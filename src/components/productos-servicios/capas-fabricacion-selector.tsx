@@ -18,7 +18,8 @@ import styles from "./capas-fabricacion.module.css";
 
 const usos = {
   SIN_OPERACION: "Sin operación",
-  CORTE_INTERIOR: "Corte interior",
+  CORTE_INTERIOR: "Corte completo",
+  CORTE_PARCIAL: "Corte parcial",
   HENDIDO: "Hendido",
   MIXTO: "Distintos usos",
 };
@@ -78,11 +79,16 @@ export function CapasFabricacionSelector({
               e.exportable !== false,
           )
           .flatMap((e) =>
-            valor === "CORTE_INTERIOR" || valor === "HENDIDO"
+            valor === "CORTE_INTERIOR" ||
+            valor === "CORTE_PARCIAL" ||
+            valor === "HENDIDO"
               ? [
                   {
                     entidadId: e.id,
-                    tipo: valor as "CORTE_INTERIOR" | "HENDIDO",
+                    tipo: valor as
+                      | "CORTE_INTERIOR"
+                      | "CORTE_PARCIAL"
+                      | "HENDIDO",
                   },
                 ]
               : [],
@@ -109,7 +115,8 @@ export function CapasFabricacionSelector({
       <SelectContent>
         <SelectGroup>
           <SelectItem value="SIN_OPERACION">Sin operación</SelectItem>
-          <SelectItem value="CORTE_INTERIOR">Corte interior</SelectItem>
+          <SelectItem value="CORTE_INTERIOR">Corte completo</SelectItem>
+          <SelectItem value="CORTE_PARCIAL">Corte parcial</SelectItem>
           <SelectItem value="HENDIDO">Hendido</SelectItem>
         </SelectGroup>
       </SelectContent>

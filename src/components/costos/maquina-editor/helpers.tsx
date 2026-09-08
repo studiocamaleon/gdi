@@ -39,7 +39,12 @@ export type LocalPerfil = NonNullable<
 };
 
 export type ConsumibleCanal =
-  "cian" | "magenta" | "amarillo" | "negro" | "blanco" | "barniz";
+  | "cian"
+  | "magenta"
+  | "amarillo"
+  | "negro"
+  | "blanco"
+  | "barniz";
 
 export const PRINTER_TEMPLATES_WITH_CONSUMIBLES = new Set<PlantillaMaquinaria>([
   "impresora_laser",
@@ -159,7 +164,8 @@ export function requiredChannelsForLaserMachine(
 
 export function canalFromConsumible(
   consumible:
-    Pick<MaquinaConsumible, "detalle"> | MaquinaPayload["consumibles"][number],
+    | Pick<MaquinaConsumible, "detalle">
+    | MaquinaPayload["consumibles"][number],
 ) {
   const detalle = (consumible.detalle ?? {}) as Record<string, unknown>;
   return normalizeCanal(detalle.color ?? detalle.canal);
@@ -241,6 +247,7 @@ function prepararDetallePerfil(
   detalle: Record<string, unknown> | null | undefined,
   parametrosTecnicos: Record<string, unknown> | null | undefined,
 ) {
+  if (detalle?.procesamientoCorteVersion === 1) return structuredClone(detalle);
   const retiradas = PERFIL_DETALLE_RETIRADO[plantilla] ?? [];
   const heredadas = PERFIL_DETALLE_HEREDADO[plantilla] ?? [];
   if (!detalle && heredadas.length === 0) return undefined;
@@ -813,6 +820,7 @@ export function normalizePerfilTypeForTemplate(
   perfil: LocalPerfil,
   form: MaquinaPayload,
 ): LocalPerfil {
+  if (perfil.detalle?.procesamientoCorteVersion === 1) return perfil;
   const allowedTypes = getAllowedProfileTypes(form);
   const allowedUnits = getAllowedProductivityUnits(form);
   const defaultUnit = getDefaultProductivityUnit(form);

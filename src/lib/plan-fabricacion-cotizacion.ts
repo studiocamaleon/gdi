@@ -11,6 +11,7 @@ export type OperacionPlan = {
   material: string;
   materialId?: string;
   esCorte: boolean;
+  procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
   result: NestingViewerInput;
 };
 export type PlanFabricacion = {
@@ -46,7 +47,9 @@ export function obtenerPlanesFabricacion(
           nombre: g.participantes[0]?.pasoNombre ?? "Fabricación",
           material: lote.materialNombre,
           materialId: lote.materialVarianteId,
+          procesamientoCorte: lote.procesamientoCorte,
           esCorte:
+            Boolean(lote.procesamientoCorte) ||
             Boolean(lote.layoutOrigenLoteId) ||
             /corte/i.test(g.participantes[0]?.pasoNombre ?? ""),
           result: {
@@ -104,7 +107,12 @@ export function obtenerPlanesFabricacion(
             nombre: p.nombreVisible ?? "Fabricación",
             material: n.sustrato?.nombre ?? c.nombre,
             materialId: n.sustrato?.materialVarianteId,
-            esCorte: p.familiaCodigo === "corte_laser",
+            esCorte: [
+              "corte_laser",
+              "router_cnc",
+              "troquelado_digital",
+            ].includes(p.familiaCodigo ?? ""),
+            procesamientoCorte: p.tiempo?.procesamientoCorte,
             result: n,
           });
         }

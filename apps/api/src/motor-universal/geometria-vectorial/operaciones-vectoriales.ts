@@ -3,7 +3,9 @@ import type { FuenteGuardada } from '../../productos-servicios/geometrias/interp
 import type { GeometriaVectorialCanonica, PuntoVectorial } from './tipos';
 
 export type OperacionVectorial = FuenteGuardada['operaciones'][number];
-export function longitudOperacion(op: OperacionVectorial): number {
+export function longitudOperacion(
+  op: Pick<OperacionVectorial, 'puntos' | 'cerrada'>,
+): number {
   return op.puntos.reduce((s, p, i, ps) => {
     if (i === ps.length - 1 && !op.cerrada) return s;
     const q = ps[(i + 1) % ps.length];

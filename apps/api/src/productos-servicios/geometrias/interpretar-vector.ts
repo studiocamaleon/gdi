@@ -52,7 +52,10 @@ export type SeleccionVector = {
   unidad: string;
   cerrarExterior: boolean;
   excluidas?: string[];
-  operaciones: Array<{ entidadId: string; tipo: 'CORTE_INTERIOR' | 'HENDIDO' }>;
+  operaciones: Array<{
+    entidadId: string;
+    tipo: 'CORTE_INTERIOR' | 'CORTE_PARCIAL' | 'HENDIDO';
+  }>;
 };
 export type FuenteGuardada = {
   schemaVersion: 2;
@@ -78,7 +81,7 @@ export type FuenteGuardada = {
   operaciones: Array<{
     entidadId: string;
     capa: string;
-    tipo: 'CORTE_INTERIOR' | 'HENDIDO';
+    tipo: 'CORTE_INTERIOR' | 'CORTE_PARCIAL' | 'HENDIDO';
     puntos: Punto[];
     cerrada: boolean;
   }>;
@@ -296,7 +299,7 @@ export function interpretarVector(
       excluidas.has(op.entidadId) ||
       original.puntos.length < 2 ||
       usados.has(op.entidadId) ||
-      !['CORTE_INTERIOR', 'HENDIDO'].includes(op.tipo)
+      !['CORTE_INTERIOR', 'CORTE_PARCIAL', 'HENDIDO'].includes(op.tipo)
     )
       throw new Error(
         'Las operaciones no son válidas o tienen entidades repetidas.',
@@ -365,6 +368,18 @@ export function interpretarVector(
           capa: original.capa,
           tipoEntidad: original.tipoEntidad ?? 'POLILINEA',
           rol,
+          funcionGeometrica:
+            original.id === e.id
+              ? 'EXTERIOR'
+              : !rol
+                ? 'REFERENCIA'
+                : original.cerrada
+                  ? 'INTERIOR'
+                  : 'TRAZO',
+          operacion:
+            rol === 'CORTE_EXTERIOR' || rol === 'CORTE_INTERIOR'
+              ? 'CORTE_COMPLETO'
+              : rol,
           conservar: !excluidas.has(original.id),
           color: original.color,
           tipoLinea: original.tipoLinea,

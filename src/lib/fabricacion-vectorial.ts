@@ -9,13 +9,17 @@ export type MatrizFabricacion = [
 export type RolRecorrido =
   | "CORTE_EXTERIOR"
   | "CORTE_INTERIOR"
+  | "CORTE_PARCIAL"
   | "HENDIDO"
   | null;
 export type RecorridoFabricacion = {
   entidadId: string;
   capa: string;
   tipoEntidad: string;
+  /** Rol legado; la intención física y función geométrica se conservan aparte. */
   rol: RolRecorrido;
+  funcionGeometrica?: "EXTERIOR" | "INTERIOR" | "TRAZO" | "REFERENCIA";
+  operacion?: "CORTE_COMPLETO" | "CORTE_PARCIAL" | "HENDIDO" | null;
   conservar: boolean;
   color?: string;
   tipoLinea?: string;

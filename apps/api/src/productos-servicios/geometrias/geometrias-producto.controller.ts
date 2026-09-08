@@ -38,7 +38,10 @@ class ArchivoGeometriaDto {
 }
 class OperacionDto {
   @IsString() @MaxLength(160) entidadId!: string;
-  @IsIn(['CORTE_INTERIOR', 'HENDIDO']) tipo!: 'CORTE_INTERIOR' | 'HENDIDO';
+  @IsIn(['CORTE_INTERIOR', 'CORTE_PARCIAL', 'HENDIDO']) tipo!:
+    | 'CORTE_INTERIOR'
+    | 'CORTE_PARCIAL'
+    | 'HENDIDO';
 }
 class InterpretarDto extends ArchivoGeometriaDto {
   @IsOptional()

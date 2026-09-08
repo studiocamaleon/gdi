@@ -2,7 +2,7 @@
 
 Fecha: 08/09/2026. Base de código: `visual-ilusion/analisis`, commit `706b85381`.
 
-**Estado: diagnóstico y propuesta para discutir; implementación pendiente.** Se revisaron el código, el catálogo local mediante consultas de lectura y documentación oficial de fabricantes. Este trabajo no modifica máquinas, perfiles, cotizaciones ni fórmulas del sistema.
+**Estado: diagnóstico histórico; propuesta aceptada e implementada en una rama independiente.** Este documento conserva el análisis sobre la base indicada arriba, realizado con consultas de lectura al código y catálogo, y documentación oficial de fabricantes. El alcance final, uso y evidencia de validación están en [la implementación pre-F5](mesa-de-corte-herramientas-implementacion-2026-09-08.md). Las referencias a conexiones pendientes en este diagnóstico describen el estado previo a esa implementación.
 
 ## 1. Resultado y decisión propuesta
 

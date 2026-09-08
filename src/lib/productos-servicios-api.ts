@@ -1866,6 +1866,7 @@ export interface AnalisisNestingCompuestoInput {
     };
     lote?: {
       id: string;
+      procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
       layoutOrigenLoteId?: string;
       versionContrato: 1;
       estado: "CONGELADO";
@@ -1960,6 +1961,7 @@ export interface OperacionInternaCosteadaInput {
   tiempo?: {
     totalMin: number;
     setupMin?: number;
+    procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
     runMin?: number;
     runTrabajoMin?: number;
     runMermaMin?: number;
@@ -2213,7 +2215,8 @@ export interface CotizarResponse {
         tiempo?: {
           totalMin: number;
           setupMin?: number;
-          runMin?: number;
+          procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
+    runMin?: number;
           runTrabajoMin?: number;
           runMermaMin?: number;
           cleanupMin?: number;
@@ -2389,7 +2392,8 @@ export interface CotizarResponse {
         /** Incluye los minutos de `tiemposExtra` (la ETA los cuenta). */
         totalMin: number;
         setupMin?: number;
-        runMin?: number;
+        procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
+    runMin?: number;
         runTrabajoMin?: number;
         runMermaMin?: number;
         cleanupMin?: number;

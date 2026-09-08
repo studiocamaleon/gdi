@@ -902,6 +902,9 @@ const corte_laser: DefinicionFamilia = {
   validaciones: [],
   editorParamsGenerico: true,
   paramsPasoSchema: [
+    { campo: 'cotizarOperacionesVectoriales', etiqueta: 'Cotizar operaciones del archivo por herramienta',
+      tipo: 'boolean', default: false,
+      descripcion: 'Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas.' },
     {
       campo: 'usarDisenoVectorial',
       etiqueta: 'Archivo vectorial para cotizar y preparar',
@@ -931,29 +934,17 @@ const corte_laser: DefinicionFamilia = {
 };
 
 const troquelado_digital: DefinicionFamilia = {
+  ...corte_laser,
   codigo: 'troquelado_digital',
-  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
-  outputHeredadoDefault: 'pliegos_impresos',
-  nombre: 'Troquelado digital',
-  categoria: 'corte_y_formado',
-  descripcion: 'Mesa de corte digital tipo Esko/Zund. Sustrato en hoja.',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
+  nombre: 'Mesa de corte digital',
+  descripcion: 'Procesa piezas en placa con herramientas y perfiles por operación.',
   plantillasCompatibles: ['MESA_DE_CORTE'],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['piezas_troqueladas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-  productosTipicos: [
-    'Cajas con forma especial',
-    'Stickers troquelados grandes',
-  ],
+  // Los nodos anteriores conservan la base de productividad genérica. La
+  // modalidad por herramienta se activa explícitamente en la receta.
+  magnitudTiempoDefault: undefined,
+  outputHeredadoDefault: 'pliegos_impresos',
+  outputsCanonicos: ['piezas_troqueladas', 'tiempo_real_corte'],
+  productosTipicos: ['Exhibidores', 'Packaging', 'Piezas con corte e hendido'],
 };
 
 const cnc: DefinicionFamilia = {
@@ -1002,6 +993,9 @@ const cnc: DefinicionFamilia = {
   validaciones: [],
   editorParamsGenerico: true,
   paramsPasoSchema: [
+    { campo: 'cotizarOperacionesVectoriales', etiqueta: 'Cotizar operaciones del archivo por herramienta',
+      tipo: 'boolean', default: false,
+      descripcion: 'Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas.' },
     {
       campo: 'usarDisenoVectorial',
       etiqueta: 'Archivo vectorial para cotizar y preparar',

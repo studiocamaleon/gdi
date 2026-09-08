@@ -1,5 +1,7 @@
 "use client";
 
+import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
+
 import campanaStyles from "./propuesta-campana.module.css";
 import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-descargas";
 import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
@@ -2876,7 +2878,7 @@ function ProduccionItemView({
                     <NestingPatronesDescargas
                       result={activeNestingTab.paso.nestingResult}
                       nombreBase={nombreBaseSvg(item.productoNombre)}
-                      permitirDxf={activeNestingTab.paso.familiaCodigo === "cnc" || activeNestingTab.paso.familiaCodigo === "corte_laser"}
+                      permitirDxf={activeNestingTab.paso.familiaCodigo === "cnc" || activeNestingTab.paso.familiaCodigo === "corte_laser" || activeNestingTab.paso.familiaCodigo === "troquelado_digital"}
                     />
                   </div>
                 ) : null}
@@ -3280,6 +3282,7 @@ function pasoTieneDetalleCosteo(paso: PasoCosteo) {
     paso.activado &&
     (Boolean(paso.tiempo) ||
       Boolean(paso.mutacionAplicada) ||
+      Boolean(paso.tiempo?.procesamientoCorte) ||
       (paso.materiales?.length ?? 0) > 0 ||
       (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
       (paso.cargosDirectosPaso?.length ?? 0) > 0)
@@ -3290,6 +3293,7 @@ function operacionTieneDetalleDesplegable(paso: PasoCosteo) {
   return (
     paso.activado &&
     (Boolean(paso.mutacionAplicada) ||
+      Boolean(paso.tiempo?.procesamientoCorte) ||
       (paso.materiales?.length ?? 0) > 0 ||
       (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
       Number(paso.tiempo?.runMermaMin ?? 0) > 0 ||
@@ -3489,6 +3493,7 @@ function PasoCostDetail({
         />
       </div>
 
+      <DesgloseOperacionesCorte valor={paso.tiempo?.procesamientoCorte}/>
       <MermaPasoCollapsible paso={paso} cotizacion={cotizacion} />
 
       {tiemposExtra.length > 0 ? (

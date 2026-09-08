@@ -120,6 +120,28 @@ function resultado(): NestingViewerInput {
   };
 }
 describe("entrega de las capas conservadas", () => {
+  it("mantiene nombre, geometría y operación de una capa de corte parcial al exportar", () => {
+    const r = resultado();
+    const documentoParcial = structuredClone(documento);
+    documentoParcial.entidades[1] = {
+      ...documentoParcial.entidades[1],
+      capa: "CORTE_PARCIAL original",
+      rol: "CORTE_PARCIAL",
+      operacion: "CORTE_PARCIAL",
+      funcionGeometrica: "TRAZO",
+    };
+    r.placements[0].meta = {
+      ...(r.placements[0].meta as object),
+      fabricacion: documentoParcial,
+    };
+    expect(crearSvgDePlaca(r, 0)).toContain(
+      'data-capa="CORTE_PARCIAL original"',
+    );
+    documentoParcial.dxfNativo = false; // fuente vectorial normalizada: exportador local
+    const dxf = crearDxfDePlaca(r, 0);
+    expect(dxf).toContain("CORTE_PARCIAL original");
+    expect(documentoParcial.entidades[1].operacion).toBe("CORTE_PARCIAL");
+  });
   it("exporta la fuente y las capas propias de cada componente de segundo nivel con códigos repetidos", async () => {
     const cotizacion = {
       componentesFabricados: ["izquierda", "derecha"].map((codigo) => {

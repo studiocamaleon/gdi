@@ -1836,7 +1836,7 @@ function buildAnilladoraSections(): MaquinariaTemplateSection[] {
   ];
 }
 
-/** Plantilla provisional MESA_DE_CORTE — postergada (doc §15). */
+/** Capacidades comunes; herramientas y recetas se configuran en el editor dedicado. */
 function buildMesaCorteSections(): MaquinariaTemplateSection[] {
   return [
     section({
@@ -2397,7 +2397,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     sections: buildMesaCorteSections(),
     help: {
       summary:
-        "Plantilla provisional (doc §15: postergada — evaluar si CORTE_LASER + PLOTTER cubren los casos).",
+        "Mesa digital con herramientas intercambiables. Permite cotizar corte completo, corte parcial e hendido desde los recorridos del producto.",
       tips: ["Configurá perfiles por herramienta y material."],
       examples: ["Mesa Zünd, Esko Kongsberg"],
     },

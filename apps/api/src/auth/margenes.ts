@@ -30,6 +30,9 @@ const COSTOS = [
   'costosFijos',
   'costoPorUnidad',
   'costoEstimadoMm2',
+  'costoReposicion',
+  'desgasteCosto',
+  'desgasteAsignadoCosto',
 ];
 
 /** Márgenes y contribución: la ganancia, en plata o en puntos. */

@@ -6640,6 +6640,7 @@ export function ConfigPasosEditorView({
                                         )}
                                         {familia ? (
                                           <ParamsFamiliaFields
+                maquina={maquinaSel}
                                             familia={familia}
                                             params={paramsPaso}
                                             onChange={(patch) =>
@@ -13914,6 +13915,7 @@ function SeccionesEsquemaPaso({
             // el mismo componente del detallado (una opción, un editor).
             return familia ? (
               <ParamsFamiliaFields
+                maquina={maquinaSel}
                 familia={familia}
                 params={asRecord(cfg.paramsPasoJson)}
                 onChange={(patch) => onParams(pasoActual.id, patch)}

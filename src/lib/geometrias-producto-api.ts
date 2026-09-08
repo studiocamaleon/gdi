@@ -38,7 +38,10 @@ export type SeleccionVector = {
   unidad: string;
   cerrarExterior: boolean;
   excluidas?: string[];
-  operaciones: Array<{ entidadId: string; tipo: "CORTE_INTERIOR" | "HENDIDO" }>;
+  operaciones: Array<{
+    entidadId: string;
+    tipo: "CORTE_INTERIOR" | "CORTE_PARCIAL" | "HENDIDO";
+  }>;
 };
 export type FuenteGuardada = {
   schemaVersion: 2;
@@ -64,7 +67,7 @@ export type FuenteGuardada = {
   operaciones: Array<{
     entidadId: string;
     capa: string;
-    tipo: "CORTE_INTERIOR" | "HENDIDO";
+    tipo: "CORTE_INTERIOR" | "CORTE_PARCIAL" | "HENDIDO";
     puntos: Punto[];
     cerrada: boolean;
   }>;

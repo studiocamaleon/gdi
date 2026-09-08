@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  OperacionesCorteFields,
+  type MaquinaOperacionesCorte,
+} from "./operaciones-corte-fields";
 import type { FamiliaListItem } from "@/lib/productos-servicios";
 import {
   DESCRIPCIONES_VALOR_PARAM,
@@ -61,8 +65,10 @@ export function ParamsFamiliaFields({
   familia,
   params,
   onChange,
+  maquina,
 }: {
   familia: FamiliaListItem;
+  maquina?: MaquinaOperacionesCorte | null;
   params: Record<string, unknown>;
   /** Patch shallow sobre `paramsPasoJson`. */
   onChange: (patch: Record<string, unknown>) => void;
@@ -93,8 +99,12 @@ export function ParamsFamiliaFields({
       return (
         <span className={`${s.ctl} ${s.sel}`}>
           <select
-            value={typeof valor === "string" ? valor : String(param.default ?? "")}
-            onChange={(e) => onChange(patchParaEnum(param.campo, e.target.value))}
+            value={
+              typeof valor === "string" ? valor : String(param.default ?? "")
+            }
+            onChange={(e) =>
+              onChange(patchParaEnum(param.campo, e.target.value))
+            }
           >
             {(param.valoresPermitidos ?? []).map((opcion) => (
               <option key={opcion} value={opcion}>
@@ -140,7 +150,12 @@ export function ParamsFamiliaFields({
                 aria-pressed={on}
                 onClick={() =>
                   onChange({
-                    [param.campo]: toggleMultiEnum(permitidos, valor, opcion, !on),
+                    [param.campo]: toggleMultiEnum(
+                      permitidos,
+                      valor,
+                      opcion,
+                      !on,
+                    ),
                   })
                 }
               >
@@ -189,7 +204,9 @@ export function ParamsFamiliaFields({
         <span className={s.lb}>
           <span className={s.a}>
             {param.etiqueta}
-            {param.requerido ? <span className={s.req}>obligatorio</span> : null}
+            {param.requerido ? (
+              <span className={s.req}>obligatorio</span>
+            ) : null}
           </span>
           {descripcion ? <span className={s.b}>{descripcion}</span> : null}
         </span>
@@ -198,6 +215,7 @@ export function ParamsFamiliaFields({
           type="button"
           className={s.lock}
           aria-pressed={editable}
+          disabled={param.campo === "cotizarOperacionesVectoriales"}
           title={
             expuesto
               ? "La familia sugiere abrirlo; podés fijarlo igual."
@@ -214,8 +232,8 @@ export function ParamsFamiliaFields({
         </button>
         {faltaObligatorio ? (
           <span className={s.reqmsg}>
-            Elegí al menos un lado: sin lados el paso no puede calcular nada y la
-            cotización va a cortar.
+            Elegí al menos un lado: sin lados el paso no puede calcular nada y
+            la cotización va a cortar.
           </span>
         ) : null}
       </div>
@@ -230,6 +248,11 @@ export function ParamsFamiliaFields({
         <span className={`${s.k} ${s.kr}`}>Al cotizar</span>
       </div>
       {schema.map(renderRow)}
+      <OperacionesCorteFields
+        params={params}
+        maquina={maquina}
+        onChange={onChange}
+      />
       <div className={s.foot}>
         <svg
           width="13"

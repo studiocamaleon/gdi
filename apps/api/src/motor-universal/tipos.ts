@@ -84,7 +84,7 @@ export interface MutacionAplicada {
  */
 export interface JobContext {
   /** Colección resuelta desde la configuración publicada del componente. */
-  disenosVectoriales?: import("../productos-servicios/componentes-configuracion").PiezaVectorialComponente[];
+  disenosVectoriales?: import('../productos-servicios/componentes-configuracion').PiezaVectorialComponente[];
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
   /** Fuente geométrica elegida en familias que admiten vector opcional. */
@@ -307,10 +307,12 @@ export interface CotizarOutput {
 }
 
 export type PoliticaNestingCompuesto =
-  'INDEPENDIENTE' | 'CONSOLIDAR_COMPATIBLES';
+  | 'INDEPENDIENTE'
+  | 'CONSOLIDAR_COMPATIBLES';
 
 export interface LoteNestingCompuestoSnapshot {
   id: string;
+  procesamientoCorte?: import('../maquinaria/procesamiento-corte').ProcesamientoCorteCosteado;
   /** Operación posterior sobre las mismas placas; no compra otro sustrato. */
   layoutOrigenLoteId?: string;
   versionContrato: 1;
@@ -722,6 +724,7 @@ export interface PasoEjecutado {
   };
   /** Tiempo calculado (si activado). */
   tiempo?: {
+    procesamientoCorte?: import('../maquinaria/procesamiento-corte').ProcesamientoCorteCosteado;
     setupMin: number;
     runMin: number;
     /** Corrida necesaria para producir las unidades buenas. */
@@ -1243,7 +1246,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -1378,11 +1383,14 @@ export interface PasoCargado {
     costo: number;
   }>;
   /** Detalles de la máquina (cargados del JOIN). */
+  procesamientoCortePreparacion?: import('./procesamiento-corte').PreparacionCorte;
+  procesamientoCorteCosteado?: import('../maquinaria/procesamiento-corte').ProcesamientoCorteCosteado;
   maquina?: {
     id: string;
     codigo: string;
     nombre: string;
     plantilla: string;
+    espesorMaximo?: number | null;
     anchoUtil?: number | null;
     largoUtil?: number | null;
     centroCostoPrincipalId?: string | null;
@@ -1436,6 +1444,7 @@ export interface PasoCargado {
       codigo: string;
       nombre: string;
       plantilla: string;
+      espesorMaximo?: number | null;
       anchoUtil?: number | null;
       largoUtil?: number | null;
       centroCostoPrincipalId?: string | null;

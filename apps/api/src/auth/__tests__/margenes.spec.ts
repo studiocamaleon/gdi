@@ -5,6 +5,38 @@ import { CAMPOS_DE_PLATA, FALSOS_AMIGOS, podarPlata } from '../margenes';
  * no puede ver la plata.
  */
 describe('podar la plata', () => {
+  it('oculta el costo de las herramientas y conserva la receta técnica de corte', () => {
+    expect(
+      podarPlata({
+        procesamientoCorte: {
+          desgasteCosto: 120,
+          participacion: { porcentaje: 50, desgasteAsignadoCosto: 60 },
+          operaciones: [
+            {
+              metros: 10,
+              desgasteCosto: 120,
+              herramienta: {
+                nombre: 'Cuchilla',
+                desgaste: { costoReposicion: 600, vidaUtil: 50 },
+              },
+              parametros: { pasadas: 2, profundidadMm: 3 },
+            },
+          ],
+        },
+      }),
+    ).toEqual({
+      procesamientoCorte: {
+        participacion: { porcentaje: 50 },
+        operaciones: [
+          {
+            metros: 10,
+            herramienta: { nombre: 'Cuchilla', desgaste: { vidaUtil: 50 } },
+            parametros: { pasadas: 2, profundidadMm: 3 },
+          },
+        ],
+      },
+    });
+  });
   it('saca costos y márgenes de cualquier profundidad', () => {
     const cotizacion = {
       total: 185400,

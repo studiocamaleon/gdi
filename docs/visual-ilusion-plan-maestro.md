@@ -967,15 +967,22 @@ cotizable, trazable y ejecutable.
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 3–4.4.
 
-**Revisión previa solicitada el 08/09/2026:** antes de iniciar F5 se analiza
-una ampliación de F4 para resolver operaciones, herramientas, perfiles y
-tiempos/costos estimados de corte desde la cotización. El
+**Ampliación previa implementada el 08/09/2026:** antes de iniciar F5 se
+resolvieron operaciones, herramientas, perfiles y tiempos/costos estimados de
+corte desde la cotización en `codex/cotizacion-operaciones-herramientas-corte`.
+El
 [diagnóstico de Mesa de corte y propuesta de alcance](mesa-de-corte-herramientas-cotizacion-analisis-2026-09-08.md)
-compara equipos compactos e industriales y documenta las conexiones pendientes.
-La implementación de esta ampliación sigue pendiente; no altera la evidencia
-del cierre histórico de F4. En F5, la máquina, herramienta, pasadas y estimación
-del plan deben partir de la configuración cotizada, conservando sus revisiones
-operativas sin reescribir silenciosamente lo vendido.
+compara equipos compactos e industriales. La
+[implementación y validación pre-F5](mesa-de-corte-herramientas-implementacion-2026-09-08.md)
+documenta herramientas, perfiles por material/espesor, cálculo de recorridos y
+cambios, reparto por lote y conservación cotización→OT. Se verificaron 2.281
+pruebas API y 702 frontend, además de compilación y revisión de interfaz. La
+rama aún no está integrada a `visual-ilusion/analisis`; esta evidencia se suma
+al cierre histórico de F4. El piloto contempla placas y herramientas
+secuenciales; requiere calibrar parámetros con la máquina real.
+En F5, la máquina, herramienta, pasadas y estimación del plan deben partir de
+la configuración cotizada, conservando sus revisiones operativas sin
+reescribir silenciosamente lo vendido.
 
 ### Objetivo de negocio
 

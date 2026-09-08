@@ -1,3 +1,5 @@
+import { lineasDesgasteCorte } from './repartir-operaciones-corte';
+import { usaProcesamientoCorte, prepararProcesamientoCorte, calcularProcesamientoCorte } from './procesamiento-corte';
 import { geometriaDeColeccion } from "./geometria-vectorial/geometria-coleccion";
 import { adjuntarOperacionesGuardadas, longitudOperacion } from './geometria-vectorial/operaciones-vectoriales';
 import { resolverFuentesProducto, atributosDeRevision } from '../productos-servicios/geometrias/resolver-fuentes';
@@ -4004,7 +4006,13 @@ export class MotorUniversalService {
         costoTotal: 0,
       };
     }
-    const perfilDependeDelSustrato =
+    if (!usaProcesamientoCorte(pasoConMaquina) && pasoConMaquina.perfil?.detalleJson &&
+      typeof pasoConMaquina.perfil.detalleJson === 'object' && 'procesamientoCorteVersion' in pasoConMaquina.perfil.detalleJson) {
+      errores.push({ codigo:'perfil_herramienta_requiere_operaciones',severidad:'ERROR',
+        mensaje:'El perfil elegido es una receta por herramienta. Activá la cotización por operaciones vectoriales en este nodo.',rutaPasoId:pasoConMaquina.rutaPasoId });
+      return this.pasoAbortado(pasoConMaquina);
+    }
+    const perfilDependeDelSustrato = usaProcesamientoCorte(pasoConMaquina) ||
       pasoConMaquina.familiaCodigo === 'corte_laser' ||
       pasoConMaquina.familiaCodigo === 'grabado_laser';
     let perfilResuelto =
@@ -4043,7 +4051,23 @@ export class MotorUniversalService {
     // En láser, primero hay que conocer la variante realmente elegida por el
     // slot (también cuando MOTOR_ELIGE_AUTO) para seleccionar la velocidad del
     // perfil que cubre ese material y espesor.
-    if (!sinImpresion && perfilDependeDelSustrato) {
+    if (!sinImpresion && usaProcesamientoCorte(paso)) {
+      try {
+        const materialCorte = materialPreliminar ?? (jobContext.layout_produccion?.materialVarianteId
+          ? await this.cargarVariantePorId(tenantId, jobContext.layout_produccion.materialVarianteId) : null);
+        const preparacion = prepararProcesamientoCorte(paso, jobContext, materialCorte);
+        paso = { ...paso, procesamientoCortePreparacion: preparacion };
+        perfilResuelto = preparacion.perfiles.CORTE_COMPLETO as NonNullable<PasoCargado['perfil']>;
+        // El perfil de corte se resuelve antes del nesting: determina el kerf.
+        paso = { ...paso, perfil: perfilResuelto };
+      } catch (error) {
+        errores.push({ codigo: 'operaciones_corte_sin_configurar', severidad: 'ERROR',
+          mensaje: error instanceof Error ? error.message : 'No se pudieron resolver las operaciones de corte.',
+          rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo });
+        return this.pasoAbortado(paso);
+      }
+    } else if (!sinImpresion && perfilDependeDelSustrato) {
       const attrs = materialPreliminar?.atributosVarianteJson ?? {};
       const espesorMm = this.numeroPositivo(
         attrs.espesorMm ?? attrs.espesor_mm ?? attrs.espesor,
@@ -4395,6 +4419,18 @@ export class MotorUniversalService {
         return this.pasoAbortado(pasoConPerfil);
       }
     }
+    if (pasoConPerfil.procesamientoCortePreparacion) {
+      try {
+        pasoConPerfil.procesamientoCorteCosteado = calcularProcesamientoCorte(
+          pasoConPerfil, jobContext, pasoConPerfil.procesamientoCortePreparacion, nestingDispatch);
+      } catch (error) {
+        errores.push({ codigo: 'operaciones_corte_no_cotizables', severidad: 'ERROR',
+          mensaje: error instanceof Error ? error.message : 'No se pudo calcular el trabajo de corte.',
+          rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo });
+        return this.pasoAbortado(paso);
+      }
+    }
     const tiempo = sinImpresion
       ? this.tiempoCero()
       : this.calcularTiempo(
@@ -4419,6 +4455,7 @@ export class MotorUniversalService {
       errores,
       materialPreliminar,
     );
+    if (tiempo.procesamientoCorte) materiales.push(...lineasDesgasteCorte(tiempo.procesamientoCorte));
     const materialesCosto = materiales.reduce(
       (acc, m) => acc + m.costoTotal,
       0,
@@ -4930,18 +4967,24 @@ export class MotorUniversalService {
     const omitirSetupCleanup = jc?.omitirSetupCleanup === true;
 
     // Setup, cleanup, tiempoFijo: jerarquía override > perfil > familia > 0
+    const procesamientoCorte = paso.procesamientoCorteCosteado;
     const setupMin = omitirSetupCleanup
       ? 0
-      : (paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0);
+      : (paso.setupOverrideMin ?? procesamientoCorte?.configuracion.preparacionMin ?? paso.perfil?.setupMin ?? 0);
     const cleanupMin = omitirSetupCleanup
       ? 0
-      : (paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0);
+      : (paso.cleanupOverrideMin ?? procesamientoCorte?.configuracion.limpiezaMin ?? paso.perfil?.cleanupMin ?? 0);
     const tiempoFijoMin =
       tiempoManualMin != null ? 0 : tiempoFijoEfectivoMin(paso);
 
     let runMin = 0;
 
-    if (tiempoManualMin != null) {
+    if (procesamientoCorte) {
+      if (tiempoManualMin != null) errores.push({ codigo: 'tiempo_manual_con_operaciones_corte', severidad: 'ERROR',
+        mensaje: 'El tiempo manual total no puede reemplazar el desglose por herramientas. Desactivá una de las dos modalidades.',
+        rutaPasoId: paso.rutaPasoId, familiaCodigo: paso.familiaCodigo });
+      runMin = procesamientoCorte.runMin;
+    } else if (tiempoManualMin != null) {
       runMin = tiempoManualMin;
     } else if (modoTiempo === 'T-1') {
       // Fijo: solo el tiempoFijo cuenta
@@ -5120,7 +5163,7 @@ export class MotorUniversalService {
     const totalCrudoMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
     const ctxTiempo = jobContext as Record<string, unknown>;
     const trabajoMin =
-      ctxTiempo.tiempoReal === true ? totalCrudoMin : Math.ceil(totalCrudoMin);
+      ctxTiempo.tiempoReal === true ? totalCrudoMin : Math.ceil(procesamientoCorte ? Math.round(totalCrudoMin * 1e8) / 1e8 : totalCrudoMin);
 
     // F.2.10 — Tarifa horaria. Prioridad:
     //   1. Centro de costo principal de la máquina.
@@ -5212,6 +5255,7 @@ export class MotorUniversalService {
     return {
       setupMin,
       runMin,
+      ...(procesamientoCorte ? { procesamientoCorte: { ...procesamientoCorte, redondeo: ctxTiempo.tiempoReal === true ? 'EXACTO' as const : 'MINUTO' as const } } : {}),
       ...(desgloseRun.cantidadMerma > 0
         ? {
             runTrabajoMin: desgloseRun.cantidadTrabajo,
@@ -9331,7 +9375,7 @@ export class MotorUniversalService {
   ): NonNullable<PasoCargado['perfil']> | null {
     const perfilesDisponibles = this.filtrarPerfilesCompatibles(
       paso.familiaCodigo,
-      paso.perfilesDisponibles,
+      paso.perfilesDisponibles?.filter(p => !(p.detalleJson && typeof p.detalleJson === 'object' && 'procesamientoCorteVersion' in p.detalleJson)),
     );
     if (perfilesDisponibles.length <= 1) {
       return null; // no hay alternativas, mantener default
@@ -10243,6 +10287,7 @@ export class MotorUniversalService {
               codigo: cp.maquinaM1.codigo,
               nombre: cp.maquinaM1.nombre,
               plantilla: cp.maquinaM1.plantilla,
+              espesorMaximo: cp.maquinaM1.espesorMaximo != null ? Number(cp.maquinaM1.espesorMaximo) : null,
               anchoUtil: cp.maquinaM1.anchoUtil
                 ? Number(cp.maquinaM1.anchoUtil)
                 : null,
@@ -10321,6 +10366,7 @@ export class MotorUniversalService {
             codigo: mc.maquina.codigo,
             nombre: mc.maquina.nombre,
             plantilla: mc.maquina.plantilla,
+            espesorMaximo: mc.maquina.espesorMaximo != null ? Number(mc.maquina.espesorMaximo) : null,
             anchoUtil: mc.maquina.anchoUtil
               ? Number(mc.maquina.anchoUtil)
               : null,
@@ -10946,6 +10992,7 @@ export class MotorUniversalService {
             codigo: maquina.codigo,
             nombre: maquina.nombre,
             plantilla: maquina.plantilla,
+            espesorMaximo: maquina.espesorMaximo != null ? Number(maquina.espesorMaximo) : null,
             anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
             largoUtil: maquina.largoUtil ? Number(maquina.largoUtil) : null,
             centroCostoPrincipalId: maquina.centroCostoPrincipalId,
@@ -11337,7 +11384,8 @@ export class MotorUniversalService {
               codigo: maquina.codigo,
               nombre: maquina.nombre,
               plantilla: maquina.plantilla,
-              anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
+              espesorMaximo: maquina.espesorMaximo != null ? Number(maquina.espesorMaximo) : null,
+            anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
               largoUtil: maquina.largoUtil ? Number(maquina.largoUtil) : null,
               centroCostoPrincipalId: maquina.centroCostoPrincipalId,
               centroCostoPrincipalNombre:

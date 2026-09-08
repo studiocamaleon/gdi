@@ -1,5 +1,7 @@
 "use client";
 
+import { DesgloseOperacionesCorte } from "@/components/comercial/desglose-operaciones-corte";
+
 import * as React from "react";
 import { ArrowUpRightIcon, Layers3Icon, LoaderCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -218,6 +220,14 @@ export function PlanLotesCotizacion({
                     operaciones. Las placas se contabilizan una sola vez.
                   </p>
                 ) : null}
+                {actual.operaciones
+                  .filter((o) => o.procesamientoCorte)
+                  .map((o) => (
+                    <DesgloseOperacionesCorte
+                      key={o.id}
+                      valor={o.procesamientoCorte}
+                    />
+                  ))}
                 {agruparPatronesNesting(actual.result).length ? (
                   <NestingPatronesView
                     key={actual.id}
