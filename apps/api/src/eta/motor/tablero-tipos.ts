@@ -19,6 +19,11 @@ export type TableroPasoEstado =
 export type TableroPasoData = {
   id: string;
   indice: number;
+  /** Null en OTs históricas; en órdenes nuevas habilita precedencia explícita. */
+  nodoClave?: string | null;
+  predecesorPasoIds?: string[];
+  sucesorPasoIds?: string[];
+  esTerminal?: boolean;
   nombre: string;
   familiaCodigo: string;
   plantillaCodigo?: string | null;
@@ -92,6 +97,14 @@ export function pasoActivo(
   paso: TableroPasoData,
 ): boolean {
   if (paso.estado === 'hecho') return false;
+  if (paso.nodoClave) {
+    const porId = new Map(
+      item.pasos.map((candidato) => [candidato.id, candidato]),
+    );
+    return (paso.predecesorPasoIds ?? []).every(
+      (id) => porId.get(id)?.estado === 'hecho',
+    );
+  }
   return item.pasos
     .filter((otro) => otro.indice < paso.indice)
     .every((otro) => otro.estado === 'hecho');

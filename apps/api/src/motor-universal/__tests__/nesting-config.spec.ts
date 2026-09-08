@@ -1,4 +1,4 @@
-import { resolveNestingConfig } from '../nesting-config';
+import { debeEjecutarNestingVectorial, resolveNestingConfig } from '../nesting-config';
 import type { JobContext, PasoCargado } from '../tipos';
 
 function paso(overrides: Partial<PasoCargado> = {}): PasoCargado {
@@ -27,6 +27,19 @@ function paso(overrides: Partial<PasoCargado> = {}): PasoCargado {
 }
 
 const jobContext: JobContext = { cantidad: 1 };
+
+describe('nesting vectorial heredado', () => {
+  const vectorial: JobContext = { cantidad: 1, geometriaVectorial: { piezas: [{ id: 'exhibidor' }] } as JobContext['geometriaVectorial'] };
+  it.each(['corte_laser', 'cnc'])('procesa el vector heredado en %s sin habilitar otra carga comercial', (familiaCodigo) => {
+    expect(debeEjecutarNestingVectorial(paso({ familiaCodigo, paramsPasoJson: null }), vectorial)).toBe(true);
+  });
+  it('mantiene la cotización por medidas y no activa corte sin geometría', () => {
+    const laser = paso({ familiaCodigo: 'corte_laser' });
+    expect(debeEjecutarNestingVectorial(laser, jobContext)).toBe(false);
+    expect(debeEjecutarNestingVectorial(laser, { ...vectorial, modoCotizacionVectorial: 'medidas' })).toBe(false);
+    expect(debeEjecutarNestingVectorial(paso(), vectorial)).toBe(false);
+  });
+});
 
 describe('resolveNestingConfig', () => {
   it('toma de la máquina la política para conservar la composición vectorial', () => {
@@ -609,5 +622,64 @@ describe('resolveNestingConfig', () => {
       topMm: 5,
       bottomMm: 5,
     });
+  });
+
+  it('habilita Common Line sólo cuando máquina, paso y perfil lo permiten', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'corte_laser',
+        paramsPasoJson: { usarCommonLine: true },
+        maquina: {
+          id: 'laser-1',
+          codigo: 'LASER-1',
+          nombre: 'Láser',
+          plantilla: 'corte_laser',
+          parametrosTecnicosJson: {
+            commonLineHabilitado: true,
+            commonLineLongitudMinimaMm: 30,
+            commonLineToleranciaMm: 0.08,
+          },
+        },
+        perfil: {
+          id: 'perfil-1',
+          nombre: 'Acrílico 3 mm',
+          detalleJson: { anchoCorteMm: 0.25 },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.commonLine).toEqual({
+      habilitado: true,
+      anchoCorteMm: 0.25,
+      longitudMinimaMm: 30,
+      toleranciaMm: 0.08,
+    });
+  });
+
+  it('no habilita Common Line por capacidad implícita de la máquina', () => {
+    const config = resolveNestingConfig(
+      paso({
+        familiaCodigo: 'cnc',
+        paramsPasoJson: { usarCommonLine: true },
+        maquina: {
+          id: 'cnc-1',
+          codigo: 'CNC-1',
+          nombre: 'Router',
+          plantilla: 'router_cnc',
+          parametrosTecnicosJson: {},
+        },
+        perfil: {
+          id: 'perfil-1',
+          nombre: 'MDF 18 mm',
+          detalleJson: { anchoCorteMm: 6 },
+        },
+      }),
+      jobContext,
+      null,
+    );
+
+    expect(config.commonLine).toBeUndefined();
   });
 });

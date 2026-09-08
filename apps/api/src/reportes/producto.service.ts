@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PASOS_ECONOMICOS_SQL, COSTO_VARIABLE_PASO_SQL } from './costos-snapshot-sql';
 import { PrismaService } from '../prisma/prisma.service';
 import { finExclusivo, granularidad, type Granularidad, type Rango } from './periodo';
 
@@ -163,7 +164,7 @@ export class ProductoService {
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
       ${JOIN_PRODUCTO}
-      WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+      WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         ${categoria ? `AND COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') = $5` : ''}
       GROUP BY 1, 2 ORDER BY 1, monto DESC
@@ -199,7 +200,7 @@ export class ProductoService {
                COALESCE(AVG(oti.subtotal) FILTER (WHERE NOT ${conAdic}), 0)::float8 AS ticketsin
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-        WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         `,
         f.tenantId,
@@ -213,7 +214,7 @@ export class ProductoService {
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         CROSS JOIN LATERAL jsonb_array_elements_text(oti."adicionalesJson") et(etiqueta)
-        WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
           AND ${esArray}
         GROUP BY 1 ORDER BY items DESC, ventas DESC
@@ -230,7 +231,7 @@ export class ProductoService {
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
         ${JOIN_PRODUCTO}
-        WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         GROUP BY 1 ORDER BY items DESC LIMIT 12
         `,
@@ -293,12 +294,10 @@ export class ProductoService {
       -- Costos variables por item (material + consumibles + desgaste): escalar
       -- por LATERAL para no multiplicar filas al agregar ventas/costo.
       LEFT JOIN LATERAL (
-        SELECT COALESCE(SUM((mat->>'costoTotal')::numeric), 0) AS variables
-        FROM jsonb_array_elements(ci."trazabilidadJson"->'pasos') paso
-        CROSS JOIN jsonb_array_elements(COALESCE(paso->'materiales', '[]'::jsonb)) mat
-        WHERE mat->>'tipoLineaCosto' IN ('MATERIAL', 'CONSUMIBLE_MAQUINA', 'DESGASTE_MAQUINA')
+        SELECT COALESCE(SUM(${COSTO_VARIABLE_PASO_SQL}), 0) AS variables
+        FROM (${PASOS_ECONOMICOS_SQL}) pasos_economicos
       ) v ON true
-      WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+      WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         ${categoria ? `AND COALESCE(NULLIF(oti."categoriaComercial", ''), 'Sin categoría') = $4` : ''}
       GROUP BY 1
@@ -349,9 +348,9 @@ export class ProductoService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      CROSS JOIN LATERAL jsonb_array_elements(ci."trazabilidadJson"->'pasos') paso
-      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(paso->'materiales', '[]'::jsonb)) mat
-      WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+      CROSS JOIN LATERAL (${PASOS_ECONOMICOS_SQL}) pasos_economicos
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(NULLIF(paso->'materiales', 'null'::jsonb), '[]'::jsonb)) mat
+      WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         AND mat->>'tipoLineaCosto' = $4
       GROUP BY 1, 2, 3
@@ -392,7 +391,7 @@ export class ProductoService {
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
         ${JOIN_PRODUCTO}
-        WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         GROUP BY 1, 2
         `,
@@ -406,7 +405,7 @@ export class ProductoService {
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-        WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
           AND ci."jobContextJson"->>'medidaModo' = 'predefinida'
           AND COALESCE(ci."jobContextJson"->>'medidaPredefinidaNombre', '') <> ''
@@ -464,7 +463,7 @@ export class ProductoService {
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
       CROSS JOIN LATERAL jsonb_array_elements(COALESCE(ci."jobContextJson"->'piezas', '[]'::jsonb)) pieza
-      WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+      WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
         AND pieza->>'anchoMm' IS NOT NULL AND pieza->>'altoMm' IS NOT NULL
       `,
@@ -487,7 +486,7 @@ export class ProductoService {
       FROM "OrdenTrabajoItem" oti
       JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
-      WHERE oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+      WHERE oti."parentItemId" IS NULL AND oti."tenantId" = $1::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= $2 AND ot."fechaEmision" < $3
       GROUP BY 1 ORDER BY monto DESC
       `,

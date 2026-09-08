@@ -57,6 +57,26 @@ export class ConfiguracionEncastresVectorialesDto {
   kerfMm!: number;
 }
 
+export class ConfiguracionCommonLineDto {
+  @IsBoolean()
+  habilitado!: boolean;
+
+  @IsNumber()
+  @Min(0.01)
+  @Max(100)
+  anchoCorteMm!: number;
+
+  @IsNumber()
+  @Min(1)
+  @Max(100_000)
+  longitudMinimaMm!: number;
+
+  @IsNumber()
+  @Min(0.01)
+  @Max(1)
+  toleranciaMm!: number;
+}
+
 export class NivelVectorialDto {
   @IsString()
   @MaxLength(80)
@@ -108,6 +128,30 @@ export class ConfiguracionCapasVectorialesDto {
   asignaciones!: AsignacionObjetoVectorialDto[];
 }
 
+export class MedirSvgFabricacionDto {
+  @IsString()
+  @MaxLength(524_288)
+  svg!: string;
+
+  @IsString()
+  @MaxLength(255)
+  nombreArchivo!: string;
+}
+
+export class NormalizarFuenteVectorialDto {
+  @IsString()
+  @MaxLength(524_288)
+  contenido!: string;
+
+  @IsString()
+  @MaxLength(255)
+  nombreArchivo!: string;
+
+  @IsOptional()
+  @IsIn(['SVG', 'DXF'])
+  formato?: 'SVG' | 'DXF';
+}
+
 export class AnalizarSvgFabricacionDto {
   @IsString()
   @MaxLength(524_288)
@@ -116,6 +160,12 @@ export class AnalizarSvgFabricacionDto {
   @IsString()
   @MaxLength(255)
   nombreArchivo!: string;
+
+  /** Scope estable de la pantalla: un nuevo cálculo invalida el anterior. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  claveSolicitud?: string;
 
   @IsNumber()
   @Min(1)
@@ -171,6 +221,11 @@ export class AnalizarSvgFabricacionDto {
   @ValidateNested()
   @Type(() => ConfiguracionEncastresVectorialesDto)
   configuracionEncastres?: ConfiguracionEncastresVectorialesDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ConfiguracionCommonLineDto)
+  commonLine?: ConfiguracionCommonLineDto;
 
   @IsOptional()
   @ValidateNested()

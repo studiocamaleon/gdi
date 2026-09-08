@@ -719,7 +719,8 @@ export class ArchivosService {
     const referenciasDocumentales = await this.prisma.archivoRevision.count({
       where: { archivoId: archivo.id },
     });
-    if (referenciasDocumentales > 0) {
+    const geometriasProducto = await this.prisma.geometriaProducto.count({ where: { archivoId: archivo.id } });
+    if (referenciasDocumentales > 0 || geometriasProducto > 0) {
       throw new BadRequestException(
         'El archivo forma parte de una revisión controlada y debe conservarse en el historial.',
       );

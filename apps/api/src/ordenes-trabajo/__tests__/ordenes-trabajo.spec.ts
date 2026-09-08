@@ -14,6 +14,7 @@ import {
   ordenSeFinaliza,
   pasoEjecutable,
   pasoReabrible,
+  progresoPonderadoPasos,
   sumaTramosMin,
   TRANSICIONES_PASO,
   validarCancelacion,
@@ -614,7 +615,17 @@ describe('OrdenesTrabajoService — pasosDesdeTrazabilidad (Tablero)', () => {
   });
 
   it('toma nombre visible, centro de costo y duración del snapshot', () => {
-    const [paso] = pasosDesde({ pasos: [pasoTraz()] });
+    const operacionesIncorporacion = [
+      {
+        codigo: 'tensar_lona',
+        nombre: 'Tensar lona',
+        componenteCodigo: 'lona',
+        duracionMin: 30,
+      },
+    ];
+    const [paso] = pasosDesde({
+      pasos: [pasoTraz({ operacionesIncorporacion })],
+    });
     expect(paso).toMatchObject({
       tenantId: 't-1',
       ordenId: 'o-1',
@@ -624,6 +635,7 @@ describe('OrdenesTrabajoService — pasosDesdeTrazabilidad (Tablero)', () => {
       categoriaFamilia: 'produccion_impresion',
       centroCostoNombre: 'IMP-001 · HP Indigo',
       duracionEstimadaMin: 42.5,
+      operacionesIncorporacionSnapshotJson: operacionesIncorporacion,
     });
   });
 
@@ -737,6 +749,36 @@ describe('auto-finalización — ordenSeFinaliza', () => {
 
   it('una OT sin pasos materializados no se auto-finaliza', () => {
     expect(ordenSeFinaliza('completar', 0, 0)).toBe(false);
+  });
+});
+
+describe('progreso DAG ponderado por duración', () => {
+  it('un lote pesa una sola vez, también cuando faltan tiempos estimados', () => {
+    for (const duracionEstimadaMin of [30, null]) {
+      expect(progresoPonderadoPasos([
+        { estado: 'hecho', duracionEstimadaMin, nestingLoteRol: 'OPERATIVO' },
+        { estado: 'hecho', duracionEstimadaMin: 0, nestingLoteRol: 'PARTICIPANTE' },
+        { estado: 'hecho', duracionEstimadaMin: 0, nestingLoteRol: 'PARTICIPANTE' },
+        { estado: 'pendiente', duracionEstimadaMin },
+      ])).toBe(50);
+    }
+  });
+  it('una rama breve no pesa igual que una operación larga', () => {
+    expect(
+      progresoPonderadoPasos([
+        { estado: 'hecho', duracionEstimadaMin: 15 },
+        { estado: 'pendiente', duracionEstimadaMin: 225 },
+      ]),
+    ).toBe(6);
+  });
+
+  it('sin duraciones conserva el avance histórico por cantidad', () => {
+    expect(
+      progresoPonderadoPasos([
+        { estado: 'hecho', duracionEstimadaMin: null },
+        { estado: 'pendiente', duracionEstimadaMin: null },
+      ]),
+    ).toBe(50);
   });
 });
 

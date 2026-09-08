@@ -1,6 +1,6 @@
 {
   "name": "@grafo/hotwire-linker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Motor TypeScript para vincular contornos SVG y exportar TAP compatible con el flujo VectorLinker/GRBL de la cortadora de polifan de Corporearte.",
   "private": true,
   "type": "module",

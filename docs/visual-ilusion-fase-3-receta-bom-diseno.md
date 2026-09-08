@@ -55,6 +55,19 @@ validación, reporting y futuras reservas.
 
 Así se evita mantener dos editores y dos motores que puedan contradecirse.
 
+### 3.1.1 Lectura multinivel de la composición
+
+La consolidación no aplana la identidad de los subproductos. La revisión raíz
+conserva la referencia a la revisión exacta de cada hijo y la consulta BOM
+expande esa cadena de forma acíclica y acotada. La UI puede alternar entre el
+árbol multinivel y el roll-up consolidado, pero ambos provienen de las mismas
+revisiones congeladas.
+
+El grafo productivo y la BOM permanecen coordinados, no duplicados: las rutas
+describen precedencias y ejecución; la BOM describe ensambles, materiales y
+cantidades. Las líneas pueden indicar el paso consumidor o el nodo de
+incorporación sin convertir operaciones en componentes físicos.
+
 ### 3.2 Adopción opt-in y compatibilidad
 
 - Producto sin receta publicada: conserva el comportamiento histórico.
@@ -111,6 +124,13 @@ cantidad/fórmula/unidad y política de ejecución. Un accesorio comprado simple
 continúa siendo un slot de rol `COMPONENTE`; no se convierte artificialmente en
 subproducto.
 
+La relación representa una **ocurrencia de uso**, no la definición del producto
+hijo. Una misma definición puede aparecer varias veces en una receta, incluso en
+paralelo, siempre que cada ocurrencia conserve un código interno único. Nombre
+visible, bindings, medidas, cantidad, pricing, opcionalidad y política de nesting
+se configuran por ocurrencia; la receta publicada del hijo se reutiliza sin
+duplicar el producto del catálogo.
+
 ### `ProductoRecetaDocumento`
 
 Requisito declarativo por receta o nodo: nombre, propósito, etapa, tipo de
@@ -161,6 +181,12 @@ La UI debe diferenciar claramente:
 - merma calculada por acomodo/geometría;
 - merma adicional declarada por receta.
 
+Cuando el slot es `sustrato_principal` de un paso de impresión, la merma
+adicional representa pérdida operativa y también incrementa la tinta/tóner,
+el desgaste por clicks o tinta procesada y el tiempo de corrida. No se aplica
+a setup/cleanup. El desperdicio geométrico del nesting no se propaga: ver
+`docs/merma-operativa-consumos-diseno.md`.
+
 ## 8. Unidades y componentes
 
 - Se reutiliza `UnidadMateriaPrima` como catálogo físico.
@@ -180,12 +206,19 @@ concreto. Al usarla dentro de una campaña se resuelve o crea el maestro
 correspondiente. La liberación continúa gobernada por la Fase 2 y los cambios
 se comunican por la Fase 2.5.
 
+En productos compuestos el requisito pertenece por defecto a la receta que lo
+origina: un documento de la lona se configura en la ruta de la lona y se
+hereda al incorporarla como componente. El alcance queda explícito como OT
+completa, ruta/subruta del item o paso determinado; por lo tanto un requisito
+general de un componente no puede bloquear accidentalmente las ramas del
+producto padre.
+
 ## 10. Contrato visual
 
 - La ficha expone una sola pestaña principal llamada `Producción`; `Rutas`,
   `Pasos` y `Receta / BOM` dejan de competir como pestañas hermanas.
 - Producción organiza el recorrido `Rutas y flujo → Pasos y recursos → BOM y
-  versiones`, conservando la vía seleccionada durante toda la navegación.
+versiones`, conservando la vía seleccionada durante toda la navegación.
 - La configuración viva continúa en rutas/pasos y la versión publicada sigue
   siendo su contrato inmutable, pero la interfaz explica y conecta ambas capas.
 - Las URLs históricas con `tab=rutas|pasos|receta` redirigen al nuevo recorrido.
@@ -296,3 +329,26 @@ El recorrido de un exhibidor usa exactamente el mismo contrato ya validado: los
 roles `SUSTRATO`, `CONSUMIBLE`, `PACKAGING` y `COMPONENTE` se proyectan desde
 los slots existentes hacia la BOM congelada. La ejecución independiente y la
 convergencia de componentes fabricados quedan, deliberadamente, para la Fase 4.
+
+## 17. Estabilización del flujo de publicación (3 de septiembre de 2026)
+
+La ficha de producto deja de inferir la vigencia sólo por la existencia de un
+borrador. Para cada ruta activa reconstruye el mismo snapshot que valida el
+motor al cotizar y expone uno de estos estados: `SIN_RECETA`,
+`BORRADOR_INICIAL`, `VIGENTE`, `VIGENTE_CON_BORRADOR`, `DESACTUALIZADA` o
+`BLOQUEADA`.
+
+El diagnóstico explica qué familia de datos cambió —producto, ruta, Workflow,
+pasos, materiales, recursos, cargos, documentos, componentes o etapas— sin
+reemplazar a la huella SHA-256 como fuente de verdad. También muestra:
+
+- por cada ocurrencia de componente, la versión congelada por el padre y la
+  publicación disponible del hijo;
+- dependencias sin publicación, ambiguas o con actualización disponible;
+- productos padres publicados que usan la receta y podrían requerir una nueva
+  revisión.
+
+Este corte es deliberadamente informativo: conserva las revisiones publicadas
+inmutables y no propaga ni republica cambios en forma automática. Una futura
+acción masiva de actualización deberá crear borradores explícitos, presentar
+el impacto y exigir una publicación consciente por cada ruta afectada.

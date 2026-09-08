@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Pasos de producción: el catálogo del sistema + los pasos propios del
+ * Nodos de producción: el catálogo del sistema + los pasos propios del
  * tenant, que son INSTANCIAS de una plantilla del catálogo y heredan su
  * ficha entera (docs/pasos-tenant-por-plantilla-diseno.md).
  *
@@ -62,6 +62,9 @@ export function PasosFamiliasView({
   const [errorCarga, setErrorCarga] = React.useState(false);
   const [busquedaCatalogo, setBusquedaCatalogo] = React.useState("");
   const [categoriaCatalogo, setCategoriaCatalogo] = React.useState("todas");
+  const [tipoVisible, setTipoVisible] = React.useState<"SIMPLE" | "COMPUESTO">(
+    "SIMPLE",
+  );
 
   const recargar = React.useCallback(async () => {
     setPasos(await getPasosTenant());
@@ -84,7 +87,7 @@ export function PasosFamiliasView({
       } catch {
         if (vivo) {
           setErrorCarga(true);
-          toast.error("No se pudieron cargar los pasos.");
+          toast.error("No se pudieron cargar los nodos.");
         }
       } finally {
         if (vivo) setCargando(false);
@@ -124,11 +127,15 @@ export function PasosFamiliasView({
       ].some((texto) => normalizarBusqueda(texto).includes(query));
     });
   }, [busquedaCatalogo, categoriaCatalogo, sistema]);
+  const pasosVisibles = React.useMemo(
+    () => pasos.filter((paso) => paso.tipoPaso === tipoVisible),
+    [pasos, tipoVisible],
+  );
 
   const toggleActivo = async (paso: PasoTenant) => {
     try {
       await actualizarPasoTenant(paso.id, { activo: !paso.activo });
-      toast.success(paso.activo ? "Paso inhabilitado" : "Paso reactivado");
+      toast.success(paso.activo ? "Nodo inhabilitado" : "Nodo reactivado");
       await recargar();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo actualizar");
@@ -139,7 +146,7 @@ export function PasosFamiliasView({
     if (!aEliminar) return;
     try {
       await eliminarPasoTenant(aEliminar.id);
-      toast.success("Paso eliminado");
+      toast.success("Nodo eliminado");
       setAEliminar(null);
       await recargar();
     } catch (err) {
@@ -151,28 +158,51 @@ export function PasosFamiliasView({
     <div className="content">
       <div className="page-head">
         <div className="title-block">
-          <h1>Pasos de producción</h1>
+          <h1>Nodos de producción</h1>
           <p>
-            Los tipos de paso con los que se arman las rutas: el catálogo del
+            Los tipos de nodo con los que se arman los flujos: el catálogo del
             sistema más los que crea tu empresa.
           </p>
         </div>
         {/* Sin pasos propios manda el CTA del estado vacío ("Crear el
             primero"); con pasos, este. Nunca los dos a la vez. */}
         {puedeGestionar && pasos.length > 0 ? (
-          <Button onClick={() => setAltaAbierta(true)}>+ Nuevo paso</Button>
+          <Button onClick={() => setAltaAbierta(true)}>+ Nuevo nodo</Button>
         ) : null}
       </div>
+
+      <nav className={s.tipoNav} aria-label="Tipo de nodo">
+        <button
+          type="button"
+          data-active={tipoVisible === "SIMPLE"}
+          onClick={() => setTipoVisible("SIMPLE")}
+        >
+          <strong>Nodos simples</strong>
+          <span>Operaciones reales con tiempo, materiales y recursos</span>
+        </button>
+        <button
+          type="button"
+          data-active={tipoVisible === "COMPUESTO"}
+          onClick={() => setTipoVisible("COMPUESTO")}
+        >
+          <strong>Nodos compuestos</strong>
+          <span>Agrupan nodos simples en una operación de producción</span>
+        </button>
+      </nav>
 
       <div className={s.wrap}>
         <section className={s.seccion}>
           <div className={s.seccionHead}>
             <div>
-              <div className={s.seccionTitulo}>Tus pasos</div>
+              <div className={s.seccionTitulo}>
+                {tipoVisible === "COMPUESTO"
+                  ? "Tus nodos compuestos"
+                  : "Tus nodos simples"}
+              </div>
               <div className={s.seccionSub}>
-                Creados por tu empresa a partir de una plantilla del catálogo:
-                heredan cómo se calculan y agregan la configuración base de tu
-                taller.
+                {tipoVisible === "COMPUESTO"
+                  ? "Agrupan nodos simples y se configuran en el contexto de cada producto."
+                  : "Creados por tu empresa a partir de una plantilla del catálogo: heredan cómo se calculan y agregan la configuración base de tu taller."}
               </div>
             </div>
           </div>
@@ -182,14 +212,21 @@ export function PasosFamiliasView({
           ) : errorCarga ? (
             <EstadoVacio
               variant="compacto"
-              titulo="No pudimos cargar tus pasos"
+              titulo="No pudimos cargar tus nodos"
               descripcion="Revisá la conexión y volvé a intentar."
-              cta={{ label: "Reintentar", onClick: () => window.location.reload() }}
+              cta={{
+                label: "Reintentar",
+                onClick: () => window.location.reload(),
+              }}
             />
-          ) : pasos.length === 0 ? (
+          ) : pasosVisibles.length === 0 ? (
             <EstadoVacio
               variant="compacto"
-              titulo="Todavía no creaste pasos propios"
+              titulo={
+                tipoVisible === "COMPUESTO"
+                  ? "Todavía no creaste nodos compuestos"
+                  : "Todavía no creaste nodos simples"
+              }
               cta={
                 puedeGestionar
                   ? {
@@ -200,100 +237,118 @@ export function PasosFamiliasView({
               }
             />
           ) : (
-            <div className="overflow-x-auto"><table className="tbl min-w-[760px]">
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Parte de</th>
-                  <th>Categoría</th>
-                  <th>Estación</th>
-                  <th>Estado</th>
-                  <th className="right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pasos.map((paso) => (
-                  <tr
-                    key={paso.id}
-                    className={paso.activo ? undefined : s.inactiva}
-                  >
-                    <td>
-                      <div className="name">{paso.nombre}</div>
-                      {paso.descripcion ? (
-                        <div className="desc">{paso.descripcion}</div>
-                      ) : null}
-                    </td>
-                    <td>
-                      {paso.heredaFicha === false ? (
-                        <span className="tag warm">Plantilla inexistente</span>
-                      ) : (
-                        <span className={s.formaChip}>
-                          {paso.plantillaNombre ?? paso.plantillaCodigo}
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      {paso.categoria
-                        ? getLabel(categoriaFamiliaLabels, paso.categoria).label
-                        : "—"}
-                    </td>
-                    <td>
-                      {paso.estacion ? (
-                        <>
-                          {paso.estacion.nombre}
-                          {paso.estacionHeredada ? (
-                            <span className="desc"> (de la plantilla)</span>
-                          ) : null}
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td>
-                      <span className="tag">
-                        {paso.activo ? "Activo" : "Inhabilitado"}
-                      </span>
-                    </td>
-                    <td className="right">
-                      {puedeGestionar ? (
-                        <Link
-                          href={`/productos-servicios/pasos/${paso.id}`}
-                          className={buttonVariants({
-                            variant: "outline",
-                            size: "sm",
-                          })}
-                        >
-                          Configurar
-                        </Link>
-                      ) : null}
-                      {puedeGestionar ? <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleActivo(paso)}
-                      >
-                        {paso.activo ? "Inhabilitar" : "Reactivar"}
-                      </Button> : null}
-                      {puedeGestionar ? <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAEliminar(paso)}
-                      >
-                        Eliminar
-                      </Button> : null}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="tbl min-w-[760px]">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Parte de</th>
+                    <th>Categoría</th>
+                    <th>Estación</th>
+                    <th>Estado</th>
+                    <th className="right">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table></div>
+                </thead>
+                <tbody>
+                  {pasosVisibles.map((paso) => (
+                    <tr
+                      key={paso.id}
+                      className={paso.activo ? undefined : s.inactiva}
+                    >
+                      <td>
+                        <div className="name">{paso.nombre}</div>
+                        {paso.descripcion ? (
+                          <div className="desc">{paso.descripcion}</div>
+                        ) : null}
+                        {paso.tipoPaso === "COMPUESTO" ? (
+                          <span className="tag warm">
+                            Nodo compuesto · {paso.pasosInternos?.length ?? 0}{" "}
+                            nodos internos
+                          </span>
+                        ) : null}
+                      </td>
+                      <td>
+                        {paso.heredaFicha === false ? (
+                          <span className="tag warm">
+                            Plantilla inexistente
+                          </span>
+                        ) : (
+                          <span className={s.formaChip}>
+                            {paso.tipoPaso === "COMPUESTO"
+                              ? "Subflujo reutilizable"
+                              : (paso.plantillaNombre ?? paso.plantillaCodigo)}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {paso.categoria
+                          ? getLabel(categoriaFamiliaLabels, paso.categoria)
+                              .label
+                          : "—"}
+                      </td>
+                      <td>
+                        {paso.estacion ? (
+                          <>
+                            {paso.estacion.nombre}
+                            {paso.estacionHeredada ? (
+                              <span className="desc"> (de la plantilla)</span>
+                            ) : null}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>
+                        <span className="tag">
+                          {paso.activo ? "Activo" : "Inhabilitado"}
+                        </span>
+                      </td>
+                      <td className="right">
+                        {puedeGestionar ? (
+                          <Link
+                            href={`/productos-servicios/pasos/${paso.id}`}
+                            className={buttonVariants({
+                              variant: "outline",
+                              size: "sm",
+                            })}
+                          >
+                            Configurar
+                          </Link>
+                        ) : null}
+                        {puedeGestionar ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => toggleActivo(paso)}
+                          >
+                            {paso.activo ? "Inhabilitar" : "Reactivar"}
+                          </Button>
+                        ) : null}
+                        {puedeGestionar ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAEliminar(paso)}
+                          >
+                            Eliminar
+                          </Button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
 
+        {tipoVisible === "SIMPLE" ? (
         <section className={s.seccion}>
           <div className={s.seccionHead}>
             <div>
               <div className={s.seccionTitulo}>Catálogo del sistema</div>
               <div className={s.seccionSub}>
-                Los {sistema.length} tipos de paso que trae Grafo. Su definición
+                Los {sistema.length} tipos de nodo que trae Grafo. Su definición
                 técnica se actualiza automáticamente; podés configurar cómo los
                 usa tu empresa.
               </div>
@@ -304,19 +359,19 @@ export function PasosFamiliasView({
               type="search"
               value={busquedaCatalogo}
               onChange={(event) => setBusquedaCatalogo(event.target.value)}
-              placeholder="Buscar un tipo de paso"
-              aria-label="Buscar en el catálogo de pasos"
+              placeholder="Buscar un tipo de nodo"
+              aria-label="Buscar en el catálogo de nodos"
               className="sm:max-w-sm"
             />
-            <Select value={categoriaCatalogo} onValueChange={(value) => setCategoriaCatalogo(value ?? "todas")}>
+            <Select
+              value={categoriaCatalogo}
+              onValueChange={(value) => setCategoriaCatalogo(value ?? "todas")}
+            >
               <SelectTrigger className="w-full sm:w-64">
                 <SelectValue>
                   {categoriaCatalogo === "todas"
                     ? "Todas las categorías"
-                    : getLabel(
-                        categoriaFamiliaLabels,
-                        categoriaCatalogo,
-                      ).label}
+                    : getLabel(categoriaFamiliaLabels, categoriaCatalogo).label}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -331,71 +386,78 @@ export function PasosFamiliasView({
               </SelectContent>
             </Select>
           </div>
-          <div className="overflow-x-auto"><table className="tbl min-w-[760px]">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Descripción</th>
-                <th>Categoría</th>
-                <th className="right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sistemaFiltrado.map((f) => (
-                <tr key={f.codigo}>
-                  <td>
-                    <div className="name">{f.nombre}</div>
-                  </td>
-                  <td>
-                    <div className="desc">
-                      {descripcionPasoParaUsuario(f.descripcion)}
-                    </div>
-                  </td>
-                  <td>{getLabel(categoriaFamiliaLabels, f.categoria).label}</td>
-                  <td className="right">
-                    {puedeGestionar ? (
-                      <Link
-                        href={`/productos-servicios/pasos/${f.codigo}`}
-                        className={buttonVariants({
-                          variant: f.configBase ? "outline" : "ghost",
-                          size: "sm",
-                        })}
-                      >
-                        {f.configBase ? "Editar configuración" : "Configurar"}
-                      </Link>
-                    ) : null}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="tbl min-w-[760px]">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Descripción</th>
+                  <th>Categoría</th>
+                  <th className="right">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table></div>
+              </thead>
+              <tbody>
+                {sistemaFiltrado.map((f) => (
+                  <tr key={f.codigo}>
+                    <td>
+                      <div className="name">{f.nombre}</div>
+                    </td>
+                    <td>
+                      <div className="desc">
+                        {descripcionPasoParaUsuario(f.descripcion)}
+                      </div>
+                    </td>
+                    <td>
+                      {getLabel(categoriaFamiliaLabels, f.categoria).label}
+                    </td>
+                    <td className="right">
+                      {puedeGestionar ? (
+                        <Link
+                          href={`/productos-servicios/pasos/${f.codigo}`}
+                          className={buttonVariants({
+                            variant: f.configBase ? "outline" : "ghost",
+                            size: "sm",
+                          })}
+                        >
+                          {f.configBase ? "Editar configuración" : "Configurar"}
+                        </Link>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {!cargando && sistemaFiltrado.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
-              No hay tipos de paso que coincidan con esos filtros.
+              No hay tipos de nodo que coincidan con esos filtros.
             </p>
           ) : null}
         </section>
+        ) : null}
       </div>
 
-      {puedeGestionar ? <PasoAltaDialog
-        open={altaAbierta}
-        plantillas={plantillas}
-        onClose={() => setAltaAbierta(false)}
-        onCreado={(paso) => {
-          setAltaAbierta(false);
-          router.push(`/productos-servicios/pasos/${paso.id}`);
-        }}
-      /> : null}
+      {puedeGestionar ? (
+        <PasoAltaDialog
+          open={altaAbierta}
+          plantillas={plantillas}
+          onClose={() => setAltaAbierta(false)}
+          onCreado={(paso) => {
+            setAltaAbierta(false);
+            router.push(`/productos-servicios/pasos/${paso.id}`);
+          }}
+        />
+      ) : null}
 
       <ConfirmacionDestructiva
         open={aEliminar !== null}
         onOpenChange={(open) => {
           if (!open) setAEliminar(null);
         }}
-        titulo="Eliminar paso"
+        titulo="Eliminar nodo"
         nombreItem={aEliminar?.nombre}
         requiereTipear={false}
-        descripcion="Sólo se puede eliminar un paso que ninguna ruta ni orden usó jamás. Si tiene historial, el sistema va a ofrecer inhabilitarlo en su lugar."
+        descripcion="Sólo se puede eliminar un nodo que ningún flujo ni orden usó jamás. Si tiene historial, el sistema va a ofrecer inhabilitarlo en su lugar."
         accionLabel="Eliminar"
         onConfirmar={confirmarEliminar}
       />

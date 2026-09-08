@@ -36,9 +36,23 @@ function productoFixture() {
     activo: true,
     unidadComercial: 'm2',
     modoMedidas: 'LIBRE',
+    dimensionesRequeridas: ['ANCHO', 'ALTO'],
     medidaDefaultAnchoMm: null,
     medidaDefaultAltoMm: null,
     medidasPredefinidasJson: null,
+    atributosComercialesJson: {
+      geometriasComerciales: {
+        version: 1,
+        modo: 'AMBAS',
+        fuentes: [
+          {
+            id: 'contorno_principal',
+            nombre: 'Contorno principal',
+            requerida: true,
+          },
+        ],
+      },
+    },
     personalizacionesJson: null,
     minimoComercialPolitica: 'BLOQUEAR',
     minimoComercialCantidad: 1,
@@ -177,6 +191,23 @@ function servicio(fixture: unknown) {
 }
 
 describe('formulario de cotización', () => {
+  it('publica las fuentes geométricas nombradas del producto', async () => {
+    const form = await servicio(productoFixture()).obtener('t1', 'prod-1');
+    expect(form.geometrias).toEqual({
+      version: 1,
+      modo: 'AMBAS',
+      permitirCotizacionManual: false,
+      fuentes: [
+        {
+          id: 'contorno_principal',
+          nombre: 'Contorno principal',
+          requerida: true,
+          permitirReemplazo: false,
+        },
+      ],
+    });
+  });
+
   it('un paso NO_EJECUTAR no aporta NINGUNA pregunta', async () => {
     const form = await servicio(productoFixture()).obtener('t1', 'prod-1');
     const deMuerto = form.preguntas.filter(
@@ -185,8 +216,97 @@ describe('formulario de cotización', () => {
     expect(deMuerto).toHaveLength(0);
     // Ni siquiera sus params abiertos (densidad estaba en editables).
     expect(
-      form.preguntas.some((p) => p.jobContextKey?.toString().includes('densidad')),
+      form.preguntas.some((p) =>
+        p.jobContextKey?.toString().includes('densidad'),
+      ),
     ).toBe(false);
+  });
+
+  it('publica el diseño vectorial como herramienta compleja del producto hijo', async () => {
+    const fixture = productoFixture();
+    fixture.rutasAlternativas[0].configPasos = [
+      {
+        ...CONFIG_BASE,
+        id: 'cp-vectorial',
+        rutaPasoId: 'rp-vectorial',
+        modoActivacion: 'OBLIGATORIO',
+        rutaPaso: {
+          familiaCodigo: 'corte_hilo_caliente',
+          familiaNombre: 'Corte de formas',
+          activo: true,
+          orden: 1,
+        },
+      },
+    ] as never;
+
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+
+    expect(form.herramientas).toEqual([
+      {
+        tipo: 'diseno_vectorial',
+        jobContextKey: 'disenoVectorialFuente',
+        etiqueta: 'Diseño vectorial',
+        requerido: true,
+      },
+    ]);
+  });
+
+  it('publica el diseño vectorial opcional cuando fue activado en láser/CNC', async () => {
+    const fixture = productoFixture();
+    fixture.rutasAlternativas[0].configPasos = [
+      {
+        ...CONFIG_BASE,
+        id: 'cp-laser-vectorial',
+        rutaPasoId: 'rp-laser-vectorial',
+        modoActivacion: 'OBLIGATORIO',
+        paramsPasoJson: { usarDisenoVectorial: true },
+        rutaPaso: {
+          familiaCodigo: 'corte_laser',
+          familiaNombre: 'Corte láser',
+          activo: true,
+          orden: 1,
+        },
+      },
+    ] as never;
+
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+
+    expect(form.herramientas).toEqual([
+      expect.objectContaining({
+        tipo: 'diseno_vectorial',
+        jobContextKey: 'disenoVectorialFuente',
+        requerido: true,
+      }),
+    ]);
+  });
+
+  it('publica láser/CNC como capacidad vectorial opcional aunque use medidas por defecto', async () => {
+    const fixture = productoFixture();
+    fixture.rutasAlternativas[0].configPasos = [
+      {
+        ...CONFIG_BASE,
+        id: 'cp-laser-medidas',
+        rutaPasoId: 'rp-laser-medidas',
+        modoActivacion: 'OBLIGATORIO',
+        paramsPasoJson: {},
+        rutaPaso: {
+          familiaCodigo: 'corte_laser',
+          familiaNombre: 'Corte láser',
+          activo: true,
+          orden: 1,
+        },
+      },
+    ] as never;
+
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+
+    expect(form.herramientas).toEqual([
+      expect.objectContaining({
+        tipo: 'diseno_vectorial',
+        jobContextKey: 'disenoVectorialFuente',
+        requerido: false,
+      }),
+    ]);
   });
 
   it('camposFijadosComercial gana sobre expuestoAlComercial de la familia', async () => {
@@ -212,7 +332,9 @@ describe('formulario de cotización', () => {
     expect(opciones).toHaveLength(2);
     const default440 = opciones.find((o) => o.varianteId === 'var-440');
     expect(default440?.esDefault).toBe(true);
-    expect(default440?.etiqueta).toBe('Lona frontlight · 440g · 1580mm de ancho');
+    expect(default440?.etiqueta).toBe(
+      'Lona frontlight · 440g · 1580mm de ancho',
+    );
     expect(opciones.find((o) => o.varianteId === 'var-340')?.sinPrecio).toBe(
       true,
     );
@@ -242,17 +364,22 @@ describe('formulario de cotización', () => {
     // requiereRutaPasoIds venía como rutaPasoId (rp-3) → sale como configPasoId.
     expect(bastidor!.requiereIds).toEqual(['cp-refuerzo']);
     // El cargo de cotización también está.
-    expect(
-      form.adicionales.some((a) => a.id === 'cargo-cot-1'),
-    ).toBe(true);
+    expect(form.adicionales.some((a) => a.id === 'cargo-cot-1')).toBe(true);
   });
 
-  it('bastidor doble sin profundidad fija pregunta profundidadMm', async () => {
+  it('no infiere profundidad desde un paso de bastidor', async () => {
     const form = await servicio(productoFixture()).obtener('t1', 'prod-1');
     const prof = form.preguntas.find((p) => p.tipo === 'profundidad');
-    expect(prof).toBeDefined();
-    expect(prof!.jobContextKey).toBe('profundidadMm');
-    expect(prof!.requerido).toBe(true);
+    expect(prof).toBeUndefined();
+    expect(form.medidas.ejes).toEqual(['ANCHO', 'ALTO']);
+  });
+
+  it('producto 3D publica profundidad aunque la ruta no sea su propietaria', async () => {
+    const fixture = productoFixture();
+    fixture.dimensionesRequeridas = ['ANCHO', 'ALTO', 'PROFUNDIDAD'];
+    const form = await servicio(fixture).obtener('t1', 'prod-1');
+    expect(form.medidas.instruccion).toBe('pedir_ancho_alto_profundidad');
+    expect(form.medidas.jobContextKeys).toContain('profundidadMm');
   });
 
   it('medidas LIBRE instruye pedir ancho×alto en mm', async () => {
@@ -270,7 +397,7 @@ describe('formulario de cotización', () => {
     const fixture = productoFixture();
     fixture.rutasAlternativas = [];
     await expect(servicio(fixture).obtener('t1', 'prod-1')).rejects.toThrow(
-      /no tiene rutas/,
+      /no tiene flujos/,
     );
   });
 

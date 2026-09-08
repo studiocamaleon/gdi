@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRightIcon,
   BookOpenIcon,
+  BoxesIcon,
   CircleDotIcon,
   CopyIcon,
   FactoryIcon,
   GitBranchIcon,
   LayersIcon,
   LayoutDashboardIcon,
+  Layers3Icon,
   Loader2Icon,
   PackageIcon,
   PaintbrushIcon,
@@ -80,14 +82,23 @@ function getStepIcon(icono?: string | null) {
 }
 
 function RoutePreview({
-  pasos,
+  ruta,
   familiaLabel,
-  rutaNombre,
 }: {
-  pasos: RutaListItem["pasos"];
+  ruta: RutaListItem;
   familiaLabel: (codigo: string) => string;
-  rutaNombre: string;
 }) {
+  const nodos =
+    ruta.workflow?.nodos.slice().sort((a, b) => a.orden - b.orden) ??
+    ruta.pasos.map((paso, index) => ({
+      clave: paso.id,
+      tipo: "PASO" as const,
+      orden: index,
+      familiaCodigo: paso.familiaCodigo,
+      nombreVisible: paso.nombreVisible,
+      icono: paso.icono,
+    }));
+  const topologia = ruta.workflow?.topologia ?? "LINEAL";
   return (
     <Tooltip>
       <TooltipTrigger
@@ -97,12 +108,12 @@ function RoutePreview({
             type="button"
             variant="outline"
             size="sm"
-            aria-label={`Ver recorrido de ${rutaNombre}: ${pasos.length} ${pasos.length === 1 ? "paso" : "pasos"}`}
+            aria-label={`Ver flujo de producción de ${ruta.nombre}: ${nodos.length} ${nodos.length === 1 ? "nodo" : "nodos"}`}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           >
             <RouteIcon data-icon="inline-start" />
-            {pasos.length} {pasos.length === 1 ? "paso" : "pasos"}
+            {nodos.length} {nodos.length === 1 ? "nodo" : "nodos"} · {topologia}
           </Button>
         )}
       />
@@ -111,20 +122,28 @@ function RoutePreview({
         align="start"
         className="block w-80 max-w-[calc(100vw-2rem)] p-3"
       >
-        <p className="mb-2 font-medium">Recorrido de producción</p>
+        <p className="mb-2 font-medium">Flujo de producción reutilizable</p>
         <ol className="grid gap-1.5">
-          {pasos.map((paso, index) => {
-            const StepIcon = getStepIcon(paso.icono);
+          {nodos.map((nodo, index) => {
+            const StepIcon =
+              nodo.tipo === "COMPONENTE"
+                ? BoxesIcon
+                : nodo.tipo === "ETAPA"
+                  ? Layers3Icon
+                  : getStepIcon(nodo.icono);
+            const nombre =
+              nodo.tipo === "COMPONENTE"
+                ? nodo.nombre
+                : nodo.nombreVisible?.trim() ||
+                  familiaLabel(nodo.familiaCodigo);
             return (
-              <li key={paso.id} className="flex min-w-0 items-center gap-2">
+              <li key={nodo.clave} className="flex min-w-0 items-center gap-2">
                 <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
                   {index + 1}
                 </span>
                 <StepIcon className="size-3.5 shrink-0 opacity-75" />
-                <span className="min-w-0 truncate">
-                  {paso.nombreVisible?.trim() ||
-                    familiaLabel(paso.familiaCodigo)}
-                </span>
+                <span className="min-w-0 truncate">{nombre}</span>
+                <small className="ml-auto opacity-60">{nodo.tipo}</small>
               </li>
             );
           })}
@@ -175,11 +194,15 @@ export function RutasTable({
       if (estadoFiltro === "activas" && !r.activo) return false;
       if (estadoFiltro === "inactivas" && r.activo) return false;
       if (!term) return true;
-      const nombresPasos = r.pasos
-        .map((p) => familiaLabel(p.familiaCodigo).toLowerCase())
+      const nombresNodos = (r.workflow?.nodos ?? r.pasos)
+        .map((nodo) =>
+          "tipo" in nodo && nodo.tipo === "COMPONENTE"
+            ? nodo.nombre.toLowerCase()
+            : familiaLabel(nodo.familiaCodigo).toLowerCase(),
+        )
         .join(" ");
       const haystack =
-        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresPasos}`.toLowerCase();
+        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresNodos}`.toLowerCase();
       return haystack.includes(term);
     });
   }, [rutas, search, familiaLabel, estadoFiltro]);
@@ -211,14 +234,14 @@ export function RutasTable({
     setDuplicandoId(rutaADuplicar.id);
     try {
       const duplicada = await duplicarRuta(rutaADuplicar.id, { nombre });
-      toast.success(`Ruta "${rutaADuplicar.nombre}" duplicada`);
+      toast.success(`Flujo "${rutaADuplicar.nombre}" duplicado`);
       setRutaADuplicar(null);
       setNombreCopia("");
       router.refresh();
       router.push(`/productos-servicios/rutas/${duplicada.id}`);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "No se pudo duplicar la ruta",
+        err instanceof Error ? err.message : "No se pudo duplicar el flujo",
       );
     } finally {
       setDuplicandoId(null);
@@ -229,10 +252,10 @@ export function RutasTable({
     <div className="content">
       <div className="page-head">
         <div className="title-block">
-          <h1>Rutas de producción</h1>
+          <h1>Flujos de producción</h1>
           <div className="sub">
-            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos
-            que los productos pueden referenciar.
+            {rutas.length} flujos reutilizables. Cada flujo organiza nodos simples,
+            nodos compuestos y componentes que distintos productos pueden usar.
           </div>
         </div>
         {puedeGestionar ? (
@@ -241,19 +264,19 @@ export function RutasTable({
             className="btn btn-primary"
           >
             <PlusIcon size={14} />
-            Nueva ruta
+            Nuevo flujo
           </Link>
         ) : null}
       </div>
 
       {rutas.length === 0 ? (
         <EstadoVacio
-          titulo="Sin rutas cargadas"
-          descripcion="Las rutas son los caminos de producción reusables. Empezá creando una desde cero o ejecutá el seed."
+          titulo="Sin flujos cargados"
+          descripcion="Los flujos organizan la producción y se pueden reutilizar. Empezá creando uno desde cero."
           cta={
             puedeGestionar
               ? {
-                  label: "Crear ruta",
+                  label: "Crear flujo",
                   href: "/productos-servicios/rutas/nueva",
                   icon: PlusIcon,
                 }
@@ -264,7 +287,7 @@ export function RutasTable({
         <div className="card">
           <div className="search-card-head">
             <div className="ttl-block">
-              <span className="title">Rutas</span>
+              <span className="title">Flujos</span>
               <span className="count">
                 {rutasFiltradas.length} de {rutas.length}
               </span>
@@ -278,18 +301,18 @@ export function RutasTable({
                 const value = values[0] as EstadoFiltro | undefined;
                 if (value) setEstadoFiltro(value);
               }}
-              aria-label="Filtrar rutas por estado"
+              aria-label="Filtrar flujos por estado"
             >
-              <ToggleGroupItem value="activas">Activas</ToggleGroupItem>
-              <ToggleGroupItem value="inactivas">Inactivas</ToggleGroupItem>
-              <ToggleGroupItem value="todas">Todas</ToggleGroupItem>
+              <ToggleGroupItem value="activas">Activos</ToggleGroupItem>
+              <ToggleGroupItem value="inactivas">Inactivos</ToggleGroupItem>
+              <ToggleGroupItem value="todas">Todos</ToggleGroupItem>
             </ToggleGroup>
             <label className="search-inline">
               <SearchIcon size={14} />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar ruta o paso..."
+                placeholder="Buscar flujo o nodo..."
               />
               <span className="kbd">/</span>
             </label>
@@ -299,7 +322,7 @@ export function RutasTable({
             <div className="p-8">
               <EstadoVacio
                 variant="compacto"
-                titulo="Ninguna ruta coincide"
+                titulo="Ningún flujo coincide"
                 descripcion="Probá con otros términos de búsqueda."
               />
             </div>
@@ -315,7 +338,7 @@ export function RutasTable({
                         Versión
                       </th>
                       <th className="right" style={{ width: 150 }}>
-                        Productos que la usan
+                        Productos que lo usan
                       </th>
                       <th className="right" style={{ width: 110 }}>
                         Acciones
@@ -352,9 +375,8 @@ export function RutasTable({
                         </td>
                         <td>
                           <RoutePreview
-                            pasos={ruta.pasos}
+                            ruta={ruta}
                             familiaLabel={familiaLabel}
-                            rutaNombre={ruta.nombre}
                           />
                         </td>
                         <td className="right">
@@ -431,10 +453,11 @@ export function RutasTable({
         <AlertDialogContent>
           <form onSubmit={handleDuplicarRuta}>
             <AlertDialogHeader>
-              <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
+              <AlertDialogTitle>Duplicar flujo de producción</AlertDialogTitle>
               <AlertDialogDescription>
-                Definí el nombre de la copia. Se copiarán los pasos de la
-                versión actual para que puedas revisarla antes de usarla.
+                Definí el nombre de la copia. Se copiará el flujo de producción
+                completo de la versión actual, incluidos sus nodos compuestos, componentes
+                y paralelismos, para que puedas revisarlo antes de usarlo.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="mt-4 grid gap-3">
@@ -445,7 +468,7 @@ export function RutasTable({
                   autoFocus
                   value={nombreCopia}
                   onChange={(event) => setNombreCopia(event.target.value)}
-                  placeholder="Nombre de la nueva ruta"
+                  placeholder="Nombre del nuevo flujo"
                   disabled={Boolean(duplicandoId)}
                 />
               </div>
@@ -467,7 +490,7 @@ export function RutasTable({
                 loading={Boolean(duplicandoId)}
                 disabled={!nombreCopia.trim()}
               >
-                Duplicar ruta
+                Duplicar flujo
               </Button>
             </AlertDialogFooter>
           </form>

@@ -35,6 +35,7 @@ async function ProductosServiciosPageContent({
   const categoria = first(params.categoria)?.trim() ?? "";
   const categoriaGrupo = first(params.categoriaGrupo)?.trim() ?? "";
   const vista = first(params.vista) === "categorias" ? "categorias" : "tabla";
+  const composicion = normalizarComposicion(first(params.composicion));
   const [res, catalogo, todosLosProductos, canManage] = await Promise.all([
     listProductos({
       page,
@@ -45,6 +46,7 @@ async function ProductosServiciosPageContent({
       subcategoriaCodigo: categoria || undefined,
       categoriaCodigo: categoriaGrupo || undefined,
       orden,
+      composicion: composicion || undefined,
     }),
     getCatalogoComercial(),
     getProductos(),
@@ -66,6 +68,7 @@ async function ProductosServiciosPageContent({
         estado,
         orden,
         vista,
+        composicion,
       }}
       categorias={catalogo.map((grupo) => ({
         codigo: grupo.codigo,
@@ -108,4 +111,8 @@ function normalizarEstado(value: string | undefined) {
 
 function normalizarOrden(value: string | undefined) {
   return value === "nombre_asc" || value === "nombre_desc" ? value : "recientes";
+}
+
+function normalizarComposicion(value: string | undefined) {
+  return value === "simple" || value === "compuesto" ? value : "";
 }

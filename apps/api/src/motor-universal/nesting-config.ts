@@ -7,10 +7,12 @@
 // lee con los helpers de familias.ts. Lo que queda son las primitivas de
 // geometría (panelizado, pliego automático, algoritmo).
 import type { PasoCargado, JobContext } from './tipos';
+import type { ConfiguracionCommonLineTrabajo } from '../workers/colas';
 import type { CostingStrategyKind } from '../productos-servicios/nesting/costing';
 import {
   campoSeparacionMaquinaDeFamilia,
   estrategiaNestingDeFamilia,
+  herramientasCotizacionEfectivas,
   margenesNestingDefaultDeFamilia,
   origenMargenesNestingDeFamilia,
   resolverFamilia,
@@ -21,6 +23,23 @@ import {
   resolverConfiguracionEncastresVectoriales,
   type ConfiguracionEncastresVectoriales,
 } from './geometria-vectorial/segmentacion-encastres';
+
+/** La carga comercial es opcional, pero una geometría ya recibida por la
+ * receta (también desde un componente padre) debe llegar al corte. */
+export function debeEjecutarNestingVectorial(
+  paso: Pick<PasoCargado, 'familiaCodigo' | 'paramsPasoJson'>,
+  jobContext: JobContext,
+): boolean {
+  if (jobContext.modoCotizacionVectorial === 'medidas') return false;
+  return (
+    herramientasCotizacionEfectivas(
+      paso.familiaCodigo,
+      paso.paramsPasoJson,
+    ).includes('diseno_vectorial') ||
+    (estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa' &&
+      Boolean(jobContext.geometriaVectorial?.piezas.length))
+  );
+}
 
 export type NestingAlgorithmPolicy =
   | 'auto'
@@ -74,6 +93,7 @@ export interface NestingConfigResolved {
   allowRotation: boolean;
   preservarComposicionOriginalSiEntra: boolean;
   permitirSegmentacionVectorial: boolean;
+  commonLine?: ConfiguracionCommonLineTrabajo;
   configuracionEncastres: ConfiguracionEncastresVectoriales;
   pieceBleedMm: number;
   separationHMm: number;
@@ -91,6 +111,16 @@ export interface NestingConfigResolved {
   sheetHeightMm: number | null;
   machineBedWidthMm: number | null;
   machineBedHeightMm: number | null;
+  /**
+   * Algunas mesas abiertas permiten apoyar una placa mayor que la cama y
+   * dejar el excedente fuera de la máquina. El eje está expresado en las
+   * coordenadas de la máquina (X = ancho, Y = fondo/alto en vista superior).
+   * La placa conserva su formato y costo completos; sólo se limita la ventana
+   * en la que el nesting puede ubicar cortes.
+   */
+  machineSheetOverhang?: {
+    axis: 'x' | 'y';
+  };
   printSheetMode: 'fixed' | 'automatic';
   /**
    * Origen del costo al comparar candidatos de pliego:
@@ -148,6 +178,7 @@ export function resolveNestingConfig(
     asRecord(jobContext.configPasoRuntime)?.[paso.configPasoId],
   );
   const runtimeNestingConfig = asRecord(runtimeConfig.nestingConfig);
+  const perfilDetalle = asRecord(paso.perfil?.detalleJson);
   const runtimeMargins = normalizeMargins(
     asRecord(runtimeNestingConfig.margins),
     {},
@@ -378,6 +409,49 @@ export function resolveNestingConfig(
         pliegoImpresionConfig.heightMm,
       )
     : null;
+  const permitePlacaSobresaliente = readBoolean(
+    maqParams.placaSobresalientePermitida,
+    false,
+  );
+  const ejeSobresalienteRaw =
+    typeof maqParams.ejeSobresalientePlaca === 'string'
+      ? maqParams.ejeSobresalientePlaca.trim().toLowerCase()
+      : '';
+  const machineSheetOverhang: NestingConfigResolved['machineSheetOverhang'] =
+    permitePlacaSobresaliente &&
+    (ejeSobresalienteRaw === 'x' || ejeSobresalienteRaw === 'y')
+      ? { axis: ejeSobresalienteRaw }
+      : undefined;
+  const commonLineSolicitado = readBoolean(
+    runtimeNestingConfig.commonLineEnabled,
+    runtimeConfig.usarCommonLine,
+    nestingConfig.commonLineEnabled,
+    params.usarCommonLine,
+    false,
+  );
+  const commonLineDisponible = readBoolean(
+    maqParams.commonLineHabilitado,
+    false,
+  );
+  const anchoCorteMm = Math.max(
+    0,
+    readNumber(perfilDetalle.anchoCorteMm) ?? 0,
+  );
+  const commonLine =
+    commonLineSolicitado && commonLineDisponible && anchoCorteMm > 0
+      ? {
+          habilitado: true,
+          anchoCorteMm,
+          longitudMinimaMm: Math.max(
+            1,
+            readNumber(maqParams.commonLineLongitudMinimaMm) ?? 20,
+          ),
+          toleranciaMm: Math.min(
+            1,
+            Math.max(0.01, readNumber(maqParams.commonLineToleranciaMm) ?? 0.1),
+          ),
+        }
+      : undefined;
 
   return {
     algorithm,
@@ -392,6 +466,7 @@ export function resolveNestingConfig(
     permitirSegmentacionVectorial:
       resolverFamilia(paso.familiaCodigo)?.permiteSegmentacionVectorial ===
       true,
+    commonLine,
     configuracionEncastres:
       resolverConfiguracionEncastresVectoriales(maqParams),
     pieceBleedMm,
@@ -417,6 +492,7 @@ export function resolveNestingConfig(
       maqParams.largoUtil,
       maqParams.largoMesaMm,
     ),
+    machineSheetOverhang,
     printSheetMode,
     printSheetCostSource,
     printSheetCandidates,

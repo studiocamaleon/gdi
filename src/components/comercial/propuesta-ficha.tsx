@@ -1,11 +1,16 @@
 "use client";
 
+import campanaStyles from "./propuesta-campana.module.css";
+import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-descargas";
+import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
+
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   BadgePercentIcon,
+  BlocksIcon,
   CalendarIcon,
   ClockIcon,
   CheckIcon,
@@ -23,6 +28,7 @@ import {
   FileXIcon,
   EyeIcon,
   FolderIcon,
+  GitCommitHorizontalIcon,
   HistoryIcon,
   PackageCheckIcon,
   PackageIcon,
@@ -152,15 +158,26 @@ import {
   calcularCostoItem,
   getCostoTiempoPaso,
   getVisibleCostSteps,
+  proyectarPasoOperacionInterna,
   sumCargosPaso,
   sumCargosYTiempoExtraPaso,
   sumMaterialesPaso,
   consolidarCostosOrden,
 } from "@/lib/costos-orden";
+import {
+  construirWorkflowCotizacion,
+  type ComponenteWorkflowCotizacion,
+} from "@/lib/workflow-cotizacion";
+import {
+  calcularCostoMermaTiempo,
+  calcularItemsMermaMaterial,
+} from "@/lib/desglose-merma-material";
 import { FidelizacionCotizador } from "@/components/comercial/fidelizacion-cotizador";
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import { ComponentesEspecificaciones } from "@/components/comercial/componentes-especificaciones";
+import { componentesTienenMaterialEfectivo } from "@/lib/especificaciones-componentes";
 import {
   BriefDisenoDialog,
   BriefDisenoEspecificaciones,
@@ -180,13 +197,36 @@ import {
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import { Button } from "@/components/ui/button";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
@@ -206,8 +246,6 @@ import { NestingViewer } from "@/components/nesting/nesting-viewer";
 import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
 import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
 import {
-  crearSvgDePlaca,
-  crearDxfDePlaca,
   descargarTexto,
   nombreBaseSvg,
   obtenerFuenteVectorial,
@@ -218,6 +256,7 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import nestC from "./nesting-compra-pliego-viewer.module.css";
+import costC from "./propuesta-ficha-costos.module.css";
 import descM from "./descuento-modal.module.css";
 import { ConstelacionCanvas } from "@/components/constelacion-canvas";
 import resumenBar from "./resumen-financiero-bar.module.css";
@@ -1771,6 +1810,305 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
   return "Acomodado";
 }
 
+type ComponenteNestingRecursivo = {
+  jobContext?: Record<string, unknown>;
+  codigo?: string;
+  nombre?: string;
+  pasos?: Array<
+    Partial<PasoCosteo> & {
+      rutaPasoOrden: number;
+      familiaCodigo: string;
+      activado: boolean;
+      costoTotal: number;
+      nestingResult?: NestingViewerInput;
+      operacionesInternas?: Array<{
+        codigo: string;
+        nombre: string;
+        familiaCodigo: string;
+        activada: boolean;
+        duracionMin: number;
+        costoTotal: number;
+        centroCostoId?: string | null;
+        centroCostoNombre?: string | null;
+        materiales?: PasoCosteo["materiales"];
+        nestingResult?: NestingViewerInput;
+      }>;
+    }
+  >;
+  componentes?: ComponenteNestingRecursivo[];
+};
+
+type FuenteNesting = {
+  key: string;
+  label: string;
+  paso: PanelEditorPaso;
+  /** Sólo el paso raíz pertenece al editor de paneles del item padre. */
+  editable: boolean;
+  /** Metadatos internos para reemplazar participantes por su lote común. */
+  componenteCodigo?: string;
+  pasoClave?: string;
+  orden: number;
+};
+
+/**
+ * El nesting puede pertenecer a un paso raíz, una operación interna de una
+ * etapa consolidada o cualquier nivel fabricado del BOM. La cotización ya
+ * conserva esos resultados: esta función evita que Producción mire solamente
+ * el primer nivel y haga desaparecer los acomodos de componentes/etapas.
+ */
+function recolectarNestingsCotizacion(
+  cotizacion: CotizacionPropuestaSnapshot,
+  jobContext?: Record<string, unknown>,
+): FuenteNesting[] {
+  const fuentes: FuenteNesting[] = [];
+  let secuencia = 0;
+
+  const agregarPaso = (
+    paso: PasoCosteo,
+    contexto: string | null,
+    editable: boolean,
+    componenteCodigo?: string,
+    contextoVectorial?: Record<string, unknown>,
+  ) => {
+    if (paso.nestingResult) paso = { ...paso, nestingResult: vincularFuentesFabricacion(paso.nestingResult, contextoVectorial) };
+    if (paso.nestingResult) {
+      secuencia += 1;
+      fuentes.push({
+        key: `${contexto ?? "raiz"}-${nestingPasoKey(paso)}-${secuencia}`,
+        label: [contexto, nestingTabLabel(paso.nestingResult)]
+          .filter(Boolean)
+          .join(" · "),
+        paso: paso as PanelEditorPaso,
+        editable,
+        componenteCodigo,
+        pasoClave: paso.configPasoId,
+        orden: secuencia,
+      });
+    }
+
+    for (const operacion of paso.operacionesInternas ?? []) {
+      if (!operacion.nestingResult) continue;
+      secuencia += 1;
+      const pasoInterno = {
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: operacion.familiaCodigo,
+        nombreVisible: operacion.nombre,
+        activado: operacion.activada,
+        costoTotal: operacion.costoTotal,
+        tiempo: {
+          totalMin: operacion.duracionMin,
+          centroCostoId: operacion.centroCostoId ?? null,
+          centroCostoNombre: operacion.centroCostoNombre ?? null,
+          tarifaHora: 0,
+          costo: 0,
+        },
+        materiales: operacion.materiales ?? [],
+        nestingResult: vincularFuentesFabricacion(operacion.nestingResult, contextoVectorial),
+      } as PanelEditorPaso;
+      fuentes.push({
+        key: `${contexto ?? "etapa"}-${operacion.codigo}-${secuencia}`,
+        label: [
+          contexto,
+          paso.nombreVisible?.trim() || "Etapa",
+          operacion.nombre,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        paso: pasoInterno,
+        editable: false,
+        componenteCodigo,
+        orden: secuencia,
+      });
+    }
+  };
+
+  cotizacion.pasos.forEach((paso) => agregarPaso(paso, null, true, undefined, jobContext));
+
+  const recorrerComponentes = (
+    componentes: ComponenteNestingRecursivo[],
+    rutaPadre: string[] = [],
+  ) => {
+    for (const componente of componentes) {
+      const nombre =
+        componente.nombre?.trim() || componente.codigo || "Componente";
+      const ruta = [...rutaPadre, nombre];
+      for (const paso of componente.pasos ?? []) {
+        agregarPaso(
+          paso as PasoCosteo,
+          ruta.join(" › "),
+          false,
+          componente.codigo,
+          componente.jobContext,
+        );
+      }
+      recorrerComponentes(componente.componentes ?? [], ruta);
+    }
+  };
+
+  recorrerComponentes(
+    (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteNestingRecursivo[],
+  );
+
+  const gruposAplicados =
+    cotizacion.analisisNestingCompuesto?.grupos.filter(
+      (grupo) => grupo.aplicacion?.aplicado === true && grupo.lote,
+    ) ?? [];
+  if (gruposAplicados.length === 0) return fuentes;
+
+  const suprimidas = new Set<string>();
+  const consolidadas: FuenteNesting[] = [];
+  const nombresPorCodigo = new Map<string, string>();
+  const indexarNombres = (componentes: ComponenteNestingRecursivo[]) => {
+    for (const componente of componentes) {
+      if (componente.codigo) {
+        nombresPorCodigo.set(
+          componente.codigo,
+          componente.nombre?.trim() || componente.codigo,
+        );
+      }
+      indexarNombres(componente.componentes ?? []);
+    }
+  };
+  indexarNombres(
+    (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteNestingRecursivo[],
+  );
+
+  for (const grupo of gruposAplicados) {
+    const lote = grupo.lote!;
+    const participantes = grupo.participantes.map((participante) =>
+      fuentes.find(
+        (fuente) =>
+          fuente.componenteCodigo === participante.componenteCodigo &&
+          (fuente.pasoClave === participante.pasoClave ||
+            fuente.paso.rutaPasoId === participante.rutaPasoId),
+      ),
+    );
+    // Ante un snapshot incompleto conservamos los resultados individuales: es
+    // preferible mostrar más información que inventar una asociación.
+    if (participantes.some((participante) => !participante)) continue;
+    const fuentesParticipantes = participantes as FuenteNesting[];
+    const base = fuentesParticipantes[0];
+    const baseResult = base.paso.nestingResult;
+    const snapshot = lote.nestingResult;
+    const cantidadSustratos = snapshot.substrates.reduce(
+      (total, substrate) =>
+        total + (substrate.kind === "sheet" ? substrate.count : 1),
+      0,
+    );
+    const placements = snapshot.placements.map((placement) => {
+      const meta =
+        placement.meta &&
+        typeof placement.meta === "object" &&
+        !Array.isArray(placement.meta)
+          ? (placement.meta as Record<string, unknown>)
+          : {};
+      const codigo =
+        typeof meta.componenteCodigo === "string"
+          ? meta.componenteCodigo
+          : null;
+      return {
+        ...placement,
+        meta: {
+          ...meta,
+          ...(codigo ? { label: nombresPorCodigo.get(codigo) ?? codigo } : {}),
+        },
+      };
+    });
+    const nestingResult: NestingViewerInput = {
+      ...baseResult,
+      ...snapshot,
+      algorithm: snapshot.algorithm,
+      cantidadCalculada: snapshot.cantidadCalculada ?? cantidadSustratos,
+      unidad:
+        snapshot.unidad ??
+        (snapshot.substrates.some((substrate) => substrate.kind === "roll")
+          ? "m_lineales"
+          : "pliegos"),
+      aprovechamientoPct: snapshot.aprovechamientoPct,
+      maquina: snapshot.maquina ?? baseResult.maquina,
+      sustrato: snapshot.sustrato ?? baseResult.sustrato,
+      substrates: snapshot.substrates,
+      placements,
+      piezasAcomodadas: snapshot.piezasAcomodadas ?? placements.length,
+      visualConfig: snapshot.visualConfig ?? baseResult.visualConfig,
+      costingPreview: snapshot.costingPreview,
+      composicionCompuesta: {
+        participantes: grupo.participantes.length,
+        sustratosIndependientes: grupo.independiente.sustratos,
+        sustratosConsolidados: grupo.consolidado.sustratos,
+        ahorroPct: grupo.diferencia.ahorroPct,
+      },
+    };
+
+    const materialBase = base.paso.materiales?.find(
+      (material) =>
+        material.materialVarianteId === lote.materialVarianteId &&
+        (material.detalleCosteoNesting ||
+          material.asignacionNestingCompuesto?.loteId === lote.id),
+    );
+    const costeo = lote.costeoSustrato;
+    const detalleExacto = costeo
+      ? {
+          strategy: costeo.strategy,
+          totalCost: costeo.totalCost,
+          unitPrice: costeo.unitPrice,
+          pricePerM2: costeo.pricePerM2,
+          fullUnits: costeo.fullUnits,
+          fullUnitsCost: costeo.fullUnitsCost,
+          lastUnit: costeo.lastUnit,
+          units: costeo.units,
+        }
+      : materialBase?.detalleCosteoNesting
+        ? {
+            ...materialBase.detalleCosteoNesting,
+            totalCost: lote.costoMaterialTotal,
+            fullUnits: 0,
+            fullUnitsCost: 0,
+            lastUnit: null,
+            units: [],
+          }
+        : null;
+    const materiales =
+      materialBase && detalleExacto
+        ? [
+            {
+              ...materialBase,
+              materialNombre: lote.materialNombre,
+              materialDisplayName: lote.materialNombre,
+              cantidad:
+                detalleExacto.unitPrice > 0
+                  ? detalleExacto.totalCost / detalleExacto.unitPrice
+                  : materialBase.cantidad,
+              costoTotal: detalleExacto.totalCost,
+              detalleCosteoNesting: detalleExacto,
+            },
+          ]
+        : [];
+
+    fuentesParticipantes.forEach((fuente) => suprimidas.add(fuente.key));
+    consolidadas.push({
+      key: `lote-${lote.id}`,
+      label: `${lote.layoutOrigenLoteId ? "Corte láser consolidado" : "Nesting consolidado"} · ${nestingTabLabel(nestingResult)}`,
+      paso: {
+        ...base.paso,
+        nombreVisible: `${lote.layoutOrigenLoteId ? "Corte compartido" : "Nesting consolidado"} de ${grupo.participantes.length} componentes`,
+        costoTotal: lote.costoTotalAsignado,
+        materiales,
+        nestingResult,
+      },
+      editable: false,
+      orden: Math.min(...fuentesParticipantes.map((fuente) => fuente.orden)),
+    });
+  }
+
+  return [
+    ...fuentes.filter((fuente) => !suprimidas.has(fuente.key)),
+    ...consolidadas,
+  ].sort((a, b) => a.orden - b.orden);
+}
+
 function formatMinutos(min: number) {
   return `${min.toLocaleString("es-AR", { maximumFractionDigits: 1 })} min`;
 }
@@ -1781,12 +2119,14 @@ function formatTiempoPaso(paso: PasoCosteo) {
 }
 
 function formatTarifaCentroCosto(paso: PasoCosteo, moneda: Moneda) {
+  if (paso.tercerizado) return "Costo tercerizado";
   if (!paso.tiempo?.tarifaHora) return "Sin tarifa";
   return `${formatCurrency(paso.tiempo.tarifaHora, moneda)}/h`;
 }
 
 function getCentroCostoLabel(paso: PasoCosteo) {
   if (!paso.activado) return "No aplica";
+  if (paso.tercerizado) return "Proveedor";
   if (paso.tiempo?.centroCostoNombre) return paso.tiempo.centroCostoNombre;
   if (paso.tiempo?.costo && paso.tiempo.costo > 0) return "Centro tarifado";
   if (paso.tiempo) return "Sin costo";
@@ -1981,6 +2321,165 @@ function MaterialesPasoTable({
   );
 }
 
+type ItemMermaPasoVista = {
+  key: string;
+  titulo: string;
+  detalle: string;
+  cantidad: number;
+  unidad: string;
+  porcentaje: number;
+  costo: number;
+};
+
+function tituloMermaOperativa(material: MaterialCosteo) {
+  if (material.tipoLineaCosto === "CONSUMIBLE_MAQUINA") {
+    return "Consumo adicional de tinta o tóner";
+  }
+  if (material.tipoLineaCosto === "DESGASTE_MAQUINA") {
+    return "Desgaste adicional de máquina";
+  }
+  return "Merma operativa de sustrato";
+}
+
+function itemsMermaDelPaso(
+  paso: PasoCosteo,
+  cotizacion: CotizacionPropuestaSnapshot,
+): ItemMermaPasoVista[] {
+  const items: ItemMermaPasoVista[] = [];
+
+  (paso.materiales ?? [])
+    .filter((material) => material.costoTotal > 0)
+    .forEach((material, materialIndex) => {
+      const asignacion = material.asignacionNestingCompuesto;
+      const loteCompartido = asignacion
+        ? cotizacion.analisisNestingCompuesto?.grupos.find(
+            (grupo) => grupo.lote?.id === asignacion.loteId,
+          )?.lote
+        : null;
+      const participante = loteCompartido?.participantes.find(
+        (item) =>
+          item.pasoClave === paso.configPasoId ||
+          item.rutaPasoId === paso.rutaPasoId,
+      );
+      const detalles = calcularItemsMermaMaterial({
+        material,
+        costeoNesting:
+          loteCompartido?.nestingResult.costingPreview ??
+          paso.nestingResult?.costingPreview,
+        porcentajeAsignacion:
+          participante?.porcentajeAsignacion ??
+          asignacion?.porcentajeAsignacion ??
+          100,
+        consolidado: Boolean(loteCompartido),
+      });
+
+      detalles.forEach((detalle, detalleIndex) => {
+        const nombreMaterial = getMaterialCosteoLabel(material);
+        const esGeometrica = detalle.origen === "NESTING_GEOMETRICA";
+        items.push({
+          key: `${material.slotCodigo}-${material.materialVarianteId}-${materialIndex}-${detalleIndex}`,
+          titulo: esGeometrica
+            ? "Desperdicio geométrico del nesting"
+            : tituloMermaOperativa(material),
+          detalle: esGeometrica
+            ? `${nombreMaterial} · ${detalle.consolidado ? "lote consolidado" : "acomodo individual"}`
+            : `${nombreMaterial} · ${formatDecimal(detalle.porcentaje, 2)}% sobre el consumo productivo`,
+          cantidad: detalle.cantidadMerma,
+          unidad: detalle.unidad,
+          porcentaje: detalle.porcentaje,
+          costo: detalle.costoMerma,
+        });
+      });
+    });
+
+  const tiempo = paso.tiempo;
+  const runMermaMin = Math.max(0, Number(tiempo?.runMermaMin ?? 0));
+  if (tiempo && runMermaMin > 0) {
+    items.push({
+      key: `tiempo-${paso.configPasoId ?? paso.rutaPasoId ?? paso.rutaPasoOrden}`,
+      titulo: "Tiempo adicional de corrida",
+      detalle: `${tiempo.centroCostoNombre ?? "Centro de costo del paso"} · ${formatDecimal(tiempo.mermaOperativaPct ?? 0, 2)}% sobre la corrida productiva`,
+      cantidad: runMermaMin,
+      unidad: "min",
+      porcentaje: Math.max(0, Number(tiempo.mermaOperativaPct ?? 0)),
+      costo: calcularCostoMermaTiempo(tiempo),
+    });
+  }
+
+  return items.filter(
+    (item) =>
+      Number.isFinite(item.cantidad) &&
+      item.cantidad > 0 &&
+      Number.isFinite(item.costo) &&
+      item.costo >= 0,
+  );
+}
+
+function MermaPasoCollapsible({
+  paso,
+  cotizacion,
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const { moneda } = useConfigRegional();
+  const [open, setOpen] = React.useState(false);
+  const items = itemsMermaDelPaso(paso, cotizacion);
+  if (items.length === 0) return null;
+
+  const costoTotal = items.reduce((total, item) => total + item.costo, 0);
+  const cantidadConceptos = items.length;
+
+  return (
+    <div className="cost-detail-block">
+      <Collapsible
+        open={open}
+        onOpenChange={setOpen}
+        className={costC.collapsible}
+      >
+        <CollapsibleTrigger
+          render={<button type="button" className={costC.trigger} />}
+        >
+          <ChevronRightIcon
+            data-icon="inline-start"
+            className={costC.chevron}
+            style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+          />
+          <span className={costC.triggerCopy}>
+            <strong>Merma</strong>
+            <small>
+              {cantidadConceptos}{" "}
+              {cantidadConceptos === 1 ? "concepto" : "conceptos"}
+            </small>
+          </span>
+          <strong className={costC.triggerTotal}>
+            {formatCurrency(costoTotal, moneda)}
+          </strong>
+        </CollapsibleTrigger>
+        <CollapsibleContent className={costC.content}>
+          {items.map((item) => (
+            <div className={costC.item} key={item.key}>
+              <div className={costC.itemCopy}>
+                <strong>{item.titulo}</strong>
+                <small>{item.detalle}</small>
+              </div>
+              <div className={costC.itemQuantity}>
+                <strong>
+                  {formatCantidadCosto(item.cantidad, item.unidad)}
+                </strong>
+                <small>{formatDecimal(item.porcentaje, 1)}%</small>
+              </div>
+              <strong className={costC.itemCost}>
+                {formatCurrency(item.costo, moneda)}
+              </strong>
+            </div>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
+}
+
 function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
   const { moneda } = useConfigRegional();
   const visibles = cargos.filter((cargo) => cargo.monto > 0);
@@ -2045,12 +2544,141 @@ function TiemposExtraPasoList({
 /** Clave del tab del visor 3D del bastidor dentro de "Disposición de piezas". */
 const TAB_BASTIDOR_3D = "__bastidor3d__";
 
+type ComponenteWorkflowVista = ComponenteWorkflowCotizacion<PasoCosteo> & {
+  politicaEjecucion?: "INLINE" | "INDEPENDIENTE";
+  jobContext?: { disenosVectoriales?: unknown[]; piezas?: Array<{ cantidadPorUnidad?: number }> };
+};
+
+function WorkflowCotizacion({
+  cotizacion,
+}: {
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const workflow = React.useMemo(
+    () =>
+      construirWorkflowCotizacion({
+        pasos: cotizacion.pasos,
+        componentes: (cotizacion.componentesFabricados ??
+          []) as unknown as ComponenteWorkflowVista[],
+        grafoProduccion: cotizacion.grafoProduccion,
+      }),
+    [
+      cotizacion.componentesFabricados,
+      cotizacion.grafoProduccion,
+      cotizacion.pasos,
+    ],
+  );
+
+  if (workflow.columnas.length === 0) {
+    return (
+      <div className="quote-workflow-empty">
+        Esta cotización no tiene nodos productivos activos.
+      </div>
+    );
+  }
+
+  return (
+    <div className="quote-workflow-viewport">
+      <div className="quote-workflow-canvas">
+        <div className="quote-workflow-terminal start" aria-hidden="true">
+          <span />
+          <small>INICIO</small>
+        </div>
+        {workflow.columnas.map((columna, indiceColumna) => (
+          <React.Fragment key={`momento-${indiceColumna}`}>
+            {indiceColumna > 0 ? (
+              <div className="quote-workflow-link" aria-hidden="true">
+                <span />
+              </div>
+            ) : null}
+            <section className="quote-workflow-moment">
+              <header>
+                <span>
+                  MOMENTO {String(indiceColumna + 1).padStart(2, "0")}
+                </span>
+                {columna.length > 1 ? (
+                  <small>{columna.length} en paralelo</small>
+                ) : null}
+              </header>
+              <div className="quote-workflow-stack">
+                {columna.map((nodo) => {
+                  if (nodo.tipo === "COMPONENTE") {
+                    const componente = nodo.componente;
+                    const pasosActivos = componente.pasos?.filter((p) => p.activado).length ?? 0;
+                    const esColeccion = Boolean(
+                      componente.jobContext?.disenosVectoriales?.length || componente.jobContext?.piezas?.some(p => p.cantidadPorUnidad != null),
+                    );
+                    return (
+                      <article
+                        className="quote-workflow-node component"
+                        key={nodo.clave}
+                      >
+                        <span className="quote-workflow-icon">
+                          <PackageIcon />
+                        </span>
+                        <span className="quote-workflow-copy">
+                          <small>SUBRUTA FABRICADA</small>
+                          <strong>{componente.nombre}</strong>
+                          <span>
+                            {componente.cantidad ?? 1}{" "}
+                            {esColeccion ? "conjuntos" : componente.unidad ?? "u."}
+                            {pasosActivos
+                              ? ` · ${pasosActivos} ${pasosActivos === 1 ? "paso" : "pasos"}`
+                              : ""}
+                          </span>
+                        </span>
+                      </article>
+                    );
+                  }
+
+                  const paso = nodo.paso;
+                  const esEtapa = nodo.tipo === "ETAPA";
+                  return (
+                    <article
+                      className={`quote-workflow-node ${esEtapa ? "stage" : "step"}`}
+                      key={nodo.clave}
+                    >
+                      <span className="quote-workflow-icon">
+                        {esEtapa ? <BlocksIcon /> : <GitCommitHorizontalIcon />}
+                      </span>
+                      <span className="quote-workflow-copy">
+                        <small>
+                          {esEtapa ? "ETAPA CONSOLIDADA" : "PASO DE PRODUCCIÓN"}
+                        </small>
+                        <strong>
+                          {paso.nombreVisible?.trim() ||
+                            humanizeCodigo(paso.familiaCodigo)}
+                        </strong>
+                        <span>
+                          {paso.tiempo
+                            ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
+                            : getCentroCostoLabel(paso)}
+                        </span>
+                      </span>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </React.Fragment>
+        ))}
+        <div className="quote-workflow-link" aria-hidden="true">
+          <span />
+        </div>
+        <div className="quote-workflow-terminal end" aria-hidden="true">
+          <span />
+          <small>FIN</small>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProduccionItemView({
   item,
   calculoPendiente,
   onEditPanels,
   onExpand,
-  onOpenBrief,
   ampliada = false,
   prepararCorte = false,
 }: {
@@ -2067,14 +2695,6 @@ function ProduccionItemView({
   /** La preparación de máquina sólo existe cuando el item ya pertenece a una OT. */
   prepararCorte?: boolean;
 }) {
-  const briefDiseno = React.useMemo(
-    () => leerBriefDiseno(item.jobContext?.briefDiseno),
-    [item.jobContext],
-  );
-  const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
-  const tieneBrief = briefDisenoTieneContenido(briefDiseno);
-  const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
-  const pasosActivos = pasosCosteoActivos;
   // Cartelería con estructura de bastidor: se muestra el visor 3D del marco a
   // fabricar. El visor pide la estructura del snapshot y se auto-oculta si no
   // la hay (ítem sin OT emitida todavía).
@@ -2087,18 +2707,17 @@ function ProduccionItemView({
   const estructuraBastidorLocal =
     item.cotizacion.pasos.find((paso) => paso.estructuraBastidor)
       ?.estructuraBastidor ?? null;
-  const pasosConNesting = pasosCosteoActivos.filter(
-    (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
+  const fuentesNesting = React.useMemo(
+    () => recolectarNestingsCotizacion(item.cotizacion, item.jobContext),
+    [item.cotizacion, item.jobContext],
   );
   const fuenteVectorial = React.useMemo(
     () => obtenerFuenteVectorial(item.jobContext),
     [item.jobContext],
   );
-  const nestingTabs = pasosConNesting.map((paso, index) => ({
-    key: nestingPasoKey(paso),
-    label: nestingTabLabel(paso.nestingResult),
+  const nestingTabs = fuentesNesting.map((fuente, index) => ({
+    ...fuente,
     index: index + 1,
-    paso,
   }));
   // Overlay de modificaciones físicas: la demasía y los ojales viven en pasos
   // HERMANOS del que trae el nesting (`modificacion_pre` y `colocacion_ojales`
@@ -2162,7 +2781,7 @@ function ProduccionItemView({
 
       <div className="cost-section">
         <div className="flex items-center justify-between gap-3">
-          <div className="cost-title">Ruta de producción</div>
+          <div className="cost-title">Flujos de producción</div>
           {onExpand ? (
             <Button
               type="button"
@@ -2177,40 +2796,10 @@ function ProduccionItemView({
             </Button>
           ) : null}
         </div>
-        <div className="production-route">
-          {pasosActivos.map((paso, index) => {
-            const title =
-              paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
-            const esTiempoManual =
-              paso.tiempo?.origenTiempo === "manual_comercial";
-            const detail = paso.tiempo
-              ? `${formatTiempoPaso(paso)}${
-                  esTiempoManual ? " (estimado por el comercial)" : ""
-                } · ${getCentroCostoLabel(paso)}`
-              : getCentroCostoLabel(paso);
-            return (
-              <div className="production-step" key={`${title}-${index}`}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <small>{detail}</small>
-                  {paso.familiaCodigo === "diseno_grafico" &&
-                  tieneBrief &&
-                  onOpenBrief ? (
-                    <BriefDisenoProduccion
-                      brief={briefDiseno}
-                      caras={carasBrief}
-                      onOpen={onOpenBrief}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <WorkflowCotizacion cotizacion={item.cotizacion} />
       </div>
 
-      {pasosConNesting.length > 0 || esBastidor ? (
+      {fuentesNesting.length > 0 || esBastidor ? (
         <div className="cost-section">
           {/* Con tabs (nesting + bastidor), la tira de tabs ES el encabezado
               de la sección: el título grande repetía lo que ya dice el tab.
@@ -2284,56 +2873,16 @@ function ProduccionItemView({
                         SVG original
                       </Button>
                     ) : null}
-                    {activeNestingTab.paso.nestingResult.substrates.map(
-                      (_, substrateIndex) => {
-                        const base = `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}`;
-                        const preparaSvgDxf =
-                          activeNestingTab.paso.familiaCodigo === "cnc" ||
-                          activeNestingTab.paso.familiaCodigo === "corte_laser";
-                        return (
-                          <React.Fragment key={substrateIndex}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const result =
-                                  activeNestingTab.paso.nestingResult!;
-                                descargarTexto(
-                                  crearSvgDePlaca(result, substrateIndex),
-                                  `${base}.svg`,
-                                );
-                              }}
-                            >
-                              <DownloadIcon />
-                              Placa {substrateIndex + 1} SVG
-                            </Button>
-                            {preparaSvgDxf ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  const result =
-                                    activeNestingTab.paso.nestingResult!;
-                                  descargarTexto(
-                                    crearDxfDePlaca(result, substrateIndex),
-                                    `${base}.dxf`,
-                                    "application/dxf;charset=utf-8",
-                                  );
-                                }}
-                              >
-                                <DownloadIcon />
-                                Placa {substrateIndex + 1} DXF
-                              </Button>
-                            ) : null}
-                          </React.Fragment>
-                        );
-                      },
-                    )}
+                    <NestingPatronesDescargas
+                      result={activeNestingTab.paso.nestingResult}
+                      nombreBase={nombreBaseSvg(item.productoNombre)}
+                      permitirDxf={activeNestingTab.paso.familiaCodigo === "cnc" || activeNestingTab.paso.familiaCodigo === "corte_laser"}
+                    />
                   </div>
                 ) : null}
-                {onEditPanels && isPanelEditableStep(activeNestingTab.paso) ? (
+                {onEditPanels &&
+                activeNestingTab.editable &&
+                isPanelEditableStep(activeNestingTab.paso) ? (
                   <div className="mb-3 flex justify-end">
                     <button
                       type="button"
@@ -2726,7 +3275,197 @@ function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
   );
 }
 
-function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
+function pasoTieneDetalleCosteo(paso: PasoCosteo) {
+  return (
+    paso.activado &&
+    (Boolean(paso.tiempo) ||
+      Boolean(paso.mutacionAplicada) ||
+      (paso.materiales?.length ?? 0) > 0 ||
+      (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
+      (paso.cargosDirectosPaso?.length ?? 0) > 0)
+  );
+}
+
+function operacionTieneDetalleDesplegable(paso: PasoCosteo) {
+  return (
+    paso.activado &&
+    (Boolean(paso.mutacionAplicada) ||
+      (paso.materiales?.length ?? 0) > 0 ||
+      (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
+      Number(paso.tiempo?.runMermaMin ?? 0) > 0 ||
+      (paso.cargosDirectosPaso?.length ?? 0) > 0)
+  );
+}
+
+function OperacionesEtapaTable({
+  etapa,
+  cotizacion,
+}: {
+  etapa: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const { moneda } = useConfigRegional();
+  const operaciones = etapa.operacionesInternas ?? [];
+  const [abiertas, setAbiertas] = React.useState<Set<string>>(() => new Set());
+
+  const alternar = (key: string) => {
+    setAbiertas((actuales) => {
+      const siguientes = new Set(actuales);
+      if (siguientes.has(key)) siguientes.delete(key);
+      else siguientes.add(key);
+      return siguientes;
+    });
+  };
+
+  return (
+    <div className="cost-detail-block">
+      <div className="cost-detail-title">Desglose por operación</div>
+      <div className={`cost-detail-table-wrap ${costC.stageTableWrap}`}>
+        <Table className={`cost-detail-table ${costC.stageTable}`}>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Operación</TableHead>
+              <TableHead>Centro de costo</TableHead>
+              <TableHead className="num">Tiempo</TableHead>
+              <TableHead className="num">Materiales</TableHead>
+              <TableHead className="num">Cargos</TableHead>
+              <TableHead className="num">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {operaciones.map((operacion, index) => {
+              const key = `${operacion.codigo}-${index}`;
+              const pasoOperacion = proyectarPasoOperacionInterna(
+                etapa,
+                operacion,
+                index,
+              );
+              const materialesTotal = sumMaterialesPaso(pasoOperacion);
+              const cargosTotal = sumCargosYTiempoExtraPaso(pasoOperacion);
+              const puedeExpandir =
+                operacionTieneDetalleDesplegable(pasoOperacion);
+              const abierta = abiertas.has(key);
+              const centroCosto =
+                operacion.tiempo?.centroCostoNombre ??
+                operacion.centroCostoNombre ??
+                (operacion.activada ? "Sin centro asignado" : "No aplica");
+              const tiempoMin =
+                operacion.tiempo?.totalMin ?? operacion.duracionMin;
+
+              return (
+                <React.Fragment key={key}>
+                  <TableRow
+                    className={`${costC.stageRow} ${
+                      operacion.activada ? "" : costC.inactiveRow
+                    }`}
+                  >
+                    <TableCell className={costC.operationCell}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={costC.operationTrigger}
+                        disabled={!puedeExpandir}
+                        aria-expanded={puedeExpandir ? abierta : undefined}
+                        onClick={() => puedeExpandir && alternar(key)}
+                      >
+                        <ChevronRightIcon
+                          data-icon="inline-start"
+                          data-open={abierta ? "true" : "false"}
+                          aria-hidden="true"
+                          className={`${costC.operationChevron} ${
+                            puedeExpandir ? "" : costC.hiddenChevron
+                          }`}
+                        />
+                        <span className={costC.operationIndex}>
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <strong>{operacion.nombre}</strong>
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <div className="cost-step-center">
+                        <strong>{centroCosto}</strong>
+                        <span>
+                          {operacion.tiempo
+                            ? formatTarifaCentroCosto(pasoOperacion, moneda)
+                            : "Sin detalle tarifario"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="num">
+                      {tiempoMin > 0 ? (
+                        <>
+                          <strong>
+                            {operacion.tiempo
+                              ? formatCurrency(
+                                  getCostoTiempoPaso(pasoOperacion),
+                                  moneda,
+                                )
+                              : "—"}
+                          </strong>
+                          <span>{formatMinutos(tiempoMin)}</span>
+                        </>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell className="num">
+                      {materialesTotal > 0
+                        ? formatCurrency(materialesTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="num">
+                      {cargosTotal > 0
+                        ? formatCurrency(cargosTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="num strong">
+                      {operacion.costoTotal > 0
+                        ? formatCurrency(operacion.costoTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                  </TableRow>
+                  {puedeExpandir && abierta ? (
+                    <TableRow className={costC.operationDetailRow}>
+                      <TableCell colSpan={6} className={costC.detailCell}>
+                        <div className={costC.stageDetail}>
+                          <PasoCostDetail
+                            paso={pasoOperacion}
+                            cotizacion={cotizacion}
+                            contexto="operación"
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function PasoCostDetail({
+  paso,
+  cotizacion,
+  contexto = "paso",
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+  contexto?: "paso" | "operación";
+}) {
+  if ((paso.operacionesInternas?.length ?? 0) > 0) {
+    return (
+      <div className="cost-step-expanded">
+        <OperacionesEtapaTable etapa={paso} cotizacion={cotizacion} />
+      </div>
+    );
+  }
+
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
   const cargosTotal = sumCargosPaso(paso);
@@ -2739,12 +3478,18 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
       ) : null}
 
       <div className="cost-detail-block">
-        <div className="cost-detail-title">Materiales del paso</div>
+        <div className="cost-detail-title">
+          {contexto === "paso"
+            ? "Materiales del paso"
+            : "Materiales de la operación"}
+        </div>
         <MaterialesPasoTable
           materiales={materiales}
           nesting={paso.nestingResult}
         />
       </div>
+
+      <MermaPasoCollapsible paso={paso} cotizacion={cotizacion} />
 
       {tiemposExtra.length > 0 ? (
         <div className="cost-detail-block">
@@ -2763,6 +3508,105 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
       ) : null}
     </div>
   );
+}
+
+type ComponenteCostoVista = {
+  codigo: string;
+  nombre: string;
+  cantidad?: number;
+  unidad?: string;
+  costoTotal: number;
+  nodoIncorporacionClave?: string | null;
+  nodosPredecesoresClaves?: string[];
+  grafoProduccion?: ComponenteWorkflowVista["grafoProduccion"];
+  pasos?: unknown[];
+  componentes?: ComponenteCostoVista[];
+};
+
+type FilaCostoArbol =
+  | {
+      tipo: "componente";
+      key: string;
+      componente: ComponenteCostoVista;
+      nivel: number;
+    }
+  | {
+      tipo: "paso";
+      key: string;
+      paso: PasoCosteo;
+      nivel: number;
+      indice: number;
+    };
+
+function construirFilasCostoArbol(
+  cotizacion: CotizacionPropuestaSnapshot,
+): FilaCostoArbol[] {
+  const filas: FilaCostoArbol[] = [];
+
+  const recorrerWorkflow = ({
+    pasos,
+    componentes,
+    grafoProduccion,
+    nivel,
+    prefijo,
+  }: {
+    pasos: PasoCosteo[];
+    componentes: ComponenteCostoVista[];
+    grafoProduccion?: ComponenteWorkflowVista["grafoProduccion"];
+    nivel: number;
+    prefijo: string;
+  }) => {
+    const workflow = construirWorkflowCotizacion({
+      pasos,
+      componentes: componentes as unknown as ComponenteWorkflowVista[],
+      grafoProduccion,
+    });
+    let indicePaso = 0;
+
+    for (const columna of workflow.columnas) {
+      for (const nodo of columna) {
+        if (nodo.tipo === "COMPONENTE") {
+          const componente = nodo.componente as unknown as ComponenteCostoVista;
+          const clave = `${prefijo}-componente-${componente.codigo}-${filas.length}`;
+          filas.push({
+            tipo: "componente",
+            key: clave,
+            componente,
+            nivel,
+          });
+          recorrerWorkflow({
+            pasos: (componente.pasos ?? []) as PasoCosteo[],
+            componentes: componente.componentes ?? [],
+            grafoProduccion: componente.grafoProduccion,
+            nivel: nivel + 1,
+            prefijo: clave,
+          });
+          continue;
+        }
+
+        const paso = nodo.paso;
+        if (getVisibleCostSteps([paso]).length === 0) continue;
+        indicePaso += 1;
+        filas.push({
+          tipo: "paso",
+          key: `${prefijo}-paso-${paso.rutaPasoId ?? `${paso.rutaPasoOrden}-${paso.familiaCodigo}`}`,
+          paso,
+          nivel,
+          indice: indicePaso,
+        });
+      }
+    }
+  };
+
+  recorrerWorkflow({
+    pasos: cotizacion.pasos,
+    componentes: (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteCostoVista[],
+    grafoProduccion: cotizacion.grafoProduccion,
+    nivel: 0,
+    prefijo: "raiz",
+  });
+  return filas;
 }
 
 function CostosItemView({
@@ -2791,7 +3635,10 @@ function CostosItemView({
     contribucionMonto: margenContribucionMonto,
     contribucionPct: margenContribucionPct,
   } = desglose;
-  const visibleCostSteps = getVisibleCostSteps(item.cotizacion.pasos);
+  const filasCosteo = React.useMemo(
+    () => construirFilasCostoArbol(item.cotizacion),
+    [item.cotizacion],
+  );
   const [expandedCostSteps, setExpandedCostSteps] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -2903,9 +3750,9 @@ function CostosItemView({
             }}
           >
             Indicador de gestión — no forma parte de la composición del precio.
-            Precio neto − costos variables (materiales, proveedor, cargos,
-            impuestos internos, comisiones). Es lo que queda para cubrir la
-            estructura fija (centro de costo) y dejar ganancia.
+            Precio neto − costos variables (materia prima, proveedor, cargos,
+            impuestos internos y comisiones). Es lo que queda para cubrir la
+            estructura fija y dejar ganancia.
           </span>
         </div>
         <div
@@ -2944,23 +3791,50 @@ function CostosItemView({
               </tr>
             </thead>
             <tbody>
-              {visibleCostSteps.map((paso, visibleIndex) => {
-                const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
+              {filasCosteo.map((fila) => {
+                if (fila.tipo === "componente") {
+                  const { componente, nivel } = fila;
+                  return (
+                    <tr className="cost-component-row" key={fila.key}>
+                      <td colSpan={5}>
+                        <div
+                          className="cost-component-name"
+                          style={{
+                            paddingLeft: `${Math.max(0, nivel - 1) * 18}px`,
+                          }}
+                        >
+                          <PackageIcon aria-hidden="true" />
+                          <span>
+                            <strong>{componente.nombre}</strong>
+                            <small>
+                              Componente fabricado
+                              {componente.cantidad != null
+                                ? ` · ${formatDecimal(componente.cantidad, 2)} ${componente.unidad ?? "u."}`
+                                : ""}
+                            </small>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="num strong">
+                        {componente.costoTotal > 0
+                          ? fmt(componente.costoTotal)
+                          : "-"}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                const { paso, nivel, indice: visibleIndex } = fila;
+                const stepKey = fila.key;
                 const materialesTotal = sumMaterialesPaso(paso);
                 // La columna Cargos junta los cargos monetarios y el costo de
                 // los bloques de tiempo extra: así se distingue del tiempo de
                 // TRABAJO del paso, que es la columna Tiempo.
                 const cargosTotal = sumCargosYTiempoExtraPaso(paso);
-                const puedeExpandir =
-                  paso.activado &&
-                  (Boolean(paso.tiempo) ||
-                    Boolean(paso.mutacionAplicada) ||
-                    (paso.materiales?.length ?? 0) > 0 ||
-                    (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
-                    (paso.cargosDirectosPaso?.length ?? 0) > 0);
+                const puedeExpandir = pasoTieneDetalleCosteo(paso);
                 const expanded = expandedCostSteps.has(stepKey);
                 return (
-                  <React.Fragment key={stepKey}>
+                  <React.Fragment key={fila.key}>
                     <tr
                       className={`${paso.activado ? "" : "muted-row"} ${
                         puedeExpandir ? "clickable" : ""
@@ -2971,7 +3845,7 @@ function CostosItemView({
                           : undefined
                       }
                     >
-                      <td>
+                      <td style={{ paddingLeft: `${12 + nivel * 22}px` }}>
                         <div className="cost-step-name">
                           <span className="cost-step-title">
                             {puedeExpandir ? (
@@ -2981,7 +3855,7 @@ function CostosItemView({
                               />
                             ) : null}
                             <span>
-                              {visibleIndex + 1}.{" "}
+                              {visibleIndex}.{" "}
                               {paso.nombreVisible?.trim() ||
                                 humanizeCodigo(paso.familiaCodigo)}
                             </span>
@@ -3046,8 +3920,11 @@ function CostosItemView({
                     </tr>
                     {puedeExpandir && expanded ? (
                       <tr className="cost-step-detail-row">
-                        <td colSpan={7}>
-                          <PasoCostDetail paso={paso} />
+                        <td colSpan={6}>
+                          <PasoCostDetail
+                            paso={paso}
+                            cotizacion={item.cotizacion}
+                          />
                         </td>
                       </tr>
                     ) : null}
@@ -3067,11 +3944,14 @@ function CostosItemView({
  * son la proyección `specs` que persiste el item de la OT al emitir — la OT
  * muestra exactamente lo que el comercial vio al armarla.
  */
-function buildOrdenItemSpecs(
+export function buildOrdenItemSpecs(
   item: PropuestaItem,
 ): Array<{ lbl: string; val: string }> {
   const mainMaterial = getMainCommercialMaterial(item);
   const montajeSustrato = getMontajeSustratoMaterial(item);
+  const materialEnComponentes =
+    !mainMaterial &&
+    componentesTienenMaterialEfectivo(item.cotizacion.componentesFabricados);
 
   const specsBase = item.atributosSchema
     .filter(
@@ -3080,6 +3960,10 @@ function buildOrdenItemSpecs(
         !["tipo_pieza", "tipoPieza", "tipo_de_pieza"].includes(attr.key),
     )
     .filter((attr) => !isDuplicateModoColorSpec(item, attr.key))
+    .filter(
+      (attr) =>
+        !(materialEnComponentes && isMaterialSpecKey(attr.key, attr.label)),
+    )
     // Con sustrato de montaje, el espesor pertenece a ESE material y se muestra
     // dentro del bloque "Montaje" (con su nombre); quitamos el ESPESOR suelto
     // para no dejar un "3 mm" huérfano que no dice de qué material es.
@@ -3403,6 +4287,10 @@ export function ProductRow({
     () => leerBriefDiseno(item.jobContext?.briefDiseno),
     [item.jobContext],
   );
+  const componentesFabricados = item.cotizacion.componentesFabricados ?? [];
+  const tieneComponentesFabricados = componentesFabricados.length > 0;
+  const tieneEspecificacionesRaiz =
+    specs.length > 0 || briefDisenoTieneContenido(briefDiseno);
   const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
 
   // Neto por ítem cuando la orden es sin comprobante: Total = subtotal (sin
@@ -3609,110 +4497,125 @@ export function ProductRow({
 
           {innerTab === "specs" ? (
             <>
-              {(() => {
-                // Cortas: grilla compacta que se estira al ancho (auto-fit).
-                // Largas (caras/modo de color por paso): filas plenas debajo,
-                // FUERA de la grilla — un span 1/-1 dentro impediría que
-                // auto-fit colapse las columnas vacías de la fila de arriba.
-                const esLarga = (spec: (typeof specs)[number]) =>
-                  spec.val.length > 40;
-                const cortas = specs.filter((spec) => !esLarga(spec));
-                const largas = specs.filter(esLarga);
-                const renderSpec = (
-                  spec: (typeof specs)[number],
-                  idx: number,
-                ) => {
-                  const isMedidasSpec = spec.lbl
-                    .toLowerCase()
-                    .includes("medida");
-                  const isModoColorSpec =
-                    spec.lbl.toLowerCase().includes("modo de color") ||
-                    // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
-                    spec.lbl.toLowerCase() === "color";
-                  const isCarasSpec =
-                    spec.lbl.toLowerCase() === "caras" ||
-                    // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
-                    spec.lbl.toLowerCase() === "faz";
-                  // "Estampas": una personalización por línea (multilínea, como
-                  // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
-                  const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
-                  return (
-                    <div
-                      className={`spec ${
-                        isModoColorSpec ? "color-mode-spec" : ""
-                      } ${esLarga(spec) ? "spec-long" : ""}`}
-                      key={`${spec.lbl}-${idx}`}
-                    >
-                      <div className="spec-head">
-                        <div className="lbl">{spec.lbl}</div>
+              {tieneEspecificacionesRaiz
+                ? (() => {
+                    // Cortas: grilla compacta que se estira al ancho (auto-fit).
+                    // Largas (caras/modo de color por paso): filas plenas debajo,
+                    // FUERA de la grilla — un span 1/-1 dentro impediría que
+                    // auto-fit colapse las columnas vacías de la fila de arriba.
+                    const esLarga = (spec: (typeof specs)[number]) =>
+                      spec.val.length > 40;
+                    const cortas = specs.filter((spec) => !esLarga(spec));
+                    const largas = specs.filter(esLarga);
+                    const renderSpec = (
+                      spec: (typeof specs)[number],
+                      idx: number,
+                    ) => {
+                      const isMedidasSpec = spec.lbl
+                        .toLowerCase()
+                        .includes("medida");
+                      const isModoColorSpec =
+                        spec.lbl.toLowerCase().includes("modo de color") ||
+                        // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
+                        spec.lbl.toLowerCase() === "color";
+                      const isCarasSpec =
+                        spec.lbl.toLowerCase() === "caras" ||
+                        // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
+                        spec.lbl.toLowerCase() === "faz";
+                      // "Estampas": una personalización por línea (multilínea, como
+                      // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
+                      const isEstampasSpec =
+                        spec.lbl.toLowerCase() === "estampas";
+                      return (
+                        <div
+                          className={`spec ${
+                            isModoColorSpec ? "color-mode-spec" : ""
+                          } ${esLarga(spec) ? "spec-long" : ""}`}
+                          key={`${spec.lbl}-${idx}`}
+                        >
+                          <div className="spec-head">
+                            <div className="lbl">{spec.lbl}</div>
+                          </div>
+                          <div
+                            className={`val ${
+                              isMedidasSpec || isEstampasSpec ? "multi" : ""
+                            } ${
+                              isModoColorSpec ||
+                              isCarasSpec ||
+                              spec.val.length > 28
+                                ? "wrap"
+                                : ""
+                            }`}
+                          >
+                            {isModoColorSpec ? (
+                              <ModoColorSpecValue value={spec.val} />
+                            ) : isCarasSpec ? (
+                              <CarasSpecValue value={spec.val} />
+                            ) : (
+                              spec.val
+                            )}
+                          </div>
+                        </div>
+                      );
+                    };
+                    return (
+                      <div className="op-specs">
+                        {cortas.length > 0 ? (
+                          <div className="op-specs-grid">
+                            {cortas.map(renderSpec)}
+                          </div>
+                        ) : null}
+                        {largas.map(renderSpec)}
+                        <BriefDisenoEspecificaciones
+                          brief={briefDiseno}
+                          caras={carasBrief}
+                          onOpen={() => setBriefAbierto(true)}
+                        />
                       </div>
-                      <div
-                        className={`val ${
-                          isMedidasSpec || isEstampasSpec ? "multi" : ""
-                        } ${
-                          isModoColorSpec || isCarasSpec || spec.val.length > 28
-                            ? "wrap"
-                            : ""
-                        }`}
-                      >
-                        {isModoColorSpec ? (
-                          <ModoColorSpecValue value={spec.val} />
-                        ) : isCarasSpec ? (
-                          <CarasSpecValue value={spec.val} />
-                        ) : (
-                          spec.val
-                        )}
-                      </div>
-                    </div>
-                  );
-                };
-                return (
-                  <div className="op-specs">
-                    {cortas.length > 0 ? (
-                      <div className="op-specs-grid">
-                        {cortas.map(renderSpec)}
-                      </div>
-                    ) : null}
-                    {largas.map(renderSpec)}
-                    <BriefDisenoEspecificaciones
-                      brief={briefDiseno}
-                      caras={carasBrief}
-                      onOpen={() => setBriefAbierto(true)}
-                    />
-                  </div>
-                );
-              })()}
+                    );
+                  })()
+                : null}
+
+              <ComponentesEspecificaciones
+                componentes={componentesFabricados}
+              />
 
               <div className="op-extras">
-                <div className="op-adicionales">
-                  <div className="op-adi-head">
-                    <PlusIcon />
-                    <span>Opcionales activados</span>
-                  </div>
-                  <div className="op-chips">
-                    {item.adicionales.length > 0 ? (
-                      item.adicionales.map((adicional) => {
-                        const details =
-                          optionalMaterialDetails.get(adicional) ?? [];
-                        return (
-                          <span key={adicional} className="adi-chip-detail">
-                            <span className="adi-chip">
-                              <CheckIcon />
-                              {adicional}
-                            </span>
-                            {details.length > 0 ? (
-                              <span className="adi-chip-variant">
-                                {details.join(" · ")}
+                {item.adicionales.length > 0 || !tieneComponentesFabricados ? (
+                  <div className="op-adicionales">
+                    <div className="op-adi-head">
+                      <PlusIcon />
+                      <span>Opcionales activados</span>
+                    </div>
+                    <div className="op-chips">
+                      {item.adicionales.length > 0 ? (
+                        item.adicionales.map((adicional) => {
+                          const details =
+                            optionalMaterialDetails.get(adicional) ?? [];
+                          return (
+                            <span key={adicional} className="adi-chip-detail">
+                              <span className="adi-chip">
+                                <CheckIcon />
+                                {adicional}
                               </span>
-                            ) : null}
-                          </span>
-                        );
-                      })
-                    ) : (
-                      <span className="adi-chip">Sin opcionales activados</span>
-                    )}
+                              {details.length > 0 ? (
+                                <span className="adi-chip-variant">
+                                  {details.join(" · ")}
+                                </span>
+                              ) : null}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="adi-chip">
+                          Sin opcionales activados
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : componentMaterialDetails.length === 0 ? (
+                  <span aria-hidden="true" />
+                ) : null}
 
                 {componentMaterialDetails.length > 0 ? (
                   <div className="op-adicionales">
@@ -5436,6 +6339,7 @@ type SnapshotResumenOrden = {
 
 type SnapshotTrazabilidadOrden = {
   pasos?: CotizacionPropuestaSnapshot["pasos"];
+  componentesFabricados?: CotizacionPropuestaSnapshot["componentesFabricados"];
   cargosDirectosCotizacion?: CotizacionPropuestaSnapshot["cargosDirectosCotizacion"];
 };
 
@@ -5540,6 +6444,11 @@ function rehidratarOrdenItem(
       null,
     costos: resumen?.ejecucion?.costos ?? costosVacios,
     pasos: trazabilidad?.pasos ?? [],
+    // La cotización persiste el árbol completo de componentes dentro de la
+    // trazabilidad. Rehidratar sólo los pasos del producto raíz conservaba el
+    // total, pero borraba el origen de los costos de los hijos: la vista de
+    // Costos terminaba enviándolos a "Sin desglosar" al reabrir una OT.
+    componentesFabricados: trazabilidad?.componentesFabricados ?? [],
     cargosDirectosCotizacion: trazabilidad?.cargosDirectosCotizacion ?? [],
     desglosePrecio: snap
       ? ({
@@ -5621,6 +6530,10 @@ function rehidratarOrdenItem(
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
     jobContext,
+    notaProduccion:
+      typeof jobContext?.notasProduccion === "string"
+        ? jobContext.notasProduccion
+        : undefined,
     // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
     descuentoInput:
       producto.descuentoTipo && producto.descuentoValor != null
@@ -5863,6 +6776,7 @@ export function PropuestaFicha({
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
     orden?.proyectoCampana?.id ?? "",
   );
+  const [campanaSelectorOpen, setCampanaSelectorOpen] = React.useState(false);
   const [campanasCliente, setCampanasCliente] = React.useState<
     CampanaReferencia[]
   >([]);
@@ -8040,39 +8954,109 @@ export function PropuestaFicha({
           )}
         </FieldCard>
 
-        <FieldCard label="Campaña" icon={<FolderIcon />}>
+        <div className={`ofield ${campanaStyles["ofield--campana"]}`}>
           {!orden ? (
-            <div className="ctrl-input">
-              <select
-                value={proyectoCampanaId}
-                onChange={(event) => setProyectoCampanaId(event.target.value)}
-                disabled={!clienteId}
-                aria-label="Campaña opcional"
+            <Popover
+              open={campanaSelectorOpen}
+              onOpenChange={setCampanaSelectorOpen}
+            >
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <PopoverTrigger
+                      className={campanaStyles["campana-trigger"]}
+                      data-active={Boolean(proyectoCampanaId)}
+                      disabled={!clienteId}
+                      aria-label={
+                        proyectoCampanaId ? "Cambiar campaña" : "Elegir campaña"
+                      }
+                    />
+                  }
+                >
+                  <FolderIcon aria-hidden="true" />
+                  {proyectoCampanaId ? (
+                    <span className={campanaStyles["campana-indicator"]} />
+                  ) : null}
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {!clienteId
+                    ? "Elegí primero un cliente"
+                    : proyectoCampanaId
+                      ? `Campaña: ${
+                          campanasCliente.find(
+                            (campana) => campana.id === proyectoCampanaId,
+                          )?.nombre ?? "seleccionada"
+                        }`
+                      : "Asociar a una campaña"}
+                </TooltipContent>
+              </Tooltip>
+              <PopoverContent
+                align="start"
+                className={campanaStyles["campana-selector-popover"]}
               >
-                <option value="">
-                  {clienteId ? "Sin campaña" : "Primero elegí un cliente"}
-                </option>
-                {campanasCliente.map((campana) => (
-                  <option key={campana.id} value={campana.id}>
-                    {campana.codigo} · {campana.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className={campanaStyles["campana-selector-heading"]}>
+                  <FolderIcon aria-hidden="true" />
+                  <div>
+                    <strong>Campaña</strong>
+                    <span>Opcional para esta orden</span>
+                  </div>
+                </div>
+                <label className={campanaStyles["campana-selector-field"]}>
+                  <span>Seleccionar campaña</span>
+                  <select
+                    value={proyectoCampanaId}
+                    onChange={(event) => {
+                      setProyectoCampanaId(event.target.value);
+                      setCampanaSelectorOpen(false);
+                    }}
+                    aria-label="Campaña opcional"
+                  >
+                    <option value="">Sin campaña</option>
+                    {campanasCliente.map((campana) => (
+                      <option key={campana.id} value={campana.id}>
+                        {campana.codigo} · {campana.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </PopoverContent>
+            </Popover>
           ) : orden.proyectoCampana ? (
-            <div className="ctrl-input">
-              <Link href={`/comercial/campanas/${orden.proyectoCampana.id}`}>
-                <span className="mono">{orden.proyectoCampana.codigo}</span>
-                {" · "}
-                {orden.proyectoCampana.nombre}
-              </Link>
-            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    className={campanaStyles["campana-trigger"]}
+                    data-active="true"
+                    href={`/comercial/campanas/${orden.proyectoCampana.id}`}
+                    aria-label={`Abrir campaña ${orden.proyectoCampana.nombre}`}
+                  />
+                }
+              >
+                <FolderIcon aria-hidden="true" />
+                <span className={campanaStyles["campana-indicator"]} />
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {orden.proyectoCampana.codigo} · {orden.proyectoCampana.nombre}
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <div className="ctrl-input">
-              <span>Sin campaña</span>
-            </div>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    className={campanaStyles["campana-trigger"]}
+                    aria-label="Sin campaña"
+                    aria-disabled="true"
+                  />
+                }
+              >
+                <FolderIcon aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent side="top">Sin campaña</TooltipContent>
+            </Tooltip>
           )}
-        </FieldCard>
+        </div>
 
         <FieldCard label="Vendedor" icon={<UserIcon />}>
           <div className="ctrl-input has-avatar">

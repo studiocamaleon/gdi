@@ -1,3 +1,4 @@
+import { productosComercialesConTrabajo } from '../ordenes-trabajo/productos-comerciales';
 import { Injectable } from '@nestjs/common';
 import { RolSistema, type Prisma } from '@prisma/client';
 
@@ -372,6 +373,7 @@ export class PanelGeneralService {
         this.prisma.ordenTrabajoItem.count({
           where: {
             tenantId,
+            parentItemId: null,
             entregadoEl: null,
             orden: { ...filtroVendedor, estado: 'finalizada' },
           },
@@ -382,6 +384,7 @@ export class PanelGeneralService {
         this.prisma.ordenTrabajoItemPaso.count({
           where: {
             tenantId,
+            OR: [{ nestingLoteRol: null }, { nestingLoteRol: { not: 'PARTICIPANTE' } }],
             estado: 'bloqueado',
             orden: {
               ...filtroVendedor,
@@ -419,11 +422,13 @@ export class PanelGeneralService {
           orderBy: { ordenIndice: 'asc' },
           select: {
             id: true,
+            parentItemId: true,
             nombre: true,
             pasos: {
               orderBy: { indice: 'asc' },
               select: {
                 estado: true,
+                nestingLoteRol: true,
                 nombre: true,
                 centroCostoNombre: true,
               },
@@ -433,9 +438,10 @@ export class PanelGeneralService {
       },
     });
     return filas.map((orden) => {
-      const pasos = orden.items.flatMap((i) => i.pasos);
+      const comerciales = productosComercialesConTrabajo(orden.items);
+      const pasos = comerciales.flatMap((i) => i.pasos);
       const hechos = pasos.filter((p) => p.estado === 'hecho').length;
-      const productos = orden.items.map((item) => {
+      const productos = comerciales.map((item) => {
         const pasosHechos = item.pasos.filter(
           (paso) => paso.estado === 'hecho',
         ).length;
@@ -460,9 +466,9 @@ export class PanelGeneralService {
         numero: orden.numero,
         cliente: orden.cliente?.nombre ?? 'Sin cliente',
         producto:
-          orden.items.length === 1
-            ? (orden.items[0]?.nombre ?? 'Sin productos')
-            : `${orden.items.length} productos`,
+          comerciales.length === 1
+            ? (comerciales[0]?.nombre ?? 'Sin productos')
+            : `${comerciales.length} productos`,
         productos,
         fechaEntrega: fecha,
         progresoPct:

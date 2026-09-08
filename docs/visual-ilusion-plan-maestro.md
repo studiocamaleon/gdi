@@ -8,6 +8,21 @@
 **Contrato visual obligatorio:** `docs/visual-ilusion-lenguaje-visual.md`
 **Punto de restauración previo:** `/Users/lucasgomez/gdi-saas-backups/visual-ilusion-pre-plan-20260829-181912--03`
 
+**Decisión transversal de autoría productiva (2026-08-31):** la configuración
+de pasos, componentes fabricados, dependencias y etapas compuestas converge en
+un único editor de modelo productivo. `Identidad` declara si el producto es
+simple o compuesto y condiciona la paleta del editor, sin crear dos motores.
+La BOM pasa a ser una proyección consolidada y versionada, no una segunda
+fuente de autoría. Contrato completo en
+`docs/editor-modelo-productivo-unificado-diseno.md`.
+
+**Decisión de lectura BOM multinivel (2026-09-01):** la proyección conserva la
+jerarquía completa de revisiones hijas y diferencia consumos directos de
+acumulados. El Workflow continúa siendo la representación de secuencia y
+paralelismo; la BOM muestra composición, reglas de cantidad y vínculos con el
+paso consumidor o nodo de incorporación. La ficha de producto muestra reglas
+maestras y cotización/OT podrán mostrar la explosión con cantidades resueltas.
+
 ---
 
 ## 1. Propósito y autoridad de este documento
@@ -131,6 +146,10 @@ Toda interfaz nueva debe aplicar el contrato `docs/visual-ilusion-lenguaje-visua
 ### P12. Frescura operativa y notificaciones son infraestructura transversal
 
 Una vista operacional abierta no puede exigir recarga manual para conocer una aprobación, un avance productivo o un bloqueo ocurrido en otra sesión. Los eventos de negocio se persistirán una sola vez y servirán para invalidar vistas y generar notificaciones internas dirigidas. El tiempo real no reemplaza la fuente relacional ni la auditoría: avisa que algo cambió y cada pantalla reconsulta la proyección autorizada correspondiente.
+
+### P13. El contrato comercial pertenece al producto
+
+La pestaña **Comercial** define una sola vez la unidad de venta y los datos dimensionales que se solicitan al cotizar. **Identidad** queda reservada para nombre, descripción, categoría y publicación. Producción consume el contrato comercial y no lo replica. Ancho, alto y, cuando corresponda, profundidad son dimensiones del producto publicables en el contexto del trabajo; una familia de paso puede exigirlas o utilizarlas, pero no ser su propietaria. La semántica y la migración se detallan en `docs/contrato-comercial-dimensiones-producto-diseno.md`.
 
 ---
 
@@ -570,7 +589,45 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado inicial:** PENDIENTE  
+**Estado actual:** CERRADA FUNCIONALMENTE EN LOCAL · MATRIZ INTEGRAL APROBADA · F5 HABILITADA
+
+**Cierre integral del 07/09/2026:**
+[Informe y evidencia final](visual-ilusion-fase-4-cierre-integral-2026-09-07.md).
+Comprende F4 original, ampliaciones 4.1–4.4, ocurrencias, piezas
+rectangulares/vectoriales, patrones y capas DXF. Los ocho hallazgos de la
+[auditoría original](visual-ilusion-fase-4-auditoria-integral-2026-09-07.md) y el
+hallazgo adicional de Compras quedaron corregidos y verificados. Se aprobaron
+cotización/persistencia/ejecución, concurrencia, reportes, documentos, CAD,
+regresiones y builds. Esta evaluación prevalece sobre los estados históricos
+que siguen como bitácora de implementación. El cierre corresponde a la versión
+local; no constituye merge ni despliegue remoto. F5 puede planificarse dentro
+de su alcance propio de planes operativos, liberación y herramientas por capa.
+
+**Rama:** `visual-ilusion/fase-4-rutas-dag`
+
+**Documento de diseño:** `docs/visual-ilusion-fase-4-rutas-dag-diseno.md`
+
+**Ampliación 4.1:**
+`docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md`
+
+**Ampliación 4.2:**
+`docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md`
+
+**Ampliación 4.2.3 — contrato dimensional del producto:**
+`docs/contrato-comercial-dimensiones-producto-diseno.md`
+
+**Ampliación 4.2.4 — activación interna de componentes:**
+`docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md`, §17
+
+**Ampliación 4.3 — pricing composicional:**
+`docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`
+
+**Ampliación 4.4 — nesting compartido dentro del compuesto:**
+`docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`
+
+**Cierre transversal — pasos omitidos en una ruta de producto:**
+`docs/editor-modelo-productivo-unificado-diseno.md`, §13
+
 **Dependencias:** Fase 3.
 
 ### Objetivo de negocio
@@ -590,6 +647,47 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
   incorporación, ensamble o convergencia dentro del flujo principal.
 - Crear y coordinar la ejecución hija desde esa relación, conservando la receta
   y revisión que Fase 3 dejó congeladas.
+- Configurar cada instancia hija mediante bindings de parámetro: default del
+  hijo, valor fijo, referencia al JobContext público del padre, fórmula segura
+  o valor solicitado durante la cotización.
+- Conservar dentro de cada componente los pasos opcionales y condicionales de
+  su ruta: los opcionales se fijan, heredan o solicitan al cotizar; los
+  condicionales continúan evaluándose automáticamente con el JobContext hijo.
+- Tratar `NO_EJECUTAR` como una omisión contextual y reversible: el editor
+  conserva el nodo estructural atenuado para poder reactivarlo, mientras que
+  producto, cotización, costos y OT proyectan el grafo efectivo contrayendo el
+  paso omitido y preservando las dependencias entre sus vecinos activos.
+- Mantener separada la inclusión del componente completo de la activación de
+  sus pasos internos, y presentar esas decisiones dentro del componente sin
+  aplanar la subruta en el recorrido del padre.
+- Declarar en Comercial si el producto no usa medidas, es 2D (ancho y alto) o
+  es 3D (ancho, alto y profundidad), y hacer que el sheet solicite exactamente
+  esos ejes sin inferirlos de una familia de paso.
+- Mantener visibles los parámetros industriales de un paso tercerizado: cambia
+  quién lo ejecuta y cómo se costea, no qué trabajo se encarga.
+- Permitir que un componente publique outputs planificados y que otros hijos
+  los consuman mediante referencias controladas y un DAG de cálculo separado
+  del DAG productivo.
+- Permitir que el nodo de incorporación actúe como etapa compuesta y reúna
+  operaciones internas de cálculo con parámetros, materiales, máquinas,
+  tercerización, inductores, tiempos, recursos, costos y outputs propios. La
+  etapa se materializa como un único paso y un único estado en la OT; el
+  desglose interno no genera tarjetas productivas independientes.
+- Resolver primero los componentes fabricados y después las operaciones
+  internas de incorporación, inyectando en cada operación los outputs públicos de los
+  componentes que tiene vinculados.
+- Diferenciar en los catálogos productos simples/compuestos y pasos
+  simples/etapas compuestas sin duplicar entidades ni motores.
+- Separar estrictamente la fabricación de cada componente, su trabajo de
+  incorporación y la preparación/cierre general del ensamble, evitando doble
+  conteo y manteniendo legible la ruta principal.
+- Congelar outputs públicos, dependencias de cálculo y contextos resueltos sin
+  compartir un JobContext global mutable entre productos.
+- Reutilizar el configurador del producto hijo en un workspace amplio desde la
+  BOM y como segundo nivel del sheet de cotización, sin duplicar ni comprimir el
+  editor de rutas.
+- Congelar en cotización y OT el JobContext hijo resuelto, sus bindings,
+  cantidad, revisión y desglose económico.
 - Actualización de iniciar, completar, bloquear, reabrir, cancelar y finalizar.
 - Progreso por nodos y duración ponderada, sin vender falsa precisión.
 - Adaptación del tablero por ítems/estación/kanban.
@@ -619,15 +717,252 @@ Ejecutar rutas con ramas paralelas y convergencia, manteniendo las rutas lineale
 - Impedir Armado hasta completar todas las ramas.
 - Demostrar que un componente fabricado con receta propia se ejecuta por su
   ruta y habilita exactamente el nodo del producto padre donde se incorpora.
+- Cotizar un padre de medida libre cuyo hijo hereda/calcula medidas, combina
+  valores fijos y solicita al menos una decisión comercial; validar y congelar
+  ambos JobContexts sin doble conteo.
 - Ejecutar una OT lineal histórica con resultado equivalente.
+- Omitir un paso intermedio sin convertir su sucesor en una raíz o rama
+  paralela; el preview, el desglose por paso y la OT deben conservar el mismo
+  orden efectivo.
 - ETA y progreso coherentes en ambos tipos de topología.
+- Resolver el caso Backlight: Bastidor publica geometría; Lona y Cenefas la
+  consumen al cotizar y las tres ramas siguen disponibles en paralelo hasta su
+  convergencia física.
+- Resolver el ensamble del Backlight como una etapa operativa única: tensado,
+  cenefas, iluminación y prueba conservan reglas de tiempo y materiales
+  diferentes para el costeo, pero la OT y el tablero sólo permiten iniciar y
+  completar `Ensamble`.
+
+### Evidencia de implementación
+
+- Grafo `LINEAL | DAG` versionado, validado, congelado en OT y materializado
+  mediante dependencias relacionales, con fallback equivalente para órdenes
+  históricas.
+- Ejecución con varias fronteras simultáneas, convergencia estricta,
+  reapertura segura por descendientes, finalización por terminales y progreso
+  ponderado.
+- Componentes fabricados como ítems hijos con receta propia congelada; sus
+  terminales habilitan exactamente el nodo de incorporación del padre.
+- Gates de aprobación, componente y tercerización integrados con sus fuentes;
+  gates de `MATERIAL` y `CALIDAD` persistentes, auditables y bloqueantes. En F4
+  se resuelven por supervisor; F7 y F9 conectarán evidencia de QC e inventario
+  sin cambiar el contrato.
+- Scheduler ETA, simuladores y tablero adaptados a DAG; editor controlado de
+  dependencias y gates en Producción/BOM.
+- Proyección común de pasos omitidos: el grafo de diseño completo se mantiene
+  versionado y el grafo efectivo conecta los primeros descendientes activos.
+  Preview y desglose por paso ya comparten esta reducción; la materialización
+  de OT aplica la misma semántica en backend.
+- Migraciones aplicadas en desarrollo y test; builds aprobados; regresión
+  acumulada: backend 197 suites/1.944 pruebas y frontend 54 archivos/542
+  pruebas aprobadas.
+- La validación funcional detectó que `cantidad × unidad` no cubre hijos de
+  medida libre. Se aprobó la ampliación de bindings padre–componente documentada
+  en el diseño de F4; su implementación y QA vuelven a dejar la fase en
+  desarrollo antes del cierre.
+
+---
+
+## Fase 4.3 — Pricing composicional para productos compuestos
+
+**Estado actual:** COMPLETA · QA FUNCIONAL, DESKTOP Y RESPONSIVE APROBADO
+
+**Dependencias:** cierre y validación de Fase 4.2.
+
+**Documento de diseño:** `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`
+
+### Avance de preparación — 2026-09-02
+
+- Auditoría focalizada de la frontera padre–componente: 9 suites y 84 pruebas
+  aprobadas.
+- Regresión completa de integración del motor: 87 pruebas aprobadas.
+- Golden master agregado para demostrar que `GENERAL` usa la regla del padre,
+  no propaga el pricing del hijo y persiste la configuración efectiva en el
+  snapshot del ítem.
+- Contrato versionado implementado en JSON para estrategia y política BOM,
+  con lectura tolerante (`GENERAL`/`HEREDAR_PADRE`) para datos históricos y
+  validación de overrides explícitos.
+- Regla efectiva del hijo u override congelada en la revisión; cambios
+  posteriores del pricing hijo no mutan el snapshot publicado.
+- El motor ya expone la asignación reconciliada de costos entre bloque general
+  y componentes, manteniendo intacto el precio final en modo `GENERAL`.
+- `MIXTO` y `POR_COMPONENTE` calculan el neto con la cantidad y regla congelada
+  de cada bloque; cargas, descuento y redondeo se consolidan una sola vez.
+- El desglose comercial por bloque queda congelado en la trazabilidad del ítem
+  y el golden master valida el cambio `GENERAL → MIXTO` de punta a punta.
+- Editor implementado en Pricing del producto padre para estrategia general,
+  mixta o por componente, con herencia, regla congelada del hijo y override
+  contextual por relación BOM.
+- La previsualización estructural anticipa bloques y reglas efectivas; el
+  guardado actualiza la configuración comercial y el borrador versionado de
+  Routing sin publicar cambios productivos de forma implícita.
+- QA visual desktop aprobado en un producto compuesto publicado, incluyendo
+  estrategia mixta y override sin guardar datos de prueba.
+- Refinamiento visual Grafoprint aplicado a toda la pestaña: regla base,
+  composición, impuestos, comisiones, excepciones y guardado unificado comparten
+  jerarquía, densidad y estados de interacción.
+- Matriz funcional cerrada sobre un fixture controlado con cuatro ocurrencias
+  del mismo hijo: `HEREDAR_PADRE`, `USAR_PRODUCTO_HIJO`, `OVERRIDE` y opcional
+  omitido, recorridas en `GENERAL`, `MIXTO` y `POR_COMPONENTE`.
+- Los bloques reconciliados absorben residuos de redondeo de forma
+  determinista; costo, neto de lista, descuento y neto final suman exactamente
+  sus totales consolidados.
+- QA responsive aprobado en Chrome real a 390 × 844 y 768 × 1024, sin
+  desborde horizontal global y con scroll local en la vista previa tabular.
+- Regresión de cierre aprobada: API 206 suites/1.997 pruebas, frontend 62
+  archivos/588 pruebas, 10 snapshots y builds de producción de API y web.
+- Fase cerrada. El siguiente incremento recomendado es Fase 4.4: nesting
+  compartido entre componentes compatibles del mismo producto compuesto.
+
+### Objetivo de negocio
+
+Permitir que un producto compuesto conserve el pricing general actual o use
+reglas comerciales diferentes por componente, sin duplicar impuestos,
+comisiones, descuentos ni redondeos.
+
+### Alcance obligatorio
+
+- Estrategias `GENERAL | POR_COMPONENTE | MIXTO`, con `GENERAL` compatible por
+  defecto.
+- Política versionada por relación BOM: heredar del padre, congelar la regla
+  del producto hijo o definir un override contextual.
+- Pricing por bloques de costo y aplicación única de cargas comerciales sobre
+  la línea final.
+- Regla propia para costos directos e incorporación del padre.
+- Desglose de costo, neto y margen por componente con permisos y snapshots.
+- Editor y previsualización dentro del Pricing del producto padre.
+
+### Invariantes
+
+- El modo general no cambia resultados existentes.
+- Cada costo participa exactamente en un bloque.
+- Impuestos, comisiones, descuentos y redondeo se aplican una sola vez.
+- Una revisión publicada no sigue cambios posteriores del pricing hijo.
+- Componentes inactivos no aportan costo ni precio.
+
+### Criterios de salida
+
+- Comparar el mismo compuesto en modo general, por componente y mixto.
+- Aplicar reglas diferentes a impresión, estructura y ensamblaje manteniendo
+  una sola línea comercial.
+- Reconstruir el total y margen desde el snapshot sin consultar configuración
+  mutable.
+- Regresión del pricing simple y compuesto, seguridad y QA visual aprobadas.
+
+---
+
+## Fase 4.4 — Nesting compartido dentro de productos compuestos
+
+**Estado inicial:** PROPUESTA · PENDIENTE
+
+**Estado actual:** CERRADA FUNCIONALMENTE EN LOCAL · F5 HABILITADA
+
+Precedencias, conservación multinivel, simuladores, métricas, transporte de
+geometrías y ejecución de OT aprobados. El caso Puma pasó tres repeticiones
+reales en dos placas. El exhibidor conserva cantidades, posiciones y capas al
+exportar y ejecutar. Ver el [cierre integral](visual-ilusion-fase-4-cierre-integral-2026-09-07.md).
+Los avances siguientes conservan la cronología; no reemplazan este dictamen.
+
+**Dependencias:** Fases 4.2–4.3.
+
+**Documento de diseño:** `docs/visual-ilusion-fase-4-4-nesting-compuestos-diseno.md`
+
+### Objetivo de negocio
+
+Consolidar piezas compatibles de varias ramas del mismo producto compuesto para
+reducir consumo y preparación, conservando identidad, costos y ejecución.
+
+### Alcance obligatorio
+
+- Política `INDEPENDIENTE | CONSOLIDAR_COMPATIBLES` con exclusión por
+  componente.
+- Firma estricta de compatibilidad productiva; mismo material por sí solo no
+  habilita la mezcla.
+- Pipeline en dos etapas: resolver demandas, agrupar, nestear y devolver
+  asignaciones a cada componente.
+- Lote compartido congelado en cotización y referenciado una sola vez en OT.
+- Reconciliación determinística de material, desperdicio y preparación.
+- Modo sombra antes de afectar costos; primera activación limitada a geometría
+  rectangular segura.
+
+### Invariantes
+
+- El modo independiente conserva el resultado anterior.
+- Toda pieza pertenece a un único placement y mantiene su componente de origen.
+- Consumo y preparación compartidos no se duplican.
+- El ahorro cotizado debe poder ejecutarse en producción.
+- La suma de costos asignados coincide con el costo completo del lote.
+
+### Avance 4.4.1 — observabilidad sin impacto comercial
+
+- Activación voluntaria por producto; ausencia de configuración conserva el
+  nesting independiente.
+- Exclusión explícita por uso BOM con motivo opcional.
+- Demanda rectangular exacta expuesta por el dispatcher y firma SHA-256
+  productiva versión 1.
+- Agrupación limitada a pliegos rectangulares de material, máquina y
+  configuración estrictamente compatibles.
+- Comparación de pliegos y aprovechamiento independiente/consolidado mediante
+  el algoritmo multi-pieza existente, conservando la identidad de cada pieza.
+- Resultado devuelto y persistido en la trazabilidad de la cotización, siempre
+  con `aplicadoACostos: false`; costos, precio y OT continúan independientes.
+- Validación focalizada: 136 pruebas del motor y build de API aprobados.
+- Regresión integral: 207 suites, 2.001 pruebas y 10 snapshots aprobados; 2
+  suites y 3 pruebas omitidas.
+
+### Avance 4.4.2 — consumo reconciliado y ejecución única
+
+- El lote rectangular se aplica antes de Fase 4.3 sólo cuando todos los
+  participantes admiten un costeo directo y reproducible.
+- Material y preparación se asignan por área útil con reconciliación exacta.
+- Si el consolidado aumenta consumo o costo, el motor conserva los valores
+  independientes y persiste el motivo del fallback.
+- La cotización congela firma, placements, participantes, asignaciones, costo
+  y duración del lote.
+- La OT materializa una sola operación visible; los aliases por componente
+  preservan la topología y se sincronizan transaccionalmente.
+- Dependencias y gates convergen en la operación compartida, que libera todas
+  las ramas al completarse.
+- Migración operativa aplicada, build aprobado y regresión integral aprobada:
+  207 suites, 2.004 pruebas y 10 snapshots; 2 suites y 3 pruebas omitidas.
+- La configuración queda disponible en el editor de cada ruta de producto
+  compuesto: política general y exclusiones por componente, persistidas en el
+  borrador y sujetas a publicación por la huella productiva.
+
+4.4.3 extiende la misma semántica a rollos y geometría vectorial mediante un
+contrato neutral de demanda/solución. Admite cantidades heterogéneas y
+consolidación poligonal entre componentes sin perder su propietario. Las
+composiciones originales y los layouts impresión–corte ya registrados se
+excluyen de reacomodos independientes. Fase 5 no comienza hasta que el usuario
+valide funcionalmente el motor irregular.
+
+### Criterios de salida
+
+- Consolidar dos componentes compatibles y demostrar menor consumo real.
+- Rechazar y explicar dos componentes incompatibles aunque compartan material.
+- Reflejar los costos reasignados en el pricing de Fase 4.3.
+- Ejecutar una sola vez el lote en OT y liberar todas las ramas participantes.
+- Regresión, reconciliación, concurrencia y QA visual aprobadas.
+
+### Secuencia aprobada antes de retomar el plan original
+
+```text
+Cierre funcional de F4.2
+  → F4.3 Pricing composicional
+  → F4.4 Nesting compartido dentro del compuesto
+  → F5 Centro de corte y consolidación entre órdenes
+```
+
+No se inicia F4.3 sobre una frontera padre–componente todavía inestable ni se
+adelanta F5 antes de demostrar que el lote compartido de un único compuesto es
+cotizable, trazable y ejecutable.
 
 ---
 
 ## Fase 5 — Centro de corte y planes de nesting persistentes
 
 **Estado inicial:** PENDIENTE  
-**Dependencias:** Fases 3–4.
+**Dependencias:** Fases 3–4.4.
 
 ### Objetivo de negocio
 
@@ -642,6 +977,8 @@ Convertir corte/nesting en trabajo planificado, versionado y trazable, no sólo 
 - Aprobación/liberación del plan antes de ejecutar.
 - Cola específica de mesa de corte usando estaciones y capacidad existentes.
 - Consolidación de trabajos y relación entre tanda de máquina y lotes productivos futuros.
+- Extensión de los lotes compartidos de Fase 4.4 desde el alcance de un único
+  producto compuesto hacia múltiples ítems y órdenes compatibles.
 - Consumo planificado vs. real y aporte a costos/sostenibilidad.
 - Revisiones sin sobrescribir planes ya ejecutados.
 
@@ -1075,12 +1412,14 @@ F0 Gobierno
      │   └─ F2.5 Tiempo real/notificaciones
      │       └─ F3 Recetas/BOM
      │           └─ F4 DAG y gates
-     │               ├─ F5 Nesting/corte
-     │               └─ F6 Lotes/parcialidad
-     │                   ├─ F7 Calidad/reproceso
-     │                   ├─ F8 Variantes
-     │                   └─ F9 Reservas/inventario
-     │                       └─ F10 Compras/tercerización
+     │               └─ F4.3 Pricing compuesto
+     │                   └─ F4.4 Nesting del compuesto
+     │                       └─ F5 Nesting/corte persistente
+     │                           └─ F6 Lotes/parcialidad
+     │                               ├─ F7 Calidad/reproceso
+     │                               ├─ F8 Variantes
+     │                               └─ F9 Reservas/inventario
+     │                                   └─ F10 Compras/tercerización
      └─────────────────────────┐
 F4 + F6 + F9 + F10 ───────────┴─ F11 Planificación
 F1 + F6 + F8 + F9 ────────────── F12 Kits/destinos
@@ -1105,7 +1444,7 @@ Esta tabla es el control maestro contra pérdida de alcance.
 |    3 | Múltiples órdenes y ampliaciones                                       | F1            | F12                | Implementado; se extiende en F12                             |
 |    4 | BOM/receta avanzada                                                    | F3            | F4, F9             | Implementada y validada en F3                                |
 |    5 | Rutas dinámicas/condicionales                                          | F3–F4         | F2                 | Parcial hoy                                                  |
-|    6 | Rutas paralelas y convergencia                                         | F4            | F11                | Pendiente                                                    |
+| 6 | Rutas paralelas y convergencia | F4 | F11 | Implementadas y verificadas en F4; cierre integral aprobado |
 |    7 | Subproductos/componentes                                               | F3–F4         | F6                 | Costeo/versionado en F3; ejecución independiente en F4       |
 |    8 | Prototipos y muestras                                                  | F2            | F1                 | Implementado y validado                                      |
 |    9 | Versionado de archivos                                                 | F2            | F5                 | Implementado y validado                                      |
@@ -1270,17 +1609,25 @@ Cada fase tomará el subconjunto pertinente y agregará fixtures automatizados c
 
 ## 13. Registro de decisiones maestras
 
-| ID     | Decisión                                                               | Estado  | Motivo                                                                                                                                             |
-| ------ | ---------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DM-001 | Un solo Grafoprint con módulos avanzados                               | Cerrada | El núcleo compartido es dominante; un fork duplicaría costos y bugs.                                                                               |
-| DM-002 | Campaña es contenedor opcional, no OT                                  | Cerrada | Preserva ciclos, numeración y facturación existentes.                                                                                              |
-| DM-003 | Recetas y rutas se versionan/snapshotean                               | Cerrada | Evita mutar trabajos históricos o en vuelo.                                                                                                        |
-| DM-004 | DAG se incorpora de forma compatible con rutas lineales                | Cerrada | Reduce riesgo de regresión.                                                                                                                        |
-| DM-005 | Lote productivo y tanda de máquina son distintos                       | Cerrada | Representan identidades y cantidades diferentes.                                                                                                   |
-| DM-006 | Kits/packing/multidestino forman vertical shopper                      | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple.                                                                                   |
-| DM-007 | Planificador visual es proyección del scheduler                        | Cerrada | Evita dos fuentes de verdad.                                                                                                                       |
-| DM-008 | Datos operativos centrales serán relacionales                          | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting.                                                                                         |
-| DM-009 | SSE + outbox durable para frescura; inbox interno separado de WhatsApp | Cerrada | La comunicación es unidireccional, debe sobrevivir reconexiones/varias instancias y no puede mezclar permisos internos con consentimiento externo. |
+| ID     | Decisión                                                                  | Estado  | Motivo                                                                                                                                                                   |
+| ------ | ------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| DM-001 | Un solo Grafoprint con módulos avanzados                                  | Cerrada | El núcleo compartido es dominante; un fork duplicaría costos y bugs.                                                                                                     |
+| DM-002 | Campaña es contenedor opcional, no OT                                     | Cerrada | Preserva ciclos, numeración y facturación existentes.                                                                                                                    |
+| DM-003 | Recetas y rutas se versionan/snapshotean                                  | Cerrada | Evita mutar trabajos históricos o en vuelo.                                                                                                                              |
+| DM-004 | DAG se incorpora de forma compatible con rutas lineales                   | Cerrada | Reduce riesgo de regresión.                                                                                                                                              |
+| DM-005 | Lote productivo y tanda de máquina son distintos                          | Cerrada | Representan identidades y cantidades diferentes.                                                                                                                         |
+| DM-006 | Kits/packing/multidestino forman vertical shopper                         | Cerrada | Reutilizan producción/inventario sin contaminar el flujo simple.                                                                                                         |
+| DM-007 | Planificador visual es proyección del scheduler                           | Cerrada | Evita dos fuentes de verdad.                                                                                                                                             |
+| DM-008 | Datos operativos centrales serán relacionales                             | Cerrada | Necesitan integridad, concurrencia, auditoría y reporting.                                                                                                               |
+| DM-009 | SSE + outbox durable para frescura; inbox interno separado de WhatsApp    | Cerrada | La comunicación es unidireccional, debe sobrevivir reconexiones/varias instancias y no puede mezclar permisos internos con consentimiento externo.                       |
+| DM-010 | La instancia hija se configura por bindings de parámetros                 | Cerrada | Combina defaults, fijos, contexto padre, fórmulas y decisiones de cotización sin duplicar configuradores ni acoplar JobContexts internos.                                |
+| DM-011 | Los hijos comparten sólo outputs públicos mediante un DAG de cálculo      | Cerrada | Preserva JobContexts aislados, permite dependencias entre componentes y evita convertir una dependencia de cálculo en una precedencia física.                            |
+| DM-012 | La incorporación vive en la relación BOM y se agrupa en un paso compuesto | Cerrada | El mismo hijo puede incorporarse de formas diferentes; fabricación e incorporación necesitan tiempos y costos separados sin perder una ruta legible.                     |
+| DM-013 | La geometría requerida se declara en el producto, no se infiere de pasos  | Cerrada | El sheet debe pedir sólo los ejes publicados por Comercial; cualquier paso o componente puede consumirlos sin apropiarse de su origen.                                   |
+| DM-014 | Las rutas reutilizables son plantillas versionadas de Workflow            | Cerrada | Permite reutilizar recorridos lineales o DAG con pasos, etapas y componentes sin duplicar el motor ni mezclar la plantilla con la configuración contextual del producto. |
+| DM-015 | El pricing compuesto admite estrategia general, por componente o mixta    | Cerrada | Los componentes pueden tener lógicas comerciales distintas, pero impuestos, comisiones, descuentos y redondeo pertenecen una sola vez a la línea final.                  |
+| DM-016 | El nesting entre componentes exige una firma productiva compatible        | Cerrada | La activación es voluntaria por producto y el valor por defecto es independiente; compartir material no basta y la primera versión se limita a pliegos rectangulares.    |
+| DM-017 | La BOM identifica ocurrencias, no productos hijos únicos                  | Cerrada | Un mismo producto puede usarse varias veces con nombres, medidas y bindings propios; el código interno de la ocurrencia preserva cálculo, Workflow, nesting y OT.        |
 
 Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decisión se revoca, se conserva la fila y se añade la sucesora.
 
@@ -1290,26 +1637,32 @@ Las decisiones nuevas se agregan, no se reemplazan silenciosamente. Si una decis
 
 Esta tabla se actualizará al integrar cada fase.
 
-| Fase | Estado        | Rama                                                 | Documento técnico                                                   | Evidencia/commit                                       | Observaciones                                                                                                       |
-| ---: | ------------- | ---------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-|    0 | COMPLETA      | `visual-ilusion/analisis`                            | Diagnóstico + Plan Maestro                                          | `1d50db6c`                                             | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829`                                              |
-|    1 | COMPLETA      | `visual-ilusion/fase-1-campanas`                     | `docs/visual-ilusion-fase-1-campanas-diseno.md`                     | `41ead4c3`, `8077992a`, `4290c512`                     | Journey, seguridad, regresión y QA visual desktop/móvil aprobados                                                   |
-|    2 | COMPLETA      | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`      | `bf2df97a`, `52538507`                                 | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                      |
-|  2.5 | COMPLETA      | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md` | `46316989`                                             | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados |
-|    3 | COMPLETA      | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                   | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b` | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados           |
-|    4 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|    5 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|    6 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|    7 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|    8 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|    9 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   10 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   11 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   12 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   13 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   14 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   15 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
-|   16 | PENDIENTE     | —                                                    | —                                                                   | —                                                      | —                                                                                                                   |
+|  Fase | Estado                              | Rama                                                 | Documento técnico                                                       | Evidencia/commit                                                              | Observaciones                                                                                                                 |
+| ----: | ----------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+|     0 | COMPLETA                            | `visual-ilusion/analisis`                            | Diagnóstico + Plan Maestro                                              | `1d50db6c`                                                                    | Backup verificado; tag `restauracion-visual-ilusion-pre-plan-20260829`                                                        |
+|     1 | COMPLETA                            | `visual-ilusion/fase-1-campanas`                     | `docs/visual-ilusion-fase-1-campanas-diseno.md`                         | `41ead4c3`, `8077992a`, `4290c512`                                            | Journey, seguridad, regresión y QA visual desktop/móvil aprobados                                                             |
+|     2 | COMPLETA                            | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`          | `bf2df97a`, `52538507`                                                        | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                                |
+|   2.5 | COMPLETA                            | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md`     | `46316989`                                                                    | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados           |
+|     3 | COMPLETA                            | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                       | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b`                    | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados                    |
+| 4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | DAG, gates, lotes, costos, archivos, OT, áreas vecinas y concurrencia aprobados; F5 habilitada |
+| 4.1 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Backlight actual: profundidad y output Bastidor→Lona conservados hasta finalizar OT |
+| 4.2 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Ensamble único, Compras con DAG/gates y ejecución de Backlight aprobados |
+| 4.2.3 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/contrato-comercial-dimensiones-producto-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Contratos dimensionales y Backlight de 200 × 100 × 20 cm aprobados |
+| 4.2.4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Regresiones de opcionales/condicionales y reducción de dependencias aprobadas |
+|   4.3 | COMPLETA                            | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                                     | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                       |
+| 4.4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-4-nesting-compuestos` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Lotes seguros y multinivel, calidad Puma, exhibidor 1/10/50/51, CAD y OT aprobados |
+|     5 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|     6 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|     7 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|     8 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|     9 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    10 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    11 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    12 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    13 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    14 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    15 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+|    16 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 
 ---
 

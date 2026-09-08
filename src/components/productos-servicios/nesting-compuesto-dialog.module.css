@@ -1,0 +1,80 @@
+.body {
+  gap: 18px;
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.segmented {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--muted);
+}
+
+.segmented :global([data-slot="toggle-group-item"]) {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  background: transparent;
+  white-space: normal;
+}
+
+.segmented :global([data-slot="toggle-group-item"]):hover {
+  color: var(--foreground);
+}
+
+.segmented :global([data-slot="toggle-group-item"][aria-pressed="true"]),
+.segmented :global([data-slot="toggle-group-item"][data-pressed]),
+.segmented :global([data-slot="toggle-group-item"][data-state="on"]) {
+  color: var(--primary-foreground);
+  background: var(--signal, #e85f2a);
+  box-shadow: 0 3px 10px
+    color-mix(in srgb, var(--signal, #e85f2a) 20%, transparent);
+  font-weight: 720;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 0;
+}
+
+.componentList {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.component {
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  background: var(--background);
+}
+
+.component + .component {
+  border-top: 1px solid var(--border);
+}
+
+.empty {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .segmented {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

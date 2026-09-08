@@ -4,11 +4,16 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProductosService } from './productos.service';
-import { resolverFamilia } from './pasos/familias';
+import {
+  herramientasCotizacionEfectivas,
+  resolverFamilia,
+} from './pasos/familias';
 import {
   camposEditablesComercial,
   camposFijadosComercial,
 } from '../motor-universal/params-runtime';
+import { catalogoSalidasPublicasComposicion } from './composicion-outputs';
+import { leerGeometriasComerciales } from './geometrias-comerciales';
 
 /**
  * Formulario de cotización derivado por producto: la lista plana de PREGUNTAS
@@ -167,7 +172,7 @@ export class FormularioCotizacionService {
     }));
     if (rutas.length === 0) {
       throw new BadRequestException(
-        'Este producto no tiene rutas de producción activas: no se puede cotizar.',
+        'Este producto no tiene flujos de producción activos: no se puede cotizar.',
       );
     }
 
@@ -209,10 +214,18 @@ export class FormularioCotizacionService {
       rutaSeleccionada: ruta.id,
       cantidad: this.bloqueCantidad(producto),
       medidas: this.bloqueMedidas(producto),
+      geometrias: leerGeometriasComerciales(producto.atributosComercialesJson),
       preguntas: [
         ...this.preguntasDePasos(ejecutables),
         ...this.preguntasDeCargos(producto, ejecutables),
       ],
+      herramientas: this.herramientasDePasos(ejecutables),
+      outputsPublicos: catalogoSalidasPublicasComposicion(
+        ejecutables.map((config) => ({
+          familiaCodigo: config.rutaPaso?.familiaCodigo ?? '',
+          nombreVisible: config.nombreVisible,
+        })),
+      ),
       multiplicadores: this.bloqueMultiplicadores(ejecutables),
       adicionales: this.bloqueAdicionales(
         producto,
@@ -262,19 +275,35 @@ export class FormularioCotizacionService {
   private bloqueMedidas(producto: Detalle) {
     const predefinidas = this.medidasPredefinidas(producto);
     const modo = producto.modoMedidas;
+    const ejes = Array.isArray(producto.dimensionesRequeridas)
+      ? producto.dimensionesRequeridas
+      : modo === 'FIJA' && predefinidas.length === 0
+        ? []
+        : ['ANCHO', 'ALTO'];
+    const usaProfundidad = ejes.includes('PROFUNDIDAD');
     const instruccion =
       modo === 'FIJA'
         ? 'no_preguntar'
         : modo === 'COMERCIAL_ELIGE'
           ? 'elegir_predefinida'
           : modo === 'LIBRE'
-            ? 'pedir_ancho_alto'
+            ? usaProfundidad
+              ? 'pedir_ancho_alto_profundidad'
+              : 'pedir_ancho_alto'
             : 'predefinida_o_custom'; // MIXTA
     return {
       modo,
+      ejes,
       instruccion,
       unidadEntrada: 'mm',
-      jobContextKeys: modo === 'FIJA' ? [] : ['piezas', 'medidaCustomMm'], // el MCP arma ambos desde ancho×alto
+      jobContextKeys:
+        modo === 'FIJA'
+          ? []
+          : [
+              'piezas',
+              'medidaCustomMm',
+              ...(usaProfundidad ? ['profundidadMm'] : []),
+            ],
       predefinidas,
       default: predefinidas.find((m) => m.esDefault) ?? predefinidas[0] ?? null,
     };
@@ -294,6 +323,9 @@ export class FormularioCotizacionService {
             ),
             anchoMm: positivo(medida.anchoMm) ?? 0,
             altoMm: positivo(medida.altoMm) ?? 0,
+            profundidadMm:
+              positivo(medida.profundidadMm) ??
+              positivo(producto.medidaDefaultProfundidadMm),
             esDefault: medida.esDefault === true,
           };
         })
@@ -310,6 +342,7 @@ export class FormularioCotizacionService {
         nombre: `${anchoMm} x ${altoMm} mm`,
         anchoMm,
         altoMm,
+        profundidadMm: positivo(producto.medidaDefaultProfundidadMm),
         esDefault: true,
       },
     ];
@@ -338,10 +371,54 @@ export class FormularioCotizacionService {
         ...this.preguntaModoColor(config, base, familia),
         ...this.preguntaTiempoManual(config, base),
         ...this.preguntasTercerizado(config, base),
-        ...this.preguntaProfundidad(config, base, familiaCodigo),
       );
     }
     return preguntas;
+  }
+
+  /**
+   * Entradas complejas que no son una pregunta escalar. Se publican aparte
+   * para que un producto usado como componente conserve el mismo contrato de
+   * cotización que cuando se vende de forma directa.
+   */
+  private herramientasDePasos(ejecutables: ConfigPaso[]) {
+    const herramientas = new Map<
+      string,
+      {
+        tipo: 'diseno_vectorial';
+        jobContextKey: 'disenoVectorialFuente';
+        etiqueta: string;
+        requerido: boolean;
+      }
+    >();
+    for (const config of ejecutables) {
+      const familiaCodigo = config.rutaPaso?.familiaCodigo ?? '';
+      const familia = resolverFamilia(familiaCodigo);
+      const esEfectiva = herramientasCotizacionEfectivas(
+        familiaCodigo,
+        config.paramsPasoJson,
+      ).includes('diseno_vectorial');
+      const esCapacidadDisponible =
+        familia?.herramientasCotizacionDisponibles?.includes(
+          'diseno_vectorial',
+        ) === true;
+      if (!esEfectiva && !esCapacidadDisponible) {
+        continue;
+      }
+      herramientas.set('disenoVectorialFuente', {
+        tipo: 'diseno_vectorial',
+        jobContextKey: 'disenoVectorialFuente',
+        etiqueta: 'Diseño vectorial',
+        // En un hijo, láser/CNC pueden recibir una geometría heredada aunque
+        // su cotización directa normalmente use medidas. La capacidad se
+        // publica como opcional; las herramientas obligatorias o activadas
+        // explícitamente conservan el requisito.
+        requerido:
+          esEfectiva ||
+          herramientas.get('disenoVectorialFuente')?.requerido === true,
+      });
+    }
+    return [...herramientas.values()];
   }
 
   /** Espejo de getParamsComercialDeRuta: abiertos = (editables ∪ expuestos) − fijados. */
@@ -461,6 +538,7 @@ export class FormularioCotizacionService {
       {
         tipo: 'modo_color',
         ...base,
+        etiqueta: `Modo de color · ${base.paso as string}`,
         opciones,
         default: defaultMode,
         requerido: false,
@@ -562,34 +640,6 @@ export class FormularioCotizacionService {
         requerido: true,
         jobContextKey: `tercerizado_${config.id}.${eje.clave}`,
       }));
-  }
-
-  /**
-   * Cartelería backlight: bastidor DOBLE sin profundidad fija en params ⇒ el
-   * comercial (o la IA) carga la profundidad del cajón. Espejo de
-   * getProfundidadDeRuta (sheet). En MM (la UI muestra cm y convierte).
-   */
-  private preguntaProfundidad(
-    config: ConfigPaso,
-    base: Record<string, unknown>,
-    familiaCodigo: string,
-  ): PreguntaFormulario[] {
-    if (familiaCodigo !== 'estructura_bastidor') return [];
-    const params = asRecord(config.paramsPasoJson);
-    if (String(params.tipoBastidor ?? 'doble').toLowerCase() === 'simple') {
-      return [];
-    }
-    const fija = positivo(params.profundidadMm);
-    return [
-      {
-        tipo: 'profundidad',
-        ...base,
-        unidad: 'mm',
-        sugerido: fija,
-        requerido: fija === null,
-        jobContextKey: 'profundidadMm',
-      },
-    ];
   }
 
   /**

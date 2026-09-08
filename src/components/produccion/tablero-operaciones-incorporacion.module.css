@@ -1,0 +1,84 @@
+.compoundStep {
+  overflow: hidden;
+  margin-top: 10px;
+  border: 1px solid #e0d9d3;
+  border-radius: 10px;
+  background: #fbfaf8;
+}
+
+.compoundHeader {
+  display: grid;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #ebe5df;
+  color: #3c3739;
+  background: #f2efeb;
+  grid-template-columns: auto 1fr auto;
+}
+
+.compoundHeader svg {
+  width: 14px;
+  color: #ef6b35;
+}
+
+.compoundHeader strong {
+  font-size: 10px;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.compoundHeader span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #fff;
+  background: #28252a;
+  font: 700 9px var(--font-mono);
+  place-items: center;
+}
+
+.compoundRows {
+  display: grid;
+}
+
+.compoundRows > div {
+  display: grid;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-top: 1px solid #eee9e4;
+  grid-template-columns: auto 1fr auto;
+}
+
+.compoundRows > div:first-child {
+  border-top: 0;
+}
+
+.compoundRows > div > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef6b35;
+}
+
+.compoundRows div div {
+  display: grid;
+  gap: 2px;
+}
+
+.compoundRows strong {
+  color: #302c30;
+  font-size: 11px;
+}
+
+.compoundRows small {
+  color: #817a76;
+  font-size: 9.5px;
+}
+
+.compoundRows b {
+  color: #564f50;
+  font: 700 10px var(--font-mono);
+}

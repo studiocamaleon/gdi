@@ -44,6 +44,7 @@ import {
   etiquetaDuracion,
   etiquetaEntrega,
   etiquetaMomento,
+  etiquetaPasoKanban,
   etiquetaRestante,
   diasHastaEntrega,
   familiaIcono,
@@ -56,7 +57,7 @@ import {
   MOTIVOS_PAUSA,
   resolverEstacionDePaso,
   pasoActivo,
-  pasoActual,
+  pasosActivos,
   pasoReabrible,
   prioridadDerivada,
   progresoItem,
@@ -75,6 +76,7 @@ import {
   getOrdenTrabajo,
   getTableroProduccion,
   mesaPasoProduccion,
+  resolverGatePasoProduccion,
 } from "@/lib/ordenes-trabajo-api";
 import type {
   OrdenTrabajoDetalle,
@@ -111,12 +113,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { BriefDisenoProduccion } from "@/components/comercial/brief-diseno-resumen";
 import { leerBriefDiseno, type BriefDiseno } from "@/lib/brief-diseno";
+import operationStyles from "./tablero-operaciones-incorporacion.module.css";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = "items" | "estacion" | "kanban" | "simulacion";
 type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
 type PriorityFilter = "all" | TableroPrioridad;
-type KanbanBucketKey = "not-started" | "today" | "delayed" | "active";
+type KanbanBucketKey =
+  | "not-started"
+  | "blocked"
+  | "today"
+  | "delayed"
+  | "active";
 
 const DEFAULT_BOARD_MODE: Mode = "items";
 /** Refresco en vivo del dataset (mismo ritmo que el tracking público). */
@@ -307,6 +315,7 @@ type ItemView = {
   /** Icono de esa estación (clave del set del tablero). */
   stationIcon: string | null;
   currentStep: StepView | undefined;
+  currentSteps: StepView[];
   steps: StepView[];
 };
 
@@ -343,20 +352,22 @@ function buildItemView(
   item: TableroItemData,
   estaciones: Estacion[],
 ): ItemView {
-  const actual = pasoActual(item);
+  const activos = pasosActivos(item);
+  const actual = activos[0];
   const estacionActual = actual
     ? resolverEstacionDePaso(estaciones, actual)
     : null;
   const steps = item.pasos.map<StepView>((paso) => ({
     paso,
     status: stepStatus(paso),
-    esActivo: paso.id === actual?.id,
+    esActivo: activos.some((activo) => activo.id === paso.id),
     iconKey: familiaIcono(paso.familiaCodigo, paso.plantillaCodigo),
     tec: paso.centroCostoNombre ?? "Paso manual",
   }));
   const currentStep = actual
     ? steps.find((s) => s.paso.id === actual.id)
     : undefined;
+  const currentSteps = steps.filter((step) => step.esActivo);
   const blocked = itemBloqueado(item);
   const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
   // El resumen une valores SIN etiqueta, así que la medida de corte no puede
@@ -389,15 +400,22 @@ function buildItemView(
     dueDays: diasHastaEntrega(item.fechaEntrega),
     delayed: itemConRetraso(item),
     blocked,
-    blockedReason: bloqueadoPaso?.motivoBloqueo ?? null,
+    blockedReason:
+      bloqueadoPaso?.motivoBloqueo ??
+      (blocked && !actual ? "Esperando componentes o pasos anteriores" : null),
     started: itemIniciado(item),
     finished: itemTerminado(item),
     sinRuta: item.sinRuta,
     progressPct: progresoItem(item),
     statusLine: lineaEstado(item),
-    station: actual ? (estacionActual?.nombre ?? "Sin estación") : "—",
+    station: actual
+      ? actual.tipoEjecucion === "tercerizado"
+        ? "Proveedor tercerizado"
+        : (estacionActual?.nombre ?? "Sin estación")
+      : "—",
     stationIcon: estacionActual?.icono ?? null,
     currentStep,
+    currentSteps,
     steps,
   };
 }
@@ -525,6 +543,14 @@ const ItemRow = React.memo(function ItemRow({
           <span className="ot-badge" title="Orden de trabajo origen">
             {item.otCode}
           </span>
+          {item.data.componenteDe ? (
+            <span
+              className="ot-badge"
+              title={`Componente fabricado de ${item.data.componenteDe.nombre}`}
+            >
+              Componente
+            </span>
+          ) : null}
           {item.priority !== "normal" ? (
             <span className={`prio-pill prio-${item.priority}`}>
               {priorityLabel(item.priority)}
@@ -692,6 +718,66 @@ type AccionHandler = (
   },
 ) => Promise<void>;
 
+type GateHandler = (
+  paso: TableroPasoData,
+  tipo: "MATERIAL" | "CALIDAD",
+  estado: "CUMPLIDO" | "PENDIENTE",
+) => Promise<void>;
+
+export function GatesOperativos({
+  paso,
+  busy,
+  canSupervise,
+  onGate,
+}: {
+  paso: TableroPasoData;
+  busy: boolean;
+  canSupervise: boolean;
+  onGate: GateHandler;
+}) {
+  const gates = paso.gatesOperativos ?? [];
+  if (!gates.length) return null;
+  return (
+    <div className="ds-terc">
+      {gates.map((gate) => {
+        const cumplido = gate.estado === "CUMPLIDO";
+        const etiqueta = gate.tipo === "MATERIAL" ? "Material" : "Calidad";
+        return (
+          <React.Fragment key={gate.id}>
+            <span
+              className={`dst-badge ${cumplido ? "recibido" : "pendiente"}`}
+            >
+              {cumplido ? "✓ " : ""}
+              {etiqueta}
+            </span>
+            <span className="dst-info">
+              {cumplido
+                ? `Confirmado${gate.resueltoPorNombre ? ` por ${gate.resueltoPorNombre}` : ""}`
+                : "Pendiente: bloquea la ejecución"}
+            </span>
+            {canSupervise ? (
+              <button
+                type="button"
+                className="sta-btn ghost"
+                disabled={busy}
+                onClick={() =>
+                  void onGate(
+                    paso,
+                    gate.tipo,
+                    cumplido ? "PENDIENTE" : "CUMPLIDO",
+                  )
+                }
+              >
+                {cumplido ? "Revocar" : "Confirmar"}
+              </button>
+            ) : null}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * ¿Completar este paso dejaría el tiempo INVÁLIDO (D8, el "inicio y
  * completo en 1 seg")? Espejo del criterio del backend: suma de tramos
@@ -758,10 +844,14 @@ function PasoAcciones({
   const [declarando, setDeclarando] = React.useState(false);
   const [tiempoOtro, setTiempoOtro] = React.useState("");
   const paso = step.paso;
-  const esActual = item.currentStep?.paso.id === paso.id;
+  const esActual = step.esActivo;
   const esCronometro = paso.modoRegistro === "cronometro";
+  const gatePendiente = (paso.gatesOperativos ?? []).some(
+    (gate) => gate.estado !== "CUMPLIDO",
+  );
 
   if (!canManage) return null;
+  if (gatePendiente && paso.estado === "pendiente") return null;
 
   // Un paso TERCERIZADO es una compra al proveedor, no trabajo del taller: no se
   // ejecuta desde el tablero (se avanza en "Compras / Tercerizados" de la OT).
@@ -1051,6 +1141,7 @@ function DetailRuta({
   estaciones,
   estacionIdsEjecutables,
   onAccion,
+  onGate,
 }: {
   item: ItemView;
   briefDiseno: BriefDiseno;
@@ -1061,6 +1152,7 @@ function DetailRuta({
   estaciones: Estacion[];
   estacionIdsEjecutables: string[] | null;
   onAccion: AccionHandler;
+  onGate: GateHandler;
 }) {
   if (item.sinRuta) {
     return (
@@ -1085,7 +1177,7 @@ function DetailRuta({
         const dur = etiquetaDuracion(paso.duracionEstimadaMin);
         // El paso ACTIVO (la frontera de la secuencia) se resalta con borde
         // para ubicar de un vistazo dónde está parado el trabajo.
-        const esActivo = item.currentStep?.paso.id === paso.id;
+        const esActivo = step.esActivo;
         return (
           <div
             key={paso.id}
@@ -1142,6 +1234,39 @@ function DetailRuta({
                 ) : null}
               </div>
 
+              {paso.operacionesIncorporacionSnapshotJson?.length ? (
+                <div className={operationStyles.compoundStep}>
+                  <div className={operationStyles.compoundHeader}>
+                    <LayersIcon />
+                    <strong>Operaciones de ensamblaje</strong>
+                    <span>
+                      {paso.operacionesIncorporacionSnapshotJson.length}
+                    </span>
+                  </div>
+                  <div className={operationStyles.compoundRows}>
+                    {paso.operacionesIncorporacionSnapshotJson.map(
+                      (operacion) => (
+                        <div key={operacion.codigo}>
+                          <span />
+                          <div>
+                            <strong>{operacion.nombre}</strong>
+                            <small>
+                              {operacion.componentesNombres?.join(" + ") ??
+                                operacion.componenteNombre ??
+                                "Operación del paso"}
+                              {operacion.modoTiempo === "POR_UNIDAD"
+                                ? ` · ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(operacion.cantidadResuelta)} ${operacion.unidadCantidad ?? "unidades"}`
+                                : " · tiempo fijo"}
+                            </small>
+                          </div>
+                          <b>{etiquetaDuracion(operacion.duracionMin)}</b>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
               {step.status === "blocked" && paso.motivoBloqueo ? (
                 <div className="ds-blocked-detail">{paso.motivoBloqueo}</div>
               ) : null}
@@ -1174,6 +1299,12 @@ function DetailRuta({
                   detalleInline
                 />
               ) : null}
+              <GatesOperativos
+                paso={paso}
+                busy={busy}
+                canSupervise={canSupervise}
+                onGate={onGate}
+              />
               <PasoAcciones
                 item={item}
                 step={step}
@@ -1399,6 +1530,7 @@ function ItemDetailSheet({
   estacionIdsEjecutables,
   alcance,
   onAccion,
+  onGate,
   onClose,
 }: {
   item: ItemView | undefined;
@@ -1409,6 +1541,7 @@ function ItemDetailSheet({
   estacionIdsEjecutables: string[] | null;
   alcance: AlcanceTableroProduccion;
   onAccion: AccionHandler;
+  onGate: GateHandler;
   onClose: () => void;
 }) {
   const [tab, setTab] = React.useState("ruta");
@@ -1494,6 +1627,14 @@ function ItemDetailSheet({
               <div className="sheet-codes">
                 <span className="item-code">{item.code}</span>
                 <span className="ot-badge">{item.otCode}</span>
+                {item.data.componenteDe ? (
+                  <span
+                    className="ot-badge"
+                    title={`Se incorpora en ${item.data.componenteDe.nombre}`}
+                  >
+                    Componente de {item.data.componenteDe.nombre}
+                  </span>
+                ) : null}
                 {item.priority !== "normal" ? (
                   <span className={`prio-pill prio-${item.priority}`}>
                     {item.priority === "urgent" ? "Urgente" : "Alta prioridad"}
@@ -1538,7 +1679,14 @@ function ItemDetailSheet({
               ) : null}
               {!item.blocked && currentStep ? (
                 <div className="sub">
-                  Paso actual · <strong>{currentStep.paso.nombre}</strong>
+                  {item.currentSteps.length > 1
+                    ? `${item.currentSteps.length} ramas disponibles · `
+                    : "Paso actual · "}
+                  <strong>
+                    {item.currentSteps
+                      .map((step) => step.paso.nombre)
+                      .join(" + ")}
+                  </strong>
                   {currentStep.paso.centroCostoNombre ? (
                     <>
                       {" "}
@@ -1646,6 +1794,7 @@ function ItemDetailSheet({
               estaciones={estaciones}
               estacionIdsEjecutables={estacionIdsEjecutables}
               onAccion={onAccion}
+              onGate={onGate}
             />
           ) : null}
           {tab === "materiales" ? (
@@ -1666,7 +1815,7 @@ function ItemDetailSheet({
               ? "Todos los pasos completados. La orden se finaliza desde Órdenes de trabajo."
               : currentStep
                 ? `Paso actual: ${currentStep.paso.nombre}`
-                : null}
+                : item.statusLine}
           </div>
           <div className="spacer" />
           {alcance !== "operario" ? (
@@ -2839,19 +2988,20 @@ function ByStationView({
 
 // ── Kanban ───────────────────────────────────────────────────────────────
 
-function getKanbanBucket(item: ItemView): KanbanBucketKey {
+function getKanbanBucket(item: ItemView): KanbanBucketKey | null {
+  if (item.blocked) return "blocked";
   return bucketKanbanProduccion({
     iniciado: item.started,
+    terminado: item.finished,
     atrasado: item.delayed,
     diasEntrega: item.dueDays,
   });
 }
 
-function kanbanStepIcon(item: ItemView) {
+function kanbanStepIcon(item: ItemView, step: StepView | undefined) {
   if (item.blocked) return <BanIcon />;
-  const IconCmp = item.currentStep
-    ? getStepIcon(item.currentStep.iconKey)
-    : LayoutDashboardIcon;
+  if (step?.paso.estado === "pausado") return <PauseIcon />;
+  const IconCmp = step ? getStepIcon(step.iconKey) : LayoutDashboardIcon;
   return <IconCmp />;
 }
 
@@ -2865,7 +3015,13 @@ const KanbanCard = React.memo(function KanbanCard({
   item: ItemView;
   onOpen: (id: string) => void;
 }) {
-  const step = item.currentStep;
+  // Si el DAG espera una dependencia externa no hay una frontera ejecutable,
+  // pero la card igualmente debe nombrar el próximo paso, no decir solamente
+  // "En espera" ni repetir una explicación de estado.
+  const step =
+    item.currentStep ??
+    item.steps.find((candidate) => candidate.paso.estado !== "hecho");
+  const pasoPausado = step?.paso.estado === "pausado";
 
   return (
     <button
@@ -2875,7 +3031,14 @@ const KanbanCard = React.memo(function KanbanCard({
     >
       <div className="kan-card-top">
         <span className="item-code">{item.code}</span>
-        <span className="ot-badge">{item.otCode}</span>
+        {item.data.componenteDe ? (
+          <span
+            className="ot-badge"
+            title={`Componente fabricado de ${item.data.componenteDe.nombre}`}
+          >
+            Componente
+          </span>
+        ) : null}
         {item.priority !== "normal" ? (
           <span className={`prio-pill prio-${item.priority}`}>
             {priorityLabel(item.priority)}
@@ -2883,17 +3046,34 @@ const KanbanCard = React.memo(function KanbanCard({
         ) : null}
         <span className="kan-pct">{item.progressPct}%</span>
       </div>
+      <div className="kan-customer">{item.customer}</div>
       <div className="kan-title">{item.product}</div>
-      <div className="kan-meta">
-        {item.customer} · {item.spec}
-      </div>
       <div className="kan-step">
-        <span className="kan-step-ico">{kanbanStepIcon(item)}</span>
+        <span
+          className={`kan-step-ico ${
+            item.blocked ? "is-blocked" : pasoPausado ? "is-paused" : ""
+          }`}
+          title={pasoPausado ? "Paso pausado" : undefined}
+        >
+          {kanbanStepIcon(item, step)}
+        </span>
         <div>
-          <div className="tec">
-            {step?.paso.nombre ?? (item.sinRuta ? "Sin ruta" : "Completado")}
+          <div className="kan-step-label">
+            {etiquetaPasoKanban(step?.paso.estado)}
           </div>
-          <div className="sub">{item.statusLine}</div>
+          <div className="tec">
+            {step?.paso.nombre ??
+              (item.sinRuta
+                ? "Sin ruta"
+                : item.finished
+                  ? "Completado"
+                    : item.blocked
+                      ? "Bloqueado"
+                      : "En espera")}
+          </div>
+          {item.blocked && item.blockedReason ? (
+            <div className="kan-blocked-reason">{item.blockedReason}</div>
+          ) : null}
         </div>
       </div>
       <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}>
@@ -2976,6 +3156,11 @@ function KanbanView({
       key: "not-started",
       title: "No iniciados",
       description: "Sin pasos ejecutados",
+    },
+    {
+      key: "blocked",
+      title: "Bloqueados",
+      description: "Esperan dependencias o intervención",
     },
     { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
     { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
@@ -3342,6 +3527,31 @@ export function TableroProduccion({
       }
     },
     [canManage],
+  );
+
+  const handleGate = React.useCallback<GateHandler>(
+    async (paso, tipo, estado) => {
+      if (!permisoSupervisar) return;
+      setBusy(true);
+      setError(null);
+      mutacionesRef.current += 1;
+      try {
+        await resolverGatePasoProduccion(paso.id, { tipo, estado });
+        const respuesta = await getTableroProduccion();
+        setItems(respuesta.items);
+        ultimoSnapshotRef.current = JSON.stringify(respuesta.items);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No se pudo actualizar la condición operativa.",
+        );
+      } finally {
+        mutacionesRef.current -= 1;
+        setBusy(false);
+      }
+    },
+    [permisoSupervisar],
   );
 
   /**
@@ -3757,6 +3967,7 @@ export function TableroProduccion({
         estacionIdsEjecutables={meta.estacionIdsEjecutables}
         alcance={meta.alcance}
         onAccion={handleAccion}
+        onGate={handleGate}
         onClose={() => setSelectedId(null)}
       />
     </div>

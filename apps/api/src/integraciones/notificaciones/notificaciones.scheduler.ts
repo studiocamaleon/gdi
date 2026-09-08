@@ -193,6 +193,7 @@ export class NotificacionesScheduler {
       const pendientes = await this.prisma.notificacionWhatsapp.findMany({
         where: {
           estado: ESTADOS.pendiente,
+          canal: 'WATI',
           OR: [{ programadaPara: null }, { programadaPara: { lte: ahora } }],
         },
         orderBy: { createdAt: 'asc' },

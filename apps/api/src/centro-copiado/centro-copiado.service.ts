@@ -1661,12 +1661,13 @@ export class CentroCopiadoService {
     };
   }
 
-  /** Tipo de anillo por defecto: el primero instalado (o espiral plástico). */
+  /** Primer tipo configurado que está instalado. El orden de lectura de las
+   * variantes en PostgreSQL no puede decidir el precio de un tomo. */
   private tipoAnilladoDefault(ctx: Ctx): string {
     return (
-      ctx.anillos.find((anillo) =>
-        ctx.tiposAnilloPermitidos.includes(anillo.tipoAnillo),
-      )?.tipoAnillo || 'ESPIRAL_PLASTICO'
+      ctx.tiposAnilloPermitidos.find((tipo) =>
+        ctx.anillos.some((anillo) => anillo.tipoAnillo === tipo),
+      ) || 'ESPIRAL_PLASTICO'
     );
   }
 

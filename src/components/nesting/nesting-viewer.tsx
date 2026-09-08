@@ -1,8 +1,12 @@
 "use client";
 
+import { NestingPatronesView } from './nesting-patrones-view';
+import { agruparPatronesNesting } from '@/lib/nesting-patrones';
 import * as React from "react";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
+import { useCapasFabricacion } from "@/hooks/use-capas-fabricacion";
+import { CapasFabricacionPlacement, EstadoCapasFabricacion } from "./capas-fabricacion-nesting";
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
 import type {
   DemasiaPorLado,
@@ -131,18 +135,18 @@ function formatMoney(value: number, moneda: Moneda) {
   return formatearMoneda(value, moneda, { decimales: 0 });
 }
 
-function labelUnidad(u: NestingViewerInput["unidad"]): string {
+function labelUnidad(u: NestingViewerInput["unidad"], cantidad = 2): string {
   switch (u) {
     case "m_lineales":
       return "m lineales";
     case "pliegos":
-      return "pliegos";
+      return cantidad === 1 ? "pliego" : "pliegos";
     case "pouches":
-      return "pouches";
+      return cantidad === 1 ? "pouch" : "pouches";
     case "m2":
       return "m²";
     case "piezas":
-      return "piezas";
+      return cantidad === 1 ? "pieza" : "piezas";
   }
 }
 
@@ -154,6 +158,7 @@ function algorithmLabel(algorithm: NestingViewerInput["algorithm"]): string {
     "grid-2d-single": "Acomodo en pliego",
     "grid-2d-multi": "Acomodo multi-placa",
     "irregular-2d-bottom-left-v1": "Acomodo vectorial en placa",
+    "manual-vector-estimate-v1": "Estimación manual de corte",
   };
   // Snapshots viejos pueden traer un algoritmo ya retirado.
   return labels[algorithm] ?? "Acomodo";
@@ -232,7 +237,7 @@ function copiasLabel(copias: number) {
 }
 
 export function NestingViewer({
-  result,
+  result: original,
   copias = 1,
   costingDetails = [],
   maxPx = 560,
@@ -240,6 +245,10 @@ export function NestingViewer({
   className,
   modificaciones,
 }: NestingViewerProps) {
+  const { result, ...estadoCapas } = useCapasFabricacion(original);
+  const [verPatrones, setVerPatrones] = React.useState(true);
+  const admitePatrones = result.substrates.every(s => s.kind === 'sheet') &&
+    (result.algorithm === 'irregular-2d-bottom-left-v1' || !!result.composicionCompuesta) && agruparPatronesNesting(result).length > 0;
   const reactId = React.useId();
   const definitionIdPrefix = `nesting-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const pieceGroups = usePieceGroups(result.placements);
@@ -288,21 +297,35 @@ export function NestingViewer({
     );
   }
 
+  if (verPatrones && admitePatrones) return <NestingPatronesView result={result} onVerDetalle={() => setVerPatrones(false)} />;
   return (
     <section className={cn("nesting-viewer", className)}>
+      <EstadoCapasFabricacion {...estadoCapas} />
+      {admitePatrones && <button type="button" className="text-sm underline" onClick={() => setVerPatrones(true)}>Volver a los patrones</button>}
       <div className="nesting-strat-row">
         <div className="nesting-strat on">
           <span className="ix">01</span>
           <span>
-            {result.estrategiaDisposicion === "composicion_original"
-              ? "Composición original"
-              : algorithmLabel(result.algorithm)}
+            {result.composicionCompuesta
+              ? "Acomodo consolidado"
+              : result.estrategiaDisposicion === "composicion_original"
+                ? "Composición original"
+                : algorithmLabel(result.algorithm)}
           </span>
           <span className="yield">
             {formatNumber(result.aprovechamientoPct, 1)}%
           </span>
         </div>
-        {result.costingPreview ? (
+        {result.composicionCompuesta ? (
+          <div className="right">
+            <strong className="font-semibold text-foreground">
+              {result.composicionCompuesta.participantes} componentes
+            </strong>
+            {" · "}
+            {result.composicionCompuesta.sustratosIndependientes} →{" "}
+            {result.composicionCompuesta.sustratosConsolidados} placas
+          </div>
+        ) : result.costingPreview ? (
           <div className="right">
             Costeo:{" "}
             <strong className="font-semibold text-foreground">
@@ -330,7 +353,7 @@ export function NestingViewer({
         {copias > 1 ? (
           <StatBlock
             label="Cantidad calculada"
-            value={`${formatNumber(result.cantidadCalculada * copias, 2)} ${labelUnidad(result.unidad)}`}
+            value={`${formatNumber(result.cantidadCalculada * copias, 2)} ${labelUnidad(result.unidad, result.cantidadCalculada * copias)}`}
             hint={`${formatNumber(result.cantidadCalculada, 2)} por copia × ${copias} (${copiasLabel(copias)})`}
           />
         ) : (
@@ -340,7 +363,7 @@ export function NestingViewer({
                 ? "Largo consumido"
                 : "Cantidad calculada"
             }
-            value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad)}`}
+            value={`${formatNumber(result.cantidadCalculada, 2)} ${labelUnidad(result.unidad, result.cantidadCalculada)}`}
             hint={
               result.consumedLengthMm
                 ? `Rollo: ${formatMm(result.consumedLengthMm)}`
@@ -373,6 +396,7 @@ export function NestingViewer({
       </div>
 
       <NestingConfigStrip result={result} substrateLabel={substrateLabel} />
+      <ManejoPlacaNotice visualConfig={result.visualConfig} />
       <NestingCostingSummary costingDetails={costingDetails} />
       <NestingLegend
         pieceGroups={pieceGroups}
@@ -412,6 +436,7 @@ export function NestingViewer({
             printer={idx === 0 && conImpresora ? maquinaVisual : null}
             printerVisible={verMaquina}
             planImposicion={planImposicion}
+            commonLine={result.commonLine}
           />
         ))}
       </div>
@@ -485,6 +510,12 @@ function NestingConfigStrip({
     visualConfig
       ? ["Rotación", visualConfig.allowRotation ? "permitida" : "bloqueada"]
       : null,
+    visualConfig?.manejoPlaca
+      ? [
+          "Carga",
+          `sobresale ${formatMm(visualConfig.manejoPlaca.excedenteMm)} · eje ${visualConfig.manejoPlaca.eje.toUpperCase()}`,
+        ]
+      : null,
     result.costingPreview
       ? ["Costeo", costingLabel(result.costingPreview.strategy)]
       : null,
@@ -504,6 +535,27 @@ function NestingConfigStrip({
           <span className="v">{value}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ManejoPlacaNotice({
+  visualConfig,
+}: {
+  visualConfig?: NestingViewerInput["visualConfig"];
+}) {
+  const manejo = visualConfig?.manejoPlaca;
+  if (!manejo) return null;
+
+  return (
+    <div className={s.sheetHandlingNotice} role="note">
+      <span className={s.sheetHandlingMark} aria-hidden="true">
+        ↕
+      </span>
+      <div>
+        <strong>Carga especial de placa</strong>
+        <span>{manejo.mensaje}</span>
+      </div>
     </div>
   );
 }
@@ -1008,6 +1060,7 @@ interface SubstrateViewProps {
   printerVisible?: boolean;
   /** Plan de imposición de cuadernillo: dibuja páginas y plegado en cada par. */
   planImposicion?: PlanImposicionOutput | null;
+  commonLine?: NestingViewerInput["commonLine"];
 }
 
 function SubstrateView({
@@ -1024,6 +1077,7 @@ function SubstrateView({
   printer,
   printerVisible,
   planImposicion,
+  commonLine,
 }: SubstrateViewProps) {
   const widthMm = substrate.widthMm;
   const heightMm =
@@ -1250,6 +1304,12 @@ function SubstrateView({
               displayTransform={displayTransform}
               placementTransform={placementTransform}
             />
+            <SheetOverhangLayer
+              visualConfig={effectiveVisualConfig}
+              substrateWidthMm={widthMm}
+              substrateHeightMm={heightMm}
+              displayTransform={displayTransform}
+            />
             {hasMargins ? (
               <MarginsLayer
                 visualConfig={effectiveVisualConfig}
@@ -1305,6 +1365,11 @@ function SubstrateView({
                   modificaciones={modificaciones}
                 />
               ))}
+              <CommonLineLayer
+                commonLine={commonLine}
+                substrateIndex={substrateIndex}
+                displayTransform={placementTransform}
+              />
               {planImposicion ? (
                 <ImposicionOverlay
                   placements={placements}
@@ -1674,7 +1739,8 @@ function getVectorContours(placement: Placement): VectorContour[] {
     const contour = candidate as { esHueco?: unknown; puntos?: unknown };
     if (!Array.isArray(contour.puntos) || contour.puntos.length < 3) return [];
     const puntos = contour.puntos.flatMap((point) => {
-      if (!point || typeof point !== "object" || Array.isArray(point)) return [];
+      if (!point || typeof point !== "object" || Array.isArray(point))
+        return [];
       const { x, y } = point as { x?: unknown; y?: unknown };
       return typeof x === "number" &&
         Number.isFinite(x) &&
@@ -1777,6 +1843,10 @@ function PlacementRect({
     vectorContours.length > 0
       ? vectorPathData(vectorContours, displayTransform)
       : null;
+  const origen = mapDisplayPoint(displayTransform, { x: 0, y: 0 });
+  const ejeX = mapDisplayPoint(displayTransform, { x: 1, y: 0 });
+  const ejeY = mapDisplayPoint(displayTransform, { x: 0, y: 1 });
+  const transformCapas = `matrix(${ejeX.x - origen.x} ${ejeX.y - origen.y} ${ejeY.x - origen.x} ${ejeY.y - origen.y} ${origen.x} ${origen.y})`;
   const baseLabel = placementLabel(placement);
   const label =
     placement.panelIndex && placement.panelCount
@@ -1837,6 +1907,7 @@ function PlacementRect({
         <path
           d={vectorPath}
           fill={style.fill}
+          fillOpacity={0.15}
           fillRule="evenodd"
           clipRule="evenodd"
           stroke={style.stroke}
@@ -1855,6 +1926,7 @@ function PlacementRect({
           strokeWidth={0.8}
         />
       )}
+      <CapasFabricacionPlacement placement={placement} transform={transformCapas} />
       {placement.panelAxis === "vertical" && verticalStart ? (
         <rect
           x={verticalStart.x}
@@ -1930,7 +2002,7 @@ function PlacementRect({
             fontSize={labelFontSize}
             fontFamily="monospace"
             fontWeight={600}
-            fill={style.text}
+            fill={vectorPath ? "#202327" : style.text}
             pointerEvents="none"
           >
             {label}
@@ -1981,7 +2053,56 @@ function NestingFooter({ result }: { result: NestingViewerInput }) {
           <strong className="v">{formatMm(chargedLength)}</strong>
         </span>
       ) : null}
+      {result.commonLine?.habilitado ? (
+        <span>
+          <span className="k">Common Line</span>
+          <strong className="v">
+            {result.commonLine.aplicado
+              ? `${result.commonLine.tramos.length} tramos · ${formatMm(result.commonLine.ahorroRecorridoMm)} menos`
+              : "Sin tramos compatibles"}
+          </strong>
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+function CommonLineLayer({
+  commonLine,
+  substrateIndex,
+  displayTransform,
+}: {
+  commonLine?: NestingViewerInput["commonLine"];
+  substrateIndex: number;
+  displayTransform: DisplayTransform;
+}) {
+  if (!commonLine?.aplicado) return null;
+  return (
+    <g aria-label="Líneas de corte compartidas" pointerEvents="none">
+      {commonLine.tramos
+        .filter((tramo) => tramo.placa === substrateIndex)
+        .map((tramo) => {
+          const inicio = mapDisplayPoint(displayTransform, tramo.inicio);
+          const fin = mapDisplayPoint(displayTransform, tramo.fin);
+          return (
+            <line
+              key={tramo.id}
+              x1={inicio.x}
+              y1={inicio.y}
+              x2={fin.x}
+              y2={fin.y}
+              stroke="#ff6b2c"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            >
+              <title>
+                Common Line · {formatMm(tramo.longitudMm)} compartidos
+              </title>
+            </line>
+          );
+        })}
+    </g>
   );
 }
 
@@ -2277,6 +2398,77 @@ function PrintableAreaLayer({
   );
 }
 
+function SheetOverhangLayer({
+  visualConfig,
+  substrateWidthMm,
+  substrateHeightMm,
+  displayTransform,
+}: {
+  visualConfig: VisualConfig;
+  substrateWidthMm: number;
+  substrateHeightMm: number;
+  displayTransform: DisplayTransform;
+}) {
+  const manejo = visualConfig.manejoPlaca;
+  if (!manejo || manejo.excedenteMm <= 0) return null;
+
+  const workEndX = manejo.workArea.xMm + manejo.workArea.widthMm;
+  const workEndY = manejo.workArea.yMm + manejo.workArea.heightMm;
+  const excedeEnY = workEndY < substrateHeightMm - 0.01;
+  const zona = excedeEnY
+    ? {
+        xMm: 0,
+        yMm: workEndY,
+        widthMm: substrateWidthMm,
+        heightMm: Math.max(0, substrateHeightMm - workEndY),
+      }
+    : {
+        xMm: workEndX,
+        yMm: 0,
+        widthMm: Math.max(0, substrateWidthMm - workEndX),
+        heightMm: substrateHeightMm,
+      };
+  if (zona.widthMm <= 0 || zona.heightMm <= 0) return null;
+
+  const rect = mapDisplayRect(
+    displayTransform,
+    zona.xMm,
+    zona.yMm,
+    zona.widthMm,
+    zona.heightMm,
+  );
+  const labelFits = rect.width >= 95 && rect.height >= 22;
+
+  return (
+    <g pointerEvents="none">
+      <rect
+        x={rect.x}
+        y={rect.y}
+        width={rect.width}
+        height={rect.height}
+        fill="#fff1e8"
+        fillOpacity={0.9}
+        stroke="#ff642d"
+        strokeWidth={1}
+        strokeDasharray="6 4"
+      />
+      {labelFits ? (
+        <text
+          x={rect.x + rect.width / 2}
+          y={rect.y + rect.height / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#a63d18"
+          fontSize={11}
+          fontWeight={600}
+        >
+          Fuera de alcance · {formatMm(manejo.excedenteMm)}
+        </text>
+      ) : null}
+    </g>
+  );
+}
+
 function MarginsLayer({
   visualConfig,
   substrateWidthMm,
@@ -2396,12 +2588,22 @@ function CostingOverlay({
     );
   }
 
-  const bounds = costingPreview.chargedBounds ?? {
-    xMm: 0,
-    yMm: 0,
-    widthMm: substrateWidthMm,
-    heightMm: substrateHeightMm * (costingPreview.chargedRatio ?? 1),
-  };
+  const chargedRatio = costingPreview.chargedRatio ?? 1;
+  const bounds =
+    costingPreview.chargedBounds ??
+    (substrateWidthMm > substrateHeightMm
+      ? {
+          xMm: 0,
+          yMm: 0,
+          widthMm: substrateWidthMm * chargedRatio,
+          heightMm: substrateHeightMm,
+        }
+      : {
+          xMm: 0,
+          yMm: 0,
+          widthMm: substrateWidthMm,
+          heightMm: substrateHeightMm * chargedRatio,
+        });
 
   return (
     <g>

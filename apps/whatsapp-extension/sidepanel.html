@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grafo · WhatsApp</title>
+    <link rel="stylesheet" href="src/panel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        grafo<span class="brand-dot">.</span
+        ><small>Junto a tu conversación</small>
+      </div>
+      <button
+        id="settings-toggle"
+        class="icon-button"
+        aria-label="Configurar conexión"
+        aria-expanded="false"
+        title="Configurar conexión"
+      >
+        ⚙
+      </button>
+    </header>
+    <main>
+      <section id="settings" class="card" hidden>
+        <h1>Conectá tu Grafo</h1>
+        <p class="muted">Usá la dirección donde iniciás sesión en Grafo.</p>
+        <form id="connection-form">
+          <label for="origin">Dirección de Grafo</label>
+          <input
+            id="origin"
+            type="url"
+            placeholder="https://tu-grafo.com"
+            required
+            autocomplete="url"
+          />
+          <button class="primary" id="connect" type="submit">Conectar</button>
+        </form>
+        <p class="muted fine">
+          La conexión usa tu sesión de Grafo en este perfil de Chrome.
+        </p>
+        <button id="disconnect" class="text-button" type="button" hidden>
+          Desconectar
+        </button>
+        <details id="auto-settings">
+          <summary>Avisos automáticos de órdenes</summary>
+          <p class="fine muted">
+            Orden recibida, lista para retirar y cambio de entrega. Una vez
+            activado, este equipo los envía sin clics y con el panel cerrado.
+          </p>
+          <p class="fine muted">
+            Requiere Chrome abierto, WhatsApp conectado y el equipo despierto.
+            Los avisos nuevos usan este canal; los anteriores conservan el suyo.
+          </p>
+          <p id="auto-account" class="fine"></p>
+          <p id="auto-state" class="fine" role="status">Sin activar.</p>
+          <button id="auto-enable" class="secondary" type="button">
+            Activar en este equipo
+          </button>
+          <button id="auto-pause" class="text-button" type="button" hidden>
+            Pausar envíos
+          </button>
+          <button id="auto-wati" class="text-button" type="button" hidden>
+            Volver a WATI para avisos nuevos
+          </button>
+          <button id="auto-test" class="text-button" type="button">
+            Enviar prueba al propio número emisor
+          </button>
+          <div id="auto-log"></div>
+        </details>
+        <details>
+          <summary>Estado de detección · v0.3.1</summary>
+          <p id="detection-diagnostic" class="fine muted">Esperando un chat.</p>
+        </details>
+      </section>
+      <div id="company" class="company" hidden></div>
+      <section id="chat" class="chat-card" hidden>
+        <div class="eyebrow">CHAT ACTUAL</div>
+        <div id="chat-name" class="chat-name"></div>
+        <div id="chat-phone" class="muted fine"></div>
+        <details id="manual-details">
+          <summary>Ingresar teléfono manualmente</summary>
+          <form id="phone-form">
+            <label for="phone">Teléfono con código de país</label>
+            <div class="input-row">
+              <input
+                id="phone"
+                type="tel"
+                placeholder="+54 9 2966 123456"
+                required
+                autocomplete="off"
+              /><button class="secondary" type="submit">Buscar</button>
+            </div>
+            <p class="fine muted">
+              Se usa sólo para este chat; se borra al cambiar de conversación.
+            </p>
+          </form>
+        </details>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite"></div>
+      <div id="actions" class="actions"></div>
+      <div id="results" aria-live="polite"></div>
+    </main>
+    <footer>Contacto y órdenes · Grafo</footer>
+    <script type="module" src="src/panel.js"></script>
+  </body>
+</html>

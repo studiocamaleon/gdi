@@ -75,6 +75,9 @@
   .ot-v1 {
     --muted: var(--muted-text);
     --muted-2: var(--muted-text-2);
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .ot-v1 svg {
@@ -244,7 +247,9 @@
 
   .orden-form {
     display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    grid-template-columns:
+      minmax(250px, 1.4fr) 64px minmax(190px, 1fr) minmax(180px, 1fr)
+      minmax(250px, 1.15fr);
     gap: 0;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -281,12 +286,18 @@
   }
 
   @media (max-width: 1100px) {
-    .ofield:nth-child(2) {
+    .ofield:nth-child(even) {
       border-right: none;
     }
 
-    .ofield:nth-child(-n + 2) {
+    .ofield:nth-child(-n + 4) {
       border-bottom: 1px solid var(--border);
+    }
+  }
+
+  @media (max-width: 700px) {
+    .ofield {
+      border-right: none;
     }
   }
 
@@ -675,6 +686,8 @@
   }
 
   .orden-table {
+    width: 100%;
+    min-width: 0;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-3);
@@ -824,6 +837,14 @@
 
   .orows > .order-row-wrap + .order-row-wrap {
     border-top: 1px solid var(--hairline);
+  }
+
+  .ot-v1 .orows,
+  .ot-v1 .order-row-wrap,
+  .ot-v1 .oprow,
+  .ot-v1 .oprow-body {
+    min-width: 0;
+    max-width: 100%;
   }
 
   /* Recotización masiva al cambiar el cliente: banner de progreso y filas
@@ -1257,9 +1278,6 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  @media (max-width: 1000px) {
   }
 
   .op-extras {
@@ -2091,7 +2109,14 @@
 
   .op-production {
     display: grid;
+    min-width: 0;
+    max-width: 100%;
     gap: 12px;
+  }
+
+  .op-production .cost-section {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .production-note {
@@ -2142,9 +2167,9 @@
   }
 
   .production-route {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
     margin-top: 10px;
   }
 
@@ -8881,6 +8906,11 @@ body {
     min-width: 0;
   }
 
+  .route-cols > .route-workflow-slot {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
   .route-actions-bar {
     position: sticky;
     bottom: 0;
@@ -9422,6 +9452,132 @@ body {
     border-top: 1px solid var(--hairline);
   }
 
+  .editor-side .modelo-nodos-side {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 8px;
+    border-top: 1px solid var(--hairline);
+    background: linear-gradient(180deg, #fbfaf8, #f5f2ed);
+  }
+
+  .editor-side .modelo-nodos-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 7px 5px;
+  }
+
+  .editor-side .modelo-nodos-head > span {
+    color: #d95422;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 760;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .editor-side .modelo-nodos-head small {
+    color: var(--muted-text);
+    font-size: 9.5px;
+  }
+
+  .editor-side .modelo-nodo-componente {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: var(--r-2);
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
+  }
+
+  .editor-side .modelo-nodo-componente:hover,
+  .editor-side .modelo-nodo-componente.active {
+    border-color: #f1c2ad;
+    background: #fff7f2;
+  }
+
+  .editor-side .modelo-nodo-componente .ix {
+    display: grid;
+    width: 25px;
+    height: 25px;
+    place-items: center;
+    border: 1px solid #f0b79d;
+    border-radius: 7px;
+    color: #e75c28;
+    background: #fff;
+  }
+
+  .editor-side .modelo-nodo-componente .ix svg,
+  .editor-side .modelo-config-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .editor-side .modelo-nodo-componente .body,
+  .editor-side .modelo-nodo-componente .ttl,
+  .editor-side .modelo-nodo-componente .sub {
+    display: block;
+    min-width: 0;
+  }
+
+  .editor-side .modelo-nodo-componente .ttl,
+  .editor-side .modelo-nodo-componente .sub {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .editor-side .modelo-nodo-componente .ttl {
+    font-size: 12.5px;
+    font-weight: 620;
+  }
+
+  .editor-side .modelo-nodo-componente .sub {
+    color: var(--muted-text);
+    font-size: 10.5px;
+  }
+
+  .editor-side .modelo-nodo-componente .status {
+    color: #c54d20;
+    font-size: 9px;
+  }
+
+  .editor-side .modelo-config-btn {
+    display: inline-flex;
+    width: 100%;
+    min-height: 34px;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+    border: 1px dashed #e4a78c;
+    border-radius: var(--r-2);
+    color: #b84a21;
+    background: rgb(255 255 255 / 55%);
+    font-size: 11.5px;
+    font-weight: 620;
+  }
+
+  .editor-side .modelo-config-btn:hover,
+  .editor-side .modelo-config-btn.active {
+    border-style: solid;
+    border-color: #ff8f5c;
+    background: #fff4ee;
+  }
+
+  .editor-side .modelo-simple-note {
+    padding: 8px 9px;
+    color: var(--muted-text);
+    font-size: 10.5px;
+    line-height: 1.45;
+  }
+
   .editor-side .pe-side-head {
     padding: 8px 10px 4px;
     color: var(--muted-text);
@@ -9597,6 +9753,11 @@ body {
        container empuja los sticky bottom hacia arriba). */
     padding: 28px 32px 12px;
     background: var(--bg);
+  }
+
+  .editor-main.modelo-activo {
+    padding: 0;
+    background: #1b1a1f;
   }
 
   .mini-graph {
@@ -10767,6 +10928,33 @@ body {
     border-radius: 50%;
   }
 
+  .ot-v1 .ap-compound-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    color: var(--side-accent, #ff6a2b);
+    background: color-mix(
+      in srgb,
+      var(--side-accent, #ff6a2b) 10%,
+      var(--surface)
+    );
+    border: 1px solid
+      color-mix(
+        in srgb,
+        var(--side-accent, #ff6a2b) 32%,
+        var(--border)
+      );
+    border-radius: 7px;
+  }
+
+  .ot-v1 .ap-compound-icon svg {
+    width: 13px;
+    height: 13px;
+    stroke-width: 1.9;
+  }
+
   .ot-v1 .ap-prod-name {
     color: var(--ink);
     font-size: 14px;
@@ -11036,6 +11224,10 @@ body {
   .ot-v1 .ap-config-section:last-child {
     padding-bottom: 0;
     border-bottom: 0;
+  }
+
+  .ot-v1 .ap-config-section-after-components {
+    padding-top: 18px;
   }
 
   .ot-v1 .ap-cs-head {
@@ -14190,7 +14382,7 @@ body {
 
 .tablero-produccion .kanban-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(280px, 1fr));
+  grid-template-columns: repeat(5, minmax(240px, 1fr));
   gap: 12px;
   align-items: start;
 }
@@ -14312,16 +14504,24 @@ body {
 }
 
 .tablero-produccion .kan-title {
+  margin-top: -5px;
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tablero-produccion .kan-customer {
+  overflow: hidden;
   color: var(--ink);
   font-size: 13.5px;
   font-weight: 700;
   line-height: 1.25;
-}
-
-.tablero-produccion .kan-meta {
-  color: var(--muted-text);
-  font-size: 12px;
-  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tablero-produccion .kan-step {
@@ -14341,6 +14541,14 @@ body {
   border-radius: 7px;
   background: var(--ink);
   color: #fff;
+}
+
+.tablero-produccion .kan-step-ico.is-blocked {
+  background: var(--destructive, #cf4b2f);
+}
+
+.tablero-produccion .kan-step-ico.is-paused {
+  background: var(--warn, #d97706);
 }
 
 /* Iconos y avatares de tamaño fijo que viven en una fila flex junto a texto: sin
@@ -14369,11 +14577,23 @@ body {
   font-weight: 650;
 }
 
-.tablero-produccion .kan-step .sub {
-  margin-top: 2px;
+.tablero-produccion .kan-step-label {
+  margin-bottom: 2px;
   color: var(--muted-text);
-  font-size: 11.5px;
-  line-height: 1.35;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.tablero-produccion .kan-blocked-reason {
+  margin-top: 3px;
+  color: var(--destructive, #cf4b2f);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .tablero-produccion .kan-progress {
@@ -27303,17 +27523,6 @@ button.otl-kpi {
   margin-bottom: 24px;
 }
 
-.ade-eyebrow {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--ade-orange);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .ade-head h1 {
   color: var(--ade-ink);
   font-size: 29px;
@@ -31043,8 +31252,907 @@ body:has(.t-app) {
   white-space: nowrap;
 }
 
+/* Workflow DAG de la OT: misma gramática visual que el editor, en modo
+   lectura. El lienzo puede crecer horizontalmente sin volver a una tira
+   secuencial falsa. */
+.prodtab .otp-root-workflows,
+.prodtab .otp-root-workflow {
+  min-width: 0;
+}
+
+.prodtab .otp-root-workflow + .otp-root-workflow {
+  border-top: 1px solid var(--hairline);
+}
+
+.prodtab .otp-workflow-view-stage {
+  display: grid;
+  overflow: hidden;
+}
+
+.prodtab .otp-workflow-view-panel {
+  min-width: 0;
+  grid-area: 1 / 1;
+  transform-origin: 50% 42%;
+  transition:
+    opacity 240ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 240ms ease,
+    visibility 0s linear 320ms;
+}
+
+.prodtab .otp-workflow-view-panel.active {
+  z-index: 1;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+  transition-delay: 70ms, 70ms, 70ms, 0s;
+}
+
+.prodtab .otp-workflow-view-panel.inactive {
+  z-index: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.988);
+  filter: blur(1.5px);
+}
+
+.prodtab .otp-root-workflow-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 22px;
+  color: var(--ink);
+  background: #fff;
+}
+
+.prodtab .otp-root-workflow-head > svg {
+  color: var(--graf-accent, #e64b24);
+}
+
+.prodtab .otp-workflow-card-head {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 22px;
+}
+
+.prodtab .otp-workflow-head-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.prodtab .otp-workflow-summary {
+  margin-top: 4px;
+  color: #8c837a;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.prodtab .otp-workflow-view-toggle {
+  flex: 0 0 auto;
+  padding: 4px;
+  border: 1px solid #ddd7cf;
+  border-radius: 12px;
+  background: #f4f1ed;
+}
+
+.prodtab .otp-workflow-view-toggle [data-slot="toggle-group-item"] {
+  min-width: 96px;
+  height: 34px;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  color: #716b65;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.prodtab
+  .otp-workflow-view-toggle
+  [data-slot="toggle-group-item"][data-pressed] {
+  color: #fff;
+  background: #1b191d;
+  box-shadow: 0 4px 12px rgba(24, 22, 26, 0.16);
+}
+
+.prodtab .otp-workflow-empty {
+  padding: 22px;
+  color: var(--muted);
+  background: #faf8f5;
+  font-size: 11px;
+  text-align: center;
+}
+
+.prodtab .otp-workflow-shell {
+  overflow-x: auto;
+  background-color: #fbfaf8;
+  background-image:
+    linear-gradient(#ece8e2 1px, transparent 1px),
+    linear-gradient(90deg, #ece8e2 1px, transparent 1px);
+  background-size: 34px 34px;
+  border-top: 1px solid var(--hairline);
+}
+
+.prodtab .otp-workflow-canvas {
+  min-width: max(100%, max-content);
+  min-height: 390px;
+  padding: 42px 34px 50px;
+  display: flex;
+  align-items: center;
+}
+
+.prodtab .otp-workflow-start,
+.prodtab .otp-workflow-end {
+  width: 56px;
+  flex: 0 0 56px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  color: var(--muted);
+}
+
+.prodtab .otp-workflow-start > span,
+.prodtab .otp-workflow-end > span {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 4px var(--surface);
+}
+
+.prodtab .otp-workflow-start > span {
+  background: var(--ink);
+}
+
+.prodtab .otp-workflow-end > span {
+  border-color: var(--graf-accent, #ff5c35);
+  background: var(--graf-accent, #ff5c35);
+}
+
+.prodtab .otp-workflow-start small,
+.prodtab .otp-workflow-end small,
+.prodtab .otp-workflow-moment > header > span,
+.prodtab .otp-workflow-node-type {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.prodtab .otp-workflow-link {
+  width: 64px;
+  flex: 0 0 64px;
+  height: 1px;
+  position: relative;
+  background: #cbc5bc;
+}
+
+.prodtab .otp-workflow-link span::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid #aaa39a;
+  border-right: 1px solid #aaa39a;
+  transform: rotate(45deg);
+}
+
+.prodtab .otp-workflow-moment {
+  width: 300px;
+  flex: 0 0 300px;
+  display: grid;
+  gap: 10px;
+}
+
+.prodtab .otp-workflow-moment.expanded {
+  width: max-content;
+  flex-basis: auto;
+}
+
+.prodtab .otp-workflow-moment > header {
+  min-height: 24px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--muted);
+}
+
+.prodtab .otp-workflow-moment > header small {
+  color: var(--graf-accent, #e64b24);
+  background: #fff3ee;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.prodtab .otp-workflow-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.prodtab .otp-workflow-node {
+  width: 300px;
+  min-height: 116px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #ded9d2;
+  border-top: 4px solid #cfcbc5;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(22, 20, 18, 0.08);
+}
+
+.prodtab .otp-workflow-node-main {
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 17px;
+  position: relative;
+}
+
+.prodtab .otp-workflow-component-collapsible,
+.prodtab .otp-workflow-node.component.expanded,
+.prodtab .otp-workflow-node.stage.expanded {
+  width: max-content;
+}
+
+.prodtab .otp-workflow-node.component.expanded {
+  min-width: 640px;
+}
+
+.prodtab .otp-workflow-node.stage.expanded {
+  min-width: 390px;
+}
+
+.prodtab .otp-workflow-component-head {
+  min-width: 296px;
+  grid-template-columns: 42px minmax(0, 1fr) auto 30px;
+}
+
+.prodtab .otp-workflow-node.component {
+  border-top-color: #ff9c7f;
+}
+
+.prodtab .otp-workflow-node.stage {
+  border-top-color: #d89a22;
+}
+
+.prodtab .otp-workflow-node.current {
+  box-shadow:
+    0 0 0 2px rgba(255, 92, 53, 0.18),
+    0 14px 28px rgba(22, 20, 18, 0.11);
+}
+
+.prodtab .otp-workflow-node.done {
+  opacity: 0.78;
+}
+
+.prodtab .otp-workflow-node.blocked {
+  border-color: #efaaa3;
+}
+
+.prodtab .otp-workflow-node-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8d3cc;
+  background: #f4f2ef;
+  color: var(--ink);
+}
+
+.prodtab .otp-workflow-node.component .otp-workflow-node-icon {
+  color: var(--graf-accent, #e64b24);
+  background: #fff5f1;
+  border-color: #ffc5b3;
+}
+
+.prodtab .otp-workflow-node.stage .otp-workflow-node-icon {
+  color: #b87500;
+  background: #fff8e9;
+  border-color: #ecd3a0;
+}
+
+.prodtab .otp-workflow-node.done .otp-workflow-node-icon {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-color: transparent;
+}
+
+.prodtab .otp-workflow-node-body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.prodtab .otp-workflow-node-type {
+  color: var(--graf-accent, #d94c27);
+  text-transform: uppercase;
+}
+
+.prodtab .otp-workflow-node-body strong {
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.prodtab .otp-workflow-node-body small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.prodtab .otp-workflow-status {
+  align-self: end;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.prodtab .otp-workflow-status.current {
+  color: var(--graf-accent, #d94c27);
+}
+
+.prodtab .otp-workflow-status.done {
+  color: var(--ok);
+}
+
+.prodtab .otp-workflow-status.blocked {
+  color: #c1372b;
+}
+
+.prodtab .otp-workflow-expand-button {
+  width: 30px;
+  height: 30px;
+  align-self: center;
+  border-color: #e3dcd4;
+  border-radius: 10px;
+  color: #4f4944;
+  background: #fff;
+}
+
+.prodtab .otp-workflow-expand-button:hover {
+  color: var(--graf-accent, #e64b24);
+  border-color: #ffb8a4;
+  background: #fff6f2;
+}
+
+.prodtab .otp-workflow-subroute-panel {
+  border-top: 1px solid #e8e1d9;
+  background: #f7f4f0;
+}
+
+.prodtab .otp-workflow-subroute-head {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 16px;
+  color: #8b3b25;
+  background: #fff9f6;
+  border-bottom: 1px solid #eadfd7;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.prodtab .otp-workflow-subroute-head small {
+  color: #7e756d;
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.025em;
+}
+
+.prodtab .otp-workflow-shell.nested {
+  border-top: 0;
+  background-color: #faf8f5;
+  background-size: 28px 28px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-canvas {
+  min-height: 264px;
+  padding: 28px 22px 34px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-start,
+.prodtab .otp-workflow-shell.nested .otp-workflow-end {
+  width: 46px;
+  flex-basis: 46px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-link {
+  width: 46px;
+  flex-basis: 46px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-moment {
+  width: 250px;
+  flex-basis: 250px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-moment.expanded {
+  width: max-content;
+  flex-basis: auto;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-node {
+  width: 250px;
+  min-height: 100px;
+  border-radius: 15px;
+  box-shadow: 0 8px 18px rgba(22, 20, 18, 0.065);
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-node-main {
+  min-height: 96px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-component-head {
+  min-width: 246px;
+  grid-template-columns: 36px minmax(0, 1fr) auto 30px;
+}
+
+.prodtab .otp-workflow-shell.nested .otp-workflow-node-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.prodtab .otp-workflow-stage-breakdown {
+  min-width: 386px;
+  display: grid;
+  gap: 9px;
+  padding: 0 14px 14px;
+  border-top: 1px solid #eee5d5;
+  background: #fffcf5;
+}
+
+.prodtab .otp-workflow-stage-breakdown > span {
+  padding-top: 12px;
+  color: #9a6818;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+}
+
+.prodtab .otp-workflow-stage-breakdown > div {
+  display: grid;
+  gap: 6px;
+}
+
+.prodtab .otp-workflow-stage-operation {
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid #eadfc8;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.prodtab .otp-workflow-stage-operation > span {
+  color: #a97825;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.prodtab .otp-workflow-stage-operation > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.prodtab .otp-workflow-stage-operation strong {
+  overflow: hidden;
+  color: #2e2925;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prodtab .otp-workflow-stage-operation small {
+  color: #8b8178;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+/* Workflow explotado de la OT. La jerarquía se expresa como ramas y aristas,
+   no como paneles anidados: cada paso real ocupa un nodo del mismo lienzo. */
+.prodtab .otp-workflow-shell.exploded {
+  background-size: 32px 32px;
+}
+
+.prodtab .otp-exploded-canvas {
+  min-height: 430px;
+  padding-top: 32px;
+  padding-bottom: 58px;
+}
+
+.prodtab .otp-exploded-moment {
+  width: max-content;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.prodtab .otp-exploded-stack {
+  min-height: 112px;
+  display: grid;
+  align-content: center;
+  gap: 20px;
+  position: relative;
+}
+
+.prodtab .otp-exploded-stack > [data-workflow-row] {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.prodtab .otp-exploded-stack > [data-workflow-row] > * {
+  flex: 1 1 auto;
+}
+
+.prodtab .otp-exploded-stack.parallel {
+  padding-inline: 36px;
+}
+
+.prodtab .otp-exploded-parallel-curves {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.prodtab .otp-exploded-parallel-curves.incoming {
+  left: 0;
+}
+
+.prodtab .otp-exploded-parallel-curves.outgoing {
+  right: 0;
+}
+
+.prodtab .otp-exploded-parallel-curves path {
+  fill: none;
+  stroke: #c2bbb2;
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.prodtab .otp-exploded-node {
+  width: 250px;
+  min-height: 106px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  position: relative;
+  padding: 14px;
+  border: 1px solid #dcd6cf;
+  border-top: 3px solid #cec9c3;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 20px rgba(27, 24, 21, 0.075);
+}
+
+.prodtab .otp-exploded-node.stage {
+  border-top-color: #d39828;
+}
+
+.prodtab .otp-exploded-node.current {
+  box-shadow:
+    0 0 0 2px rgba(255, 92, 53, 0.18),
+    0 10px 22px rgba(27, 24, 21, 0.09);
+}
+
+.prodtab .otp-exploded-node.done {
+  opacity: 0.78;
+}
+
+.prodtab .otp-exploded-node.blocked {
+  border-color: #e9aaa2;
+}
+
+.prodtab .otp-exploded-node-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8d2ca;
+  border-radius: 11px;
+  color: #242126;
+  background: #f3f1ee;
+}
+
+.prodtab .otp-exploded-node.stage .otp-exploded-node-icon {
+  color: #a86d09;
+  border-color: #e8cd96;
+  background: #fff8e8;
+}
+
+.prodtab .otp-exploded-node.done .otp-exploded-node-icon {
+  color: var(--ok);
+  border-color: transparent;
+  background: var(--ok-bg);
+}
+
+.prodtab .otp-exploded-node-body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.prodtab .otp-exploded-node-body > span:first-child {
+  color: #b84628;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 750;
+  letter-spacing: 0.075em;
+}
+
+.prodtab .otp-exploded-node.stage .otp-exploded-node-body > span:first-child {
+  color: #9e690f;
+}
+
+.prodtab .otp-exploded-node-body strong {
+  overflow: hidden;
+  color: #201d21;
+  font-size: 13px;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+}
+
+.prodtab .otp-exploded-node-body small {
+  overflow: hidden;
+  color: #7e7770;
+  font-size: 9.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prodtab .otp-exploded-stage-detail {
+  width: fit-content;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #8b5d0e !important;
+  background: #fff2d7;
+}
+
+.prodtab .otp-exploded-status {
+  align-self: end;
+  color: #79726b;
+  font-size: 8.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.prodtab .otp-exploded-status.current {
+  color: var(--graf-accent, #e64b24);
+}
+
+.prodtab .otp-exploded-status.done {
+  color: var(--ok);
+}
+
+.prodtab .otp-exploded-status.blocked {
+  color: #c1372b;
+}
+
+.prodtab .otp-exploded-branch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  position: relative;
+  padding: 9px 0;
+}
+
+.prodtab .otp-exploded-branch-label {
+  width: 178px;
+  flex: 0 0 178px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  color: #29252a;
+}
+
+.prodtab .otp-exploded-branch-label > span {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--graf-accent, #e64b24);
+  border: 1px solid #ffc2b0;
+  border-radius: 10px;
+  background: #fff4ef;
+}
+
+.prodtab .otp-exploded-branch-label > div {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.prodtab .otp-exploded-branch-label small {
+  color: #bb4729;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
+.prodtab .otp-exploded-branch-label strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prodtab .otp-exploded-branch-label em {
+  width: fit-content;
+  margin-top: 2px;
+  color: #8b837c;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.prodtab .otp-exploded-branch-track {
+  min-width: max-content;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.prodtab .otp-exploded-branch-track::before {
+  content: "";
+  width: 24px;
+  height: 1px;
+  flex: 0 0 24px;
+  background: #c8c1b9;
+}
+
+.prodtab .otp-exploded-branch-exit {
+  min-width: 24px;
+  height: 1px;
+  flex: 1 0 24px;
+  background: #c8c1b9;
+}
+
+.prodtab .otp-exploded-submoment {
+  display: grid;
+  gap: 10px;
+}
+
+.prodtab .otp-exploded-link {
+  width: 44px;
+  flex: 0 0 44px;
+  height: 1px;
+  position: relative;
+  background: #c8c1b9;
+}
+
+.prodtab .otp-exploded-link span::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid #a9a29b;
+  border-right: 1px solid #a9a29b;
+  transform: rotate(45deg);
+}
+
+.prodtab .otp-exploded-empty {
+  min-width: 150px;
+  padding: 10px;
+  color: #89817a;
+  border: 1px dashed #d3ccc4;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.66);
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prodtab .otp-workflow-view-panel {
+    transition: none;
+  }
+}
+
+/* Jerarquía BOM dentro del desglose de costos. */
+.cost-steps-table .cost-component-row td {
+  background: #f4f1ed;
+  border-top: 1px solid #d8d1c8;
+  border-bottom-color: #d8d1c8;
+}
+
+.cost-steps-table .cost-component-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cost-steps-table .cost-component-name > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--graf-accent, #e64b24);
+}
+
+.cost-steps-table .cost-component-name > span {
+  display: grid;
+  gap: 2px;
+}
+
+.cost-steps-table .cost-component-name strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.cost-steps-table .cost-component-name small {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
+  .prodtab .otp-workflow-card-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .prodtab .otp-workflow-view-toggle {
+    width: 100%;
+  }
+
+  .prodtab .otp-workflow-view-toggle [data-slot="toggle-group-item"] {
+    min-width: 0;
+    flex: 1 1 50%;
+  }
+
   .prodtab .otp-prod-head {
     grid-template-columns: 18px 1fr auto;
   }
@@ -40715,17 +41823,6 @@ body:has(.t-app) {
   flex-wrap: wrap;
 }
 
-.egr-eyebrow {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--egr-orange);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .egr-head h1 {
   margin: 0;
   color: var(--ink);
@@ -40808,29 +41905,6 @@ body:has(.t-app) {
   content: "";
 }
 
-.egr-kpi-top {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: auto;
-}
-
-.egr-kpi-icon {
-  display: grid;
-  width: 33px;
-  height: 33px;
-  flex: none;
-  place-items: center;
-  border-radius: 10px;
-  color: var(--egr-ink);
-  background: #f3f1ed;
-}
-
-.egr-kpi-icon svg {
-  width: 15px;
-  height: 15px;
-}
-
 .egr-kpi .l {
   color: var(--muted-text);
   font-size: 9px;
@@ -40856,11 +41930,6 @@ body:has(.t-app) {
 .egr-kpi.mal {
   border-color: color-mix(in srgb, var(--signal) 32%, transparent);
   background: var(--signal-bg);
-}
-
-.egr-kpi.mal .egr-kpi-icon {
-  color: var(--signal);
-  background: rgb(185 28 28 / 8%);
 }
 
 .egr-kpi.mal .v {
@@ -42157,8 +43226,6 @@ body:has(.t-app) {
    La identidad conserva microtexto editorial, pero la información operativa
    nunca baja de una escala cómoda de lectura. Este bloque queda al final para
    prevalecer sobre los estilos históricos de cada módulo. */
-.ade-eyebrow,
-.egr-eyebrow,
 .gp-modal > [data-slot="dialog-header"]::before,
 .gp-modal > form > [data-slot="dialog-header"]::before,
 .mod-head::before {
@@ -42197,4 +43264,772 @@ body:has(.t-app) {
 .gp-modal [data-slot="field-description"],
 .egr-f .egr-hint {
   font-size: 12px;
+}
+
+/* Navegador común del editor productivo: pasos, etapas y componentes. */
+.editor-main.modelo-activo {
+  padding: 0;
+  background: var(--bg);
+}
+
+.editor-side .modelo-nodos-side {
+  gap: 2px;
+  padding: 0 8px 8px;
+  border-top: 0;
+  background: transparent;
+}
+
+.editor-main .modelo-config-step-header {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  margin: -28px -32px 0;
+  padding: 28px 36px;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  background:
+    radial-gradient(circle at 78% -70%, rgb(255 105 52 / 24%), transparent 46%),
+    linear-gradient(112deg, #17161b 0%, #221a1d 55%, #542b20 125%);
+  grid-template-columns: auto auto minmax(280px, 1fr) auto auto;
+}
+
+.editor-main .modelo-config-step-header > button {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 12px;
+  color: #fff;
+  background: rgb(255 255 255 / 6%);
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.editor-main .modelo-config-step-header > button:hover {
+  border-color: rgb(255 119 69 / 62%);
+  background: rgb(255 255 255 / 11%);
+  transform: translateX(-2px);
+}
+
+.editor-main .modelo-config-step-header > button svg {
+  width: 18px;
+}
+
+.editor-main .modelo-config-step-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgb(255 111 58 / 42%);
+  border-radius: 14px;
+  color: #ff7040;
+  background: rgb(255 103 48 / 9%);
+}
+
+.editor-main .modelo-config-step-icon svg {
+  width: 21px;
+}
+
+.editor-main .modelo-config-step-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.editor-main .modelo-config-step-copy > span {
+  color: #ff7545;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.editor-main .modelo-config-step-header h1 {
+  margin: 2px 0 0;
+  color: #fff;
+  font-size: clamp(24px, 2vw, 32px);
+  font-weight: 690;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.editor-main .modelo-config-step-copy p {
+  margin: 0;
+  color: rgb(255 255 255 / 62%);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.editor-main .modelo-config-step-status {
+  display: grid;
+  min-width: 176px;
+  gap: 4px;
+  padding: 11px 14px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 6%);
+}
+
+.editor-main .modelo-config-step-status > span {
+  color: rgb(255 255 255 / 46%);
+  font: 700 9px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.editor-main .modelo-config-step-status strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.editor-main .modelo-config-step-status strong::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #efa91b;
+  box-shadow: 0 0 0 4px rgb(239 169 27 / 12%);
+  content: "";
+}
+
+.editor-main .modelo-config-step-status[data-state="ready"] strong::before {
+  background: #32bc83;
+  box-shadow: 0 0 0 4px rgb(50 188 131 / 12%);
+}
+
+.editor-main .modelo-config-step-status[data-state="warning"] strong::before {
+  background: #ff7545;
+  box-shadow: 0 0 0 4px rgb(255 117 69 / 12%);
+}
+
+/* Ficha técnica de un paso productivo. Se aplica sólo cuando la Hoja de ruta
+   abre un nodo: el editor histórico conserva su presentación normal. */
+.editor-shell.modelo-configuracion-nodo-activa > .editor-main {
+  padding: 28px 32px 0;
+  background:
+    linear-gradient(rgb(30 26 22 / 3%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(30 26 22 / 3%) 1px, transparent 1px), #f6f4f1;
+  background-size: 32px 32px;
+}
+
+.modelo-configuracion-nodo-activa .config-step-content {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 28px 34px 0;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-workspace {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 2px 2px 4px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro > div:first-child > span {
+  color: #d85224;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro h2 {
+  margin: 5px 0 3px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-intro p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 3px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d9aa56;
+  box-shadow: 0 0 0 3px rgb(217 170 86 / 14%);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-legend i[data-tone="ready"] {
+  background: #22a06b;
+  box-shadow: 0 0 0 3px rgb(34 160 107 / 12%);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-flow {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+  counter-reset: paso-config-section;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado.is-fixed {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid #ded9d2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgb(30 23 18 / 4%);
+  counter-increment: paso-config-section;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado.is-fixed.has-pending {
+  border-color: color-mix(in srgb, #d89b35 54%, #ded9d2);
+  box-shadow:
+    inset 3px 0 0 #dfa331,
+    0 10px 28px rgb(30 23 18 / 4%);
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado.is-fixed .eje-guiado-head {
+  align-items: center !important;
+  padding: 17px 20px !important;
+  border-bottom: 1px solid #ebe7e1;
+  background: linear-gradient(105deg, #f7f5f2, #fff 54%);
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-title {
+  gap: 9px !important;
+  color: var(--ink);
+  font-size: 15.5px !important;
+  font-weight: 690 !important;
+}
+
+.modelo-configuracion-nodo-activa
+  .eje-guiado.is-fixed
+  .eje-guiado-title::before {
+  display: inline-flex;
+  width: 27px;
+  flex: 0 0 27px;
+  justify-content: center;
+  color: #9a9189;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.07em;
+  content: counter(paso-config-section, decimal-leading-zero);
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-check {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-subtitle {
+  max-width: 760px !important;
+  margin-top: 3px !important;
+  margin-left: 56px !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-content {
+  gap: 18px !important;
+  padding: 20px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-content label {
+  color: #4b4541 !important;
+  font-size: 11.5px !important;
+  font-weight: 620 !important;
+}
+
+.modelo-configuracion-nodo-activa .eje-guiado-content input,
+.modelo-configuracion-nodo-activa .eje-guiado-content select,
+.modelo-configuracion-nodo-activa
+  .eje-guiado-content
+  [data-slot="select-trigger"] {
+  min-height: 40px;
+  border-color: #ded8d1;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.modelo-configuracion-nodo-activa .paso-config-group-head {
+  margin-top: 2px;
+  padding: 17px 18px 12px !important;
+  border: 1px solid #ded9d2;
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(105deg, #f7f5f2, #fff 54%);
+}
+
+.modelo-configuracion-nodo-activa
+  .paso-config-group-head
+  + div[style*="overflow: hidden"] {
+  margin-top: -16px;
+  border-color: #ded9d2 !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: 0 10px 28px rgb(30 23 18 / 4%);
+}
+
+/* Regla de consumo: traduce la configuración técnica del motor a un contrato
+   controlado y legible. Mantiene la densidad de la OT, sin adoptar la card
+   genérica de los componentes base. */
+
+.editor-main .paso-config-savebar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 14px;
+  margin-left: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline, #e6e2dc);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  box-shadow: 0 8px 24px rgb(20 16 12 / 14%);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-savebar {
+  bottom: 0;
+  width: calc(100% + 64px);
+  justify-content: flex-end;
+  margin: 24px -32px 0;
+  padding: 13px 36px;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: rgb(250 249 247 / 94%);
+  box-shadow: 0 -10px 30px rgb(28 20 15 / 7%);
+  backdrop-filter: blur(14px);
+}
+
+.modelo-configuracion-nodo-activa .paso-config-savebar .btn-primary {
+  min-height: 40px;
+  padding-inline: 17px;
+  border-radius: 10px;
+  background: #1b191d;
+  box-shadow: 0 7px 18px rgb(23 20 23 / 16%);
+}
+
+@media (max-width: 1040px) {
+  .editor-main .modelo-config-step-header {
+    grid-template-columns: auto auto minmax(220px, 1fr) auto;
+  }
+
+  .editor-main .modelo-config-step-status {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .editor-shell.modelo-configuracion-nodo-activa > .editor-main {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .editor-main .modelo-config-step-header {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    margin-right: -16px;
+    margin-left: -16px;
+    padding: 20px 16px;
+  }
+
+  .editor-main .modelo-config-step-icon {
+    display: none;
+  }
+
+  .editor-main .modelo-config-step-copy {
+    grid-column: 2 / -1;
+  }
+
+  .modelo-configuracion-nodo-activa .config-step-content {
+    padding: 22px 2px 0;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-legend {
+    white-space: normal;
+  }
+
+  .modelo-configuracion-nodo-activa .eje-guiado-content {
+    padding: 16px !important;
+  }
+
+  .modelo-configuracion-nodo-activa .eje-guiado-subtitle {
+    margin-left: 0 !important;
+  }
+
+  .modelo-configuracion-nodo-activa .paso-config-savebar {
+    width: calc(100% + 32px);
+    margin-right: -16px;
+    margin-left: -16px;
+    padding: 11px 16px;
+  }
+}
+
+.editor-side .modelo-vista-flujo {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  color: var(--ink);
+  background: var(--surface);
+  text-align: left;
+}
+
+.editor-side .modelo-vista-flujo:hover,
+.editor-side .modelo-vista-flujo.active {
+  border-color: color-mix(in srgb, var(--signal) 45%, white);
+  background: var(--signal-bg);
+}
+
+.editor-side .modelo-vista-flujo .ix {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--signal) 35%, white);
+  border-radius: 7px;
+  color: var(--signal);
+  background: var(--surface);
+}
+
+.editor-side .modelo-vista-flujo .ix svg {
+  width: 14px;
+  height: 14px;
+}
+
+.editor-side .modelo-vista-flujo .body,
+.editor-side .modelo-vista-flujo .ttl,
+.editor-side .modelo-vista-flujo .sub {
+  display: block;
+  min-width: 0;
+}
+
+.editor-side .modelo-vista-flujo .ttl {
+  font-size: 12.5px;
+  font-weight: 680;
+}
+
+.editor-side .modelo-vista-flujo .sub {
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-side .modelo-vista-flujo .status {
+  color: var(--signal);
+  font-size: 9px;
+  font-weight: 680;
+  text-transform: uppercase;
+}
+
+.editor-side .paso-item.etapa .ix {
+  border-radius: 7px;
+  border-color: color-mix(in srgb, var(--signal) 35%, white);
+  color: var(--signal);
+  background: var(--signal-bg);
+}
+
+.editor-side .paso-item.etapa .status,
+.editor-side .modelo-nodo-componente .status {
+  color: var(--muted-text);
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.editor-side .modelo-nodo-componente {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.editor-side .modelo-nodo-componente.active {
+  box-shadow: inset 2px 0 0 var(--signal);
+}
+
+/* El editor del modelo productivo usa todo el ancho: la hoja de ruta es el
+   navegador primario y reemplaza temporalmente al sidebar vertical. */
+.editor-shell.modelo-hoja-ruta-activa,
+.editor-shell.modelo-configuracion-nodo-activa {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-shell.modelo-hoja-ruta-activa > .editor-side,
+.editor-shell.modelo-configuracion-nodo-activa > .editor-side {
+  display: none;
+}
+
+.editor-shell.modelo-hoja-ruta-activa > .editor-main,
+.editor-shell.modelo-configuracion-nodo-activa > .editor-main {
+  min-width: 0;
+}
+
+.editor-side .modelo-add-nodos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.editor-side .modelo-add-nodos .pe-add-btn {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  text-align: center;
+}
+
+.editor-side .modelo-add-nodos .pe-add-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Workflow congelado de una cotización. Conserva la gramática del editor sin
+   convertir la DAG en tarjetas verticales ni mezclar edición con consulta. */
+.op-production .quote-workflow-viewport {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background-color: #fbfaf8;
+  background-image:
+    linear-gradient(#eeeae4 1px, transparent 1px),
+    linear-gradient(90deg, #eeeae4 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.op-production .quote-workflow-viewport::-webkit-scrollbar {
+  height: 9px;
+}
+
+.op-production .quote-workflow-viewport::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border-strong);
+  background-clip: padding-box;
+}
+
+.op-production .quote-workflow-canvas {
+  display: flex;
+  min-width: max(100%, max-content);
+  min-height: 330px;
+  align-items: center;
+  padding: 34px 26px 42px;
+}
+
+.op-production .quote-workflow-terminal {
+  display: grid;
+  width: 52px;
+  flex: 0 0 52px;
+  justify-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.op-production .quote-workflow-terminal > span {
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: inset 0 0 0 4px white;
+}
+
+.op-production .quote-workflow-terminal.end > span {
+  border-color: var(--signal);
+  background: var(--signal);
+}
+
+.op-production .quote-workflow-terminal small,
+.op-production .quote-workflow-moment > header > span,
+.op-production .quote-workflow-copy > small {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+}
+
+.op-production .quote-workflow-link {
+  position: relative;
+  width: 52px;
+  height: 1px;
+  flex: 0 0 52px;
+  background: #c9c3ba;
+}
+
+.op-production .quote-workflow-link > span::after {
+  position: absolute;
+  top: -3px;
+  right: 0;
+  width: 7px;
+  height: 7px;
+  border-top: 1px solid #aaa39a;
+  border-right: 1px solid #aaa39a;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.op-production .quote-workflow-moment {
+  display: grid;
+  width: 278px;
+  flex: 0 0 278px;
+  gap: 8px;
+}
+
+.op-production .quote-workflow-moment > header {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 5px;
+  color: var(--muted);
+}
+
+.op-production .quote-workflow-moment > header small {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--signal);
+  background: var(--signal-bg);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.op-production .quote-workflow-stack {
+  display: grid;
+  gap: 9px;
+}
+
+.op-production .quote-workflow-node {
+  display: grid;
+  min-height: 104px;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid #ded9d2;
+  border-top: 3px solid #cfcbc5;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 9px 22px rgba(24, 21, 18, 0.075);
+}
+
+.op-production .quote-workflow-node.component {
+  border-top-color: #ff9c7f;
+}
+
+.op-production .quote-workflow-node.stage {
+  border-top-color: #d89a22;
+}
+
+.op-production .quote-workflow-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid #d8d3cc;
+  border-radius: 11px;
+  color: var(--ink);
+  background: #f4f2ef;
+}
+
+.op-production .quote-workflow-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.op-production .quote-workflow-node.component .quote-workflow-icon {
+  border-color: #ffc5b3;
+  color: var(--signal);
+  background: #fff5f1;
+}
+
+.op-production .quote-workflow-node.stage .quote-workflow-icon {
+  border-color: #ecd3a0;
+  color: #b87500;
+  background: #fff8e9;
+}
+
+.op-production .quote-workflow-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.op-production .quote-workflow-copy > small {
+  color: var(--signal);
+}
+
+.op-production .quote-workflow-node.stage .quote-workflow-copy > small {
+  color: #a96b00;
+}
+
+.op-production .quote-workflow-copy > strong {
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.2;
+}
+
+.op-production .quote-workflow-copy > span {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.op-production .quote-workflow-empty {
+  margin-top: 12px;
+  padding: 24px;
+  border: 1px dashed var(--hairline);
+  border-radius: 14px;
+  color: var(--muted);
+  text-align: center;
 }

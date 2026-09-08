@@ -5,7 +5,7 @@ const DEFAULT_API_URL = "http://localhost:3001/api";
 export class ApiError extends Error {
   status: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, readonly retryAfterSeconds?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -75,7 +75,15 @@ export async function apiRequest<T>(
       } catch {}
     }
 
-    throw new ApiError(message, response.status);
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterSeconds = retryAfter === null ? undefined : Number(retryAfter);
+    throw new ApiError(
+      message,
+      response.status,
+      retryAfterSeconds !== undefined && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds
+        : undefined,
+    );
   }
 
   if (response.status === 204) {

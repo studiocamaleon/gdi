@@ -12,6 +12,7 @@ import { tienePermiso } from "@/lib/permisos-server";
 import {
   getCargosDirectosCatalogo,
   getCatalogoFamilias,
+  getEstadoPublicacionProducto,
   getLookupsConfigPaso,
   getProductoById,
   getRecetasProducto,
@@ -81,12 +82,30 @@ async function ProductoDetalleContent({
       );
     }
 
-    const [rutasDisponibles, catalogoFamilias, lookups, catalogoCargos, recetas, canManage] = await Promise.all([
-      tab === "produccion" && produccionVista === "rutas" ? getRutas() : Promise.resolve(undefined),
-      tab === "produccion" && (produccionVista === "rutas" || produccionVista === "operaciones") ? getCatalogoFamilias() : Promise.resolve(undefined),
-      tab === "produccion" && produccionVista === "operaciones" ? getLookupsConfigPaso() : Promise.resolve(undefined),
-      tab === "cargos" ? getCargosDirectosCatalogo(true) : Promise.resolve(undefined),
+    const [
+      rutasDisponibles,
+      catalogoFamilias,
+      lookups,
+      catalogoCargos,
+      recetas,
+      estadoPublicacion,
+      canManage,
+    ] = await Promise.all([
+      tab === "produccion" && produccionVista === "rutas"
+        ? getRutas()
+        : Promise.resolve(undefined),
+      tab === "produccion" &&
+      (produccionVista === "rutas" || produccionVista === "operaciones")
+        ? getCatalogoFamilias()
+        : Promise.resolve(undefined),
+      tab === "produccion" && produccionVista === "operaciones"
+        ? getLookupsConfigPaso()
+        : Promise.resolve(undefined),
+      tab === "cargos"
+        ? getCargosDirectosCatalogo(true)
+        : Promise.resolve(undefined),
       getRecetasProducto(productoId),
+      getEstadoPublicacionProducto(productoId),
       tienePermiso("costos.gestionar"),
     ]);
 
@@ -101,6 +120,7 @@ async function ProductoDetalleContent({
         lookups={lookups}
         catalogoCargos={catalogoCargos}
         recetas={recetas}
+        estadoPublicacion={estadoPublicacion}
         canManage={canManage}
       />
     );
@@ -119,6 +139,7 @@ function firstParam(value: string | string[] | undefined) {
 function normalizarTab(value: string | undefined): ProductoWorkspaceTab {
   if (
     value === "identidad" ||
+    value === "comercial" ||
     value === "produccion" ||
     value === "cargos" ||
     value === "herramientas" ||

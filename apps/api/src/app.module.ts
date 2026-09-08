@@ -53,6 +53,7 @@ import { RegistroModule } from './registro/registro.module';
 import { CampanasModule } from './campanas/campanas.module';
 import { DesarrolloDocumentalModule } from './desarrollo-documental/desarrollo-documental.module';
 import { EventosSistemaModule } from './eventos-sistema/eventos-sistema.module';
+import { GeometriaJobsModule } from './workers/geometria/geometria-jobs.module';
 
 @Module({
   imports: [
@@ -129,6 +130,7 @@ import { EventosSistemaModule } from './eventos-sistema/eventos-sistema.module';
     RecorridosVectorialesModule,
     ProvisionamientoModule,
     RegistroModule,
+    GeometriaJobsModule,
   ],
   controllers: [AppController],
   providers: [

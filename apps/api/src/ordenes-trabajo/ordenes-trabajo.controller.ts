@@ -33,6 +33,7 @@ import {
 import { EntregaService } from './entrega.service';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
+import { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
 import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
 import { Permiso } from '../auth/permiso.decorator';
@@ -211,6 +212,17 @@ export class OrdenesTrabajoController {
       pasoId,
       payload.estadoCompra,
     );
+  }
+
+  /** Resolver/reabrir una condición operativa de material o calidad. */
+  @Permiso('produccion.supervisar')
+  @Patch('tablero/pasos/:pasoId/gate')
+  resolverGatePaso(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('pasoId') pasoId: string,
+    @Body() payload: ResolverGatePasoDto,
+  ) {
+    return this.ordenesTrabajoService.resolverGatePaso(auth, pasoId, payload);
   }
 
   @Get(':id')

@@ -6,6 +6,11 @@ import Link from "next/link";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BadgeCheckIcon,
+  BoxesIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
   CopyIcon,
   Grid2X2Icon,
   Loader2Icon,
@@ -61,6 +66,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { duplicarProducto, listProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import {
@@ -73,6 +84,7 @@ import styles from "./productos-table.module.css";
 
 type OrdenProductos = "recientes" | "nombre_asc" | "nombre_desc";
 type VistaProductos = "tabla" | "categorias";
+type ComposicionProductos = "" | "simple" | "compuesto";
 
 export interface ProductosQueryInicial {
   page: number;
@@ -83,6 +95,7 @@ export interface ProductosQueryInicial {
   estado: "" | "activo" | "inactivo";
   orden: OrdenProductos;
   vista: VistaProductos;
+  composicion: ComposicionProductos;
 }
 
 interface SelectOption {
@@ -147,13 +160,25 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 function estadoProducto(producto: ProductoListItem) {
   switch (producto.estadoCatalogo) {
     case "activo":
-      return { label: "Activo", variant: "default" as const };
+      return {
+        label: "Activo",
+        description: "Publicado y disponible para cotizar.",
+      };
     case "incompleto":
-      return { label: "Incompleto", variant: "destructive" as const };
+      return {
+        label: "Incompleto",
+        description: "Falta completar su configuración antes de publicarlo.",
+      };
     case "listo":
-      return { label: "Listo", variant: "outline" as const };
+      return {
+        label: "Listo para publicar",
+        description: "La configuración está completa, pero aún no fue publicada.",
+      };
     default:
-      return { label: "Borrador", variant: "secondary" as const };
+      return {
+        label: "Borrador",
+        description: "Todavía está en preparación y no puede cotizarse.",
+      };
   }
 }
 
@@ -169,6 +194,7 @@ function queryString(query: ProductosQueryInicial) {
   if (query.estado) params.set("estado", query.estado);
   if (query.orden !== "recientes") params.set("orden", query.orden);
   if (query.vista === "categorias") params.set("vista", "categorias");
+  if (query.composicion) params.set("composicion", query.composicion);
   return params.toString();
 }
 
@@ -246,6 +272,7 @@ export function ProductosServiciosTable({
             subcategoriaCodigo: query.subcategoriaCodigo || undefined,
             categoriaCodigo: query.categoriaCodigo || undefined,
             orden: query.orden,
+            composicion: query.composicion || undefined,
           });
           if (id !== requestId.current) return;
           setProductos(response.data);
@@ -351,6 +378,42 @@ export function ProductosServiciosTable({
           </div>
         </article>
       </section>
+
+      <nav className={styles.compositionNav} aria-label="Tipo de producto">
+        <button
+          type="button"
+          data-active={!query.composicion}
+          onClick={() => updateQuery({ composicion: "", page: 1 })}
+        >
+          <PackageIcon aria-hidden="true" />
+          <span>
+            <strong>Todos</strong>
+            <small>Catálogo completo</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          data-active={query.composicion === "simple"}
+          onClick={() => updateQuery({ composicion: "simple", page: 1 })}
+        >
+          <ShapesIcon aria-hidden="true" />
+          <span>
+            <strong>Productos simples</strong>
+            <small>Se fabrican con su propia ruta</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          data-active={query.composicion === "compuesto"}
+          onClick={() => updateQuery({ composicion: "compuesto", page: 1 })}
+        >
+          <BoxesIcon aria-hidden="true" />
+          <span>
+            <strong>Productos compuestos</strong>
+            <small>Integran componentes fabricados</small>
+          </span>
+        </button>
+      </nav>
 
       <section className={styles.filterBar} aria-label="Filtros del catálogo">
         <div className={styles.search}>
@@ -608,8 +671,20 @@ export function ProductosServiciosTable({
         </section>
       ) : total === 0 && !query.search ? (
         <EstadoVacio
-          titulo="Sin productos cargados"
-          descripcion="Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
+          titulo={
+            query.composicion === "compuesto"
+              ? "Todavía no hay productos compuestos"
+              : query.composicion === "simple"
+                ? "Todavía no hay productos simples"
+                : "Sin productos cargados"
+          }
+          descripcion={
+            query.composicion === "compuesto"
+              ? "Un producto aparecerá acá cuando su receta incorpore al menos un componente fabricado."
+              : query.composicion === "simple"
+                ? "Los productos sin componentes fabricados aparecerán en esta sección."
+                : "Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
+          }
           cta={
             canManage
               ? {
@@ -647,14 +722,17 @@ export function ProductosServiciosTable({
             </div>
           ) : (
             <div className={styles.tableFrame}>
-              <Table className={styles.table}>
+              <TooltipProvider delay={180}>
+                <Table className={styles.table}>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[34%]">Nombre</TableHead>
+                    <TableHead className="w-[31%]">Nombre</TableHead>
+                    <TableHead className="w-[14%]">Tipo</TableHead>
                     <TableHead className="w-[14%]">Categoría</TableHead>
-                    <TableHead className="w-[16%]">¿Cómo se cobra?</TableHead>
-                    <TableHead className="w-[19%]">Manejo de medidas</TableHead>
-                    <TableHead className="w-[9%]">Estado</TableHead>
+                    <TableHead className="w-[16%]">Unidad de venta</TableHead>
+                    <TableHead className="w-[17%]">
+                      Definición de medida
+                    </TableHead>
                     {canManage ? (
                       <TableHead className="w-[8%] text-right">
                         Acciones
@@ -673,6 +751,14 @@ export function ProductosServiciosTable({
                       producto.modoMedidas,
                     );
                     const estado = estadoProducto(producto);
+                    const EstadoIcon =
+                      producto.estadoCatalogo === "activo"
+                        ? BadgeCheckIcon
+                        : producto.estadoCatalogo === "incompleto"
+                          ? CircleAlertIcon
+                          : producto.estadoCatalogo === "listo"
+                            ? CircleCheckIcon
+                            : CircleDashedIcon;
                     return (
                       <TableRow
                         key={producto.id}
@@ -682,17 +768,49 @@ export function ProductosServiciosTable({
                           className={styles.productCell}
                           title={producto.descripcion ?? undefined}
                         >
-                          <Link
-                            className={styles.productName}
-                            href={`/productos-servicios/${producto.id}?tab=identidad`}
+                          <span className={styles.productIdentity}>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={(props) => (
+                                  <button
+                                    {...props}
+                                    type="button"
+                                    className={styles.statusIcon}
+                                    data-state={producto.estadoCatalogo}
+                                    aria-label={`Estado: ${estado.label}`}
+                                  >
+                                    <EstadoIcon />
+                                  </button>
+                                )}
+                              />
+                              <TooltipContent
+                                side="right"
+                                align="center"
+                                className={styles.statusTooltip}
+                              >
+                                <strong>{estado.label}</strong>
+                                <span>{estado.description}</span>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Link
+                              className={styles.productName}
+                              href={`/productos-servicios/${producto.id}?tab=identidad`}
+                            >
+                              {highlightMatch(producto.nombre, query.search)}
+                            </Link>
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={styles.typePill}
+                            data-kind={
+                              producto.esCompuesto ? "compuesto" : "simple"
+                            }
                           >
-                            {highlightMatch(producto.nombre, query.search)}
-                          </Link>
-                          {producto.tercerizado ? (
-                            <span className={styles.outsourcedPill}>
-                              Tercerizado
-                            </span>
-                          ) : null}
+                            {producto.esCompuesto
+                              ? "Producto compuesto"
+                              : "Producto simple"}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <span className={styles.categoryPill}>
@@ -708,14 +826,6 @@ export function ProductosServiciosTable({
                         <TableCell title={medidas.descripcion}>
                           <span className={styles.measurePill}>
                             {medidas.label}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={styles.statusPill}
-                            data-state={producto.estadoCatalogo}
-                          >
-                            {estado.label}
                           </span>
                         </TableCell>
                         {canManage ? (
@@ -739,7 +849,8 @@ export function ProductosServiciosTable({
                     );
                   })}
                 </TableBody>
-              </Table>
+                </Table>
+              </TooltipProvider>
             </div>
           )}
         </section>

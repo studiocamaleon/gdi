@@ -217,3 +217,42 @@ export interface AplicarPrecioOutput {
     precioEspecialCliente: PrecioEspecialClienteSnapshot | null;
   };
 }
+
+export interface BloquePrecioCompuestoInput {
+  codigo: string;
+  nombre: string;
+  costoTotal: number;
+  costoSinMargenTotal?: number;
+  /** Cantidad comercial propia: gobierna tramos y precios fijos del bloque. */
+  cantidad: number;
+  precioConfig: PrecioConfig;
+}
+
+export interface AplicarPrecioCompuestoInput {
+  costoTotal: number;
+  cantidad: number;
+  bloques: BloquePrecioCompuestoInput[];
+  impuestos: ImpuestoSnapshot[];
+  comisiones: ComisionSnapshot[];
+  precioConfigPadre: PrecioConfig;
+  precioEspecialCliente?: PrecioEspecialClienteSnapshot;
+  descuento?: DescuentoPrecio | null;
+  decimalesPrecio?: number;
+}
+
+export interface BloquePrecioCompuestoOutput {
+  codigo: string;
+  nombre: string;
+  cantidad: number;
+  costoTotal: number;
+  costoSinMargenTotal: number;
+  netoListaTotal: number;
+  netoFinalTotal: number;
+  descuentoTotal: number;
+  margenEfectivoPct: number;
+  precioConfigSnapshot: PrecioConfig;
+}
+
+export interface AplicarPrecioCompuestoOutput extends AplicarPrecioOutput {
+  bloques: BloquePrecioCompuestoOutput[];
+}

@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   AplicarPrecioInput,
+  AplicarPrecioCompuestoInput,
+  AplicarPrecioCompuestoOutput,
   AplicarPrecioOutput,
   DescuentoPrecio,
   DetalleFijadoPorCantidad,
@@ -163,6 +165,233 @@ export class AplicarPrecioService {
         comisiones: input.comisiones,
         precioEspecialCliente: input.precioEspecialCliente ?? null,
       },
+    };
+  }
+
+  /**
+   * Pricing composicional: calcula cada regla sobre su cantidad natural y
+   * consolida descuento, cargas y redondeo en la única línea comercial.
+   */
+  aplicarCompuesto(
+    input: AplicarPrecioCompuestoInput,
+  ): AplicarPrecioCompuestoOutput {
+    if (!Number.isFinite(input.costoTotal) || input.costoTotal < 0) {
+      throw new BadRequestException('costoTotal debe ser número >= 0');
+    }
+    if (!Number.isFinite(input.cantidad) || input.cantidad <= 0) {
+      throw new BadRequestException('cantidad debe ser número > 0');
+    }
+    if (!input.bloques.length) {
+      throw new BadRequestException(
+        'El pricing compuesto requiere al menos un bloque.',
+      );
+    }
+
+    const decimalesFinales = input.decimalesPrecio ?? 2;
+    // Los bloques son cálculos intermedios. La precisión alta evita convertir
+    // cada uno en una línea monetaria y reserva el redondeo visible al total.
+    this.dec = 12;
+    const cargas = this.normalizarCargas(input.impuestos, input.comisiones);
+    const bloquesIntermedios = input.bloques.map((bloque) => {
+      const costoSinMargenTotal = bloque.costoSinMargenTotal ?? 0;
+      const costoUnitario = bloque.costoTotal / bloque.cantidad;
+      const costoSinMargenUnitario = costoSinMargenTotal / bloque.cantidad;
+      this.validarInput({
+        costoUnitario,
+        costoSinMargenUnitario,
+        cantidad: bloque.cantidad,
+        precioConfig: bloque.precioConfig,
+        impuestos: input.impuestos,
+        comisiones: input.comisiones,
+      });
+      const netoMargenableUnitario = this.calcularNeto(
+        bloque.precioConfig,
+        Math.max(0, costoUnitario - costoSinMargenUnitario),
+        bloque.cantidad,
+        cargas,
+      );
+      const trasladoSinMargenUnitario = this.netoSinMargen(
+        costoSinMargenUnitario,
+        cargas,
+      );
+      return {
+        ...bloque,
+        costoSinMargenTotal,
+        netoMargenableTotal: netoMargenableUnitario * bloque.cantidad,
+        trasladoSinMargenTotal: trasladoSinMargenUnitario * bloque.cantidad,
+      };
+    });
+
+    const netoMargenableListaTotal = bloquesIntermedios.reduce(
+      (total, bloque) => total + bloque.netoMargenableTotal,
+      0,
+    );
+    const trasladoSinMargenTotal = bloquesIntermedios.reduce(
+      (total, bloque) => total + bloque.trasladoSinMargenTotal,
+      0,
+    );
+    const netoMargenableListaUnitario =
+      netoMargenableListaTotal / input.cantidad;
+    const trasladoSinMargenUnitario = trasladoSinMargenTotal / input.cantidad;
+
+    this.dec = decimalesFinales;
+    const descuentoUnitario = this.calcularDescuentoUnitario(
+      netoMargenableListaUnitario,
+      input.descuento,
+      input.cantidad,
+    );
+    const descuentoTotal = descuentoUnitario * input.cantidad;
+    const netoUnitario = this.r(
+      Math.max(
+        0,
+        netoMargenableListaUnitario -
+          descuentoUnitario +
+          trasladoSinMargenUnitario,
+      ),
+    );
+    const impuestosPorFuera = this.r((netoUnitario * cargas.porFueraPct) / 100);
+    const brutoUnitario = this.r(netoUnitario + impuestosPorFuera);
+    const costosInternos = this.r(
+      (netoUnitario * cargas.internosNetoPct) / 100 +
+        (brutoUnitario * cargas.internosBrutoPct) / 100,
+    );
+    const totalComisiones = this.r(
+      (netoUnitario * cargas.comisionesNetoPct) / 100 +
+        (brutoUnitario * cargas.comisionesBrutoPct) / 100,
+    );
+    const totalImpuestos = this.r(impuestosPorFuera + costosInternos);
+    const precioBase = this.r(netoUnitario - costosInternos - totalComisiones);
+    const precioNetoTotal = this.r(netoUnitario * input.cantidad);
+    const precioBrutoTotal = this.r(brutoUnitario * input.cantidad);
+    const margenEfectivoPct =
+      netoUnitario > 0
+        ? redondear(
+            ((precioBase - input.costoTotal / input.cantidad) / netoUnitario) *
+              100,
+            2,
+          )
+        : 0;
+
+    const bloques = bloquesIntermedios.map((bloque) => {
+      const proporcionDescuento =
+        netoMargenableListaTotal > 0
+          ? bloque.netoMargenableTotal / netoMargenableListaTotal
+          : 0;
+      const descuentoBloque = descuentoTotal * proporcionDescuento;
+      const netoFinalBloque = Math.max(
+        0,
+        bloque.netoMargenableTotal -
+          descuentoBloque +
+          bloque.trasladoSinMargenTotal,
+      );
+      const brutoBloque = netoFinalBloque * (1 + cargas.porFueraPct / 100);
+      const costosInternosBloque =
+        (netoFinalBloque * cargas.internosNetoPct) / 100 +
+        (brutoBloque * cargas.internosBrutoPct) / 100;
+      const comisionesBloque =
+        (netoFinalBloque * cargas.comisionesNetoPct) / 100 +
+        (brutoBloque * cargas.comisionesBrutoPct) / 100;
+      const precioBaseBloque =
+        netoFinalBloque - costosInternosBloque - comisionesBloque;
+      return {
+        codigo: bloque.codigo,
+        nombre: bloque.nombre,
+        cantidad: bloque.cantidad,
+        costoTotal: this.r(bloque.costoTotal),
+        costoSinMargenTotal: this.r(bloque.costoSinMargenTotal),
+        netoListaTotal: this.r(
+          bloque.netoMargenableTotal + bloque.trasladoSinMargenTotal,
+        ),
+        netoFinalTotal: this.r(netoFinalBloque),
+        descuentoTotal: this.r(descuentoBloque),
+        margenEfectivoPct:
+          netoFinalBloque > 0
+            ? redondear(
+                ((precioBaseBloque - bloque.costoTotal) / netoFinalBloque) *
+                  100,
+                2,
+              )
+            : 0,
+        precioConfigSnapshot: bloque.precioConfig,
+      };
+    });
+
+    // Cada bloque se muestra con la precisión monetaria del tenant. El último
+    // centavo que surge al redondearlos de manera individual se asigna al
+    // bloque de mayor importe para que el snapshot siga reconstruyendo
+    // exactamente los totales consolidados de la única línea comercial.
+    const reconciliarCampo = (
+      campo:
+        | 'costoTotal'
+        | 'costoSinMargenTotal'
+        | 'netoListaTotal'
+        | 'netoFinalTotal'
+        | 'descuentoTotal',
+      objetivo: number,
+    ) => {
+      const objetivoRedondeado = this.r(objetivo);
+      const suma = this.r(
+        bloques.reduce((total, bloque) => total + bloque[campo], 0),
+      );
+      const residuo = this.r(objetivoRedondeado - suma);
+      if (residuo === 0) return;
+      const indice = bloques.reduce(
+        (mayor, bloque, actual) =>
+          Math.abs(bloque[campo]) > Math.abs(bloques[mayor][campo])
+            ? actual
+            : mayor,
+        0,
+      );
+      bloques[indice] = {
+        ...bloques[indice],
+        [campo]: this.r(bloques[indice][campo] + residuo),
+      };
+    };
+    reconciliarCampo('costoTotal', input.costoTotal);
+    reconciliarCampo(
+      'costoSinMargenTotal',
+      bloquesIntermedios.reduce(
+        (total, bloque) => total + bloque.costoSinMargenTotal,
+        0,
+      ),
+    );
+    reconciliarCampo(
+      'netoListaTotal',
+      netoMargenableListaTotal + trasladoSinMargenTotal,
+    );
+    reconciliarCampo('netoFinalTotal', precioNetoTotal);
+    reconciliarCampo('descuentoTotal', descuentoTotal);
+
+    return {
+      precioNetoUnitario: netoUnitario,
+      precioBrutoUnitario: brutoUnitario,
+      precioNetoTotal,
+      precioBrutoTotal,
+      desglose: {
+        precioBase,
+        totalImpuestos,
+        totalComisiones,
+        margenEfectivoPct,
+        trasladoSinMargenUnitario: this.r(trasladoSinMargenUnitario),
+      },
+      descuento: {
+        aplicado: descuentoUnitario > 0,
+        montoUnitario: this.r(descuentoUnitario),
+        montoTotal: this.r(descuentoTotal),
+        netoListaUnitario: this.r(
+          netoMargenableListaUnitario + trasladoSinMargenUnitario,
+        ),
+        netoListaTotal: this.r(
+          netoMargenableListaTotal + trasladoSinMargenTotal,
+        ),
+      },
+      snapshots: {
+        precioConfig: input.precioConfigPadre,
+        impuestos: input.impuestos,
+        comisiones: input.comisiones,
+        precioEspecialCliente: input.precioEspecialCliente ?? null,
+      },
+      bloques,
     };
   }
 

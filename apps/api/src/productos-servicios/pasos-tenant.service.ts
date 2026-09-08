@@ -44,6 +44,8 @@ import {
   validarPasoTenant,
   type PasoTenantInput,
 } from './pasos/paso-tenant';
+import { leerDefinicionesPasoCompuesto } from './pasos-compuestos';
+import type { TipoPasoTenant } from '@prisma/client';
 
 /** Defaults del taller; null en un campo lo limpia. */
 export interface DefaultsPasoTenantInput {
@@ -61,6 +63,11 @@ export interface DefaultsPasoTenantInput {
 export interface UpsertPasoTenantInput extends PasoTenantInput {
   defaults?: DefaultsPasoTenantInput | null;
   activo?: boolean;
+  tipoPaso?: TipoPasoTenant;
+  operacionesCompuestas?: unknown[];
+  /** Nombre público desde 4.2.1. Se guarda en la columna JSON histórica para
+   * no romper recetas ni exigir una migración destructiva. */
+  pasosInternos?: unknown[];
 }
 
 @Injectable()
@@ -132,6 +139,15 @@ export class PasosTenantService implements OnModuleInit {
         estacionHeredada: !estacionPorCodigo.has(fila.id),
         defaults: this.defaultsDeFila(fila),
         configBase: fila.configBaseJson,
+        tipoPaso: fila.tipoPaso,
+        operacionesCompuestas:
+          fila.tipoPaso === 'COMPUESTO'
+            ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
+            : [],
+        pasosInternos:
+          fila.tipoPaso === 'COMPUESTO'
+            ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
+            : [],
       };
     });
   }
@@ -142,6 +158,13 @@ export class PasosTenantService implements OnModuleInit {
       throw new BadRequestException(errores.map((e) => e.mensaje));
     }
     await this.validarDefaults(tenantId, input.defaults);
+    const tipoPaso = input.tipoPaso ?? 'SIMPLE';
+    const operacionesCompuestas =
+      tipoPaso === 'COMPUESTO'
+        ? leerDefinicionesPasoCompuesto(
+            input.pasosInternos ?? input.operacionesCompuestas ?? [],
+          )
+        : [];
 
     try {
       const fila = await this.prisma.pasoTenant.create({
@@ -151,6 +174,11 @@ export class PasosTenantService implements OnModuleInit {
           nombre: input.nombre.trim(),
           descripcion: input.descripcion?.trim() || null,
           icono: input.icono?.trim() || null,
+          tipoPaso,
+          operacionesCompuestasJson:
+            tipoPaso === 'COMPUESTO'
+              ? (operacionesCompuestas as Prisma.InputJsonValue)
+              : undefined,
           ...this.defaultsAColumnas(input.defaults),
         },
       });
@@ -213,8 +241,11 @@ export class PasosTenantService implements OnModuleInit {
       familiaCodigo,
       input,
     );
-    const { rutaPasoId: _rutaPasoId, requiereRutaPasoIds: _requiere, ...base } =
-      input;
+    const {
+      rutaPasoId: _rutaPasoId,
+      requiereRutaPasoIds: _requiere,
+      ...base
+    } = input;
     void _rutaPasoId;
     void _requiere;
     const fila = await this.prisma.familiaPasoDefaults.upsert({
@@ -304,6 +335,15 @@ export class PasosTenantService implements OnModuleInit {
       throw new BadRequestException(errores.map((e) => e.mensaje));
     }
     await this.validarDefaults(tenantId, input.defaults);
+    const tipoPaso = input.tipoPaso ?? existente.tipoPaso;
+    const operacionesCompuestas =
+      tipoPaso === 'COMPUESTO'
+        ? leerDefinicionesPasoCompuesto(
+            input.pasosInternos ??
+              input.operacionesCompuestas ??
+              existente.operacionesCompuestasJson,
+          )
+        : [];
 
     if (plantillaCodigo !== existente.plantillaCodigo) {
       const usos = await this.prisma.rutaPaso.count({
@@ -344,6 +384,11 @@ export class PasosTenantService implements OnModuleInit {
           icono:
             input.icono === undefined ? undefined : input.icono?.trim() || null,
           activo: input.activo ?? undefined,
+          tipoPaso,
+          operacionesCompuestasJson:
+            tipoPaso === 'COMPUESTO'
+              ? (operacionesCompuestas as Prisma.InputJsonValue)
+              : Prisma.DbNull,
           ...(input.defaults === undefined
             ? {}
             : this.defaultsAColumnasParaActualizar(input.defaults)),
@@ -411,6 +456,8 @@ export class PasosTenantService implements OnModuleInit {
     activo: boolean;
     plantillaCodigo: string;
     configBaseJson?: Prisma.JsonValue | null;
+    tipoPaso: TipoPasoTenant;
+    operacionesCompuestasJson: Prisma.JsonValue | null;
   }) {
     const proyectada = proyectarPasoTenant(fila);
     return {
@@ -423,6 +470,15 @@ export class PasosTenantService implements OnModuleInit {
       plantillaNombre: nombrePlantilla(fila.plantillaCodigo),
       categoria: proyectada?.categoria ?? null,
       configBase: fila.configBaseJson ?? null,
+      tipoPaso: fila.tipoPaso,
+      operacionesCompuestas:
+        fila.tipoPaso === 'COMPUESTO'
+          ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
+          : [],
+      pasosInternos:
+        fila.tipoPaso === 'COMPUESTO'
+          ? leerDefinicionesPasoCompuesto(fila.operacionesCompuestasJson)
+          : [],
     };
   }
 

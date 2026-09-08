@@ -1,3 +1,6 @@
+import { productosComercialesConTrabajo } from './productos-comerciales';
+import { fronterasEjecutablesDAG } from './fronteras-ejecutables';
+import { snapshotPasoProduccion, requierePlanConservado, type ItemSnapshotProduccion, type PasoSnapshotProduccion } from '../produccion/snapshot-paso-produccion';
 import {
   BadRequestException,
   ConflictException,
@@ -33,7 +36,6 @@ import {
   ESTADO_CANCELADA,
   MOTIVOS_PAUSA,
   MOTIVO_PAUSA_LABELS,
-  ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_ESTADO_LABELS,
   ORDEN_TRABAJO_FLUJO,
   progresoEfectivo,
@@ -55,18 +57,28 @@ import type {
 } from './dto/crear-orden-trabajo.dto';
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import type { AhorroConsolidacionDto } from './dto/completar-pasos-lote.dto';
+import type { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
 import {
   colaConsolidacionDeFamilia,
   modoRegistroDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import { evaluarCupon, planDescuentoCupon } from '../cupones/cupon-reglas';
 import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
 import {
   acomodarTanda,
   claveCompatibilidadVariante,
 } from '../produccion/produccion.service';
+import {
+  compilarRutaLineal,
+  nodoEjecutable,
+  nodoReabrible,
+  reducirGrafoAClaves,
+  type GrafoProduccion,
+} from './grafo-produccion';
+import { ControlConsolidacionProduccion } from './consolidacion-produccion';
+import { loteEnItem, trazabilidadDeComponente } from './snapshot-componente';
+import { resolverJobContextComponente } from '../productos-servicios/componentes-configuracion';
 import {
   aplicarFallbackConfigLaser,
   claveCompatibilidadLoteLaser,
@@ -75,6 +87,7 @@ import {
 } from '../produccion/simulador-laser-compatibilidad';
 import { resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
+import type { LoteNestingCompuestoSnapshot } from '../motor-universal/tipos';
 
 /**
  * Qué archivos de una orden puede ver el cliente en el link de seguimiento:
@@ -160,40 +173,14 @@ function margenFidelizacion(
   );
 }
 
-type PasoAhorroConsolidacion = {
+type PasoAhorroConsolidacion = PasoSnapshotProduccion & {
   id: string;
   rutaPasoId: string | null;
-  item: {
-    cotizacionItem: {
-      jobContextJson: Prisma.JsonValue;
-      trazabilidadJson: Prisma.JsonValue;
-    } | null;
-  };
+  item: ItemSnapshotProduccion;
 };
 
 function snapshotAhorroPaso(paso: PasoAhorroConsolidacion) {
-  const jobContext =
-    (paso.item.cotizacionItem?.jobContextJson as Record<
-      string,
-      unknown
-    > | null) ?? null;
-  const trazabilidad = paso.item.cotizacionItem?.trazabilidadJson as {
-    pasos?: Array<{
-      rutaPasoId?: string | null;
-      materiales?: Array<{
-        tipoLineaCosto?: string;
-        materialVarianteId?: string;
-        materiaPrimaNombre?: string;
-        precioUnitario?: number;
-      }>;
-      nestingResult?: { consumedLengthMm?: number } | null;
-    }>;
-  } | null;
-  const traza = Array.isArray(trazabilidad?.pasos)
-    ? trazabilidad.pasos.find(
-        (item) => item.rutaPasoId && item.rutaPasoId === paso.rutaPasoId,
-      )
-    : null;
+  const { jobContext, paso: traza } = snapshotPasoProduccion(paso.item, paso);
   const material = traza?.materiales?.find(
     (item) => item.tipoLineaCosto === 'MATERIAL',
   );
@@ -398,8 +385,11 @@ const LIST_INCLUDE = {
   cliente: { select: { nombre: true } },
   vendedor: { select: { nombreCompleto: true } },
   proyectoCampana: { select: { id: true, codigo: true, nombre: true } },
-  _count: { select: { items: true } },
+  _count: {
+    select: { items: { where: { parentItemId: null } } },
+  },
   items: {
+    where: { parentItemId: null },
     select: { nombre: true, ordenIndice: true },
     orderBy: { ordenIndice: 'asc' as const },
   },
@@ -426,7 +416,11 @@ export function alcanceTableroProduccionDe(
 }
 
 type PasoVisibleParaOperario = {
+  id?: string;
   indice: number;
+  nodoClave?: string | null;
+  predecesorPasoIds?: string[];
+  predecesoresSatisfechos?: boolean;
   estado: string;
   mesaEsMia: boolean;
   mesaUsuarioNombre: string | null;
@@ -437,6 +431,9 @@ type PasoVisibleParaOperario = {
 export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
   pasos: T[],
 ): T[] {
+  const porId = new Map(
+    pasos.flatMap((paso) => (paso.id ? [[paso.id, paso] as const] : [])),
+  );
   return pasos.filter((paso) => {
     if (paso.mesaEsMia || paso.tramoAbierto?.esMio) return true;
     if (
@@ -445,6 +442,14 @@ export function pasosVisiblesParaOperario<T extends PasoVisibleParaOperario>(
       paso.mesaUsuarioNombre
     ) {
       return false;
+    }
+    if (paso.nodoClave) {
+      if (paso.predecesoresSatisfechos != null) {
+        return paso.predecesoresSatisfechos;
+      }
+      return (paso.predecesorPasoIds ?? []).every(
+        (id) => porId.get(id)?.estado === 'hecho',
+      );
     }
     return pasos
       .filter((anterior) => anterior.indice < paso.indice)
@@ -469,11 +474,65 @@ type PasoTrazabilidad = {
     centroCostoNombre?: string | null;
     maquinaId?: string | null;
   };
+  operacionesIncorporacion?: Array<Record<string, unknown>>;
+  operacionesInternas?: Array<Record<string, unknown>>;
   /// Paso tercerizado (compra a proveedor) — ver F2 en el diseño.
   tercerizado?: boolean;
   proveedorId?: string | null;
   plazoProveedorDias?: number | null;
 };
+
+function lotesNestingAplicados(
+  trazabilidad: unknown,
+): LoteNestingCompuestoSnapshot[] {
+  if (
+    !trazabilidad ||
+    typeof trazabilidad !== 'object' ||
+    Array.isArray(trazabilidad)
+  ) {
+    return [];
+  }
+  const analisis = (trazabilidad as Record<string, unknown>)
+    .analisisNestingCompuesto;
+  if (!analisis || typeof analisis !== 'object' || Array.isArray(analisis)) {
+    return [];
+  }
+  const grupos = (analisis as Record<string, unknown>).grupos;
+  if (!Array.isArray(grupos)) return [];
+  return grupos.flatMap((grupo) => {
+    if (!grupo || typeof grupo !== 'object' || Array.isArray(grupo)) return [];
+    const registro = grupo as Record<string, unknown>;
+    const aplicacion = registro.aplicacion;
+    const lote = registro.lote;
+    if (
+      !aplicacion ||
+      typeof aplicacion !== 'object' ||
+      Array.isArray(aplicacion) ||
+      (aplicacion as Record<string, unknown>).aplicado !== true ||
+      !lote ||
+      typeof lote !== 'object' ||
+      Array.isArray(lote)
+    ) {
+      return [];
+    }
+    const candidato = lote as unknown as LoteNestingCompuestoSnapshot;
+    return typeof candidato.id === 'string' &&
+      Array.isArray(candidato.participantes) &&
+      candidato.participantes.length >= 2
+      ? [candidato]
+      : [];
+  });
+}
+
+function grafoDesdeSnapshotReceta(valor: Prisma.JsonValue | null | undefined) {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const grafo = (valor as Record<string, Prisma.JsonValue>).grafoProduccion;
+  if (!grafo || typeof grafo !== 'object' || Array.isArray(grafo)) return null;
+  const candidato = grafo as unknown as GrafoProduccion;
+  return Array.isArray(candidato.nodos) && Array.isArray(candidato.aristas)
+    ? candidato
+    : null;
+}
 
 function pasosActivados(trazabilidad: unknown): PasoTrazabilidad[] {
   const pasos = (trazabilidad as { pasos?: unknown } | null | undefined)?.pasos;
@@ -617,6 +676,42 @@ export function pasoReabrible(pasos: PasoSecuencia[], indice: number): boolean {
   return pasos
     .filter((paso) => paso.indice > indice)
     .every((paso) => paso.estado === 'pendiente');
+}
+
+/**
+ * Avance por trabajo estimado, no por cantidad de cajitas. Si faltan tiempos,
+ * cada desconocido toma la mediana de los conocidos; si faltan todos se cae
+ * al conteo histórico. De ese modo un QC de 5 min no pesa igual que 4 h de UV
+ * y tampoco se inventa precisión extrema para pasos sin estimación.
+ */
+export function progresoPonderadoPasos(
+  entrada: Array<{ estado: string; duracionEstimadaMin: number | null; nestingLoteRol?: string | null }>,
+): number {
+  // Las participaciones de un lote reflejan la operación principal. Un tiempo
+  // cero no debe convertirlas en trabajos de duración desconocida.
+  const pasos = entrada.filter((paso) => paso.nestingLoteRol !== 'PARTICIPANTE');
+  if (pasos.length === 0) return 0;
+  const conocidos = pasos
+    .map((paso) => paso.duracionEstimadaMin)
+    .filter((valor): valor is number => valor != null && valor > 0)
+    .sort((a, b) => a - b);
+  const pesoDesconocido =
+    conocidos.length > 0 ? conocidos[Math.floor(conocidos.length / 2)] : 1;
+  const peso = (paso: (typeof pasos)[number]) =>
+    paso.duracionEstimadaMin != null && paso.duracionEstimadaMin > 0
+      ? paso.duracionEstimadaMin
+      : pesoDesconocido;
+  const total = pasos.reduce((suma, paso) => suma + peso(paso), 0);
+  const hecho = pasos
+    .filter((paso) => paso.estado === 'hecho')
+    .reduce((suma, paso) => suma + peso(paso), 0);
+  return Math.round((hecho / total) * 100);
+}
+
+export function gatesOperativosPendientes(
+  gates: Array<{ tipo: string; estado: string }>,
+) {
+  return gates.filter((gate) => gate.estado !== 'CUMPLIDO');
 }
 
 /**
@@ -991,10 +1086,19 @@ export class OrdenesTrabajoService {
       where: { id, tenantId: auth.tenantId },
       include: {
         ...LIST_INCLUDE,
-        _count: { select: { items: true, eventos: true } },
+        _count: {
+          select: {
+            items: { where: { parentItemId: null } },
+            eventos: true,
+          },
+        },
         items: {
+          // Los componentes fabricados son subitems técnicos ejecutables. No
+          // son renglones comerciales adicionales ni tienen precio propio.
+          where: { parentItemId: null },
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            parentItem: { select: { id: true, nombre: true } },
             // Payload de rehidratación: la vista de la OT emitida es la misma
             // ficha de creación, reconstruida desde el snapshot del cotizador.
             cotizacionItem: {
@@ -2131,6 +2235,21 @@ export class OrdenesTrabajoService {
       });
     });
 
+    const fechaAnterior =
+      orden.fechaEntrega?.toISOString().slice(0, 10) ?? null;
+    if (
+      estado !== 'borrador' &&
+      payload.fechaEntrega !== undefined &&
+      payload.fechaEntrega.slice(0, 10) !== fechaAnterior
+    ) {
+      void this.avisos.cambioEntrega(
+        orden.id,
+        fechaAnterior,
+        payload.fechaEntrega.slice(0, 10),
+        orden.updatedAt.toISOString(),
+      );
+    }
+
     // Mismo contrato que crear/agregar/editar un item individual: al volver
     // del guardado, cualquier producto vectorial ya tiene sus revisiones por
     // placa listas. `asegurarParaItem` compara hashes, por lo que recorrer el
@@ -2379,6 +2498,17 @@ export class OrdenesTrabajoService {
       });
     });
 
+    if (
+      estado !== 'borrador' &&
+      cambios.some((c) => c.campo === 'fechaEntrega')
+    ) {
+      void this.avisos.cambioEntrega(
+        orden.id,
+        fechaActualIso,
+        payload.fechaEntrega!,
+        orden.updatedAt.toISOString(),
+      );
+    }
     return this.findOne(auth, orden.id);
   }
 
@@ -4283,16 +4413,32 @@ export class OrdenesTrabajoService {
     itemId: string,
     trazabilidad: unknown,
     proveedorNombrePorId: Map<string, string> = new Map(),
+    grafoProduccion: GrafoProduccion | null = null,
   ) {
-    return pasosActivados(trazabilidad).map((paso, indice) => {
+    const pasos = pasosActivados(trazabilidad);
+    return pasos.map((paso, indice) => {
       const familiaCodigo = paso.familiaCodigo ?? 'trabajo_manual';
       const familia = resolverFamilia(familiaCodigo);
       const esTercerizado = paso.tercerizado === true;
+      const claveRuta = paso.rutaPasoId ? `ruta:${paso.rutaPasoId}` : null;
+      const claveExtra = paso.rutaPasoId ? `extra:${paso.rutaPasoId}` : null;
+      const clavesDeclaradas = new Set(
+        grafoProduccion?.nodos.map((nodo) => nodo.clave) ?? [],
+      );
+      const nodoClave =
+        (claveRuta && clavesDeclaradas.has(claveRuta) && claveRuta) ||
+        (claveExtra && clavesDeclaradas.has(claveExtra) && claveExtra) ||
+        claveRuta ||
+        `paso:${indice + 1}:${familiaCodigo}`;
       return {
         tenantId,
         ordenId,
         itemId,
         indice,
+        nodoClave,
+        esTerminal: grafoProduccion
+          ? grafoProduccion.terminales.includes(nodoClave)
+          : indice === pasos.length - 1,
         rutaPasoId: paso.rutaPasoId ?? null,
         familiaCodigo,
         categoriaFamilia: familia?.categoria ?? 'operaciones_manuales',
@@ -4301,6 +4447,17 @@ export class OrdenesTrabajoService {
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
         maquinaId: paso.tiempo?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
+        operacionesIncorporacionSnapshotJson: paso.operacionesInternas?.length
+          ? (paso.operacionesInternas.map((operacion) => ({
+              ...operacion,
+              modoTiempo: 'FIJO',
+              cantidadResuelta: 1,
+              unidadCantidad: 'etapa',
+              dotacionOperarios: 1,
+            })) as Prisma.InputJsonValue)
+          : paso.operacionesIncorporacion?.length
+            ? (paso.operacionesIncorporacion as Prisma.InputJsonValue)
+            : undefined,
         modoRegistro: modoRegistroDeFamilia(familiaCodigo),
         // === Tercerización (F2): el paso comprado va al panel de Compras. ===
         tipoEjecucion: esTercerizado ? 'tercerizado' : 'interno',
@@ -4347,6 +4504,19 @@ export class OrdenesTrabajoService {
     const trazabilidadPorId = new Map(
       snapshots.map((snap) => [snap.id, snap.trazabilidadJson]),
     );
+    const itemsConReceta = await tx.ordenTrabajoItem.findMany({
+      where: {
+        tenantId,
+        id: { in: conSnapshot.map((item) => item.id) },
+      },
+      select: { id: true, recetaSnapshotJson: true },
+    });
+    const grafoPorItem = new Map(
+      itemsConReceta.map((item) => [
+        item.id,
+        grafoDesdeSnapshotReceta(item.recetaSnapshotJson),
+      ]),
+    );
     // Snapshot del nombre de cada proveedor de los pasos tercerizados.
     const proveedorIds = new Set<string>();
     for (const snap of snapshots) {
@@ -4364,20 +4534,736 @@ export class OrdenesTrabajoService {
       });
       for (const p of provs) proveedorNombrePorId.set(p.id, p.nombre);
     }
-    const data = conSnapshot.flatMap((item) =>
-      this.pasosDesdeTrazabilidad(
-        tenantId,
-        item.ordenId,
-        item.id,
-        trazabilidadPorId.get(item.cotizacionItemId!),
-        proveedorNombrePorId,
-      ),
+    const dataPorItem = new Map(
+      conSnapshot.map((item) => {
+        const filas = this.pasosDesdeTrazabilidad(
+          tenantId,
+          item.ordenId,
+          item.id,
+          trazabilidadPorId.get(item.cotizacionItemId!),
+          proveedorNombrePorId,
+          grafoPorItem.get(item.id) ?? null,
+        );
+        const grafoCompleto = grafoPorItem.get(item.id);
+        if (grafoCompleto) {
+          const grafoEfectivo = reducirGrafoAClaves(
+            grafoCompleto,
+            new Set(filas.map((fila) => fila.nodoClave)),
+          );
+          grafoPorItem.set(item.id, grafoEfectivo);
+          for (const fila of filas) {
+            fila.esTerminal = grafoEfectivo.terminales.includes(fila.nodoClave);
+          }
+        }
+        return [item.id, filas] as const;
+      }),
     );
+    const data = [...dataPorItem.values()].flat();
     if (data.length > 0) {
       // skipDuplicates = ON CONFLICT DO NOTHING contra el único
       // (itemId, indice): si dos materializaciones corren a la vez, el
       // perdedor no inserta en vez de reventar una lectura del tablero.
       await tx.ordenTrabajoItemPaso.createMany({ data, skipDuplicates: true });
+
+      // La Fase 4 nace compatible: toda ruta histórica lineal se compila a un
+      // DAG trivial A → B → C. `indice` conserva el orden visual, mientras
+      // estas aristas pasan a ser el contrato de precedencia explícito.
+      const pasosPersistidos = await tx.ordenTrabajoItemPaso.findMany({
+        where: {
+          tenantId,
+          itemId: { in: conSnapshot.map((item) => item.id) },
+        },
+        select: {
+          id: true,
+          itemId: true,
+          indice: true,
+          nodoClave: true,
+        },
+        orderBy: [{ itemId: 'asc' }, { indice: 'asc' }],
+      });
+      const pasosPorItem = new Map<string, typeof pasosPersistidos>();
+      for (const paso of pasosPersistidos) {
+        const actuales = pasosPorItem.get(paso.itemId) ?? [];
+        actuales.push(paso);
+        pasosPorItem.set(paso.itemId, actuales);
+      }
+
+      const dependencias = conSnapshot.flatMap((item) => {
+        const pasosItem = pasosPorItem.get(item.id) ?? [];
+        const grafo = grafoPorItem.get(item.id);
+        if (grafo) {
+          const porClave = new Map(
+            pasosItem.flatMap((paso) =>
+              paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
+            ),
+          );
+          return grafo.aristas.map((arista) => ({
+            tenantId,
+            ordenId: item.ordenId,
+            predecesorPasoId: porClave.get(arista.desdeClave)!,
+            sucesorPasoId: porClave.get(arista.haciaClave)!,
+          }));
+        }
+        return pasosItem.slice(1).map((paso, index) => ({
+          tenantId,
+          ordenId: item.ordenId,
+          predecesorPasoId: pasosItem[index].id,
+          sucesorPasoId: paso.id,
+        }));
+      });
+      if (dependencias.length > 0) {
+        await tx.ordenTrabajoPasoDependencia.createMany({
+          data: dependencias,
+          skipDuplicates: true,
+        });
+      }
+
+      const gatesOperativos = conSnapshot.flatMap((item) => {
+        const pasosItem = pasosPorItem.get(item.id) ?? [];
+        const porClave = new Map(
+          pasosItem.flatMap((paso) =>
+            paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
+          ),
+        );
+        return (grafoPorItem.get(item.id)?.nodos ?? []).flatMap((nodo) =>
+          (nodo.gates ?? []).flatMap((tipo) => {
+            const pasoId = porClave.get(nodo.clave);
+            return pasoId
+              ? [{ tenantId, ordenId: item.ordenId, pasoId, tipo }]
+              : [];
+          }),
+        );
+      });
+      if (gatesOperativos.length > 0) {
+        await tx.ordenTrabajoPasoGate.createMany({
+          data: gatesOperativos,
+          skipDuplicates: true,
+        });
+      }
+
+      for (const item of conSnapshot) {
+        const pasosItem = pasosPorItem.get(item.id) ?? [];
+        if (pasosItem.length === 0) continue;
+        const grafo =
+          grafoPorItem.get(item.id) ??
+          compilarRutaLineal(
+            pasosItem.map((paso) => ({
+              clave: paso.nodoClave ?? `paso:${paso.indice + 1}`,
+              indice: paso.indice,
+            })),
+          );
+        await tx.ordenTrabajoItem.update({
+          where: { id: item.id },
+          data: {
+            topologiaProduccion: grafo.topologia,
+            grafoProduccionSnapshotJson: grafo as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      await this.materializarComponentesFabricados(
+        tx,
+        tenantId,
+        conSnapshot.map((item) => item.id),
+      );
+    }
+  }
+
+  /**
+   * Convierte cada componente INDEPENDIENTE versionado por Fase 3 en un item
+   * hijo ejecutable y conecta sus terminales al nodo de incorporación padre.
+   * La cola admite componentes anidados; la validación de recetas ya impide
+   * ciclos y el unique (parentItemId, componenteCodigo) lo vuelve idempotente.
+   */
+  private async materializarComponentesFabricados(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    padresIniciales: string[],
+  ) {
+    const pendientes = [...padresIniciales];
+    const visitados = new Set<string>();
+    // Los snapshots de hijos anidados vienen dentro del componente costeado
+    // del nivel anterior. La transacción es atómica, por lo que podemos
+    // propagarlos en memoria y materializar toda la profundidad usando
+    // exactamente el cálculo original, incluidas ocurrencias dinámicas.
+    const costeadosPorItem = new Map<string, unknown[]>();
+    while (pendientes.length > 0) {
+      const padreId = pendientes.shift()!;
+      if (visitados.has(padreId)) continue;
+      visitados.add(padreId);
+      const padre = await tx.ordenTrabajoItem.findFirst({
+        where: { id: padreId, tenantId },
+        include: {
+          cotizacionItem: {
+            select: { jobContextJson: true, trazabilidadJson: true },
+          },
+          recetaRevision: {
+            include: { componentes: { orderBy: { orden: 'asc' } } },
+          },
+        },
+      });
+      if (!padre?.recetaRevision) continue;
+
+      const contextoPadreCrudo =
+        padre.jobContextSnapshotJson ?? padre.cotizacionItem?.jobContextJson;
+      const contextoPadreLeido =
+        contextoPadreCrudo &&
+        typeof contextoPadreCrudo === 'object' &&
+        !Array.isArray(contextoPadreCrudo)
+          ? (contextoPadreCrudo as Record<string, unknown>)
+          : {};
+      const contextoPadre = {
+        cantidad: Number(padre.cantidad),
+        ...contextoPadreLeido,
+      };
+      const trazaCruda =
+        padre.trazabilidadSnapshotJson ??
+        padre.cotizacionItem?.trazabilidadJson;
+      const traza =
+        trazaCruda &&
+        typeof trazaCruda === 'object' &&
+        !Array.isArray(trazaCruda)
+          ? (trazaCruda as Record<string, unknown>)
+          : null;
+      const costeadosEnTraza = traza?.componentesFabricados;
+      const tieneCosteadosEnTraza = Array.isArray(costeadosEnTraza);
+      const tieneCosteadosPropagados = costeadosPorItem.has(padre.id);
+      const costeadosTraza = Array.isArray(costeadosEnTraza)
+        ? costeadosEnTraza
+        : [];
+      const costeados = tieneCosteadosEnTraza
+        ? costeadosTraza
+        : (costeadosPorItem.get(padre.id) ?? []);
+      const outputsComponentes = Object.fromEntries(
+        costeados.flatMap((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) {
+            return [];
+          }
+          const snapshot = item as Record<string, unknown>;
+          const codigo = snapshot.codigo;
+          const outputs = snapshot.outputsPublicos;
+          return typeof codigo === 'string' &&
+            outputs &&
+            typeof outputs === 'object' &&
+            !Array.isArray(outputs)
+            ? [[codigo, outputs as Record<string, unknown>]]
+            : [];
+        }),
+      );
+      const plantillasPorCodigo = new Map(
+        padre.recetaRevision.componentes.map((item) => [item.codigo, item]),
+      );
+      const tieneSnapshotAutoritativo =
+        tieneCosteadosEnTraza || tieneCosteadosPropagados;
+      const componentesAProcesar = tieneSnapshotAutoritativo
+        ? costeados.flatMap((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) {
+              return [];
+            }
+            const snapshot = item as Record<string, unknown>;
+            const plantillaCodigo =
+              typeof snapshot.plantillaCodigo === 'string'
+                ? snapshot.plantillaCodigo
+                : typeof snapshot.codigo === 'string'
+                  ? snapshot.codigo
+                  : '';
+            const plantilla = plantillasPorCodigo.get(plantillaCodigo);
+            return plantilla ? [{ plantilla, snapshot }] : [];
+          })
+        : padre.recetaRevision.componentes.map((plantilla) => ({
+            plantilla,
+            snapshot: null,
+          }));
+
+      for (const { plantilla, snapshot } of componentesAProcesar) {
+        const componenteCodigo =
+          typeof snapshot?.codigo === 'string'
+            ? snapshot.codigo
+            : plantilla.codigo;
+        const componenteNombre =
+          typeof snapshot?.nombre === 'string'
+            ? snapshot.nombre
+            : plantilla.nombre;
+        const politicaEjecucion =
+          snapshot?.politicaEjecucion === 'INLINE' ||
+          snapshot?.politicaEjecucion === 'INDEPENDIENTE'
+            ? snapshot.politicaEjecucion
+            : plantilla.politicaEjecucion;
+        const nodoIncorporacionClave =
+          typeof snapshot?.nodoIncorporacionClave === 'string'
+            ? snapshot.nodoIncorporacionClave
+            : plantilla.nodoIncorporacionClave;
+        // Publicaciones F3 anteriores a la convergencia conservan su ejecución
+        // histórica: sólo las nuevas revisiones con nodo declarado crean red.
+        if (politicaEjecucion !== 'INDEPENDIENTE' || !nodoIncorporacionClave) {
+          continue;
+        }
+        const recetaRevisionId =
+          typeof snapshot?.recetaRevisionId === 'string'
+            ? snapshot.recetaRevisionId
+            : plantilla.recetaRevisionId;
+        const revisionHija = await tx.productoRecetaRevision.findFirst({
+          where: {
+            id: recetaRevisionId,
+            tenantId,
+            estado: { in: ['PUBLICADA', 'DEPRECADA'] },
+          },
+          include: { recursos: { orderBy: { orden: 'asc' } } },
+        });
+        if (!revisionHija) {
+          throw new ConflictException(
+            `La receta congelada del componente "${componenteNombre}" ya no está disponible.`,
+          );
+        }
+        const jobContextHijoCrudo = snapshot?.jobContext;
+        const jobContextHijo =
+          jobContextHijoCrudo &&
+          typeof jobContextHijoCrudo === 'object' &&
+          !Array.isArray(jobContextHijoCrudo)
+            ? (jobContextHijoCrudo as Record<string, unknown>)
+            : resolverJobContextComponente({
+                configuracion: plantilla.configuracionJson,
+                contextoPadre,
+                codigoComponente: plantilla.codigo,
+                cantidadLegacy: Number(plantilla.cantidad),
+                outputsComponentes,
+              });
+
+        let hijo = await tx.ordenTrabajoItem.findFirst({
+          where: {
+            tenantId,
+            parentItemId: padre.id,
+            componenteCodigo,
+          },
+        });
+        if (!hijo) {
+          hijo = await tx.ordenTrabajoItem.create({
+            data: {
+              tenantId,
+              ordenId: padre.ordenId,
+              parentItemId: padre.id,
+              componenteCodigo,
+              nodoIncorporacionClave,
+              recetaRevisionId: revisionHija.id,
+              recetaVersion: revisionHija.numero,
+              recetaHuella: revisionHija.huellaConfiguracion,
+              recetaSnapshotJson:
+                revisionHija.snapshotJson as Prisma.InputJsonValue,
+              jobContextSnapshotJson: jobContextHijo as Prisma.InputJsonValue,
+              trazabilidadSnapshotJson: snapshot
+                ? (trazabilidadDeComponente(snapshot) as Prisma.InputJsonValue)
+                : undefined,
+              topologiaProduccion: revisionHija.topologiaProduccion,
+              grafoProduccionSnapshotJson:
+                (revisionHija.grafoProduccionJson as Prisma.InputJsonValue) ??
+                undefined,
+              codigo: `${padre.codigo}/${componenteCodigo}`.slice(0, 180),
+              nombre: componenteNombre,
+              familia: 'Componente fabricado',
+              categoriaComercial: 'Producción interna',
+              subcategoriaComercial: 'Componente fabricado',
+              cantidad: Number(jobContextHijo.cantidad),
+              cantidadUnidad:
+                typeof snapshot?.unidad === 'string'
+                  ? snapshot.unidad
+                  : plantilla.unidad,
+              subtotal: 0,
+              impuestos: 0,
+              total: 0,
+              ordenIndice: padre.ordenIndice,
+            },
+          });
+        }
+        const componentesAnidadosCrudos = snapshot?.componentes;
+        const tieneComponentesAnidados = Array.isArray(
+          componentesAnidadosCrudos,
+        );
+        const componentesAnidados = Array.isArray(componentesAnidadosCrudos)
+          ? componentesAnidadosCrudos
+          : [];
+        if (tieneComponentesAnidados) {
+          costeadosPorItem.set(hijo.id, componentesAnidados);
+        }
+
+        const recetaSnapshot = revisionHija.snapshotJson as unknown as {
+          pasos?: Array<{
+            clave?: string;
+            nombre?: string;
+            familiaCodigo?: string;
+            orden?: number;
+            recurso?: {
+              plazoProveedorDias?: number | null;
+            };
+          }>;
+        };
+        const pasosSnapshot = Array.isArray(recetaSnapshot.pasos)
+          ? recetaSnapshot.pasos
+          : [];
+        const grafoGuardado = revisionHija.grafoProduccionJson as
+          | (GrafoProduccion & Prisma.JsonObject)
+          | null;
+        const grafoHijo = grafoGuardado
+          ? (grafoGuardado as unknown as GrafoProduccion)
+          : compilarRutaLineal(
+              pasosSnapshot.map((paso, index) => ({
+                clave: paso.clave ?? `paso:${index + 1}`,
+                indice: paso.orden ?? index,
+              })),
+            );
+        const recursoPorClave = new Map(
+          revisionHija.recursos.map((recurso) => [recurso.pasoClave, recurso]),
+        );
+        const snapshotPorClave = new Map(
+          pasosSnapshot.flatMap((paso) =>
+            paso.clave ? [[paso.clave, paso] as const] : [],
+          ),
+        );
+        const pasosCosteados = Array.isArray(snapshot?.pasos)
+          ? (snapshot.pasos as PasoTrazabilidad[])
+          : [];
+        const clavesDeclaradas = new Set(
+          grafoHijo.nodos.map((nodo) => nodo.clave),
+        );
+        const claveDePasoCosteado = (paso: PasoTrazabilidad) => {
+          if (!paso.rutaPasoId) return null;
+          const ruta = `ruta:${paso.rutaPasoId}`;
+          const extra = `extra:${paso.rutaPasoId}`;
+          if (clavesDeclaradas.has(ruta)) return ruta;
+          if (clavesDeclaradas.has(extra)) return extra;
+          return null;
+        };
+        const clavesActivasHijas = new Set(
+          pasosCosteados
+            .filter((paso) => paso.activado)
+            .map(claveDePasoCosteado)
+            .filter((clave): clave is string => Boolean(clave)),
+        );
+        const grafoHijoEfectivo =
+          pasosCosteados.length > 0
+            ? reducirGrafoAClaves(grafoHijo, clavesActivasHijas)
+            : grafoHijo;
+        const filasHijas =
+          pasosCosteados.length > 0
+            ? this.pasosDesdeTrazabilidad(
+                tenantId,
+                padre.ordenId,
+                hijo.id,
+                { pasos: pasosCosteados },
+                new Map(),
+                grafoHijoEfectivo,
+              )
+            : grafoHijoEfectivo.nodos.map((nodo) => {
+                const recurso = recursoPorClave.get(nodo.clave);
+                const pasoSnapshot = snapshotPorClave.get(nodo.clave);
+                const familiaCodigo =
+                  recurso?.familiaCodigo ??
+                  pasoSnapshot?.familiaCodigo ??
+                  'trabajo_manual';
+                const familia = resolverFamilia(familiaCodigo);
+                return {
+                  tenantId,
+                  ordenId: padre.ordenId,
+                  itemId: hijo!.id,
+                  indice: nodo.indice,
+                  nodoClave: nodo.clave,
+                  esTerminal: grafoHijoEfectivo.terminales.includes(nodo.clave),
+                  rutaPasoId: nodo.clave.replace(/^(ruta|extra):/, ''),
+                  familiaCodigo,
+                  categoriaFamilia:
+                    familia?.categoria ?? 'operaciones_manuales',
+                  nombre:
+                    recurso?.pasoNombre ??
+                    pasoSnapshot?.nombre ??
+                    familia?.nombre ??
+                    familiaCodigo,
+                  centroCostoId: recurso?.centroCostoId ?? null,
+                  centroCostoNombre: recurso?.centroCostoNombre ?? null,
+                  maquinaId: recurso?.maquinaId ?? null,
+                  duracionEstimadaMin: null,
+                  operacionesIncorporacionSnapshotJson: undefined,
+                  modoRegistro: modoRegistroDeFamilia(familiaCodigo),
+                  tipoEjecucion: recurso?.tercerizado
+                    ? 'tercerizado'
+                    : 'interno',
+                  proveedorId: recurso?.proveedorId ?? null,
+                  proveedorNombre: recurso?.proveedorNombre ?? null,
+                  plazoProveedorDias:
+                    pasoSnapshot?.recurso?.plazoProveedorDias ?? null,
+                  estadoCompra: recurso?.tercerizado ? 'pendiente' : null,
+                };
+              });
+        if (filasHijas.length > 0) {
+          await tx.ordenTrabajoItemPaso.createMany({
+            data: filasHijas,
+            skipDuplicates: true,
+          });
+        }
+        const pasosHijos = await tx.ordenTrabajoItemPaso.findMany({
+          where: { tenantId, itemId: hijo.id },
+          select: { id: true, nodoClave: true },
+        });
+        const idPorClave = new Map(
+          pasosHijos.flatMap((paso) =>
+            paso.nodoClave ? [[paso.nodoClave, paso.id] as const] : [],
+          ),
+        );
+        const gatesHijos = grafoHijoEfectivo.nodos.flatMap((nodo) =>
+          (nodo.gates ?? []).flatMap((tipo) => {
+            const pasoId = idPorClave.get(nodo.clave);
+            return pasoId
+              ? [{ tenantId, ordenId: padre.ordenId, pasoId, tipo }]
+              : [];
+          }),
+        );
+        if (gatesHijos.length > 0) {
+          await tx.ordenTrabajoPasoGate.createMany({
+            data: gatesHijos,
+            skipDuplicates: true,
+          });
+        }
+        const aristasHijas = grafoHijoEfectivo.aristas.map((arista) => ({
+          tenantId,
+          ordenId: padre.ordenId,
+          predecesorPasoId: idPorClave.get(arista.desdeClave)!,
+          sucesorPasoId: idPorClave.get(arista.haciaClave)!,
+        }));
+        const incorporacion = await tx.ordenTrabajoItemPaso.findFirst({
+          where: {
+            tenantId,
+            itemId: padre.id,
+            nodoClave: nodoIncorporacionClave,
+          },
+          select: { id: true },
+        });
+        if (!incorporacion) {
+          throw new ConflictException(
+            `No se pudo ubicar el nodo de incorporación de "${componenteNombre}" en la OT.`,
+          );
+        }
+        const convergencias = grafoHijoEfectivo.terminales.map((clave) => ({
+          tenantId,
+          ordenId: padre.ordenId,
+          predecesorPasoId: idPorClave.get(clave)!,
+          sucesorPasoId: incorporacion.id,
+          tipo: 'componente_fabricado',
+        }));
+        const clavesPredecesoras = Array.isArray(
+          snapshot?.nodosPredecesoresClaves,
+        )
+          ? snapshot.nodosPredecesoresClaves.filter(
+              (clave): clave is string => typeof clave === 'string',
+            )
+          : plantilla.nodosPredecesoresClaves;
+        const predecesoresPadre = clavesPredecesoras.length
+          ? await tx.ordenTrabajoItemPaso.findMany({
+              where: {
+                tenantId,
+                itemId: padre.id,
+                nodoClave: { in: clavesPredecesoras },
+              },
+              select: { id: true },
+            })
+          : [];
+        const habilitaciones = predecesoresPadre.flatMap((predecesor) =>
+          grafoHijoEfectivo.raices.map((clave) => ({
+            tenantId,
+            ordenId: padre.ordenId,
+            predecesorPasoId: predecesor.id,
+            sucesorPasoId: idPorClave.get(clave)!,
+            tipo: 'componente_fabricado',
+          })),
+        );
+        const dependencias = [
+          ...aristasHijas,
+          ...habilitaciones,
+          ...convergencias,
+        ].filter(
+          (dependencia) =>
+            dependencia.predecesorPasoId && dependencia.sucesorPasoId,
+        );
+        if (dependencias.length > 0) {
+          await tx.ordenTrabajoPasoDependencia.createMany({
+            data: dependencias,
+            skipDuplicates: true,
+          });
+        }
+        pendientes.push(hijo.id);
+      }
+    }
+
+    await this.materializarLotesNestingCompuesto(tx, tenantId, [...visitados]);
+  }
+
+  /**
+   * Proyecta el lote económico congelado por el motor a una única operación
+   * de taller. Los demás pasos siguen existiendo como aliases para conservar
+   * la topología y la trazabilidad por componente, pero no se muestran ni se
+   * ejecutan por separado.
+   */
+  private async materializarLotesNestingCompuesto(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    padresIniciales: string[],
+  ) {
+    for (const padreId of padresIniciales) {
+      const padre = await tx.ordenTrabajoItem.findFirst({
+        where: { id: padreId, tenantId },
+        select: {
+          ordenId: true,
+          trazabilidadSnapshotJson: true,
+          cotizacionItem: { select: { trazabilidadJson: true } },
+        },
+      });
+      if (!padre) continue;
+      const lotes = lotesNestingAplicados(
+        padre.trazabilidadSnapshotJson ??
+          padre.cotizacionItem?.trazabilidadJson,
+      ).map((lote) => loteEnItem(lote, padreId));
+      if (lotes.length === 0) continue;
+
+      const componentes = await tx.ordenTrabajoItem.findMany({
+        where: { tenantId, parentItemId: padreId },
+        select: {
+          componenteCodigo: true,
+          pasos: {
+            select: {
+              id: true,
+              rutaPasoId: true,
+              nombre: true,
+            },
+          },
+        },
+      });
+      const pasosPorParticipante = new Map(
+        componentes.flatMap((componente) =>
+          componente.pasos.map(
+            (paso) =>
+              [
+                `${componente.componenteCodigo ?? ''}:${paso.rutaPasoId ?? ''}`,
+                paso,
+              ] as const,
+          ),
+        ),
+      );
+
+      for (const lote of lotes) {
+        const participantes = lote.participantes.map((participante) => ({
+          snapshot: participante,
+          paso: pasosPorParticipante.get(
+            `${participante.componenteCodigo}:${participante.rutaPasoId}`,
+          ),
+        }));
+        if (participantes.some((participante) => !participante.paso)) {
+          throw new ConflictException(
+            `No se pudo materializar el lote de nesting compartido ${lote.id}: falta un paso participante en la OT.`,
+          );
+        }
+        const resueltos = participantes as Array<{
+          snapshot: LoteNestingCompuestoSnapshot['participantes'][number];
+          paso: { id: string; rutaPasoId: string | null; nombre: string };
+        }>;
+        const operativo =
+          resueltos.find(
+            (participante) => participante.snapshot.esPasoOperativo,
+          ) ?? resueltos[0];
+        const aliases = resueltos.filter(
+          (participante) => participante.paso.id !== operativo.paso.id,
+        );
+        const idsParticipantes = resueltos.map(
+          (participante) => participante.paso.id,
+        );
+
+        const [dependencias, gates] = await Promise.all([
+          tx.ordenTrabajoPasoDependencia.findMany({
+            where: {
+              tenantId,
+              ordenId: padre.ordenId,
+            },
+            select: {
+              predecesorPasoId: true,
+              sucesorPasoId: true,
+              tipo: true,
+              obligatoria: true,
+            },
+          }),
+          tx.ordenTrabajoPasoGate.findMany({
+            where: { tenantId, pasoId: { in: idsParticipantes } },
+            select: { tipo: true },
+          }),
+        ]);
+        const controlPrecedencias = new ControlConsolidacionProduccion(
+          dependencias.map((d) => ({
+            desdeClave: d.predecesorPasoId,
+            haciaClave: d.sucesorPasoId,
+          })),
+        );
+        if (controlPrecedencias.motivoIncompatible(idsParticipantes)) {
+          throw new ConflictException(
+            `No se pudo materializar el lote ${lote.id}: sus precedencias forman un ciclo. Volvé a cotizar para conservar operaciones ejecutables.`,
+          );
+        }
+        const idsSet = new Set(idsParticipantes);
+        const dependenciasOperativas = dependencias.flatMap((dependencia) => {
+          if (
+            idsSet.has(dependencia.sucesorPasoId) &&
+            !idsSet.has(dependencia.predecesorPasoId)
+          ) {
+            return [{ ...dependencia, sucesorPasoId: operativo.paso.id }];
+          }
+          if (
+            idsSet.has(dependencia.predecesorPasoId) &&
+            !idsSet.has(dependencia.sucesorPasoId)
+          ) {
+            return [{ ...dependencia, predecesorPasoId: operativo.paso.id }];
+          }
+          return [];
+        });
+        if (dependenciasOperativas.length > 0) {
+          await tx.ordenTrabajoPasoDependencia.createMany({
+            data: dependenciasOperativas.map((dependencia) => ({
+              tenantId,
+              ordenId: padre.ordenId,
+              ...dependencia,
+            })),
+            skipDuplicates: true,
+          });
+        }
+        if (gates.length > 0) {
+          await tx.ordenTrabajoPasoGate.createMany({
+            data: [...new Set(gates.map((gate) => gate.tipo))].map((tipo) => ({
+              tenantId,
+              ordenId: padre.ordenId,
+              pasoId: operativo.paso.id,
+              tipo,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        await tx.ordenTrabajoItemPaso.update({
+          where: { id: operativo.paso.id },
+          data: {
+            nestingLoteId: lote.id,
+            nestingLoteRol: 'OPERATIVO',
+            nestingLoteSnapshotJson: lote as unknown as Prisma.InputJsonValue,
+            nombre: operativo.paso.nombre.startsWith('Nesting compartido · ')
+              ? operativo.paso.nombre
+              : `Nesting compartido · ${operativo.paso.nombre}`,
+            duracionEstimadaMin: lote.duracionEstimadaMin,
+          },
+        });
+        if (aliases.length > 0) {
+          await tx.ordenTrabajoItemPaso.updateMany({
+            where: { id: { in: aliases.map((alias) => alias.paso.id) } },
+            data: {
+              nestingLoteId: lote.id,
+              nestingLoteRol: 'PARTICIPANTE',
+              nestingLoteSnapshotJson: Prisma.JsonNull,
+              duracionEstimadaMin: 0,
+            },
+          });
+        }
+      }
     }
   }
 
@@ -4599,6 +5485,10 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            // El tablero necesita conservar la jerarquía del BOM: sin el
+            // padre cargado los componentes se proyectaban como productos
+            // independientes y se perdía el contexto de la OT compuesta.
+            parentItem: { select: { id: true, nombre: true } },
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
@@ -4617,6 +5507,25 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
+                dependenciasEntrantes: {
+                  where: { obligatoria: true },
+                  select: { predecesorPasoId: true },
+                },
+                dependenciasSalientes: {
+                  where: { obligatoria: true },
+                  select: { sucesorPasoId: true },
+                },
+                gatesOperativos: {
+                  orderBy: { tipo: 'asc' as const },
+                  select: {
+                    id: true,
+                    tipo: true,
+                    estado: true,
+                    detalle: true,
+                    resueltoEl: true,
+                    resueltoPorNombre: true,
+                  },
+                },
                 tramos: {
                   // Todos los tramos del paso (son pocos): la proyección
                   // deriva el abierto, el último cierre y el acumulado.
@@ -4649,7 +5558,17 @@ export class OrdenesTrabajoService {
     const items = ordenes.flatMap((orden) =>
       orden.items
         .map((item) =>
-          this.toTableroItem(orden, item, auth.userId, tecnologias),
+          this.toTableroItem(
+            orden,
+            item,
+            auth.userId,
+            tecnologias,
+            new Map(
+              orden.items.flatMap((fila) =>
+                fila.pasos.map((paso) => [paso.id, paso.estado] as const),
+              ),
+            ),
+          ),
         )
         .map((item) => item),
     );
@@ -4695,6 +5614,7 @@ export class OrdenesTrabajoService {
         items: {
           orderBy: { ordenIndice: 'asc' as const },
           include: {
+            parentItem: { select: { id: true, nombre: true } },
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
@@ -4713,6 +5633,25 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               include: {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
+                dependenciasEntrantes: {
+                  where: { obligatoria: true },
+                  select: { predecesorPasoId: true },
+                },
+                dependenciasSalientes: {
+                  where: { obligatoria: true },
+                  select: { sucesorPasoId: true },
+                },
+                gatesOperativos: {
+                  orderBy: { tipo: 'asc' as const },
+                  select: {
+                    id: true,
+                    tipo: true,
+                    estado: true,
+                    detalle: true,
+                    resueltoEl: true,
+                    resueltoPorNombre: true,
+                  },
+                },
                 tramos: {
                   // Todos los tramos del paso (son pocos): la proyección
                   // deriva el abierto, el último cierre y el acumulado.
@@ -4740,7 +5679,17 @@ export class OrdenesTrabajoService {
     );
     return {
       items: (orden?.items ?? []).map((item) =>
-        this.toTableroItem(orden!, item, auth.userId, tecnologias),
+        this.toTableroItem(
+          orden!,
+          item,
+          auth.userId,
+          tecnologias,
+          new Map(
+            (orden?.items ?? []).flatMap((fila) =>
+              fila.pasos.map((paso) => [paso.id, paso.estado] as const),
+            ),
+          ),
+        ),
       ),
     };
   }
@@ -4912,6 +5861,9 @@ export class OrdenesTrabajoService {
           tramos: {
             select: { id: true, usuarioId: true, inicioEl: true, finEl: true },
           },
+          gatesOperativos: {
+            select: { tipo: true, estado: true },
+          },
         },
       }),
       this.prisma.empleado.findFirst({
@@ -4921,6 +5873,11 @@ export class OrdenesTrabajoService {
     ]);
     if (!paso) {
       throw new NotFoundException('No se encontró el paso de producción.');
+    }
+    if (paso.nestingLoteRol === 'PARTICIPANTE') {
+      throw new ConflictException(
+        'Este paso forma parte de un nesting compartido y se ejecuta desde su operación principal.',
+      );
     }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
     if (
@@ -4976,26 +5933,73 @@ export class OrdenesTrabajoService {
       );
     }
 
-    // La ruta es una secuencia: sólo se ejecuta el paso ACTIVO (frontera).
-    const pasosItem = await this.prisma.ordenTrabajoItemPaso.findMany({
-      where: { tenantId: auth.tenantId, itemId },
-      select: { indice: true, estado: true },
+    // Fase 4: para órdenes nuevas mandan las precedencias explícitas. Una OT
+    // histórica sin nodoClave conserva exactamente la frontera por índice.
+    const pasosOrden = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { tenantId: auth.tenantId, ordenId },
+      select: {
+        id: true,
+        itemId: true,
+        indice: true,
+        nodoClave: true,
+        estado: true,
+      },
     });
+    const pasosItem = pasosOrden.filter(
+      (candidato) => candidato.itemId === itemId,
+    );
+    const usaGrafo =
+      pasosItem.length > 0 &&
+      pasosItem.every((candidato) => candidato.nodoClave);
+    const dependencias = usaGrafo
+      ? ((await this.prisma.ordenTrabajoPasoDependencia.findMany({
+          where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
+          select: { predecesorPasoId: true, sucesorPasoId: true },
+        })) ?? [])
+      : [];
     const ejecuta =
       payload.accion === 'iniciar' ||
       payload.accion === 'pausar' ||
       payload.accion === 'continuar' ||
       payload.accion === 'completar' ||
       payload.accion === 'bloquear';
-    if (ejecuta && !pasoEjecutable(pasosItem, paso.indice)) {
+    const evaluarFrontera = (
+      pasosEvaluados: typeof pasosOrden,
+      dependenciasEvaluadas: typeof dependencias,
+    ) => {
+      const delItem = pasosEvaluados.filter(
+        (candidato) => candidato.itemId === itemId,
+      );
+      const conGrafo =
+        delItem.length > 0 && delItem.every((candidato) => candidato.nodoClave);
+      if (!conGrafo) {
+        return {
+          ejecutable: pasoEjecutable(delItem, paso.indice),
+          reabrible: pasoReabrible(delItem, paso.indice),
+        };
+      }
+      const estados = pasosEvaluados.map((candidato) => ({
+        clave: candidato.id,
+        estado: candidato.estado,
+      }));
+      const aristas = dependenciasEvaluadas.map((dependencia) => ({
+        desdeClave: dependencia.predecesorPasoId,
+        haciaClave: dependencia.sucesorPasoId,
+      }));
+      return {
+        ejecutable: nodoEjecutable(paso.id, estados, aristas),
+        reabrible: nodoReabrible(paso.id, estados, aristas),
+      };
+    };
+    const frontera = evaluarFrontera(pasosOrden, dependencias);
+    const listoParaEjecutar = frontera.ejecutable;
+    if (ejecuta && !listoParaEjecutar) {
       throw new BadRequestException(
-        `"${paso.nombre}" todavía no está listo: la ruta es secuencial y hay pasos anteriores sin completar.`,
+        `"${paso.nombre}" todavía no está listo: faltan dependencias obligatorias por completar.`,
       );
     }
-    if (
-      payload.accion === 'reabrir' &&
-      !pasoReabrible(pasosItem, paso.indice)
-    ) {
+    const puedeReabrir = frontera.reabrible;
+    if (payload.accion === 'reabrir' && !puedeReabrir) {
       throw new BadRequestException(
         `No se puede reabrir "${paso.nombre}": hay pasos posteriores que ya arrancaron.`,
       );
@@ -5005,7 +6009,25 @@ export class OrdenesTrabajoService {
       payload.accion === 'continuar' ||
       payload.accion === 'completar'
     ) {
-      await this.desarrolloDocumental.exigirGatesCumplidos(ordenId, paso.id);
+      const gatesPendientes = gatesOperativosPendientes(
+        paso.gatesOperativos ?? [],
+      );
+      if (gatesPendientes.length > 0) {
+        const etiquetas: Record<string, string> = {
+          MATERIAL: 'material asignado/disponible',
+          CALIDAD: 'condición de calidad satisfecha',
+        };
+        throw new ConflictException(
+          `"${paso.nombre}" todavía no está listo: falta ${gatesPendientes
+            .map((gate) => etiquetas[gate.tipo] ?? gate.tipo.toLowerCase())
+            .join(' y ')}.`,
+        );
+      }
+      await this.desarrolloDocumental.exigirGatesCumplidos(
+        ordenId,
+        paso.id,
+        paso.itemId,
+      );
     }
 
     const motivo = payload.motivo?.trim();
@@ -5146,6 +6168,46 @@ export class OrdenesTrabajoService {
         );
       }
 
+      // La fila de la orden ya está bloqueada por esta transacción. Volvemos
+      // a leer la frontera para que dos operadores sobre ramas relacionadas
+      // no puedan abrir/reabrir un nodo usando un snapshot concurrente viejo.
+      const pasosActuales = await tx.ordenTrabajoItemPaso.findMany({
+        where: { tenantId: auth.tenantId, ordenId },
+        select: {
+          id: true,
+          itemId: true,
+          indice: true,
+          nodoClave: true,
+          estado: true,
+        },
+      });
+      const pasosItemActuales = pasosActuales.filter(
+        (candidato) => candidato.itemId === itemId,
+      );
+      const usaGrafoActual =
+        pasosItemActuales.length > 0 &&
+        pasosItemActuales.every((candidato) => candidato.nodoClave);
+      const dependenciasActuales = usaGrafoActual
+        ? ((await tx.ordenTrabajoPasoDependencia.findMany({
+            where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
+            select: { predecesorPasoId: true, sucesorPasoId: true },
+          })) ?? [])
+        : [];
+      const fronteraActual = evaluarFrontera(
+        pasosActuales,
+        dependenciasActuales,
+      );
+      if (ejecuta && !fronteraActual.ejecutable) {
+        throw new ConflictException(
+          `Las dependencias de "${paso.nombre}" cambiaron mientras operabas. Actualizá el tablero.`,
+        );
+      }
+      if (payload.accion === 'reabrir' && !fronteraActual.reabrible) {
+        throw new ConflictException(
+          `Un nodo descendiente de "${paso.nombre}" ya arrancó. Actualizá el tablero.`,
+        );
+      }
+
       // Compare-and-set: la transición sólo se confirma si el paso conserva
       // exactamente el estado que validamos. El segundo de dos clicks
       // concurrentes obtiene conflicto y no abre otro tramo.
@@ -5163,6 +6225,27 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'El paso cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
         );
+      }
+
+      // F4.4.2: el paso visible gobierna la tanda física completa. Sus
+      // aliases conservan la trazabilidad de cada componente y avanzan en la
+      // misma transacción, sin duplicar tiempo ni trabajo en el tablero.
+      if (paso.nestingLoteRol === 'OPERATIVO' && paso.nestingLoteId) {
+        await tx.ordenTrabajoItemPaso.updateMany({
+          where: {
+            tenantId: auth.tenantId,
+            ordenId,
+            nestingLoteId: paso.nestingLoteId,
+            nestingLoteRol: 'PARTICIPANTE',
+          },
+          data: {
+            ...data,
+            duracionEstimadaMin: 0,
+            ...(payload.accion === 'completar'
+              ? { tiempoRealMin: 0, tiempoFuente: 'medido_lote' }
+              : {}),
+          },
+        });
       }
 
       // Tramos (D2): iniciar/continuar abren sesión de trabajo; pausar,
@@ -5197,13 +6280,30 @@ export class OrdenesTrabajoService {
         });
       }
 
-      // Progreso real de la orden: pasos hechos sobre el total (D3 del doc).
-      const [total, hechos] = await Promise.all([
-        tx.ordenTrabajoItemPaso.count({ where: { ordenId } }),
-        tx.ordenTrabajoItemPaso.count({
-          where: { ordenId, estado: 'hecho' },
-        }),
-      ]);
+      // Progreso real: duración estimada ponderada. El helper conserva un
+      // fallback honesto por conteo cuando la orden no tiene tiempos.
+      const pasosParaProgreso = await tx.ordenTrabajoItemPaso.findMany({
+        where: { ordenId },
+        select: {
+          estado: true,
+          duracionEstimadaMin: true,
+          nestingLoteRol: true,
+        },
+      });
+      const total = pasosParaProgreso.length;
+      const hechos = pasosParaProgreso.filter(
+        (candidato) => candidato.estado === 'hecho',
+      ).length;
+      const progresoPonderado = progresoPonderadoPasos(
+        pasosParaProgreso.map((candidato) => ({
+          estado: candidato.estado,
+          nestingLoteRol: candidato.nestingLoteRol,
+          duracionEstimadaMin:
+            candidato.duracionEstimadaMin != null
+              ? Number(candidato.duracionEstimadaMin)
+              : null,
+        })),
+      );
       // Estado destino de la OT tras la acción:
       // - completar el último paso pendiente la FINALIZA sola;
       // - reabrir un paso de una OT finalizada la reabre a producción;
@@ -5223,9 +6323,7 @@ export class OrdenesTrabajoService {
         where: { id: ordenId },
         data: {
           ...(nuevoEstadoOrden ? { estado: nuevoEstadoOrden } : {}),
-          ...(total > 0
-            ? { progresoPct: Math.round((hechos / total) * 100) }
-            : {}),
+          ...(total > 0 ? { progresoPct: progresoPonderado } : {}),
         },
       });
       // Primera finalización (acá: el último paso completado la finaliza
@@ -5258,6 +6356,9 @@ export class OrdenesTrabajoService {
             itemId,
             accion: payload.accion,
             antes: estadoActual,
+            ...(paso.nestingLoteId
+              ? { nestingLoteId: paso.nestingLoteId }
+              : {}),
             ...(motivo ? { motivo } : {}),
           },
         },
@@ -5359,20 +6460,33 @@ export class OrdenesTrabajoService {
         itemId: true,
         nombre: true,
         rutaPasoId: true,
+        nestingLoteRol: true,
+        nestingLoteSnapshotJson: true,
         familiaCodigo: true,
         estado: true,
         tipoEjecucion: true,
+        orden: {
+          select: {
+            pasos: {
+              select: {
+                id: true,
+                itemId: true,
+                indice: true,
+                nodoClave: true,
+                estado: true,
+                dependenciasEntrantes: { select: { predecesorPasoId: true } },
+                gatesOperativos: { select: { estado: true } },
+              },
+            },
+          },
+        },
         duracionEstimadaMin: true,
         item: {
           select: {
+            jobContextSnapshotJson: true,
+            trazabilidadSnapshotJson: true,
             cotizacionItem: {
               select: { jobContextJson: true, trazabilidadJson: true },
-            },
-            pasos: {
-              where: { estado: { not: 'hecho' } },
-              orderBy: { indice: 'asc' },
-              take: 1,
-              select: { id: true, estado: true },
             },
           },
         },
@@ -5387,14 +6501,17 @@ export class OrdenesTrabajoService {
         );
       }
 
-      const extraidas = pasos.map((paso) => ({
-        paso,
-        datos: extraerCompatibilidadLaser(
-          paso.item.cotizacionItem?.jobContextJson ?? null,
-          paso.item.cotizacionItem?.trazabilidadJson ?? null,
-          paso.rutaPasoId,
-        ),
-      }));
+      const extraidas = pasos.map((paso) => {
+        const snapshot = snapshotPasoProduccion(paso.item, paso);
+        return {
+          paso,
+          datos: extraerCompatibilidadLaser(
+            snapshot.jobContext,
+            snapshot.traza,
+            paso.rutaPasoId,
+          ),
+        };
+      });
       const configIds = [
         ...new Set(
           extraidas
@@ -5416,7 +6533,11 @@ export class OrdenesTrabajoService {
           colaConsolidacionDeFamilia(paso.familiaCodigo) !== 'laser' ||
           paso.tipoEjecucion === 'tercerizado' ||
           paso.estado === 'bloqueado' ||
-          paso.item.pasos[0]?.id !== paso.id
+          paso.nestingLoteRol === 'PARTICIPANTE' ||
+          !fronterasEjecutablesDAG(
+            paso.orden.pasos,
+            paso.orden.pasos.filter((p) => p.itemId === paso.itemId),
+          ).some((p) => p.id === paso.id)
         ) {
           throw new BadRequestException(
             'La tanda cambió: uno de los trabajos ya no está listo para impresión láser.',
@@ -5462,6 +6583,21 @@ export class OrdenesTrabajoService {
           'La tanda cambió. Actualizá la cola antes de confirmar la impresión.',
         );
       }
+      if (
+        pasos.some((p) => {
+          const snapshot = snapshotPasoProduccion(p.item, p);
+          return (
+            p.nestingLoteRol === 'PARTICIPANTE' ||
+            requierePlanConservado(
+              snapshot.paso?.nestingResult,
+              !!snapshot.lote,
+            )
+          );
+        })
+      )
+        throw new BadRequestException(
+          'Esta tanda tiene un plan de fabricación conservado. Completá sus operaciones desde la orden sin reacomodar el material.',
+        );
       const acomodo = acomodarTanda(pasos, [ahorro.anchoMm]).anchos[0];
       if (
         !acomodo ||
@@ -5695,6 +6831,25 @@ export class OrdenesTrabajoService {
           orderBy: { indice: 'asc' as const },
           include: {
             mesaUsuario: { select: { nombreCompleto: true, email: true } },
+            dependenciasEntrantes: {
+              where: { obligatoria: true },
+              select: { predecesorPasoId: true },
+            },
+            dependenciasSalientes: {
+              where: { obligatoria: true },
+              select: { sucesorPasoId: true },
+            },
+            gatesOperativos: {
+              orderBy: { tipo: 'asc' as const },
+              select: {
+                id: true,
+                tipo: true,
+                estado: true,
+                detalle: true,
+                resueltoEl: true,
+                resueltoPorNombre: true,
+              },
+            },
             tramos: {
               orderBy: {
                 finEl: { sort: 'desc' as const, nulls: 'first' as const },
@@ -5724,11 +6879,20 @@ export class OrdenesTrabajoService {
     const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, [
       item,
     ]);
+    const estadosOrden = new Map(
+      (
+        await this.prisma.ordenTrabajoItemPaso.findMany({
+          where: { tenantId: auth.tenantId, ordenId: item.ordenId },
+          select: { id: true, estado: true },
+        })
+      ).map((paso) => [paso.id, paso.estado] as const),
+    );
     const proyectado = this.toTableroItem(
       item.orden,
       item,
       auth.userId,
       tecnologias,
+      estadosOrden,
     );
     if (alcanceTableroProduccionDe(auth) !== 'operario') return proyectado;
     return {
@@ -5752,35 +6916,88 @@ export class OrdenesTrabajoService {
       throw new BadRequestException('Estado de compra inválido.');
     }
     const resultado = await this.prisma.$transaction(async (tx) => {
-      const paso = await tx.ordenTrabajoItemPaso.findFirst({
+      const referencia = await tx.ordenTrabajoItemPaso.findFirst({
         where: { id: pasoId, tenantId: auth.tenantId },
-        include: { item: { select: { nombre: true } } },
+        select: { ordenId: true },
       });
-      if (!paso) throw new NotFoundException('Paso no encontrado.');
+      if (!referencia) throw new NotFoundException('Paso no encontrado.');
+      // Comparte el lock de la OT con las acciones de producción: recibir o
+      // deshacer una compra no puede competir con el inicio de su sucesor.
+      const tomada = await tx.ordenTrabajo.updateMany({
+        where: {
+          id: referencia.ordenId,
+          tenantId: auth.tenantId,
+          estado: { in: ['pendiente', 'produccion', 'finalizada'] },
+        },
+        data: { updatedAt: new Date() },
+      });
+      if (tomada.count !== 1)
+        throw new ConflictException(
+          'La orden ya no permite modificar sus compras.',
+        );
+      const paso = await tx.ordenTrabajoItemPaso.findFirstOrThrow({
+        where: { id: pasoId, tenantId: auth.tenantId },
+        include: { item: { select: { nombre: true } }, gatesOperativos: true },
+      });
       if (paso.tipoEjecucion !== 'tercerizado') {
         throw new BadRequestException('El paso no es una compra tercerizada.');
       }
-      // La ruta es una SECUENCIA también para las compras: no se le puede pedir
-      // al proveedor hasta que lo anterior esté hecho (ej. el diseño gráfico que
-      // hay que mandarle). Volver a 'pendiente' siempre se permite (es deshacer).
-      if (estadoCompra !== 'pendiente') {
-        const previoPendiente = await tx.ordenTrabajoItemPaso.findFirst({
-          where: {
-            itemId: paso.itemId,
-            indice: { lt: paso.indice },
-            estado: { not: 'hecho' },
-          },
-          orderBy: { indice: 'asc' },
-          select: { nombre: true },
-        });
-        if (previoPendiente) {
-          throw new BadRequestException(
-            `No se puede avanzar la compra: falta completar "${previoPendiente.nombre}".`,
-          );
-        }
-      }
+      const ordenId = paso.ordenId;
+      if (paso.estadoCompra === estadoCompra)
+        return { ok: true, pasoId, estadoCompra, ordenId };
+      const pasos = await tx.ordenTrabajoItemPaso.findMany({
+        where: { tenantId: auth.tenantId, ordenId },
+        select: {
+          id: true,
+          itemId: true,
+          indice: true,
+          nodoClave: true,
+          estado: true,
+        },
+      });
+      const delItem = pasos.filter((p) => p.itemId === paso.itemId);
+      const usaGrafo = delItem.length > 0 && delItem.every((p) => p.nodoClave);
+      const dependencias = usaGrafo
+        ? await tx.ordenTrabajoPasoDependencia.findMany({
+            where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
+            select: { predecesorPasoId: true, sucesorPasoId: true },
+          })
+        : [];
+      const estados = pasos.map((p) => ({ clave: p.id, estado: p.estado }));
+      const aristas = dependencias.map((d) => ({
+        desdeClave: d.predecesorPasoId,
+        haciaClave: d.sucesorPasoId,
+      }));
       const recibido =
         estadoCompra === 'recibido' || estadoCompra === 'entregado';
+      const deshaceRecepcion = paso.estado === 'hecho' && !recibido;
+      if (
+        deshaceRecepcion &&
+        !(usaGrafo
+          ? nodoReabrible(paso.id, estados, aristas)
+          : pasoReabrible(delItem, paso.indice))
+      )
+        throw new ConflictException(
+          'No se puede deshacer la recepción: hay pasos posteriores que ya arrancaron.',
+        );
+      if (estadoCompra !== 'pendiente') {
+        const ejecutable = usaGrafo
+          ? nodoEjecutable(paso.id, estados, aristas)
+          : pasoEjecutable(delItem, paso.indice);
+        if (!ejecutable)
+          throw new BadRequestException(
+            `No se puede avanzar la compra: faltan dependencias obligatorias de "${paso.nombre}".`,
+          );
+        if (gatesOperativosPendientes(paso.gatesOperativos).length > 0)
+          throw new ConflictException(
+            `No se puede avanzar la compra: faltan condiciones operativas de "${paso.nombre}".`,
+          );
+        await this.desarrolloDocumental.exigirGatesCumplidos(
+          ordenId,
+          paso.id,
+          paso.itemId,
+        );
+      }
       await tx.ordenTrabajoItemPaso.update({
         where: { id: pasoId },
         data: {
@@ -5789,37 +7006,55 @@ export class OrdenesTrabajoService {
           completadoEl: recibido ? (paso.completadoEl ?? new Date()) : null,
         },
       });
-      const ordenId = paso.ordenId;
-      const [orden, total, hechos] = await Promise.all([
-        tx.ordenTrabajo.findFirst({
+      const [orden, pasosParaProgreso] = await Promise.all([
+        tx.ordenTrabajo.findFirstOrThrow({
           where: { id: ordenId },
           select: { estado: true },
         }),
-        tx.ordenTrabajoItemPaso.count({ where: { ordenId } }),
-        tx.ordenTrabajoItemPaso.count({ where: { ordenId, estado: 'hecho' } }),
+        tx.ordenTrabajoItemPaso.findMany({
+          where: { ordenId },
+          select: {
+            estado: true,
+            duracionEstimadaMin: true,
+            nestingLoteRol: true,
+          },
+        }),
       ]);
+      const total = pasosParaProgreso.length;
+      const hechos = pasosParaProgreso.filter(
+        (p) => p.estado === 'hecho',
+      ).length;
       const promueve =
-        orden?.estado === 'pendiente' && estadoCompra !== 'pendiente';
+        orden.estado === 'pendiente' && estadoCompra !== 'pendiente';
       const finaliza =
         total > 0 &&
         hechos === total &&
-        (orden?.estado === 'produccion' || promueve);
+        (orden.estado === 'produccion' || promueve);
       await tx.ordenTrabajo.update({
         where: { id: ordenId },
         data: {
           ...(total > 0
-            ? { progresoPct: Math.round((hechos / total) * 100) }
+            ? {
+                progresoPct: progresoPonderadoPasos(
+                  pasosParaProgreso.map((p) => ({
+                    ...p,
+                    duracionEstimadaMin:
+                      p.duracionEstimadaMin == null
+                        ? null
+                        : Number(p.duracionEstimadaMin),
+                  })),
+                ),
+              }
             : {}),
           ...(finaliza
             ? { estado: 'finalizada' }
-            : promueve
+            : promueve || (deshaceRecepcion && orden.estado === 'finalizada')
               ? { estado: 'produccion' }
               : {}),
         },
       });
-      if (finaliza) {
+      if (finaliza)
         await this.marcarPrimeraFinalizacion(tx, auth.tenantId, ordenId);
-      }
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -5846,6 +7081,75 @@ export class OrdenesTrabajoService {
       pasoId: resultado.pasoId,
       estadoCompra: resultado.estadoCompra,
     };
+  }
+
+  /**
+   * Resolución manual y auditada del contrato de gate de Fase 4. Las fases de
+   * Calidad e Inventario llamarán esta misma transición desde sus evidencias;
+   * hasta entonces sólo un supervisor puede afirmar o revocar la condición.
+   */
+  async resolverGatePaso(
+    auth: CurrentAuth,
+    pasoId: string,
+    payload: ResolverGatePasoDto,
+  ) {
+    const detalle = payload.detalle?.trim() || null;
+    return this.prisma.$transaction(async (tx) => {
+      const gate = await tx.ordenTrabajoPasoGate.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          pasoId,
+          tipo: payload.tipo,
+        },
+        include: {
+          paso: { select: { nombre: true } },
+        },
+      });
+      if (!gate) {
+        throw new NotFoundException(
+          'Ese paso no exige la condición operativa indicada.',
+        );
+      }
+      const cumplido = payload.estado === 'CUMPLIDO';
+      const actualizado = await tx.ordenTrabajoPasoGate.update({
+        where: { id: gate.id },
+        data: {
+          estado: payload.estado,
+          detalle,
+          resueltoEl: cumplido ? new Date() : null,
+          resueltoPorId: cumplido ? auth.userId : null,
+          resueltoPorNombre: cumplido ? auth.email : null,
+        },
+      });
+      const etiqueta = payload.tipo === 'MATERIAL' ? 'Material' : 'Calidad';
+      await tx.ordenTrabajoEvento.create({
+        data: {
+          tenantId: auth.tenantId,
+          ordenId: gate.ordenId,
+          tipo: 'gate_operativo',
+          descripcion: `${etiqueta} ${cumplido ? 'confirmado' : 'reabierto'} para "${gate.paso.nombre}".`,
+          usuarioNombre: auth.email,
+          usuarioId: auth.userId,
+          origen: 'usuario',
+          datosJson: {
+            pasoId,
+            gateId: gate.id,
+            tipo: payload.tipo,
+            estado: payload.estado,
+            detalle,
+          },
+        },
+      });
+      return {
+        id: actualizado.id,
+        pasoId,
+        tipo: actualizado.tipo,
+        estado: actualizado.estado,
+        detalle: actualizado.detalle,
+        resueltoEl: actualizado.resueltoEl?.toISOString() ?? null,
+        resueltoPorNombre: actualizado.resueltoPorNombre,
+      };
+    });
   }
 
   /**
@@ -5889,12 +7193,17 @@ export class OrdenesTrabajoService {
     },
     item: {
       id: string;
+      parentItemId: string | null;
+      componenteCodigo: string | null;
+      nodoIncorporacionClave: string | null;
+      parentItem?: { id: string; nombre: string } | null;
       ordenIndice: number;
       codigo: string;
       nombre: string;
       cantidad: Prisma.Decimal;
       cantidadUnidad: string;
       specsJson: Prisma.JsonValue;
+      jobContextSnapshotJson?: Prisma.JsonValue;
       cotizacionItemId: string | null;
       /** Producto vivo (vía la cotización): su nombre ACTUAL, para no mostrar
        *  el snapshot viejo si se renombró el producto. Null en OT manuales. */
@@ -5907,6 +7216,8 @@ export class OrdenesTrabajoService {
       pasos: Array<{
         id: string;
         indice: number;
+        nodoClave: string | null;
+        esTerminal: boolean;
         /** Paso de la ruta que lo originó: empareja con el snapshot del costeo. */
         rutaPasoId: string | null;
         nombre: string;
@@ -5916,6 +7227,10 @@ export class OrdenesTrabajoService {
         centroCostoNombre: string | null;
         maquinaId: string | null;
         duracionEstimadaMin: Prisma.Decimal | null;
+        operacionesIncorporacionSnapshotJson: Prisma.JsonValue;
+        nestingLoteId: string | null;
+        nestingLoteRol: string | null;
+        nestingLoteSnapshotJson: Prisma.JsonValue;
         estado: string;
         motivoBloqueo: string | null;
         tipoEjecucion: string;
@@ -5931,6 +7246,16 @@ export class OrdenesTrabajoService {
         completadoPorNombre: string | null;
         mesaUsuarioId: string | null;
         mesaUsuario: { nombreCompleto: string | null; email: string } | null;
+        dependenciasEntrantes: Array<{ predecesorPasoId: string }>;
+        dependenciasSalientes: Array<{ sucesorPasoId: string }>;
+        gatesOperativos?: Array<{
+          id: string;
+          tipo: string;
+          estado: string;
+          detalle: string | null;
+          resueltoEl: Date | null;
+          resueltoPorNombre: string | null;
+        }>;
         tramos: Array<{
           usuarioId: string | null;
           usuarioNombre: string;
@@ -5950,15 +7275,25 @@ export class OrdenesTrabajoService {
      * arma en lectura desde `Maquina`. Default vacío = ruteo por fallback.
      */
     tecnologiaPorMaquina: Map<string, string | null> = new Map(),
+    estadoPasosOrden: Map<string, string> = new Map(),
   ) {
+    const contexto =
+      item.jobContextSnapshotJson ?? item.cotizacionItem?.jobContextJson;
     const jobContext =
-      item.cotizacionItem?.jobContextJson &&
-      typeof item.cotizacionItem.jobContextJson === 'object' &&
-      !Array.isArray(item.cotizacionItem.jobContextJson)
-        ? (item.cotizacionItem.jobContextJson as Record<string, unknown>)
+      contexto && typeof contexto === 'object' && !Array.isArray(contexto)
+        ? (contexto as Record<string, unknown>)
         : null;
+    const pasosVisibles = item.pasos.filter(
+      (paso) => paso.nestingLoteRol !== 'PARTICIPANTE',
+    );
     return {
       id: item.id,
+      parentItemId: item.parentItemId,
+      componenteCodigo: item.componenteCodigo,
+      nodoIncorporacionClave: item.nodoIncorporacionClave,
+      componenteDe: item.parentItem
+        ? { id: item.parentItem.id, nombre: item.parentItem.nombre }
+        : null,
       ordenId: orden.id,
       ordenNumero: orden.numero,
       ordenEstado: orden.estado,
@@ -5983,10 +7318,26 @@ export class OrdenesTrabajoService {
       // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
       briefDiseno: jobContext?.briefDiseno ?? null,
       caras: jobContext?.caras === 2 ? 2 : 1,
-      sinRuta: item.pasos.length === 0,
-      pasos: item.pasos.map((paso) => ({
+      sinRuta: pasosVisibles.length === 0,
+      pasos: pasosVisibles.map((paso) => ({
         id: paso.id,
         indice: paso.indice,
+        nodoClave: paso.nodoClave,
+        esTerminal: paso.esTerminal,
+        predecesorPasoIds: (paso.dependenciasEntrantes ?? []).map(
+          (dependencia) => dependencia.predecesorPasoId,
+        ),
+        predecesoresSatisfechos: (paso.dependenciasEntrantes ?? []).every(
+          (dependencia) =>
+            estadoPasosOrden.get(dependencia.predecesorPasoId) === 'hecho',
+        ),
+        sucesorPasoIds: (paso.dependenciasSalientes ?? []).map(
+          (dependencia) => dependencia.sucesorPasoId,
+        ),
+        gatesOperativos: (paso.gatesOperativos ?? []).map((gate) => ({
+          ...gate,
+          resueltoEl: gate.resueltoEl?.toISOString() ?? null,
+        })),
         // Clave de emparejamiento con el paso del snapshot de costeo: la vista
         // consolidada de Costos cruza el tiempo REAL de acá con la tarifa y el
         // costo COTIZADOS de allá. Sale del `rutaPasoId` que la
@@ -6013,6 +7364,18 @@ export class OrdenesTrabajoService {
         duracionEstimadaMin:
           paso.duracionEstimadaMin != null
             ? Number(paso.duracionEstimadaMin)
+            : null,
+        operacionesIncorporacionSnapshotJson: Array.isArray(
+          paso.operacionesIncorporacionSnapshotJson,
+        )
+          ? paso.operacionesIncorporacionSnapshotJson
+          : null,
+        nestingLote:
+          paso.nestingLoteRol === 'OPERATIVO'
+            ? {
+                id: paso.nestingLoteId,
+                snapshot: paso.nestingLoteSnapshotJson,
+              }
             : null,
         estado: paso.estado,
         motivoBloqueo: paso.motivoBloqueo,
@@ -6062,10 +7425,13 @@ export class OrdenesTrabajoService {
 
   private toListItem(
     orden: Omit<OrdenConRelaciones, 'items'> & {
-      items: Array<{ nombre: string }>;
+      items: Array<{ nombre: string; parentItemId?: string | null }>;
     },
   ) {
     const estado = orden.estado as OrdenTrabajoEstado;
+    const itemsComerciales = orden.items.filter(
+      (item) => item.parentItemId == null,
+    );
     return {
       id: orden.id,
       numero: orden.numero,
@@ -6080,10 +7446,10 @@ export class OrdenesTrabajoService {
       fechaEntrega: orden.fechaEntrega
         ? orden.fechaEntrega.toISOString().slice(0, 10)
         : null,
-      itemsCount: orden._count.items,
+      itemsCount: itemsComerciales.length,
       total: Number(orden.total ?? 0),
       progresoPct: progresoEfectivo(estado, orden.progresoPct),
-      resumen: orden.items.map((item) => item.nombre).join(' · '),
+      resumen: itemsComerciales.map((item) => item.nombre).join(' · '),
       proyectoCampana: orden.proyectoCampana,
     };
   }
@@ -6165,100 +7531,102 @@ export class OrdenesTrabajoService {
           minutosReales: o.minutosRealesAlCancelar ?? 0,
         };
       })(),
-      productos: orden.items.map((item) => {
-        const cotItem = (
-          item as typeof item & {
-            cotizacionItem?: {
-              productoId: string;
-              rutaAlternativaId: string | null;
-              jobContextJson: unknown;
-              snapshotJson: unknown;
-              trazabilidadJson: unknown;
-              costoUnitario: unknown;
-              costoTotal: unknown;
-              precioUnitario: unknown;
-              precioTotal: unknown;
-              precioConfigSnapshotJson: unknown;
-              impuestosSnapshotJson: unknown;
-              comisionesSnapshotJson: unknown;
-              precioEspecialClienteSnapshotJson: unknown;
-            } | null;
-          }
-        ).cotizacionItem;
-        const itemCategorias = item as typeof item & {
-          categoriaComercial?: string;
-          subcategoriaComercial?: string;
-        };
-        const itemDescuento = item as typeof item & {
-          descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
-          descuentoValor?: unknown;
-          descuentoMonto?: unknown;
-          descuentoCuponId?: string | null;
-        };
-        return {
-          id: item.id,
-          cotizacionItemId: item.cotizacionItemId,
-          // Descuento comercial persistido (F1): para rehidratar la ficha con el
-          // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
-          descuentoTipo: itemDescuento.descuentoTipo ?? null,
-          descuentoValor:
-            itemDescuento.descuentoValor != null
-              ? Number(itemDescuento.descuentoValor)
+      productos: orden.items
+        .filter((item) => item.parentItemId == null)
+        .map((item) => {
+          const cotItem = (
+            item as typeof item & {
+              cotizacionItem?: {
+                productoId: string;
+                rutaAlternativaId: string | null;
+                jobContextJson: unknown;
+                snapshotJson: unknown;
+                trazabilidadJson: unknown;
+                costoUnitario: unknown;
+                costoTotal: unknown;
+                precioUnitario: unknown;
+                precioTotal: unknown;
+                precioConfigSnapshotJson: unknown;
+                impuestosSnapshotJson: unknown;
+                comisionesSnapshotJson: unknown;
+                precioEspecialClienteSnapshotJson: unknown;
+              } | null;
+            }
+          ).cotizacionItem;
+          const itemCategorias = item as typeof item & {
+            categoriaComercial?: string;
+            subcategoriaComercial?: string;
+          };
+          const itemDescuento = item as typeof item & {
+            descuentoTipo?: 'PORCENTAJE' | 'MONTO' | null;
+            descuentoValor?: unknown;
+            descuentoMonto?: unknown;
+            descuentoCuponId?: string | null;
+          };
+          return {
+            id: item.id,
+            cotizacionItemId: item.cotizacionItemId,
+            // Descuento comercial persistido (F1): para rehidratar la ficha con el
+            // mismo descuento que aplicó el vendedor. Ver descuentos-diseno.md §10.
+            descuentoTipo: itemDescuento.descuentoTipo ?? null,
+            descuentoValor:
+              itemDescuento.descuentoValor != null
+                ? Number(itemDescuento.descuentoValor)
+                : null,
+            descuentoMonto:
+              itemDescuento.descuentoMonto != null
+                ? Number(itemDescuento.descuentoMonto)
+                : null,
+            descuentoCuponId: itemDescuento.descuentoCuponId ?? null,
+            codigo: item.codigo,
+            nombre: item.nombre,
+            familia: item.familia,
+            categoriaComercial: itemCategorias.categoriaComercial ?? '',
+            subcategoriaComercial: itemCategorias.subcategoriaComercial ?? '',
+            cantidad: Number(item.cantidad),
+            cantidadUnidad: item.cantidadUnidad,
+            subtotal: Number(item.subtotal),
+            impuestos: Number(item.impuestos),
+            total: Number(item.total),
+            specs: (item.specsJson ?? []) as Array<{
+              etiqueta: string;
+              valor: string;
+            }>,
+            adicionales: (item.adicionalesJson ?? []) as string[],
+            snapshot: cotItem
+              ? {
+                  productoId: cotItem.productoId,
+                  rutaAlternativaId: cotItem.rutaAlternativaId,
+                  jobContext: cotItem.jobContextJson ?? null,
+                  resumen: cotItem.snapshotJson ?? null,
+                  trazabilidad: cotItem.trazabilidadJson ?? null,
+                  costoUnitario:
+                    cotItem.costoUnitario != null
+                      ? Number(cotItem.costoUnitario)
+                      : null,
+                  costoTotal:
+                    cotItem.costoTotal != null
+                      ? Number(cotItem.costoTotal)
+                      : null,
+                  precioUnitario:
+                    cotItem.precioUnitario != null
+                      ? Number(cotItem.precioUnitario)
+                      : null,
+                  precioTotal:
+                    cotItem.precioTotal != null
+                      ? Number(cotItem.precioTotal)
+                      : null,
+                  precioSnapshots: {
+                    precioConfig: cotItem.precioConfigSnapshotJson ?? null,
+                    impuestos: cotItem.impuestosSnapshotJson ?? null,
+                    comisiones: cotItem.comisionesSnapshotJson ?? null,
+                    precioEspecialCliente:
+                      cotItem.precioEspecialClienteSnapshotJson ?? null,
+                  },
+                }
               : null,
-          descuentoMonto:
-            itemDescuento.descuentoMonto != null
-              ? Number(itemDescuento.descuentoMonto)
-              : null,
-          descuentoCuponId: itemDescuento.descuentoCuponId ?? null,
-          codigo: item.codigo,
-          nombre: item.nombre,
-          familia: item.familia,
-          categoriaComercial: itemCategorias.categoriaComercial ?? '',
-          subcategoriaComercial: itemCategorias.subcategoriaComercial ?? '',
-          cantidad: Number(item.cantidad),
-          cantidadUnidad: item.cantidadUnidad,
-          subtotal: Number(item.subtotal),
-          impuestos: Number(item.impuestos),
-          total: Number(item.total),
-          specs: (item.specsJson ?? []) as Array<{
-            etiqueta: string;
-            valor: string;
-          }>,
-          adicionales: (item.adicionalesJson ?? []) as string[],
-          snapshot: cotItem
-            ? {
-                productoId: cotItem.productoId,
-                rutaAlternativaId: cotItem.rutaAlternativaId,
-                jobContext: cotItem.jobContextJson ?? null,
-                resumen: cotItem.snapshotJson ?? null,
-                trazabilidad: cotItem.trazabilidadJson ?? null,
-                costoUnitario:
-                  cotItem.costoUnitario != null
-                    ? Number(cotItem.costoUnitario)
-                    : null,
-                costoTotal:
-                  cotItem.costoTotal != null
-                    ? Number(cotItem.costoTotal)
-                    : null,
-                precioUnitario:
-                  cotItem.precioUnitario != null
-                    ? Number(cotItem.precioUnitario)
-                    : null,
-                precioTotal:
-                  cotItem.precioTotal != null
-                    ? Number(cotItem.precioTotal)
-                    : null,
-                precioSnapshots: {
-                  precioConfig: cotItem.precioConfigSnapshotJson ?? null,
-                  impuestos: cotItem.impuestosSnapshotJson ?? null,
-                  comisiones: cotItem.comisionesSnapshotJson ?? null,
-                  precioEspecialCliente:
-                    cotItem.precioEspecialClienteSnapshotJson ?? null,
-                },
-              }
-            : null,
-        };
-      }),
+          };
+        }),
       eventos: orden.eventos.map((evento) => ({
         fecha: evento.fecha.toISOString(),
         tipo: evento.tipo,
@@ -6325,6 +7693,7 @@ export class OrdenesTrabajoService {
           orderBy: { ordenIndice: 'asc' as const },
           select: {
             id: true,
+            parentItemId: true,
             nombre: true,
             specsJson: true,
             archivos: {
@@ -6335,6 +7704,7 @@ export class OrdenesTrabajoService {
               orderBy: { indice: 'asc' as const },
               select: {
                 indice: true,
+                nestingLoteRol: true,
                 nombre: true,
                 familiaCodigo: true,
                 estado: true,
@@ -6357,9 +7727,10 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No encontramos ese pedido.');
     }
 
+    const productos = productosComercialesConTrabajo(orden.items);
     let pasosTotal = 0;
     let pasosHechos = 0;
-    const items = orden.items.map((item) => {
+    const items = productos.map((item) => {
       const total = item.pasos.length;
       const hechos = item.pasos.filter((p) => p.estado === 'hecho').length;
       pasosTotal += total;
@@ -6402,7 +7773,7 @@ export class OrdenesTrabajoService {
     // Se arma desde los pasos (no desde los eventos internos, que traen texto
     // de staff/montos), así nunca hay fuga de datos internos.
     const actividad: Array<{ fecha: string; texto: string }> = [];
-    for (const item of orden.items) {
+    for (const item of productos) {
       for (const paso of item.pasos) {
         if (paso.estado === 'hecho' && paso.completadoEl) {
           actividad.push({

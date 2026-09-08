@@ -178,7 +178,7 @@ export class EquipoService {
              COUNT(DISTINCT p."familiaCodigo")::int AS familias,
              COUNT(*) FILTER (WHERE t."motivoFin" = 'auto_pausa')::int AS autopausas
       FROM "OrdenTrabajoPasoTramo" t
-      JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId"
+      JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId" AND p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
       WHERE t."tenantId" = ${tenantId}::uuid AND t."finEl" IS NOT NULL
         AND t."motivoFin" <> 'migracion'
         AND t."finEl" >= ${desde} AND t."finEl" < ${hastaExcl}
@@ -209,7 +209,7 @@ export class EquipoService {
              COALESCE(SUM(p."duracionEstimadaMin"), 0)::float8 AS estimado,
              COALESCE(SUM(p."tiempoRealMin"), 0)::float8 AS real
       FROM "OrdenTrabajoItemPaso" p
-      WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+      WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
         AND p."tiempoRealMin" IS NOT NULL AND p."duracionEstimadaMin" IS NOT NULL
         AND p."tiempoFuente" IN ('medido', 'medido_lote')
         AND p."tiempoRealMin" <= 480 AND p."tiempoRealMin" <= 5 * p."duracionEstimadaMin"
@@ -229,7 +229,7 @@ export class EquipoService {
              COALESCE(SUM(p."duracionEstimadaMin"), 0)::float8 AS estimado,
              COALESCE(SUM(p."tiempoRealMin"), 0)::float8 AS real
       FROM "OrdenTrabajoItemPaso" p
-      WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+      WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
         AND p."tiempoRealMin" IS NOT NULL AND p."duracionEstimadaMin" IS NOT NULL
         AND p."tiempoFuente" IN ('medido', 'medido_lote')
         AND p."tiempoRealMin" <= 480 AND p."tiempoRealMin" <= 5 * p."duracionEstimadaMin"
@@ -265,7 +265,7 @@ export class EquipoService {
                COUNT(*) FILTER (WHERE p."tiempoFuente" = 'estimado')::int AS estimados,
                COUNT(*) FILTER (WHERE COALESCE(p."tiempoFuente", 'invalido') = 'invalido')::int AS invalidos
         FROM "OrdenTrabajoItemPaso" p
-        WHERE p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
+        WHERE p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE' AND p."tenantId" = ${tenantId}::uuid AND p.estado = 'hecho'
           AND p."completadoEl" >= ${desde} AND p."completadoEl" < ${hastaExcl}
         GROUP BY 1, 2
         ORDER BY 2
@@ -273,6 +273,7 @@ export class EquipoService {
       this.prisma.$queryRaw<Array<{ nombre: string; veces: number }>>`
         SELECT t."usuarioNombre" AS nombre, COUNT(*)::int AS veces
         FROM "OrdenTrabajoPasoTramo" t
+        JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId" AND p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
         WHERE t."tenantId" = ${tenantId}::uuid AND t."motivoFin" = 'auto_pausa'
           AND t."finEl" >= ${desde} AND t."finEl" < ${hastaExcl}
         GROUP BY 1
@@ -305,7 +306,7 @@ export class EquipoService {
              COALESCE(SUM(EXTRACT(EPOCH FROM (t."finEl" - t."inicioEl")) / 60.0), 0)::float8 AS minutos,
              COUNT(DISTINCT t."pasoId")::int AS pasos
       FROM "OrdenTrabajoPasoTramo" t
-      JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId"
+      JOIN "OrdenTrabajoItemPaso" p ON p.id = t."pasoId" AND p."nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
       WHERE t."tenantId" = ${tenantId}::uuid AND t."finEl" IS NOT NULL
         AND t."motivoFin" <> 'migracion'
         AND t."finEl" >= ${desde} AND t."finEl" < ${hastaExcl}
@@ -352,7 +353,7 @@ export class EquipoService {
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
         LEFT JOIN "Empleado" e ON e.id = ot."vendedorEmpleadoId"
-        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${desde} AND ot."fechaEmision" < ${hastaExcl}
         GROUP BY 1, 2
         ORDER BY facturado DESC

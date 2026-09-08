@@ -42,6 +42,12 @@ describe('Motor — desgaste del cabezal de Plotter CAD', () => {
     const service = createService();
     const paso = {
       familiaCodigo: 'impresion_por_area',
+      slots: [
+        {
+          slotCodigo: 'sustrato_principal',
+          mermaAdicionalPct: 10,
+        },
+      ],
       perfilM1Id: 'perfil-cad',
       perfil: {
         id: 'perfil-cad',
@@ -90,8 +96,13 @@ describe('Motor — desgaste del cabezal de Plotter CAD', () => {
       estrategiaCosto: 'costo_por_ml_tinta',
       modoSeleccion: 'MAQUINA_DESGASTE',
     });
-    expect(lineas[0].cantidad).toBeCloseTo(9.8, 8);
+    expect(lineas[0].cantidad).toBeCloseTo(10.78, 8);
     expect(lineas[0].precioUnitario).toBeCloseTo(50, 8);
-    expect(lineas[0].costoTotal).toBeCloseTo(490, 8);
+    expect(lineas[0].costoTotal).toBeCloseTo(539, 8);
+    expect(lineas[0].mermaAdicional).toEqual({
+      porcentaje: 10,
+      cantidadTrabajo: 9.8,
+      cantidadMerma: expect.closeTo(0.98, 8),
+    });
   });
 });

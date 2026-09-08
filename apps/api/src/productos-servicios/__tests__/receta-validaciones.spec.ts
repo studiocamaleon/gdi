@@ -10,7 +10,10 @@ type ValidadorInterno = {
         slots: Array<Record<string, unknown>>;
       }>;
     },
-    unidades: Map<string, UnidadMateriaPrima | null>,
+    unidades: Map<
+      string,
+      { unidad: UnidadMateriaPrima | null; sku: string; nombre: string }
+    >,
   ): void;
   validarCiclos(
     tenantId: string,
@@ -22,6 +25,8 @@ type ValidadorInterno = {
     productoId: string,
     documentos: Array<Record<string, unknown>>,
     componentes: Array<Record<string, unknown>>,
+    clavesPaso?: Set<string>,
+    atributosComercialesJson?: unknown,
   ): Promise<void>;
 };
 
@@ -60,8 +65,22 @@ describe('validaciones industriales de receta', () => {
           ],
         },
         new Map([
-          ['variante-unidad', UnidadMateriaPrima.UNIDAD],
-          ['variante-m2', UnidadMateriaPrima.M2],
+          [
+            'variante-unidad',
+            {
+              unidad: UnidadMateriaPrima.UNIDAD,
+              sku: 'UNIDAD',
+              nombre: 'Variante por unidad',
+            },
+          ],
+          [
+            'variante-m2',
+            {
+              unidad: UnidadMateriaPrima.M2,
+              sku: 'M2',
+              nombre: 'Variante por metro cuadrado',
+            },
+          ],
         ]),
       ),
     ).toThrow(BadRequestException);
@@ -93,7 +112,7 @@ describe('validaciones industriales de receta', () => {
     ).rejects.toThrow('ciclo de componentes');
   });
 
-  it('rechaza fórmulas y unidades no fabricables en componentes', async () => {
+  it('rechaza configuraciones de parámetros con formato inválido', async () => {
     const servicio = servicioConPrisma({});
 
     await expect(
@@ -106,12 +125,112 @@ describe('validaciones industriales de receta', () => {
             productoComponenteId: 'componente-1',
             codigo: 'COMP-1',
             nombre: 'Componente',
-            formula: 'por_m2',
+            formula: 'por_unidad',
             cantidad: 1,
-            unidad: 'm2',
+            unidad: 'unidad',
+            configuracionJson: { version: 9, bindings: [] },
           },
         ],
       ),
-    ).rejects.toThrow('fórmula por_unidad');
+    ).rejects.toThrow('no tiene un formato válido');
+  });
+
+  it('acepta dos ocurrencias del mismo producto con códigos distintos', async () => {
+    const count = jest.fn().mockResolvedValue(1);
+    const servicio = servicioConPrisma({ producto: { count } });
+
+    await expect(
+      servicio.validarReferenciasBorrador(
+        'tenant-1',
+        'producto-raiz',
+        [],
+        [
+          {
+            productoComponenteId: 'vinilo-impreso',
+            codigo: 'VINILO-IMPRESO',
+            nombre: 'Vinilo frente',
+            formula: 'por_unidad',
+            cantidad: 1,
+            unidad: 'unidad',
+          },
+          {
+            productoComponenteId: 'vinilo-impreso',
+            codigo: 'VINILO-IMPRESO-2',
+            nombre: 'Vinilo lateral',
+            formula: 'por_unidad',
+            cantidad: 1,
+            unidad: 'unidad',
+          },
+        ],
+        new Set(),
+      ),
+    ).resolves.toBeUndefined();
+    expect(count).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        id: { in: ['vinilo-impreso'] },
+        activo: true,
+      },
+    });
+  });
+
+  it('rechaza un componente que hereda una fuente geométrica eliminada', async () => {
+    const servicio = servicioConPrisma({});
+
+    await expect(
+      servicio.validarReferenciasBorrador(
+        'tenant-1',
+        'producto-raiz',
+        [],
+        [
+          {
+            productoComponenteId: 'componente-vectorial',
+            codigo: 'FRENTE',
+            nombre: 'Frente de acrílico',
+            formula: 'por_unidad',
+            cantidad: 1,
+            unidad: 'unidad',
+            configuracionJson: {
+              version: 2,
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  origen: 'PADRE',
+                  requerido: true,
+                  padreClave: 'cantidad',
+                },
+                {
+                  clave: 'disenoVectorialFuente',
+                  origen: 'PADRE',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'geometriasVectoriales.contorno_viejo',
+                    operador: 'COPIAR',
+                    fuente: {
+                      tipo: 'PADRE',
+                      campo: 'geometriasVectoriales.contorno_viejo',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        new Set(),
+        {
+          geometriasComerciales: {
+            version: 1,
+            modo: 'VECTORIAL',
+            fuentes: [
+              {
+                id: 'contorno_principal',
+                nombre: 'Contorno principal',
+                requerida: true,
+              },
+            ],
+          },
+        },
+      ),
+    ).rejects.toThrow('ya no existe');
   });
 });

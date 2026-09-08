@@ -83,6 +83,7 @@ function item(
   pasos: TableroPasoData[],
   over: Partial<TableroItemData> = {},
 ): TableroItemData {
+  const ids = new Map(pasos.map((paso) => [paso.id, `${id}-${paso.id}`]));
   return {
     id,
     ordenId: `orden-${id}`,
@@ -90,7 +91,18 @@ function item(
     ordenEstado: 'produccion',
     fechaEntrega: null,
     sinRuta: false,
-    pasos,
+    // En la base los ids de paso son UUID globales. El prefijo evita que los
+    // fixtures de dos items inventen accidentalmente el mismo nodo.
+    pasos: pasos.map((paso) => ({
+      ...paso,
+      id: ids.get(paso.id)!,
+      predecesorPasoIds: (paso.predecesorPasoIds ?? []).map(
+        (pasoId) => ids.get(pasoId) ?? pasoId,
+      ),
+      sucesorPasoIds: (paso.sucesorPasoIds ?? []).map(
+        (pasoId) => ids.get(pasoId) ?? pasoId,
+      ),
+    })),
     ...over,
   };
 }
@@ -121,7 +133,9 @@ function correr(
 
 describe('avanzarAVentana', () => {
   it('respeta un instante dentro de la franja', () => {
-    expect(avanzarAVentana(CALENDARIO, jul(20, 10, 30))).toEqual(jul(20, 10, 30));
+    expect(avanzarAVentana(CALENDARIO, jul(20, 10, 30))).toEqual(
+      jul(20, 10, 30),
+    );
   });
   it('empuja al inicio si es antes de abrir', () => {
     expect(avanzarAVentana(CALENDARIO, jul(20, 6, 0))).toEqual(jul(20, 8, 0));
@@ -157,11 +171,26 @@ describe('sumarMinutosLaborales', () => {
 describe('jornada cortada', () => {
   const CORTADO: CalendarioEstacion = {
     dias: {
-      lun: [{ desde: '09:00', hasta: '12:00' }, { desde: '15:00', hasta: '19:00' }],
-      mar: [{ desde: '09:00', hasta: '12:00' }, { desde: '15:00', hasta: '19:00' }],
-      mie: [{ desde: '09:00', hasta: '12:00' }, { desde: '15:00', hasta: '19:00' }],
-      jue: [{ desde: '09:00', hasta: '12:00' }, { desde: '15:00', hasta: '19:00' }],
-      vie: [{ desde: '09:00', hasta: '12:00' }, { desde: '15:00', hasta: '19:00' }],
+      lun: [
+        { desde: '09:00', hasta: '12:00' },
+        { desde: '15:00', hasta: '19:00' },
+      ],
+      mar: [
+        { desde: '09:00', hasta: '12:00' },
+        { desde: '15:00', hasta: '19:00' },
+      ],
+      mie: [
+        { desde: '09:00', hasta: '12:00' },
+        { desde: '15:00', hasta: '19:00' },
+      ],
+      jue: [
+        { desde: '09:00', hasta: '12:00' },
+        { desde: '15:00', hasta: '19:00' },
+      ],
+      vie: [
+        { desde: '09:00', hasta: '12:00' },
+        { desde: '15:00', hasta: '19:00' },
+      ],
       sab: null,
       dom: null,
     },
@@ -209,6 +238,39 @@ describe('simularFlujo', () => {
     // a: 8→10; b espera el puesto: 10→12.
     expect(r.porItem.get('a')?.finEstimado).toEqual(jul(20, 10, 0));
     expect(r.porItem.get('b')?.finEstimado).toEqual(jul(20, 12, 0));
+  });
+
+  it('programa ramas DAG en paralelo y espera la convergencia', () => {
+    const diseno = interno(0, 'diseno', 60);
+    const uv = interno(1, 'uv', 120);
+    const laser = interno(2, 'laser', 180);
+    const armado = interno(3, 'armado', 60);
+    diseno.nodoClave = 'diseno';
+    uv.nodoClave = 'uv';
+    laser.nodoClave = 'laser';
+    armado.nodoClave = 'armado';
+    uv.predecesorPasoIds = [diseno.id];
+    laser.predecesorPasoIds = [diseno.id];
+    armado.predecesorPasoIds = [uv.id, laser.id];
+    armado.esTerminal = true;
+    const r = correr([item('dag', [diseno, uv, laser, armado])], {
+      estaciones: [
+        estacion({ id: 'diseno', familias: ['diseno'] }),
+        estacion({ id: 'uv', familias: ['uv'] }),
+        estacion({ id: 'laser', familias: ['laser'] }),
+        estacion({ id: 'armado', familias: ['armado'] }),
+      ],
+    });
+    const porFamilia = new Map(
+      r.traza.map((fila) => [
+        r.traza.find((otra) => otra.pasoId === fila.pasoId)?.estacionKey,
+        fila,
+      ]),
+    );
+    expect(porFamilia.get('uv')?.inicio).toEqual(jul(20, 9, 0));
+    expect(porFamilia.get('laser')?.inicio).toEqual(jul(20, 9, 0));
+    expect(porFamilia.get('armado')?.inicio).toEqual(jul(20, 12, 0));
+    expect(r.porItem.get('dag')?.finEstimado).toEqual(jul(20, 13, 0));
   });
 
   it('un tercerizado corre por lead time, no ocupa puesto', () => {

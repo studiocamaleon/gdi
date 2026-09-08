@@ -1,12 +1,15 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
   IsISO8601,
+  IsIn,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -17,6 +20,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
+  AlcanceDocumentoProduccion,
   EtapaDesarrolloDocumento,
   PoliticaEjecucionRecetaComponente,
   PropositoArchivoMaestro,
@@ -31,6 +35,10 @@ export class RecetaDocumentoDto {
   @IsString()
   @Length(1, 180)
   nombre!: string;
+
+  @IsOptional()
+  @IsEnum(AlcanceDocumentoProduccion)
+  alcance?: AlcanceDocumentoProduccion;
 
   @IsOptional()
   @IsString()
@@ -100,11 +108,49 @@ export class RecetaComponenteDto {
   requerido?: boolean;
 
   @IsOptional()
+  @IsObject()
+  configuracionJson?: unknown;
+
+  /** Nodo del producto padre que queda bloqueado hasta recibir el componente. */
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  nodoIncorporacionClave?: string | null;
+
+  /** Pasos del padre que habilitan el inicio de la subruta hija. */
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  @MaxLength(160, { each: true })
+  nodosPredecesoresClaves?: string[];
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   @Max(10_000)
   orden?: number;
+}
+
+export class RecetaDependenciaDto {
+  @IsString()
+  @Length(1, 160)
+  desdeClave!: string;
+
+  @IsString()
+  @Length(1, 160)
+  haciaClave!: string;
+}
+
+export class RecetaGateOperativoDto {
+  @IsString()
+  @Length(1, 160)
+  nodoClave!: string;
+
+  @IsIn(['MATERIAL', 'CALIDAD'])
+  tipo!: 'MATERIAL' | 'CALIDAD';
 }
 
 export class GuardarBorradorRecetaDto {
@@ -134,6 +180,29 @@ export class GuardarBorradorRecetaDto {
   @ValidateNested({ each: true })
   @Type(() => RecetaComponenteDto)
   componentes?: RecetaComponenteDto[];
+
+  /** Configuración contextual de los pasos compuestos de esta receta. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  pasosCompuestos?: unknown[];
+
+  /** Aristas obligatorias del flujo. Si se omiten, se conserva el borrador
+   * actual o se compila la ruta lineal por primera vez. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(300)
+  @ValidateNested({ each: true })
+  @Type(() => RecetaDependenciaDto)
+  dependencias?: RecetaDependenciaDto[];
+
+  /** Condiciones operativas que deben resolverse antes de ejecutar el nodo. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => RecetaGateOperativoDto)
+  gates?: RecetaGateOperativoDto[];
 }
 
 export class PublicarRecetaDto {

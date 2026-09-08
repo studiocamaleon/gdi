@@ -89,7 +89,7 @@ export class DespachoService {
     // En Postgres el updateMany toma el lock de la fila, así que de N
     // competidores exactamente uno se lleva count === 1.
     const reserva = await this.prisma.notificacionWhatsapp.updateMany({
-      where: { id, estado: ESTADOS.pendiente },
+      where: { id, estado: ESTADOS.pendiente, canal: 'WATI' },
       data: { estado: ESTADOS.enviando, reservadaEl: new Date() },
     });
     if (reserva.count === 0) return { estado: 'nada' };
@@ -176,7 +176,9 @@ export class DespachoService {
       return { estado: 'descartada', motivo: 'Parámetros desalineados.' };
     }
 
-    const parametros = Object.fromEntries(nombres.map((x, i) => [x, valores[i]]));
+    const parametros = Object.fromEntries(
+      nombres.map((x, i) => [x, valores[i]]),
+    );
 
     // Las plantillas con header de imagen (el QR de retiro) arman la media por
     // orden acá, con firma fresca por envío. Para las de texto puro es

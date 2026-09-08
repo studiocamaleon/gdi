@@ -1,3 +1,5 @@
+import { AutomaticosWebController } from './whatsapp-web/automaticos.controller';
+import { AutomaticosWebService } from './whatsapp-web/automaticos.service';
 import { Global, Module } from '@nestjs/common';
 
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
@@ -35,8 +37,13 @@ import { WatiScheduler } from './wati/wati.scheduler';
   // ParseEnumPipe contestaba "Validation failed (enum string is expected)".
   // Nest resuelve por orden de registro, así que las rutas concretas van antes
   // que las que tienen comodín.
-  controllers: [NotificacionesController, IntegracionesController],
+  controllers: [
+    AutomaticosWebController,
+    NotificacionesController,
+    IntegracionesController,
+  ],
   providers: [
+    AutomaticosWebService,
     SecretosService,
     IntegracionesService,
     WatiClient,

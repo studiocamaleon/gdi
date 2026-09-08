@@ -290,7 +290,7 @@ export class NegocioService {
         COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
         COUNT(DISTINCT ot."tenantId") AS tenants
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       LEFT JOIN "DatosEmpresa" de ON de."tenantId" = ot."tenantId"
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
@@ -523,7 +523,7 @@ export class NegocioService {
         COUNT(DISTINCT ot.id) FILTER (WHERE ot."fechaEmision" >= ${v.desde}) AS ordenes,
         COUNT(DISTINCT ot.id) FILTER (WHERE ot."fechaEmision" >= ${v.desdePrev} AND ot."fechaEmision" < ${v.desde}) AS ordenesprev
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desdePrev} AND ot."fechaEmision" < ${v.hasta}
     `;
@@ -592,7 +592,7 @@ export class NegocioService {
       SELECT to_char(date_trunc(${trunc}, ot."fechaEmision"), 'YYYY-MM-DD') AS periodo,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS monto
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1 ORDER BY 1
@@ -637,7 +637,7 @@ export class NegocioService {
              COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
              COUNT(DISTINCT ot.id) AS ordenes
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       GROUP BY 1 ORDER BY 2 DESC
@@ -665,7 +665,7 @@ export class NegocioService {
              COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas,
              COUNT(DISTINCT ot.id) AS ordenes
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       JOIN "Tenant" t ON t.id = ot."tenantId"
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
@@ -734,7 +734,7 @@ export class NegocioService {
       SELECT COALESCE(ci."jobContextJson"->>'tecnologia', 'Sin especificar') AS tecnologia,
              COALESCE(SUM(oti.subtotal), 0)::float8 AS ventas
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
@@ -765,7 +765,7 @@ export class NegocioService {
     >`
       SELECT ci."jobContextJson"->>'medidaModo' AS modo, COUNT(*) AS items
       FROM "OrdenTrabajoItem" oti
-      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+      JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
       JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
       WHERE ot.estado NOT IN ('borrador', 'cancelada')
         AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
@@ -799,14 +799,14 @@ export class NegocioService {
                    AND jsonb_array_length(oti."adicionalesJson") > 0
                ) AS con
         FROM "OrdenTrabajoItem" oti
-        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
         WHERE ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${v.desde} AND ot."fechaEmision" < ${v.hasta}
       `,
       this.prisma.$queryRaw<Array<{ etiqueta: string; items: bigint }>>`
         SELECT et.etiqueta, COUNT(*) AS items
         FROM "OrdenTrabajoItem" oti
-        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
+        JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId" AND oti."parentItemId" IS NULL
         CROSS JOIN LATERAL jsonb_array_elements_text(oti."adicionalesJson") et(etiqueta)
         WHERE ot.estado NOT IN ('borrador', 'cancelada')
           AND jsonb_typeof(oti."adicionalesJson") = 'array'

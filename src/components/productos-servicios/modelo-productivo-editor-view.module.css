@@ -1,0 +1,153 @@
+.preparePanel {
+  min-height: 100%;
+  color: #f5f3ef;
+  background: #1b1a1f;
+}
+
+.preparePanel header {
+  padding: 34px 38px 30px;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+  background:
+    radial-gradient(circle at 88% 0%, rgb(255 106 43 / 18%), transparent 34%),
+    linear-gradient(125deg, #1b1a1f, #2b2020 65%, #542c21);
+}
+
+.preparePanel header > span {
+  color: #ff8b54;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.13em;
+}
+
+.preparePanel h1 {
+  margin: 8px 0 7px;
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 560;
+  letter-spacing: -0.04em;
+}
+
+.preparePanel header p,
+.prepareBody p {
+  margin: 0;
+  color: #aaa7ae;
+  line-height: 1.55;
+}
+
+.preparePanel header p {
+  max-width: 720px;
+  font-size: 13px;
+}
+
+.prepareBody {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin: 28px;
+  padding: 22px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.prepareIcon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgb(255 139 84 / 28%);
+  border-radius: 12px;
+  color: #ff8b54;
+  background: rgb(255 106 43 / 9%);
+}
+
+.prepareIcon svg,
+.prepareBody button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.prepareBody strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.prepareBody p {
+  font-size: 11.5px;
+}
+
+.prepareBody button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid #ff8b54;
+  border-radius: 9px;
+  color: #fff;
+  background: #ee5d27;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.prepareBody button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+@media (max-width: 760px) {
+  .preparePanel header {
+    padding: 24px 20px;
+  }
+
+  .prepareBody {
+    grid-template-columns: 40px minmax(0, 1fr);
+    margin: 16px;
+    padding: 16px;
+  }
+
+  .prepareBody button {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}
+
+/* El alta de revisión comparte la misma superficie del editor técnico. */
+.preparePanel {
+  color: var(--ink, #1d1b20);
+  background: var(--bg, #f6f4f1);
+}
+
+.preparePanel header {
+  padding: 28px 32px 24px;
+  border-bottom: 1px solid var(--border, #dedad4);
+  background: var(--surface, #fff);
+}
+
+.preparePanel h1 {
+  color: var(--ink, #1d1b20);
+}
+
+.preparePanel header p,
+.prepareBody p {
+  color: var(--muted-text, #77736d);
+}
+
+.prepareBody {
+  border-color: var(--border, #dedad4);
+  background: var(--surface, #fff);
+}
+
+.prepareIcon {
+  border-color: color-mix(in srgb, var(--signal, #e85f2a) 30%, white);
+  color: var(--signal, #e85f2a);
+  background: var(--signal-bg, #fff3ed);
+}
+
+.prepareBody button {
+  border-color: var(--ink, #1d1b20);
+  color: var(--surface, #fff);
+  background: var(--ink, #1d1b20);
+}

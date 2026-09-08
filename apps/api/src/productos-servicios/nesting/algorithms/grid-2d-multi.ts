@@ -6,11 +6,14 @@
  * automáticamente. Cada placement lleva `substrateIndex` para
  * trazabilidad.
  *
- * Ported (1:1, sin cambios de comportamiento) desde:
+ * Evolucionado desde el algoritmo legacy:
  *   - motors/rigid-printed.calculations.ts:nestMultiMedida
+ *
+ * Además del encaje MaxRects, compara alternativas para minimizar el material
+ * consumido sobre el lado largo de la placa.
  */
 
-import { MaxRectsPacker } from 'maxrects-packer';
+import { MaxRectsPacker, PACKING_LOGIC } from 'maxrects-packer';
 import type {
   Piece,
   SheetSubstrate,
@@ -28,6 +31,22 @@ interface PendingPiece {
   prerotated: boolean;
   pieceId: string;
   meta?: unknown;
+}
+
+type OrientationStrategy =
+  | 'automatic'
+  | 'minimize-long-axis-per-piece'
+  | 'maximize-long-axis-per-piece';
+
+interface PackingContext {
+  areaWidthMm: number;
+  areaHeightMm: number;
+  sepHMm: number;
+  sepVMm: number;
+  marginLeftMm: number;
+  marginRightMm: number;
+  marginTopMm: number;
+  marginBottomMm: number;
 }
 
 /**
@@ -52,13 +71,7 @@ function emptyResult<T>(): Grid2DMultiResult<T> {
   };
 }
 
-export interface Grid2DMultiOptions extends NestingOptions {
-  /**
-   * Hoy no se usa activamente pero el legacy lo aceptaba como parámetro.
-   * Se mantiene en el shape para parity de signature.
-   */
-  orientacionPlaca?: 'usar_lado_corto' | 'usar_lado_largo';
-}
+export type Grid2DMultiOptions = NestingOptions;
 
 /**
  * Estructura interna que también devolvemos para que el adapter pueda
@@ -73,6 +86,69 @@ export function nestGrid2DMulti<T = unknown>(
   pieces: Piece<T>[],
   substrate: SheetSubstrate,
   options: Grid2DMultiOptions = {},
+): Grid2DMultiResult<T> {
+  // El solver trabaja siempre en coordenadas canonicas: lado corto en X y
+  // lado largo en Y. Si la placa vino declarada al reves (caso MDF 1300x900),
+  // transponemos entrada y salida. Asi el acomodo optimiza el mismo eje que
+  // despues usan el costeo y los escalones, sin cambiar la orientacion que ve
+  // el consumidor del resultado.
+  if (substrate.widthMm > substrate.heightMm) {
+    const margins = substrate.margins;
+    const transposed = nestGrid2DMultiAlongLongYAxis(
+      pieces.map((piece) => ({
+        ...piece,
+        widthMm: piece.heightMm,
+        heightMm: piece.widthMm,
+      })),
+      {
+        ...substrate,
+        widthMm: substrate.heightMm,
+        heightMm: substrate.widthMm,
+        margins: margins
+          ? {
+              leftMm: margins.topMm,
+              rightMm: margins.bottomMm,
+              topMm: margins.leftMm,
+              bottomMm: margins.rightMm,
+              startMm: margins.startMm,
+              endMm: margins.endMm,
+            }
+          : undefined,
+      },
+      {
+        ...options,
+        separationHMm: options.separationVMm,
+        separationVMm: options.separationHMm,
+      },
+    );
+    return {
+      ...transposed,
+      substrates: transposed.substrates.map((item) =>
+        item.kind === 'sheet'
+          ? {
+              ...item,
+              widthMm: item.heightMm,
+              heightMm: item.widthMm,
+            }
+          : item,
+      ),
+      placements: transposed.placements.map((placement) => ({
+        ...placement,
+        xMm: placement.yMm,
+        yMm: placement.xMm,
+        widthMm: placement.heightMm,
+        heightMm: placement.widthMm,
+      })),
+    };
+  }
+
+  return nestGrid2DMultiAlongLongYAxis(pieces, substrate, options);
+}
+
+function nestGrid2DMultiAlongLongYAxis<T = unknown>(
+  pieces: Piece<T>[],
+  substrate: SheetSubstrate,
+  options: Grid2DMultiOptions,
 ): Grid2DMultiResult<T> {
   const sepHMm = options.separationHMm ?? 0;
   const sepVMm = options.separationVMm ?? 0;
@@ -118,16 +194,99 @@ export function nestGrid2DMulti<T = unknown>(
   });
   if (algunaNoEntra) return emptyResult<T>();
 
-  // Expandir piezas a instancias individuales (1 por cantidad)
+  const context: PackingContext = {
+    areaWidthMm,
+    areaHeightMm,
+    sepHMm,
+    sepVMm,
+    marginLeftMm,
+    marginRightMm,
+    marginTopMm,
+    marginBottomMm,
+  };
+
+  /**
+   * MaxRects optimiza el encaje local de cada rectángulo. Eso puede elegir una
+   * orientación válida pero consumir más avance sobre el lado largo de la
+   * placa. Evaluamos más de una estrategia y elegimos por el objetivo físico:
+   * menos placas y, en empate, menos largo total consumido. Los escalones de
+   * precio deliberadamente no participan de esta decisión.
+   */
+  const candidateDefinitions: Array<{
+    orientation: OrientationStrategy;
+    logic: PACKING_LOGIC;
+  }> = [
+    { orientation: 'automatic', logic: PACKING_LOGIC.MAX_EDGE },
+    { orientation: 'automatic', logic: PACKING_LOGIC.MAX_AREA },
+  ];
+  if (allowRotation) {
+    candidateDefinitions.push(
+      {
+        orientation: 'minimize-long-axis-per-piece',
+        logic: PACKING_LOGIC.MAX_EDGE,
+      },
+      {
+        orientation: 'minimize-long-axis-per-piece',
+        logic: PACKING_LOGIC.MAX_AREA,
+      },
+      {
+        orientation: 'maximize-long-axis-per-piece',
+        logic: PACKING_LOGIC.MAX_EDGE,
+      },
+      {
+        orientation: 'maximize-long-axis-per-piece',
+        logic: PACKING_LOGIC.MAX_AREA,
+      },
+    );
+  }
+
+  const candidates = candidateDefinitions.map(({ orientation, logic }) => {
+    const pendientes = expandPendingPieces(
+      piezasValidas,
+      context,
+      allowRotation,
+      orientation,
+    );
+    return packPendingPieces<T>(
+      pendientes,
+      substrate,
+      context,
+      expectedCount,
+      orientation === 'automatic' && allowRotation,
+      logic,
+    );
+  });
+
+  return candidates.reduce((best, candidate) =>
+    isBetterMaterialLayout(candidate, best) ? candidate : best,
+  );
+}
+
+function expandPendingPieces<T>(
+  pieces: Piece<T>[],
+  context: PackingContext,
+  allowRotation: boolean,
+  orientation: OrientationStrategy,
+): PendingPiece[] {
   const pendientes: PendingPiece[] = [];
-  for (const piece of piezasValidas) {
+  for (const piece of pieces) {
     const entraNormal =
-      piece.widthMm <= areaWidthMm && piece.heightMm <= areaHeightMm;
-    const prerotated =
-      !entraNormal &&
+      piece.widthMm <= context.areaWidthMm &&
+      piece.heightMm <= context.areaHeightMm;
+    const entraRotada =
       allowRotation &&
-      piece.heightMm <= areaWidthMm &&
-      piece.widthMm <= areaHeightMm;
+      piece.heightMm <= context.areaWidthMm &&
+      piece.widthMm <= context.areaHeightMm;
+    const ambasOrientacionesEntran = entraNormal && entraRotada;
+    const prerotated =
+      entraRotada &&
+      (!entraNormal ||
+        (ambasOrientacionesEntran &&
+          ((orientation === 'minimize-long-axis-per-piece' &&
+            piece.widthMm < piece.heightMm) ||
+            (orientation === 'maximize-long-axis-per-piece' &&
+              piece.widthMm > piece.heightMm))));
+
     for (let i = 0; i < Math.ceil(piece.quantity); i++) {
       pendientes.push({
         origW: piece.widthMm,
@@ -140,33 +299,48 @@ export function nestGrid2DMulti<T = unknown>(
       });
     }
   }
-  // Ordenar por área descendente (heurística estándar de bin-packing)
-  pendientes.sort((a, b) => b.origW * b.origH - a.origW * a.origH);
 
+  // Orden estable y determinista: área descendente y luego lado mayor.
+  pendientes.sort(
+    (a, b) =>
+      b.origW * b.origH - a.origW * a.origH ||
+      Math.max(b.origW, b.origH) - Math.max(a.origW, a.origH),
+  );
+  return pendientes;
+}
+
+function packPendingPieces<T>(
+  pendientes: PendingPiece[],
+  substrate: SheetSubstrate,
+  context: PackingContext,
+  expectedCount: number,
+  packerCanRotate: boolean,
+  logic: PACKING_LOGIC,
+): Grid2DMultiResult<T> {
   if (pendientes.length === 0) return emptyResult<T>();
 
   const packer = new MaxRectsPacker(
-    areaWidthMm + sepHMm,
-    areaHeightMm + sepVMm,
+    context.areaWidthMm + context.sepHMm,
+    context.areaHeightMm + context.sepVMm,
     0,
     {
       smart: false,
       pot: false,
       square: false,
-      allowRotation,
+      allowRotation: packerCanRotate,
+      logic,
     },
   );
 
   for (const p of pendientes) {
-    packer.add(p.packedW + sepHMm, p.packedH + sepVMm, {
-      origW: p.origW,
-      origH: p.origH,
-      packedW: p.packedW,
-      packedH: p.packedH,
-      prerotated: p.prerotated,
-      pieceId: p.pieceId,
-      meta: p.meta,
-    });
+    // MaxRects conserva el orden en que genera sus rectángulos libres y, ante
+    // un empate de score, suele probar primero el hueco inferior. Ordenarlos
+    // por Y hace que complete antes el ancho disponible de la placa y evita
+    // avanzar innecesariamente sobre su lado largo.
+    for (const bin of packer.bins) {
+      bin.freeRects.sort((a, b) => a.y - b.y || a.x - b.x);
+    }
+    packer.add(p.packedW + context.sepHMm, p.packedH + context.sepVMm, p);
   }
 
   const placements: Placement<T>[] = [];
@@ -189,13 +363,13 @@ export function nestGrid2DMulti<T = unknown>(
       const rotated = data.prerotated !== (packedRect.rot ?? false);
       const placedW = rotated ? data.origH : data.origW;
       const placedH = rotated ? data.origW : data.origH;
-      const bottom = rect.y + placedH + marginTopMm;
+      const bottom = rect.y + placedH + context.marginTopMm;
       if (bottom > maxYLocal) maxYLocal = bottom;
       placements.push({
         pieceId: data.pieceId,
         substrateIndex: binIndex,
-        xMm: marginLeftMm + rect.x,
-        yMm: marginTopMm + rect.y,
+        xMm: context.marginLeftMm + rect.x,
+        yMm: context.marginTopMm + rect.y,
         widthMm: placedW,
         heightMm: placedH,
         rotated,
@@ -211,7 +385,7 @@ export function nestGrid2DMulti<T = unknown>(
     });
     perSubstrate.push({
       areaUtilMm2: areaUtil,
-      consumedLengthMm: maxYLocal > 0 ? maxYLocal + marginBottomMm : 0,
+      consumedLengthMm: maxYLocal > 0 ? maxYLocal + context.marginBottomMm : 0,
     });
     totalAreaUtil += areaUtil;
   });
@@ -221,12 +395,12 @@ export function nestGrid2DMulti<T = unknown>(
     placements.length !== expectedCount ||
     placements.some(
       (placement) =>
-        placement.xMm < marginLeftMm - EPSILON_MM ||
-        placement.yMm < marginTopMm - EPSILON_MM ||
+        placement.xMm < context.marginLeftMm - EPSILON_MM ||
+        placement.yMm < context.marginTopMm - EPSILON_MM ||
         placement.xMm + placement.widthMm >
-          substrate.widthMm - marginRightMm + EPSILON_MM ||
+          substrate.widthMm - context.marginRightMm + EPSILON_MM ||
         placement.yMm + placement.heightMm >
-          substrate.heightMm - marginBottomMm + EPSILON_MM,
+          substrate.heightMm - context.marginBottomMm + EPSILON_MM,
     );
   if (hayPlacementInvalido) return emptyResult<T>();
 
@@ -245,7 +419,40 @@ export function nestGrid2DMulti<T = unknown>(
       aprovechamientoPct,
       areaUtilMm2: totalAreaUtil,
       areaTotalMm2,
+      trailingMarginMm: context.marginBottomMm,
+      perSubstrate,
     },
     perSubstrate,
   };
+}
+
+function isBetterMaterialLayout<T>(
+  candidate: Grid2DMultiResult<T>,
+  current: Grid2DMultiResult<T>,
+): boolean {
+  if (candidate.substrates.length !== current.substrates.length) {
+    return candidate.substrates.length < current.substrates.length;
+  }
+
+  const candidateConsumed = candidate.perSubstrate.reduce(
+    (total, item) => total + item.consumedLengthMm,
+    0,
+  );
+  const currentConsumed = current.perSubstrate.reduce(
+    (total, item) => total + item.consumedLengthMm,
+    0,
+  );
+  if (candidateConsumed !== currentConsumed) {
+    return candidateConsumed < currentConsumed;
+  }
+
+  const candidateMax = Math.max(
+    0,
+    ...candidate.perSubstrate.map((item) => item.consumedLengthMm),
+  );
+  const currentMax = Math.max(
+    0,
+    ...current.perSubstrate.map((item) => item.consumedLengthMm),
+  );
+  return candidateMax < currentMax;
 }

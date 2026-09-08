@@ -1,6 +1,8 @@
 import type { JobContext } from './tipos';
 
-export function calcularPerimetroPiezasM(jobContext: Pick<JobContext, 'piezas'>) {
+export function calcularPerimetroPiezasM(
+  jobContext: Pick<JobContext, 'piezas'>,
+) {
   if (!jobContext.piezas || jobContext.piezas.length === 0) return 0;
   return jobContext.piezas.reduce((acc, p) => {
     const perimetroMm =
@@ -61,6 +63,9 @@ export function congelarMedidaVisible(jobContext: JobContext): void {
     jobContext.medidaVisibleMm = {
       anchoMm: fuenteMedida.anchoMm,
       altoMm: fuenteMedida.altoMm,
+      ...(jobContext.profundidadMm
+        ? { profundidadMm: jobContext.profundidadMm }
+        : {}),
     };
   }
 }
@@ -81,7 +86,9 @@ export function congelarMedidaVisible(jobContext: JobContext): void {
  * sobre las piezas mutadas. Lo que se mide sobre el borde terminado (ojales,
  * soldadura) NO debe leerlas — tiene que leer `piezasVisibles`.
  */
-export function recalcularMetricasDerivadasPiezas(jobContext: JobContext): void {
+export function recalcularMetricasDerivadasPiezas(
+  jobContext: JobContext,
+): void {
   if (!jobContext.piezas || jobContext.piezas.length === 0) return;
 
   jobContext.piezaAreaTotalM2 = calcularAreaPiezasM2(jobContext);

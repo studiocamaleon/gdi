@@ -1,3 +1,6 @@
+import { ExportarFabricacionController } from './geometrias/exportar-fabricacion.controller';
+import { GeometriasProductoController } from './geometrias/geometrias-producto.controller';
+import { StorageModule } from '../archivos/storage/storage.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ProductosServiciosController } from './productos-servicios.controller';
@@ -29,8 +32,8 @@ import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module'
  *               por cliente, servicio AplicarPrecio (pure function).
  */
 @Module({
-  imports: [PrismaModule, PrecioModule, EventosSistemaModule],
-  controllers: [ProductosServiciosController],
+  imports: [StorageModule, PrismaModule, PrecioModule, EventosSistemaModule],
+  controllers: [ProductosServiciosController, GeometriasProductoController, ExportarFabricacionController],
   providers: [
     ProductosServiciosService,
     ProductosService,

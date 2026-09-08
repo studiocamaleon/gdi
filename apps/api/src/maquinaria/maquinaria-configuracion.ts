@@ -57,6 +57,7 @@ const FIELD_LABELS: Record<string, string> = {
   espesorMaxMm: 'Espesor máximo',
   tipoAnillo: 'Tipo de anillo',
   tiempoPrensadoSeg: 'Tiempo de planchado',
+  anchoCorteMm: 'Ancho efectivo de corte',
 };
 
 const WEAR_REQUIRED_TEMPLATES = new Set<PlantillaMaquinariaDto>([

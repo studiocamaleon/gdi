@@ -25,30 +25,45 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  BadgeDollarSignIcon,
   ExternalLinkIcon,
+  HandCoinsIcon,
   InfoIcon,
   PencilIcon,
   PlusIcon,
+  ReceiptTextIcon,
   SaveIcon,
   Trash2Icon,
+  UsersRoundIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
 import { HumanSelect } from "@/components/ui/human-select";
-import { Label } from "@/components/ui/label";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldTitle,
+} from "@/components/ui/field";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -58,7 +73,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TabPrecioEditor, type TabPrecioConfig } from "./tab-precio-editor";
+import { PricingSectionHeader } from "./pricing-section-header";
+import pricingStyles from "./pricing-visual.module.css";
 import {
   actualizarPrecioEspecialCliente,
   crearPrecioEspecialCliente,
@@ -77,7 +95,6 @@ import {
 } from "@/lib/productos-servicios-api";
 import { getClientes } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
-import { cn } from "@/lib/utils";
 
 interface Props {
   /** ID del producto; si es null el producto aún no existe (crear mode no guardado). */
@@ -89,6 +106,8 @@ interface Props {
   precioDirty?: boolean;
   guardandoPrecio?: boolean;
   onGuardarPrecio?: () => Promise<void> | void;
+  /** Editor opcional de la estrategia y los bloques de un producto compuesto. */
+  pricingCompuestoSection?: React.ReactNode;
 }
 
 type PricingSaveState = {
@@ -113,6 +132,7 @@ export function TabPrecioCompleto({
   precioDirty = false,
   guardandoPrecio = false,
   onGuardarPrecio,
+  pricingCompuestoSection,
 }: Props) {
   const [impuestosState, setImpuestosState] = React.useState<PricingSaveState>(idleSaveState);
   const [comisionesState, setComisionesState] = React.useState<PricingSaveState>(idleSaveState);
@@ -142,47 +162,54 @@ export function TabPrecioCompleto({
   };
 
   return (
-    <div className="pricing-flow">
+    <div className={pricingStyles.root}>
       {/* Sección 1 — Método de cálculo (siempre visible, no requiere productoId) */}
-      <Card className="wiz-section pricing-section">
-        <CardHeader className="wiz-section-head">
-          <CardTitle>Método de cálculo</CardTitle>
-          <CardDescription>
-            Cómo se calcula el precio de venta a partir del costo del motor.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Card className={pricingStyles.section}>
+        <PricingSectionHeader
+          step="01"
+          eyebrow="Regla base"
+          title="Método de cálculo"
+          description="Define cómo el costo productivo se convierte en precio de venta."
+          icon={BadgeDollarSignIcon}
+        />
+        <CardContent className={pricingStyles.sectionContent}>
           <TabPrecioEditor
             value={precioConfig}
-            onChange={onChangePrecioConfig}
+            onChange={(next) =>
+              onChangePrecioConfig({
+                ...next,
+                ...(precioConfig.compuesto
+                  ? { compuesto: precioConfig.compuesto }
+                  : {}),
+              })
+            }
             unidadComercial={unidadComercial}
           />
         </CardContent>
       </Card>
 
+      {pricingCompuestoSection}
+
       {productoId == null ? (
-        <Card className="bg-muted/30">
-          <CardContent className="flex items-start gap-3 pt-6">
-            <InfoIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-            <div className="text-sm">
-              <div className="font-medium">Guardá el producto para configurar el resto.</div>
-              <p className="text-muted-foreground mt-1 text-xs">
-                Las secciones de impuestos, comisiones y precios especiales por cliente requieren
-                que el producto exista primero. Volvé al step 1 y tocá &quot;Crear producto&quot;.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <Alert>
+          <InfoIcon />
+          <AlertTitle>Guardá el producto para completar su arquitectura de precio</AlertTitle>
+          <AlertDescription>
+            Impuestos, comisiones y excepciones por cliente requieren que el producto exista.
+          </AlertDescription>
+        </Alert>
       ) : (
         <>
-          <SeccionImpuestos
-            productoId={productoId}
-            onStateChange={hasUnifiedSave ? setImpuestosState : undefined}
-          />
-          <SeccionComisiones
-            productoId={productoId}
-            onStateChange={hasUnifiedSave ? setComisionesState : undefined}
-          />
+          <div className={pricingStyles.commercialGrid}>
+            <SeccionImpuestos
+              productoId={productoId}
+              onStateChange={hasUnifiedSave ? setImpuestosState : undefined}
+            />
+            <SeccionComisiones
+              productoId={productoId}
+              onStateChange={hasUnifiedSave ? setComisionesState : undefined}
+            />
+          </div>
           <PreciosEspecialesClientesCard
             productoId={productoId}
             unidadComercial={unidadComercial}
@@ -191,11 +218,16 @@ export function TabPrecioCompleto({
       )}
       {hasUnifiedSave && (isDirty || isSaving) && (
         <div className="save-sticky-footer pricing-sticky-footer">
-          <div className="pricing-sticky-footer-copy">
+          <div className={pricingStyles.stickyCopy}>
+            <span className={pricingStyles.stickyDot} aria-hidden="true" />
             {isDirty ? "Hay cambios sin guardar en pricing." : "No hay cambios pendientes."}
           </div>
           <Button onClick={guardarCambios} disabled={!productoId || !isDirty || isSaving}>
-            <SaveIcon className="mr-2 size-4" />
+            {isSaving ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <SaveIcon data-icon="inline-start" />
+            )}
             {isSaving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </div>
@@ -277,67 +309,74 @@ function SeccionImpuestos({
   }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
-    <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head pricing-section-head">
-        <div className="body">
-          <CardTitle>Impuestos</CardTitle>
-          <CardDescription>
-            El IVA se resuelve según la categoría del producto y tu condición
-            fiscal. Los impuestos de empresa se aplican solos a todo.
-          </CardDescription>
-        </div>
-        <CardAction className="pricing-section-action">
-          <Link href="/configuracion/impuestos"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
+    <Card className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}>
+      <PricingSectionHeader
+        step="03A"
+        eyebrow="Cargas comerciales"
+        title="Impuestos"
+        description="Define el tratamiento fiscal del precio final del producto."
+        icon={ReceiptTextIcon}
+        action={
+          <Button
+            render={<Link href="/configuracion/impuestos" />}
+            nativeButton={false}
+            variant="outline"
+            size="sm"
           >
-            <ExternalLinkIcon className="mr-2 size-3" />
-            Administrar catálogo
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pricing-section-content">
+            <ExternalLinkIcon data-icon="inline-start" />
+            Catálogo
+          </Button>
+        }
+      />
+      <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <p className="text-muted-foreground text-sm italic">Cargando...</p>
+          <div className={pricingStyles.loading} aria-label="Cargando impuestos">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-10 w-4/5" />
+          </div>
         ) : (
           <>
-            <div className="checkpill-row">
+            <ToggleGroup
+              multiple={false}
+              value={[categoria]}
+              onValueChange={(values) => {
+                const next = values.at(-1);
+                if (next) setCategoria(next);
+              }}
+              variant="outline"
+              className={`${pricingStyles.segmented} ${pricingStyles.taxSegmented} grid w-full grid-cols-2`}
+            >
               {CATEGORIA_FISCAL_OPCIONES.map((op) => {
-                const on = categoria === op.value;
                 return (
-                  <label key={op.value} className={`checkpill ${on ? "on" : ""}`}>
-                    <span className="cb">{on ? "●" : ""}</span>
-                    <input
-                      type="radio"
-                      name={`categoria-fiscal-${productoId}`}
-                      checked={on}
-                      onChange={() => setCategoria(op.value)}
-                    />
-                    <div className="body">
-                      <div className="name">{op.nombre}</div>
-                      <div className="sub">{op.sub}</div>
-                    </div>
+                  <ToggleGroupItem key={op.value} value={op.value}>
+                    <span className={pricingStyles.optionName}>{op.nombre}</span>
+                    <span className={pricingStyles.optionDescription}>{op.sub}</span>
                     {op.value === "general" && ivaGeneralPct != null && (
-                      <Badge variant="outline" className="pct">
+                      <Badge variant="outline" className={pricingStyles.optionBadge}>
                         {ivaGeneralPct.toFixed(2)}%
                       </Badge>
                     )}
-                  </label>
+                  </ToggleGroupItem>
                 );
               })}
-            </div>
+            </ToggleGroup>
             {impuestosEmpresa.length > 0 && (
-              <p className="text-muted-foreground mt-1 text-xs">
-                Se aplican a todo automáticamente:{" "}
-                {impuestosEmpresa
-                  .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
-                  .join(" · ")}
-                .
-              </p>
+              <Alert className={pricingStyles.automaticNote}>
+                <InfoIcon />
+                <AlertTitle>Aplicación automática</AlertTitle>
+                <AlertDescription>
+                  {impuestosEmpresa
+                    .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
+                    .join(" · ")}
+                </AlertDescription>
+              </Alert>
             )}
             {!onStateChange && (
-              <div className="pricing-total-row">
+              <div className={pricingStyles.summaryRow}>
+                <span className="text-sm text-muted-foreground">
+                  Tratamiento fiscal del producto
+                </span>
                 <Button
-                  className="btn btn-primary"
                   onClick={() => {
                     guardar().catch((err) =>
                       toast.error(err instanceof Error ? err.message : "Error guardando"),
@@ -346,6 +385,7 @@ function SeccionImpuestos({
                   disabled={!dirty || guardando}
                   size="sm"
                 >
+                  {guardando ? <Spinner data-icon="inline-start" /> : null}
                   {guardando ? "Guardando..." : "Guardar categoría"}
                 </Button>
               </div>
@@ -440,27 +480,31 @@ function SeccionComisiones({
   }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
-    <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head pricing-section-head">
-        <div className="body">
-          <CardTitle>Comisiones</CardTitle>
-          <CardDescription>
-            Comisiones de vendedor que se asignan a este producto. La de
-            pasarela de pago se aplica sola a todo, no hace falta tildarla.
-          </CardDescription>
-        </div>
-        <CardAction className="pricing-section-action">
-          <Link href="/configuracion/comisiones"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
+    <Card className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}>
+      <PricingSectionHeader
+        step="03B"
+        eyebrow="Cargas comerciales"
+        title="Comisiones"
+        description="Selecciona las comisiones variables asociadas a la venta."
+        icon={HandCoinsIcon}
+        action={
+          <Button
+            render={<Link href="/configuracion/comisiones" />}
+            nativeButton={false}
+            variant="outline"
+            size="sm"
           >
-            <ExternalLinkIcon className="mr-2 size-3" />
-            Administrar catálogo
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pricing-section-content">
+            <ExternalLinkIcon data-icon="inline-start" />
+            Catálogo
+          </Button>
+        }
+      />
+      <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <p className="text-muted-foreground text-sm italic">Cargando...</p>
+          <div className={pricingStyles.loading} aria-label="Cargando comisiones">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-10 w-3/4" />
+          </div>
         ) : catalogoVendedor.length === 0 ? (
           <EstadoVacio
             variant="compacto"
@@ -474,31 +518,49 @@ function SeccionComisiones({
           />
         ) : (
           <>
-            <div className="checkpill-row">
+            <FieldGroup
+              data-slot="checkbox-group"
+              className={`${pricingStyles.checkGrid} ${pricingStyles.checkGridSingle}`}
+            >
               {catalogoVendedor.map((c) => {
                 const checked = seleccionadas.includes(c.id);
                 return (
-                  <label key={c.id} className={`checkpill ${checked ? "on" : ""}`}>
-                    <span className="cb">{checked ? "✓" : ""}</span>
-                    <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
-                    <div className="body">
-                      <div className="name">{c.nombre}</div>
-                    </div>
-                    <Badge variant="outline" className="pct">
-                      {c.porcentaje.toFixed(2)}%
-                    </Badge>
-                  </label>
+                  <Field
+                    key={c.id}
+                    orientation="horizontal"
+                    className={pricingStyles.checkOption}
+                  >
+                    <Checkbox
+                      id={`comision-${c.id}`}
+                      checked={checked}
+                      onCheckedChange={() => toggle(c.id)}
+                    />
+                    <FieldContent>
+                      <div className="flex items-center justify-between gap-2">
+                        <FieldLabel htmlFor={`comision-${c.id}`}>
+                          {c.nombre}
+                        </FieldLabel>
+                        <Badge variant="outline">
+                          {c.porcentaje.toFixed(2)}%
+                        </Badge>
+                      </div>
+                      <FieldDescription>
+                        Se aplica al precio de esta venta.
+                      </FieldDescription>
+                    </FieldContent>
+                  </Field>
                 );
               })}
-            </div>
-            <div className="pricing-total-row">
+            </FieldGroup>
+            <div className={pricingStyles.summaryRow}>
               <div className="text-sm">
-                <span className="text-muted-foreground">Total comisiones seleccionadas:</span>{" "}
-                <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
+                <span className="text-muted-foreground">Total seleccionado</span>{" "}
+                <span className={pricingStyles.summaryValue}>
+                  {totalPct.toFixed(2)}%
+                </span>
               </div>
               {!onStateChange && (
                 <Button
-                  className="btn btn-primary"
                   onClick={() => {
                     guardar().catch((err) =>
                       toast.error(err instanceof Error ? err.message : "Error guardando"),
@@ -507,18 +569,21 @@ function SeccionComisiones({
                   disabled={!dirty || guardando}
                   size="sm"
                 >
+                  {guardando ? <Spinner data-icon="inline-start" /> : null}
                   {guardando ? "Guardando..." : "Guardar selección"}
                 </Button>
               )}
             </div>
             {pasarelas.length > 0 && (
-              <p className="text-muted-foreground mt-2 text-xs">
-                Se aplican solas a todo:{" "}
-                {pasarelas
-                  .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
-                  .join(" · ")}
-                .
-              </p>
+              <Alert className={pricingStyles.automaticNote}>
+                <InfoIcon />
+                <AlertTitle>Aplicación automática</AlertTitle>
+                <AlertDescription>
+                  {pasarelas
+                    .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
+                    .join(" · ")}
+                </AlertDescription>
+              </Alert>
             )}
           </>
         )}
@@ -644,26 +709,30 @@ export function PreciosEspecialesClientesCard({
   const clientesDisponibles = clientes.filter((c) => !clientesUsadosIds.has(c.id));
 
   return (
-    <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head pricing-section-head">
-        <div className="body">
-          <CardTitle>Precios especiales por cliente</CardTitle>
-          <CardDescription>{descripcion}</CardDescription>
-        </div>
-        <CardAction className="pricing-section-action">
+    <Card className={pricingStyles.section}>
+      <PricingSectionHeader
+        step="04"
+        eyebrow="Excepciones comerciales"
+        title="Precios especiales por cliente"
+        description={descripcion}
+        icon={UsersRoundIcon}
+        action={
           <Button
             size="sm"
             onClick={abrirNuevo}
             disabled={creandoNuevo || clientesDisponibles.length === 0}
           >
-            <PlusIcon className="mr-2 size-3" />
+            <PlusIcon data-icon="inline-start" />
             Agregar
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pricing-section-content">
+        }
+      />
+      <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <p className="text-muted-foreground text-sm italic">Cargando...</p>
+          <div className={pricingStyles.loading} aria-label="Cargando precios especiales">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : items.length === 0 && !creandoNuevo ? (
           <EstadoVacio
             variant="compacto"
@@ -671,68 +740,80 @@ export function PreciosEspecialesClientesCard({
             descripcion="Por default todos los clientes pagan el precio standard. Si querés cobrar distinto a algún cliente puntual, agregalo acá."
           />
         ) : items.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Método</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => {
-                const cfg = item.configJson as TabPrecioConfig;
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <div className="font-medium">{item.cliente.nombre}</div>
-                      {item.cliente.razonSocial && (
-                        <div className="text-muted-foreground text-xs">
-                          {item.cliente.razonSocial}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {cfg.metodoCalculo.replace(/_/g, " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={item.activo}
-                        onCheckedChange={(c) => togglearActivo(item, c)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => abrirEditar(item)}>
-                        <PencilIcon className="size-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setABorrar(item)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2Icon className="size-3" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className={pricingStyles.tableShell}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => {
+                  const cfg = item.configJson as TabPrecioConfig;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <div className="font-medium">{item.cliente.nombre}</div>
+                        {item.cliente.razonSocial && (
+                          <div className="text-muted-foreground text-xs">
+                            {item.cliente.razonSocial}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {cfg.metodoCalculo.replace(/_/g, " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          aria-label={`${item.activo ? "Desactivar" : "Activar"} precio especial de ${item.cliente.nombre}`}
+                          checked={item.activo}
+                          onCheckedChange={(c) => togglearActivo(item, c)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          aria-label={`Editar precio especial de ${item.cliente.nombre}`}
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => abrirEditar(item)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                        <Button
+                          aria-label={`Eliminar precio especial de ${item.cliente.nombre}`}
+                          variant="destructive"
+                          size="icon-sm"
+                          onClick={() => setABorrar(item)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         ) : null}
 
         {creandoNuevo && (
-          <Card className="bg-muted/30 border-dashed">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">
+          <Card className={pricingStyles.specialEditor}>
+            <CardHeader className={pricingStyles.specialEditorHeader}>
+              <CardTitle>
                 {editando ? "Editar precio especial" : "Nuevo precio especial"}
               </CardTitle>
+              <CardDescription>
+                Esta regla reemplaza la configuración general sólo para el cliente elegido.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
+            <CardContent className={pricingStyles.specialEditorContent}>
+              <FieldGroup>
+                <Field>
                 <LabelConTooltip
                   label="Cliente"
                   required
@@ -752,30 +833,31 @@ export function PreciosEspecialesClientesCard({
                   contentClassName="max-h-80"
                 />
                 {editando && (
-                  <p className="text-muted-foreground text-xs">
+                  <FieldDescription>
                     El cliente no se puede cambiar. Si querés cambiarlo, eliminá este y creá otro.
-                  </p>
+                  </FieldDescription>
                 )}
-              </div>
+                </Field>
 
-              <div className="space-y-2">
-                <Label>Método de cálculo del precio especial</Label>
+                <Field>
+                  <FieldTitle>Regla especial</FieldTitle>
                 <TabPrecioEditor
                   value={config}
                   onChange={setConfig}
                   unidadComercial={unidadComercial}
                 />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t pt-3">
-                <Button variant="outline" size="sm" onClick={cancelar} disabled={guardando}>
-                  Cancelar
-                </Button>
-                <Button size="sm" onClick={guardar} disabled={guardando || !clienteId}>
-                  {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
-                </Button>
-              </div>
+                </Field>
+              </FieldGroup>
             </CardContent>
+            <CardFooter className={pricingStyles.specialEditorFooter}>
+              <Button variant="outline" size="sm" onClick={cancelar} disabled={guardando}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={guardar} disabled={guardando || !clienteId}>
+                {guardando ? <Spinner data-icon="inline-start" /> : null}
+                {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
+              </Button>
+            </CardFooter>
           </Card>
         )}
       </CardContent>

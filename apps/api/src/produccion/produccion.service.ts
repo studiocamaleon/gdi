@@ -1,3 +1,6 @@
+import { fronterasEjecutablesDAG } from '../ordenes-trabajo/fronteras-ejecutables';
+export { fronterasEjecutablesDAG } from '../ordenes-trabajo/fronteras-ejecutables';
+import { snapshotPasoProduccion, requierePlanConservado, planoOperativo, type ItemSnapshotProduccion, type PasoSnapshotProduccion } from './snapshot-paso-produccion';
 import {
   Injectable,
   NotFoundException,
@@ -15,7 +18,6 @@ import {
   FAMILIAS,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
-import type { FamiliaCodigo } from '../productos-servicios/pasos/types';
 import {
   normalizarCalendarioAlmacenado,
   parseCalendario,
@@ -59,11 +61,11 @@ type TrazabilidadPasoSimulador = {
     tipoLineaCosto?: string;
     materialVarianteId?: string;
     materialSku?: string;
-    materiaPrimaNombre?: string;
+    materiaPrimaNombre?: string | null;
     precioUnitario?: number;
     unidad?: string;
     atributosVarianteJson?: { anchoMm?: unknown } | null;
-    materiaPrimaId?: string;
+    materiaPrimaId?: string | null;
   }>;
   nestingResult?: {
     placements?: Array<{ widthMm?: number; heightMm?: number }>;
@@ -208,10 +210,10 @@ function piezasDeSnapshot(
 }
 
 /** Lo que `acomodarTanda` necesita de un paso ya cargado de la DB. */
-type PasoParaAcomodar = {
+type PasoParaAcomodar = PasoSnapshotProduccion & {
   id: string;
   rutaPasoId: string | null;
-  item: {
+  item: ItemSnapshotProduccion & {
     cotizacionItem: {
       jobContextJson: Prisma.JsonValue;
       trazabilidadJson: Prisma.JsonValue;
@@ -234,22 +236,13 @@ export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
   const sinMedidas: string[] = [];
 
   for (const paso of pasos) {
-    const jobContext =
-      (paso.item.cotizacionItem?.jobContextJson as Record<
-        string,
-        unknown
-      > | null) ?? null;
-    const pasosTraza = (
-      paso.item.cotizacionItem?.trazabilidadJson as {
-        pasos?: TrazabilidadPasoSimulador[];
-      } | null
-    )?.pasos;
-    const trazPaso =
-      (Array.isArray(pasosTraza)
-        ? pasosTraza.find(
-            (t) => t.rutaPasoId && t.rutaPasoId === paso.rutaPasoId,
-          )
-        : null) ?? null;
+    const snapshot = snapshotPasoProduccion(paso.item, paso);
+    const jobContext = snapshot.jobContext;
+    const trazPaso = snapshot.paso;
+    if (paso.nestingLoteRol === 'PARTICIPANTE') throw new BadRequestException('La participación se ejecuta desde la operación principal de su lote.');
+    if (requierePlanConservado(trazPaso?.nestingResult, Boolean(snapshot.lote))) {
+      throw new BadRequestException('Este trabajo tiene un plan de fabricación conservado. Ejecutá su plano original desde la cola.');
+    }
 
     const piezas = piezasDeSnapshot(trazPaso, jobContext);
     if (piezas.length === 0) {
@@ -397,7 +390,7 @@ function buildLaserJob(
     fechaEntrega: Date | null;
     cliente: { nombre: string } | null;
   },
-  item: {
+  item: ItemSnapshotProduccion & {
     id: string;
     nombre: string;
     ordenIndice: number;
@@ -407,7 +400,7 @@ function buildLaserJob(
     } | null;
     pasos: Array<{ indice: number; nombre: string; estado: string }>;
   },
-  frontera: {
+  frontera: PasoSnapshotProduccion & {
     id: string;
     indice: number;
     rutaPasoId: string | null;
@@ -418,11 +411,8 @@ function buildLaserJob(
     iniciadoEl: Date | null;
   },
 ) {
-  const compatibilidad = extraerCompatibilidadLaser(
-    item.cotizacionItem?.jobContextJson ?? null,
-    item.cotizacionItem?.trazabilidadJson ?? null,
-    frontera.rutaPasoId,
-  );
+  const snapshot = snapshotPasoProduccion(item, frontera);
+  const compatibilidad = extraerCompatibilidadLaser(snapshot.jobContext, snapshot.traza, frontera.rutaPasoId);
 
   // Adónde va DESPUÉS: los pasos siguientes del item, como contexto.
   const acabados = item.pasos
@@ -497,7 +487,7 @@ function buildSimuladorJob(
     fechaEntrega: Date | null;
     cliente: { nombre: string } | null;
   },
-  item: {
+  item: ItemSnapshotProduccion & {
     id: string;
     codigo: string;
     nombre: string;
@@ -507,26 +497,15 @@ function buildSimuladorJob(
       trazabilidadJson: Prisma.JsonValue;
     } | null;
   },
-  frontera: {
+  frontera: PasoSnapshotProduccion & {
     id: string;
     rutaPasoId: string | null;
     duracionEstimadaMin: Prisma.Decimal | null;
   },
 ) {
-  const jobContext =
-    (item.cotizacionItem?.jobContextJson as Record<string, unknown> | null) ??
-    null;
-  const pasosTraza = (
-    item.cotizacionItem?.trazabilidadJson as {
-      pasos?: TrazabilidadPasoSimulador[];
-    } | null
-  )?.pasos;
-  const trazPaso =
-    (Array.isArray(pasosTraza)
-      ? pasosTraza.find(
-          (paso) => paso.rutaPasoId && paso.rutaPasoId === frontera.rutaPasoId,
-        )
-      : null) ?? null;
+  const snapshot = snapshotPasoProduccion(item, frontera);
+  const jobContext = snapshot.jobContext;
+  const trazPaso = snapshot.paso;
 
   // Sustrato: la línea MATERIAL del paso (las tintas son CONSUMIBLE_MAQUINA).
   const sustrato =
@@ -566,6 +545,8 @@ function buildSimuladorJob(
         }
       : null,
     consumoCotizadoMm: numeroONull(trazPaso?.nestingResult?.consumedLengthMm),
+    planFabricacion: requierePlanConservado(trazPaso?.nestingResult, Boolean(snapshot.lote))
+      ? planoOperativo(trazPaso!.nestingResult!) : null,
     piezas: piezasDeSnapshot(trazPaso, jobContext),
     // Prellenar "¿cuánto duró la tanda?" (registro-tiempos D11).
     duracionEstimadaMin:
@@ -731,6 +712,7 @@ export class ProduccionService {
         AND "estado" = 'hecho'
         AND "tiempoRealMin" IS NOT NULL
         AND "tiempoFuente" IN ('medido', 'medido_lote')
+        AND "nestingLoteRol" IS DISTINCT FROM 'PARTICIPANTE'
       GROUP BY "familiaCodigo"
       HAVING COUNT(*) >= ${MIN_MUESTRAS_MEDIANA}
       ORDER BY "familiaCodigo" ASC
@@ -766,6 +748,8 @@ export class ProduccionService {
             codigo: true,
             nombre: true,
             ordenIndice: true,
+            jobContextSnapshotJson: true,
+            trazabilidadSnapshotJson: true,
             cotizacionItem: {
               select: { jobContextJson: true, trazabilidadJson: true },
             },
@@ -778,7 +762,14 @@ export class ProduccionService {
                 estado: true,
                 tipoEjecucion: true,
                 rutaPasoId: true,
+                nestingLoteRol: true,
+                nestingLoteSnapshotJson: true,
                 duracionEstimadaMin: true,
+                nodoClave: true,
+                gatesOperativos: { select: { estado: true } },
+                dependenciasEntrantes: {
+                  select: { predecesorPasoId: true },
+                },
               },
             },
           },
@@ -788,21 +779,24 @@ export class ProduccionService {
 
     const jobs: Array<ReturnType<typeof buildSimuladorJob>> = [];
     for (const orden of ordenes) {
+      const pasosOrden = orden.items.flatMap((item) => item.pasos);
       for (const item of orden.items) {
-        // Frontera de la secuencia: el primer paso no hecho del item.
-        // [Tanda A] Entra a esta cola si su familia declara impresión sobre
-        // material continuo — antes preguntaba por familiaCodigo.
-        const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
-        if (
-          !frontera ||
-          colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'gran_formato'
-        )
-          continue;
-        // Bloqueado no es imprimible ni completable: el tablero lo señala.
-        if (frontera.estado === 'bloqueado') continue;
-        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
-        if (frontera.tipoEjecucion === 'tercerizado') continue;
-        jobs.push(buildSimuladorJob(orden, item, frontera));
+        // Un DAG puede abrir varias ramas simultáneas. Cada cola recibe sólo
+        // los nodos cuyos predecesores (también cross-item) ya terminaron.
+        for (const frontera of fronterasEjecutablesDAG(
+          pasosOrden,
+          item.pasos,
+        )) {
+          if (
+            colaConsolidacionDeFamilia(frontera.familiaCodigo) !==
+            'gran_formato'
+          )
+            continue;
+          if (frontera.nestingLoteRol === 'PARTICIPANTE') continue;
+          if (frontera.estado === 'bloqueado') continue;
+          if (frontera.tipoEjecucion === 'tercerizado') continue;
+          jobs.push(buildSimuladorJob(orden, item, frontera));
+        }
       }
     }
 
@@ -940,8 +934,12 @@ export class ProduccionService {
       select: {
         id: true,
         rutaPasoId: true,
+        nestingLoteRol: true,
+        nestingLoteSnapshotJson: true,
         item: {
           select: {
+            jobContextSnapshotJson: true,
+            trazabilidadSnapshotJson: true,
             cotizacionItem: {
               select: { jobContextJson: true, trazabilidadJson: true },
             },
@@ -949,7 +947,7 @@ export class ProduccionService {
         },
       },
     });
-    if (pasos.length === 0)
+    if (pasos.length !== pasoIds.length || pasos.length === 0)
       throw new NotFoundException('No se encontraron los pasos.');
     const porId = new Map(pasos.map((paso) => [paso.id, paso]));
 
@@ -987,10 +985,10 @@ export class ProduccionService {
   ): Promise<EstructuraBastidorEjecutada> {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
-      select: { cotizacionItem: { select: { trazabilidadJson: true } } },
+      select: { trazabilidadSnapshotJson: true, cotizacionItem: { select: { trazabilidadJson: true } } },
     });
 
-    let trazabilidad = item?.cotizacionItem?.trazabilidadJson ?? null;
+    let trazabilidad = item?.trazabilidadSnapshotJson ?? item?.cotizacionItem?.trazabilidadJson ?? null;
     if (!item) {
       // Borrador del cotizador: el id es el CotizacionItem, sin OT todavía.
       const cotizacionItem = await this.prisma.cotizacionItem.findFirst({
@@ -1041,6 +1039,8 @@ export class ProduccionService {
             id: true,
             nombre: true,
             ordenIndice: true,
+            jobContextSnapshotJson: true,
+            trazabilidadSnapshotJson: true,
             cotizacionItem: {
               select: { jobContextJson: true, trazabilidadJson: true },
             },
@@ -1054,10 +1054,17 @@ export class ProduccionService {
                 estado: true,
                 tipoEjecucion: true,
                 rutaPasoId: true,
+                nestingLoteRol: true,
+                nestingLoteSnapshotJson: true,
                 centroCostoId: true,
                 centroCostoNombre: true,
                 duracionEstimadaMin: true,
                 iniciadoEl: true,
+                nodoClave: true,
+                gatesOperativos: { select: { estado: true } },
+                dependenciasEntrantes: {
+                  select: { predecesorPasoId: true },
+                },
               },
             },
           },
@@ -1067,18 +1074,19 @@ export class ProduccionService {
 
     const jobs: Array<ReturnType<typeof buildLaserJob>> = [];
     for (const orden of ordenes) {
+      const pasosOrden = orden.items.flatMap((item) => item.pasos);
       for (const item of orden.items) {
-        // [Tanda A] Ídem gran formato: impresión sobre pliego declarada.
-        const frontera = item.pasos.find((paso) => paso.estado !== 'hecho');
-        if (
-          !frontera ||
-          colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'laser'
-        )
-          continue;
-        if (frontera.estado === 'bloqueado') continue;
-        // El tercerizado lo imprime el proveedor: vive en Compras, no en el taller.
-        if (frontera.tipoEjecucion === 'tercerizado') continue;
-        jobs.push(buildLaserJob(orden, item, frontera));
+        for (const frontera of fronterasEjecutablesDAG(
+          pasosOrden,
+          item.pasos,
+        )) {
+          if (colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'laser')
+            continue;
+          if (frontera.nestingLoteRol === 'PARTICIPANTE') continue;
+          if (frontera.estado === 'bloqueado') continue;
+          if (frontera.tipoEjecucion === 'tercerizado') continue;
+          jobs.push(buildLaserJob(orden, item, frontera));
+        }
       }
     }
 
@@ -1293,12 +1301,16 @@ export class ProduccionService {
       ).values(),
     ];
 
-    const codigosPropios = [...new Set([
-      ...familias.filter((codigo) => !resolverFamilia(codigo)),
-      ...reglas
-        .filter((regla) => regla.tipo === 'paso' && !resolverFamilia(regla.valor))
-        .map((regla) => regla.valor),
-    ])];
+    const codigosPropios = [
+      ...new Set([
+        ...familias.filter((codigo) => !resolverFamilia(codigo)),
+        ...reglas
+          .filter(
+            (regla) => regla.tipo === 'paso' && !resolverFamilia(regla.valor),
+          )
+          .map((regla) => regla.valor),
+      ]),
+    ];
     const propiosEncontrados = codigosPropios.length
       ? await this.prisma.pasoTenant.findMany({
           where: {
@@ -1326,17 +1338,22 @@ export class ProduccionService {
         !propiosValidos.has(regla.valor),
     );
     if (reglasPasoInvalidas.length > 0) {
-      throw new BadRequestException('Algún paso concreto no existe en este tenant.');
+      throw new BadRequestException(
+        'Algún paso concreto no existe en este tenant.',
+      );
     }
     const tecnologiasInvalidas = reglas.filter(
       (regla) =>
         regla.tipo === 'tecnologia' &&
         (!TECNOLOGIAS_MAQUINA.includes(
           regla.valor as (typeof TECNOLOGIAS_MAQUINA)[number],
-        ) || normalizarTecnologiaMaquina(regla.valor) !== regla.valor),
+        ) ||
+          normalizarTecnologiaMaquina(regla.valor) !== regla.valor),
     );
     if (tecnologiasInvalidas.length > 0) {
-      throw new BadRequestException('Alguna tecnología de estación no es válida.');
+      throw new BadRequestException(
+        'Alguna tecnología de estación no es válida.',
+      );
     }
 
     // Una familia puede repetirse entre estaciones CON máquinas (filtran por

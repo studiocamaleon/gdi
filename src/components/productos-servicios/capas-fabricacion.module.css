@@ -1,0 +1,123 @@
+.section {
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.header {
+  padding: 12px;
+  background: var(--surface-2);
+}
+.header h3 {
+  font-size: 12px;
+  font-weight: 650;
+  margin: 0 0 4px;
+}
+.header p,
+.help {
+  font-size: 11px;
+  color: var(--muted-text);
+  margin: 0;
+  line-height: 1.5;
+}
+.help {
+  padding: 10px 12px;
+}
+.columns,
+.entity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px 140px;
+  align-items: center;
+  gap: 8px;
+}
+.columns {
+  padding: 8px 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--muted-text);
+  border-bottom: 1px solid var(--hairline);
+}
+.layer {
+  position: relative;
+  border-bottom: 1px solid var(--hairline);
+}
+.layerName {
+  padding: 12px 228px 12px 12px;
+  min-height: 64px;
+  cursor: pointer;
+  list-style: none;
+}
+.layerName strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.layerName > span:nth-child(3) {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-text);
+  margin-top: 3px;
+}
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline);
+  margin-right: 6px;
+}
+.layerControls {
+  position: absolute;
+  top: 16px;
+  right: 12px;
+  display: grid;
+  grid-template-columns: 68px 140px;
+  align-items: center;
+  gap: 8px;
+}
+.useSelect {
+  font-size: 11px;
+  min-height: 30px;
+  width: 100%;
+}
+.exterior {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.entities {
+  background: var(--surface-2);
+  padding: 0 12px;
+}
+.entity {
+  padding: 10px 0;
+  border-top: 1px solid var(--hairline);
+}
+.entity strong {
+  display: block;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.entity small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-text);
+  margin-top: 3px;
+}
+@media (max-width: 600px) {
+  .columns {
+    display: none;
+  }
+  .layerName {
+    padding-right: 12px;
+    padding-bottom: 52px;
+  }
+  .layerControls {
+    top: 46px;
+    left: 12px;
+    right: auto;
+  }
+  .entity {
+    grid-template-columns: minmax(0, 1fr) 28px;
+  }
+  .entity > :last-child {
+    grid-column: 1 / -1;
+  }
+}

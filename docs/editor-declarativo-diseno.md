@@ -160,18 +160,17 @@ type ControlOpcion =
   pregunta con pendiente → abierta y primera; resuelta → colapsada con
   resumen; el orden de secciones es fijo y narrativo.
 
-## 4. Las dos presentaciones
+## 4. Presentación vigente
 
 - **Guiado (el asistente flotante de E.3.2 v2)**: recorre secciones como
   capítulos; cada opción visible se muestra SIEMPRE — abierta si
   pendiente, colapsada con resumen + "Cambiar" si resuelta. Nada
   desaparece: paridad visible.
-- **Detallado**: queda CONGELADO tal como está (no se re-renderiza del
-  esquema — sería doble trabajo). Un **test de paridad** compara las
-  claves del esquema contra el censo §2: si alguien agrega un campo al
-  detallado sin declararlo en el esquema, el test rompe. Cuando el
-  usuario valide que el guiado cubre todo, el detallado se retira y el
-  esquema queda como única fuente.
+- **Detallado (retirado el 2026-08-31)**: la validación funcional cerró la
+  transición. Ya no existe selector ni preferencia local: el esquema guiado
+  es la única presentación del editor. El test de paridad permanece como
+  guardián del contrato y además verifica que toda opción no material
+  pertenezca a un eje renderizable.
 
 ## 5. Plan por sub-fases
 
@@ -270,6 +269,11 @@ type ControlOpcion =
   > internas se ocultan. 5 tests nuevos (30 del esquema, 392 front).
 - **E — Cobertura 100% verificada → retiro del detallado** (decisión
   final del usuario tras probar).
+  > **Estado 2026-08-31: HECHA.** Se retiró el acceso a Detallado y la
+  > preferencia guardada en navegador. El hueco final detectado —los
+  > multiplicadores declarados pero sin eje visible— se cerró ubicándolos en
+  > Información básica, antes de Materiales, con etiquetas humanas y fallback
+  > seguro para futuras claves del motor.
   > **Vista guiada EXPANDIDA (2026-07-30, idea del usuario)**: para
   > decidir con las dos a la vista, el cuerpo del asistente se extrajo
   > como `SeccionesEsquemaPaso` (una fuente, dos shells) y el editor ganó
@@ -284,8 +288,13 @@ type ControlOpcion =
 
 ## 6. Decisiones
 
-1. **Detallado congelado + test de paridad + retiro final** (no
-   re-render del esquema) — propuesto arriba, a confirmar.
+1. **Guiado como editor único + test de paridad** — confirmado y aplicado el
+   2026-08-31.
+   El botón permite guardar un **borrador incompleto** aunque existan
+   pendientes de máquina, centro, materiales o parámetros. Esos pendientes
+   siguen bloqueando la publicación/cotización, no la continuidad del trabajo.
+   Sólo una estructura imposible de persistir (JSON o regla condicional
+   inválidos) rechaza el guardado.
 2. **Ubicación**: `src/lib/editor-paso/` (schema + tipos) con el
    renderer en components. Front-only: el esquema es de PRESENTACIÓN;
    la verdad de negocio sigue en el back (validador/motor).

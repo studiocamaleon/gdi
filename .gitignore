@@ -3,6 +3,7 @@
 # dependencies
 /node_modules
 /apps/api/node_modules
+/apps/api/.venv-opennest/
 /apps/marketing/node_modules
 /.pnp
 .pnp.*
@@ -63,3 +64,7 @@ apps/api/output.lp
 apps/api/*.lp
 backups/
 apps/api/scripts/*.baseline.json
+
+# Cache del lector CAD de Python
+__pycache__/
+*.pyc

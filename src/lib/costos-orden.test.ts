@@ -4,12 +4,18 @@ import {
   calcularCostoItem,
   consolidarCostosOrden,
   cruzarRealVsCotizado,
+  proyectarPasoOperacionInterna,
   reconciliarComisionPasarela,
+  sumCargosPaso,
+  sumMaterialesPaso,
   tiempoFueMedido,
   tiempoRealAtipico,
 } from "@/lib/costos-orden";
 import type { PropuestaCargoDirecto, PropuestaItem } from "@/lib/propuestas";
-import type { TableroItemData, TableroPasoData } from "@/lib/tablero-produccion";
+import type {
+  TableroItemData,
+  TableroPasoData,
+} from "@/lib/tablero-produccion";
 
 /**
  * Item con un paso de máquina y otro manual. Los números están elegidos para
@@ -180,6 +186,76 @@ const cargoOrden = (montoNeto: number): PropuestaCargoDirecto => ({
 });
 
 describe("consolidarCostosOrden", () => {
+  it("proyecta una operación de etapa sin reconstruir sus importes", () => {
+    const etapa = item().cotizacion.pasos[0];
+    const operacion = {
+      codigo: "tensado",
+      nombre: "Tensado de lona",
+      familiaCodigo: "trabajo_manual",
+      activada: true,
+      duracionMin: 9,
+      costoTotal: 135,
+      configPasoId: "interno-tensado",
+      tiempo: {
+        totalMin: 9,
+        centroCostoId: "cc-taller",
+        centroCostoNombre: "Taller",
+        tarifaHora: 600,
+        costo: 90,
+      },
+      materiales: [
+        {
+          slotCodigo: "lona",
+          materialVarianteId: "material-1",
+          materialNombre: "LONA-13OZ",
+          materialSku: "LONA-13OZ",
+          materialDisplayName: "Lona frontlight 13 oz",
+          tipoLineaCosto: "MATERIAL" as const,
+          cantidad: 1,
+          unidad: "m2",
+          precioUnitario: 30,
+          costoTotal: 30,
+          estrategiaCosto: "simple",
+          modoSeleccion: "HARDCODED" as const,
+        },
+      ],
+      cargosDirectosPaso: [
+        {
+          cargoCodigo: "control",
+          cargoNombre: "Control de calidad",
+          monto: 15,
+          modoCalculo: "MONTO_FIJO_PLANO",
+          aplicaMargen: true,
+        },
+      ],
+    };
+
+    const proyectado = proyectarPasoOperacionInterna(etapa, operacion, 0);
+
+    expect(proyectado).toMatchObject({
+      nombreVisible: "Tensado de lona",
+      configPasoId: "interno-tensado",
+      tiempo: { totalMin: 9, costo: 90 },
+      costoTotal: 135,
+    });
+    expect(sumMaterialesPaso(proyectado)).toBe(30);
+    expect(sumCargosPaso(proyectado)).toBe(15);
+
+    const snapshotViejo = proyectarPasoOperacionInterna(
+      etapa,
+      {
+        codigo: "legacy",
+        nombre: "Operación anterior",
+        familiaCodigo: "trabajo_manual",
+        activada: true,
+        duracionMin: 5,
+        costoTotal: 50,
+      },
+      1,
+    );
+    expect(snapshotViejo.tiempo).toBeUndefined();
+  });
+
   it("suma el costo de los items separando materiales de centros", () => {
     const c = consolidarCostosOrden([item()], []);
     expect(c.costoItems).toBe(400);
@@ -207,7 +283,210 @@ describe("consolidarCostosOrden", () => {
     const c = consolidarCostosOrden([item()], [cargoOrden(100)]);
     const suma = c.composicion.reduce((acc, p) => acc + p.monto, 0);
     expect(suma).toBeCloseTo(c.costoTotal, 6);
-    expect(c.composicion.reduce((acc, p) => acc + p.pct, 0)).toBeCloseTo(100, 6);
+    expect(c.composicion.reduce((acc, p) => acc + p.pct, 0)).toBeCloseTo(
+      100,
+      6,
+    );
+  });
+
+  it("no inventa un bucket BOM cuando un snapshot viejo no trae su naturaleza", () => {
+    const compuesto = item();
+    compuesto.cotizacion.costos = {
+      ...compuesto.cotizacion.costos,
+      tiempoTotal: 100,
+      materialesTotal: 100,
+      componentesFabricadosTotal: 200,
+      total: 400,
+      unitario: 400,
+    };
+
+    const c = consolidarCostosOrden([compuesto], []);
+    expect(c.componentesFabricadosTotal).toBe(200);
+    expect(
+      c.composicion.find((parte) => parte.key === "componentes-fabricados"),
+    ).toBeUndefined();
+    expect(
+      c.composicion.find((parte) => parte.key === "sin-desglosar"),
+    ).toMatchObject({ monto: 200 });
+  });
+
+  it("clasifica materiales y centros de los componentes en los buckets normales", () => {
+    const compuesto = item();
+    compuesto.cotizacion.costos = {
+      ...compuesto.cotizacion.costos,
+      componentesFabricadosTotal: 100,
+      total: 500,
+      unitario: 500,
+    };
+    compuesto.cotizacion.componentesFabricados = [
+      {
+        productoId: "hijo",
+        codigo: "LONA",
+        nombre: "Lona",
+        politicaEjecucion: "INDEPENDIENTE",
+        cantidad: 1,
+        unidad: "u.",
+        recetaRevisionId: "rev",
+        recetaVersion: 1,
+        recetaHuella: "huella",
+        costoUnitario: 100,
+        costoTotal: 100,
+        pasos: [
+          {
+            rutaPasoId: "rp-hijo",
+            rutaPasoOrden: 1,
+            familiaCodigo: "impresion_hijo",
+            nombreVisible: "Impresión de lona",
+            activado: true,
+            costoTotal: 100,
+            materiales: [
+              {
+                slotCodigo: "sustrato",
+                slotNombre: "Sustrato",
+                materialVarianteId: "mat-lona",
+                materialNombre: "Lona backlight",
+                materialSku: "LONA-BACKLIGHT",
+                materialDisplayName: "Lona backlight",
+                cantidad: 1,
+                unidad: "m2",
+                precioUnitario: 40,
+                costoTotal: 40,
+              },
+            ],
+            tiempo: {
+              totalMin: 6,
+              centroCostoId: "cc-hijo",
+              centroCostoNombre: "Gran formato",
+              tarifaHora: 600,
+              costo: 60,
+            },
+          },
+        ],
+      },
+    ];
+
+    const c = consolidarCostosOrden([compuesto], []);
+    expect(c.materialesTotal).toBe(240);
+    expect(c.centroCostoTotal).toBe(260);
+    expect(
+      c.composicion.find((parte) => parte.key === "materiales"),
+    ).toMatchObject({ monto: 240 });
+    expect(
+      c.composicion.find((parte) => parte.key === "centro-costo"),
+    ).toMatchObject({ monto: 260 });
+    expect(
+      c.composicion.find((parte) => parte.key === "sin-desglosar"),
+    ).toBeUndefined();
+  });
+
+  it("separa materia prima propia del costo de proveedor en un componente tercerizado", () => {
+    const compuesto = item();
+    compuesto.cotizacion.costos = {
+      ...compuesto.cotizacion.costos,
+      componentesFabricadosTotal: 100,
+      total: 500,
+      unitario: 500,
+    };
+    compuesto.cotizacion.componentesFabricados = [
+      {
+        productoId: "hijo-tercerizado",
+        codigo: "BASTIDOR",
+        nombre: "Bastidor",
+        politicaEjecucion: "INDEPENDIENTE",
+        cantidad: 1,
+        unidad: "u.",
+        recetaRevisionId: "rev",
+        recetaVersion: 1,
+        recetaHuella: "huella",
+        costoUnitario: 100,
+        costoTotal: 100,
+        pasos: [
+          {
+            rutaPasoId: "rp-hijo-tercerizado",
+            rutaPasoOrden: 1,
+            familiaCodigo: "bastidor",
+            nombreVisible: "Fabricación de bastidor",
+            activado: true,
+            tercerizado: true,
+            costoTotal: 100,
+            materiales: [
+              {
+                slotCodigo: "perfil",
+                slotNombre: "Perfil",
+                materialVarianteId: "mat-perfil",
+                materialNombre: "Perfil estructural",
+                materialSku: "PERFIL",
+                materialDisplayName: "Perfil estructural",
+                cantidad: 1,
+                unidad: "u.",
+                precioUnitario: 30,
+                costoTotal: 30,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const c = consolidarCostosOrden([compuesto], []);
+    expect(c.materialesTotal).toBe(230);
+    expect(c.tercerizadoTotal).toBe(70);
+    expect(c.composicion.find((parte) => parte.key === "materiales")).toMatchObject({
+      monto: 230,
+    });
+    expect(c.composicion.find((parte) => parte.key === "proveedor")).toMatchObject({
+      monto: 70,
+    });
+  });
+
+  it("incluye los centros de costo de las recetas hijas", () => {
+    const compuesto = item();
+    compuesto.cotizacion.costos = {
+      ...compuesto.cotizacion.costos,
+      componentesFabricadosTotal: 60,
+      total: 460,
+      unitario: 460,
+    };
+    compuesto.cotizacion.componentesFabricados = [
+      {
+        productoId: "hijo",
+        codigo: "LONA",
+        nombre: "Lona",
+        politicaEjecucion: "INDEPENDIENTE",
+        cantidad: 1,
+        unidad: "u.",
+        recetaRevisionId: "rev",
+        recetaVersion: 1,
+        recetaHuella: "huella",
+        costoUnitario: 60,
+        costoTotal: 60,
+        pasos: [
+          {
+            rutaPasoId: "rp-hijo",
+            rutaPasoOrden: 1,
+            familiaCodigo: "impresion_hijo",
+            nombreVisible: "Impresión de lona",
+            activado: true,
+            costoTotal: 60,
+            tiempo: {
+              totalMin: 6,
+              centroCostoId: "cc-hijo",
+              centroCostoNombre: "Gran formato",
+              tarifaHora: 600,
+              costo: 60,
+            },
+          },
+        ],
+      },
+    ];
+
+    const c = consolidarCostosOrden([compuesto], []);
+    expect(
+      c.centros.find((centro) => centro.nombre === "Gran formato"),
+    ).toMatchObject({
+      minutosCotizados: 6,
+      costoTotal: 60,
+    });
   });
 
   it("expone como 'Sin desglosar' el costo que el snapshot no desglosó", () => {
@@ -359,7 +638,11 @@ describe("cruzarRealVsCotizado", () => {
       desvioPct: 100,
     });
     // El paso sin medir aparece en el centro pero no aporta desvío.
-    expect(taller).toMatchObject({ pasos: 1, pasosMedidos: 0, desvioPct: null });
+    expect(taller).toMatchObject({
+      pasos: 1,
+      pasosMedidos: 0,
+      desvioPct: null,
+    });
   });
 
   it("cuenta los pasos que no se pueden cruzar con el costeo", () => {

@@ -63,6 +63,15 @@ describe('Catálogo de familias', () => {
     });
   });
 
+  it('las aplicaciones de transfer cuentan las estampas vinculadas, no sólo las prendas', () => {
+    const manual = getFamilia('aplicacion_transfer');
+    const textil = getFamilia('aplicacion_transfer_textil');
+
+    expect(manual.ritmoDefault?.fuenteCantidad).toBe('cantidad_montaje');
+    expect(manual.magnitudTiempoDefault).toBe('cantidad_montaje');
+    expect(textil.magnitudTiempoDefault).toBe('cantidad_montaje');
+  });
+
   it('colocación de ojales ofrece el modo sólo cuatro esquinas', () => {
     const familia = getFamilia('colocacion_ojales');
     const modo = familia.paramsPasoSchema.find(

@@ -127,12 +127,12 @@ export const NAV: NavItem[] = [
       { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
       {
         key: "pasos",
-        label: "Pasos de producción",
+        label: "Nodos de producción",
         href: "/productos-servicios/pasos",
       },
       {
         key: "rutas",
-        label: "Rutas de producción",
+        label: "Flujos de producción",
         href: "/productos-servicios/rutas",
       },
       {
@@ -259,7 +259,7 @@ export const NAV: NavItem[] = [
   // deciden la tira (reportes-shell.tsx) y el gate de cada página.
   {
     key: "reportes",
-    label: "Reportes",
+    label: "Centro de análisis",
     icon: "Chart",
     permiso: "reportes.ver",
     href: "/reportes",

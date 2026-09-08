@@ -1,10 +1,13 @@
+import { pasosEfectivos, proyectarBomEfectivo } from './bom-efectivo';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
+  AlcanceDocumentoProduccion,
   EstadoProductoRecetaRevision,
   Prisma,
   UnidadMateriaPrima,
@@ -24,9 +27,41 @@ import type {
 } from './dto/receta-producto.dto';
 import { ProductoValidacionService } from './producto-validacion.service';
 import { ProductosService } from './productos.service';
+import { ConfigPasosService } from './config-pasos.service';
+import type { UpsertProductoConfigPasoDto } from './dto/producto-ruta.dto';
+import {
+  compilarRutaLineal,
+  validarYOrdenarGrafo,
+  type GrafoProduccion,
+} from '../ordenes-trabajo/grafo-produccion';
+import {
+  leerConfiguracionComponente,
+  ordenarComponentesPorCalculo,
+  validarConfiguracionComponente,
+} from './componentes-configuracion';
+import { catalogoSalidasPublicasComposicion } from './composicion-outputs';
+import {
+  leerConfiguracionesPasosCompuestos,
+  leerDefinicionesPasoCompuesto,
+  type ConfiguracionPasoCompuesto,
+} from './pasos-compuestos';
+import {
+  construirBomMultinivel,
+  type BomRevisionFuente,
+} from './bom-multinivel';
+import { leerWorkflowRuta } from './ruta-workflow';
+import {
+  congelarPoliticaPricingComponente,
+  validarPoliticaPricingComponente,
+} from './precio/pricing-compuesto';
+import { motivosCambioEntreSnapshots } from './estado-publicacion-receta';
+import { leerGeometriasComerciales } from './geometrias-comerciales';
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
+type RevisionPublicadaDetalle = Prisma.ProductoRecetaRevisionGetPayload<{
+  include: { documentos: true; componentes: true };
+}>;
 
 type PasoSnapshot = {
   clave: string;
@@ -44,6 +79,12 @@ type SnapshotConfiguracion = {
   ruta: Record<string, unknown>;
   pasos: PasoSnapshot[];
   cargosCotizacion: unknown[];
+};
+
+type VarianteMaterialReferencia = {
+  unidad: UnidadMateriaPrima | null;
+  sku: string;
+  nombre: string;
 };
 
 function jsonSeguro(valor: unknown): unknown {
@@ -75,6 +116,31 @@ function numero(valor: unknown, fallback = 0): number {
   return Number.isFinite(result) ? result : fallback;
 }
 
+function grafoParaConfiguracion(
+  configuracion: SnapshotConfiguracion,
+  aristas?: Array<{ desdeClave: string; haciaClave: string }>,
+  gates?: Array<{ nodoClave: string; tipo: 'MATERIAL' | 'CALIDAD' }>,
+): GrafoProduccion {
+  const nodos = configuracion.pasos.map((paso, indice) => ({
+    clave: paso.clave,
+    indice,
+    gates: (gates ?? [])
+      .filter((gate) => gate.nodoClave === paso.clave)
+      .map((gate) => gate.tipo),
+  }));
+  try {
+    return aristas
+      ? validarYOrdenarGrafo(nodos, aristas)
+      : compilarRutaLineal(nodos);
+  } catch (error: unknown) {
+    throw new BadRequestException(
+      error instanceof Error
+        ? error.message
+        : 'La topología productiva no es válida.',
+    );
+  }
+}
+
 @Injectable()
 export class RecetasProductoService {
   constructor(
@@ -82,11 +148,12 @@ export class RecetasProductoService {
     private readonly productos: ProductosService,
     private readonly validacionProducto: ProductoValidacionService,
     private readonly eventos: EventosSistemaService,
+    @Optional() private readonly configPasos?: ConfigPasosService,
   ) {}
 
   async obtener(auth: CurrentAuth, productoId: string) {
     await this.productos.obtenerProducto(auth.tenantId, productoId);
-    return this.prisma.productoReceta.findMany({
+    const recetas = await this.prisma.productoReceta.findMany({
       where: { tenantId: auth.tenantId, productoId },
       orderBy: { createdAt: 'asc' },
       include: {
@@ -112,6 +179,184 @@ export class RecetasProductoService {
         },
       },
     });
+    return recetas.map(receta => ({
+      ...receta,
+      revisionPublicada: receta.revisionPublicada ? proyectarBomEfectivo(receta.revisionPublicada) : null,
+      revisiones: receta.revisiones.map(proyectarBomEfectivo),
+    }));
+  }
+
+  /**
+   * Estado explicable de cada publicación y de las dependencias entre recetas.
+   * La cotizabilidad usa exactamente el mismo snapshot que consume el motor.
+   */
+  async obtenerEstadoPublicacion(auth: CurrentAuth, productoId: string) {
+    const producto = await this.productos.obtenerProducto(
+      auth.tenantId,
+      productoId,
+    );
+    const recetas = await this.prisma.productoReceta.findMany({
+      where: { tenantId: auth.tenantId, productoId, activo: true },
+      include: {
+        rutaAlternativa: {
+          select: { id: true, nombre: true, rutaVersion: true, activo: true },
+        },
+        revisionPublicada: {
+          include: {
+            documentos: { orderBy: { orden: 'asc' } },
+            componentes: { orderBy: { orden: 'asc' } },
+          },
+        },
+        revisiones: {
+          where: { estado: EstadoProductoRecetaRevision.BORRADOR },
+          orderBy: { numero: 'desc' },
+          select: { id: true, numero: true, updatedAt: true },
+        },
+      },
+    });
+    const recetaPorRuta = new Map(
+      recetas.map((receta) => [receta.rutaAlternativaId, receta]),
+    );
+
+    const rutas = await Promise.all(
+      producto.rutasAlternativas.map(async (ruta) => {
+        const receta = recetaPorRuta.get(ruta.id);
+        const publicada = receta?.revisionPublicada ?? null;
+        const borrador = receta?.revisiones[0] ?? null;
+        if (!publicada) {
+          return {
+            ruta: {
+              id: ruta.id,
+              nombre: ruta.nombre,
+              version: ruta.rutaVersion,
+              esPreferida: ruta.esPreferida,
+            },
+            estado: borrador ? 'BORRADOR_INICIAL' : 'SIN_RECETA',
+            cotizableConReceta: false,
+            revisionPublicada: null,
+            borrador,
+            motivos: [],
+            dependencias: [],
+          };
+        }
+
+        const dependencias = await this.diagnosticarDependencias(
+          auth.tenantId,
+          publicada.componentes,
+        );
+        try {
+          const snapshotActual = await this.snapshotActualPublicado(
+            auth.tenantId,
+            producto,
+            ruta,
+            publicada,
+          );
+          const vigente =
+            huellaDe(snapshotActual) === publicada.huellaConfiguracion;
+          return {
+            ruta: {
+              id: ruta.id,
+              nombre: ruta.nombre,
+              version: ruta.rutaVersion,
+              esPreferida: ruta.esPreferida,
+            },
+            estado: vigente
+              ? borrador
+                ? 'VIGENTE_CON_BORRADOR'
+                : 'VIGENTE'
+              : 'DESACTUALIZADA',
+            cotizableConReceta: vigente,
+            revisionPublicada: {
+              id: publicada.id,
+              version: publicada.numero,
+              publicadaEl: publicada.publicadaEl,
+              publicadaPorNombre: publicada.publicadaPorNombre,
+            },
+            borrador,
+            motivos: vigente
+              ? []
+              : motivosCambioEntreSnapshots(
+                  publicada.snapshotJson,
+                  snapshotActual,
+                ),
+            dependencias,
+          };
+        } catch (error: unknown) {
+          return {
+            ruta: {
+              id: ruta.id,
+              nombre: ruta.nombre,
+              version: ruta.rutaVersion,
+              esPreferida: ruta.esPreferida,
+            },
+            estado: 'BLOQUEADA',
+            cotizableConReceta: false,
+            revisionPublicada: {
+              id: publicada.id,
+              version: publicada.numero,
+              publicadaEl: publicada.publicadaEl,
+              publicadaPorNombre: publicada.publicadaPorNombre,
+            },
+            borrador,
+            motivos: [
+              {
+                codigo: 'COMPONENTES',
+                titulo: 'Dependencia no resoluble',
+                detalle:
+                  error instanceof Error
+                    ? error.message
+                    : 'No se pudo reconstruir la configuración actual de la receta.',
+              },
+            ],
+            dependencias,
+          };
+        }
+      }),
+    );
+    const usadoPor = await this.obtenerProductosPadreAfectados(
+      auth.tenantId,
+      productoId,
+    );
+
+    return {
+      producto: {
+        id: producto.id,
+        nombre: producto.nombre,
+      },
+      resumen: {
+        rutasTotales: rutas.length,
+        rutasVigentes: rutas.filter((ruta) => ruta.cotizableConReceta).length,
+        rutasConAtencion: rutas.filter((ruta) => !ruta.cotizableConReceta)
+          .length,
+        productosPadreAfectados: usadoPor.length,
+      },
+      rutas,
+      usadoPor,
+    };
+  }
+
+  /**
+   * Proyección de lectura del BOM completo. Sigue las revisiones exactas que
+   * quedaron congeladas en cada componente; nunca reemplaza un hijo por su
+   * publicación más reciente.
+   */
+  async obtenerBomMultinivel(auth: CurrentAuth, revisionId: string) {
+    try {
+      const bom = await construirBomMultinivel(revisionId, (id) =>
+        this.cargarRevisionBom(auth.tenantId, id),
+      );
+      if (!bom) {
+        throw new NotFoundException('La revisión de receta no existe.');
+      }
+      return bom;
+    } catch (error: unknown) {
+      if (error instanceof NotFoundException) throw error;
+      throw new ConflictException(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo proyectar el BOM multinivel.',
+      );
+    }
   }
 
   /** Contrato consumido por el motor: null mantiene el flujo legacy. */
@@ -141,19 +386,12 @@ export class RecetasProductoService {
 
     const producto = await this.productos.obtenerProducto(tenantId, productoId);
     const ruta = this.encontrarRuta(producto, rutaAlternativaId);
-    const snapshot = {
-      ...this.snapshotConfiguracion(producto, ruta),
-      documentos: this.documentosCanonicos(receta.revisionPublicada.documentos),
-      componentes: this.componentesCanonicos(
-        await this.componentesConRevisionActual(
-          tenantId,
-          receta.revisionPublicada.componentes.map((item) => ({
-            ...item,
-            cantidad: Number(item.cantidad),
-          })),
-        ),
-      ),
-    };
+    const snapshot = await this.snapshotActualPublicado(
+      tenantId,
+      producto,
+      ruta,
+      receta.revisionPublicada,
+    );
     const huellaActual = huellaDe(snapshot);
     if (huellaActual !== receta.revisionPublicada.huellaConfiguracion) {
       throw new ConflictException(
@@ -177,8 +415,25 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad,
         requerido: item.requerido,
+        configuracionJson:
+          item.configuracionJson == null
+            ? null
+            : jsonSeguro(item.configuracionJson),
+        nodoIncorporacionClave: item.nodoIncorporacionClave,
+        nodosPredecesoresClaves: item.nodosPredecesoresClaves,
         orden: item.orden,
       })),
+      pasosCompuestos: receta.revisionPublicada.pasosCompuestosJson
+        ? leerConfiguracionesPasosCompuestos(
+            receta.revisionPublicada.pasosCompuestosJson,
+          )
+        : this.pasosCompuestosDesdeLegacy(
+            receta.revisionPublicada.componentes.map((item) => ({
+              ...item,
+              cantidad: Number(item.cantidad),
+            })),
+            this.snapshotConfiguracion(producto, ruta),
+          ),
     };
   }
 
@@ -214,6 +469,9 @@ export class RecetasProductoService {
     const borradorExistente = existente?.revisiones[0] ?? null;
     const revisionFuente =
       borradorExistente ?? existente?.revisionPublicada ?? null;
+    const plantillaRuta = !revisionFuente
+      ? await this.plantillaInicialDesdeRuta(auth.tenantId, ruta)
+      : null;
     if (
       dto.expectedUpdatedAt &&
       (!borradorExistente ||
@@ -229,6 +487,7 @@ export class RecetasProductoService {
       revisionFuente?.documentos.map((item) => ({
         codigo: item.codigo,
         nombre: item.nombre,
+        alcance: item.alcance,
         pasoClave: item.pasoClave,
         proposito: item.proposito,
         etapa: item.etapa,
@@ -249,24 +508,172 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad,
         requerido: item.requerido,
+        configuracionJson:
+          item.configuracionJson == null
+            ? null
+            : jsonSeguro(item.configuracionJson),
+        nodoIncorporacionClave: item.nodoIncorporacionClave,
+        nodosPredecesoresClaves: item.nodosPredecesoresClaves,
         orden: item.orden,
       })) ??
+      plantillaRuta?.componentes ??
       [];
+    if (producto.estructuraProducto === 'SIMPLE' && componentes.length > 0) {
+      throw new BadRequestException(
+        'Este producto está definido como simple. Cambialo a compuesto en Identidad antes de agregar componentes fabricados.',
+      );
+    }
     await this.validarReferenciasBorrador(
       auth.tenantId,
       productoId,
       documentos,
       componentes,
+      new Set(configuracion.pasos.map((paso) => paso.clave)),
+      producto.atributosComercialesJson,
     );
+    const nombresPasoVigentes = new Map(
+      configuracion.pasos.map((paso) => [paso.clave, paso.nombre]),
+    );
+    const pasosCompuestos = leerConfiguracionesPasosCompuestos(
+      dto.pasosCompuestos ??
+        borradorExistente?.pasosCompuestosJson ??
+        existente?.revisionPublicada?.pasosCompuestosJson ??
+        [],
+    ).map((paso) => ({
+      ...paso,
+      // El nombre es contextual al producto y puede cambiar en el editor de
+      // ruta. La sincronización debe conservar la subruta configurada, pero no
+      // una etiqueta vieja que vuelva a confundir BOM y componentes.
+      pasoNombre: nombresPasoVigentes.get(paso.nodoClave) ?? paso.pasoNombre,
+    }));
     const componentesVersionados = await this.componentesConRevisionActual(
       auth.tenantId,
       componentes,
+      pasosCompuestos,
+      { actualizarSnapshotsPricing: true },
     );
 
+    const aristasFuente = dto.dependencias
+      ? dto.dependencias.map((dependencia) => ({
+          desdeClave: dependencia.desdeClave,
+          haciaClave: dependencia.haciaClave,
+        }))
+      : (borradorExistente?.grafoProduccionJson ??
+          existente?.revisionPublicada?.grafoProduccionJson)
+        ? (
+            (borradorExistente?.grafoProduccionJson ??
+              existente?.revisionPublicada
+                ?.grafoProduccionJson) as unknown as GrafoProduccion
+          ).aristas
+        : plantillaRuta?.dependencias;
+    const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
+      existente?.revisionPublicada?.grafoProduccionJson) as
+      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
+    const gatesFuente = dto.gates
+      ? dto.gates
+      : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
+          (nodo.gates ?? []).map((tipo) => ({
+            nodoClave: nodo.clave,
+            tipo,
+          })),
+        );
+    const grafoProduccion = grafoParaConfiguracion(
+      configuracion,
+      aristasFuente,
+      gatesFuente,
+    );
+    const clavesNodo = new Set(grafoProduccion.nodos.map((nodo) => nodo.clave));
+    for (const componente of componentes) {
+      if (
+        (componente.politicaEjecucion ?? 'INDEPENDIENTE') === 'INDEPENDIENTE' &&
+        !componente.nodoIncorporacionClave
+      ) {
+        throw new BadRequestException(
+          `El componente "${componente.nombre}" necesita un nodo de incorporación en el flujo principal.`,
+        );
+      }
+      if (
+        componente.nodoIncorporacionClave &&
+        !clavesNodo.has(componente.nodoIncorporacionClave)
+      ) {
+        throw new BadRequestException(
+          `El nodo de incorporación de "${componente.nombre}" ya no existe en esta ruta.`,
+        );
+      }
+      for (const predecesor of componente.nodosPredecesoresClaves ?? []) {
+        if (!clavesNodo.has(predecesor)) {
+          throw new BadRequestException(
+            `La dependencia inicial de "${componente.nombre}" referencia un nodo que ya no existe.`,
+          );
+        }
+      }
+    }
+    try {
+      validarYOrdenarGrafo(
+        [
+          ...grafoProduccion.nodos,
+          ...componentes
+            .filter(
+              (item) =>
+                (item.politicaEjecucion ?? 'INDEPENDIENTE') === 'INDEPENDIENTE',
+            )
+            .map((item, index) => ({
+              clave: `componente:${item.codigo}`,
+              indice: grafoProduccion.nodos.length + index,
+            })),
+        ],
+        [
+          ...grafoProduccion.aristas,
+          ...componentes
+            .filter(
+              (item) =>
+                (item.politicaEjecucion ?? 'INDEPENDIENTE') === 'INDEPENDIENTE',
+            )
+            .flatMap((item) => {
+              const nodoComponente = `componente:${item.codigo}`;
+              return [
+                ...(item.nodosPredecesoresClaves ?? []).map((desdeClave) => ({
+                  desdeClave,
+                  haciaClave: nodoComponente,
+                })),
+                ...(item.nodoIncorporacionClave
+                  ? [
+                      {
+                        desdeClave: nodoComponente,
+                        haciaClave: item.nodoIncorporacionClave,
+                      },
+                    ]
+                  : []),
+              ];
+            }),
+        ],
+      );
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Las dependencias de los componentes no forman un flujo válido.',
+      );
+    }
+    await this.validarPasosCompuestos(
+      auth.tenantId,
+      pasosCompuestos,
+      configuracion,
+      componentes,
+      clavesNodo,
+      false,
+    );
+
+    const configuracionConInternos = this.incorporarPasosInternos(
+      configuracion,
+      pasosCompuestos,
+    );
     const snapshot = {
-      ...configuracion,
+      ...configuracionConInternos,
+      grafoProduccion,
       documentos: this.documentosCanonicos(documentos),
       componentes: this.componentesCanonicos(componentesVersionados),
+      pasosCompuestos,
     };
     const huella = huellaDe(snapshot);
     const variantes = await this.unidadesVariantes(auth.tenantId, snapshot);
@@ -314,6 +721,10 @@ export class RecetasProductoService {
             rutaVersion: ruta.rutaVersion,
             huellaConfiguracion: huella,
             snapshotJson: snapshot as Prisma.InputJsonValue,
+            topologiaProduccion: grafoProduccion.topologia,
+            grafoProduccionJson: grafoProduccion as Prisma.InputJsonValue,
+            pasosCompuestosJson:
+              pasosCompuestos as unknown as Prisma.InputJsonValue,
             cambios: dto.cambios ?? revision.cambios,
             creadaPorId: auth.userId,
             creadaPorNombre: actorNombre,
@@ -334,6 +745,10 @@ export class RecetasProductoService {
             rutaVersion: ruta.rutaVersion,
             huellaConfiguracion: huella,
             snapshotJson: snapshot as Prisma.InputJsonValue,
+            topologiaProduccion: grafoProduccion.topologia,
+            grafoProduccionJson: grafoProduccion as Prisma.InputJsonValue,
+            pasosCompuestosJson:
+              pasosCompuestos as unknown as Prisma.InputJsonValue,
             cambios: dto.cambios,
             creadaPorId: auth.userId,
             creadaPorNombre: actorNombre,
@@ -377,6 +792,11 @@ export class RecetasProductoService {
             cantidad: item.cantidad,
             unidad: item.unidad ?? 'unidad',
             requerido: item.requerido ?? true,
+            configuracionJson:
+              (componentesVersionados[index].configuracionJson as
+                Prisma.InputJsonValue | undefined) ?? undefined,
+            nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
+            nodosPredecesoresClaves: item.nodosPredecesoresClaves ?? [],
             orden: item.orden ?? index,
           })),
         });
@@ -386,7 +806,19 @@ export class RecetasProductoService {
           data: documentos.map((item, index) => ({
             tenantId: auth.tenantId,
             revisionId: revision.id,
-            pasoClave: item.pasoClave ?? null,
+            alcance:
+              item.alcance ??
+              (item.pasoClave
+                ? AlcanceDocumentoProduccion.PASO
+                : AlcanceDocumentoProduccion.ITEM),
+            pasoClave:
+              (item.alcance ??
+                (item.pasoClave
+                  ? AlcanceDocumentoProduccion.PASO
+                  : AlcanceDocumentoProduccion.ITEM)) ===
+              AlcanceDocumentoProduccion.PASO
+                ? (item.pasoClave ?? null)
+                : null,
             codigo: item.codigo.trim(),
             nombre: item.nombre.trim(),
             proposito: item.proposito,
@@ -452,23 +884,56 @@ export class RecetasProductoService {
     );
     const ruta = this.encontrarRuta(producto, revision.rutaAlternativaId);
     const configuracion = this.snapshotConfiguracion(producto, ruta);
+    const pasosCompuestosActuales = leerConfiguracionesPasosCompuestos(
+      revision.pasosCompuestosJson ?? [],
+    );
     const componentesActuales = await this.componentesConRevisionActual(
       auth.tenantId,
       revision.componentes.map((item) => ({
         ...item,
         cantidad: Number(item.cantidad),
       })),
+      pasosCompuestosActuales,
+      { actualizarSnapshotsPricing: true },
+    );
+    const configuracionConInternos = this.incorporarPasosInternos(
+      configuracion,
+      pasosCompuestosActuales,
     );
     const snapshotActual = {
-      ...configuracion,
+      ...configuracionConInternos,
+      ...(revision.grafoProduccionJson
+        ? { grafoProduccion: revision.grafoProduccionJson }
+        : {}),
       documentos: this.documentosCanonicos(revision.documentos),
       componentes: this.componentesCanonicos(componentesActuales),
+      ...(revision.pasosCompuestosJson
+        ? {
+            pasosCompuestos: pasosCompuestosActuales,
+          }
+        : {}),
     };
     if (huellaDe(snapshotActual) !== revision.huellaConfiguracion) {
       throw new ConflictException(
         'La configuración productiva cambió desde que se guardó el borrador. Actualizá la receta antes de publicar.',
       );
     }
+    const grafoActual = revision.grafoProduccionJson as
+      GrafoProduccion | null | undefined;
+    await this.validarPasosCompuestos(
+      auth.tenantId,
+      pasosCompuestosActuales,
+      configuracion,
+      revision.componentes.map((item) => ({
+        ...item,
+        cantidad: Number(item.cantidad),
+      })),
+      new Set(
+        grafoActual?.nodos.map((item) => item.clave) ??
+          configuracion.pasos.map((item) => item.clave),
+      ),
+      true,
+    );
 
     const validacion = await this.validacionProducto.validarProducto(
       auth.tenantId,
@@ -710,7 +1175,7 @@ export class RecetasProductoService {
   }
 
   private async obtenerRevision(tenantId: string, revisionId: string) {
-    return this.prisma.productoRecetaRevision.findFirstOrThrow({
+    const revision = await this.prisma.productoRecetaRevision.findFirstOrThrow({
       where: { id: revisionId, tenantId },
       include: {
         materiales: { orderBy: { orden: 'asc' } },
@@ -719,6 +1184,337 @@ export class RecetasProductoService {
         documentos: { orderBy: { orden: 'asc' } },
       },
     });
+    return proyectarBomEfectivo(revision);
+  }
+
+  private async cargarRevisionBom(
+    tenantId: string,
+    revisionId: string,
+  ): Promise<BomRevisionFuente | null> {
+    const guardada = await this.prisma.productoRecetaRevision.findFirst({
+      where: { id: revisionId, tenantId },
+      include: {
+        receta: {
+          include: {
+            producto: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true,
+                unidadComercial: true,
+              },
+            },
+          },
+        },
+        rutaAlternativa: { select: { id: true, nombre: true } },
+        materiales: { orderBy: { orden: 'asc' } },
+        recursos: { orderBy: { orden: 'asc' } },
+        componentes: { orderBy: { orden: 'asc' } },
+        documentos: { orderBy: { orden: 'asc' } },
+      },
+    });
+    if (!guardada) return null;
+    const revision = proyectarBomEfectivo(guardada);
+
+    return {
+      id: revision.id,
+      numero: revision.numero,
+      estado: revision.estado,
+      huellaConfiguracion: revision.huellaConfiguracion,
+      recetaId: revision.recetaId,
+      rutaAlternativaId: revision.rutaAlternativaId,
+      rutaNombre: revision.rutaAlternativa.nombre,
+      productoId: revision.receta.producto.id,
+      productoCodigo: revision.receta.producto.codigo,
+      productoNombre: revision.receta.producto.nombre,
+      unidadComercial: revision.receta.producto.unidadComercial,
+      materiales: revision.materiales.map((material) => ({
+        id: material.id,
+        pasoClave: material.pasoClave,
+        pasoNombre: material.pasoNombre,
+        slotCodigo: material.slotCodigo,
+        slotNombre: material.slotNombre,
+        rol: material.rol,
+        modoSeleccion: material.modoSeleccion,
+        materialVarianteId: material.materialVarianteId,
+        materialSku: material.materialSku,
+        materialNombre: material.materialNombre,
+        unidad: material.unidad,
+        formula: material.formula,
+        cantidadBase: material.cantidadBase,
+        cantidadFactor:
+          material.cantidadFactor === null
+            ? null
+            : Number(material.cantidadFactor),
+        fuenteMedida: material.fuenteMedida,
+        mermaAdicionalPct: Number(material.mermaAdicionalPct),
+        aplicaMultiCaras: material.aplicaMultiCaras,
+        orden: material.orden,
+      })),
+      recursos: revision.recursos.map((recurso) => ({
+        id: recurso.id,
+        pasoClave: recurso.pasoClave,
+        pasoNombre: recurso.pasoNombre,
+        familiaCodigo: recurso.familiaCodigo,
+        maquinaNombre: recurso.maquinaNombre,
+        estacionNombre: recurso.estacionNombre,
+        perfilNombre: recurso.perfilNombre,
+        centroCostoNombre: recurso.centroCostoNombre,
+        dotacionOperarios: recurso.dotacionOperarios,
+        tercerizado: recurso.tercerizado,
+        proveedorNombre: recurso.proveedorNombre,
+        orden: recurso.orden,
+      })),
+      documentos: revision.documentos.map((documento) => ({
+        id: documento.id,
+        alcance: documento.alcance,
+        pasoClave: documento.pasoClave,
+        codigo: documento.codigo,
+        nombre: documento.nombre,
+        proposito: documento.proposito,
+        etapa: documento.etapa,
+        requerido: documento.requerido,
+        orden: documento.orden,
+      })),
+      componentes: revision.componentes.map((componente) => ({
+        id: componente.id,
+        productoComponenteId: componente.productoComponenteId,
+        recetaRevisionId: componente.recetaRevisionId,
+        recetaVersion: componente.recetaVersion,
+        recetaHuella: componente.recetaHuella,
+        codigo: componente.codigo,
+        nombre: componente.nombre,
+        politicaEjecucion: componente.politicaEjecucion,
+        formula: componente.formula,
+        cantidad: Number(componente.cantidad),
+        unidad: componente.unidad,
+        requerido: componente.requerido,
+        configuracionJson: jsonSeguro(componente.configuracionJson),
+        nodoIncorporacionClave: componente.nodoIncorporacionClave,
+        orden: componente.orden,
+      })),
+    };
+  }
+
+  private pasosCompuestosDesdeLegacy(
+    componentes: Array<{
+      codigo: string;
+      nombre: string;
+      configuracionJson?: unknown;
+      nodoIncorporacionClave?: string | null;
+    }>,
+    configuracion: SnapshotConfiguracion,
+  ): ConfiguracionPasoCompuesto[] {
+    const porNodo = new Map<string, ConfiguracionPasoCompuesto>();
+    for (const componente of componentes) {
+      const nodoClave = componente.nodoIncorporacionClave;
+      const legacy = leerConfiguracionComponente(
+        componente.configuracionJson,
+      )?.operacionesIncorporacion;
+      if (!nodoClave || !legacy?.length) continue;
+      const paso = configuracion.pasos.find((item) => item.clave === nodoClave);
+      if (!paso) continue;
+      const actual = porNodo.get(nodoClave) ?? {
+        version: 1 as const,
+        nodoClave,
+        pasoTenantId: paso.familiaCodigo,
+        pasoNombre: paso.nombre,
+        operaciones: [],
+      };
+      actual.operaciones.push(
+        ...legacy.map((operacion, index) => ({
+          ...operacion,
+          activa: true,
+          componentesCodigos: [componente.codigo],
+          orden: actual.operaciones.length + index,
+        })),
+      );
+      porNodo.set(nodoClave, actual);
+    }
+    return [...porNodo.values()];
+  }
+
+  private async validarPasosCompuestos(
+    tenantId: string,
+    pasosCompuestos: ConfiguracionPasoCompuesto[],
+    configuracion: SnapshotConfiguracion,
+    componentes: RecetaComponenteDto[],
+    clavesNodo: Set<string>,
+    exigirTodos: boolean,
+  ) {
+    const idsRuta = configuracion.pasos
+      .map((item) => item.familiaCodigo)
+      .filter((id) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          id,
+        ),
+      );
+    const idsConsulta = [
+      ...new Set([
+        ...pasosCompuestos.map((item) => item.pasoTenantId),
+        ...idsRuta,
+      ]),
+    ];
+    if (!idsConsulta.length) return;
+    const filas = await this.prisma.pasoTenant.findMany({
+      where: {
+        tenantId,
+        id: { in: idsConsulta },
+      },
+      select: {
+        id: true,
+        nombre: true,
+        tipoPaso: true,
+        operacionesCompuestasJson: true,
+      },
+    });
+    const porId = new Map(filas.map((item) => [item.id, item]));
+    if (exigirTodos) {
+      for (const nodo of configuracion.pasos) {
+        const plantilla = porId.get(nodo.familiaCodigo);
+        if (
+          plantilla?.tipoPaso === 'COMPUESTO' &&
+          !pasosCompuestos.some((item) => item.nodoClave === nodo.clave)
+        ) {
+          throw new BadRequestException(
+            `La etapa compuesta "${nodo.nombre}" todavía no tiene sus pasos internos configurados en la BOM.`,
+          );
+        }
+      }
+    }
+    const codigosComponentes = new Set(componentes.map((item) => item.codigo));
+    const nodosVistos = new Set<string>();
+    for (const paso of pasosCompuestos) {
+      if (nodosVistos.has(paso.nodoClave)) {
+        throw new BadRequestException(
+          `El paso compuesto "${paso.pasoNombre}" está configurado más de una vez.`,
+        );
+      }
+      nodosVistos.add(paso.nodoClave);
+      if (!clavesNodo.has(paso.nodoClave)) {
+        throw new BadRequestException(
+          `El nodo compuesto "${paso.pasoNombre}" ya no existe en la ruta.`,
+        );
+      }
+      const nodo = configuracion.pasos.find(
+        (item) => item.clave === paso.nodoClave,
+      );
+      const plantilla = porId.get(paso.pasoTenantId);
+      if (
+        !nodo ||
+        nodo.familiaCodigo !== paso.pasoTenantId ||
+        plantilla?.tipoPaso !== 'COMPUESTO'
+      ) {
+        throw new BadRequestException(
+          `"${paso.pasoNombre}" no corresponde a un paso compuesto vigente de esta ruta.`,
+        );
+      }
+      const definiciones = leerDefinicionesPasoCompuesto(
+        plantilla.operacionesCompuestasJson,
+      );
+      const definicionesPorCodigo = new Map(
+        definiciones.map((item) => [item.codigo, item]),
+      );
+      if (paso.version === 2) {
+        const internos = paso.pasos ?? [];
+        for (const requerida of definiciones.filter((item) => item.requerida)) {
+          if (
+            !internos.some(
+              (item) => item.codigo === requerida.codigo && item.activa,
+            )
+          ) {
+            throw new BadRequestException(
+              `El paso obligatorio "${requerida.nombre}" de "${paso.pasoNombre}" todavía no está configurado.`,
+            );
+          }
+        }
+        const codigosInternos = new Set(internos.map((item) => item.codigo));
+        for (const interno of internos) {
+          const definicion = definicionesPorCodigo.get(interno.codigo);
+          if (
+            !definicion ||
+            definicion.familiaCodigo !== interno.familiaCodigo
+          ) {
+            throw new BadRequestException(
+              `El paso interno "${interno.nombre}" ya no coincide con la subruta reutilizable de "${paso.pasoNombre}".`,
+            );
+          }
+          for (const codigo of interno.componentesCodigos) {
+            if (!codigosComponentes.has(codigo)) {
+              throw new BadRequestException(
+                `El paso "${interno.nombre}" referencia un componente que ya no existe.`,
+              );
+            }
+          }
+          if (
+            interno.requiereCodigos.some(
+              (codigo) => !codigosInternos.has(codigo),
+            )
+          ) {
+            throw new BadRequestException(
+              `El paso "${interno.nombre}" depende de otro paso interno que ya no existe.`,
+            );
+          }
+          if (exigirTodos && interno.activa && this.configPasos) {
+            await this.configPasos.validarConfiguracionBase(
+              tenantId,
+              interno.familiaCodigo,
+              {
+                ...(interno.configuracion as unknown as UpsertProductoConfigPasoDto),
+                rutaPasoId: interno.codigo,
+                requiereRutaPasoIds: [],
+              },
+            );
+          }
+        }
+        continue;
+      }
+      for (const requerida of definiciones.filter((item) => item.requerida)) {
+        if (
+          !paso.operaciones.some(
+            (item) => item.codigo === requerida.codigo && item.activa,
+          )
+        ) {
+          throw new BadRequestException(
+            `La operación obligatoria "${requerida.nombre}" de "${paso.pasoNombre}" todavía no está configurada.`,
+          );
+        }
+      }
+      for (const operacion of paso.operaciones) {
+        if (!definicionesPorCodigo.has(operacion.codigo)) {
+          throw new BadRequestException(
+            `La operación "${operacion.nombre}" ya no existe en el paso reutilizable "${paso.pasoNombre}".`,
+          );
+        }
+        for (const codigo of operacion.componentesCodigos) {
+          if (!codigosComponentes.has(codigo)) {
+            throw new BadRequestException(
+              `La operación "${operacion.nombre}" referencia un componente que ya no existe.`,
+            );
+          }
+        }
+        const fuente = operacion.fuenteCantidad;
+        if (
+          fuente?.tipo === 'COMPONENTE' &&
+          (!fuente.componenteCodigo ||
+            !codigosComponentes.has(fuente.componenteCodigo))
+        ) {
+          throw new BadRequestException(
+            `La fuente de "${operacion.nombre}" ya no pertenece a un componente de la BOM.`,
+          );
+        }
+        if (
+          fuente?.tipo === 'COMPONENTES' &&
+          (fuente.componentesCodigos ?? []).some(
+            (codigo) => !codigosComponentes.has(codigo),
+          )
+        ) {
+          throw new BadRequestException(
+            `La agregación de "${operacion.nombre}" referencia componentes que ya no pertenecen a la BOM.`,
+          );
+        }
+      }
+    }
   }
 
   private encontrarRuta(producto: ProductoDetalle, rutaAlternativaId: string) {
@@ -731,6 +1527,260 @@ export class RecetasProductoService {
       );
     }
     return ruta;
+  }
+
+  private async snapshotActualPublicado(
+    tenantId: string,
+    producto: ProductoDetalle,
+    ruta: RutaDetalle,
+    revision: RevisionPublicadaDetalle,
+  ) {
+    const pasosCompuestos = revision.pasosCompuestosJson
+      ? leerConfiguracionesPasosCompuestos(revision.pasosCompuestosJson)
+      : [];
+    return {
+      ...this.incorporarPasosInternos(
+        this.snapshotConfiguracion(producto, ruta),
+        pasosCompuestos,
+      ),
+      ...(revision.grafoProduccionJson
+        ? { grafoProduccion: revision.grafoProduccionJson }
+        : {}),
+      documentos: this.documentosCanonicos(revision.documentos),
+      componentes: this.componentesCanonicos(
+        await this.componentesConRevisionActual(
+          tenantId,
+          revision.componentes.map((item) => ({
+            ...item,
+            cantidad: Number(item.cantidad),
+          })),
+          pasosCompuestos,
+        ),
+      ),
+      ...(revision.pasosCompuestosJson ? { pasosCompuestos } : {}),
+    };
+  }
+
+  private async diagnosticarDependencias(
+    tenantId: string,
+    componentes: RevisionPublicadaDetalle['componentes'],
+  ) {
+    if (!componentes.length) return [];
+    const productosIds = [
+      ...new Set(componentes.map((item) => item.productoComponenteId)),
+    ];
+    const revisionesIds = [
+      ...new Set(componentes.map((item) => item.recetaRevisionId)),
+    ];
+    const [revisionesCongeladas, publicaciones] = await Promise.all([
+      this.prisma.productoRecetaRevision.findMany({
+        where: { tenantId, id: { in: revisionesIds } },
+        select: {
+          id: true,
+          numero: true,
+          rutaAlternativaId: true,
+          rutaAlternativa: { select: { id: true, nombre: true } },
+        },
+      }),
+      this.prisma.productoReceta.findMany({
+        where: {
+          tenantId,
+          productoId: { in: productosIds },
+          activo: true,
+          revisionPublicadaId: { not: null },
+        },
+        select: {
+          productoId: true,
+          rutaAlternativaId: true,
+          rutaAlternativa: { select: { id: true, nombre: true } },
+          revisionPublicada: {
+            select: { id: true, numero: true, publicadaEl: true },
+          },
+        },
+      }),
+    ]);
+    const congeladaPorId = new Map(
+      revisionesCongeladas.map((revision) => [revision.id, revision]),
+    );
+    const publicacionesPorProducto = new Map<string, typeof publicaciones>();
+    for (const publicacion of publicaciones) {
+      const lista = publicacionesPorProducto.get(publicacion.productoId) ?? [];
+      lista.push(publicacion);
+      publicacionesPorProducto.set(publicacion.productoId, lista);
+    }
+
+    return componentes.map((componente) => {
+      const congelada = congeladaPorId.get(componente.recetaRevisionId);
+      const disponibles =
+        publicacionesPorProducto.get(componente.productoComponenteId) ?? [];
+      const candidatas = congelada
+        ? disponibles.filter(
+            (item) => item.rutaAlternativaId === congelada.rutaAlternativaId,
+          )
+        : disponibles;
+      const disponible = candidatas.length === 1 ? candidatas[0] : null;
+      const estado =
+        candidatas.length === 0
+          ? 'SIN_PUBLICACION'
+          : candidatas.length > 1
+            ? 'AMBIGUA'
+            : disponible?.revisionPublicada?.id === componente.recetaRevisionId
+              ? 'VIGENTE'
+              : 'ACTUALIZACION_DISPONIBLE';
+      return {
+        ocurrencia: {
+          id: componente.id,
+          nombre: componente.nombre,
+          productoId: componente.productoComponenteId,
+        },
+        rutaCongelada: congelada?.rutaAlternativa ?? null,
+        revisionCongelada: {
+          id: componente.recetaRevisionId,
+          version: componente.recetaVersion,
+        },
+        revisionDisponible: disponible?.revisionPublicada
+          ? {
+              id: disponible.revisionPublicada.id,
+              version: disponible.revisionPublicada.numero,
+              publicadaEl: disponible.revisionPublicada.publicadaEl,
+            }
+          : null,
+        estado,
+        publicacionesDisponibles: disponibles.flatMap((item) =>
+          item.revisionPublicada
+            ? [
+                {
+                  ruta: item.rutaAlternativa,
+                  revisionId: item.revisionPublicada.id,
+                  version: item.revisionPublicada.numero,
+                },
+              ]
+            : [],
+        ),
+      };
+    });
+  }
+
+  private async obtenerProductosPadreAfectados(
+    tenantId: string,
+    productoId: string,
+  ) {
+    const usos = await this.prisma.productoRecetaComponente.findMany({
+      where: {
+        tenantId,
+        productoComponenteId: productoId,
+        revision: { estado: EstadoProductoRecetaRevision.PUBLICADA },
+      },
+      select: {
+        id: true,
+        nombre: true,
+        recetaRevisionId: true,
+        recetaVersion: true,
+        revision: {
+          select: {
+            id: true,
+            numero: true,
+            rutaAlternativa: { select: { id: true, nombre: true } },
+            receta: {
+              select: {
+                revisionPublicadaId: true,
+                producto: { select: { id: true, nombre: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    const usosVigentes = usos.filter(
+      (uso) => uso.revision.receta.revisionPublicadaId === uso.revision.id,
+    );
+    if (!usosVigentes.length) return [];
+
+    const revisionesCongeladas =
+      await this.prisma.productoRecetaRevision.findMany({
+        where: {
+          tenantId,
+          id: { in: usosVigentes.map((uso) => uso.recetaRevisionId) },
+        },
+        select: { id: true, rutaAlternativaId: true },
+      });
+    const rutaPorRevision = new Map(
+      revisionesCongeladas.map((revision) => [
+        revision.id,
+        revision.rutaAlternativaId,
+      ]),
+    );
+    const publicaciones = await this.prisma.productoReceta.findMany({
+      where: {
+        tenantId,
+        productoId,
+        activo: true,
+        revisionPublicadaId: { not: null },
+      },
+      select: {
+        rutaAlternativaId: true,
+        revisionPublicada: { select: { id: true, numero: true } },
+      },
+    });
+    const publicadaPorRuta = new Map(
+      publicaciones.flatMap((publicacion) =>
+        publicacion.revisionPublicada
+          ? [
+              [
+                publicacion.rutaAlternativaId,
+                publicacion.revisionPublicada,
+              ] as const,
+            ]
+          : [],
+      ),
+    );
+    const agrupados = new Map<
+      string,
+      {
+        productoPadre: { id: string; nombre: string };
+        rutaPadre: { id: string; nombre: string };
+        revisionPublicadaPadre: { id: string; version: number };
+        ocurrencias: Array<{
+          id: string;
+          nombre: string;
+          revisionCongelada: { id: string; version: number };
+          revisionDisponible: { id: string; version: number } | null;
+          estado: 'VIGENTE' | 'ACTUALIZACION_DISPONIBLE' | 'SIN_PUBLICACION';
+        }>;
+      }
+    >();
+    for (const uso of usosVigentes) {
+      const rutaHija = rutaPorRevision.get(uso.recetaRevisionId);
+      const disponible = rutaHija ? publicadaPorRuta.get(rutaHija) : null;
+      const estado = !disponible
+        ? 'SIN_PUBLICACION'
+        : disponible.id === uso.recetaRevisionId
+          ? 'VIGENTE'
+          : 'ACTUALIZACION_DISPONIBLE';
+      const existente = agrupados.get(uso.revision.id) ?? {
+        productoPadre: uso.revision.receta.producto,
+        rutaPadre: uso.revision.rutaAlternativa,
+        revisionPublicadaPadre: {
+          id: uso.revision.id,
+          version: uso.revision.numero,
+        },
+        ocurrencias: [],
+      };
+      existente.ocurrencias.push({
+        id: uso.id,
+        nombre: uso.nombre,
+        revisionCongelada: {
+          id: uso.recetaRevisionId,
+          version: uso.recetaVersion,
+        },
+        revisionDisponible: disponible
+          ? { id: disponible.id, version: disponible.numero }
+          : null,
+        estado,
+      });
+      agrupados.set(uso.revision.id, existente);
+    }
+    return [...agrupados.values()];
   }
 
   private snapshotConfiguracion(
@@ -834,8 +1884,13 @@ export class RecetasProductoService {
         nombre: producto.nombre,
         unidadComercial: producto.unidadComercial,
         modoMedidas: producto.modoMedidas,
+        dimensionesRequeridas: producto.dimensionesRequeridas,
         medidaDefaultAnchoMm: numero(producto.medidaDefaultAnchoMm, 0),
         medidaDefaultAltoMm: numero(producto.medidaDefaultAltoMm, 0),
+        medidaDefaultProfundidadMm: numero(
+          producto.medidaDefaultProfundidadMm,
+          0,
+        ),
         medidasPredefinidasJson: jsonSeguro(producto.medidasPredefinidasJson),
         atributosComercialesJson: jsonSeguro(producto.atributosComercialesJson),
       },
@@ -856,19 +1911,138 @@ export class RecetasProductoService {
     };
   }
 
+  private async plantillaInicialDesdeRuta(
+    tenantId: string,
+    ruta: RutaDetalle,
+  ): Promise<{
+    dependencias: Array<{ desdeClave: string; haciaClave: string }>;
+    componentes: RecetaComponenteDto[];
+  }> {
+    const version = await this.prisma.rutaVersion.findFirst({
+      where: {
+        tenantId,
+        rutaId: ruta.rutaId,
+        version: ruta.rutaVersion,
+      },
+      select: { snapshotJson: true },
+    });
+    const workflow = leerWorkflowRuta(version?.snapshotJson, ruta.ruta.pasos);
+    const tipos = new Map(
+      workflow.nodos.map((nodo) => [nodo.clave, nodo.tipo]),
+    );
+    const dependencias = workflow.aristas.filter(
+      (arista) =>
+        tipos.get(arista.desdeClave) !== 'COMPONENTE' &&
+        tipos.get(arista.haciaClave) !== 'COMPONENTE',
+    );
+    const componentes: RecetaComponenteDto[] = workflow.nodos
+      .filter((nodo) => nodo.tipo === 'COMPONENTE')
+      .map((nodo, index) => ({
+        productoComponenteId: nodo.productoComponenteId,
+        codigo: nodo.codigo,
+        nombre: nodo.nombre,
+        politicaEjecucion: 'INDEPENDIENTE',
+        formula: 'por_unidad',
+        cantidad: 1,
+        unidad: 'unidad',
+        requerido: nodo.requerido,
+        configuracionJson: null,
+        nodoIncorporacionClave:
+          workflow.aristas.find((arista) => arista.desdeClave === nodo.clave)
+            ?.haciaClave ?? null,
+        nodosPredecesoresClaves: workflow.aristas
+          .filter(
+            (arista) =>
+              arista.haciaClave === nodo.clave &&
+              tipos.get(arista.desdeClave) !== 'COMPONENTE',
+          )
+          .map((arista) => arista.desdeClave),
+        orden: index,
+      }));
+    return { dependencias, componentes };
+  }
+
+  /** Materializa las operaciones privadas de una etapa como pasos de cálculo
+   * del snapshot. El motor los evalúa con toda la precisión del editor normal,
+   * pero consolida el resultado antes de exponerlo a la OT y al Tablero. */
+  private incorporarPasosInternos(
+    configuracion: SnapshotConfiguracion,
+    compuestos: ConfiguracionPasoCompuesto[],
+  ): SnapshotConfiguracion {
+    const internos: PasoSnapshot[] = [];
+    for (const compuesto of compuestos) {
+      if (compuesto.version !== 2) continue;
+      const contenedor = configuracion.pasos.find(
+        (item) => item.clave === compuesto.nodoClave,
+      );
+      for (const [index, paso] of (compuesto.pasos ?? [])
+        .filter((item) => item.activa)
+        .entries()) {
+        const cfg = paso.configuracion;
+        internos.push({
+          clave: `${compuesto.nodoClave}:interno:${paso.codigo}`,
+          nombre: paso.nombre,
+          familiaCodigo: paso.familiaCodigo,
+          orden: (contenedor?.orden ?? 10000) + (index + 1) / 1000,
+          configuracion: jsonSeguro({
+            ...cfg,
+            contenedorClave: compuesto.nodoClave,
+            pasoInternoCodigo: paso.codigo,
+            componentesCodigos: paso.componentesCodigos,
+            requiereCodigos: paso.requiereCodigos,
+          }) as Record<string, unknown>,
+          slots: Array.isArray(cfg.slotsMateriales)
+            ? cfg.slotsMateriales.map(
+                (slot) => jsonSeguro(slot) as Record<string, unknown>,
+              )
+            : [],
+          recurso: jsonSeguro({
+            maquina: cfg.maquinaM1Id ? { id: cfg.maquinaM1Id } : null,
+            perfil: cfg.perfilM1Id ? { id: cfg.perfilM1Id } : null,
+            centroCosto: cfg.centroCostoId ? { id: cfg.centroCostoId } : null,
+            maquinasCandidatas: cfg.maquinasCandidatas ?? [],
+            dotacionOperarios: cfg.dotacionOperarios ?? 1,
+            tercerizado: cfg.tercerizado ?? false,
+            proveedorId: cfg.proveedorId ?? null,
+            fuenteCostoTercerizado: cfg.fuenteCostoTercerizado ?? null,
+            tercerizadoConfigJson: cfg.tercerizadoConfigJson ?? null,
+            plazoProveedorDias: cfg.plazoProveedorDias ?? null,
+          }) as Record<string, unknown>,
+        });
+      }
+    }
+    return {
+      ...configuracion,
+      pasos: [...configuracion.pasos, ...internos].sort(
+        (a, b) => a.orden - b.orden || a.clave.localeCompare(b.clave),
+      ),
+    };
+  }
+
   private documentosCanonicos(documentos: RecetaDocumentoDto[]) {
     return documentos
-      .map((item, index) => ({
-        codigo: item.codigo.trim(),
-        nombre: item.nombre.trim(),
-        pasoClave: item.pasoClave ?? null,
-        proposito: item.proposito,
-        etapa: item.etapa,
-        tipoAprobacion: item.tipoAprobacion ?? null,
-        requerido: item.requerido ?? true,
-        descripcion: item.descripcion ?? null,
-        orden: item.orden ?? index,
-      }))
+      .map((item, index) => {
+        const alcance =
+          item.alcance ??
+          (item.pasoClave
+            ? AlcanceDocumentoProduccion.PASO
+            : AlcanceDocumentoProduccion.ITEM);
+        return {
+          codigo: item.codigo.trim(),
+          nombre: item.nombre.trim(),
+          alcance,
+          pasoClave:
+            alcance === AlcanceDocumentoProduccion.PASO
+              ? (item.pasoClave ?? null)
+              : null,
+          proposito: item.proposito,
+          etapa: item.etapa,
+          tipoAprobacion: item.tipoAprobacion ?? null,
+          requerido: item.requerido ?? true,
+          descripcion: item.descripcion ?? null,
+          orden: item.orden ?? index,
+        };
+      })
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));
   }
 
@@ -894,6 +2068,14 @@ export class RecetasProductoService {
         cantidad: Number(item.cantidad),
         unidad: item.unidad ?? 'unidad',
         requerido: item.requerido ?? true,
+        configuracionJson:
+          item.configuracionJson == null
+            ? null
+            : jsonSeguro(item.configuracionJson),
+        nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
+        ...((item.nodosPredecesoresClaves?.length ?? 0) > 0
+          ? { nodosPredecesoresClaves: item.nodosPredecesoresClaves }
+          : {}),
         orden: item.orden ?? index,
       }))
       .sort((a, b) => a.orden - b.orden || a.codigo.localeCompare(b.codigo));
@@ -902,6 +2084,8 @@ export class RecetasProductoService {
   private async componentesConRevisionActual(
     tenantId: string,
     componentes: RecetaComponenteDto[],
+    pasosCompuestos: ConfiguracionPasoCompuesto[] = [],
+    opciones: { actualizarSnapshotsPricing?: boolean } = {},
   ) {
     if (!componentes.length) return [];
     const ids = [
@@ -916,8 +2100,14 @@ export class RecetasProductoService {
       },
       select: {
         productoId: true,
+        producto: { select: { precioConfigJson: true } },
         revisionPublicada: {
-          select: { id: true, numero: true, huellaConfiguracion: true },
+          select: {
+            id: true,
+            numero: true,
+            huellaConfiguracion: true,
+            snapshotJson: true,
+          },
         },
       },
     });
@@ -928,6 +2118,158 @@ export class RecetasProductoService {
           : [],
       ),
     );
+    const precioPorProducto = new Map(
+      recetas.map((receta) => [
+        receta.productoId,
+        receta.producto.precioConfigJson,
+      ]),
+    );
+    const componentePorCodigo = new Map(
+      componentes.map((item) => [item.codigo, item]),
+    );
+    for (const item of componentes) {
+      const configuracion = leerConfiguracionComponente(item.configuracionJson);
+      for (const binding of configuracion?.bindings ?? []) {
+        const fuente = binding.regla?.fuente;
+        if (fuente?.tipo !== 'COMPONENTE' || !fuente.componenteCodigo) {
+          continue;
+        }
+        const componenteFuente = componentePorCodigo.get(
+          fuente.componenteCodigo,
+        );
+        const revisionFuente = componenteFuente
+          ? porProducto.get(componenteFuente.productoComponenteId)
+          : null;
+        const snapshot = revisionFuente?.snapshotJson;
+        const pasos =
+          snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+            ? (snapshot as Record<string, unknown>).pasos
+            : null;
+        const catalogo = catalogoSalidasPublicasComposicion(
+          Array.isArray(pasos)
+            ? pasos.flatMap((paso) => {
+                if (!paso || typeof paso !== 'object' || Array.isArray(paso)) {
+                  return [];
+                }
+                const value = paso as Record<string, unknown>;
+                return typeof value.familiaCodigo === 'string'
+                  ? [
+                      {
+                        familiaCodigo: value.familiaCodigo,
+                        nombreVisible:
+                          typeof value.nombre === 'string'
+                            ? value.nombre
+                            : null,
+                      },
+                    ]
+                  : [];
+              })
+            : [],
+        );
+        if (!catalogo.some((output) => output.clave === fuente.campo)) {
+          throw new BadRequestException(
+            `El componente "${item.nombre}" usa el dato "${fuente.campo}" de "${componenteFuente?.nombre ?? fuente.componenteCodigo}", pero ese producto no lo publica en su receta vigente.`,
+          );
+        }
+      }
+      for (const operacion of configuracion?.operacionesIncorporacion ?? []) {
+        const fuente = operacion.fuenteCantidad;
+        if (fuente?.tipo !== 'COMPONENTE' || !fuente.componenteCodigo) {
+          continue;
+        }
+        const componenteFuente = componentePorCodigo.get(
+          fuente.componenteCodigo,
+        );
+        if (item.requerido !== false && componenteFuente?.requerido === false) {
+          throw new BadRequestException(
+            `La incorporación requerida de "${item.nombre}" no puede depender del componente opcional "${componenteFuente.nombre}".`,
+          );
+        }
+        const revisionFuente = componenteFuente
+          ? porProducto.get(componenteFuente.productoComponenteId)
+          : null;
+        const snapshot = revisionFuente?.snapshotJson;
+        const pasos =
+          snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+            ? (snapshot as Record<string, unknown>).pasos
+            : null;
+        const catalogo = catalogoSalidasPublicasComposicion(
+          Array.isArray(pasos)
+            ? pasos.flatMap((paso) => {
+                if (!paso || typeof paso !== 'object' || Array.isArray(paso)) {
+                  return [];
+                }
+                const value = paso as Record<string, unknown>;
+                return typeof value.familiaCodigo === 'string'
+                  ? [
+                      {
+                        familiaCodigo: value.familiaCodigo,
+                        nombreVisible:
+                          typeof value.nombre === 'string'
+                            ? value.nombre
+                            : null,
+                      },
+                    ]
+                  : [];
+              })
+            : [],
+        );
+        if (!catalogo.some((output) => output.clave === fuente.campo)) {
+          throw new BadRequestException(
+            `La operación "${operacion.nombre}" usa el dato "${fuente.campo}" de "${componenteFuente?.nombre ?? fuente.componenteCodigo}", pero ese producto no lo publica en su receta vigente.`,
+          );
+        }
+      }
+    }
+    for (const paso of pasosCompuestos) {
+      for (const operacion of paso.operaciones.filter((item) => item.activa)) {
+        const fuente = operacion.fuenteCantidad;
+        if (fuente?.tipo !== 'COMPONENTE' || !fuente.componenteCodigo) {
+          continue;
+        }
+        const componenteFuente = componentePorCodigo.get(
+          fuente.componenteCodigo,
+        );
+        const revisionFuente = componenteFuente
+          ? porProducto.get(componenteFuente.productoComponenteId)
+          : null;
+        const snapshot = revisionFuente?.snapshotJson;
+        const pasos =
+          snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+            ? (snapshot as Record<string, unknown>).pasos
+            : null;
+        const catalogo = catalogoSalidasPublicasComposicion(
+          Array.isArray(pasos)
+            ? pasos.flatMap((pasoSnapshot) => {
+                if (
+                  !pasoSnapshot ||
+                  typeof pasoSnapshot !== 'object' ||
+                  Array.isArray(pasoSnapshot)
+                ) {
+                  return [];
+                }
+                const value = pasoSnapshot as Record<string, unknown>;
+                return typeof value.familiaCodigo === 'string'
+                  ? [
+                      {
+                        familiaCodigo: value.familiaCodigo,
+                        nombreVisible:
+                          typeof value.nombre === 'string'
+                            ? value.nombre
+                            : null,
+                      },
+                    ]
+                  : [];
+              })
+            : [],
+        );
+        if (!catalogo.some((output) => output.clave === fuente.campo)) {
+          throw new BadRequestException(
+            `La operación "${operacion.nombre}" usa el dato "${fuente.campo}" de "${componenteFuente?.nombre ?? fuente.componenteCodigo}", pero ese producto no lo publica en su receta vigente.`,
+          );
+        }
+      }
+    }
     return componentes.map((item) => {
       const revision = porProducto.get(item.productoComponenteId);
       if (!revision) {
@@ -940,6 +2282,12 @@ export class RecetasProductoService {
         recetaRevisionId: revision.id,
         recetaVersion: revision.numero,
         recetaHuella: revision.huellaConfiguracion,
+        configuracionJson: congelarPoliticaPricingComponente({
+          configuracionJson: item.configuracionJson,
+          precioConfigHijo: precioPorProducto.get(item.productoComponenteId),
+          actualizarSnapshot: opciones.actualizarSnapshotsPricing === true,
+          componenteNombre: item.nombre,
+        }),
       };
     });
   }
@@ -949,9 +2297,9 @@ export class RecetasProductoService {
       documentos: unknown[];
       componentes: unknown[];
     },
-    unidades: Map<string, UnidadMateriaPrima | null>,
+    variantes: Map<string, VarianteMaterialReferencia>,
   ) {
-    return snapshot.pasos.flatMap((paso) =>
+    return pasosEfectivos(snapshot).flatMap((paso) =>
       paso.slots.map((slot, index) => {
         const materialVariante =
           slot.materialVariante && typeof slot.materialVariante === 'object'
@@ -966,6 +2314,9 @@ export class RecetasProductoService {
           typeof slot.materialVarianteId === 'string'
             ? slot.materialVarianteId
             : null;
+        const varianteCatalogo = varianteId
+          ? (variantes.get(varianteId) ?? null)
+          : null;
         return {
           pasoClave: paso.clave,
           pasoNombre: paso.nombre,
@@ -976,16 +2327,18 @@ export class RecetasProductoService {
           modoSeleccion: String(slot.modoSeleccion ?? 'HARDCODED'),
           materialVarianteId: varianteId,
           materialSku:
-            typeof materialVariante?.sku === 'string'
+            varianteCatalogo?.sku ??
+            (typeof materialVariante?.sku === 'string'
               ? materialVariante.sku
-              : null,
+              : null),
           materialNombre:
-            typeof materiaPrima?.nombre === 'string'
+            varianteCatalogo?.nombre ??
+            (typeof materiaPrima?.nombre === 'string'
               ? materiaPrima.nombre
               : typeof materialVariante?.nombreVariante === 'string'
                 ? materialVariante.nombreVariante
-                : null,
-          unidad: varianteId ? (unidades.get(varianteId) ?? null) : null,
+                : null),
+          unidad: varianteCatalogo?.unidad ?? null,
           formula: String(slot.formula ?? 'por_unidad_productiva'),
           cantidadBase:
             typeof slot.cantidadBase === 'string' ? slot.cantidadBase : null,
@@ -1015,7 +2368,7 @@ export class RecetasProductoService {
       componentes: unknown[];
     },
   ) {
-    return snapshot.pasos.map((paso) => {
+    return pasosEfectivos(snapshot).map((paso) => {
       const recurso = paso.recurso;
       const maquina =
         recurso.maquina && typeof recurso.maquina === 'object'
@@ -1161,7 +2514,7 @@ export class RecetasProductoService {
         for (const id of this.idsVariantesSlot(slot)) ids.add(id);
       }
     }
-    if (!ids.size) return new Map<string, UnidadMateriaPrima | null>();
+    if (!ids.size) return new Map<string, VarianteMaterialReferencia>();
     const variantes = await this.prisma.materiaPrimaVariante.findMany({
       where: {
         tenantId,
@@ -1170,14 +2523,22 @@ export class RecetasProductoService {
       },
       select: {
         id: true,
+        sku: true,
+        nombreVariante: true,
         unidadStock: true,
-        materiaPrima: { select: { unidadStock: true } },
+        materiaPrima: { select: { nombre: true, unidadStock: true } },
       },
     });
     return new Map(
       variantes.map((item) => [
         item.id,
-        item.unidadStock ?? item.materiaPrima.unidadStock,
+        {
+          unidad: item.unidadStock ?? item.materiaPrima.unidadStock,
+          sku: item.sku,
+          nombre: item.nombreVariante
+            ? `${item.materiaPrima.nombre} · ${item.nombreVariante}`
+            : item.materiaPrima.nombre,
+        },
       ]),
     );
   }
@@ -1187,6 +2548,8 @@ export class RecetasProductoService {
     productoId: string,
     documentos: RecetaDocumentoDto[],
     componentes: RecetaComponenteDto[],
+    clavesPaso: Set<string>,
+    atributosComercialesJson?: unknown,
   ) {
     const codigosDocumentos = new Set<string>();
     for (const item of documentos) {
@@ -1195,17 +2558,59 @@ export class RecetasProductoService {
         throw new BadRequestException(`Documento duplicado: ${item.codigo}.`);
       }
       codigosDocumentos.add(codigo);
-    }
-    const codigosComponentes = new Set<string>();
-    for (const item of componentes) {
-      if ((item.formula ?? 'por_unidad') !== 'por_unidad') {
+      const alcance =
+        item.alcance ??
+        (item.pasoClave
+          ? AlcanceDocumentoProduccion.PASO
+          : AlcanceDocumentoProduccion.ITEM);
+      if (alcance === AlcanceDocumentoProduccion.PASO) {
+        if (!item.pasoClave || !clavesPaso.has(item.pasoClave)) {
+          throw new BadRequestException(
+            `El documento "${item.nombre}" debe apuntar a un paso vigente de la ruta.`,
+          );
+        }
+      } else if (item.pasoClave) {
         throw new BadRequestException(
-          `El componente ${item.nombre} debe usar la fórmula por_unidad.`,
+          `El documento "${item.nombre}" no puede conservar un paso cuando su alcance es ${alcance.toLowerCase()}.`,
         );
       }
-      if ((item.unidad ?? 'unidad').trim().toLowerCase() !== 'unidad') {
+    }
+    const codigosComponentes = new Set<string>();
+    const fuentesGeometricas = new Set(
+      leerGeometriasComerciales(atributosComercialesJson).fuentes.map(
+        (fuente) => `geometriasVectoriales.${fuente.id}`,
+      ),
+    );
+    for (const item of componentes) {
+      validarConfiguracionComponente(item.configuracionJson, item.nombre);
+      validarPoliticaPricingComponente(item.configuracionJson, item.nombre);
+      const configuracion = leerConfiguracionComponente(item.configuracionJson);
+      for (const binding of configuracion?.bindings ?? []) {
+        if (
+          binding.clave !== 'disenoVectorialFuente' ||
+          binding.origen !== 'PADRE'
+        ) {
+          continue;
+        }
+        const campoFuente =
+          binding.regla?.fuente?.tipo === 'PADRE'
+            ? binding.regla.fuente.campo
+            : (binding.regla?.campoPadre ?? binding.padreClave ?? '');
+        if (
+          campoFuente.startsWith('geometriasVectoriales.') &&
+          !fuentesGeometricas.has(campoFuente)
+        ) {
+          throw new BadRequestException(
+            `El componente "${item.nombre}" hereda una geometría que ya no existe en el producto padre. Elegí nuevamente su fuente geométrica.`,
+          );
+        }
+      }
+      if (
+        item.requerido === false &&
+        configuracion?.repeticion?.permitida === true
+      ) {
         throw new BadRequestException(
-          `El componente ${item.nombre} debe expresarse en unidad.`,
+          `El componente repetible "${item.nombre}" debe tener una ocurrencia base obligatoria. Las ocurrencias adicionales se activan al cotizar.`,
         );
       }
       if (item.productoComponenteId === productoId) {
@@ -1219,6 +2624,7 @@ export class RecetasProductoService {
       }
       codigosComponentes.add(codigo);
     }
+    ordenarComponentesPorCalculo(componentes);
     const ids = [
       ...new Set(componentes.map((item) => item.productoComponenteId)),
     ];
@@ -1282,14 +2688,14 @@ export class RecetasProductoService {
 
   private validarUnidades(
     snapshot: SnapshotConfiguracion,
-    unidades: Map<string, UnidadMateriaPrima | null>,
+    variantes: Map<string, VarianteMaterialReferencia>,
   ) {
     for (const paso of snapshot.pasos) {
       for (const slot of paso.slots) {
         const formula = String(slot.formula ?? '');
         const unidadesSlot = new Set(
           this.idsVariantesSlot(slot)
-            .map((id) => unidades.get(id))
+            .map((id) => variantes.get(id)?.unidad)
             .filter((item): item is UnidadMateriaPrima => Boolean(item)),
         );
         const esperada =

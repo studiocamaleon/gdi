@@ -36,6 +36,28 @@ function job(
 }
 
 describe("view-model del simulador gran formato", () => {
+  it("reserva los planos conservados para su visor y no los mezcla en el reacomodo de rollos", () => {
+    const fijo = {
+      ...job("fijo", "blanco-60", "blanco"),
+      planFabricacion: {
+        algorithm: "grid-2d-multi",
+        cantidadCalculada: 1,
+        unidad: "pliegos",
+        aprovechamientoPct: 50,
+        placements: [],
+        substrates: [],
+        piezasAcomodadas: 0,
+      },
+    } as SimuladorJob;
+    const resultado = buildViewModel({
+      jobs: [fijo, job("libre", "blanco-60", "blanco")],
+      materiales: [],
+      puedeVerImportes: false,
+    });
+    expect([...resultado.jobs.values()].flat().map((j) => j.id)).toEqual([
+      "libre",
+    ]);
+  });
   it("separa colores incompatibles aunque compartan materia prima y ancho", () => {
     const data: SimuladorData = {
       puedeVerImportes: false,

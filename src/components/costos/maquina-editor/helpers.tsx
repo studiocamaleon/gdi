@@ -848,6 +848,12 @@ export function shouldShowMaquinaField(
   field: MaquinariaTemplateField,
   form: MaquinaPayload,
 ) {
+  if (
+    field.key === "ejeSobresalientePlaca" &&
+    getMaquinaFieldValue(form, "placaSobresalientePermitida") !== true
+  ) {
+    return false;
+  }
   if (form.plantilla === "corte_hilo_caliente") {
     const tipoUnion = getMaquinaFieldValue(form, "tipoUnionVectorial");
     const modoCantidad = getMaquinaFieldValue(form, "modoCantidadEncastres");

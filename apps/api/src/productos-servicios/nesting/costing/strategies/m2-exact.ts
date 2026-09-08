@@ -26,11 +26,13 @@ export function costingM2Exact<T = unknown>(
   const areaPiezasM2 =
     pieceWidthMm && pieceHeightMm
       ? (pieceWidthMm * pieceHeightMm * input.totalPieces) / 1_000_000
-      : input.nesting.placements.reduce(
-          (acc, placement) =>
-            acc + (placement.widthMm * placement.heightMm) / 1_000_000,
-          0,
-        );
+      : input.nesting.metrics.areaUtilMm2 > 0
+        ? input.nesting.metrics.areaUtilMm2 / 1_000_000
+        : input.nesting.placements.reduce(
+            (acc, placement) =>
+              acc + (placement.widthMm * placement.heightMm) / 1_000_000,
+            0,
+          );
   const totalCost = round2(areaPiezasM2 * pricePerM2Value);
 
   return {

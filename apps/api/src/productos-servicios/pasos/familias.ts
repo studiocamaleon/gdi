@@ -580,6 +580,13 @@ const impresion_3d: DefinicionFamilia = {
 
 const aplicacion_transfer: DefinicionFamilia = {
   codigo: 'aplicacion_transfer',
+  // Una aplicación se repite por transfer, no necesariamente por producto
+  // padre. En un compuesto, `cantidad_montaje` recibe la suma de piezas de
+  // todos los componentes vinculados (frente, espalda, manga, etc.).
+  ritmoDefault: {
+    modoCalculo: 'productivity',
+    fuenteCantidad: 'cantidad_montaje',
+  },
   // Renombrada 2026-08-07 (pedido del usuario): el nombre viejo ("Aplicación
   // DTF UV manual") ataba la familia a UNA técnica; aplica a cualquier
   // transfer colocado a mano. El par con la hermana queda simétrico:
@@ -623,6 +630,7 @@ const aplicacion_transfer: DefinicionFamilia = {
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
+  magnitudTiempoDefault: 'cantidad_montaje',
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_aplicadas'],
   validaciones: [],
@@ -632,6 +640,10 @@ const aplicacion_transfer: DefinicionFamilia = {
 
 const aplicacion_transfer_textil: DefinicionFamilia = {
   codigo: 'aplicacion_transfer_textil',
+  // La plancha cuenta bajadas/estampas. Cuando el paso pertenece al padre de
+  // un producto compuesto, esta magnitud agrega las piezas de los componentes
+  // vinculados y también sus ocurrencias creadas durante la cotización.
+  magnitudTiempoDefault: 'cantidad_montaje',
   nombre: 'Aplicación de transfer textil',
   categoria: 'produccion_impresion',
   descripcion:
@@ -896,7 +908,7 @@ const corte_laser: DefinicionFamilia = {
       tipo: 'boolean',
       default: false,
       descripcion:
-        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción.',
+        'Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción.',
     },
     {
       campo: 'permitirIngresoPorMedidas',
@@ -904,7 +916,15 @@ const corte_laser: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       descripcion:
-        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+        'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
+    },
+    {
+      campo: 'usarCommonLine',
+      etiqueta: 'Optimizar líneas de corte compartidas',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado.',
     },
   ],
   productosTipicos: ['Letras de acrílico', 'Cortes complejos en MDF/madera'],
@@ -988,7 +1008,7 @@ const cnc: DefinicionFamilia = {
       tipo: 'boolean',
       default: false,
       descripcion:
-        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción. El CAM/G-code continúa en el software de la CNC.',
+        'Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción. El CAM/G-code continúa en el software de la CNC.',
     },
     {
       campo: 'permitirIngresoPorMedidas',
@@ -996,7 +1016,15 @@ const cnc: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       descripcion:
-        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+        'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
+    },
+    {
+      campo: 'usarCommonLine',
+      etiqueta: 'Optimizar líneas de corte compartidas',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado.',
     },
   ],
   productosTipicos: ['Letras corpóreas MDF', 'Carteles rígidos con forma'],
@@ -1083,7 +1111,7 @@ const corte_manual: DefinicionFamilia = {
 };
 
 /** Corte de piezas corpóreas a partir de contornos vectoriales sobre placas.
- * El SVG y su nesting son requisitos del PROCESO: cualquier producto cuya
+ * La fuente vectorial y su nesting son requisitos del PROCESO: cualquier producto cuya
  * ruta use esta familia obtiene el configurador vectorial sin activar una
  * herramienta particular en atributos comerciales. */
 const corte_hilo_caliente: DefinicionFamilia = {

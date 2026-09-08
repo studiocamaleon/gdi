@@ -24,6 +24,7 @@ import type { LetraProvider } from './invoicing-provider';
 import { calcularTotales, type ItemCalculo } from './totales-comprobante';
 
 export type OrdenItemFacturable = {
+  parentItemId?: string | null;
   nombre: string;
   cantidad: number;
   /** Neto descontado (lo persistido en `OrdenTrabajoItem.subtotal`). */
@@ -40,7 +41,7 @@ export function itemsOrdenConDescuento(
   letra: LetraProvider,
   items: OrdenItemFacturable[],
 ): ItemFacturaOrden[] {
-  return items.map((item) => {
+  return items.filter(item => item.parentItemId == null).map((item) => {
     const descuento = Math.max(0, item.descuentoMonto);
     const netoLista = item.subtotal + descuento;
     const pct = netoLista > 0 ? (descuento / netoLista) * 100 : 0;

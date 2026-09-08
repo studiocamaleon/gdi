@@ -73,13 +73,10 @@ export function ReportesShell({ children }: { children: React.ReactNode }) {
                 <span>{activo?.categoria}</span>
               </div>
             ) : null}
-            {esIndice ? (
-              <span className={styles.modulo}>Inteligencia de negocio</span>
-            ) : null}
-            <h1>{esIndice ? "Reportes" : activo?.label ?? "Reporte"}</h1>
+            <h1>{esIndice ? "Centro de análisis" : activo?.label ?? "Reporte"}</h1>
             <div className="sub">
               {esIndice
-                ? "Elegí una vista para analizar tu negocio con datos reales."
+                ? `${visibles.length} vistas para analizar ventas, finanzas y operación.`
                 : activo?.descripcion ?? "Inteligencia de negocio de tu taller."}
             </div>
           </div>

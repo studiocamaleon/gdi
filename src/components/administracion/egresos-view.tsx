@@ -16,6 +16,7 @@
  * Ver docs/egresos-y-cuentas-por-pagar-diseno.md
  */
 
+import egresosResumen from "./egresos-resumen.module.css";
 import * as React from "react";
 import {
   CalendarClockIcon,
@@ -564,7 +565,7 @@ export function EgresosView({
       <div className="egr-wrap">
         <div className="egr-head">
           <div>
-            <span className="egr-eyebrow">Administración financiera</span>
+            <span className={egresosResumen["egr-eyebrow"]}>Administración financiera</span>
             <h1>{ENCABEZADO[modo].titulo}</h1>
             <div className="sub">{ENCABEZADO[modo].sub}</div>
           </div>
@@ -583,8 +584,8 @@ export function EgresosView({
         {resumen ? (
           <div className="egr-kpis">
             <div className={`egr-kpi ${resumen.vencido > 0 ? "mal" : ""}`}>
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <CalendarClockIcon />
                 </span>
                 <span className="l">Vencido</span>
@@ -593,8 +594,8 @@ export function EgresosView({
               <span className="h">ya se pasó la fecha</span>
             </div>
             <div className="egr-kpi">
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <CalendarClockIcon />
                 </span>
                 <span className="l">Vence esta semana</span>
@@ -603,8 +604,8 @@ export function EgresosView({
               <span className="h">próximos 7 días</span>
             </div>
             <div className="egr-kpi">
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <CircleDollarSignIcon />
                 </span>
                 <span className="l">Total a pagar</span>
@@ -620,8 +621,8 @@ export function EgresosView({
             <div
               className={`egr-kpi ${resumen.cuentas < resumen.aPagar ? "alerta" : "bien"}`}
             >
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <WalletCardsIcon />
                 </span>
                 <span className="l">En las cuentas</span>

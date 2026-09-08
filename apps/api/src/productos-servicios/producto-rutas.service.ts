@@ -13,6 +13,7 @@ import type {
   UpsertProductoConfigPasoDto,
 } from './dto/producto-ruta.dto';
 import { ConfigPasosService } from './config-pasos.service';
+import { leerWorkflowRuta } from './ruta-workflow';
 
 @Injectable()
 export class ProductoRutasService {
@@ -28,7 +29,10 @@ export class ProductoRutasService {
   ) {
     const [producto, ruta, rutaVersion] = await Promise.all([
       this.prisma.producto.findFirst({ where: { id: productoId, tenantId } }),
-      this.prisma.ruta.findFirst({ where: { id: dto.rutaId, tenantId } }),
+      this.prisma.ruta.findFirst({
+        where: { id: dto.rutaId, tenantId },
+        include: { pasos: { orderBy: { orden: 'asc' } } },
+      }),
       this.prisma.rutaVersion.findFirst({
         where: { tenantId, rutaId: dto.rutaId, version: dto.rutaVersion },
       }),
@@ -40,6 +44,50 @@ export class ProductoRutasService {
       throw new BadRequestException(
         `La versión ${dto.rutaVersion} de la ruta seleccionada no existe`,
       );
+    }
+    const pasosVersion = ruta.pasos.filter(
+      (paso) => paso.version === dto.rutaVersion,
+    );
+    const workflow = leerWorkflowRuta(rutaVersion.snapshotJson, pasosVersion);
+    const componentes = workflow.nodos.filter(
+      (nodo) => nodo.tipo === 'COMPONENTE',
+    );
+    const componenteCircular = componentes.find(
+      (nodo) => nodo.productoComponenteId === productoId,
+    );
+    if (componenteCircular) {
+      throw new BadRequestException(
+        'El producto no puede utilizarse a sí mismo como componente de su ruta.',
+      );
+    }
+    if (componentes.length > 0 && producto.estructuraProducto === 'SIMPLE') {
+      throw new BadRequestException(
+        'Esta ruta contiene componentes fabricados. Definí el producto como compuesto antes de asociarla.',
+      );
+    }
+    if (componentes.length > 0) {
+      const productosConReceta = await this.prisma.productoReceta.findMany({
+        where: {
+          tenantId,
+          productoId: {
+            in: componentes.map((item) => item.productoComponenteId),
+          },
+          activo: true,
+          revisionPublicadaId: { not: null },
+        },
+        select: { productoId: true },
+      });
+      const publicados = new Set(
+        productosConReceta.map((item) => item.productoId),
+      );
+      const faltante = componentes.find(
+        (item) => !publicados.has(item.productoComponenteId),
+      );
+      if (faltante) {
+        throw new BadRequestException(
+          `El componente "${faltante.nombre}" necesita una receta publicada antes de usar esta ruta.`,
+        );
+      }
     }
 
     try {

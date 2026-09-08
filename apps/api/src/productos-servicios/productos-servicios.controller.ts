@@ -89,6 +89,22 @@ export class ProductosServiciosController {
     return this.recetas.obtener(auth, id);
   }
 
+  @Get('productos/:id/receta/estado-publicacion')
+  obtenerEstadoPublicacionReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recetas.obtenerEstadoPublicacion(auth, id);
+  }
+
+  @Get('recetas/revisiones/:revisionId/bom-multinivel')
+  obtenerBomMultinivel(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+  ) {
+    return this.recetas.obtenerBomMultinivel(auth, revisionId);
+  }
+
   @Permiso('costos.gestionar')
   @Post('productos/:id/receta/borrador')
   guardarBorradorReceta(
@@ -149,6 +165,7 @@ export class ProductosServiciosController {
       subcategoriaCodigo: query.subcategoriaCodigo?.trim() || undefined,
       categoriaCodigo: query.categoriaCodigo?.trim() || undefined,
       orden: query.orden,
+      composicion: query.composicion,
     });
   }
 
