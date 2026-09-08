@@ -34,6 +34,7 @@ const prisma = new PrismaClient();
 let tenantId: string | null = null;
 let motorService: MotorUniversalService;
 const tarifaHoraManual = 6000;
+let restaurarFixtureTarjetas: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
   const tenant = await prisma.tenant.findUnique({
@@ -53,6 +54,7 @@ beforeAll(async () => {
   );
   if (tenantId) {
     await ensureCentrosManualesDemo(tenantId);
+    restaurarFixtureTarjetas = await prepararFixtureTarjetas(tenantId);
   }
 });
 
@@ -63,8 +65,45 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  try {
+    await restaurarFixtureTarjetas?.();
+  } finally {
+    await prisma.$disconnect();
+  }
 });
+
+/** Los ejemplos nuevos del seed no deben cambiar los supuestos de estas pruebas:
+ * A4, preprensa opcional y laminado sobre los pliegos que imprime el paso anterior.
+ * Se restaura la configuración al terminar, incluso si falla una aserción.
+ */
+async function prepararFixtureTarjetas(tenantId: string) {
+  const originales = await prisma.productoConfigPaso.findMany({
+    where: {
+      tenantId,
+      productoRutaAlternativa: { producto: { codigo: 'TARJ-PREMIUM-300' } },
+      rutaPaso: { familiaCodigo: { in: ['pre_prensa', 'impresion_por_hoja', 'laminado'] } },
+    },
+    include: { rutaPaso: true },
+  });
+  await prisma.$transaction(originales.map((config) => prisma.productoConfigPaso.update({
+    where: { id: config.id },
+    data: config.rutaPaso.familiaCodigo === 'pre_prensa'
+      ? { modoActivacion: 'OPCIONAL' }
+      : config.rutaPaso.familiaCodigo === 'laminado'
+        ? { mecanismoCantidad: 'HEREDAR_DEL_OUTPUT_CANONICO' }
+        : { paramsPasoJson: { nestingConfig: { pliegoImpresion: { preset: 'A4', anchoMm: 210, altoMm: 297 } } } },
+  })));
+  return async () => {
+    await prisma.$transaction(originales.map((config) => prisma.productoConfigPaso.update({
+      where: { id: config.id },
+      data: {
+        modoActivacion: config.modoActivacion,
+        mecanismoCantidad: config.mecanismoCantidad,
+        paramsPasoJson: config.paramsPasoJson === null ? Prisma.DbNull : config.paramsPasoJson as Prisma.InputJsonValue,
+      },
+    })));
+  };
+}
 
 /**
  * El centro que costea los pasos manuales. En el seed es PRE-001, el mismo
@@ -5307,5 +5346,5 @@ describe('MotorUniversalService — smoke tests', () => {
         where: { id: estacionQa.id, tenantId },
       });
     }
-  });
+  }, 30_000);
 });

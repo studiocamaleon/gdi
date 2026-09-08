@@ -8,39 +8,6 @@
   color: #1b191d;
 }
 
-.hero {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 24px;
-  border-radius: 18px;
-  color: #fff;
-  background: linear-gradient(120deg, #19171c 0%, #2d2023 62%, #633126 100%);
-}
-
-.hero svg {
-  width: 28px;
-  height: 28px;
-  color: #ff6941;
-}
-.hero h1 {
-  margin: 3px 0 4px;
-  font-size: clamp(24px, 3vw, 38px);
-}
-.hero p {
-  margin: 0;
-  max-width: 760px;
-  color: #c9c3c5;
-}
-.eyebrow {
-  color: #ff7a55;
-  font:
-    700 11px/1.2 ui-monospace,
-    monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .panel {
   margin-top: 16px;
   overflow: hidden;

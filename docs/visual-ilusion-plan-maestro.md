@@ -589,7 +589,7 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado actual:** CERRADA FUNCIONALMENTE EN LOCAL · MATRIZ INTEGRAL APROBADA · F5 HABILITADA
+**Estado actual:** COMPLETA · INTEGRADA EN `visual-ilusion/analisis` EN LOCAL · MATRIZ INTEGRAL APROBADA
 
 **Cierre integral del 07/09/2026:**
 [Informe y evidencia final](visual-ilusion-fase-4-cierre-integral-2026-09-07.md).
@@ -599,9 +599,12 @@ rectangulares/vectoriales, patrones y capas DXF. Los ocho hallazgos de la
 hallazgo adicional de Compras quedaron corregidos y verificados. Se aprobaron
 cotización/persistencia/ejecución, concurrencia, reportes, documentos, CAD,
 regresiones y builds. Esta evaluación prevalece sobre los estados históricos
-que siguen como bitácora de implementación. El cierre corresponde a la versión
-local; no constituye merge ni despliegue remoto. F5 puede planificarse dentro
-de su alcance propio de planes operativos, liberación y herramientas por capa.
+que siguen como bitácora de implementación. El cierre se guardó en `8f220f650`
+y se integró en `visual-ilusion/analisis` mediante `f2dcfa8d9` el 08/09/2026.
+La integración es local; no constituye publicación remota ni despliegue.
+Antes de iniciar F5, se acordó una intervención estética fuera de las fases
+del plan. La decisión entre F5 y un trabajo previo de Mesa de corte/perfiles
+queda pendiente de revisión con el usuario.
 
 **Rama:** `visual-ilusion/fase-4-rutas-dag`
 
@@ -1644,13 +1647,13 @@ Esta tabla se actualizará al integrar cada fase.
 |     2 | COMPLETA                            | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`          | `bf2df97a`, `52538507`                                                        | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                                |
 |   2.5 | COMPLETA                            | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md`     | `46316989`                                                                    | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados           |
 |     3 | COMPLETA                            | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                       | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b`                    | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados                    |
-| 4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | DAG, gates, lotes, costos, archivos, OT, áreas vecinas y concurrencia aprobados; F5 habilitada |
-| 4.1 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Backlight actual: profundidad y output Bastidor→Lona conservados hasta finalizar OT |
-| 4.2 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Ensamble único, Compras con DAG/gates y ejecución de Backlight aprobados |
-| 4.2.3 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/contrato-comercial-dimensiones-producto-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Contratos dimensionales y Backlight de 200 × 100 × 20 cm aprobados |
-| 4.2.4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Regresiones de opcionales/condicionales y reducción de dependencias aprobadas |
+| 4 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | DAG, gates, lotes, costos, archivos, OT, áreas vecinas y concurrencia aprobados; merge `f2dcfa8d9` |
+| 4.1 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Backlight actual: profundidad y output Bastidor→Lona conservados hasta finalizar OT |
+| 4.2 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Ensamble único, Compras con DAG/gates y ejecución de Backlight aprobados |
+| 4.2.3 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/contrato-comercial-dimensiones-producto-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Contratos dimensionales y Backlight de 200 × 100 × 20 cm aprobados |
+| 4.2.4 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Regresiones de opcionales/condicionales y reducción de dependencias aprobadas |
 |   4.3 | COMPLETA                            | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                                     | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                       |
-| 4.4 | CERRADA EN LOCAL | `visual-ilusion/fase-4-4-nesting-compuestos` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Lotes seguros y multinivel, calidad Puma, exhibidor 1/10/50/51, CAD y OT aprobados |
+| 4.4 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-4-nesting-compuestos` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Lotes seguros y multinivel, calidad Puma, exhibidor 1/10/50/51, CAD y OT aprobados |
 |     5 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     6 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     7 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
@@ -1663,6 +1666,14 @@ Esta tabla se actualizará al integrar cada fase.
 |    14 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |    15 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |    16 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+
+---
+
+### Intervención intermedia antes de F5 — 08/09/2026
+
+Se acordó trabajar fuera de las fases numeradas sobre la estética Grafoprint de Centros de costo, Maquinaria, Nodos y Flujos de producción, incluidas sus fichas y modales. Rama `codex/estetica-grafoprint-configuracion`, nacida desde `visual-ilusion/analisis` tras integrar F4; destino de integración: la misma rama `analisis`. [Alcance y validación](grafoprint-configuracion-estetica-2026-09-08.md).
+
+F5 sigue **PENDIENTE**. Antes de iniciarla se revisará con el usuario si conviene abordar primero Mesa de corte y perfiles.
 
 ---
 

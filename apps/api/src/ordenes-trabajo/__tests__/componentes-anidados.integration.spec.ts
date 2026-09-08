@@ -18,8 +18,19 @@ describe('OT de compuesto con lotes anidados (PostgreSQL)', () => {
           const { id: tenantId } = await tx.tenant.findUniqueOrThrow({
             where: { slug: 'gdi-demo' },
           });
-          const ruta = await tx.productoRutaAlternativa.findFirstOrThrow({
+          const rutaOrigen = await tx.productoRutaAlternativa.findFirstOrThrow({
             where: { tenantId },
+          });
+          // La receta del catálogo puede existir: esta prueba necesita su propia
+          // alternativa y sus revisiones, todas revertidas con la transacción.
+          const ruta = await tx.productoRutaAlternativa.create({
+            data: {
+              tenantId,
+              productoId: rutaOrigen.productoId,
+              rutaId: rutaOrigen.rutaId,
+              rutaVersion: rutaOrigen.rutaVersion,
+              nombre: 'Prueba de componentes anidados',
+            },
           });
           const variante = await tx.materiaPrimaVariante.findFirstOrThrow({
             where: { tenantId },
