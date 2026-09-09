@@ -980,6 +980,8 @@ cotizable, trazable y ejecutable.
 
 **Gate del 09/09/2026:** SUPERADO. H10 corregido, aceptación aprobada e integración local completada (`516e584ef`). F5 habilitada para análisis; aún no iniciada. Ver el [cierre ampliado de F4](visual-ilusion-fase-4-cierre-2026-09-09.md).
 
+**Decisión posterior del usuario (09/09/2026):** mantener F5 pendiente hasta decidir si el Centro de corte aporta valor. El siguiente diseño propuesto es entregas por cantidad/fecha y lotes generados por planificación, sin exigir implementar F5. [Propuesta de avance F6 + núcleo de planificación](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
+
 **Ampliación previa implementada el 08/09/2026:** antes de iniciar F5 se
 resolvieron operaciones, herramientas, perfiles y tiempos/costos estimados de
 corte desde la cotización en `codex/cotizacion-operaciones-herramientas-corte`.
@@ -1030,8 +1032,13 @@ Convertir corte/nesting en trabajo planificado, versionado y trazable, no sólo 
 
 ## Fase 6 — Lotes productivos y producción parcial
 
-**Estado inicial:** PENDIENTE  
-**Dependencias:** Fases 3–5.
+**Estado actual:** DISEÑO · PRIMER PROTOTIPO TÉCNICO AISLADO.
+
+**Dependencias originales:** Fases 3–5.
+
+**Revisión de alcance del 09/09/2026:** el usuario necesita distribuir un mismo ítem de OT en entregas por cantidad/fecha y delegar en el sistema la propuesta de lotes, operaciones y fechas viables. No basta registrar lotes creados manualmente. Se propone diseñar F6 sobre F3–F4.4 con el núcleo necesario de planificación de F11, conservando F5 pendiente y su conexión futura como opcional. La dependencia definitiva y los contratos compartidos se fijarán antes de implementar. [Diseño de avance, límites y aceptación](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
+
+El alcance cuantitativo original que sigue se conserva íntegro. El primer caso de aceptación propuesto es **200 exhibidores → cuatro entregas de 50**, con fechas sugeridas o solicitadas y lotes productivos propuestos por el sistema. El [diseño funcional y primer prototipo](visual-ilusion-fase-6-entregas-planificacion-diseno.md) ya comparan alternativas con el ETA existente. La F6 operativa y el alcance completo de F11 siguen pendientes. El usuario confirmó priorizar las primeras entregas al sugerir fechas, mostrando cualquier costo adicional.
 
 ### Objetivo de negocio
 
@@ -1220,6 +1227,8 @@ Convertir faltantes y pasos tercerizados en un ciclo controlado de solicitud, or
 
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 4, 6, 9 y 10.
+
+**Diseño conjunto propuesto el 09/09/2026:** anticipar con F6 el núcleo necesario de escenarios, capacidad, fechas y confirmación para generar lotes realizables desde compromisos de entrega. El alcance completo de F11 y sus dependencias de inventario/abastecimiento se conservan. Se deberá mantener un único contrato de planificación y registrar los criterios cubiertos, sin declarar completa F11 por ese anticipo. [Propuesta](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
 
 ### Objetivo de negocio
 
@@ -1463,6 +1472,8 @@ Todas ────────────────────────�
 
 La numeración expresa el orden recomendado, no prohíbe investigación paralela. No se debe implementar una fase dependiente sobre contratos todavía inestables.
 
+**Secuencia en revisión (09/09/2026):** el esquema anterior conserva las dependencias originales. Para el próximo diseño se propone `F4.4 → F6 + núcleo necesario de F11`, manteniendo F5 pendiente de decisión. La propuesta no elimina alcances ni habilita implementar sobre contratos pendientes de definición; ver el [documento de avance](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
+
 ---
 
 ## 9. Matriz de trazabilidad del informe funcional
@@ -1684,7 +1695,7 @@ Esta tabla se actualizará al integrar cada fase.
 |   4.3 | COMPLETA                            | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                                     | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                       |
 | 4.4 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-4-nesting-compuestos` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Lotes seguros y multinivel, calidad Puma, exhibidor 1/10/50/51, CAD y OT aprobados |
 |     5 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
-|     6 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+| 6 | DISEÑO · PROTOTIPO AISLADO | `codex/f6-entregas-planificacion` | [Diseño de entregas y planificación](visual-ilusion-fase-6-entregas-planificacion-diseno.md) | Selector con fixture de 200 exhibidores y ETA existente | Operación real, persistencia, UI y cierre cuantitativo pendientes; F5 no iniciada |
 |     7 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     8 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     9 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
