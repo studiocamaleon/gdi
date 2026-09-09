@@ -589,7 +589,16 @@ Los productos compuestos simples podrán seguir usando slots si no requieren eje
 
 ## Fase 4 — Rutas DAG, paralelismo, convergencia y gates
 
-**Estado actual:** COMPLETA · INTEGRADA EN `visual-ilusion/analisis` EN LOCAL · MATRIZ INTEGRAL APROBADA
+**Estado actual:** AMPLIACIONES FUNCIONALES Y VALIDADAS · INTEGRACIÓN LOCAL EN PREPARACIÓN
+
+**Cierre ampliado del 09/09/2026:** [dictamen, correcciones y evidencia](visual-ilusion-fase-4-cierre-2026-09-09.md).
+H10 quedó corregido: 150 exhibidores conservan 1.350 piezas y 96 placas/5 layouts,
+y se guardan y emiten con transacciones normales. El snapshot baja de 36,6 MB a
+286 KB sin perder geometría, capas, cantidades ni costos. Se aprobaron recorridos
+50/100/150, concurrencia, reportes/tracking, compatibilidad histórica, HTTP/worker,
+regresión y builds. Los registros locales se compactaron con integridad verificada.
+La optimización adicional de GrafoNest conserva su backlog propio. F5 sigue sin
+iniciarse; su primer piloto debe validar receta/herramienta/salida con el operador.
 
 **Cierre integral del 07/09/2026:**
 [Informe y evidencia final](visual-ilusion-fase-4-cierre-integral-2026-09-07.md).
@@ -967,6 +976,8 @@ cotizable, trazable y ejecutable.
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 3–4.4.
 
+**Gate del 09/09/2026:** H10 corregido y aceptación aprobada; completar la integración local antes de iniciar la rama siguiente. Ver el [cierre ampliado de F4](visual-ilusion-fase-4-cierre-2026-09-09.md).
+
 **Ampliación previa implementada el 08/09/2026:** antes de iniciar F5 se
 resolvieron operaciones, herramientas, perfiles y tiempos/costos estimados de
 corte desde la cotización en `codex/cotizacion-operaciones-herramientas-corte`.
@@ -976,9 +987,8 @@ compara equipos compactos e industriales. La
 [implementación y validación pre-F5](mesa-de-corte-herramientas-implementacion-2026-09-08.md)
 documenta herramientas, perfiles por material/espesor, cálculo de recorridos y
 cambios, reparto por lote y conservación cotización→OT. Se verificaron 2.281
-pruebas API y 702 frontend, además de compilación y revisión de interfaz. La
-rama aún no está integrada a `visual-ilusion/analisis`; esta evidencia se suma
-al cierre histórico de F4. El piloto contempla placas y herramientas
+pruebas API y 702 frontend, además de compilación y revisión de interfaz. Esta evidencia se suma al cierre ampliado de F4 y se integra junto con él en
+`visual-ilusion/analisis`. El piloto contempla placas y herramientas
 secuenciales; requiere calibrar parámetros con la máquina real.
 En F5, la máquina, herramienta, pasadas y estimación del plan deben partir de
 la configuración cotizada, conservando sus revisiones operativas sin
@@ -1664,7 +1674,7 @@ Esta tabla se actualizará al integrar cada fase.
 |     2 | COMPLETA                            | `visual-ilusion/fase-2-desarrollo-aprobaciones`      | `docs/visual-ilusion-fase-2-desarrollo-aprobaciones-diseno.md`          | `bf2df97a`, `52538507`                                                        | Validación técnica y funcional aprobadas; integración en rama madre habilitada                                                |
 |   2.5 | COMPLETA                            | `visual-ilusion/fase-2-5-tiempo-real-notificaciones` | `docs/visual-ilusion-fase-2-5-tiempo-real-notificaciones-diseno.md`     | `46316989`                                                                    | Dos usuarios, audiencia, persistencia, replay, fallback, protección de edición, regresión y QA responsive aprobados           |
 |     3 | COMPLETA                            | `visual-ilusion/fase-3-receta-bom`                   | `docs/visual-ilusion-fase-3-receta-bom-diseno.md`                       | `b68d0c79`, `2962bddd`, `29fcf613`, `91f2f155`, `5537881b`                    | Receta/BOM industrial, componentes recursivos, recursos, trazabilidad, regresión y QA responsive aprobados                    |
-| 4 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | DAG, gates, lotes, costos, archivos, OT, áreas vecinas y concurrencia aprobados; merge `f2dcfa8d9` |
+| 4 | AMPLIACIONES VALIDADAS · INTEGRACIÓN EN PREPARACIÓN | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | DAG, gates, lotes, costos, archivos, OT, áreas vecinas y concurrencia aprobados; merge `f2dcfa8d9` |
 | 4.1 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-1-composicion-contextual-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Backlight actual: profundidad y output Bastidor→Lona conservados hasta finalizar OT |
 | 4.2 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/visual-ilusion-fase-4-2-pasos-compuestos-incorporacion-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Ensamble único, Compras con DAG/gates y ejecución de Backlight aprobados |
 | 4.2.3 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-rutas-dag` | `docs/contrato-comercial-dimensiones-producto-diseno.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Contratos dimensionales y Backlight de 200 × 100 × 20 cm aprobados |

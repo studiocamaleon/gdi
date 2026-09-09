@@ -22,7 +22,9 @@
  * Lo viejo se migra al tocarlo, no de una. `npm run css:guard` avisa si
  * apareció una clase global nueva; ver docs/css-convenciones.md.
  */
-@import "tailwindcss";
+/* Las clases de esta aplicación viven en src/. Evita escanear fixtures CAD,
+ * resultados de benchmarks y los proyectos independientes de apps/. */
+@import "tailwindcss" source("..");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 

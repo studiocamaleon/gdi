@@ -85,7 +85,7 @@ export function NestingPatronesView({
     return (
       <ul
         className={styles.pieceCounts}
-        aria-label={`Piezas por placa del patrón ${p.id}`}
+        aria-label={`Piezas por placa del layout ${p.id}`}
         tabIndex={0}
       >
         {Object.entries(p.cantidades).map(([id, n]) => (
@@ -126,7 +126,7 @@ export function NestingPatronesView({
         <svg
           viewBox={`-3 -3 ${p.anchoMm + 6} ${p.altoMm + 6}`}
           role="img"
-          aria-label={`Distribución del patrón ${p.id}`}
+          aria-label={`Distribución del layout ${p.id}`}
           className={grande ? "h-[60vh] w-full" : "h-72 w-full"}
         >
           {trabajo && (
@@ -253,14 +253,14 @@ export function NestingPatronesView({
   return (
     <section
       className={styles.patterns}
-      aria-label="Revisar nesting por patrones"
+      aria-label="Revisar nesting por layouts"
     >
       <EstadoCapasFabricacion {...estadoCapas} />
       <div className={styles.patternHeading}>
         <div>
           <h3>
             {numero(totalPlacas)} {totalPlacas === 1 ? "placa" : "placas"} ·{" "}
-            {patrones.length} {patrones.length === 1 ? "patrón" : "patrones"}
+            {patrones.length} {patrones.length === 1 ? "layout" : "layouts"}
           </h3>
           <p>
             {numero(balance.reduce((s, b) => s + b.colocadas, 0))} piezas ·{" "}
@@ -284,7 +284,7 @@ export function NestingPatronesView({
           className={styles.tabList}
           aria-label="Detalle del plan"
         >
-          <TabsTrigger value="patrones">Patrones</TabsTrigger>
+          <TabsTrigger value="patrones">Layouts</TabsTrigger>
           <TabsTrigger value="balance">Balance de piezas</TabsTrigger>
           {archivos ? (
             <TabsTrigger value="archivos">Archivos de corte</TabsTrigger>
@@ -295,14 +295,14 @@ export function NestingPatronesView({
             <div className={styles.detail}>
               <div className={styles.detailHead}>
                 <h3>
-                  Patrón {detalle.id} · Repetir ×{detalle.repeticiones}
+                  Layout {detalle.id} · Repetir ×{detalle.repeticiones}
                 </h3>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setAmpliado(null)}
                 >
-                  Volver a los patrones
+                  Volver a los layouts
                 </Button>
               </div>
               <p>
@@ -321,7 +321,7 @@ export function NestingPatronesView({
               {patrones.map((p) => (
                 <article key={p.id} className={styles.patternCard}>
                   <header className={styles.cardHead}>
-                    <strong>Patrón {p.id}</strong>
+                    <strong>Layout {p.id}</strong>
                     <span
                       className={styles.copies}
                       title={`Repetir en ${p.repeticiones} placas`}
@@ -338,10 +338,10 @@ export function NestingPatronesView({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label={`Inspeccionar patrón ${p.id}`}
+                      aria-label={`Inspeccionar layout ${p.id}`}
                       onClick={() => setAmpliado(p.id)}
                     >
-                      Inspeccionar patrón
+                      Inspeccionar layout
                       <ExpandIcon />
                     </Button>
                   </footer>
@@ -395,7 +395,7 @@ export function NestingPatronesView({
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>
-              Patrón {detalle?.id} · Repetir ×{detalle?.repeticiones}
+              Layout {detalle?.id} · Repetir ×{detalle?.repeticiones}
             </DialogTitle>
             <DialogDescription>
               Pasá el cursor sobre una pieza para consultar su medida y giro.

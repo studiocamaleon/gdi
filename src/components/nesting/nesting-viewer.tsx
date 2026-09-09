@@ -312,7 +312,7 @@ export function NestingViewer({
   return (
     <section className={cn("nesting-viewer", className)}>
       <EstadoCapasFabricacion {...estadoCapas} />
-      {admitePatrones && <button type="button" className="text-sm underline" onClick={() => setVerPatrones(true)}>Volver a los patrones</button>}
+      {admitePatrones && <button type="button" className="text-sm underline" onClick={() => setVerPatrones(true)}>Volver a los layouts</button>}
       <div className="nesting-strat-row">
         <div className="nesting-strat on">
           <span className="ix">01</span>

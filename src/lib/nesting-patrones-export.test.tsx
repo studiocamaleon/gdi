@@ -66,7 +66,7 @@ function exhibidor(): NestingViewerInput {
   return r;
 }
 
-describe("entrega de archivos por patrón", () => {
+describe("entrega de archivos por layout", () => {
   it("reduce 34 placas a 3 archivos por formato con copias 25/5/4 y 450 piezas", () => {
     const r = exhibidor();
     const antes = JSON.stringify(r);
@@ -74,11 +74,11 @@ describe("entrega de archivos por patrón", () => {
     expect(patrones.map((p) => p.repeticiones)).toEqual([25, 5, 4]);
     for (const p of patrones) {
       expect(nombreArchivoPatron("exhibidor", p)).toBe(
-        `exhibidor-patron-${p.id}-x${p.repeticiones}`,
+        `exhibidor-layout-${p.id}-x${p.repeticiones}`,
       );
       const svg = crearSvgDePatron(r, p.id);
       expect(svg).toContain(
-        `<title>Patrón ${p.id} · ${p.repeticiones} copias</title>`,
+        `<title>Layout ${p.id} · ${p.repeticiones} copias</title>`,
       );
       expect(svg).not.toContain("<text");
       expect(svg.replace(/<title>[^<]*<\/title>/, "")).toEqual(
@@ -86,7 +86,7 @@ describe("entrega de archivos por patrón", () => {
       );
       const dxf = crearDxfDePatron(r, p.id);
       expect(dxf.startsWith("0\nSECTION\n2\nHEADER\n")).toBe(true);
-      expect(dxf).toContain(`999\nPatron ${p.id} - ${p.repeticiones} copias\n`);
+      expect(dxf).toContain(`999\nLayout ${p.id} - ${p.repeticiones} copias\n`);
       // Los handles del documento cambian entre descargas. La geometría no.
       const entidades = (texto: string) => texto.split("2\nENTITIES\n")[1].split("0\nENDSEC")[0].replace(/(?:^|\n)(5|330)\n[^\n]+/g, "");
       expect(entidades(dxf)).toBe(entidades(crearDxfDePlaca(r, p.indices[0])));
@@ -102,17 +102,17 @@ describe("entrega de archivos por patrón", () => {
       />,
     );
     expect(
-      markup.match(/aria-label="Descargar patrón [ABC] SVG/g) ?? [],
+      markup.match(/aria-label="Descargar layout [ABC] SVG/g) ?? [],
     ).toHaveLength(3);
     expect(
-      markup.match(/aria-label="Descargar patrón [ABC] DXF/g) ?? [],
+      markup.match(/aria-label="Descargar layout [ABC] DXF/g) ?? [],
     ).toHaveLength(3);
     expect(markup).not.toContain("Resumen del plan");
     expect(markup).not.toContain("Placa 34");
   });
-  it("rechaza un patrón inexistente sin exportar otra placa", () => {
+  it("rechaza un layout inexistente sin exportar otra placa", () => {
     expect(() => crearDxfDePatron(exhibidor(), "Z")).toThrow(
-      "El patrón seleccionado no existe",
+      "El layout seleccionado no existe",
     );
   });
 });

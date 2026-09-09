@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { ControlTrabajosGeometriaService } from './control-trabajos-geometria.service';
 import type { CrearTrabajoNestingOpenNestDto } from './geometria/geometria-jobs.dto';
 import { GeometriaJobsService } from './geometria/geometria-jobs.service';
+import { CapacidadGeometriaService } from './geometria/capacidad-geometria.service';
 
 async function main(): Promise<void> {
   const control = new ControlTrabajosGeometriaService();
-  const service = new GeometriaJobsService(control);
+  const capacidad = new CapacidadGeometriaService();
+  const service = new GeometriaJobsService(control, capacidad);
   const tenantId = `smoke-${randomUUID()}`;
   const dto = solicitud(`smoke-complete-${randomUUID()}`, 5);
   try {
@@ -72,6 +74,7 @@ async function main(): Promise<void> {
   } finally {
     await service.onApplicationShutdown();
     control.onApplicationShutdown();
+    capacidad.onApplicationShutdown();
   }
 }
 

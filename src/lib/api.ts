@@ -1,4 +1,6 @@
 import { getSessionToken } from "@/lib/session";
+// Codec puro compartido con el API; este módulo no importa Nest ni Node.
+import { restaurarJson } from "../../apps/api/src/common/json-compartido";
 
 const DEFAULT_API_URL = "http://localhost:3001/api";
 
@@ -29,6 +31,9 @@ export async function apiRequest<T>(
 ) {
   const headers = new Headers(init?.headers ?? {});
   headers.set("Content-Type", "application/json");
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/vnd.grafoprint.snapshot+json, application/json");
+  }
 
   // Del lado servidor adjuntamos el token directamente (leyendo la cookie
   // httpOnly vía next/headers). Del lado cliente el token lo inyecta el proxy
@@ -90,5 +95,5 @@ export async function apiRequest<T>(
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  return restaurarJson<T>(await response.json());
 }

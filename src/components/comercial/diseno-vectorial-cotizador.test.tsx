@@ -102,7 +102,7 @@ function renderizar(analisis: AnalisisSvgFabricacion | null, cantidad = 1, carga
 }
 
 describe("nesting irregular del cotizador de Polyfan", () => {
-  it.each(["opennest-v1", "grafonest-baseline-v1"] as const)(
+  it.each(["opennest-v1", "grafonest-baseline-v1", "grafonest-packingsolver-v1"] as const)(
     "conserva y muestra el resultado actual del worker %s",
     (motor) => {
       const html = renderizar(crearAnalisis(motor));

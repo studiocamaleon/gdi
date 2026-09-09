@@ -1,5 +1,25 @@
-import { generarCarteraPatrones, materializarPatrones, type SeleccionPatrones } from './cartera-patrones';
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  esMejorResultado,
+  contarPatronesResultado,
+  minimoTeoricoPatrones,
+} from './calidad-nesting';
+export { esMejorResultado } from './calidad-nesting';
+import {
+  generarCarteraPatrones,
+  materializarPatrones,
+  type SeleccionPatrones,
+  type Patron,
+} from './cartera-patrones';
+import {
+  BibliotecaPatronesService,
+  patronesDeResultado,
+} from './biblioteca-patrones.service';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  NestingsGuardadosService,
+  presupuestoExplorado,
+  satisfaceBusqueda,
+} from './nestings-guardados.service';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -7,7 +27,10 @@ import type {
   NestingIrregularOpenNestData,
   NestingIrregularOpenNestResult,
 } from '../colas';
-import { VERSION_POLITICA_ORIENTACION_GRAFONEST } from '../colas';
+import {
+  VERSION_POLITICA_ORIENTACION_GRAFONEST,
+  VERSION_POLITICA_BUSQUEDA_GRAFONEST,
+} from '../colas';
 import {
   validarEntradaNestingOpenNest,
   validarResultadoNestingOpenNest,
@@ -15,6 +38,15 @@ import {
 import { resolverNestingBaseSeguro } from './nesting-base-seguro';
 import { optimizarCommonLines } from './common-line';
 import { timeoutMaximoOpenNestMs } from './politica-busqueda';
+import { EscritorCheckpoint } from './escritor-checkpoint';
+import { seleccionInicialDeResultado } from './seleccion-inicial';
+import {
+  configuracionPackingSolver,
+  convertirPackingSolver,
+  instanciaPackingSolver,
+  presupuestoPackingSolver,
+  type CertificadoPackingSolver,
+} from './packingsolver';
 
 type ResultadoRunner = Omit<NestingIrregularOpenNestResult, 'validacion'>;
 
@@ -32,7 +64,7 @@ type RespuestaRunner =
   | { ok: true; result: ResultadoRunner }
   | { ok: false; error: { code?: string; message?: string } };
 
-type OpcionesSubproceso = {
+type OpcionesSubproceso<T = unknown> = {
   ejecutable: string;
   argumentos: string[];
   entrada: unknown;
@@ -40,6 +72,13 @@ type OpcionesSubproceso = {
   graciaTerminacionMs?: number;
   maxSalidaBytes?: number;
   signal?: AbortSignal;
+  /** Mensajes completos; el consumidor debe validarlos antes de conservarlos. */
+  onCandidate?: (candidato: T) => void;
+  onExit?: (detalle: {
+    codigo: number | null;
+    signal: NodeJS.Signals | null;
+    stderr: string;
+  }) => void;
 };
 
 const SENTINEL = 'GRAFO_OPENNEST_RESULT:';
@@ -62,10 +101,27 @@ export class OpenNestSubprocessError extends Error {
 
 @Injectable()
 export class OpenNestService {
+  constructor(
+    @Optional() private readonly guardados?: NestingsGuardadosService,
+    @Optional() private readonly biblioteca?: BibliotecaPatronesService,
+  ) {}
+
   protected ejecutarRunner(
-    options: OpcionesSubproceso,
+    options: OpcionesSubproceso<RespuestaRunner>,
   ): Promise<RespuestaRunner> {
     return ejecutarSubprocesoJson<RespuestaRunner>(options);
+  }
+
+  protected ejecutarSelector(
+    options: OpcionesSubproceso<SeleccionPatrones>,
+  ): Promise<SeleccionPatrones> {
+    return ejecutarSubprocesoJson<SeleccionPatrones>(options);
+  }
+
+  protected ejecutarPackingSolver(
+    options: OpcionesSubproceso<CertificadoPackingSolver>,
+  ): Promise<CertificadoPackingSolver> {
+    return ejecutarSubprocesoJson<CertificadoPackingSolver>(options);
   }
 
   async resolver(
@@ -76,57 +132,515 @@ export class OpenNestService {
     },
   ): Promise<NestingIrregularOpenNestResult> {
     validarEntradaNestingOpenNest(input);
+    const existente = await this.guardados?.obtener(input, {
+      biblioteca: this.biblioteca,
+      signal: options?.signal,
+    });
+    if (existente && satisfaceBusqueda(input, existente)) {
+      options?.signal?.throwIfAborted();
+      await this.aprenderPatrones(input, existente);
+      await options?.onCandidate?.();
+      return existente;
+    }
+    let inicial = existente ?? undefined;
+    let recuperado = false;
+    try {
+      const checkpoint = await this.guardados?.obtenerCheckpoint(input);
+      if (checkpoint && (!inicial || esMejorResultado(checkpoint, inicial))) {
+        inicial = checkpoint;
+        recuperado = true;
+      }
+    } catch (error) {
+      new Logger(OpenNestService.name).warn(
+        `No se pudo recuperar el avance: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    const checkpoint = this.guardados
+      ? new EscritorCheckpoint<NestingIrregularOpenNestResult>(
+          (resultado) => this.guardados!.guardarCheckpoint(input, resultado),
+          (error) =>
+            new Logger(OpenNestService.name).warn(
+              `No se pudo conservar el avance: ${error instanceof Error ? error.message : String(error)}`,
+            ),
+        )
+      : undefined;
+    try {
+      const resultado = await this.buscar(
+        input,
+        {
+          ...options,
+          checkpoint,
+          semillasRecuperadas: recuperado
+            ? patronesDeResultado(input, inicial!)
+            : [],
+        },
+        inicial,
+      );
+      await checkpoint?.vaciar();
+      const conservado = this.guardados
+        ? await this.guardados.conservarResultado(input, resultado)
+        : resultado;
+      await this.aprenderPatrones(input, conservado);
+      return conservado;
+    } finally {
+      // También al cancelar: un candidato aceptado no se pierde por cerrar
+      // el sheet mientras se terminaba su escritura.
+      await checkpoint?.vaciar();
+    }
+  }
+
+  private async aprenderPatrones(
+    input: NestingIrregularOpenNestData,
+    resultado: NestingIrregularOpenNestResult,
+  ) {
+    try {
+      await this.biblioteca?.aprender(input, resultado);
+    } catch (error) {
+      // Una biblioteca no disponible no impide cotizar un resultado validado.
+      new Logger(OpenNestService.name).warn(
+        `No se pudo enriquecer la biblioteca: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  private async buscar(
+    input: NestingIrregularOpenNestData,
+    options?: {
+      signal?: AbortSignal;
+      onCandidate?: () => Promise<void> | void;
+      checkpoint?: EscritorCheckpoint<NestingIrregularOpenNestResult>;
+      semillasRecuperadas?: Patron[];
+    },
+    existente?: NestingIrregularOpenNestResult,
+  ): Promise<NestingIrregularOpenNestResult> {
     const timeoutMs = Math.min(input.timeoutMs, timeoutMaximoOpenNestMs());
     const startedAt = Date.now();
+    const fases: NonNullable<
+      NonNullable<NestingIrregularOpenNestResult['busqueda']>['fases']
+    > = [];
+    const fase = (
+      etapa: string,
+      desde: number,
+      resultado?: NestingIrregularOpenNestResult,
+    ) => {
+      fases.push({
+        etapa,
+        duracionMs: Date.now() - desde,
+        transcurridoMs: Date.now() - startedAt,
+        ...(resultado
+          ? {
+              placas: resultado.placasUsadas,
+              patrones: contarPatronesResultado(resultado),
+            }
+          : {}),
+      });
+    };
+    const origen = (
+      etapa: NonNullable<
+        NestingIrregularOpenNestResult['origenSolucion']
+      >['etapa'],
+    ) => ({
+      etapa,
+      encontradaEl: new Date().toISOString(),
+      transcurridoMs: Date.now() - startedAt,
+    });
     const planes = crearPlanesOrientacion(input).filter(cabeCadaPieza);
     const minimoPlacas = calcularMinimoTeoricoPlacas(input);
-    const baseNativa = validarResultadoNestingOpenNest(
-      input,
-      resolverNestingBaseSeguro(input),
-    );
-    const base = validarResultadoNestingOpenNest(
-      input,
-      optimizarCommonLines(input, baseNativa),
-    );
-    let mejor: {
-      plan?: PlanOrientacionGrafoNest;
-      resultado: NestingIrregularOpenNestResult;
-    } = { resultado: base };
+    let mejor:
+      | {
+          plan?: PlanOrientacionGrafoNest;
+          resultado: NestingIrregularOpenNestResult;
+        }
+      | undefined = existente ? { resultado: existente } : undefined;
+    let errorBase: unknown;
+    try {
+      const baseNativa = validarResultadoNestingOpenNest(
+        input,
+        resolverNestingBaseSeguro(input),
+      );
+      const base = input.commonLine?.habilitado
+        ? validarResultadoNestingOpenNest(
+            input,
+            optimizarCommonLines(input, baseNativa),
+          )
+        : baseNativa;
+      base.origenSolucion = origen('base');
+      fase('base-validada', startedAt, base);
+      if (!mejor || esMejorResultado(base, mejor.resultado))
+        mejor = { resultado: base };
+    } catch (error) {
+      errorBase = error;
+      fase('base-no-disponible', startedAt);
+      // Las cajas pueden necesitar más placas que los contornos reales.
+      // No confundir ese límite de la base con inviabilidad geométrica.
+      if (!planes.length && !mejor) throw error;
+    }
+    const minimosAlcanzados = () =>
+      Boolean(
+        mejor &&
+        mejor.resultado.placasUsadas <= minimoPlacas &&
+        contarPatronesResultado(mejor.resultado) <=
+          minimoTeoricoPatrones(input, mejor.resultado.placasUsadas),
+      );
+    const patronesDelMejor = () =>
+      mejor ? patronesDeResultado(input, mejor.resultado) : [];
+    const guardarAvance = () => {
+      if (mejor)
+        options?.checkpoint?.programar({
+          ...mejor.resultado,
+          versionPoliticaBusqueda: VERSION_POLITICA_BUSQUEDA_GRAFONEST,
+          duracionMs: Date.now() - startedAt,
+        });
+    };
     let intentos = 0;
+    const motoresExplorados = new Set<'collision' | 'nfp' | 'packingsolver'>();
+    const recursosNativos: NonNullable<
+      NonNullable<NestingIrregularOpenNestResult['busqueda']>['recursosNativos']
+    > = [];
     let candidatosValidos = 0;
     let motorNoDisponible = false;
+    const descartes = { timeout: 0, resultadoInvalido: 0, errorMotor: 0 };
+    const registrarDescarte = (error: unknown) => {
+      if (
+        error instanceof OpenNestSubprocessError &&
+        error.codigo === 'TIMEOUT'
+      )
+        descartes.timeout++;
+      else if (
+        error instanceof Error &&
+        error.name === 'NestingOpenNestInvalidoError'
+      )
+        descartes.resultadoInvalido++;
+      else descartes.errorMotor++;
+    };
+    const seleccionar = async (
+      cartera: Patron[],
+      presupuestoMs: number,
+      etapa: 'biblioteca' | 'cartera',
+    ) => {
+      if (presupuestoMs <= 1000 || !cartera.length) return;
+      const inicioSeleccion = Date.now();
+      const conservarSeleccion = (seleccion: SeleccionPatrones) => {
+        try {
+          const inicioValidacion = Date.now();
+          const candidato = validarResultadoNestingOpenNest(
+            input,
+            materializarPatrones(input, cartera, seleccion),
+          );
+          fase(`${etapa}-validacion`, inicioValidacion, candidato);
+          candidato.origenSolucion = origen(etapa);
+          candidatosValidos += 1;
+          if (
+            !mejor ||
+            esMejorResultado(candidato, mejor.resultado) ||
+            (!esMejorResultado(mejor.resultado, candidato) &&
+              candidato.planPatrones?.minimoPatronesEnCartera &&
+              !mejor.resultado.planPatrones?.minimoPatronesEnCartera)
+          ) {
+            mejor = { resultado: candidato };
+            guardarAvance();
+          }
+        } catch (error) {
+          registrarDescarte(error);
+        }
+      };
+      await this.ejecutarSelector({
+        ejecutable: process.env.OPENNEST_PYTHON?.trim() || 'python3',
+        argumentos: [
+          rutaRunnerOpenNest().replace(
+            'opennest_runner.py',
+            'patrones_runner.py',
+          ),
+        ],
+        entrada: {
+          patrones: cartera.map((p) => ({ counts: p.counts })),
+          demanda: input.piezas.map((p) => p.cantidad),
+          seleccionInicial: seleccionInicialDeResultado(
+            input,
+            cartera,
+            mejor?.resultado,
+          ),
+          timeoutMs: presupuestoMs,
+        },
+        timeoutMs: presupuestoMs,
+        signal: options?.signal,
+        onCandidate: conservarSeleccion,
+      }).finally(() =>
+        fase(`${etapa}-seleccion`, inicioSeleccion, mejor?.resultado),
+      );
+    };
+    let semillas: Patron[] = [];
+    let planCompletoReutilizado = false;
+    const inicioBiblioteca = Date.now();
+    try {
+      const familia = await this.biblioteca?.obtenerFamilia(input);
+      semillas = familia?.patrones ?? [];
+      for (const seleccion of familia?.planes ?? []) {
+        options?.signal?.throwIfAborted();
+        const placas = seleccion.seleccion.reduce(
+          (s, p) => s + p.repeticiones,
+          0,
+        );
+        if (
+          mejor &&
+          (placas > mejor.resultado.placasUsadas ||
+            (placas === mejor.resultado.placasUsadas &&
+              seleccion.seleccion.length >
+                contarPatronesResultado(mejor.resultado)))
+        )
+          continue;
+        const inicioPlan = Date.now();
+        try {
+          const candidato = validarResultadoNestingOpenNest(
+            input,
+            materializarPatrones(input, semillas, seleccion),
+          );
+          candidatosValidos++;
+          candidato.origenSolucion = origen('biblioteca');
+          if (!mejor || esMejorResultado(candidato, mejor.resultado)) {
+            mejor = { resultado: candidato };
+            planCompletoReutilizado = true;
+          }
+          fase('biblioteca-plan-completo', inicioPlan, candidato);
+        } catch (error) {
+          registrarDescarte(error);
+        }
+      }
+    } catch (error) {
+      new Logger(OpenNestService.name).warn(
+        `No se pudo leer la biblioteca: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    fase('biblioteca-lectura', inicioBiblioteca);
+    // Recuperar el avance aporta sus patrones al selector, además del límite
+    // de placas. No publica esos candidatos en la biblioteca comercial.
+    semillas = [...(options?.semillasRecuperadas ?? []), ...semillas];
+    // Una receta completa reutilizada tiene el mismo contrato que el caché
+    // exacto. Cotización la recibe ahora; preparar/mejorar conserva su búsqueda.
+    const entregaReutilizada = planCompletoReutilizado && !input.buscarMejora;
+    if (!entregaReutilizada && !minimosAlcanzados()) {
+      guardarAvance();
+      await options?.checkpoint?.vaciar();
+    }
+    // Resolver primero una cartera pequeña conocida evita reconstruir el
+    // problema completo al cambiar de cantidad. La base aporta restos exactos.
+    if (
+      !entregaReutilizada &&
+      !minimosAlcanzados() &&
+      semillas.length &&
+      timeoutMs >= 10000
+    ) {
+      try {
+        const cartera = await generarCarteraPatrones(input, {
+          plazo: Date.now() + Math.min(250, timeoutMs * 0.02),
+          signal: options?.signal,
+          maxIteraciones: 64,
+          semillas: [...semillas, ...patronesDelMejor()],
+        });
+        await seleccionar(
+          cartera,
+          Math.min(3000, timeoutMs - (Date.now() - startedAt)),
+          'biblioteca',
+        );
+        semillas = [...patronesDelMejor(), ...semillas];
+      } catch (error) {
+        registrarDescarte(error);
+      }
+    }
+
+    // Motor alternativo activado explícitamente por despliegue. Comparte
+    // presupuesto, validador, checkpoints y objetivo con el motor existente.
+    if (!entregaReutilizada && !minimosAlcanzados()) {
+      const inicioNativo = Date.now();
+      const encontrados = new Map<string, Patron>();
+      const nativoController = new AbortController();
+      try {
+        const presupuesto = presupuestoPackingSolver(
+          input,
+          timeoutMs - (Date.now() - startedAt),
+        );
+        const config =
+          presupuesto >= 4000 && planes.length
+            ? configuracionPackingSolver()
+            : undefined;
+        if (config && presupuesto >= 4000 && planes.length) {
+          const cantidad = input.piezas.reduce((s, p) => s + p.cantidad, 0);
+          const plan =
+            cantidad >= 100
+              ? (planes.find((p) => p.estrategia === 'cardinal') ??
+                planes[planes.length - 1])
+              : planes[planes.length - 1];
+          intentos++;
+          motoresExplorados.add('packingsolver');
+          await this.ejecutarPackingSolver({
+            ejecutable: process.env.OPENNEST_PYTHON?.trim() || 'python3',
+            argumentos: [
+              rutaRunnerOpenNest().replace(
+                'opennest_runner.py',
+                'packingsolver_runner.py',
+              ),
+            ],
+            entrada: {
+              ...config,
+              instancia: instanciaPackingSolver(plan.input),
+              timeoutMs: presupuesto,
+              padrePid: process.pid,
+            },
+            timeoutMs: presupuesto,
+            onExit: ({ stderr }) => {
+              for (const linea of stderr.trim().split('\n')) {
+                try {
+                  const d = JSON.parse(linea) as {
+                    motor: string;
+                    fin: string;
+                    rssObservadoMb: number;
+                    rssTotalObservadoMb?: number;
+                  };
+                  if (
+                    d.motor === 'packingsolver' &&
+                    typeof d.fin === 'string' &&
+                    Number.isFinite(d.rssObservadoMb)
+                  )
+                    recursosNativos.push({
+                      motor: 'packingsolver',
+                      fin: d.fin,
+                      rssMaxObservadoMb: d.rssObservadoMb,
+                      ...(Number.isFinite(d.rssTotalObservadoMb)
+                        ? { rssTotalMaxObservadoMb: d.rssTotalObservadoMb }
+                        : {}),
+                    });
+                } catch {
+                  /* stderr puede contener trazas del supervisor. */
+                }
+              }
+            },
+            signal: options?.signal
+              ? AbortSignal.any([options.signal, nativoController.signal])
+              : nativoController.signal,
+            onCandidate: (certificado) => {
+              try {
+                const geometria = validarResultadoNestingOpenNest(
+                  plan.input,
+                  convertirPackingSolver(
+                    plan.input,
+                    certificado,
+                    config.version,
+                  ),
+                );
+                const candidato = plan.input.commonLine?.habilitado
+                  ? validarResultadoNestingOpenNest(
+                      plan.input,
+                      optimizarCommonLines(plan.input, geometria),
+                    )
+                  : geometria;
+                candidatosValidos++;
+                candidato.origenSolucion = origen('motor');
+                if (!mejor || esMejorResultado(candidato, mejor.resultado)) {
+                  mejor = { plan, resultado: candidato };
+                  guardarAvance();
+                }
+                for (const patron of patronesDeResultado(input, candidato)) {
+                  const firma = patron.counts.join(',');
+                  if (encontrados.size < 128 && !encontrados.has(firma))
+                    encontrados.set(firma, patron);
+                }
+                if (minimosAlcanzados()) nativoController.abort();
+              } catch {
+                descartes.resultadoInvalido++;
+              }
+            },
+          });
+        }
+      } catch (error) {
+        if (options?.signal?.aborted) throw error;
+        if (!nativoController.signal.aborted) registrarDescarte(error);
+      } finally {
+        if (process.env.GRAFONEST_PACKINGSOLVER_ENABLED === '1')
+          fase('motor-packingsolver', inicioNativo, mejor?.resultado);
+      }
+      if (encontrados.size && !minimosAlcanzados()) {
+        semillas = [
+          ...patronesDelMejor(),
+          ...encontrados.values(),
+          ...semillas,
+        ];
+        try {
+          // Combinar los patrones recién descubiertos antes de ampliar la
+          // cartera. El número de placas mejora primero; luego los programas.
+          const cartera = await generarCarteraPatrones(input, {
+            plazo: Date.now(),
+            maxIteraciones: 0,
+            signal: options?.signal,
+            semillas,
+          });
+          await seleccionar(
+            cartera,
+            Math.min(5000, timeoutMs - (Date.now() - startedAt)),
+            'cartera',
+          );
+        } catch (error) {
+          if (options?.signal?.aborted) throw error;
+          registrarDescarte(error);
+        }
+      }
+    }
 
     // Para lotes repetidos, primero optimizamos combinaciones enteras de
     // patrones. El tiempo consumido se descuenta del mismo presupuesto global.
-    if (input.piezas.length > 1 && input.piezas.length <= 30 && base.cantidadSolicitada >= 20 && timeoutMs >= 10000) {
+    if (
+      !entregaReutilizada &&
+      !minimosAlcanzados() &&
+      input.piezas.length > 1 &&
+      input.piezas.length <= 30 &&
+      input.piezas.reduce((s, p) => s + p.cantidad, 0) >= 20 &&
+      timeoutMs >= 10000
+    ) {
       try {
-        const cartera = await generarCarteraPatrones(input, { plazo: Math.min(startedAt + timeoutMs * 0.12, Date.now() + 6000), signal: options?.signal });
-        const restante = Math.min(60000, (timeoutMs - (Date.now() - startedAt)) * 0.6);
-        if (restante > 1000 && cartera.length) {
-          const seleccion = await ejecutarSubprocesoJson<SeleccionPatrones>({
-            ejecutable: process.env.OPENNEST_PYTHON?.trim() || 'python3',
-            argumentos: [rutaRunnerOpenNest().replace('opennest_runner.py', 'patrones_runner.py')],
-            entrada: { patrones: cartera.map(p => ({ counts: p.counts })), demanda: input.piezas.map(p => p.cantidad), timeoutMs: restante },
-            timeoutMs: restante, signal: options?.signal,
-          });
-          const candidato = validarResultadoNestingOpenNest(input, materializarPatrones(input, cartera, seleccion));
-          candidatosValidos += 1;
-          if (candidato.placasUsadas <= mejor.resultado.placasUsadas) mejor = { resultado: candidato };
-        }
+        const inicioCartera = Date.now();
+        const cartera = await generarCarteraPatrones(input, {
+          // La biblioteca y el generador nativo ya pueden haber consumido
+          // tiempo. Esta fase recibe una fracción del presupuesto restante;
+          // su plazo no puede quedar en el pasado al entrar.
+          plazo:
+            inicioCartera +
+            Math.max(
+              0,
+              Math.min(6000, (timeoutMs - (inicioCartera - startedAt)) * 0.12),
+            ),
+          signal: options?.signal,
+          semillas: [...patronesDelMejor(), ...semillas],
+        });
+        fase('cartera-generacion', inicioCartera);
+        const restante = Math.min(
+          60000,
+          (timeoutMs - (Date.now() - startedAt)) * 0.6,
+        );
+        await seleccionar(cartera, restante, 'cartera');
       } catch (error) {
-        if (options?.signal?.aborted) throw new OpenNestSubprocessError('El cálculo fue cancelado.', 'CANCELLED');
-        new Logger(OpenNestService.name).warn(`No se pudo completar la búsqueda por patrones: ${error instanceof Error ? error.message : String(error)}`);
+        if (options?.signal?.aborted)
+          throw new OpenNestSubprocessError(
+            'El cálculo fue cancelado.',
+            'CANCELLED',
+          );
+        registrarDescarte(error);
+        new Logger(OpenNestService.name).warn(
+          `No se pudo completar la búsqueda por patrones: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
 
     // Cada vuelta cambia la semilla. Los reintentos empiezan con todos los
     // ángulos y alternan motores; no terminamos por completar tres planes.
     for (let index = 0; planes.length > 0; index += 1) {
+      await options?.checkpoint?.vaciar();
       if (options?.signal?.aborted)
         throw new OpenNestSubprocessError(
           'El cálculo de OpenNest fue cancelado.',
           'CANCELLED',
         );
+      // La base o una receta conocida pueden haber alcanzado ambas cotas.
+      // No iniciar un proceso costoso para certificar otra vez lo ya demostrado.
+      if (entregaReutilizada || minimosAlcanzados()) break;
       const restanteMs = timeoutMs - (Date.now() - startedAt);
       if (restanteMs < 100) break;
       const vuelta = Math.floor(index / planes.length);
@@ -152,7 +666,9 @@ export class OpenNestService {
       const quitarPlaca = index !== 0 && vuelta % 3 !== 2;
       const maxPlacas = Math.max(
         minimoPlacas,
-        mejor.resultado.placasUsadas - (quitarPlaca ? 1 : 0),
+        mejor
+          ? mejor.resultado.placasUsadas - (quitarPlaca ? 1 : 0)
+          : input.placa.maxPlacas,
       );
       const plan: PlanOrientacionGrafoNest = {
         ...original,
@@ -166,18 +682,28 @@ export class OpenNestService {
           },
         },
       };
-      const iteraciones = motor === 'collision' && vuelta < 2 ? 1000 : undefined;
-      const presupuestoMs = Math.min(iteraciones ? 8000 : Infinity, presupuestoCandidatoMs({
-        estrategia: plan.estrategia,
-        restanteMs,
-        totalMs: timeoutMs,
-      }));
+      const iteraciones =
+        motor === 'collision' && vuelta < 2 ? 1000 : undefined;
+      const presupuestoMs = Math.min(
+        iteraciones ? 8000 : Infinity,
+        presupuestoCandidatoMs({
+          estrategia: plan.estrategia,
+          restanteMs,
+          totalMs: timeoutMs,
+        }),
+      );
       intentos += 1;
+      motoresExplorados.add(motor);
+      const inicioIntento = Date.now();
       try {
         const respuesta = await this.ejecutarRunner({
           ejecutable: process.env.OPENNEST_PYTHON?.trim() || 'python3',
           argumentos: [rutaRunnerOpenNest()],
-          entrada: { ...plan.input, timeoutMs: presupuestoMs, ...(iteraciones ? { iteraciones } : {}) },
+          entrada: {
+            ...plan.input,
+            timeoutMs: presupuestoMs,
+            ...(iteraciones ? { iteraciones } : {}),
+          },
           timeoutMs: presupuestoMs,
           graciaTerminacionMs: 250,
           maxSalidaBytes: 32 * 1024 * 1024,
@@ -193,21 +719,31 @@ export class OpenNestService {
           plan.input,
           respuesta.result,
         );
-        const validado = validarResultadoNestingOpenNest(
-          plan.input,
-          optimizarCommonLines(plan.input, validadoNativo),
-        );
+        const validado = plan.input.commonLine?.habilitado
+          ? validarResultadoNestingOpenNest(
+              plan.input,
+              optimizarCommonLines(plan.input, validadoNativo),
+            )
+          : validadoNativo;
         candidatosValidos += 1;
-        if (esMejorResultado(validado, mejor.resultado)) {
+        if (!mejor || esMejorResultado(validado, mejor.resultado)) {
           mejor = {
             plan,
-            resultado: { ...validado, calidadSolucion: 'OPTIMIZADA' },
+            resultado: {
+              ...validado,
+              motor: input.motor,
+              motorEjecutor: plan.input.motor,
+              calidadSolucion: 'OPTIMIZADA',
+              origenSolucion: origen('motor'),
+            },
           };
+          guardarAvance();
         }
-        // Este límite prueba el mínimo de PLACAS, no un óptimo universal
-        // de orientación, retales o recorrido de corte.
-        if (mejor.resultado.placasUsadas <= minimoPlacas) break;
+        // Parar exige alcanzar ambas cotas: placas y patrones. No demuestra
+        // un óptimo universal de retales o recorrido de corte.
+        if (minimosAlcanzados()) break;
       } catch (error) {
+        registrarDescarte(error);
         if (
           error instanceof OpenNestSubprocessError &&
           error.codigo === 'CANCELLED'
@@ -220,69 +756,59 @@ export class OpenNestService {
           motorNoDisponible = true;
           break;
         }
+      } finally {
+        fase(
+          `motor-${motor}-${plan.estrategia}`,
+          inicioIntento,
+          mejor?.resultado,
+        );
       }
     }
 
+    options?.signal?.throwIfAborted();
+    if (!mejor)
+      throw new Error(
+        'No se encontró un plan completo dentro de las placas y el tiempo permitidos.' +
+          (errorBase instanceof Error ? ` ${errorBase.message}` : ''),
+      );
     await options?.onCandidate?.();
+    const alcanzaMinimos = minimosAlcanzados();
     return {
       ...mejor.resultado,
       duracionMs: Date.now() - startedAt,
-      estrategiaOrientacion: mejor.plan?.estrategia,
-      rotacionesPermitidas: mejor.plan?.rotacionesMaximas,
+      versionPoliticaBusqueda: VERSION_POLITICA_BUSQUEDA_GRAFONEST,
+      presupuestoExploradoMs: Math.max(
+        existente?.versionPoliticaBusqueda ===
+          VERSION_POLITICA_BUSQUEDA_GRAFONEST
+          ? presupuestoExplorado(existente)
+          : 0,
+        motorNoDisponible || entregaReutilizada ? 0 : timeoutMs,
+      ),
+      estrategiaOrientacion:
+        mejor.plan?.estrategia ?? mejor.resultado.estrategiaOrientacion,
+      rotacionesPermitidas:
+        mejor.plan?.rotacionesMaximas ?? mejor.resultado.rotacionesPermitidas,
       versionPoliticaOrientacion: VERSION_POLITICA_ORIENTACION_GRAFONEST,
-      optimizacionAgotada: mejor.resultado.placasUsadas > minimoPlacas,
+      optimizacionAgotada: !alcanzaMinimos && !entregaReutilizada,
       busqueda: {
         motivoFin: motorNoDisponible
           ? 'MOTOR_NO_DISPONIBLE'
-          : mejor.resultado.placasUsadas <= minimoPlacas
+          : alcanzaMinimos
             ? 'MINIMO_PLACAS'
-            : 'PRESUPUESTO_AGOTADO',
+            : entregaReutilizada
+              ? 'PLAN_REUTILIZADO'
+              : 'PRESUPUESTO_AGOTADO',
         presupuestoMs: timeoutMs,
         intentos,
         candidatosValidos,
+        motoresExplorados: [...motoresExplorados],
+        ...(recursosNativos.length ? { recursosNativos } : {}),
         minimoTeoricoPlacas: minimoPlacas,
+        descartes,
+        fases,
       },
     };
   }
-}
-
-export function esMejorResultado(
-  candidato: NestingIrregularOpenNestResult,
-  actual: NestingIrregularOpenNestResult,
-): boolean {
-  if (candidato.placasUsadas !== actual.placasUsadas)
-    return candidato.placasUsadas < actual.placasUsadas;
-  const ahorro = longitudCommonLine(candidato) - longitudCommonLine(actual);
-  if (Math.abs(ahorro) > 0.01) return ahorro > 0;
-  const area = areaEnvolvente(candidato) - areaEnvolvente(actual);
-  if (Math.abs(area) > 0.01) return area < 0;
-  return actual.calidadSolucion === 'BASE_SEGURA';
-}
-
-function areaEnvolvente(result: NestingIrregularOpenNestResult): number {
-  const placas = new Map<
-    number,
-    { minX: number; minY: number; maxX: number; maxY: number }
-  >();
-  for (const p of result.placements) {
-    const caja = placas.get(p.placa) ?? {
-      minX: Infinity,
-      minY: Infinity,
-      maxX: -Infinity,
-      maxY: -Infinity,
-    };
-    for (const punto of p.contorno) {
-      caja.minX = Math.min(caja.minX, punto.x);
-      caja.maxX = Math.max(caja.maxX, punto.x);
-      caja.minY = Math.min(caja.minY, punto.y);
-      caja.maxY = Math.max(caja.maxY, punto.y);
-    }
-    placas.set(p.placa, caja);
-  }
-  return [...placas.values()].reduce(
-    (area, c) => area + (c.maxX - c.minX) * (c.maxY - c.minY),
-    0,
-  );
 }
 
 function cabeCadaPieza(plan: PlanOrientacionGrafoNest): boolean {
@@ -312,10 +838,6 @@ function cabeCadaPieza(plan: PlanOrientacionGrafoNest): boolean {
     }
     return false;
   });
-}
-
-function longitudCommonLine(result: NestingIrregularOpenNestResult): number {
-  return result.commonLine?.longitudCompartidaMm ?? 0;
 }
 
 /**
@@ -367,15 +889,33 @@ export function calcularMinimoTeoricoPlacas(
   const anchoUtil = input.placa.anchoMm - input.placa.margenMm * 2;
   const altoUtil = input.placa.altoMm - input.placa.margenMm * 2;
   const areaUtil = anchoUtil * altoUtil;
-  const areaPiezas = input.piezas.reduce((total, pieza) => {
+  const areas = input.piezas.map((pieza) => {
     const areaExterior = areaAnillo(pieza.contorno);
     const areaHuecos = (pieza.huecos ?? []).reduce(
       (area, hueco) => area + areaAnillo(hueco),
       0,
     );
-    return total + Math.max(0, areaExterior - areaHuecos) * pieza.cantidad;
-  }, 0);
-  return Math.max(1, Math.ceil(areaPiezas / areaUtil - 1e-12));
+    return {
+      area: Math.max(0, areaExterior - areaHuecos),
+      cantidad: pieza.cantidad,
+    };
+  });
+  const areaPiezas = areas.reduce((total, p) => total + p.area * p.cantidad, 0);
+  let minimo = Math.max(1, Math.ceil(areaPiezas / areaUtil - 1e-12));
+  // Si cada pieza de un conjunto ocupa más de media placa, no pueden entrar
+  // dos juntas. La misma demostración vale para tercios, cuartos, etc. Esta
+  // cota por cantidad detecta casos que la suma total de áreas subestima.
+  let cantidad = 0;
+  for (const pieza of areas.sort((a, b) => b.area - a.area)) {
+    if (pieza.area <= 0) continue;
+    cantidad += pieza.cantidad;
+    const maximoPorPlaca = Math.max(
+      1,
+      Math.floor(areaUtil / pieza.area + 1e-12),
+    );
+    minimo = Math.max(minimo, Math.ceil(cantidad / maximoPorPlaca));
+  }
+  return minimo;
 }
 
 function presupuestoCandidatoMs(input: {
@@ -386,7 +926,8 @@ function presupuestoCandidatoMs(input: {
   // Los reintentos invierten el orden. El presupuesto pertenece a la
   // estrategia, no a su posición: la búsqueda libre no debe perder tiempo
   // al pasar de última a primera en la vuelta siguiente.
-  if (input.estrategia === 'libre') return Math.max(100, Math.min(30_000, input.restanteMs));
+  if (input.estrategia === 'libre')
+    return Math.max(100, Math.min(30_000, input.restanteMs));
   const proporcion = input.estrategia === 'uniforme' ? 0.2 : 0.3;
   return Math.max(
     100,
@@ -413,7 +954,7 @@ function areaAnillo(points: Array<{ x: number; y: number }>): number {
  * procesos completo para no dejar código nativo consumiendo CPU en segundo plano.
  */
 export function ejecutarSubprocesoJson<T>(
-  options: OpcionesSubproceso,
+  options: OpcionesSubproceso<T>,
 ): Promise<T> {
   return new Promise<T>((resolvePromise, rejectPromise) => {
     if (options.signal?.aborted) {
@@ -427,8 +968,26 @@ export function ejecutarSubprocesoJson<T>(
     }
     const child = spawn(options.ejecutable, options.argumentos, {
       detached: process.platform !== 'win32',
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
-      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PYTHONUNBUFFERED: '1',
+        ...(process.platform !== 'win32' ? { GRAFONEST_GUARD_FD: '3' } : {}),
+      },
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+    });
+    // El descriptor también se cierra al salir normalmente el runner. La
+    // guardia termina cualquier descendiente que haya quedado detrás.
+    const guardia = child.stdio[3] as import('node:stream').Writable;
+    // Si Node queda suspendido (sin EOF), la guardia deja de recibir pulsos
+    // y detiene el grupo antes de que venza el permiso compartido de 60 s.
+    guardia.on('error', () => undefined); // El runner puede haber cerrado ya.
+    const pulsoGuardia = setInterval(() => {
+      if (!guardia.destroyed && !guardia.writableEnded) guardia.write('.');
+    }, 5000);
+    pulsoGuardia.unref();
+    child.once('exit', () => {
+      clearInterval(pulsoGuardia);
+      guardia.destroy();
     });
     const maxOutput = options.maxSalidaBytes ?? 32 * 1024 * 1024;
     let stdout = Buffer.alloc(0);
@@ -436,6 +995,7 @@ export function ejecutarSubprocesoJson<T>(
     let forcedError: OpenNestSubprocessError | undefined;
     let finished = false;
     let killTimer: NodeJS.Timeout | undefined;
+    let inicioLinea = 0;
 
     const forceStop = (error: OpenNestSubprocessError) => {
       if (forcedError) return;
@@ -470,6 +1030,7 @@ export function ejecutarSubprocesoJson<T>(
     const finish = (callback: () => void) => {
       if (finished) return;
       finished = true;
+      clearInterval(pulsoGuardia);
       clearTimeout(timeout);
       if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener('abort', abortHandler);
@@ -488,6 +1049,31 @@ export function ejecutarSubprocesoJson<T>(
         return;
       }
       stdout = Buffer.concat([stdout, chunk]);
+      // Sólo se interpretan líneas completas: stdout puede partir un JSON o
+      // un carácter UTF-8 en cualquier chunk. El límite total sigue vigente.
+      if (options.onCandidate) {
+        let finLinea: number;
+        while ((finLinea = stdout.indexOf(10, inicioLinea)) !== -1) {
+          const linea = stdout.subarray(inicioLinea, finLinea).toString('utf8');
+          inicioLinea = finLinea + 1;
+          const candidato = extraerRespuesta<T>(linea);
+          if (candidato !== undefined) {
+            try {
+              options.onCandidate(candidato);
+            } catch (error) {
+              forceStop(
+                new OpenNestSubprocessError(
+                  error instanceof Error
+                    ? error.message
+                    : 'Candidato inválido.',
+                  'INVALID_OUTPUT',
+                ),
+              );
+              return;
+            }
+          }
+        }
+      }
     });
     child.stderr.on('data', (chunk: Buffer) => {
       const maxStderr = 128 * 1024;
@@ -509,6 +1095,16 @@ export function ejecutarSubprocesoJson<T>(
     });
     child.on('close', (code, signal) => {
       finish(() => {
+        // La instrumentación no puede invalidar un candidato fabricable.
+        try {
+          options.onExit?.({
+            codigo: code,
+            signal,
+            stderr: stderr.toString('utf8'),
+          });
+        } catch {
+          /* sólo diagnóstico */
+        }
         if (forcedError) return rejectPromise(forcedError);
         const response = extraerRespuesta<T>(stdout.toString('utf8'));
         if (!response) {

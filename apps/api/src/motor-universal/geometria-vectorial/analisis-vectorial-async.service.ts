@@ -24,8 +24,9 @@ import {
   type PreparacionAnalisisOpenNest,
 } from './opennest-adapter';
 import { resolverConfiguracionEncastresVectoriales } from './segmentacion-encastres';
-import { NestingIrregularError } from './nesting-irregular';
+import { MotorCotizacionError } from '../motor-error';
 import type { ProblemaNesting, SolucionNesting } from './contrato-nesting';
+import { timeoutOpenNestMs } from '../../workers/geometria/politica-busqueda';
 
 const TTL_PREPARACION_SEGUNDOS = 24 * 60 * 60;
 const PREFIX_PREPARACION = 'grafo:geometry:vector-analysis:v1';
@@ -66,12 +67,8 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
       configuracionCapas: input.dto.configuracionCapas,
       parametros,
     });
-    const existente = await this.cache.obtenerCompartido(
-      input.tenantId,
-      cacheKey,
-    );
-    if (existente) return vistaCache(existente, input.dto.nombreArchivo);
-
+    // La geometría persistida es la fuente del mejor acomodo. Una entrada L2
+    // de un análisis anterior podría ocultar una preparación más reciente.
     const preparacion = prepararAnalisisOpenNest({
       tenantId: input.tenantId,
       nombreArchivo: input.dto.nombreArchivo,
@@ -100,6 +97,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
         motor: preparacion.trabajo.motor,
         placa: preparacion.trabajo.placa,
         separacionMm: preparacion.trabajo.separacionMm,
+        commonLine: preparacion.trabajo.commonLine,
         timeoutMs: preparacion.trabajo.timeoutMs,
         semilla: preparacion.trabajo.semilla,
         piezas: preparacion.trabajo.piezas.map((pieza) => ({
@@ -109,6 +107,14 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
         claveSolicitud: input.dto.claveSolicitud,
       },
     });
+    if (trabajo.estado === 'completado' && trabajo.resultado) {
+      const entry = finalizarAnalisisOpenNest({
+        contexto: preparacion.contexto,
+        resultado: trabajo.resultado,
+      });
+      await this.cache.guardarCompartido(entry);
+      return vistaCache(entry, input.dto.nombreArchivo);
+    }
     await this.guardarPreparacion(trabajo.id, preparacion.contexto);
     return vistaDesdeTrabajo(trabajo);
   }
@@ -127,14 +133,11 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
         'El contexto del análisis vectorial venció o no está disponible.',
       );
     }
-    const existente = await this.cache.obtenerCompartido(
-      tenantId,
-      contexto.cacheKey,
-    );
-    const entry =
-      existente ??
-      finalizarAnalisisOpenNest({ contexto, resultado: trabajo.resultado });
-    if (!existente) await this.cache.guardarCompartido(entry);
+    const entry = finalizarAnalisisOpenNest({
+      contexto,
+      resultado: trabajo.resultado,
+    });
+    await this.cache.guardarCompartido(entry);
     return {
       ...vistaDesdeTrabajo(trabajo),
       resultado: respuestaDesdeEntrada(entry, contexto.nombreArchivo, false),
@@ -162,9 +165,13 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     while (vista.estado === 'pendiente' || vista.estado === 'procesando') {
       if (Date.now() >= limite) {
         await this.cancelar(input.tenantId, vista.id).catch(() => undefined);
-        throw new NestingIrregularError(
-          'El nesting vectorial superó el tiempo máximo de cálculo.',
-        );
+        throw errorCalculoNesting({
+          estado: 'fallido',
+          error: {
+            codigo: 'TIMEOUT',
+            mensaje: 'El nesting vectorial superó el tiempo máximo de cálculo.',
+          },
+        });
       }
       await esperar(250);
       vista = await this.consultar(input.tenantId, vista.id);
@@ -172,12 +179,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     if (vista.estado === 'completado' && vista.resultado) {
       return vista.resultado.solucionNesting;
     }
-    throw new NestingIrregularError(
-      vista.error?.mensaje ??
-        (vista.estado === 'cancelado'
-          ? 'El nesting vectorial fue cancelado.'
-          : 'No se pudo completar el nesting vectorial.'),
-    );
+    throw errorCalculoNesting(vista);
   }
 
   /**
@@ -200,9 +202,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
       return preparacion.solucionInmediata;
     }
     if (!preparacion.trabajo) {
-      throw new NestingIrregularError(
-        'No se generó el trabajo de nesting vectorial.',
-      );
+      throw errorCalculoNesting({ estado: 'fallido' });
     }
     let vista = await this.jobs.crear({
       tenantId: input.tenantId,
@@ -210,22 +210,29 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
         motor: preparacion.trabajo.motor,
         placa: preparacion.trabajo.placa,
         separacionMm: preparacion.trabajo.separacionMm,
+        commonLine: preparacion.trabajo.commonLine,
         timeoutMs: preparacion.trabajo.timeoutMs,
         semilla: preparacion.trabajo.semilla,
         piezas: preparacion.trabajo.piezas.map((pieza) => ({
           ...pieza,
           huecos: pieza.huecos?.map((puntos) => ({ puntos })),
         })),
-        claveSolicitud: input.claveSolicitud,
+        // Cada demanda tiene su propio scope: preparar 50 unidades no cancela
+        // la preparación de 10 del mismo producto. La misma demanda se comparte.
+        claveSolicitud: `${input.claveSolicitud ?? 'cotizacion-piezas'}-${problemaHash}`,
       },
     });
     const limite = Date.now() + timeoutEsperaCotizacionMs();
     while (vista.estado === 'pendiente' || vista.estado === 'procesando') {
       if (Date.now() >= limite) {
         await this.cancelar(input.tenantId, vista.id).catch(() => undefined);
-        throw new NestingIrregularError(
-          'El nesting vectorial superó el tiempo máximo de cálculo.',
-        );
+        throw errorCalculoNesting({
+          estado: 'fallido',
+          error: {
+            codigo: 'TIMEOUT',
+            mensaje: 'El nesting vectorial superó el tiempo máximo de cálculo.',
+          },
+        });
       }
       await esperar(250);
       vista = await this.jobs.consultar(input.tenantId, vista.id);
@@ -236,12 +243,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
         resultado: vista.resultado,
       });
     }
-    throw new NestingIrregularError(
-      vista.error?.mensaje ??
-        (vista.estado === 'cancelado'
-          ? 'El nesting vectorial fue cancelado.'
-          : 'No se pudo completar el nesting vectorial.'),
-    );
+    throw errorCalculoNesting(vista);
   }
 
   onApplicationShutdown(): void {
@@ -363,11 +365,34 @@ function clavePreparacion(jobId: string): string {
 
 function timeoutEsperaCotizacionMs(): number {
   const value = Number(process.env.OPENNEST_QUOTE_WAIT_TIMEOUT_MS ?? 900_000);
-  return Number.isInteger(value) && value >= 1_000 && value <= 60 * 60 * 1_000
-    ? value
-    : 900_000;
+  const configurado =
+    Number.isInteger(value) && value >= 1_000 && value <= 60 * 60 * 1_000
+      ? value
+      : 900_000;
+  return Math.max(configurado, timeoutOpenNestMs() + 60_000);
 }
 
 function esperar(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Los fallos del worker no significan que la geometría no entre en la placa. */
+function errorCalculoNesting(
+  vista: Pick<VistaTrabajoGeometria, 'estado' | 'error'>,
+): MotorCotizacionError {
+  const motivo =
+    vista.estado === 'cancelado'
+      ? 'cancelado'
+      : vista.error?.codigo === 'TIMEOUT'
+        ? 'tiempo_agotado'
+        : 'fallido';
+  return new MotorCotizacionError(
+    `nesting_calculo_${motivo}`,
+    vista.error?.mensaje ??
+      (motivo === 'cancelado'
+        ? 'El nesting vectorial fue cancelado.'
+        : 'No se pudo completar el nesting vectorial.'),
+    'Reintentá la cotización. Los datos cargados se conservan.',
+    { codigoGeometria: vista.error?.codigo },
+  );
 }

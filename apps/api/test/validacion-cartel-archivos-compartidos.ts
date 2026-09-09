@@ -1,10 +1,11 @@
+import { PrismaService } from '../src/prisma/prisma.service';
 import { RecetasProductoService } from '../src/productos-servicios/recetas-producto.service';
 import { ProductosService } from '../src/productos-servicios/productos.service';
 import { ProductoValidacionService } from '../src/productos-servicios/producto-validacion.service';
 /** Validación local del producto real. Todas las escrituras se revierten. */
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { expect } from 'expect';
 import { MotorUniversalService } from '../src/motor-universal/motor.service';
 import { AplicarPrecioService } from '../src/productos-servicios/precio/aplicar-precio.service';
@@ -16,7 +17,7 @@ import {
 import { emitirCotizacionF4, ejecutarOrdenF4, serviciosRecorridoF4 } from './soporte-recorridos-f4';
 
 Object.assign(globalThis, { expect });
-const db = new PrismaClient();
+const db = new PrismaService();
 const json = (v: unknown) =>
   JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue;
 const rollback = new Error('ROLLBACK_VALIDACION_CARTEL');

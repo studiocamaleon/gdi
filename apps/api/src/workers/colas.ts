@@ -12,6 +12,8 @@ export const TRABAJO_MEDIR_POLIGONO = 'geometry.measure-polygon.v1' as const;
 export const TRABAJO_NESTING_IRREGULAR_OPENNEST =
   'geometry.nest-irregular-opennest.v1' as const;
 export const VERSION_POLITICA_ORIENTACION_GRAFONEST = 8 as const;
+/** Evoluciona la búsqueda sin invalidar geometrías ya guardadas. */
+export const VERSION_POLITICA_BUSQUEDA_GRAFONEST = 6 as const;
 
 export type PuntoTrabajoGeometria = {
   x: number;
@@ -108,6 +110,8 @@ export type NestingIrregularOpenNestData = {
   timeoutMs: number;
   semilla: number;
   piezas: PiezaTrabajoNestingOpenNest[];
+  /** Preparación anticipada: ampliar la búsqueda si lo guardado tuvo menos tiempo. */
+  buscarMejora?: boolean;
   claseComplejidad?: 'RAPIDA' | 'ESTANDAR' | 'INTENSIVA';
   pesoEstimado?: number;
 };
@@ -132,10 +136,18 @@ export type ResumenPlanPatrones = {
 };
 
 export type NestingIrregularOpenNestResult = {
+  versionPoliticaBusqueda?: number;
+  /** Mayor presupuesto ya explorado, incluso si se conservó un acomodo anterior. */
+  presupuestoExploradoMs?: number;
   planPatrones?: ResumenPlanPatrones;
   schemaVersion: 1;
-  algoritmo: 'opennest-v1' | 'grafonest-baseline-v1';
+  algoritmo:
+    | 'opennest-v1'
+    | 'grafonest-baseline-v1'
+    | 'grafonest-packingsolver-v1';
   motor: NestingIrregularOpenNestData['motor'];
+  /** Motor efectivo del candidato; `motor` conserva la solicitud original. */
+  motorEjecutor?: NestingIrregularOpenNestData['motor'] | 'packingsolver';
   versionMotor: string;
   cantidadSolicitada: number;
   cantidadColocada: number;
@@ -147,14 +159,43 @@ export type NestingIrregularOpenNestResult = {
   versionPoliticaOrientacion?: typeof VERSION_POLITICA_ORIENTACION_GRAFONEST;
   /** Una base segura siempre permite cotizar; el optimizador puede mejorarla. */
   calidadSolucion?: 'BASE_SEGURA' | 'OPTIMIZADA';
-  /** No se probó el mínimo de placas dentro del presupuesto disponible. */
+  /** Procedencia del acomodo; se conserva aunque otra búsqueda no lo mejore. */
+  origenSolucion?: {
+    etapa: 'base' | 'biblioteca' | 'cartera' | 'motor';
+    encontradaEl: string;
+    transcurridoMs: number;
+  };
+  /** No se probaron los mínimos de placas y patrones dentro del presupuesto. */
   optimizacionAgotada?: boolean;
   busqueda?: {
-    motivoFin: 'MINIMO_PLACAS' | 'PRESUPUESTO_AGOTADO' | 'MOTOR_NO_DISPONIBLE';
+    motivoFin:
+      | 'MINIMO_PLACAS'
+      | 'PRESUPUESTO_AGOTADO'
+      | 'MOTOR_NO_DISPONIBLE'
+      | 'PLAN_REUTILIZADO';
     presupuestoMs: number;
     intentos: number;
     candidatosValidos: number;
+    motoresExplorados?: Array<'collision' | 'nfp' | 'packingsolver'>;
+    recursosNativos?: Array<{
+      motor: 'packingsolver';
+      fin: string;
+      rssMaxObservadoMb: number;
+      rssTotalMaxObservadoMb?: number;
+    }>;
     minimoTeoricoPlacas: number;
+    fases?: Array<{
+      etapa: string;
+      duracionMs: number;
+      transcurridoMs: number;
+      placas?: number;
+      patrones?: number;
+    }>;
+    descartes?: {
+      timeout: number;
+      resultadoInvalido: number;
+      errorMotor: number;
+    };
   };
   commonLine?: ResultadoCommonLineTrabajo;
   placements: PlacementTrabajoNestingOpenNest[];

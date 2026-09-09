@@ -204,6 +204,7 @@ describe('materialización de componentes fabricados', () => {
     ).materializarComponentesFabricados(tx, 'tenant', ['item-padre']);
 
     expect(itemCreate).toHaveBeenCalledWith({
+      select: { id: true },
       data: expect.objectContaining({
         parentItemId: 'item-padre',
         componenteCodigo: 'acrilico',

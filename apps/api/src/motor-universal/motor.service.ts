@@ -1506,7 +1506,9 @@ export class MotorUniversalService {
             );
             return fallar([
               {
-                codigo: 'componente_fabricado_no_cotizable',
+                codigo: detalle?.codigo.startsWith('nesting_calculo_')
+                  ? detalle.codigo
+                  : 'componente_fabricado_no_cotizable',
                 severidad: 'ERROR',
                 mensaje: detalle?.mensaje
                   ? `No se pudo costear el componente fabricado "${ocurrencia.nombre}": ${detalle.mensaje}`
@@ -2330,7 +2332,20 @@ export class MotorUniversalService {
 
     // Crear (o reusar) la cotización y su item de forma ATÓMICA (M6): si el
     // item falla, no queda una cotización borrador huérfana.
-    const productoCargado = producto;
+    const datosCrudos = this.buildCotizacionItemData({
+      tenantId: input.tenantId,
+      cotizacionId: input.cotizacionId ?? '',
+      productoId: input.productoId,
+      jobContext: input.jobContext,
+      producto,
+      cotizacion: result.cotizacion,
+      descuento: input.descuento ?? null,
+      inputHash: hashCotizacionInput(input),
+      periodo: result.cotizacion.periodoTarifario,
+      receta,
+    });
+    const datosItem =
+      this.prisma.prepararSnapshot?.('CotizacionItem', datosCrudos) ?? datosCrudos;
     const { cotizacionId, itemId } = await this.prisma.$transaction(
       async (tx) => {
         let cid = input.cotizacionId;
@@ -2387,18 +2402,8 @@ export class MotorUniversalService {
         }
 
         const item = await tx.cotizacionItem.create({
-          data: this.buildCotizacionItemData({
-            tenantId: input.tenantId,
-            cotizacionId: cid,
-            productoId: input.productoId,
-            jobContext: input.jobContext,
-            producto: productoCargado,
-            cotizacion: result.cotizacion!,
-            descuento: input.descuento ?? null,
-            inputHash: hashCotizacionInput(input),
-            periodo: result.cotizacion!.periodoTarifario,
-            receta,
-          }),
+          data: { ...datosItem, cotizacionId: cid },
+          select: { id: true },
         });
 
         return { cotizacionId: cid, itemId: item.id };
@@ -2474,6 +2479,25 @@ export class MotorUniversalService {
       return { result };
     }
 
+    const datosCrudos = this.buildCotizacionItemData({
+      tenantId: input.tenantId,
+      cotizacionId: item.cotizacionId,
+      productoId: item.productoId,
+      jobContext: solicitud.jobContext,
+      producto,
+      cotizacion: result.cotizacion!,
+      descuento: input.descuento ?? null,
+      inputHash: hashCotizacionInput({
+        ...solicitud,
+        productoId: item.productoId,
+        rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
+      }),
+      periodo: result.cotizacion!.periodoTarifario,
+      receta,
+    });
+    const datosItem =
+      this.prisma.prepararSnapshot?.('CotizacionItem', datosCrudos) ?? datosCrudos;
+
     await this.prisma.$transaction(async (tx) => {
       const lock = await tx.cotizacion.updateMany({
         where: {
@@ -2494,22 +2518,7 @@ export class MotorUniversalService {
           tenantId: input.tenantId,
           cotizacionId: item.cotizacionId,
         },
-        data: this.buildCotizacionItemData({
-          tenantId: input.tenantId,
-          cotizacionId: item.cotizacionId,
-          productoId: item.productoId,
-          jobContext: solicitud.jobContext,
-          producto,
-          cotizacion: result.cotizacion!,
-          descuento: input.descuento ?? null,
-          inputHash: hashCotizacionInput({
-            ...solicitud,
-            productoId: item.productoId,
-            rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
-          }),
-          periodo: result.cotizacion!.periodoTarifario,
-          receta,
-        }),
+        data: datosItem,
       });
       if (updateResult.count !== 1) {
         throw new NotFoundException('No se encontró el item de cotización.');
@@ -4150,6 +4159,15 @@ export class MotorUniversalService {
           this.opcionesNesting(tenantId),
         );
       } catch (error) {
+        if (error instanceof MotorCotizacionError) {
+          errores.push({
+            ...error.toErrorMotor(),
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+          });
+          return this.pasoAbortado(paso);
+        }
         if (error instanceof NestingIrregularError) {
           errores.push({
             codigo: 'nesting_irregular_incompatible_con_maquina',

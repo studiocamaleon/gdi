@@ -3,11 +3,15 @@ import {
   Logger,
   OnApplicationBootstrap,
   OnApplicationShutdown,
+  Optional,
 } from '@nestjs/common';
 import { DelayedError, Job, Worker } from 'bullmq';
 import { MotorUniversalService } from '../../motor-universal/motor.service';
 import type { CotizarOutput } from '../../motor-universal/tipos';
 import { conexionRedisWorker } from '../redis';
+import { compactarJson, leerPropiedadJson } from '../../common/json-compartido';
+import { PreparacionesNestingService } from './preparaciones-nesting.service';
+import { conPreparacionNesting } from '../geometria/politica-busqueda';
 import {
   COLA_COTIZACIONES,
   TRABAJO_COTIZAR,
@@ -32,6 +36,7 @@ export class CotizacionWorker
   constructor(
     private readonly motor: MotorUniversalService,
     private readonly tenantConcurrency: TenantConcurrencyService,
+    @Optional() private readonly preparaciones?: PreparacionesNestingService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -71,7 +76,7 @@ export class CotizacionWorker
         totalMs: job.finishedOn
           ? Math.max(0, job.finishedOn - job.timestamp)
           : undefined,
-        exitoso: job.returnvalue?.exitoso,
+        exitoso: leerPropiedadJson(job.returnvalue, 'exitoso'),
       }),
     );
     this.worker.on('stalled', (jobId) =>
@@ -113,11 +118,43 @@ export class CotizacionWorker
       Math.floor(lease.duracionMs / 3),
     );
     renovacion.unref();
+    const inicio = Date.now();
+    const actualizarPreparacion = (estado: string, error?: string) =>
+      job.data.preparacionNestingId
+        ? this.preparaciones?.actualizar(
+            job.data.input.tenantId,
+            job.data.preparacionNestingId,
+            jobId,
+            estado,
+            error,
+            Date.now() - inicio,
+          )
+        : undefined;
     try {
+      await actualizarPreparacion('PROCESANDO');
       await job.updateProgress({ porcentaje: 10, etapa: 'cotizando' });
-      const result = await this.motor.cotizar(job.data.input);
+      const cotizar = () => this.motor.cotizar(job.data.input);
+      const result = await (job.data.preparacionNestingId
+        ? conPreparacionNesting(cotizar)
+        : cotizar());
+      await actualizarPreparacion(
+        result.exitoso ? 'PREPARADO' : 'FALLIDO',
+        result.exitoso
+          ? undefined
+          : result.errores.map((d) => d.mensaje).join(' '),
+      );
       await job.updateProgress({ porcentaje: 100, etapa: 'completado' });
-      return result;
+      // BullMQ persiste el returnvalue completo en Redis. Guardamos la misma
+      // representación autónoma que los snapshots, sin repetir cada contorno.
+      return compactarJson(result) as CotizarOutput;
+    } catch (error) {
+      await actualizarPreparacion(
+        'FALLIDO',
+        error instanceof Error
+          ? error.message
+          : 'No se pudo preparar el nesting.',
+      );
+      throw error;
     } finally {
       clearInterval(renovacion);
       await this.tenantConcurrency

@@ -4,7 +4,7 @@ import {
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
-import { DelayedError, Job, Worker } from 'bullmq';
+import { DelayedError, Job, Worker, type MinimalQueue } from 'bullmq';
 import {
   COLA_GEOMETRIA,
   COLA_GEOMETRIA_INTENSIVA,
@@ -23,10 +23,15 @@ import {
 } from '../redis';
 import { medirPoligono } from './medir-poligono';
 import { OpenNestService } from './opennest.service';
+import {
+  CapacidadGeometriaService,
+  type PermisoCapacidad,
+} from './capacidad-geometria.service';
 import { ControlTrabajosGeometriaService } from '../control-trabajos-geometria.service';
 import {
   limiteEntero,
   TenantConcurrencyService,
+  type LeaseTenant,
 } from '../tenant-concurrency.service';
 
 @Injectable()
@@ -38,6 +43,7 @@ export class GeometriaWorker
     private readonly openNestService: OpenNestService,
     private readonly control: ControlTrabajosGeometriaService,
     private readonly tenantConcurrency: TenantConcurrencyService,
+    private readonly capacidad: CapacidadGeometriaService,
   ) {}
 
   private workers: Array<
@@ -45,6 +51,8 @@ export class GeometriaWorker
   > = [];
 
   async onApplicationBootstrap(): Promise<void> {
+    // Configuraciones incompatibles entre réplicas fallan antes de tomar jobs.
+    await this.capacidad.estado();
     const configuraciones = [
       { nombre: COLA_GEOMETRIA, concurrencia: concurrenciaGeometria() },
       {
@@ -57,13 +65,17 @@ export class GeometriaWorker
         TrabajoGeometriaData,
         TrabajoGeometriaResult,
         TrabajoGeometriaNombre
-      >(nombre, (job) => this.procesar(job), {
-        connection: conexionRedisWorker(),
-        concurrency: concurrencia,
-        name: `geometry-${process.pid}`,
-        removeOnComplete: { age: 60 * 60, count: 1_000 },
-        removeOnFail: { age: 7 * 24 * 60 * 60, count: 5_000 },
-      });
+      >(
+        nombre,
+        (job): Promise<TrabajoGeometriaResult> => this.procesar(job, worker),
+        {
+          connection: conexionRedisWorker(),
+          concurrency: concurrencia,
+          name: `geometry-${process.pid}`,
+          removeOnComplete: { age: 60 * 60, count: 1_000 },
+          removeOnFail: { age: 7 * 24 * 60 * 60, count: 5_000 },
+        },
+      );
       this.conectarEventos(worker);
       return worker;
     });
@@ -136,6 +148,14 @@ export class GeometriaWorker
       });
     });
     worker.on('failed', (job, error) => {
+      if (job?.id)
+        void this.capacidad
+          .cancelar(job.id)
+          .catch((e: unknown) =>
+            this.logger.warn(
+              `No se pudo retirar el turno fallido ${job.id}: ${String(e)}`,
+            ),
+          );
       const detail = {
         event: 'worker_job_failed',
         queue: job?.queueName,
@@ -182,6 +202,7 @@ export class GeometriaWorker
       TrabajoGeometriaResult,
       TrabajoGeometriaNombre
     >,
+    cola?: MinimalQueue,
   ): Promise<TrabajoGeometriaResult> {
     switch (job.name) {
       case TRABAJO_MEDIR_POLIGONO:
@@ -193,6 +214,7 @@ export class GeometriaWorker
             TrabajoGeometriaResult,
             typeof TRABAJO_NESTING_IRREGULAR_OPENNEST
           >,
+          cola,
         );
       default:
         throw new Error(
@@ -207,16 +229,28 @@ export class GeometriaWorker
       TrabajoGeometriaResult,
       typeof TRABAJO_NESTING_IRREGULAR_OPENNEST
     >,
+    cola?: MinimalQueue,
   ): Promise<TrabajoGeometriaResult> {
     const jobId = String(job.id ?? 'sin-id');
     const intensiva = job.queueName === COLA_GEOMETRIA_INTENSIVA;
-    const lease = await this.tenantConcurrency.adquirir({
-      tenantId: job.data.tenantId,
-      categoria: intensiva ? 'geometria-intensiva' : 'geometria',
-      jobId,
-      limite: limiteEntero(process.env.WORKER_TENANT_GEOMETRY_CONCURRENCY, 1),
-      duracionMs: Math.max(60_000, job.data.timeoutMs + 30_000),
-    });
+    if (await this.control.leerCancelacion(jobId)) {
+      await this.capacidad.cancelar(jobId);
+      throw new Error('El cálculo de geometría fue cancelado.');
+    }
+    let lease: LeaseTenant | null;
+    try {
+      lease = await this.tenantConcurrency.adquirir({
+        tenantId: job.data.tenantId,
+        categoria: intensiva ? 'geometria-intensiva' : 'geometria',
+        jobId,
+        limite: limiteEntero(process.env.WORKER_TENANT_GEOMETRY_CONCURRENCY, 1),
+        // La renovación sostiene búsquedas largas. Una caída libera la cuota
+        // en un minuto, sin retenerla durante todo el presupuesto del nesting.
+        duracionMs: 60_000,
+      });
+    } catch (error) {
+      return this.reprogramarAdmision(job, error);
+    }
     if (!lease) {
       if (!job.token)
         throw new Error('El trabajo no tiene token para reprogramarse.');
@@ -226,12 +260,69 @@ export class GeometriaWorker
       );
       throw new DelayedError();
     }
+    let permisoCapacidad: PermisoCapacidad | null;
+    try {
+      permisoCapacidad = await this.capacidad.adquirir({
+        tenantId: job.data.tenantId,
+        jobId,
+        clase: intensiva ? 'intensiva' : 'normal',
+        prioridad: job.opts.priority ?? (intensiva ? 20 : 5),
+      });
+    } catch (error) {
+      await this.tenantConcurrency.liberar(lease).catch(() => undefined);
+      return this.reprogramarAdmision(job, error);
+    }
+    if (!permisoCapacidad) {
+      await this.tenantConcurrency.liberar(lease);
+      if (!job.token)
+        throw new Error('El trabajo no tiene token para esperar capacidad.');
+      await job.updateProgress({ porcentaje: 0, etapa: 'en_cola' });
+      await job.moveToDelayed(
+        Date.now() + demoraReintentoTenantMs(),
+        job.token,
+      );
+      throw new DelayedError();
+    }
+    const controller = new AbortController();
+    let permisoPerdido = false;
+    let capacidadLiberada = false;
+    let renovando = false;
+    let cerrado = false;
+    const renovarPermiso = async () => {
+      if (renovando || cerrado || controller.signal.aborted) return;
+      renovando = true;
+      try {
+        const renovaciones = await Promise.all([
+          this.tenantConcurrency.renovar(lease),
+          this.capacidad.renovar(permisoCapacidad),
+        ]);
+        if (renovaciones.some((r) => !r)) {
+          permisoPerdido = true;
+          controller.abort();
+        }
+      } catch (error) {
+        // Si no se puede verificar la exclusión, no seguir consumiendo CPU
+        // mientras otra réplica podría haber adquirido la misma cuota.
+        permisoPerdido = true;
+        controller.abort();
+        this.logger.warn(
+          `Se interrumpió la renovación de job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      } finally {
+        renovando = false;
+      }
+    };
+    let renovacionPendiente: Promise<void> | undefined;
     const renovacion = setInterval(
-      () => void this.tenantConcurrency.renovar(lease),
+      () => {
+        if (!renovacionPendiente)
+          renovacionPendiente = renovarPermiso().finally(() => {
+            renovacionPendiente = undefined;
+          });
+      },
       Math.max(5_000, Math.floor(lease.duracionMs / 3)),
     );
     renovacion.unref();
-    const controller = new AbortController();
     let consultando = false;
     const verificarCancelacion = async () => {
       if (consultando || controller.signal.aborted || !job.id) return;
@@ -262,13 +353,56 @@ export class GeometriaWorker
         },
       });
       await verificarCancelacion();
+      // No competir con una renovación en vuelo al liberar el mismo permiso.
+      cerrado = true;
+      clearInterval(renovacion);
+      await renovacionPendiente;
       if (controller.signal.aborted)
         throw new Error('El cálculo de geometría fue cancelado.');
+      // Liberar con el propietario correcto antes de publicar el resultado.
+      // Si venció, el job se reprograma con el checkpoint, sin aceptar un dueño viejo.
+      try {
+        capacidadLiberada = await this.capacidad.liberar(permisoCapacidad);
+      } catch (error) {
+        permisoPerdido = true;
+        throw error;
+      }
+      if (!capacidadLiberada) {
+        permisoPerdido = true;
+        controller.abort();
+        throw new Error('El permiso de capacidad venció antes de finalizar.');
+      }
       await job.updateProgress({ porcentaje: 100, etapa: 'completado' });
       return result;
+    } catch (error) {
+      if (permisoPerdido && job.token) {
+        // OpenNest ya esperó sus checkpoints y terminó el subproceso antes
+        // de rechazar. Reprogramar sin consumir un intento fallido del cliente.
+        await job.moveToDelayed(
+          Date.now() + demoraReintentoTenantMs(),
+          job.token,
+        );
+        this.logger.warn({
+          event: 'nesting_reprogramado_permiso_perdido',
+          jobId,
+          tenantId: job.data.tenantId,
+        });
+        throw new DelayedError();
+      }
+      throw error;
     } finally {
+      cerrado = true;
       if (timer) clearInterval(timer);
       clearInterval(renovacion);
+      await renovacionPendiente;
+      if (!capacidadLiberada)
+        await this.capacidad
+          .liberar(permisoCapacidad, permisoPerdido)
+          .catch((error: unknown) =>
+            this.logger.warn(
+              `No se pudo liberar capacidad de job=${jobId}: ${String(error)}`,
+            ),
+          );
       await this.tenantConcurrency
         .liberar(lease)
         .catch((error: unknown) =>
@@ -276,7 +410,60 @@ export class GeometriaWorker
             `No se pudo liberar concurrencia de job=${jobId}: ${error instanceof Error ? error.message : String(error)}`,
           ),
         );
+      if (cola)
+        await this.despertarSiguiente(cola, intensiva ? 'intensiva' : 'normal');
     }
+  }
+
+  private async despertarSiguiente(
+    cola: MinimalQueue,
+    clase: 'normal' | 'intensiva',
+  ): Promise<void> {
+    try {
+      // La demora evita sondeo agresivo mientras otro solver trabaja. Al
+      // terminar, despertar al próximo evita pagar esa demora por cada pieza.
+      for (let n = 0; n < 3; n++) {
+        const id = await this.capacidad.siguiente(clase);
+        if (!id) return;
+        const siguiente = await Job.fromId(cola, id);
+        if (!siguiente) {
+          await this.capacidad.cancelar(id);
+          continue;
+        }
+        if ((await siguiente.getState()) === 'delayed') {
+          // Otra réplica puede promoverlo entre getState y promote.
+          await siguiente.promote().catch(() => undefined);
+        }
+        return;
+      }
+    } catch (error) {
+      // La promoción es una aceleración; el reintento acotado sigue vigente.
+      this.logger.warn(
+        `No se pudo despertar el siguiente nesting: ${String(error)}`,
+      );
+    }
+  }
+
+  private async reprogramarAdmision(job: Job, error: unknown): Promise<never> {
+    const message = error instanceof Error ? error.message : String(error);
+    // Un despliegue incompatible necesita corregirse, no un bucle de reintentos.
+    if (
+      /GRAFONEST_POOL_CONFIG_MISMATCH|Identidad de capacidad incompatible/.test(
+        message,
+      ) ||
+      !job.token
+    )
+      throw error;
+    this.logger.warn({
+      event: 'nesting_espera_admision',
+      jobId: job.id,
+      message,
+    });
+    await job.moveToDelayed(
+      Date.now() + 1000 + demoraReintentoTenantMs(),
+      job.token,
+    );
+    throw new DelayedError();
   }
 }
 

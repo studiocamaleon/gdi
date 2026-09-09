@@ -1,6 +1,8 @@
 import {
   timeoutOpenNestMs,
   timeoutMaximoOpenNestMs,
+  conPreparacionNesting,
+  esPreparacionNesting,
 } from './politica-busqueda';
 
 describe('presupuesto global de OpenNest', () => {
@@ -23,5 +25,22 @@ describe('presupuesto global de OpenNest', () => {
     process.env.OPENNEST_TIMEOUT_MAX_MS = 'Infinity';
     expect(timeoutOpenNestMs()).toBe(120_000);
     expect(timeoutMaximoOpenNestMs()).toBe(300_000);
+  });
+  it('da cinco minutos a la preparación sin modificar cotizaciones concurrentes', async () => {
+    delete process.env.OPENNEST_JOB_TIMEOUT_MS;
+    delete process.env.OPENNEST_TIMEOUT_MAX_MS;
+    const largo = conPreparacionNesting(async () => {
+      await Promise.resolve();
+      expect(esPreparacionNesting()).toBe(true);
+      return timeoutOpenNestMs();
+    });
+    expect(timeoutOpenNestMs()).toBe(120_000);
+    expect(esPreparacionNesting()).toBe(false);
+    expect(await largo).toBe(300_000);
+    expect(timeoutOpenNestMs()).toBe(120_000);
+  });
+  it('respeta un límite de infraestructura menor también en preparación', () => {
+    process.env.OPENNEST_TIMEOUT_MAX_MS = '240000';
+    expect(conPreparacionNesting(timeoutOpenNestMs)).toBe(240_000);
   });
 });

@@ -60,6 +60,7 @@ import { HumanSelect } from "@/components/ui/human-select";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NestingsGuardadosProducto } from "./nestings-guardados-producto";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
 import { PricingCompuestoEditor } from "@/components/productos-servicios/pricing-compuesto-editor";
@@ -628,7 +629,10 @@ export function ProductoWorkspace({
                 <IdentidadTab producto={producto} seccion="identidad" />
               )}
               {activeTab === "comercial" && (
-                <IdentidadTab producto={producto} seccion="comercial" />
+                <>
+                  <NestingsGuardadosProducto productoId={producto.id} rutaAlternativaId={producto.rutasAlternativas.find(r => r.esPreferida)?.id ?? producto.rutasAlternativas[0]?.id} />
+                  <IdentidadTab producto={producto} seccion="comercial" />
+                </>
               )}
               {activeTab === "produccion" && (
                 <ProduccionTab

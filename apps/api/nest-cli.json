@@ -12,6 +12,10 @@
       {
         "include": "**/python/**/*.py",
         "outDir": "dist/src"
+      },
+      {
+        "include": "**/*.lua",
+        "outDir": "dist/src"
       }
     ],
     "watchAssets": true

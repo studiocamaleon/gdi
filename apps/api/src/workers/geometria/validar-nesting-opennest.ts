@@ -126,6 +126,18 @@ export function validarResultadoNestingOpenNest(
     );
   if (result.motor !== input.motor)
     invalido('El motor informado no coincide con el trabajo solicitado.');
+  if (
+    result.motorEjecutor !== undefined &&
+    result.motorEjecutor !== 'collision' &&
+    result.motorEjecutor !== 'nfp' &&
+    result.motorEjecutor !== 'packingsolver'
+  )
+    invalido('El motor ejecutor informado no está soportado.');
+  if (
+    (result.algoritmo === 'grafonest-packingsolver-v1') !==
+    (result.motorEjecutor === 'packingsolver')
+  )
+    invalido('La procedencia de PackingSolver no coincide con el algoritmo.');
 
   const piezas = new Map(input.piezas.map((pieza) => [pieza.id, pieza]));
   const copias = new Set<string>();
@@ -147,10 +159,9 @@ export function validarResultadoNestingOpenNest(
     if (copias.has(key)) invalido(`OpenNest repitió la instancia "${key}".`);
     copias.add(key);
     placas.add(placement.placa);
-    porPlaca.set(placement.placa, [
-      ...(porPlaca.get(placement.placa) ?? []),
-      placement,
-    ]);
+    const placements = porPlaca.get(placement.placa) ?? [];
+    placements.push(placement);
+    porPlaca.set(placement.placa, placements);
     validarPlacement(input, pieza, placement);
   }
   for (const pieza of input.piezas) {
@@ -166,7 +177,23 @@ export function validarResultadoNestingOpenNest(
       invalido('OpenNest devolvió índices de placa discontinuos.');
   }
 
+  // Una tirada puede repetir el mismo patrón cientos de veces. Cada copia
+  // ya pasó cantidades, transformación y límites. Reutilizar únicamente la
+  // comprobación entre piezas con coordenadas/huecos idénticos; nunca basarse
+  // en el nombre del patrón ni redondear geometría para decidir igualdad.
+  // Common Line se valida íntegramente porque sus permisos dependen de copias.
+  const patronesVerificados = new Set<string>();
+  let caracteresGuardados = 0;
+  const limiteCaracteres = 4_000_000; // hasta ~8 MiB de firmas por validación.
+  const reutilizar = porPlaca.size > 1 && paresCommonLine.size === 0;
   for (const [placa, placements] of porPlaca) {
+    const firma =
+      reutilizar && placements.length > 1
+        ? JSON.stringify(
+            placements.map((p) => [p.piezaId, p.contorno, p.huecos]),
+          )
+        : undefined;
+    if (firma !== undefined && patronesVerificados.has(firma)) continue;
     validarSeparacionesEnPlaca(
       placements,
       input.separacionMm,
@@ -174,6 +201,13 @@ export function validarResultadoNestingOpenNest(
       paresCommonLine,
       input.commonLine?.anchoCorteMm,
     );
+    if (
+      firma !== undefined &&
+      caracteresGuardados + firma.length <= limiteCaracteres
+    ) {
+      patronesVerificados.add(firma);
+      caracteresGuardados += firma.length;
+    }
   }
 
   return {
@@ -232,7 +266,8 @@ function validarEstructuraResultado(result: ResultadoSinValidacion): void {
   if (
     result.schemaVersion !== 1 ||
     (result.algoritmo !== 'opennest-v1' &&
-      result.algoritmo !== 'grafonest-baseline-v1') ||
+      result.algoritmo !== 'grafonest-baseline-v1' &&
+      result.algoritmo !== 'grafonest-packingsolver-v1') ||
     (result.motor !== 'collision' && result.motor !== 'nfp') ||
     !result.versionMotor?.trim() ||
     !Number.isInteger(result.cantidadSolicitada) ||

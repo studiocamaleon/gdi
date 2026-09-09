@@ -99,7 +99,8 @@ async function main(): Promise<void> {
     if (
       !recovered ||
       (recovered.nesting.motorNesting !== 'opennest-v1' &&
-        recovered.nesting.motorNesting !== 'grafonest-baseline-v1') ||
+        recovered.nesting.motorNesting !== 'grafonest-baseline-v1' &&
+        recovered.nesting.motorNesting !== 'grafonest-packingsolver-v1') ||
       recovered.nesting.placements.length !== 3 ||
       JSON.stringify(recovered.solucionNesting.resultado) !==
         JSON.stringify(recovered.nesting)

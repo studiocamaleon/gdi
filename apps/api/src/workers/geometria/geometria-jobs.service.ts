@@ -1,10 +1,11 @@
-import { timeoutOpenNestMs } from './politica-busqueda';
+import { esPreparacionNesting, timeoutOpenNestMs } from './politica-busqueda';
 import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
   OnApplicationShutdown,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
@@ -15,10 +16,18 @@ import {
   COLA_GEOMETRIA_INTENSIVA,
   TRABAJO_NESTING_IRREGULAR_OPENNEST,
   VERSION_POLITICA_ORIENTACION_GRAFONEST,
+  VERSION_POLITICA_BUSQUEDA_GRAFONEST,
   type NestingIrregularOpenNestData,
   type NestingIrregularOpenNestResult,
 } from '../colas';
 import { conexionRedisApi } from '../redis';
+import {
+  NestingsGuardadosService,
+  firmaNesting,
+  satisfaceBusqueda,
+} from './nestings-guardados.service';
+import { BibliotecaPatronesService } from './biblioteca-patrones.service';
+import { CapacidadGeometriaService } from './capacidad-geometria.service';
 import type { CrearTrabajoNestingOpenNestDto } from './geometria-jobs.dto';
 import {
   NestingOpenNestInvalidoError,
@@ -64,7 +73,12 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   private readonly logger = new Logger(GeometriaJobsService.name);
   private readonly queues = new Map<string, GeometryQueue>();
 
-  constructor(private readonly control: ControlTrabajosGeometriaService) {}
+  constructor(
+    private readonly control: ControlTrabajosGeometriaService,
+    private readonly capacidad: CapacidadGeometriaService,
+    @Optional() private readonly guardados?: NestingsGuardadosService,
+    @Optional() private readonly biblioteca?: BibliotecaPatronesService,
+  ) {}
 
   async crear(input: {
     tenantId: string;
@@ -81,6 +95,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
       separacionMm: input.dto.separacionMm,
       commonLine: input.dto.commonLine,
       timeoutMs: input.dto.timeoutMs ?? timeoutOpenNestMs(),
+      ...(esPreparacionNesting() ? { buscarMejora: true } : {}),
       semilla: input.dto.semilla ?? 30,
       piezas: input.dto.piezas.map((pieza) => ({
         id: pieza.id,
@@ -102,12 +117,50 @@ export class GeometriaJobsService implements OnApplicationShutdown {
         throw new BadRequestException(error.message);
       throw error;
     }
-    let jobId = idTrabajo(input.tenantId, input.dto.claveSolicitud, data);
+    // Cotizar mientras se mejora el mismo nesting no cancela la preparación.
+    const scope =
+      data.buscarMejora && input.dto.claveSolicitud
+        ? `${input.dto.claveSolicitud}-preparacion-${data.timeoutMs}`
+        : input.dto.claveSolicitud;
+    let jobId = idTrabajo(input.tenantId, scope, data);
     let job: GeometryJob;
     try {
+      const guardado = await this.guardados?.obtener(data, {
+        biblioteca: this.biblioteca,
+      });
+      if (guardado && satisfaceBusqueda(data, guardado)) {
+        // Promueve también los acomodos anteriores que el API devuelve sin
+        // pasar por el worker: sus patrones sirven para otras cantidades.
+        try {
+          await this.biblioteca?.aprender(data, guardado);
+        } catch (error) {
+          this.logger.warn(
+            `No se pudo enriquecer la biblioteca: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+        return {
+          id: `nest-${firmaNesting(data).clave}`,
+          tipo: TRABAJO_NESTING_IRREGULAR_OPENNEST,
+          estado: 'completado',
+          creadoEl: data.solicitadoEl,
+          finalizadoEl: data.solicitadoEl,
+          correlationId,
+          progreso: { porcentaje: 100, etapa: 'completado' },
+          resultado: guardado,
+        };
+      }
       if (await this.control.leerCancelacion(jobId))
         jobId = `${jobId}-${randomUUID()}`;
       const queue = this.getQueue(complejidad.clase);
+      await this.capacidad.registrar(
+        {
+          jobId,
+          tenantId: input.tenantId,
+          clase: complejidad.clase === 'INTENSIVA' ? 'intensiva' : 'normal',
+          prioridad: complejidad.prioridad,
+        },
+        false,
+      );
       const queued = await queue.add(TRABAJO_NESTING_IRREGULAR_OPENNEST, data, {
         jobId,
         attempts: 1,
@@ -116,10 +169,22 @@ export class GeometriaJobsService implements OnApplicationShutdown {
         removeOnFail: { age: 7 * 24 * 60 * 60, count: 5_000 },
       });
       job = (await queue.getJob(jobId)) ?? queued;
-      if (input.dto.claveSolicitud) {
+      // Reintentar desde el sheet debe volver a ejecutar un trabajo fallido,
+      // no devolver durante siete días el mismo error guardado en Redis.
+      if ((await job.getState()) === 'failed') {
+        try {
+          await job.retry('failed');
+        } catch (error) {
+          // Dos solicitudes pueden compartir el reintento ya puesto en cola.
+          if ((await job.getState()) === 'failed') throw error;
+        }
+        job = (await queue.getJob(jobId)) ?? job;
+      }
+      await this.capacidad.confirmar(jobId);
+      if (scope) {
         const anterior = await this.control.activarScope({
           tenantId: input.tenantId,
-          scope: input.dto.claveSolicitud,
+          scope,
           jobId,
         });
         if (anterior && anterior !== jobId) {
@@ -134,6 +199,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
       }
       return await this.vistaDesdeJob(job);
     } catch (error) {
+      await this.capacidad.cancelar(jobId).catch(() => undefined);
       if (error instanceof NotFoundException) throw error;
       this.logger.warn(
         `No se pudo encolar nesting: ${error instanceof Error ? error.message : String(error)}`,
@@ -216,7 +282,16 @@ export class GeometriaJobsService implements OnApplicationShutdown {
     job: GeometryJob,
   ): Promise<VistaTrabajoGeometria> {
     const state = await job.getState();
+    if (state === 'completed' || state === 'failed')
+      await this.capacidad.cancelar(String(job.id));
     const estado = estadoPublico(state);
+    let resultado = job.returnvalue;
+    if (estado === 'completado' && resultado) {
+      // Un job antiguo de Redis nunca debe tapar una mejora persistida después.
+      resultado = this.guardados
+        ? await this.guardados.conservarResultado(job.data, resultado)
+        : resultado;
+    }
     const progreso = progresoPublico(job.progress, estado);
     return {
       id: job.id ?? '',
@@ -231,9 +306,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
         : {}),
       correlationId: job.data.correlationId,
       progreso,
-      ...(estado === 'completado' && job.returnvalue
-        ? { resultado: job.returnvalue }
-        : {}),
+      ...(estado === 'completado' && job.returnvalue ? { resultado } : {}),
       ...(estado === 'fallido'
         ? {
             error: errorPublico(job.failedReason),
@@ -243,6 +316,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   }
 
   private async removerSiEspera(jobId: string): Promise<void> {
+    await this.capacidad.cancelar(jobId);
     const job = await this.buscarJob(jobId);
     if (!job) return;
     const state = await job.getState();
@@ -430,11 +504,13 @@ export function idTrabajo(
     .update(
       JSON.stringify({
         versionPoliticaOrientacion: VERSION_POLITICA_ORIENTACION_GRAFONEST,
+        versionPoliticaBusqueda: VERSION_POLITICA_BUSQUEDA_GRAFONEST,
         motor: data.motor,
         placa: data.placa,
         separacionMm: data.separacionMm,
         commonLine: data.commonLine,
         timeoutMs: data.timeoutMs,
+        buscarMejora: data.buscarMejora,
         semilla: data.semilla,
         piezas: data.piezas,
       }),

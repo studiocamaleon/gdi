@@ -3,12 +3,18 @@
 
 import json
 import math
+import os
 import sys
 import time
 import traceback
 from importlib.metadata import version
 
+if os.environ.get('GRAFONEST_GUARD_FD'):
+    from process_guard import start_guard
+    start_guard()
+
 SENTINEL = "GRAFO_OPENNEST_RESULT:"
+_native_handle = None
 
 
 def _emit(payload):
@@ -42,6 +48,28 @@ def _transform(points, angle, tx, ty):
         }
         for point in points
     ]
+
+
+def _solve_until(solver, geometry, sheets, deadline):
+    """El plazo es global, incluso cuando el driver nativo reparte tiempo por placa.
+
+    Un snapshot sigue siendo un candidato: Node comprueba demanda, poses,
+    solapamientos y separación antes de aceptarlo. No se presupone su validez.
+    """
+    global _native_handle
+    if time.monotonic() >= deadline:
+        raise TimeoutError("El presupuesto se agotó preparando la geometría.")
+    handle = solver.start(geometry, sheets)
+    _native_handle = handle
+    while handle.is_running() and time.monotonic() < deadline:
+        time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+    if not handle.is_running():
+        return handle.wait()
+    handle.cancel()
+    grace = time.monotonic() + 0.15
+    while handle.is_running() and time.monotonic() < grace:
+        time.sleep(0.01)
+    return handle.snapshot() if handle.is_running() else handle.wait()
 
 
 def _solve(data):
@@ -91,8 +119,8 @@ def _solve(data):
     for _ in range(int(sheet["maxPlacas"])):
         sheets.add_sheet(sheet_outline)
 
-    # El timeout real lo impone Node matando este proceso. Este presupuesto
-    # interno deja un margen breve para serializar y validar el candidato.
+    # Se cancela el cálculo al vencer el plazo global; Node termina el proceso
+    # como respaldo. El margen permite serializar y validar el candidato.
     timeout_ms = int(data["timeoutMs"])
     reserve_ms = min(5000, max(1000, timeout_ms * 0.30))
     budget_seconds = max(0.05, (timeout_ms - reserve_ms) / 1000.0)
@@ -131,7 +159,8 @@ def _solve(data):
             seed=int(data["semilla"]),
             use_holes=True,
             try_all_rotations=True,
-            mode=2,
+            # El modo 2 de 0.1.1.post4 ignora tiempo y reemplaza la semilla.
+            mode=1,
             num_seeds=1,
             use_parallel=True,
             time_budget_secs=budget_seconds,
@@ -140,7 +169,10 @@ def _solve(data):
         )
 
     started = time.monotonic()
-    result = solver.solve(solve_geometry, sheets)
+    result = _solve_until(
+        solver, solve_geometry, sheets,
+        preparation_started + (timeout_ms - reserve_ms) / 1000.0,
+    )
     duration_ms = round((time.monotonic() - started) * 1000, 3)
     copies = {}
     placements = []
@@ -206,4 +238,12 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    exit_code = main()
+    if _native_handle is not None and _native_handle.is_running():
+        # El proceso es descartable. Evita destruir globals de C++ mientras
+        # un hilo todavía termina una operación no cancelable; la salida JSON
+        # ya fue emitida. El OS libera todos los hilos de este proceso.
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(exit_code)
+    raise SystemExit(exit_code)

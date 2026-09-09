@@ -139,7 +139,7 @@ export function PlanLotesCotizacion({
               {resumen.patrones > 0 ? (
                 <span>
                   <b>{formato(resumen.patrones)}</b>{" "}
-                  {resumen.patrones === 1 ? "patrón" : "patrones"}
+                  {resumen.patrones === 1 ? "layout" : "layouts"}
                 </span>
               ) : null}
               <span>
@@ -165,10 +165,10 @@ export function PlanLotesCotizacion({
         ) : (
           <p className={styles.pending}>
             {estado === "calculando"
-              ? "Estamos calculando las placas y sus patrones para esta configuración."
+              ? "Estamos calculando las placas y sus layouts para esta configuración."
               : estado === "error"
                 ? "Resolvé el aviso de cotización para obtener el plan de fabricación."
-                : "Al calcular la cotización vas a poder revisar las placas y los patrones."}
+                : "Al calcular la cotización vas a poder revisar las placas y los layouts."}
           </p>
         )}
       </section>

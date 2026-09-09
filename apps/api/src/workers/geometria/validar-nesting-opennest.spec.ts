@@ -27,7 +27,14 @@ function input(separacionMm = 5): NestingIrregularOpenNestData {
     separacionMm,
     timeoutMs: 5_000,
     semilla: 7,
-    piezas: [{ id: 'cuadrado', cantidad: 2, contorno: square, rotaciones: 1 }],
+    piezas: [
+      {
+        id: 'cuadrado',
+        cantidad: 2,
+        contorno: square.map((p) => ({ ...p })),
+        rotaciones: 1,
+      },
+    ],
   };
 }
 
@@ -178,6 +185,63 @@ describe('validador de resultados OpenNest', () => {
     data.piezas[0].contorno[0].x = Number.NaN;
     expect(() => validarEntradaNestingOpenNest(data)).toThrow(
       NestingOpenNestInvalidoError,
+    );
+  });
+
+  const tirada = () => {
+    const data = input(0);
+    data.piezas[0].cantidad = 4;
+    const candidate = {
+      ...result([
+        placement(0, 5),
+        placement(1, 15),
+        { ...placement(2, 5), placa: 1 },
+        { ...placement(3, 15), placa: 1 },
+      ]),
+      cantidadSolicitada: 4,
+    };
+    return { data, candidate };
+  };
+
+  it('acepta placas repetidas conservando las cuatro identidades físicas', () => {
+    const { data, candidate } = tirada();
+    expect(
+      validarResultadoNestingOpenNest(data, candidate).cantidadColocada,
+    ).toBe(4);
+  });
+
+  it('detecta un solapamiento pequeño en otra copia aunque sus poses declaradas sean iguales', () => {
+    const { data, candidate } = tirada();
+    // Dentro de la tolerancia de transformación (0,02 mm), pero produce
+    // 0,05 mm² de solapamiento: una firma por poses/redondeo sería insegura.
+    candidate.placements[3].contorno.forEach((p) => (p.x -= 0.005));
+    expect(() => validarResultadoNestingOpenNest(data, candidate)).toThrow(
+      'solapamiento',
+    );
+  });
+
+  it('revalida geometría entre llamadas y después de una mutación', () => {
+    const { data, candidate } = tirada();
+    validarResultadoNestingOpenNest(data, candidate);
+    candidate.placements[3].contorno.forEach((p) => (p.x -= 0.005));
+    expect(() => validarResultadoNestingOpenNest(data, candidate)).toThrow(
+      'solapamiento',
+    );
+  });
+
+  it('comprueba las transformaciones y los giros de todas las copias', () => {
+    const { data, candidate } = tirada();
+    candidate.placements[3].rotacionGrados = 90;
+    expect(() => validarResultadoNestingOpenNest(data, candidate)).toThrow(
+      'rotación no permitida',
+    );
+  });
+
+  it('comprueba la demanda aunque la geometría del patrón coincida', () => {
+    const { data, candidate } = tirada();
+    candidate.placements[3].copia = 1;
+    expect(() => validarResultadoNestingOpenNest(data, candidate)).toThrow(
+      'repitió la instancia',
     );
   });
 });

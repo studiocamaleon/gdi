@@ -357,7 +357,8 @@
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* Sin desborde, o al llegar a un extremo, el scroll continúa en el plan. */
+  overscroll-behavior: auto;
   scrollbar-gutter: stable;
 }
 .pieceCounts li {

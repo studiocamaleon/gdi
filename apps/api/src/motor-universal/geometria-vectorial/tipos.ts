@@ -121,7 +121,7 @@ export interface NestingIrregularResult {
   algorithm: 'irregular-2d-bottom-left-v1';
   /** Solver real que originó el layout. `algorithm` se conserva como
    * discriminante compatible con snapshots y consumidores existentes. */
-  motorNesting?: 'opennest-v1' | 'grafonest-baseline-v1';
+  motorNesting?: 'opennest-v1' | 'grafonest-baseline-v1' | 'grafonest-packingsolver-v1';
   versionMotor?: string;
   duracionMs?: number;
   estrategiaOrientacion?: 'uniforme' | 'cardinal' | 'libre';
@@ -130,7 +130,7 @@ export interface NestingIrregularResult {
   calidadSolucion?: 'BASE_SEGURA' | 'OPTIMIZADA';
   optimizacionAgotada?: boolean;
   busqueda?: {
-    motivoFin: 'MINIMO_PLACAS' | 'PRESUPUESTO_AGOTADO' | 'MOTOR_NO_DISPONIBLE';
+    motivoFin: 'MINIMO_PLACAS' | 'PRESUPUESTO_AGOTADO' | 'MOTOR_NO_DISPONIBLE' | 'PLAN_REUTILIZADO';
     presupuestoMs: number;
     intentos: number;
     candidatosValidos: number;

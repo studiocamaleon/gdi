@@ -1,14 +1,15 @@
+import { PrismaService } from '../src/prisma/prisma.service';
 /** Valida la OT reportada con el motor real. Por defecto revierte las nuevas
  * revisiones; --guardar conserva exclusivamente los archivos en BORRADOR. */
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 import { PreparacionesRecorridoService } from '../src/recorridos-vectoriales/preparaciones-recorrido.service';
 import { RecorridosVectorialesService } from '../src/recorridos-vectoriales/recorridos-vectoriales.service';
 import { serviciosRecorridoF4 } from './soporte-recorridos-f4';
 import type { CurrentAuth } from '../src/auth/auth.types';
 
-const db = new PrismaClient();
+const db = new PrismaService();
 const rollback = new Error('ROLLBACK_VALIDACION_ARCHIVOS_OT53');
 async function main() {
   try {

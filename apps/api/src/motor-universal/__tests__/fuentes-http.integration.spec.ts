@@ -229,7 +229,16 @@ describe('fuentes grandes por HTTP y persistencia real', () => {
                 expect((await cotizacionesAsync.consultar(tenantId, creada.body.id)).estado).toBe('completado');
                 await expect(cotizacionesAsync.consultar(randomUUID(), creada.body.id)).rejects.toThrow(/No se encontró/);
                 const repetida = await post('/motor-universal/cotizar-asincrono', JSON.stringify(solicitud));
-                expect(repetida.body.id).toBe(creada.body.id);
+                // Se reutiliza geometría, pero el precio debe recalcularse:
+                // una cotización terminada no fija precios de solicitudes nuevas.
+                expect(repetida.status).toBe(202);
+                expect(repetida.body.id).not.toBe(creada.body.id);
+                const nuevoJob = await queue.getJob(repetida.body.id);
+                expect(nuevoJob).toBeDefined();
+                const recalculada = await nuevoJob!.waitUntilFinished(events, 15000);
+                expect(recalculada.exitoso).toBe(true);
+                expect(recalculada.cotizacion.costos.total).toBe(completo.body.cotizacion.costos.total);
+                await nuevoJob!.remove();
                 await job!.remove();
               } finally {
                 await worker.onApplicationShutdown();

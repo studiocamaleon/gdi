@@ -2815,7 +2815,7 @@ export interface AnalisisSvgFabricacion {
   };
   nesting: {
     algorithm: "irregular-2d-bottom-left-v1";
-    motorNesting?: "opennest-v1" | "grafonest-baseline-v1";
+    motorNesting?: "opennest-v1" | "grafonest-baseline-v1" | "grafonest-packingsolver-v1";
     versionMotor?: string;
     duracionMs?: number;
     estrategiaOrientacion?: "uniforme" | "cardinal" | "libre";
@@ -2828,7 +2828,8 @@ export interface AnalisisSvgFabricacion {
       motivoFin:
         | "MINIMO_PLACAS"
         | "PRESUPUESTO_AGOTADO"
-        | "MOTOR_NO_DISPONIBLE";
+        | "MOTOR_NO_DISPONIBLE"
+        | "PLAN_REUTILIZADO";
       presupuestoMs: number;
       intentos: number;
       candidatosValidos: number;
