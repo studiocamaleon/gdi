@@ -779,7 +779,12 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     itemIds: string[],
   ): Promise<void> {
-    for (const itemId of itemIds) {
+    const pendientes = [...itemIds];
+    const visitados = new Set<string>();
+    for (let indice = 0; indice < pendientes.length; indice++) {
+      const itemId = pendientes[indice];
+      if (visitados.has(itemId)) continue;
+      visitados.add(itemId);
       try {
         await this.preparacionesRecorrido.asegurarParaItem(auth, itemId);
       } catch (error) {
@@ -790,6 +795,11 @@ export class OrdenesTrabajoService {
           message: error instanceof Error ? error.message : 'Error desconocido',
         });
       }
+      const hijos = await this.prisma.ordenTrabajoItem.findMany({
+        where: { tenantId: auth.tenantId, parentItemId: itemId },
+        select: { id: true },
+      });
+      pendientes.push(...hijos.map((hijo) => hijo.id));
     }
   }
 
@@ -5035,18 +5045,66 @@ export class OrdenesTrabajoService {
           },
           select: { id: true },
         });
+        let destinosIncorporacion = incorporacion ? [incorporacion] : [];
         if (!incorporacion) {
-          throw new ConflictException(
-            `No se pudo ubicar el nodo de incorporación de "${componenteNombre}" en la OT.`,
+          const pasosPadreCotizados = Array.isArray(traza?.pasos)
+            ? (traza.pasos as PasoTrazabilidad[])
+            : [];
+          const incorporacionOmitida = pasosPadreCotizados.some(
+            (paso) =>
+              paso?.activado === false &&
+              Boolean(paso.rutaPasoId) &&
+              (nodoIncorporacionClave === `ruta:${paso.rutaPasoId}` ||
+                nodoIncorporacionClave === `extra:${paso.rutaPasoId}`),
+          );
+          const grafoPadreCompleto =
+            grafoDesdeSnapshotReceta(padre.recetaSnapshotJson) ??
+            grafoDesdeSnapshotReceta({
+              grafoProduccion: padre.recetaRevision.grafoProduccionJson,
+            });
+          if (
+            !incorporacionOmitida ||
+            !grafoPadreCompleto?.nodos.some(
+              (nodo) => nodo.clave === nodoIncorporacionClave,
+            )
+          ) {
+            throw new ConflictException(
+              `No se pudo ubicar el nodo de incorporación de "${componenteNombre}" en la OT.`,
+            );
+          }
+          const pasosPadre = await tx.ordenTrabajoItemPaso.findMany({
+            where: { tenantId, itemId: padre.id },
+            select: { id: true, nodoClave: true },
+          });
+          // La incorporación también se proyecta sobre la ruta cotizada: un
+          // opcional omitido deriva la espera a sus primeros sucesores activos.
+          // Sin sucesores, el componente termina su propia rama; la OT sigue
+          // esperando todos sus pasos, sin inventar otra operación ni costo.
+          const grafoIncorporacion = reducirGrafoAClaves(
+            grafoPadreCompleto,
+            new Set([
+              nodoIncorporacionClave,
+              ...pasosPadre.flatMap((paso) => paso.nodoClave ?? []),
+            ]),
+          );
+          const clavesDestino = new Set(
+            grafoIncorporacion.aristas
+              .filter((arista) => arista.desdeClave === nodoIncorporacionClave)
+              .map((arista) => arista.haciaClave),
+          );
+          destinosIncorporacion = pasosPadre.filter(
+            (paso) => paso.nodoClave && clavesDestino.has(paso.nodoClave),
           );
         }
-        const convergencias = grafoHijoEfectivo.terminales.map((clave) => ({
-          tenantId,
-          ordenId: padre.ordenId,
-          predecesorPasoId: idPorClave.get(clave)!,
-          sucesorPasoId: incorporacion.id,
-          tipo: 'componente_fabricado',
-        }));
+        const convergencias = destinosIncorporacion.flatMap((destino) =>
+          grafoHijoEfectivo.terminales.map((clave) => ({
+            tenantId,
+            ordenId: padre.ordenId,
+            predecesorPasoId: idPorClave.get(clave)!,
+            sucesorPasoId: destino.id,
+            tipo: 'componente_fabricado',
+          })),
+        );
         const clavesPredecesoras = Array.isArray(
           snapshot?.nodosPredecesoresClaves,
         )

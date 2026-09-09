@@ -26,11 +26,13 @@ import styles from "./plan-fabricacion.module.css";
 
 export function PlanLotesCotizacion({
   cotizacion,
+  jobContext,
   esperado = false,
   estado = "listo",
   onOpenChange,
 }: {
   cotizacion?: CotizacionFabricacion | null;
+  jobContext?: Record<string, unknown>;
   esperado?: boolean;
   estado?: "listo" | "calculando" | "pendiente" | "error";
   onOpenChange?: (open: boolean) => void;
@@ -43,8 +45,8 @@ export function PlanLotesCotizacion({
   const [seleccionado, setSeleccionado] = React.useState("");
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const planes = React.useMemo(
-    () => obtenerPlanesFabricacion(cotizacion),
-    [cotizacion],
+    () => obtenerPlanesFabricacion(cotizacion, jobContext),
+    [cotizacion, jobContext],
   );
   const resumen = React.useMemo(
     () =>
@@ -90,6 +92,7 @@ export function PlanLotesCotizacion({
   }, [visible, onOpenChange]);
   if (!planes.length && !esperado) return null;
   const actual = planes.find((p) => p.id === seleccionado) ?? planes[0];
+  const cortes = actual?.operaciones.filter((o) => o.esCorte) ?? [];
   const formato = (n: number) => n.toLocaleString("es-AR");
   return (
     <>
@@ -234,18 +237,20 @@ export function PlanLotesCotizacion({
                     result={actual.result}
                     ampliacionEnLinea
                     archivos={
-                      <div className={styles.exports}>
-                        {actual.operaciones.map((o) => (
-                          <section key={o.id}>
-                            <h3>{o.nombre}</h3>
-                            <NestingPatronesDescargas
-                              result={o.result}
-                              nombreBase={`${nombreBaseSvg(cotizacion?.productoNombre ?? "producto")}-lote-${planes.indexOf(actual) + 1}-${nombreBaseSvg(o.nombre)}`}
-                              permitirDxf={o.esCorte}
-                            />
-                          </section>
-                        ))}
-                      </div>
+                      cortes.length > 0 ? (
+                        <div className={styles.exports}>
+                          {cortes.map((o) => (
+                            <section key={o.id}>
+                              <h3>{o.nombre}</h3>
+                              <NestingPatronesDescargas
+                                result={o.result}
+                                nombreBase={`${nombreBaseSvg(cotizacion?.productoNombre ?? "producto")}-lote-${planes.indexOf(actual) + 1}-${nombreBaseSvg(o.nombre)}`}
+                                permitirDxf
+                              />
+                            </section>
+                          ))}
+                        </div>
+                      ) : undefined
                     }
                   />
                 ) : (

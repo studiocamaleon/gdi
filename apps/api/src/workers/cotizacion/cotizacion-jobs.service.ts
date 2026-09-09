@@ -335,6 +335,8 @@ export function idTrabajoCotizacion(
 ): string {
   if (!scope) return `quote-${randomUUID()}`;
   const digest = createHash('sha256')
+    // No reutilizar respuestas anteriores a la inclusión de interiores en TAP.
+    .update('cotizacion-cortes-interiores-v2\0')
     .update(tenantId)
     .update('\0')
     .update(scope)

@@ -7,7 +7,6 @@ import { agruparPatronesNesting } from "@/lib/nesting-patrones";
 import {
   crearSvgDePatron,
   crearDxfFabricacionDePatron,
-  crearResumenPatrones,
   nombreArchivoPatron,
 } from "@/lib/nesting-patrones-export";
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
@@ -68,7 +67,8 @@ export function NestingPatronesDescargas({
         {patrones.map((p) => (
           <div key={p.id} className={styles.downloadRow}>
             <span className="text-sm">
-              Patrón {p.id} · {p.repeticiones} copias
+              Patrón {p.id} · {p.repeticiones}{" "}
+              {p.repeticiones === 1 ? "copia" : "copias"}
             </span>
             <Button
               disabled={
@@ -116,21 +116,6 @@ export function NestingPatronesDescargas({
             )}
           </div>
         ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            descargar(
-              () => crearResumenPatrones(result),
-              `${nombreBase}-plan-de-fabricacion.txt`,
-              "text/plain;charset=utf-8",
-            )
-          }
-        >
-          <DownloadIcon data-icon="inline-start" />
-          Resumen del plan
-        </Button>
       </div>
     </section>
   );

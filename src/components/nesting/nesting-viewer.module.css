@@ -136,3 +136,20 @@
   font-size: 11px;
   color: var(--muted-2, #92929b);
 }
+.cutFiles {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.itemNestings {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.cutFiles > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cutFiles[open] > summary {
+  margin-bottom: 12px;
+}

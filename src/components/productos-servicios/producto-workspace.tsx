@@ -14,7 +14,6 @@ import {
   CircleAlertIcon,
   CogIcon,
   CopyIcon,
-  CopyPlusIcon,
   Edit3Icon,
   GitBranchIcon,
   IdCardIcon,
@@ -1522,12 +1521,8 @@ function ProduccionTab({
   canManage: boolean;
 }) {
   const router = useRouter();
-  const [confirmarRevisionOpen, setConfirmarRevisionOpen] =
-    React.useState(false);
-  const [preparandoRevision, setPreparandoRevision] = React.useState(false);
   const [estadoPublicacionOpen, setEstadoPublicacionOpen] =
     React.useState(false);
-  const [nodoEditorPendiente, setNodoEditorPendiente] = React.useState("ruta");
   const rutaSeleccionada =
     producto.rutasAlternativas.find((ruta) => ruta.id === rutaAltId) ??
     producto.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
@@ -1571,38 +1566,8 @@ function ProduccionTab({
   };
 
   const abrirEditorRuta = (nodoSeleccionado = "ruta") => {
-    if (!editorHref) return;
-    setNodoEditorPendiente(nodoSeleccionado);
-    if (borrador) {
-      router.push(hrefEditorParaNodo(nodoSeleccionado) ?? editorHref);
-      return;
-    }
-    setConfirmarRevisionOpen(true);
-  };
-
-  const prepararRevisionYEditar = async () => {
-    if (!rutaSeleccionada || !editorHref) return;
-    setPreparandoRevision(true);
-    try {
-      await guardarBorradorReceta(producto.id, {
-        rutaAlternativaId: rutaSeleccionada.id,
-        cambios: publicada
-          ? `Revisión del modelo productivo V${publicada.numero + 1}`
-          : "Definición inicial del modelo productivo",
-      });
-      const siguienteVersion = publicada ? publicada.numero + 1 : 1;
-      toast.success(`El borrador V${siguienteVersion} está listo para editar.`);
-      setConfirmarRevisionOpen(false);
-      router.push(hrefEditorParaNodo(nodoEditorPendiente) ?? editorHref);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "No se pudo preparar la nueva revisión.",
-      );
-    } finally {
-      setPreparandoRevision(false);
-    }
+    const href = hrefEditorParaNodo(nodoSeleccionado);
+    if (href) router.push(href);
   };
 
   return (
@@ -1715,7 +1680,7 @@ function ProduccionTab({
                   <small>
                     {diagnosticoRuta.cotizableConReceta
                       ? `La cotización puede usar la V${diagnosticoRuta.revisionPublicada?.version}.`
-                      : "Esta ruta no puede cotizar con su receta hasta publicar o resolver el bloqueo."}
+                      : "Completá la configuración pendiente; la publicación se actualiza automáticamente."}
                   </small>
                 </div>
                 <Badge variant="outline">
@@ -1855,67 +1820,7 @@ function ProduccionTab({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={confirmarRevisionOpen}
-        onOpenChange={(open) => {
-          if (!preparandoRevision) setConfirmarRevisionOpen(open);
-        }}
-      >
-        <DialogContent className={styles.prepareRevisionDialog}>
-          <DialogHeader>
-            <span className={styles.prepareRevisionEyebrow}>
-              ROUTING · NUEVA REVISIÓN
-            </span>
-            <DialogTitle>
-              {publicada
-                ? `Crear borrador V${publicada.numero + 1} para editar`
-                : "Crear el primer borrador para editar"}
-            </DialogTitle>
-            <DialogDescription>
-              {publicada
-                ? `La V${publicada.numero} está publicada y no se modificará. El editor trabajará sobre una copia versionada.`
-                : "La configuración se guardará como borrador antes de abrir el editor de la ruta."}
-            </DialogDescription>
-          </DialogHeader>
 
-          <Alert className={styles.prepareRevisionNotice}>
-            <CopyPlusIcon />
-            <AlertTitle>
-              {publicada
-                ? `La V${publicada.numero} seguirá activa`
-                : "La ruta todavía no tiene una versión"}
-            </AlertTitle>
-            <AlertDescription>
-              {publicada
-                ? `Se copiarán sus pasos, componentes, dependencias y documentos al borrador V${publicada.numero + 1}.`
-                : "Se conservarán los pasos actuales y se creará la base versionada del modelo productivo."}
-            </AlertDescription>
-          </Alert>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={preparandoRevision}
-              onClick={() => setConfirmarRevisionOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              disabled={preparandoRevision}
-              onClick={() => void prepararRevisionYEditar()}
-            >
-              <CopyPlusIcon data-icon="inline-start" />
-              {preparandoRevision
-                ? "Preparando…"
-                : publicada
-                  ? `Crear V${publicada.numero + 1} y editar`
-                  : "Crear borrador y editar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

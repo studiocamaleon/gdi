@@ -17,7 +17,7 @@ Ejemplo: diez exhibidores con exterior, cortes parciales y dobleces acumulan por
 
 - Configuración versionada de posiciones, herramientas y tiempos comunes en `Maquina.parametrosTecnicosJson.procesamientoCorte`. Sin migración de esquema.
 - Perfiles operativos vinculan una herramienta estable con operación, materiales, rango de espesor, velocidad, pasadas, ancho de corte y parámetros auxiliares.
-- Corte completo, corte parcial y hendido se asignan a entidades DXF independientemente del nombre/color de la capa y de su función geométrica. Las referencias conservadas no suman tiempo.
+- Corte completo, corte parcial y hendido se asignan a entidades DXF independientemente del nombre/color de la capa. El contrato distingue función geométrica y operación, aunque el intérprete todavía fuerza corte completo sobre el exterior elegido para nesting. Las referencias conservadas sin operación no suman tiempo.
 - El producto activa expresamente `cotizarOperacionesVectoriales`. Las recetas anteriores conservan su cálculo. Las recetas por herramientas no participan en la selección automática antigua.
 - Secuencia por placa: hendido → corte parcial → corte completo. Las herramientas montadas pueden activarse sin reemplazo; dos herramientas en una misma posición requieren cambio físico. Cambios de perfil son ajustes, no herramientas adicionales.
 - Tiempo = preparación + recorridos efectivos + entradas + ajustes + carga/registro por placa + cambios/activaciones + limpieza + otros tiempos del nodo. Se aplica un solo redondeo al trabajo. Tarifa del centro vigente; desgaste específico aparte para evitar cargarlo dos veces.
@@ -29,7 +29,7 @@ Ejemplo: diez exhibidores con exterior, cortes parciales y dobleces acumulan por
 
 Placas y recorridos vectoriales interpretados, sin segmentación automática de operaciones. Un puente con trabajo secuencial. No simula herramientas simultáneas, alimentación continua, estrategias CAM de fresado, aceleraciones ni G-code. Los parámetros de profundidad/presión/RPM describen la receta; la velocidad y pasadas deben calibrarse. El DXF mantiene capas y geometría; no reemplaza el software de control específico de la máquina.
 
-No se conoce el modelo de Visual Ilusión. No se precargan velocidades supuestas en su catálogo.
+Al implementar no se conocían los modelos de Visual Ilusión. Posteriormente informó Vega 1.6, Vega 2.5 (españolas) y Esko C64. La [validación documental y del código](visual-ilusion-validacion-maquinas-vega-c64-2026-09-08.md) identifica límites adicionales: recetas por conjunto de recorridos, compatibilidades de módulos, exterior sin corte completo y asociación de salida con el controlador. La identificación exacta de las Vega y las opciones instaladas siguen pendientes. No se precargan velocidades supuestas en su catálogo.
 
 ## Validación terminada
 

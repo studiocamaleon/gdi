@@ -1,5 +1,19 @@
 import { apiRequest } from "@/lib/api";
 
+export type SeleccionRecorrido = {
+  rutaComponentes?: string[];
+  rutaPasoId?: string;
+  fuenteId?: string;
+};
+
+function seleccionParams(seleccion?: SeleccionRecorrido) {
+  const params = new URLSearchParams();
+  if (seleccion?.rutaComponentes?.length) params.set("componentes", JSON.stringify(seleccion.rutaComponentes));
+  if (seleccion?.rutaPasoId) params.set("paso", seleccion.rutaPasoId);
+  if (seleccion?.fuenteId) params.set("fuente", seleccion.fuenteId);
+  return params;
+}
+
 export type PuntoRecorridoCorte = {
   x: number;
   y: number;
@@ -11,6 +25,7 @@ export type PuntoRecorridoCorte = {
 export type PreparacionRecorridoCorte = {
   id: string;
   placaIndice: number;
+  copias?: number;
   revision: number;
   estado:
     "BORRADOR" | "REVISADA" | "APROBADA" | "ENVIADA_MAQUINA" | "REEMPLAZADA";
@@ -47,16 +62,16 @@ export type PreparacionRecorridoCorte = {
   updatedAt: string;
 };
 
-export function getPreparacionesRecorridoCorte(itemId: string) {
+export function getPreparacionesRecorridoCorte(itemId: string, seleccion?: SeleccionRecorrido) {
   return apiRequest<PreparacionRecorridoCorte[]>(
-    `/recorridos-vectoriales/items/${itemId}/corte/preparar`,
+    `/recorridos-vectoriales/items/${itemId}/corte/preparar?${seleccionParams(seleccion)}`,
     { method: "POST" },
   );
 }
 
-export function regenerarPreparacionesRecorridoCorte(itemId: string) {
+export function regenerarPreparacionesRecorridoCorte(itemId: string, seleccion?: SeleccionRecorrido) {
   return apiRequest<PreparacionRecorridoCorte[]>(
-    `/recorridos-vectoriales/items/${itemId}/corte/regenerar`,
+    `/recorridos-vectoriales/items/${itemId}/corte/regenerar?${seleccionParams(seleccion)}`,
     { method: "POST" },
   );
 }
@@ -90,6 +105,8 @@ export type ConfiguracionPlantillaInstalacion = {
 
 export type PlantillaInstalacion = {
   schemaVersion: 1;
+  fuentes: Array<{ id: string; nombre: string }>;
+  fuenteId: string;
   nombreArchivo: string;
   anchoDisenoMm: number;
   altoDisenoMm: number;
@@ -113,9 +130,10 @@ export type PlantillaInstalacion = {
 export function getPlantillaInstalacion(
   itemId: string,
   config: ConfiguracionPlantillaInstalacion,
+  seleccion?: SeleccionRecorrido,
 ) {
   return apiRequest<PlantillaInstalacion>(
-    `/recorridos-vectoriales/items/${itemId}/plantilla-instalacion?${templateParams(config)}`,
+    `/recorridos-vectoriales/items/${itemId}/plantilla-instalacion?${templateParams(config, seleccion)}`,
   );
 }
 
@@ -123,8 +141,9 @@ export function descargaPlantillaInstalacionHref(
   itemId: string,
   config: ConfiguracionPlantillaInstalacion,
   panel?: number,
+  seleccion?: SeleccionRecorrido,
 ) {
-  const params = templateParams(config);
+  const params = templateParams(config, seleccion);
   if (panel != null) params.set("panel", String(panel));
   return `/api/backend/recorridos-vectoriales/items/${itemId}/plantilla-instalacion/descargar?${params}`;
 }
@@ -143,14 +162,16 @@ export function descargaArchivoInstalacionHref(
   config: ConfiguracionPlantillaInstalacion,
   formato: FormatoArchivoInstalacion,
   panel?: number,
+  seleccion?: SeleccionRecorrido,
 ) {
-  const params = templateParams(config);
+  const params = templateParams(config, seleccion);
   if (panel != null) params.set("panel", String(panel));
   return `/api/backend/recorridos-vectoriales/items/${itemId}/plantilla-instalacion/archivos/${formato}?${params}`;
 }
 
-function templateParams(config: ConfiguracionPlantillaInstalacion) {
+function templateParams(config: ConfiguracionPlantillaInstalacion, seleccion?: SeleccionRecorrido) {
   return new URLSearchParams({
+    ...Object.fromEntries(seleccionParams(seleccion)),
     bordeMm: String(config.bordeMm),
     anchoPanelMm: String(config.anchoPanelMm),
     altoPanelMm: String(config.altoPanelMm),

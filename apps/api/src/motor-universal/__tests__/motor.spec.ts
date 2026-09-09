@@ -5299,7 +5299,7 @@ describe('MotorUniversalService — smoke tests', () => {
               materialRigido,
           },
         }),
-      ).rejects.toThrow('cambios productivos sin publicar');
+      ).resolves.toMatchObject({ exitoso: true });
     } finally {
       await prisma.productoReceta.deleteMany({
         where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },

@@ -9,6 +9,7 @@ import { ConfigPasosEditorView } from "@/components/productos-servicios/config-p
 import { EditorDefiniciones } from "@/components/productos-servicios/receta-producto-tab";
 import {
   guardarBorradorReceta,
+  getRecetasProducto,
   type LookupsConfigPaso,
   type ProductoReceta,
 } from "@/lib/productos-servicios-api";
@@ -46,9 +47,9 @@ export function ModeloProductivoEditorView({
   const receta = recetas.find(
     (item) => item.rutaAlternativa.id === rutaAlternativa.id,
   );
-  const borradorDesdeProps = receta?.revisiones.find(
-    (revision) => revision.estado === "BORRADOR",
-  );
+  const borradorDesdeProps =
+    receta?.revisiones.find((revision) => revision.estado === "BORRADOR") ??
+    receta?.revisionPublicada;
   const [borrador, setBorrador] = React.useState(borradorDesdeProps ?? null);
   const borradorRef = React.useRef(borradorDesdeProps ?? null);
   const actualizarBorrador = React.useCallback(
@@ -80,7 +81,7 @@ export function ModeloProductivoEditorView({
       actualizarBorrador(revision);
       toast.success(
         revisionVisible
-          ? "La nueva revisión está lista para editar."
+          ? "La configuración está lista para editar."
           : "El modelo productivo quedó listo para configurar.",
       );
       router.refresh();
@@ -124,9 +125,8 @@ export function ModeloProductivoEditorView({
               : "Configurar la primera versión"}
           </h1>
           <p>
-            Los pasos actuales se conservan. La revisión permite incorporar
-            subrutas, dependencias y documentos sin modificar la versión
-            publicada.
+            Configurá pasos, componentes y documentos. Los cambios válidos se
+            publican automáticamente al guardar.
           </p>
         </header>
         <div className={styles.prepareBody}>
@@ -137,7 +137,7 @@ export function ModeloProductivoEditorView({
             <strong>
               {revisionVisible
                 ? `Partir de la versión publicada V${revisionVisible.numero}`
-                : "Crear un borrador versionado"}
+                : "Preparar el modelo productivo"}
             </strong>
             <p>
               La BOM seguirá siendo una proyección multinivel. Toda la
@@ -165,14 +165,14 @@ export function ModeloProductivoEditorView({
       catalogoCargos={catalogoCargos}
       embedded
       onPasoPersistido={async () => {
-        const revisionActual = borradorRef.current;
-        if (!revisionActual) return;
-        const revision = await guardarBorradorReceta(producto.id, {
-          rutaAlternativaId: rutaAlternativa.id,
-          expectedUpdatedAt: revisionActual.updatedAt,
-          cambios: "Configuración de un paso actualizada",
-        });
-        actualizarBorrador(revision);
+        const actuales = await getRecetasProducto(producto.id);
+        const actual = actuales.find(
+          (r) => r.rutaAlternativa.id === rutaAlternativa.id,
+        );
+        const revision =
+          actual?.revisiones.find((r) => r.estado === "BORRADOR") ??
+          actual?.revisionPublicada;
+        if (revision) actualizarBorrador(revision);
       }}
       modeloProductivo={{
         active: modeloAbierto,

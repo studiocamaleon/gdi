@@ -14,10 +14,8 @@ import {
   BoxesIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  CopyPlusIcon,
   FactoryIcon,
   FileCheck2Icon,
-  FilePlus2Icon,
   GitCommitHorizontalIcon,
   GripVerticalIcon,
   Maximize2Icon,
@@ -78,7 +76,6 @@ import {
   getBomMultinivelRevision,
   getRecetasProducto,
   getPasosTenant,
-  publicarReceta,
   type ProductoRecetaComponenteInput,
   type ProductoRecetaDocumentoInput,
   type ProductoReceta,
@@ -238,6 +235,7 @@ export function EditorDefiniciones({
         ...payload,
         rutaAlternativaId,
         expectedUpdatedAt: revisionActualRef.current.updatedAt,
+        revisionBaseId: revisionActualRef.current.id,
       });
       revisionActualRef.current = guardada;
       onRevisionGuardada?.(guardada);
@@ -1444,8 +1442,12 @@ export function EditorDefiniciones({
         atributosComercialesRef.current =
           productoActualizado.atributosComercialesJson;
         politicaNestingPersistidaRef.current = politicaNestingCompuesto;
+        const actuales = await getRecetasProducto(productoId);
+        const actual = actuales.find(r => r.rutaAlternativa.id === rutaAlternativaId);
+        const revisionActual = actual?.revisiones.find(r => r.estado === "BORRADOR") ?? actual?.revisionPublicada;
+        if (revisionActual) revisionActualRef.current = revisionActual;
       }
-      await guardarRevisionActual({
+      const guardada = await guardarRevisionActual({
         cambios: "Modelo productivo actualizado",
         documentos: documentos.map((item, orden) => ({ ...item, orden })),
         componentes: componentes.map((item, orden) => ({ ...item, orden })),
@@ -1453,7 +1455,11 @@ export function EditorDefiniciones({
         dependencias,
         gates,
       });
-      toast.success("El modelo productivo quedó guardado en el borrador.");
+      if (guardada.publicacionAutomatica?.bloqueos.length) {
+        toast.warning(`Cambios guardados. ${guardada.publicacionAutomatica.bloqueos[0].mensaje}`);
+      } else {
+        toast.success("Cambios guardados y publicados automáticamente.");
+      }
       router.refresh();
     } catch (error) {
       toast.error(
@@ -1537,7 +1543,7 @@ export function EditorDefiniciones({
     >
       <header className={styles.editorHeader}>
         <div>
-          <span>Ruta de producción · Borrador V{revision.numero}</span>
+          <span>Ruta de producción · Versión {revision.numero}</span>
           <h4>{ruta.nombre}</h4>
           <p>
             Nodos simples, nodos compuestos y componentes forman un único recorrido. Seleccioná un
@@ -2378,7 +2384,7 @@ export function EditorDefiniciones({
 
       <footer className={styles.editorFooter}>
         <span>
-          Borrador V{revision.numero} · Guardar conserva la versión publicada.
+          Los cambios válidos se publican automáticamente al guardar.
         </span>
         <button type="button" disabled={saving} onClick={guardarDefiniciones}>
           {saving ? "Guardando…" : "Guardar modelo"}
@@ -2856,12 +2862,16 @@ export function RecetaProductoTab({
   const publicar = async (revision: ProductoRecetaRevision) => {
     setWorking(`publish:${revision.id}`);
     try {
-      await publicarReceta(revision.id, {
+      const guardada = await guardarBorradorReceta(producto.id, {
+        rutaAlternativaId: revision.rutaAlternativaId,
         expectedUpdatedAt: revision.updatedAt,
-        cambios:
-          revision.cambios || `Publicación de receta V${revision.numero}`,
+        cambios: revision.cambios || "Actualización automática de la configuración",
       });
-      toast.success(`La receta V${revision.numero} quedó publicada.`);
+      if (guardada.publicacionAutomatica?.bloqueos.length) {
+        toast.warning(guardada.publicacionAutomatica.bloqueos[0].mensaje);
+      } else {
+        toast.success("Configuración actualizada y publicada automáticamente.");
+      }
       router.refresh();
     } catch (error) {
       toast.error(
@@ -2925,7 +2935,7 @@ export function RecetaProductoTab({
       <div className={styles.noRoutes}>
         <FactoryIcon />
         <h3>Primero configurá una ruta productiva</h3>
-        <p>La receta se publica sobre una ruta de producción concreta.</p>
+        <p>La configuración se publicará automáticamente al completar la ruta.</p>
       </div>
     );
   }
@@ -2974,7 +2984,7 @@ export function RecetaProductoTab({
                     <div className={styles.headerRight}>
                       {draft ? (
                         <span className={styles.status} data-state="draft">
-                          V{draft.numero} · cambios sin publicar
+                          V{draft.numero} · configuración pendiente
                         </span>
                       ) : published ? (
                         <Tooltip>
@@ -3009,30 +3019,16 @@ export function RecetaProductoTab({
                                   className={`${styles.secondaryButton} ${styles.iconButton}`}
                                   disabled={working !== null}
                                   aria-label={
-                                    draft
-                                      ? `Sincronizar borrador V${draft.numero}`
-                                      : published
-                                        ? `Crear revisión V${published.numero + 1}`
-                                        : "Crear primera versión"
+                                    draft ? "Reintentar actualización" : "Editar configuración"
                                   }
-                                  onClick={() => guardar(ruta.id, draft)}
+                                  onClick={() => draft ? guardar(ruta.id, draft) : router.push(`/productos-servicios/${producto.id}/rutas/${ruta.id}`)}
                                 >
-                                  {draft ? (
-                                    <RefreshCwIcon />
-                                  ) : published ? (
-                                    <CopyPlusIcon />
-                                  ) : (
-                                    <FilePlus2Icon />
-                                  )}
+                                  {draft ? <RefreshCwIcon /> : <PencilLineIcon />}
                                 </button>
                               )}
                             />
                             <TooltipContent>
-                              {draft
-                                ? `Actualizar el borrador V${draft.numero} con rutas y pasos actuales`
-                                : published
-                                  ? `Crear borrador V${published.numero + 1} para editar documentos y componentes`
-                                  : "Crear la primera versión de la receta"}
+                              {draft ? "Reintentar la actualización de la configuración pendiente" : "Editar configuración. Los cambios se publican al guardar."}
                             </TooltipContent>
                           </Tooltip>
                           {draft && !projectionOnly ? (
@@ -3102,7 +3098,7 @@ export function RecetaProductoTab({
                               onClick={() => publicar(draft)}
                             >
                               <RocketIcon />
-                              Publicar V{draft.numero}
+                              Reintentar actualización
                             </button>
                           ) : null}
                         </div>

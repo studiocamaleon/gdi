@@ -3,7 +3,19 @@ import type {
   NestingViewerInput,
 } from "./productos-servicios-api";
 import { vincularFuentesFabricacion } from "./fabricacion-export";
+import { esFamiliaCorteNesting } from "./nesting-procesos";
 export type CotizacionFabricacion = NonNullable<CotizarResponse["cotizacion"]>;
+type ComponentePlan = Pick<
+  NonNullable<CotizacionFabricacion["componentesFabricados"]>[number],
+  | "codigo"
+  | "productoId"
+  | "nombre"
+  | "ocurrenciaId"
+  | "jobContext"
+  | "pasos"
+  | "componentes"
+  | "analisisNestingCompuesto"
+>;
 export type OperacionPlan = {
   id: string;
   origenId?: string;
@@ -23,11 +35,12 @@ export type PlanFabricacion = {
 
 export function obtenerPlanesFabricacion(
   cotizacion?: CotizacionFabricacion | null,
+  jobContext?: Record<string, unknown>,
 ): PlanFabricacion[] {
   if (!cotizacion) return [];
   const operaciones: OperacionPlan[] = [];
   const recorrer = (
-    componentes: CotizacionFabricacion["componentesFabricados"],
+    componentes: ComponentePlan[] | undefined,
     ruta: string,
     analisis?: CotizacionFabricacion["analisisNestingCompuesto"],
   ) => {
@@ -37,6 +50,16 @@ export function obtenerPlanesFabricacion(
       ...grupos.map((g): OperacionPlan => {
         const lote = g.lote!;
         const n = lote.nestingResult;
+        const familias = g.participantes.map((participante) =>
+          componentes
+            ?.find(
+              (c) =>
+                c.codigo === participante.componenteCodigo &&
+                c.productoId === participante.productoId,
+            )
+            ?.pasos?.find((p) => p.rutaPasoId === participante.rutaPasoId)
+            ?.familiaCodigo,
+        );
         return {
           id: ruta === "componentes" ? lote.id : `${ruta}/lotes/${lote.id}`,
           origenId: lote.layoutOrigenLoteId
@@ -50,8 +73,7 @@ export function obtenerPlanesFabricacion(
           procesamientoCorte: lote.procesamientoCorte,
           esCorte:
             Boolean(lote.procesamientoCorte) ||
-            Boolean(lote.layoutOrigenLoteId) ||
-            /corte/i.test(g.participantes[0]?.pasoNombre ?? ""),
+            (familias.length > 0 && familias.every(esFamiliaCorteNesting)),
           result: {
             ...n,
             cantidadCalculada:
@@ -107,11 +129,7 @@ export function obtenerPlanesFabricacion(
             nombre: p.nombreVisible ?? "Fabricación",
             material: n.sustrato?.nombre ?? c.nombre,
             materialId: n.sustrato?.materialVarianteId,
-            esCorte: [
-              "corte_laser",
-              "router_cnc",
-              "troquelado_digital",
-            ].includes(p.familiaCodigo ?? ""),
+            esCorte: esFamiliaCorteNesting(p.familiaCodigo),
             procesamientoCorte: p.tiempo?.procesamientoCorte,
             result: n,
           });
@@ -124,6 +142,23 @@ export function obtenerPlanesFabricacion(
       );
     }
   };
+  if (
+    Array.isArray(jobContext?.disenosVectoriales) &&
+    jobContext.disenosVectoriales.length
+  ) {
+    recorrer(
+      [
+        {
+          codigo: "producto",
+          productoId: cotizacion.productoId,
+          nombre: cotizacion.productoNombre,
+          jobContext,
+          pasos: cotizacion.pasos,
+        },
+      ],
+      "producto",
+    );
+  }
   recorrer(
     cotizacion.componentesFabricados,
     "componentes",

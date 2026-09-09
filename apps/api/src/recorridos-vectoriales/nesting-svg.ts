@@ -18,13 +18,21 @@ export type NestingVectorialParaRecorrido = {
   };
   substrates?: Array<{
     kind?: string;
+    count?: number;
     widthMm?: number;
     heightMm?: number;
   }>;
   placements?: Array<{
     pieceId?: string;
     substrateIndex?: number;
-    meta?: { contornos?: ContornoNestingVectorial[] };
+    meta?: {
+      contornos?: ContornoNestingVectorial[];
+      operaciones?: Array<{
+        tipo: string;
+        cerrada: boolean;
+        puntos: PuntoNestingVectorial[];
+      }>;
+    };
   }>;
 };
 
@@ -48,7 +56,17 @@ export function crearSvgPlacaDesdeNesting(
       // Separarlos convertía los huecos interiores en piezas independientes y
       // hacía imposible que el motor TAP construyera una red de conexiones
       // válida en letras como P, U o A.
-      const subpaths = (placement.meta?.contornos ?? [])
+      const contornos = [...(placement.meta?.contornos ?? [])];
+      for (const operacion of placement.meta?.operaciones ?? []) {
+        if (operacion.tipo !== 'CORTE_INTERIOR') continue;
+        if (!operacion.cerrada) {
+          throw new BadRequestException(
+            'El corte interior de hilo caliente debe ser un contorno cerrado.',
+          );
+        }
+        contornos.push({ esHueco: true, puntos: operacion.puntos });
+      }
+      const subpaths = contornos
         .filter((contour) => contour.puntos.length >= 3)
         .map((contour) =>
           contour.puntos

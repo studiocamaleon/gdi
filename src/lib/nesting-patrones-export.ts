@@ -1,6 +1,5 @@
 import {
   agruparPatronesNesting,
-  nombrePieza,
   type PatronVisible,
 } from "./nesting-patrones";
 import {
@@ -50,35 +49,4 @@ export async function crearDxfFabricacionDePatron(
     /2\r?\nHEADER\r?\n/,
     `2\nHEADER\n999\nPatron ${p.id} - ${p.repeticiones} copias\n`,
   );
-}
-
-export function crearResumenPatrones(result: NestingViewerInput) {
-  const patrones = agruparPatronesNesting(result);
-  const totales = new Map<string, { nombre: string; cantidad: number }>();
-  const detalle = patrones.map((p) => {
-    const piezas = Object.entries(p.cantidades).map(([id, n]) => {
-      const nombre = nombrePieza(
-        p.placements.find((pieza) => pieza.pieceId === id)!,
-      );
-      const anterior = totales.get(id)?.cantidad ?? 0;
-      totales.set(id, { nombre, cantidad: anterior + n * p.repeticiones });
-      return `  ${nombre}: ${n} por placa × ${p.repeticiones} = ${n * p.repeticiones}`;
-    });
-    return [
-      `Patrón ${p.id} — ${p.repeticiones} copias — ${p.anchoMm} × ${p.altoMm} mm`,
-      ...piezas,
-    ].join("\n");
-  });
-  return [
-    "GrafoNest · Plan de fabricación",
-    `${patrones.reduce((s, p) => s + p.repeticiones, 0)} placas · ${patrones.length} patrones`,
-    "Fabricar las copias indicadas de cada patrón. Los archivos están en milímetros.",
-    "",
-    ...detalle,
-    "",
-    "Totales de piezas",
-    ...[...totales.values()].map((p) => `${p.nombre}: ${p.cantidad}`),
-    `Total: ${[...totales.values()].reduce((s, p) => s + p.cantidad, 0)} piezas`,
-    "",
-  ].join("\n");
 }

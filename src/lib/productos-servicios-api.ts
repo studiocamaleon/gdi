@@ -227,6 +227,7 @@ export type BomMultinivel = {
 };
 
 export interface ProductoRecetaRevision {
+  publicacionAutomatica?: { bloqueos: Array<{ productoId: string; rutaAlternativaId: string; mensaje: string }> };
   id: string;
   numero: number;
   estado: "BORRADOR" | "PUBLICADA" | "DEPRECADA";
@@ -685,6 +686,7 @@ export function guardarBorradorReceta(
     rutaAlternativaId: string;
     cambios?: string;
     expectedUpdatedAt?: string;
+    revisionBaseId?: string;
     documentos?: ProductoRecetaDocumentoInput[];
     componentes?: ProductoRecetaComponenteInput[];
     pasosCompuestos?: ConfiguracionPasoCompuesto[];

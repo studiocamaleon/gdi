@@ -96,7 +96,7 @@ const json = (v: unknown) =>
 describe('DXF → herramientas → cotización guardada → OT (PostgreSQL)', () => {
   const db = new PrismaClient();
   afterAll(() => db.$disconnect());
-  it('calcula los tres procesos y congela sus recetas al emitir y ejecutar la orden', async () => {
+  it.each([false, true])('calcula procesos y conserva piezas/recetas hasta la OT (colección simple: %s)', async (coleccion) => {
     const rollback = new Error('rollback mesa de corte');
     await expect(
       db.$transaction(
@@ -241,6 +241,24 @@ describe('DXF → herramientas → cotización guardada → OT (PostgreSQL)', ()
               fuenteJson: json(fuente),
             },
           });
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><path d="M0 0H80V40H0Z"/></svg>';
+          const hashSvg = createHash('sha256').update(svg).digest('hex');
+          const archivoSvg = coleccion ? await tx.archivo.create({ data: {
+            tenantId, productoId: producto.id, scope: 'PRODUCTO', key: `qa/${randomUUID()}.svg`,
+            nombreOriginal: 'soporte.svg', mimeType: 'image/svg+xml', estado: 'LISTO',
+          } }) : null;
+          let fuenteSvg: typeof fuente | undefined;
+          if (archivoSvg) {
+            const inspeccionSvg = inspeccionarVector(svg, 'soporte.svg');
+            const seleccionSvg = { exteriorId: inspeccionSvg.sugeridaId, unidad: 'mm', cerrarExterior: false, operaciones: [] };
+            fuenteSvg = interpretarVector(inspeccionSvg, seleccionSvg, {
+              geometriaId: randomUUID(), archivoId: archivoSvg.id, hash: hashSvg, nombreArchivo: 'soporte.svg',
+            });
+            await tx.geometriaProducto.create({ data: {
+              id: fuenteSvg.procedencia.geometriaId, tenantId, productoId: producto.id,
+              archivoId: archivoSvg.id, hash: hashSvg, interpretacionJson: json(seleccionSvg), fuenteJson: json(fuenteSvg),
+            } });
+          }
           await tx.producto.update({
             where: { id: producto.id },
             data: {
@@ -325,7 +343,10 @@ describe('DXF → herramientas → cotización guardada → OT (PostgreSQL)', ()
             tenantId,
             productoId: producto.id,
             periodo: '2026-06',
-            jobContext: { cantidad: 10 },
+            jobContext: { cantidad: 10, ...(fuenteSvg ? { disenosVectoriales: [
+              { id: 'principal', nombre: 'Exhibidor', cantidadPorUnidad: 1, fuente: comparable(fuente) },
+              { id: 'soporte', nombre: 'Soporte', cantidadPorUnidad: 2, fuente: comparable(fuenteSvg) },
+            ] } : {}) },
           });
           expect(guardada.result.errores).toEqual([]);
           expect(guardada.result.exitoso).toBe(true);
@@ -339,7 +360,7 @@ describe('DXF → herramientas → cotización guardada → OT (PostgreSQL)', ()
           expect(
             trace.operaciones.find((o) => o.operacion === 'CORTE_COMPLETO')!
               .metros,
-          ).toBeCloseTo(4);
+          ).toBeCloseTo(coleccion ? 8.8 : 4);
           expect(
             trace.operaciones.find((o) => o.operacion === 'CORTE_PARCIAL')!
               .metros,
@@ -350,11 +371,16 @@ describe('DXF → herramientas → cotización guardada → OT (PostgreSQL)', ()
           expect(
             trace.operaciones
               .flatMap((o) => o.fuentes)
-              .every((f) => f.archivoHash === hash),
+              .every((f) => f.archivoHash === hash || (coleccion && f.archivoHash === hashSvg)),
           ).toBe(true);
           const persistida = await tx.cotizacionItem.findUniqueOrThrow({
             where: { id: guardada.cotizacionItemId! },
           });
+          if (coleccion) {
+            expect(costeado.nestingResult?.piezasAcomodadas).toBe(30);
+            expect(new Set(costeado.nestingResult?.placements.map(p => p.pieceId)).size).toBe(2);
+            expect(comparable(persistida.jobContextJson).disenosVectoriales.map((p: { cantidadPorUnidad: number }) => p.cantidadPorUnidad)).toEqual([1, 2]);
+          }
           expect(
             comparable(persistida.trazabilidadJson).pasos[0].tiempo
               .procesamientoCorte,

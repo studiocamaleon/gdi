@@ -1,3 +1,4 @@
+import { esColeccionVectorialValida } from '../productos-servicios/geometrias/coleccion-vectorial';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -179,6 +180,14 @@ export function jobContextCotizacionValido(value: unknown): boolean {
     if (!esFuenteVectorialValida(ctx.disenoVectorialFuente)) {
       return false;
     }
+  }
+  if (ctx.disenosVectoriales !== undefined && !esColeccionVectorialValida(ctx.disenosVectoriales, esFuenteVectorialValida)) return false;
+  if (ctx.coleccionesVectoriales !== undefined) {
+    if (!ctx.coleccionesVectoriales || typeof ctx.coleccionesVectoriales !== 'object' || Array.isArray(ctx.coleccionesVectoriales)) return false;
+    const colecciones = Object.entries(ctx.coleccionesVectoriales as Record<string, unknown>);
+    if (colecciones.length > 30 || colecciones.some(([id, piezas]) =>
+      !/^[a-z0-9][a-z0-9_-]{0,59}$/.test(id) || !esColeccionVectorialValida(piezas, esFuenteVectorialValida)
+    )) return false;
   }
   if (ctx.geometriasVectoriales !== undefined) {
     if (

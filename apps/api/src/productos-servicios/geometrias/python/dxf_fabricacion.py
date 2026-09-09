@@ -220,7 +220,13 @@ def exportar(data):
         nombres = {}
         for capa in sorted({r["capa"] for r in seleccionadas}):
             layer = doc.layers.get(capa) if capa in doc.layers else doc.layers.new(capa)
-            roles = tuple(sorted({r["rol"] or "REFERENCIA" for r in seleccionadas if r["capa"] == capa}))
+            # Exterior e interior son funciones geométricas del mismo corte
+            # completo. Separar piezas no debe renombrar la capa porque una
+            # copia tenga huecos y otra sólo tenga contorno exterior.
+            roles = tuple(sorted({
+                "CORTE_COMPLETO" if r["rol"] in ("CORTE_EXTERIOR", "CORTE_INTERIOR") else r["rol"] or "REFERENCIA"
+                for r in seleccionadas if r["capa"] == capa
+            }))
             firma = (firma_recurso(layer), roles)
             nombre = capa
             if nombre.casefold() in capas and capas[nombre.casefold()] != firma:

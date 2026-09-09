@@ -18,6 +18,7 @@ import {
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/select-buscable";
 
 import { PerfilTintasModal } from "./consumibles-editor";
+import materialStyles from "./materiales-perfil-picker.module.css";
 import {
   FieldInput,
   PRINTER_TEMPLATES_WITH_CONSUMIBLES,
@@ -115,7 +117,7 @@ export function MaterialesPerfilPicker({
     onChange(seleccionados.filter((seleccionado) => seleccionado !== id));
 
   return (
-    <div className="maq-material-field">
+    <div className={materialStyles.field}>
       <SelectBuscable
         value=""
         opciones={opciones}
@@ -128,7 +130,7 @@ export function MaterialesPerfilPicker({
         minimoParaBuscar={0}
       />
       {seleccionados.length > 0 ? (
-        <div className="maq-material-chips">
+        <ul className={materialStyles.selection} aria-label="Materiales seleccionados">
           {seleccionados.map((id) => {
             const material = porId.get(id);
             const legado = opcionesLegadas?.find(
@@ -136,20 +138,25 @@ export function MaterialesPerfilPicker({
             );
             const label = material?.nombre ?? legado?.label ?? id;
             return (
-              <button
-                key={id}
-                type="button"
-                className="maq-material-chip"
-                title={`Quitar ${label}${material && !material.activo ? " (inactivo)" : ""}`}
-                onClick={() => quitar(id)}
-              >
-                <span>{label}</span>
-                <XIcon aria-hidden />
-                <span className="sr-only">Quitar</span>
-              </button>
+              <li key={id} className={materialStyles.item}>
+                <Badge variant="outline" className={materialStyles.chip}>
+                  <span className={materialStyles.name}>{label}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className={materialStyles.remove}
+                    aria-label={`Quitar ${label}`}
+                    title={`Quitar ${label}${material && !material.activo ? " (inactivo)" : ""}`}
+                    onClick={() => quitar(id)}
+                  >
+                    <XIcon aria-hidden />
+                  </Button>
+                </Badge>
+              </li>
             );
           })}
-        </div>
+        </ul>
       ) : null}
     </div>
   );

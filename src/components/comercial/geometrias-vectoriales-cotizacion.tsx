@@ -32,7 +32,7 @@ export type FuenteVectorialCotizada = {
   anchoFinalMm: number;
   altoFinalMm?: number;
   relacionAltoAncho?: number;
-  configuracionCapas?: unknown;
+  configuracionCapas?: import("./diseno-vectorial-cotizador").FuenteDisenoVectorial["configuracionCapas"];
   formatoOrigen?: FormatoFuenteVectorial;
   unidadOrigen?: string | null;
   importacionDxf?: ImportacionDxf;

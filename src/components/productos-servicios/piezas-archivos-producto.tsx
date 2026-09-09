@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { subirArchivo } from "@/lib/archivos-api";
 import {
-  guardarInterpretacionProducto,
+  guardarInterpretacionesProducto,
   inspeccionarArchivoProducto,
   type InspeccionVector,
   type SeleccionVector,
@@ -44,6 +44,12 @@ import styles from "./piezas-diseno.module.css";
 import { CapasFabricacionSelector } from "./capas-fabricacion-selector";
 import { PiezaInterpretacionPreview } from "./pieza-interpretacion-preview";
 import { UNIDADES_IMPORTACION_DXF } from "@/lib/escala-dxf";
+import {
+  incorporarPiezasArchivo,
+  piezasDeCapa,
+  seleccionarPiezasArchivo,
+  seleccionInicialArchivo,
+} from "@/lib/seleccion-piezas-archivo";
 
 const numero = (n: number) =>
   n.toLocaleString("es-AR", { maximumFractionDigits: 2 });
@@ -63,6 +69,12 @@ export function PiezasArchivosProducto({
   renderCantidad,
   accionBiblioteca,
   resumen,
+  paraCotizacion = false,
+  idsReservados = [],
+  contenidoAdicional,
+  onProcesandoChange,
+  titulo,
+  descripcion,
 }: {
   productoId: string;
   fuentes: FuenteGeometriaComercial[];
@@ -71,6 +83,12 @@ export function PiezasArchivosProducto({
   renderCantidad?: (fuenteId: string) => React.ReactNode;
   accionBiblioteca?: React.ReactNode;
   resumen?: string;
+  paraCotizacion?: boolean;
+  idsReservados?: string[];
+  contenidoAdicional?: React.ReactNode;
+  onProcesandoChange?: (procesando: boolean) => void;
+  titulo?: string;
+  descripcion?: string;
 }) {
   const [pendiente, setPendiente] = React.useState<{
     archivoId: string;
@@ -91,6 +109,19 @@ export function PiezasArchivosProducto({
   const input = React.useRef<HTMLInputElement>(null);
   const selectorContorno = React.useRef<HTMLButtonElement>(null);
   const destino = React.useRef<string | undefined>(undefined);
+  const avisoProcesando = React.useRef(onProcesandoChange);
+  avisoProcesando.current = onProcesandoChange;
+  React.useEffect(() => {
+    avisoProcesando.current?.(ocupado || !!pendiente || cola.length > 0);
+  }, [ocupado, pendiente, cola.length]);
+  React.useEffect(() => () => avisoProcesando.current?.(false), []);
+  const seleccionar = (fuenteId?: string) => {
+    destino.current = fuenteId;
+    if (input.current) {
+      input.current.multiple = !fuenteId;
+      input.current.click();
+    }
+  };
 
   async function abrir(file: File, fuenteId?: string) {
     setOcupado(true);
@@ -107,13 +138,7 @@ export function PiezasArchivosProducto({
         productoId,
         archivo.id,
       );
-      setSeleccion({
-        exteriorId: inspeccion.sugeridaId,
-        unidad: inspeccion.unidadDeclarada ?? "",
-        cerrarExterior: false,
-        operaciones: [],
-        excluidas: [],
-      });
+      setSeleccion(seleccionInicialArchivo(inspeccion));
       setPendiente({
         archivoId: archivo.id,
         nombre: file.name,
@@ -121,8 +146,9 @@ export function PiezasArchivosProducto({
         inspeccion,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo abrir el archivo.");
-      setCola([]);
+      setError(
+        `${file.name}: ${e instanceof Error ? e.message : "No se pudo abrir el archivo."}`,
+      );
     } finally {
       setOcupado(false);
     }
@@ -161,12 +187,17 @@ export function PiezasArchivosProducto({
           const entidadId = actualId(o.entidadId);
           return entidadId ? [{ entidadId, tipo: o.tipo }] : [];
         }),
-        excluidas: (guardada.fabricacion?.entidades ?? [])
-          .filter((e) => !e.conservar)
-          .flatMap((e) => {
-            const id = actualId(e.entidadId);
-            return id ? [id] : [];
-          }),
+        excluidas: [
+          ...new Set([
+            ...(guardada.procedencia.entidadesExcluidas ?? []),
+            ...(guardada.fabricacion?.entidades ?? [])
+              .filter((e) => !e.conservar)
+              .map((e) => e.entidadId),
+          ]),
+        ].flatMap((entidadId) => {
+          const id = actualId(entidadId);
+          return id ? [id] : [];
+        }),
       });
       setPendiente({
         archivoId: guardada.procedencia.archivoId,
@@ -189,29 +220,29 @@ export function PiezasArchivosProducto({
     setOcupado(true);
     setError("");
     try {
-      const predeterminada = await guardarInterpretacionProducto(
+      const cantidadImportar = seleccion.exteriorIds?.length ?? 1;
+      if (
+        fuentes.filter((f) => f.predeterminada).length +
+          cantidadImportar -
+          (pendiente.fuenteId ? 1 : 0) >
+        30
+      )
+        throw new Error(
+          "Podés cargar hasta 30 piezas. Revisá la selección antes de importar.",
+        );
+      const { fuentes: interpretadas } = await guardarInterpretacionesProducto(
         productoId,
         pendiente.archivoId,
         seleccion,
       );
-      const existente =
-        fuentes.find((f) => f.id === pendiente.fuenteId) ??
-        (!pendiente.fuenteId
-          ? fuentes.find((f) => !f.predeterminada)
-          : undefined);
-      const nueva = existente ?? {
-        ...nuevaFuenteGeometria(fuentes),
-        nombre: pendiente.nombre.replace(/\.(dxf|svg)$/i, "").slice(0, 120),
-      };
-      const actualizada = {
-        ...nueva,
-        predeterminada,
-        permitirReemplazo: nueva.permitirReemplazo ?? false,
-      };
       onChange(
-        existente
-          ? fuentes.map((f) => (f.id === existente.id ? actualizada : f))
-          : [...fuentes, actualizada],
+        incorporarPiezasArchivo(
+          fuentes,
+          interpretadas,
+          pendiente.nombre,
+          pendiente.fuenteId,
+          idsReservados,
+        ),
       );
       setPendiente(null);
       const [siguiente, ...resto] = cola;
@@ -230,15 +261,30 @@ export function PiezasArchivosProducto({
   const exterior = pendiente?.inspeccion.entidades.find(
     (e) => e.id === seleccion.exteriorId,
   );
+  const exterioresSeleccionados =
+    pendiente?.inspeccion.entidades.filter((e) =>
+      (seleccion.exteriorIds ?? [seleccion.exteriorId]).includes(e.id),
+    ) ?? [];
+  const exteriorAbierto = exterioresSeleccionados.find((e) => !e.cerrada);
   const factor = unidades.find((u) => u.value === seleccion.unidad)?.factorMm;
   const cambio = (id: string, patch: Partial<FuenteGeometriaComercial>) =>
     onChange(fuentes.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  // Las fuentes requeridas siguen reservadas para la carga por lotes, pero
+  // en la cotización sólo se muestran tarjetas de archivos ya cargados.
+  const fuentesVisibles = paraCotizacion
+    ? fuentes.filter((f) => f.predeterminada)
+    : fuentes;
 
   return (
     <section
       className={styles.editor}
+      data-cotizacion={paraCotizacion || undefined}
       aria-label={
-        paraComponente ? "Piezas de este componente" : "Piezas y archivos"
+        paraCotizacion
+          ? "Piezas de esta cotización"
+          : paraComponente
+            ? "Piezas de este componente"
+            : "Piezas y archivos"
       }
     >
       <header className={styles.sectionHead}>
@@ -251,19 +297,25 @@ export function PiezasArchivosProducto({
               GrafoNest · Diseños de fabricación
             </span>
             <h3>
-              {paraComponente
-                ? "Piezas de este componente"
-                : "Piezas y archivos"}
+              {titulo ??
+                (paraCotizacion
+                  ? "Piezas del producto"
+                  : paraComponente
+                    ? "Piezas de este componente"
+                    : "Piezas y archivos")}
             </h3>
             <p>
-              {paraComponente
-                ? "Una misma configuración de material y procesos para todos estos diseños."
-                : "Guardá los diseños una vez para reutilizarlos al cotizar o asignarlos a un componente."}
+              {descripcion ??
+                (paraCotizacion
+                  ? "Cargá varios SVG o DXF. Comparten material y procesos, con cantidades propias por diseño."
+                  : paraComponente
+                    ? "Una misma configuración de material y procesos para todos estos diseños."
+                    : "Guardá los diseños una vez para reutilizarlos al cotizar o asignarlos a un componente.")}
             </p>
           </div>
         </div>
         <div className={styles.actions}>
-          {!paraComponente && (
+          {!paraComponente && !paraCotizacion && (
             <Button
               type="button"
               variant="outline"
@@ -279,11 +331,13 @@ export function PiezasArchivosProducto({
           <Button
             type="button"
             className={styles.primaryAction}
-            disabled={ocupado || fuentes.length >= 30}
-            onClick={() => {
-              destino.current = undefined;
-              input.current?.click();
-            }}
+            disabled={
+              ocupado ||
+              fuentes.filter((f) => f.predeterminada).length +
+                idsReservados.length >=
+                30
+            }
+            onClick={() => seleccionar()}
           >
             {ocupado ? <Spinner /> : <FileUpIcon data-icon="inline-start" />}
             {ocupado ? "Preparando archivo…" : "Cargar archivos"}
@@ -309,8 +363,11 @@ export function PiezasArchivosProducto({
           const archivos = Array.from(e.target.files ?? []);
           e.target.value = "";
           if (
-            archivos.length + fuentes.filter((f) => f.predeterminada).length >
-            30
+            !destino.current &&
+            archivos.length +
+              fuentes.filter((f) => f.predeterminada).length +
+              idsReservados.length >
+              30
           ) {
             setError("Se admiten hasta 30 diseños por producto.");
             return;
@@ -321,16 +378,18 @@ export function PiezasArchivosProducto({
         }}
       />
       <div className={styles.list}>
-        {!fuentes.length && (
+        {contenidoAdicional}
+        {!fuentesVisibles.length && !idsReservados.length && (
           <div className={styles.empty}>
             <ShapesIcon aria-hidden="true" />
             <div>
-              <strong>El conjunto empieza con sus piezas</strong>Cargá los
-              vectores o reutilizá los diseños guardados del producto.
+              <strong>Agregá los diseños que necesitás fabricar</strong>Podés
+              seleccionar varios archivos juntos y revisar cada pieza antes de
+              cotizar.
             </div>
           </div>
         )}
-        {fuentes.map((f, index) => (
+        {fuentesVisibles.map((f, index) => (
           <article
             key={f.id}
             className={styles.piece}
@@ -343,22 +402,30 @@ export function PiezasArchivosProducto({
                 data-quantity={Boolean(renderCantidad)}
               >
                 <div className={styles.identity}>
-                  <Field>
+                  <Field data-invalid={!f.nombre.trim()}>
                     <FieldLabel htmlFor={`nombre-${f.id}`}>
                       Nombre de la pieza {String(index + 1).padStart(2, "0")}
                     </FieldLabel>
                     <Input
                       id={`nombre-${f.id}`}
                       value={f.nombre}
+                      aria-invalid={!f.nombre.trim()}
                       maxLength={120}
                       onChange={(e) => cambio(f.id, { nombre: e.target.value })}
                     />
+                    {!f.nombre.trim() && (
+                      <FieldDescription>
+                        Ingresá un nombre para esta pieza.
+                      </FieldDescription>
+                    )}
                   </Field>
                   {f.predeterminada ? (
                     <DatosArchivoPieza fuente={f.predeterminada} />
                   ) : (
                     <p className={styles.pending}>
-                      El archivo y su medida se definirán al cotizar.
+                      {paraCotizacion
+                        ? "Cargá el archivo requerido por este producto."
+                        : "El archivo y su medida se definirán al cotizar."}
                     </p>
                   )}
                 </div>
@@ -370,7 +437,14 @@ export function PiezasArchivosProducto({
                 size="icon-sm"
                 className={styles.removeAction}
                 aria-label={`Eliminar ${f.nombre}`}
-                disabled={fuentes.length === 1 || ocupado}
+                disabled={
+                  (!paraCotizacion && fuentes.length === 1) ||
+                  ocupado ||
+                  (paraCotizacion &&
+                    f.requerida &&
+                    !!f.predeterminada &&
+                    !f.permitirReemplazo)
+                }
                 onClick={() => onChange(fuentes.filter((p) => p.id !== f.id))}
               >
                 <Trash2Icon />
@@ -381,27 +455,28 @@ export function PiezasArchivosProducto({
                 type="button"
                 variant="outline"
                 className={styles.secondaryAction}
-                disabled={ocupado}
-                onClick={() => {
-                  destino.current = f.id;
-                  input.current?.click();
-                }}
+                disabled={
+                  ocupado ||
+                  (paraCotizacion && !!f.predeterminada && !f.permitirReemplazo)
+                }
+                onClick={() => seleccionar(f.id)}
               >
                 <FileUpIcon data-icon="inline-start" />
-                {f.predeterminada ? "Cambiar archivo" : "Cargar DXF / SVG"}
+                {f.predeterminada ? "Reemplazar archivo" : "Cargar DXF / SVG"}
               </Button>
-              {f.predeterminada?.procedencia?.archivoId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={styles.secondaryAction}
-                  disabled={ocupado}
-                  onClick={() => void revisarCapas(f)}
-                >
-                  Revisar capas
-                </Button>
-              )}
-              {!paraComponente && (
+              {f.predeterminada?.procedencia?.archivoId &&
+                (!paraCotizacion || f.permitirReemplazo) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={styles.secondaryAction}
+                    disabled={ocupado}
+                    onClick={() => void revisarCapas(f)}
+                  >
+                    Revisar capas
+                  </Button>
+                )}
+              {!paraComponente && !paraCotizacion && (
                 <div className={styles.options}>
                   <Field orientation="horizontal">
                     <Checkbox
@@ -438,6 +513,29 @@ export function PiezasArchivosProducto({
           {error}
         </p>
       )}
+      {error && !pendiente && cola.length > 0 && (
+        <div className={styles.actions}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={ocupado}
+            onClick={() => setCola([])}
+          >
+            Cancelar archivos pendientes
+          </Button>
+          <Button
+            type="button"
+            disabled={ocupado}
+            onClick={() => {
+              const [siguiente, ...resto] = cola;
+              setCola(resto);
+              if (siguiente) void abrir(siguiente);
+            }}
+          >
+            Continuar con los {cola.length} archivos restantes
+          </Button>
+        </div>
+      )}
       <Dialog
         open={!!pendiente}
         onOpenChange={(open) => {
@@ -449,16 +547,17 @@ export function PiezasArchivosProducto({
       >
         <DialogContent
           className={styles.dialog}
+          overlayClassName={styles.dialogOverlay}
           initialFocus={selectorContorno}
         >
           <DialogHeader className={styles.dialogHeader}>
             <span className={styles.eyebrow}>
               GrafoNest · Importación vectorial
             </span>
-            <DialogTitle>Interpretar pieza</DialogTitle>
+            <DialogTitle>Interpretar archivo</DialogTitle>
             <DialogDescription>
-              {pendiente?.nombre} · El naranja muestra la silueta que ocupará
-              lugar en la placa.
+              {pendiente?.nombre} · Cada silueta naranja se acomoda como una
+              pieza independiente en la placa.
               {cola.length ? ` Quedan ${cola.length} archivos.` : ""}
             </DialogDescription>
           </DialogHeader>
@@ -472,7 +571,9 @@ export function PiezasArchivosProducto({
                 />
                 <p>
                   {exterior && factor
-                    ? `${numero(exterior.ancho * factor)} × ${numero(exterior.alto * factor)} mm`
+                    ? exterioresSeleccionados.length > 1
+                      ? `${exterioresSeleccionados.length} piezas para nesting · Medidas en mm`
+                      : `${numero(exterior.ancho * factor)} × ${numero(exterior.alto * factor)} mm`
                     : "Confirmá la unidad para ver las medidas"}
                 </p>
                 <small>
@@ -482,15 +583,43 @@ export function PiezasArchivosProducto({
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="pieza-contorno-exterior">
-                    Contorno exterior para nesting
+                    Piezas para nesting
                   </FieldLabel>
                   <Select
-                    value={seleccion.exteriorId}
+                    value={
+                      seleccion.exteriorIds
+                        ? new Set(exterioresSeleccionados.map((e) => e.capa))
+                            .size > 1
+                          ? "archivo"
+                          : `capa:${exterior?.capa ?? ""}`
+                        : seleccion.exteriorId
+                    }
                     onValueChange={(v) => {
-                      if (v)
+                      if (v === "archivo") {
+                        setSeleccion((s) =>
+                          seleccionarPiezasArchivo(
+                            pendiente.inspeccion,
+                            pendiente.inspeccion.piezasSugeridas ?? [],
+                            s,
+                          ),
+                        );
+                      } else if (v?.startsWith("capa:")) {
+                        const piezas = piezasDeCapa(
+                          pendiente.inspeccion,
+                          v.slice(5),
+                        );
+                        setSeleccion((s) =>
+                          seleccionarPiezasArchivo(
+                            pendiente.inspeccion,
+                            piezas.map((p) => p.exteriorId),
+                            s,
+                          ),
+                        );
+                      } else if (v)
                         setSeleccion((s) => ({
                           ...s,
                           exteriorId: v,
+                          exteriorIds: undefined,
                           cerrarExterior: false,
                           excluidas: s.excluidas?.filter((id) => id !== v),
                           operaciones: s.operaciones.filter(
@@ -505,12 +634,42 @@ export function PiezasArchivosProducto({
                     >
                       <SelectValue>
                         {exterior
-                          ? `${exterior.capa || "Sin capa"} · ${numero(exterior.ancho)} × ${numero(exterior.alto)} u.`
+                          ? seleccion.exteriorIds
+                            ? `${exterioresSeleccionados.length} piezas · ${exterior.capa || "Sin capa"}`
+                            : `${exterior.capa || "Sin capa"} · ${numero(exterior.ancho)} × ${numero(exterior.alto)} u.`
                           : "Elegir contorno"}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className={styles.selectMenu}>
+                    <SelectContent
+                      className={styles.selectMenu}
+                      positionerClassName={styles.selectLayer}
+                    >
                       <SelectGroup>
+                        {!!pendiente.inspeccion.piezasSugeridas?.length && (
+                          <SelectItem value="archivo">
+                            Todas las piezas detectadas ·{" "}
+                            {pendiente.inspeccion.piezasSugeridas.length}
+                          </SelectItem>
+                        )}
+                        {[
+                          ...new Set(
+                            pendiente.inspeccion.entidades.map((e) => e.capa),
+                          ),
+                        ].map((capa) => {
+                          const piezas = piezasDeCapa(
+                            pendiente.inspeccion,
+                            capa,
+                          );
+                          return piezas.length > 0 ? (
+                            <SelectItem
+                              key={`capa:${capa}`}
+                              value={`capa:${capa}`}
+                            >
+                              Todas las piezas · {capa || "Sin capa"} ·{" "}
+                              {piezas.length}
+                            </SelectItem>
+                          ) : null;
+                        })}
                         {pendiente.inspeccion.entidades
                           .filter((e) => e.area > 0)
                           .map((e) => (
@@ -523,8 +682,10 @@ export function PiezasArchivosProducto({
                     </SelectContent>
                   </Select>
                   <FieldDescription>
-                    Seleccioná una pieza. Los demás contornos no se anidan como
-                    piezas independientes.
+                    Se incluyen todas las piezas detectadas. Podés limitar la
+                    selección a una capa. Los huecos se conservan como cortes
+                    internos; después podés ajustar el nombre y la cantidad de
+                    cada pieza.
                   </FieldDescription>
                 </Field>
                 <Field>
@@ -545,7 +706,10 @@ export function PiezasArchivosProducto({
                         }
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className={styles.selectMenu}>
+                    <SelectContent
+                      className={styles.selectMenu}
+                      positionerClassName={styles.selectLayer}
+                    >
                       <SelectGroup>
                         {unidades.map((u) => (
                           <SelectItem key={u.value} value={u.value}>
@@ -560,7 +724,7 @@ export function PiezasArchivosProducto({
                     {pendiente.inspeccion.unidadDeclarada ?? "sin declarar"}.
                   </FieldDescription>
                 </Field>
-                {exterior && !exterior.cerrada && (
+                {exteriorAbierto && (
                   <Field orientation="horizontal">
                     <Checkbox
                       id="cerrar-exterior"
@@ -574,7 +738,8 @@ export function PiezasArchivosProducto({
                         Confirmo cerrar el exterior con un segmento recto
                       </FieldLabel>
                       <FieldDescription>
-                        Abertura: {numero(exterior.apertura * (factor ?? 1))}{" "}
+                        Abertura:{" "}
+                        {numero(exteriorAbierto.apertura * (factor ?? 1))}{" "}
                         {factor ? "mm" : "unidades"}. Este cierre modifica la
                         silueta de fabricación.
                       </FieldDescription>
@@ -582,6 +747,7 @@ export function PiezasArchivosProducto({
                   </Field>
                 )}
                 <CapasFabricacionSelector
+                  menuLayerClassName={styles.selectLayer}
                   inspeccion={pendiente.inspeccion}
                   seleccion={seleccion}
                   onChange={setSeleccion}
@@ -624,11 +790,14 @@ export function PiezasArchivosProducto({
                     e.exportable === false &&
                     !seleccion.excluidas?.includes(e.id),
                 ) ||
-                (!exterior.cerrada && !seleccion.cerrarExterior)
+                (!!exteriorAbierto && !seleccion.cerrarExterior)
               }
               onClick={() => void confirmar()}
             >
-              {ocupado && <Spinner />}Guardar interpretación
+              {ocupado && <Spinner />}
+              {seleccion.exteriorIds
+                ? `Importar ${seleccion.exteriorIds.length} ${seleccion.exteriorIds.length === 1 ? "pieza" : "piezas"}`
+                : "Guardar interpretación"}
               {cola.length ? " y seguir" : ""}
             </Button>
           </DialogFooter>

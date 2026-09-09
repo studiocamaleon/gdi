@@ -29,15 +29,18 @@ export function CapasFabricacionSelector({
   inspeccion,
   seleccion,
   onChange,
+  menuLayerClassName,
 }: {
   inspeccion: InspeccionVector;
   seleccion: SeleccionVector;
   onChange: (seleccion: SeleccionVector) => void;
+  menuLayerClassName?: string;
 }) {
   const capas = new Map<string, EntidadInspeccion[]>();
   for (const e of inspeccion.entidades)
     capas.set(e.capa, [...(capas.get(e.capa) ?? []), e]);
   const excluidas = new Set(seleccion.excluidas ?? []);
+  const exteriores = new Set(seleccion.exteriorIds ?? [seleccion.exteriorId]);
   const conservada = (e: EntidadInspeccion) => !excluidas.has(e.id);
   const uso = (entidades: EntidadInspeccion[]): Uso => {
     const valores = new Set(
@@ -51,7 +54,7 @@ export function CapasFabricacionSelector({
   };
   const conservar = (entidades: EntidadInspeccion[], valor: boolean) => {
     const ids = new Set(
-      entidades.filter((e) => e.id !== seleccion.exteriorId).map((e) => e.id),
+      entidades.filter((e) => !exteriores.has(e.id)).map((e) => e.id),
     );
     onChange({
       ...seleccion,
@@ -74,7 +77,7 @@ export function CapasFabricacionSelector({
           .filter(
             (e) =>
               conservada(e) &&
-              e.id !== seleccion.exteriorId &&
+              !exteriores.has(e.id) &&
               e.puntos.length > 1 &&
               e.exportable !== false,
           )
@@ -86,9 +89,7 @@ export function CapasFabricacionSelector({
                   {
                     entidadId: e.id,
                     tipo: valor as
-                      | "CORTE_INTERIOR"
-                      | "CORTE_PARCIAL"
-                      | "HENDIDO",
+                      "CORTE_INTERIOR" | "CORTE_PARCIAL" | "HENDIDO",
                   },
                 ]
               : [],
@@ -112,7 +113,7 @@ export function CapasFabricacionSelector({
       >
         <SelectValue>{usos[uso(entidades)]}</SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent positionerClassName={menuLayerClassName}>
         <SelectGroup>
           <SelectItem value="SIN_OPERACION">Sin operación</SelectItem>
           <SelectItem value="CORTE_INTERIOR">Corte completo</SelectItem>
@@ -137,12 +138,8 @@ export function CapasFabricacionSelector({
         <span>Uso</span>
       </div>
       {[...capas].map(([nombre, entidades]) => {
-        const adicionales = entidades.filter(
-          (e) => e.id !== seleccion.exteriorId,
-        );
-        const contieneExterior = entidades.some(
-          (e) => e.id === seleccion.exteriorId,
-        );
+        const adicionales = entidades.filter((e) => !exteriores.has(e.id));
+        const contieneExterior = entidades.some((e) => exteriores.has(e.id));
         const cantidad = adicionales.filter(conservada).length;
         return (
           <details key={nombre} className={styles.layer}>
@@ -187,7 +184,7 @@ export function CapasFabricacionSelector({
                       {e.tipoEntidad ?? "Contorno"} · {e.id}
                     </strong>
                     <small>
-                      {e.id === seleccion.exteriorId
+                      {exteriores.has(e.id)
                         ? "Exterior de nesting"
                         : (e.motivoNoCompatible ??
                           (e.cerrada
@@ -200,10 +197,10 @@ export function CapasFabricacionSelector({
                   <Checkbox
                     aria-label={`Conservar entidad ${e.id}`}
                     checked={conservada(e)}
-                    disabled={e.id === seleccion.exteriorId}
+                    disabled={exteriores.has(e.id)}
                     onCheckedChange={(v) => conservar([e], v === true)}
                   />
-                  {e.id === seleccion.exteriorId ? (
+                  {exteriores.has(e.id) ? (
                     <span className={styles.exterior}>Corte exterior</span>
                   ) : (
                     selector([e], `entidad ${e.id}`)

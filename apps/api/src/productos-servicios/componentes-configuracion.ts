@@ -1,4 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
+import type { JobContext } from '../motor-universal/tipos';
+import { esColeccionVectorialValida } from './geometrias/coleccion-vectorial';
 
 export const ORIGENES_PARAMETRO_COMPONENTE = [
   'DEFAULT_HIJO',
@@ -778,6 +780,7 @@ export function resolverJobContextComponente(args: {
       : {});
   const resultado: Record<string, unknown> = {};
   let piezas = config.piezas;
+  let vectorialesHeredadas: JobContext['disenosVectoriales'];
   if (overrides.piezas !== undefined) {
     if (!config.piezasEditables)
       throw new BadRequestException(
@@ -802,6 +805,36 @@ export function resolverJobContextComponente(args: {
       ].includes(binding.clave)
     )
       continue;
+    // El binding sigue apuntando al mismo diseño nombrado. Una colección
+    // amplía ese diseño sin arrastrar otros archivos del padre ni piezas fijas.
+    const campoPadre = binding.regla?.fuente
+      ? binding.regla.fuente.tipo === 'PADRE'
+        ? binding.regla.fuente.campo
+        : undefined
+      : (binding.regla?.campoPadre ?? binding.padreClave);
+    if (
+      binding.clave === 'disenoVectorialFuente' &&
+      ['PADRE', 'FORMULA'].includes(binding.origen) &&
+      (!binding.regla || binding.regla.operador === 'COPIAR') &&
+      campoPadre?.startsWith('geometriasVectoriales.')
+    ) {
+      const colecciones = args.contextoPadre.coleccionesVectoriales;
+      const id = campoPadre.slice('geometriasVectoriales.'.length);
+      if (
+        esRegistro(colecciones) &&
+        Object.prototype.hasOwnProperty.call(colecciones, id)
+      ) {
+        const coleccion = colecciones[id];
+        if (!esColeccionVectorialValida(coleccion, esFuenteVectorialValida))
+          throw new BadRequestException(
+            `Revisá los archivos y las cantidades del diseño heredado por "${args.codigoComponente}".`,
+          );
+        vectorialesHeredadas = structuredClone(
+          coleccion,
+        ) as JobContext['disenosVectoriales'];
+        continue;
+      }
+    }
     let value: unknown;
     if (binding.origen === 'DEFAULT_HIJO' || binding.origen === 'FIJO') {
       value = binding.valor;
@@ -841,7 +874,7 @@ export function resolverJobContextComponente(args: {
   }
   // Un SVG dimensionado define su caja final. Ancho y alto del componente se
   // derivan de esa geometría y no deben volver a exigirse como datos paralelos.
-  if (piezas?.length) {
+  if (piezas?.length || vectorialesHeredadas?.length) {
     resultado.cantidad ??=
       Number(args.contextoPadre.cantidad ?? 1) * args.cantidadLegacy;
     if (
@@ -852,7 +885,7 @@ export function resolverJobContextComponente(args: {
         'La cantidad de productos de una colección debe ser un entero mayor que cero.',
       );
     if (
-      piezas.some(
+      (vectorialesHeredadas ?? piezas ?? []).some(
         (p) =>
           !Number.isSafeInteger(
             Number(resultado.cantidad) * p.cantidadPorUnidad,
@@ -862,7 +895,10 @@ export function resolverJobContextComponente(args: {
       throw new BadRequestException(
         'La cantidad total de piezas supera el máximo permitido.',
       );
-    if (piezas.every((p) => p.tipo === 'RECTANGULAR')) {
+    if (
+      !vectorialesHeredadas &&
+      piezas?.every((p) => p.tipo === 'RECTANGULAR')
+    ) {
       const resueltas = piezas.map((p) => ({
         id: p.id,
         nombre: p.nombre.trim(),
@@ -892,16 +928,28 @@ export function resolverJobContextComponente(args: {
         0,
       );
     } else {
-      const vectoriales = piezas.filter(
-        (p): p is PiezaVectorialComponente => p.tipo !== 'RECTANGULAR',
-      );
+      const vectoriales =
+        vectorialesHeredadas ??
+        (piezas ?? []).filter(
+          (p): p is PiezaVectorialComponente => p.tipo !== 'RECTANGULAR',
+        );
       resultado.disenosVectoriales = vectoriales;
       resultado.modoCotizacionVectorial = 'archivo';
       resultado.piezas = vectoriales.map((p) => ({
         cantidad: Number(resultado.cantidad) * p.cantidadPorUnidad,
         anchoMm: p.fuente.anchoFinalMm,
-        altoMm: p.fuente.altoFinalMm,
+        altoMm:
+          p.fuente.altoFinalMm ??
+          p.fuente.anchoFinalMm * (proporcionSvg(p.fuente.svg) ?? Number.NaN),
       }));
+      const medidas = resultado.piezas as Array<{
+        anchoMm: number;
+        altoMm: number;
+      }>;
+      resultado.medidaCustomMm = {
+        anchoMm: Math.max(...medidas.map((p) => p.anchoMm)),
+        altoMm: Math.max(...medidas.map((p) => p.altoMm)),
+      };
     }
   } else completarGeometria(resultado);
   const faltantesReales = faltantes.filter(

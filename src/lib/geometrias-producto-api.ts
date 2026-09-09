@@ -31,10 +31,13 @@ export type InspeccionVector = {
   unidadDeclarada: string | null;
   entidades: EntidadInspeccion[];
   sugeridaId: string;
+  piezas?: Array<{ exteriorId: string; interioresIds: string[] }>;
+  piezasSugeridas?: string[];
   avisos: string[];
 };
 export type SeleccionVector = {
   exteriorId: string;
+  exteriorIds?: string[];
   unidad: string;
   cerrarExterior: boolean;
   excluidas?: string[];
@@ -60,6 +63,7 @@ export type FuenteGuardada = {
     hash: string;
     capa: string;
     exteriorId: string;
+    entidadesExcluidas?: string[];
     unidadDeclarada: string | null;
     cierreConfirmado: boolean;
     aperturaOriginalMm: number;
@@ -96,5 +100,16 @@ export function guardarInterpretacionProducto(
       method: "POST",
       body: JSON.stringify({ archivoId, ...seleccion }),
     },
+  );
+}
+
+export function guardarInterpretacionesProducto(
+  productoId: string,
+  archivoId: string,
+  seleccion: SeleccionVector,
+) {
+  return apiRequest<{ fuentes: FuenteGuardada[] }>(
+    `/productos-servicios/productos/${productoId}/geometrias/interpretaciones-lote`,
+    { method: "POST", body: JSON.stringify({ archivoId, ...seleccion }) },
   );
 }

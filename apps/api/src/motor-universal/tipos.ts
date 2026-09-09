@@ -83,8 +83,15 @@ export interface MutacionAplicada {
  * que ejecuta pasos (los pasos PRE pueden modificar medidas, etc.).
  */
 export interface JobContext {
-  /** Colección resuelta desde la configuración publicada del componente. */
-  disenosVectoriales?: import('../productos-servicios/componentes-configuracion').PiezaVectorialComponente[];
+  /** Colecciones por diseño del padre, consumidas por los bindings existentes. */
+  coleccionesVectoriales?: Record<string, NonNullable<JobContext['disenosVectoriales']>>;
+  /** Piezas del componente o diseños cargados al cotizar un producto simple. */
+  disenosVectoriales?: Array<{
+    id: string;
+    nombre: string;
+    cantidadPorUnidad: number;
+    fuente: NonNullable<JobContext['disenoVectorialFuente']>;
+  }>;
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
   /** Fuente geométrica elegida en familias que admiten vector opcional. */

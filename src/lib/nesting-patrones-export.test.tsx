@@ -4,7 +4,6 @@ import { agruparPatronesNesting } from "./nesting-patrones";
 import {
   crearDxfDePatron,
   crearSvgDePatron,
-  crearResumenPatrones,
   nombreArchivoPatron,
 } from "./nesting-patrones-export";
 import { crearDxfDePlaca, crearSvgDePlaca } from "./nesting-vectorial-export";
@@ -92,14 +91,9 @@ describe("entrega de archivos por patrón", () => {
       const entidades = (texto: string) => texto.split("2\nENTITIES\n")[1].split("0\nENDSEC")[0].replace(/(?:^|\n)(5|330)\n[^\n]+/g, "");
       expect(entidades(dxf)).toBe(entidades(crearDxfDePlaca(r, p.indices[0])));
     }
-    const resumen = crearResumenPatrones(r);
-    expect(resumen).toContain("34 placas · 3 patrones");
-    expect(resumen).toContain("Total: 450 piezas");
-    expect(resumen).toContain("Estante: 200");
-    expect(resumen).toContain("Costilla: 50");
     expect(JSON.stringify(r)).toBe(antes);
   });
-  it("presenta sólo tres descargas SVG y tres DXF, junto al resumen", () => {
+  it("presenta sólo tres descargas SVG y tres DXF", () => {
     const markup = renderToStaticMarkup(
       <NestingPatronesDescargas
         result={exhibidor()}
@@ -113,7 +107,7 @@ describe("entrega de archivos por patrón", () => {
     expect(
       markup.match(/aria-label="Descargar patrón [ABC] DXF/g) ?? [],
     ).toHaveLength(3);
-    expect(markup).toContain("Resumen del plan");
+    expect(markup).not.toContain("Resumen del plan");
     expect(markup).not.toContain("Placa 34");
   });
   it("rechaza un patrón inexistente sin exportar otra placa", () => {

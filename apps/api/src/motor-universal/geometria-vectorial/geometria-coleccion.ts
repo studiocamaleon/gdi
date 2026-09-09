@@ -6,6 +6,7 @@ import {
   longitudOperacion,
 } from './operaciones-vectoriales';
 import type { GeometriaVectorialCanonica } from './tipos';
+import { aplicarCapasAGeometria } from './capas-vectoriales';
 
 /** Las fuentes ya fueron rehidratadas por tenant. Mantiene seis identidades
  * aunque una de ellas demande cuatro piezas por conjunto. */
@@ -15,11 +16,14 @@ export function geometriaDeColeccion(
   const disenos = ctx.disenosVectoriales!;
   const piezas = disenos.flatMap((d) => {
     const g = adjuntarOperacionesGuardadas(
-      analizarSvgFabricacion({
-        svg: d.fuente.svg,
-        anchoFinalMm: d.fuente.anchoFinalMm,
-        altoFinalMm: d.fuente.altoFinalMm,
-      }).geometria,
+      aplicarCapasAGeometria(
+        analizarSvgFabricacion({
+          svg: d.fuente.svg,
+          anchoFinalMm: d.fuente.anchoFinalMm,
+          altoFinalMm: d.fuente.altoFinalMm,
+        }).geometria,
+        d.fuente.configuracionCapas,
+      ),
       d.fuente,
     );
     return g.piezas.map((p) => ({
@@ -39,7 +43,7 @@ export function geometriaDeColeccion(
     (disenos.reduce(
       (s, d) =>
         s +
-        d.fuente.operaciones
+        (d.fuente.operaciones ?? [])
           .filter((o) => o.tipo === 'HENDIDO')
           .reduce((n, o) => n + longitudOperacion(o), 0) *
           d.cantidadPorUnidad,

@@ -14,6 +14,17 @@
   background: var(--surface);
   overflow: hidden;
 }
+.editor[data-cotizacion] {
+  grid-column: 1 / -1;
+  container-type: inline-size;
+  margin-block: 0;
+}
+.dialogOverlay {
+  z-index: 1100;
+}
+.selectLayer {
+  z-index: 1102;
+}
 
 .sectionHead {
   display: flex;
@@ -117,6 +128,7 @@
 .pieceFields[data-quantity="false"] {
   grid-template-columns: minmax(0, 1fr);
 }
+.legacyMain { grid-template-columns: minmax(0, 1fr) 132px auto; }
 .identity {
   display: flex;
   flex-direction: column;
@@ -366,6 +378,7 @@
   font-size: 13px;
 }
 .dialog {
+  z-index: 1101;
   max-width: min(960px, calc(100vw - 32px));
   max-height: 90dvh;
   overflow-y: auto;
@@ -374,6 +387,18 @@
   border: 1px solid var(--piece-border);
   border-radius: 16px;
   background: var(--surface);
+}
+@container (max-width: 580px) {
+  .pieceMain {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+  .pieceFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pieceFooter {
+    margin-left: 0;
+  }
 }
 .dialogHeader {
   padding: 22px 24px 18px;
