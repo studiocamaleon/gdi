@@ -189,6 +189,25 @@ it.each([50, 100, 150])(
     });
     expect(lectura).toHaveLength(2);
     const hijo = lectura.find((i) => i.parentItemId)!;
+    // La habilitación de la rama apunta a trabajo_manual, omitido en la
+    // cotización. Debe esperar igualmente su ancestro activo de pre-prensa.
+    const padre = lectura.find((i) => !i.parentItemId)!;
+    const preprensa = padre.pasos.find(
+      (p) => p.familiaCodigo === 'pre_prensa',
+    )!;
+    const impresion = hijo.pasos.find(
+      (p) => p.familiaCodigo === 'impresion_por_area',
+    )!;
+    expect(
+      await db.ordenTrabajoPasoDependencia.findFirst({
+        where: {
+          tenantId,
+          ordenId: orden.id,
+          predecesorPasoId: preprensa.id,
+          sucesorPasoId: impresion.id,
+        },
+      }),
+    ).not.toBeNull();
     expect(
       (hijo.jobContextSnapshotJson as any).piezas.reduce(
         (s: number, p: any) => s + p.cantidad,

@@ -198,6 +198,32 @@ export function reducirGrafoAClaves(
   return validarYOrdenarGrafo(nodos, aristas);
 }
 
+/** Si una habilitación BOM apunta a un opcional omitido, conserva la espera
+ * de sus ancestros activos más próximos, sin agregar operaciones omitidas. */
+export function resolverHabilitacionesActivas(
+  grafo: GrafoProduccion,
+  claves: string[],
+  activas: Set<string>,
+): string[] {
+  const entrantes = new Map<string, string[]>();
+  for (const a of grafo.aristas) {
+    const lista = entrantes.get(a.haciaClave) ?? [];
+    lista.push(a.desdeClave);
+    entrantes.set(a.haciaClave, lista);
+  }
+  const pendientes = [...claves],
+    vistas = new Set<string>(),
+    resueltas = new Set<string>();
+  while (pendientes.length) {
+    const clave = pendientes.pop()!;
+    if (vistas.has(clave)) continue;
+    vistas.add(clave);
+    if (activas.has(clave)) resueltas.add(clave);
+    else pendientes.push(...(entrantes.get(clave) ?? []));
+  }
+  return grafo.nodos.filter((n) => resueltas.has(n.clave)).map((n) => n.clave);
+}
+
 export function nodoEjecutable(
   clave: string,
   estados: EstadoNodoGrafo[],

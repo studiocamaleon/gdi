@@ -28,6 +28,12 @@ export type OperacionPiloto = {
   familiaCodigo: string;
   maquinaId?: string;
   centroCostoId?: string;
+  plantillaCodigo?: string | null;
+  tecnologia?: string | null;
+  /** Política explícita del adaptador, p. ej. preparar el vector una vez. */
+  unaVezPorPedido?: boolean;
+  /** Conserva las mismas tandas que la operación que produjo las placas. */
+  particionVinculadaA?: string;
   /** Piezas procesadas por producto terminado: p. ej. dos estantes. */
   piezasPorProducto: number;
   predecesoras: string[];
@@ -148,6 +154,8 @@ function validar(entrada: EntradaPiloto) {
         !o.codigo ||
         !enteroPositivo(o.piezasPorProducto) ||
         !Number.isSafeInteger(o.piezasPorProducto * cantidad) ||
+        (o.particionVinculadaA != null &&
+          !codigos.has(o.particionVinculadaA)) ||
         o.predecesoras.some((p) => !codigos.has(p)) ||
         new Set(o.predecesoras).size !== o.predecesoras.length ||
         new Set(o.mediciones.map((m) => m.cantidadProductos)).size !==
@@ -235,28 +243,35 @@ function generar(entrada: EntradaPiloto) {
   ];
   const vistos = new Set<string>();
   return recetas.flatMap((receta) => {
-    const firma = JSON.stringify(
-      operaciones.map((o) =>
-        terminales.has(o.codigo) ? receta.finales : receta.grupos,
-      ),
-    );
+    const gruposDe = (o: OperacionPiloto, camino: string[] = []): number[] => {
+      if (camino.includes(o.codigo))
+        throw new Error('Las particiones vinculadas contienen un ciclo.');
+      if (o.particionVinculadaA)
+        return gruposDe(
+          operaciones.find((p) => p.codigo === o.particionVinculadaA)!,
+          [...camino, o.codigo],
+        );
+      return o.unaVezPorPedido
+        ? [cantidad]
+        : terminales.has(o.codigo)
+          ? receta.finales
+          : receta.grupos;
+    };
+    const firma = JSON.stringify(operaciones.map((o) => gruposDe(o)));
     if (vistos.has(firma)) return [];
     vistos.add(firma);
     const nodos: OperacionLotePiloto[] = operaciones.flatMap((o) =>
-      rangos(terminales.has(o.codigo) ? receta.finales : receta.grupos).map(
-        (r) => ({
-          ...r,
-          id: `f6-piloto:${receta.id}:${o.codigo}:${r.desde}-${r.hasta}`,
-          operacion: o.codigo,
-          cantidadProductos: r.hasta - r.desde,
-          cantidadPiezas: (r.hasta - r.desde) * o.piezasPorProducto,
-          predecesoras: [],
-          medicion:
-            o.mediciones.find(
-              (m) => m.cantidadProductos === r.hasta - r.desde,
-            ) ?? null,
-        }),
-      ),
+      rangos(gruposDe(o)).map((r) => ({
+        ...r,
+        id: `f6-piloto:${receta.id}:${o.codigo}:${r.desde}-${r.hasta}`,
+        operacion: o.codigo,
+        cantidadProductos: r.hasta - r.desde,
+        cantidadPiezas: (r.hasta - r.desde) * o.piezasPorProducto,
+        predecesoras: [],
+        medicion:
+          o.mediciones.find((m) => m.cantidadProductos === r.hasta - r.desde) ??
+          null,
+      })),
     );
     for (const nodo of nodos) {
       const o = operaciones.find((o) => o.codigo === nodo.operacion)!;
@@ -308,6 +323,8 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
               predecesorPasoIds: n.predecesoras,
               esTerminal: true,
               familiaCodigo: o.familiaCodigo,
+              plantillaCodigo: o.plantillaCodigo,
+              tecnologia: o.tecnologia,
               maquinaId: o.maquinaId,
               centroCostoId: o.centroCostoId ?? null,
               duracionEstimadaMin: n.medicion

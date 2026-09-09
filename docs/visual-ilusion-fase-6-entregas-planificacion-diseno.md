@@ -1,6 +1,6 @@
 # F6 — Diseño funcional de entregas y planificación por cantidades
 
-**Estado:** DISEÑO, con primer prototipo técnico aislado. No habilitado en la aplicación.
+**Estado:** DISEÑO, con prototipo y adaptador al catálogo real validados. Planificación de OT no habilitada en la aplicación.
 **Rama:** `codex/f6-entregas-planificacion`. **Base:** `visual-ilusion/analisis`, F4 cerrada.
 **Referencia:** [propuesta del 09/09](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md) y [Plan Maestro](visual-ilusion-plan-maestro.md).
 
@@ -106,7 +106,7 @@ No evalúa geometría real, operaciones tercerizadas, insumos físicos, cantidad
 | Bloque | Salida verificable | Estado |
 | --- | --- | --- |
 | Diseño funcional y prueba del selector | Dos modos de fechas, alternativas por operación y balance exacto con ETA existente | Primer prototipo probado; evidencia abajo. El contrato operativo sigue en diseño |
-| Adaptador al caso real | Leer la receta/snapshot del exhibidor y obtener mediciones y particiones geométricas trazables por alternativa | Pendiente; próximo bloque técnico |
+| Adaptador al caso real | Leer la receta/snapshot del exhibidor y obtener mediciones y particiones geométricas trazables por alternativa | Implementado y validado para el exhibidor en placas; límites y condiciones en el informe del caso real |
 | Contrato autoritativo y persistencia | Plan, compromisos y lotes adoptados sin colisiones ni duplicados; compatibilidad histórica | Pendiente |
 | UI de OT | Distribuir entregas, comparar, confirmar/revalidar con estética Grafoprint | Pendiente |
 | Ejecución y entrega | Cantidades y movimientos reales, división/fusión, QR, entregas, gates, tracking y reportes | Pendiente |
@@ -139,4 +139,6 @@ TS_NODE_PROJECT=tsconfig.json node -r ts-node/register test/benchmarks/planifica
 
 Informe y trazas locales: `output/f6-planificacion-2026-09-09/INFORME.md` y `resultados.json`. El script no conecta con bases, colas ni servicios externos. Evalúa seis candidatos en aproximadamente 5–12 ms en esta corrida; esa medida excluye cotización, nesting, IO y carga concurrente, y no es una medida de capacidad SaaS.
 
-**Siguiente bloque técnico:** adaptador a receta/cotización/plan de fabricación reales, con duraciones, costos, piezas y particiones válidas por alternativa. La confirmación concurrente, la UI y la ejecución cuantitativa siguen pendientes y son necesarias para cerrar F6.
+**Actualización del siguiente bloque:** el adaptador ya fue implementado y validado contra cotizaciones actuales de 50/100/150/200 y la carga local de producción. Conserva placas registradas impresión/corte, costos y dependencias. La validación detectó ensamble fijo de 30 minutos y falta de estación para esa operación; las fechas son condicionadas. Ver [resultados, correcciones y límites](visual-ilusion-fase-6-validacion-catalogo-2026-09-09.md).
+
+**Siguiente bloque técnico:** contratos de plan, compromisos, lotes y confirmación/revalidación concurrente; luego UI y ejecución cuantitativa. Validar tiempo/estación del ensamble antes de usar sus fechas como promesas. Todo ello sigue siendo necesario para cerrar F6.

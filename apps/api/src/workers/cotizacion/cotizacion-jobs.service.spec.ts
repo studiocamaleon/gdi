@@ -79,6 +79,53 @@ describe('errores públicos de cotización', () => {
 });
 
 describe('cotizaciones con nesting reutilizable', () => {
+  it.each(['completed', 'failed'])(
+    'refresca el trabajo que pasa a %s entre las dos lecturas',
+    async (estado) => {
+      const servicio = new CotizacionJobsService();
+      const id = idTrabajoCotizacion(input.tenantId, 'carrera', input);
+      const viejo = {
+        id,
+        data: { input, correlationId: 'corr' },
+        timestamp: Date.now(),
+        getState: () => Promise.resolve(estado),
+      };
+      const nuevo = {
+        ...viejo,
+        finishedOn: Date.now(),
+        returnvalue:
+          estado === 'completed' ? { exitoso: true, errores: [] } : undefined,
+        failedReason: 'Configuración incompleta',
+      };
+      const getJob = jest
+        .fn()
+        .mockResolvedValueOnce(viejo)
+        .mockResolvedValueOnce(nuevo);
+      jest
+        .spyOn(servicio as unknown as { getQueue(): unknown }, 'getQueue')
+        .mockReturnValue({ getJob });
+      const vista = await servicio.consultar(input.tenantId, id);
+      expect(getJob).toHaveBeenCalledTimes(2);
+      expect(vista.finalizadoEl).toBeTruthy();
+      if (estado === 'completed') expect(vista.resultado?.exitoso).toBe(true);
+      else expect(vista.error).toBeTruthy();
+    },
+  );
+  it('no informa completado si un trabajo terminal carece de resultado incluso al releer', async () => {
+    const servicio = new CotizacionJobsService();
+    const id = idTrabajoCotizacion(input.tenantId, 'sin-resultado', input);
+    const job = {
+      id,
+      data: { input },
+      getState: () => Promise.resolve('completed'),
+    };
+    jest
+      .spyOn(servicio as unknown as { getQueue(): unknown }, 'getQueue')
+      .mockReturnValue({ getJob: jest.fn().mockResolvedValue(job) });
+    await expect(servicio.consultar(input.tenantId, id)).rejects.toThrow(
+      'todavía no está disponible',
+    );
+  });
   it('no reutiliza precios de una cotización terminada aunque sus inputs coincidan', async () => {
     const servicio = new CotizacionJobsService();
     const cotizacion = {

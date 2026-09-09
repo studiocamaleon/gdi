@@ -74,6 +74,7 @@ import {
   nodoEjecutable,
   nodoReabrible,
   reducirGrafoAClaves,
+  resolverHabilitacionesActivas,
   type GrafoProduccion,
 } from './grafo-produccion';
 import { ControlConsolidacionProduccion } from './consolidacion-produccion';
@@ -5152,16 +5153,32 @@ export class OrdenesTrabajoService {
               (clave): clave is string => typeof clave === 'string',
             )
           : plantilla.nodosPredecesoresClaves;
-        const predecesoresPadre = clavesPredecesoras.length
+        const candidatosPadre = clavesPredecesoras.length
           ? await tx.ordenTrabajoItemPaso.findMany({
               where: {
                 tenantId,
                 itemId: padre.id,
-                nodoClave: { in: clavesPredecesoras },
               },
-              select: { id: true },
+              select: { id: true, nodoClave: true },
             })
           : [];
+        const grafoHabilitacion =
+          grafoDesdeSnapshotReceta(padre.recetaSnapshotJson) ??
+          grafoDesdeSnapshotReceta({
+            grafoProduccion: padre.recetaRevision.grafoProduccionJson,
+          });
+        const clavesHabilitantes = new Set(
+          grafoHabilitacion
+            ? resolverHabilitacionesActivas(
+                grafoHabilitacion,
+                clavesPredecesoras,
+                new Set(candidatosPadre.flatMap((p) => p.nodoClave ?? [])),
+              )
+            : clavesPredecesoras,
+        );
+        const predecesoresPadre = candidatosPadre.filter(
+          (p) => p.nodoClave && clavesHabilitantes.has(p.nodoClave),
+        );
         const habilitaciones = predecesoresPadre.flatMap((predecesor) =>
           grafoHijoEfectivo.raices.map((clave) => ({
             tenantId,

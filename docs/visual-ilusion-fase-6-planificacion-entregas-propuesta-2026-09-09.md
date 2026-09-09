@@ -1,6 +1,6 @@
 # Propuesta de avance: entregas, lotes y planificación automática
 
-**Fecha:** 09/09/2026. **Estado:** diseño funcional y primer prototipo aislado; implementación operativa pendiente.
+**Fecha:** 09/09/2026. **Estado:** diseño funcional, prototipo y adaptador al catálogo real validados; implementación operativa pendiente.
 **Base:** F4 cerrada e integrada en `visual-ilusion/analisis`.
 **Rama de trabajo:** `codex/f6-entregas-planificacion`, creada desde `visual-ilusion/analisis` en `e0baa081c`.
 **Decisión de producto:** F5 sigue pendiente hasta que el usuario decida si necesita el Centro de corte. Su alcance no se elimina.
@@ -94,4 +94,4 @@ El diseño se trabaja en `codex/f6-entregas-planificacion`, creada desde `visual
 
 La secuencia propuesta es **diseño funcional → prototipo de cálculo → contratos definitivos → implementación de F6 con el núcleo necesario de planificación**. No exige implementar F5 ni toda F11 previamente.
 
-El primer prototipo y sus límites se documentan en el [diseño funcional](visual-ilusion-fase-6-entregas-planificacion-diseno.md). El siguiente bloque técnico es conectarlo con mediciones y particiones trazables del producto real; no se habilitó todavía la planificación de una OT.
+El primer prototipo y sus límites se documentan en el [diseño funcional](visual-ilusion-fase-6-entregas-planificacion-diseno.md). Ya se conectó con mediciones y planes completos por cantidad del catálogo real, con [validación y límites documentados](visual-ilusion-fase-6-validacion-catalogo-2026-09-09.md). Siguen contratos de persistencia y confirmación concurrente; no se habilitó todavía la planificación de una OT.

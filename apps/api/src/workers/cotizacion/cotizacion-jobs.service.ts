@@ -152,7 +152,26 @@ export class CotizacionJobsService implements OnApplicationShutdown {
   }
 
   private async vistaDesdeJob(job: QuoteJob): Promise<VistaTrabajoCotizacion> {
-    const state = await job.getState();
+    let state = await job.getState();
+    // El worker puede terminar entre getJob y getState: la instancia anterior
+    // todavía no contiene returnvalue/failedReason aunque Redis diga completed.
+    if (
+      (state === 'completed' && !job.returnvalue) ||
+      (state === 'failed' && !job.finishedOn)
+    ) {
+      const actualizado = await this.getQueue().getJob(String(job.id));
+      if (
+        !actualizado ||
+        actualizado.data.input.tenantId !== job.data.input.tenantId
+      )
+        throw new NotFoundException('No se encontró el trabajo de cotización.');
+      job = actualizado;
+      state = await job.getState();
+      if (state === 'completed' && !job.returnvalue)
+        throw new ServiceUnavailableException(
+          'El resultado de la cotización todavía no está disponible. Reintentá la consulta.',
+        );
+    }
     const estado = estadoPublico(state);
     const progress = job.progress;
     const porcentaje =

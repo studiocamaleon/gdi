@@ -53,6 +53,11 @@ export class EtaService {
 
   /** Arma las 5 entradas desde la DB y corre la simulación de todo el taller. */
   async correr(tenantId: string): Promise<ResultadoSimulacion> {
+    return simularFlujo(await this.contextoSimulacion(tenantId));
+  }
+
+  /** Lectura compartida por ETA y los escenarios F6; no reserva ni escribe. */
+  async contextoSimulacion(tenantId: string) {
     const [items, estaciones, duraciones, dias, config, regional] =
       await Promise.all([
         this.assembleItems(tenantId),
@@ -66,7 +71,7 @@ export class EtaService {
       duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
     );
     const noLaborables = new Set(dias.map((d) => d.fecha));
-    return simularFlujo({
+    return {
       items,
       estaciones: estaciones as Estacion[],
       medianas,
@@ -76,7 +81,7 @@ export class EtaService {
       // El calendario de las estaciones es hora de pared del TALLER, y este
       // proceso corre en UTC: sin la zona, las franjas se corren 3 horas.
       zona: regional.zonaHoraria,
-    });
+    };
   }
 
   /** El subconjunto de `TableroItemData` que el motor necesita, desde Prisma. */
