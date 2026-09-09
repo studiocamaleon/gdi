@@ -60,6 +60,70 @@ const cotizacion = (componentes = [componente()]) =>
   ({ componentesFabricados: componentes }) as unknown as CotizacionFabricacion;
 
 describe("plan de fabricación de la cotización", () => {
+  it.each([
+    "corte_laser",
+    "corte_hilo_caliente",
+    "cnc",
+    "router_cnc",
+    "troquelado_digital",
+  ])("reconoce %s para descargar recorridos aunque el nodo tenga un nombre propio", (familia) => {
+    const c = componente();
+    c.pasos[0].familiaCodigo = familia;
+    c.pasos[0].nombreVisible = "Acabado del local";
+    const [plan] = obtenerPlanesFabricacion(cotizacion([c]));
+    expect(plan.operaciones.filter((o) => o.esCorte).map((o) => o.nombre))
+      .toEqual(["Acabado del local"]);
+  });
+  it("un nesting vectorial de impresión no habilita archivos de corte", () => {
+    const c = componente();
+    c.pasos = [{
+      ...c.pasos[1],
+      nombreVisible: "Impresión para corte",
+      nestingResult: { ...resultado("otro-layout"), algorithm: "irregular-2d-bottom-left-v1" },
+    }];
+    const [plan] = obtenerPlanesFabricacion(cotizacion([c]));
+    expect(plan.operaciones.filter((o) => o.esCorte)).toEqual([]);
+    expect(plan.result.placements).toEqual(c.pasos[0].nestingResult.placements);
+  });
+  it("incluye impresión y corte de una colección en la raíz, sin componentes ficticios en la cotización", () => {
+    const c = {
+      ...cotizacion([]),
+      productoId: "acrilico",
+      productoNombre: "Acrílico láser",
+      cantidadPedida: 5,
+      pasos: componente().pasos,
+    } as unknown as CotizacionFabricacion;
+    const antes = JSON.stringify(c);
+    const planes = obtenerPlanesFabricacion(c, {
+      disenosVectoriales: [{ id: "principal" }],
+    });
+    expect(planes).toHaveLength(1);
+    expect(planes[0].operaciones).toHaveLength(2);
+    expect(JSON.stringify(c)).toBe(antes);
+    expect(obtenerPlanesFabricacion(c)).toEqual([]);
+  });
+  it("incluye ambos materiales y reconoce el corte con hilo de las piezas heredadas", () => {
+    const polyfan = componente("polyfan");
+    polyfan.pasos = [
+      {
+        ...polyfan.pasos[0],
+        familiaCodigo: "corte_hilo_caliente",
+        nombreVisible: "Hilo caliente",
+        nestingResult: resultado(undefined, "polyfan"),
+      },
+    ];
+    const acrilico = componente("acrilico");
+    acrilico.pasos = [
+      { ...acrilico.pasos[0], nestingResult: resultado(undefined, "acrilico") },
+    ];
+    const planes = obtenerPlanesFabricacion(cotizacion([polyfan, acrilico]));
+    expect(planes.map((p) => p.material)).toEqual(["polyfan", "acrilico"]);
+    expect(
+      planes.every(
+        (p) => p.operaciones.length === 1 && p.operaciones[0].esCorte,
+      ),
+    ).toBe(true);
+  });
   it("incluye las colecciones rectangulares en los planes sin exigir un DXF", () => {
     const c = cotizacion();
     c.componentesFabricados![0].jobContext = {
@@ -152,6 +216,13 @@ describe("plan de fabricación de la cotización", () => {
       "lote-print",
       "lote-cut",
     ]);
+    expect(p[0].operaciones.map((o) => o.esCorte)).toEqual([false, true]);
+    // El nombre del nodo y un layout heredado no identifican el proceso.
+    c.analisisNestingCompuesto!.grupos[0].participantes[0].pasoNombre = "Diseño para corte";
+    c.analisisNestingCompuesto!.grupos[0].lote!.layoutOrigenLoteId = "otro-layout";
+    c.analisisNestingCompuesto!.grupos[1].participantes[0].pasoNombre = "Acabado";
+    expect(obtenerPlanesFabricacion(c)[0].operaciones.map((o) => o.esCorte))
+      .toEqual([false, true]);
     const anidada = cotizacion([]);
     anidada.componentesFabricados = ["izquierda", "derecha"].map((codigo) => ({
       codigo,

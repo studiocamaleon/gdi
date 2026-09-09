@@ -1,3 +1,8 @@
+import { recalcularOperacionesCongeladas } from './procesamiento-corte';
+import {
+  aplicarRepartoCorte,
+  planificarRepartoCorte,
+} from './repartir-operaciones-corte';
 import type {
   ComponenteFabricadoCosteado,
   LoteNestingCompuestoSnapshot,
@@ -46,7 +51,9 @@ export function registrarCortesDelLote(
     // Actualiza también el origen: sus poses y el layout exportable deben
     // corresponder al lote, no al acomodo individual previo a consolidar.
     const impresion = componente.pasos?.find(
-      (p) => p.rutaPasoId === participante.rutaPasoId && p.configPasoId === participante.pasoClave,
+      (p) =>
+        p.rutaPasoId === participante.rutaPasoId &&
+        p.configPasoId === participante.pasoClave,
     );
     if (impresion?.nestingResult) {
       const anterior = impresion.nestingResult;
@@ -58,23 +65,26 @@ export function registrarCortesDelLote(
         piezasAcomodadas: placements.length,
         cantidadCalculada: resultado.cantidadCalculada,
         visualConfig: resultado.visualConfig,
-        ...(layout && typeof layout === 'object' && !Array.isArray(layout) ? {
-          outputsCanonicos: {
-            ...anterior.outputsCanonicos,
-            layout_produccion: {
-              ...layout,
-              algorithm: resultado.algorithm,
-              substrates: resultado.substrates,
-              placements,
-              visualConfig: resultado.visualConfig,
-            },
-          },
-        } : {}),
+        ...(layout && typeof layout === 'object' && !Array.isArray(layout)
+          ? {
+              outputsCanonicos: {
+                ...anterior.outputsCanonicos,
+                layout_produccion: {
+                  ...layout,
+                  algorithm: resultado.algorithm,
+                  substrates: resultado.substrates,
+                  placements,
+                  visualConfig: resultado.visualConfig,
+                },
+              },
+            }
+          : {}),
       };
       if (impresion.nestingResult.outputsCanonicos?.layout_produccion) {
         impresion.outputsCanonicos = {
           ...impresion.outputsCanonicos,
-          layout_produccion: impresion.nestingResult.outputsCanonicos.layout_produccion,
+          layout_produccion:
+            impresion.nestingResult.outputsCanonicos.layout_produccion,
         };
       }
     }
@@ -97,6 +107,35 @@ export function registrarCortesDelLote(
         piezasAcomodadas: placements.length,
         visualConfig: resultado.visualConfig,
       };
+      if (corte.tiempo?.procesamientoCorte) {
+        const n = corte.nestingResult;
+        // Cada nodo recorre sólo las placas donde hay piezas suyas. El plano
+        // exportable conserva los índices y el registro de la impresión.
+        const ocupadas = new Set(n.placements.map((p) => p.substrateIndex ?? 0))
+          .size;
+        const placa = n.substrates.find((s) => s.kind === 'sheet');
+        if (!placa)
+          throw new Error('El corte registrado necesita placas físicas.');
+        const snapshot = recalcularOperacionesCongeladas(
+          [corte.tiempo.procesamientoCorte],
+          {
+            placements: n.placements,
+            substrates: [{ ...placa, count: ocupadas }],
+          },
+        );
+        n.commonLine = undefined;
+        const costoAnterior = componente.costoTotal;
+        const cantidad =
+          componente.costoUnitario > 0
+            ? costoAnterior / componente.costoUnitario
+            : 0;
+        const [reparto] = planificarRepartoCorte(snapshot, [corte], [1]);
+        const diferencia = aplicarRepartoCorte(corte, reparto);
+        corte.costoTotal += diferencia;
+        componente.costoTotal += diferencia;
+        if (cantidad > 0)
+          componente.costoUnitario = componente.costoTotal / cantidad;
+      }
     }
   }
 }

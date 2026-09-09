@@ -1,5 +1,11 @@
 # Calidad de búsqueda de GrafoNest — política 8
 
+Actualización del 9 de septiembre: la orientación sigue en versión 8 y la búsqueda
+incorpora una política independiente versión 1. El comportamiento vigente del
+selector incremental, prioridad de patrones y límites nativos se documenta en
+[Mejoras de búsqueda y patrones](grafonest-mejoras-busqueda-patrones-2026-09-09.md).
+Las mediciones siguientes corresponden a los cierres anteriores de F4.
+
 ## Caso auditado
 
 Puma de 200 cm de ancho: 8 partes (el animal dividido en 2), placas de
@@ -76,10 +82,10 @@ Fuentes del comportamiento del binding: código instalado de
    hay intentos con la cantidad actual para mejorar su acomodo. Una solución
    parcial nunca reemplaza a una solución completa.
 5. Siempre se conserva el mejor resultado validado: primero menor cantidad de
-   placas; en empate, más corte común y menor área envolvente. Esto último es
+   placas; en empate, menos patrones, más corte común y menor área envolvente. Esto último es
    un criterio de compactación, no una medición exacta de retales recuperables.
 6. Ya no se termina por haber completado tres planes. Se continúa hasta
-   alcanzar el mínimo teórico de placas, agotar el presupuesto global o cancelar.
+   alcanzar las cotas de placas y patrones, agotar el presupuesto global o cancelar.
 
 Predeterminados: **120.000 ms por trabajo** y **300.000 ms de límite externo**.
 `OPENNEST_JOB_TIMEOUT_MS` y `OPENNEST_TIMEOUT_MAX_MS` permiten configurarlos;

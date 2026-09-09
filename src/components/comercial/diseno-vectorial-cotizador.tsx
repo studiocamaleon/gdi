@@ -340,7 +340,8 @@ export function DisenoVectorialCotizador({
     ? (estadoCalculo ?? "Calculando…")
     : nestingActualizado
       ? analisis?.nesting.motorNesting === "opennest-v1" ||
-        analisis?.nesting.motorNesting === "grafonest-baseline-v1"
+        analisis?.nesting.motorNesting === "grafonest-baseline-v1" ||
+        analisis?.nesting.motorNesting === "grafonest-packingsolver-v1"
         ? "GrafoNest"
         : "Calculado"
       : "Pendiente";
@@ -637,7 +638,8 @@ function analisisCoincideConEntrada({
     fuente.schemaVersion !== 1 ||
     fuente.configuracionCapas ||
     ((analisis.nesting.motorNesting === "opennest-v1" ||
-      analisis.nesting.motorNesting === "grafonest-baseline-v1") &&
+      analisis.nesting.motorNesting === "grafonest-baseline-v1" ||
+      analisis.nesting.motorNesting === "grafonest-packingsolver-v1") &&
       analisis.nesting.versionPoliticaOrientacion !==
         VERSION_POLITICA_ORIENTACION_GRAFONEST)
   )

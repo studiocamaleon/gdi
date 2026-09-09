@@ -117,6 +117,39 @@ describe('referencias compactas de geometría', () => {
     );
   });
 
+  it('rehidrata las capas de la colección nombrada antes de heredarla al componente', async () => {
+    const prisma = db();
+    const ctx = await resolverFuentesProducto(prisma as never, 'tenant-1', {}, {
+      cantidad: 10,
+      coleccionesVectoriales: {
+        principal: [
+          { id: 'letras', nombre: 'Letras', cantidadPorUnidad: 2, fuente: ref },
+        ],
+      },
+    } as never);
+    const hijo = resolverJobContextComponente({
+      codigoComponente: 'polyfan',
+      cantidadLegacy: 1,
+      contextoPadre: ctx as never,
+      configuracion: {
+        version: 1,
+        bindings: [
+          { clave: 'cantidad', origen: 'PADRE', padreClave: 'cantidad' },
+          {
+            clave: 'disenoVectorialFuente',
+            origen: 'PADRE',
+            padreClave: 'geometriasVectoriales.principal',
+          },
+        ],
+      },
+    });
+    expect(hijo.disenosVectoriales).toEqual([
+      { id: 'letras', nombre: 'Letras', cantidadPorUnidad: 2, fuente },
+    ]);
+    expect(hijo.piezas).toEqual([{ cantidad: 20, anchoMm: 100, altoMm: 60 }]);
+    expect(prisma.geometriaProducto.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     { archivoId: '44444444-4444-4444-8444-444444444444' },
     { hash: 'b'.repeat(64) },

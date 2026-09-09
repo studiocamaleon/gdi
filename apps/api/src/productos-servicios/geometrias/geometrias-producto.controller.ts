@@ -32,15 +32,31 @@ import {
 } from '../../archivos/storage/storage.driver';
 import { inspeccionarDxfNativo } from './dxf-nativo';
 import { inspeccionarVector, interpretarVector } from './interpretar-vector';
+import {
+  detectarPiezasArchivo,
+  compactarPiezaArchivo,
+  separarPiezasArchivo,
+  sugerirPiezasArchivo,
+} from './piezas-archivo';
 
 class ArchivoGeometriaDto {
   @IsUUID() archivoId!: string;
 }
 class OperacionDto {
   @IsString() @MaxLength(160) entidadId!: string;
-  @IsIn(['CORTE_INTERIOR', 'HENDIDO']) tipo!: 'CORTE_INTERIOR' | 'HENDIDO';
+  @IsIn(['CORTE_INTERIOR', 'CORTE_PARCIAL', 'HENDIDO']) tipo!:
+    | 'CORTE_INTERIOR'
+    | 'CORTE_PARCIAL'
+    | 'HENDIDO';
 }
 class InterpretarDto extends ArchivoGeometriaDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(160, { each: true })
+  exteriorIds?: string[];
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(1000)
@@ -59,7 +75,8 @@ class InterpretarDto extends ArchivoGeometriaDto {
 }
 
 @Controller('productos-servicios/productos/:productoId/geometrias')
-@Permiso('costos.gestionar')
+// Interpretaciones inmutables para recetas y cotizaciones; no modifica el producto.
+@Permiso('costos.gestionar', 'comercial.gestionar')
 export class GeometriasProductoController {
   constructor(
     private readonly prisma: PrismaService,
@@ -86,10 +103,74 @@ export class GeometriasProductoController {
     return { archivo, bytes };
   }
 
-  private inspeccion(bytes: Buffer, nombre: string) {
-    return nombre.toLowerCase().endsWith('.dxf')
-      ? inspeccionarDxfNativo(bytes.toString('utf8'))
+  private async inspeccion(bytes: Buffer, nombre: string) {
+    const inspeccion = nombre.toLowerCase().endsWith('.dxf')
+      ? await inspeccionarDxfNativo(bytes.toString('utf8'))
       : inspeccionarVector(bytes.toString('utf8'), nombre);
+    return {
+      ...inspeccion,
+      piezas: detectarPiezasArchivo(inspeccion),
+      piezasSugeridas: sugerirPiezasArchivo(inspeccion),
+    };
+  }
+
+  @Post('interpretaciones-lote')
+  async guardarLote(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('productoId', ParseUUIDPipe) productoId: string,
+    @Body() dto: InterpretarDto,
+  ) {
+    const { archivo, bytes } = await this.leer(auth, productoId, dto.archivoId);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    try {
+      const inspeccion = await this.inspeccion(bytes, archivo.nombreOriginal);
+      // La vía histórica mantiene su interpretación de una sola silueta.
+      const partes = dto.exteriorIds
+        ? separarPiezasArchivo(inspeccion, {
+            ...dto,
+            exteriorIds: dto.exteriorIds,
+          })
+        : [{ inspeccion, seleccion: dto }];
+      const registros = partes.map((parte) => {
+        const id = randomUUID();
+        const fuente = interpretarVector(parte.inspeccion, parte.seleccion, {
+          nombreArchivo: archivo.nombreOriginal,
+          archivoId: archivo.id,
+          geometriaId: id,
+          hash,
+        });
+        return {
+          id,
+          fuente: dto.exteriorIds ? compactarPiezaArchivo(fuente) : fuente,
+          seleccion: parte.seleccion,
+        };
+      });
+      // Una carga es atómica: nunca queda importada sólo una parte del DXF.
+      await this.prisma.$transaction(
+        registros.map(({ id, fuente, seleccion }) =>
+          this.prisma.geometriaProducto.create({
+            data: {
+              id,
+              tenantId: auth.tenantId,
+              productoId,
+              archivoId: archivo.id,
+              hash,
+              interpretacionJson: JSON.parse(
+                JSON.stringify(seleccion),
+              ) as Prisma.InputJsonValue,
+              fuenteJson: fuente as unknown as Prisma.InputJsonValue,
+            },
+          }),
+        ),
+      );
+      return { fuentes: registros.map((r) => r.fuente) };
+    } catch (e) {
+      throw new BadRequestException(
+        e instanceof Error
+          ? e.message
+          : 'No se pudieron importar las piezas del archivo.',
+      );
+    }
   }
 
   @Post('inspeccionar')

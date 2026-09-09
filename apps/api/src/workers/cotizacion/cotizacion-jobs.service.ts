@@ -9,11 +9,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Job, Queue, type JobState } from 'bullmq';
 import type { CotizarInput, CotizarOutput } from '../../motor-universal/tipos';
 import { conexionRedisApi } from '../redis';
+import { restaurarJson } from '../../common/json-compartido';
 
 export const COLA_COTIZACIONES = 'grafo-quotes-v1';
 export const TRABAJO_COTIZAR = 'quote.calculate.v1' as const;
 
 export type CotizacionJobData = {
+  preparacionNestingId?: string;
   schemaVersion: 1;
   solicitadoEl: string;
   correlationId: string;
@@ -81,21 +83,31 @@ export class CotizacionJobsService implements OnApplicationShutdown {
   async crear(input: {
     cotizacion: CotizarInput;
     claveSolicitud?: string;
+    preparacionNestingId?: string;
+    jobId?: string;
   }): Promise<VistaTrabajoCotizacion> {
     const data: CotizacionJobData = {
+      preparacionNestingId: input.preparacionNestingId,
       schemaVersion: 1,
       solicitadoEl: new Date().toISOString(),
       correlationId: randomUUID(),
       input: input.cotizacion,
     };
-    const jobId = idTrabajoCotizacion(
+    let jobId = input.jobId ?? idTrabajoCotizacion(
       input.cotizacion.tenantId,
       input.claveSolicitud,
       input.cotizacion,
     );
     try {
+      // Sólo compartimos cálculos en curso. Reutilizar una cotización terminada
+      // congelaría tarifas y precios; el acomodo tiene su propia persistencia.
+      if (!input.jobId) {
+        const anterior = await this.getQueue().getJob(jobId);
+        if (anterior && ['completed', 'failed'].includes(await anterior.getState())) jobId = `${jobId}-${randomUUID()}`;
+      }
       const queued = await this.getQueue().add(TRABAJO_COTIZAR, data, {
         jobId,
+        ...(input.preparacionNestingId ? { priority: 100 } : {}),
         attempts: 1,
         removeOnComplete: { age: 24 * 60 * 60, count: 2_000 },
         removeOnFail: { age: 7 * 24 * 60 * 60, count: 5_000 },
@@ -177,7 +189,7 @@ export class CotizacionJobsService implements OnApplicationShutdown {
               : 'en_cola',
       },
       ...(estado === 'completado' && job.returnvalue
-        ? { resultado: job.returnvalue }
+        ? { resultado: restaurarJson<CotizarOutput>(job.returnvalue) }
         : {}),
       ...(estado === 'fallido'
         ? {
@@ -335,6 +347,8 @@ export function idTrabajoCotizacion(
 ): string {
   if (!scope) return `quote-${randomUUID()}`;
   const digest = createHash('sha256')
+    // No reutilizar respuestas anteriores a la inclusión de interiores en TAP.
+    .update('cotizacion-cortes-interiores-v2\0')
     .update(tenantId)
     .update('\0')
     .update(scope)

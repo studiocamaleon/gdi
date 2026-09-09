@@ -14,7 +14,6 @@ import {
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import type { CurrentAuth } from '../auth/auth.types';
-import { firmaActor } from '../common/firma-actor';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
@@ -56,6 +55,9 @@ import {
 } from './precio/pricing-compuesto';
 import { motivosCambioEntreSnapshots } from './estado-publicacion-receta';
 import { leerGeometriasComerciales } from './geometrias-comerciales';
+
+type AutorReceta = Pick<CurrentAuth, 'tenantId'> &
+  Partial<Pick<CurrentAuth, 'userId' | 'email' | 'impersonacion'>>;
 
 type ProductoDetalle = Awaited<ReturnType<ProductosService['obtenerProducto']>>;
 type RutaDetalle = ProductoDetalle['rutasAlternativas'][number];
@@ -151,7 +153,236 @@ export class RecetasProductoService {
     @Optional() private readonly configPasos?: ConfigPasosService,
   ) {}
 
-  async obtener(auth: CurrentAuth, productoId: string) {
+  /** Una publicación y sus dependencias se congelan juntas. El lock también
+   * serializa la API y los workers para no crear versiones duplicadas. */
+  private async conPublicacionSerializada<T>(
+    auth: AutorReceta,
+    ejecutar: (servicio: RecetasProductoService) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`recetas:${auth.tenantId}`}))`;
+        const prisma = new Proxy(tx, {
+          get(target, property) {
+            if (property === '$transaction') {
+              return (
+                callback: (db: Prisma.TransactionClient) => Promise<unknown>,
+              ) => callback(tx);
+            }
+            return Reflect.get(target, property) as unknown;
+          },
+        }) as PrismaService;
+        const productos = new ProductosService(prisma);
+        const servicio = new RecetasProductoService(
+          prisma,
+          productos,
+          new ProductoValidacionService(productos),
+          this.eventos,
+          this.configPasos,
+        );
+        return ejecutar(servicio);
+      },
+      { timeout: 60000, maxWait: 15000 },
+    );
+  }
+
+  private async actualizarRutaAutomatica(
+    auth: AutorReceta,
+    productoId: string,
+    rutaAlternativaId: string,
+    camino: string[] = [],
+  ): Promise<void> {
+    if (camino.includes(productoId) || camino.length >= 12) {
+      throw new BadRequestException(
+        'La composición contiene un ciclo o supera los 12 niveles. Revisá los componentes.',
+      );
+    }
+    const receta = await this.prisma.productoReceta.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoId,
+        rutaAlternativaId,
+        activo: true,
+      },
+      include: {
+        revisionPublicada: { include: { documentos: true, componentes: true } },
+        revisiones: {
+          where: { estado: 'BORRADOR' },
+          include: { documentos: true, componentes: true },
+          orderBy: { numero: 'desc' },
+        },
+      },
+    });
+    const fuente = receta?.revisiones[0] ?? receta?.revisionPublicada;
+    for (const componente of fuente?.componentes ?? []) {
+      await this.actualizarDependenciaAutomatica(
+        auth,
+        componente.productoComponenteId,
+        [...camino, productoId],
+      );
+    }
+    const producto = await this.productos.obtenerProducto(
+      auth.tenantId,
+      productoId,
+    );
+    const ruta = this.encontrarRuta(producto, rutaAlternativaId);
+    if (fuente && receta?.revisionPublicada) {
+      const actual = await this.snapshotActualPublicado(
+        auth.tenantId,
+        producto,
+        ruta,
+        fuente,
+      );
+      if (huellaDe(actual) === receta.revisionPublicada.huellaConfiguracion) {
+        // Guardar sin cambios no consume otra versión. Sólo se elimina el
+        // borrador idéntico; las publicaciones y sus snapshots son inmutables.
+        if (fuente.estado === 'BORRADOR') {
+          await this.descartarBorrador(auth, fuente.id, {
+            expectedUpdatedAt: fuente.updatedAt.toISOString(),
+          });
+        }
+        return;
+      }
+    }
+    const borrador = await this.guardarBorrador(auth, productoId, {
+      rutaAlternativaId,
+      cambios:
+        fuente?.cambios ??
+        'Actualización automática de la configuración productiva',
+    });
+    await this.publicar(auth, borrador.id, {
+      expectedUpdatedAt: borrador.updatedAt.toISOString(),
+      cambios: borrador.cambios ?? 'Publicación automática',
+    });
+  }
+
+  private async actualizarDependenciaAutomatica(
+    auth: AutorReceta,
+    productoId: string,
+    camino: string[],
+  ) {
+    const ruta = await this.prisma.productoRutaAlternativa.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        productoId,
+        activo: true,
+        producto: { activo: true },
+      },
+      orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    if (!ruta)
+      throw new BadRequestException(
+        'Un componente no tiene una ruta activa disponible. Revisá su configuración.',
+      );
+    await this.actualizarRutaAutomatica(auth, productoId, ruta.id, camino);
+  }
+
+  /** Recorre todas las rutas del producto y sus padres, de abajo hacia arriba.
+   * Una ruta incompleta no impide sincronizar las demás. */
+  async sincronizarPublicaciones(auth: AutorReceta, productoIds: string[]) {
+    const pendientes = [...new Set(productoIds)];
+    const vistos = new Set<string>();
+    const bloqueos: Array<{
+      productoId: string;
+      rutaAlternativaId: string;
+      mensaje: string;
+    }> = [];
+    for (let i = 0; i < pendientes.length; i++) {
+      const productoId = pendientes[i];
+      if (vistos.has(productoId)) continue;
+      vistos.add(productoId);
+      const rutas = await this.prisma.productoRutaAlternativa.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          productoId,
+          activo: true,
+          producto: { activo: true },
+        },
+        orderBy: [{ esPreferida: 'desc' }, { orden: 'asc' }, { id: 'asc' }],
+        select: { id: true },
+      });
+      for (const ruta of rutas) {
+        try {
+          await this.conPublicacionSerializada(auth, (servicio) =>
+            servicio.actualizarRutaAutomatica(auth, productoId, ruta.id),
+          );
+        } catch (error) {
+          if (
+            !(
+              error instanceof BadRequestException ||
+              error instanceof ConflictException ||
+              error instanceof NotFoundException
+            )
+          )
+            throw error;
+          bloqueos.push({
+            productoId,
+            rutaAlternativaId: ruta.id,
+            mensaje: error.message,
+          });
+        }
+      }
+      const padres = await this.prisma.productoRecetaComponente.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          productoComponenteId: productoId,
+          revision: {
+            estado: { in: ['PUBLICADA', 'BORRADOR'] },
+            receta: { activo: true },
+          },
+        },
+        select: {
+          revision: { select: { receta: { select: { productoId: true } } } },
+        },
+      });
+      pendientes.push(...padres.map((p) => p.revision.receta.productoId));
+    }
+    return { bloqueos };
+  }
+
+  async guardarConPublicacionAutomatica(
+    auth: AutorReceta,
+    productoId: string,
+    dto: GuardarBorradorRecetaDto,
+  ) {
+    await this.conPublicacionSerializada(auth, async (servicio) => {
+      // Publicar primero los hijos también permite crear un compuesto a partir
+      // de productos simples que todavía no tenían receta versionada.
+      for (const componente of dto.componentes ?? []) {
+        await servicio.actualizarDependenciaAutomatica(
+          auth,
+          componente.productoComponenteId,
+          [productoId],
+        );
+      }
+      await servicio.guardarBorrador(auth, productoId, dto);
+    });
+    const publicacionAutomatica = await this.sincronizarPublicaciones(auth, [
+      productoId,
+    ]);
+    const receta = await this.prisma.productoReceta.findFirstOrThrow({
+      where: {
+        tenantId: auth.tenantId,
+        productoId,
+        rutaAlternativaId: dto.rutaAlternativaId,
+      },
+      include: {
+        revisiones: {
+          where: { estado: 'BORRADOR' },
+          orderBy: { numero: 'desc' },
+          select: { id: true },
+        },
+      },
+    });
+    const id = receta.revisiones[0]?.id ?? receta.revisionPublicadaId!;
+    return {
+      ...(await this.obtenerRevision(auth.tenantId, id)),
+      publicacionAutomatica,
+    };
+  }
+
+  async obtener(auth: AutorReceta, productoId: string) {
     await this.productos.obtenerProducto(auth.tenantId, productoId);
     const recetas = await this.prisma.productoReceta.findMany({
       where: { tenantId: auth.tenantId, productoId },
@@ -179,9 +410,11 @@ export class RecetasProductoService {
         },
       },
     });
-    return recetas.map(receta => ({
+    return recetas.map((receta) => ({
       ...receta,
-      revisionPublicada: receta.revisionPublicada ? proyectarBomEfectivo(receta.revisionPublicada) : null,
+      revisionPublicada: receta.revisionPublicada
+        ? proyectarBomEfectivo(receta.revisionPublicada)
+        : null,
       revisiones: receta.revisiones.map(proyectarBomEfectivo),
     }));
   }
@@ -190,7 +423,7 @@ export class RecetasProductoService {
    * Estado explicable de cada publicación y de las dependencias entre recetas.
    * La cotizabilidad usa exactamente el mismo snapshot que consume el motor.
    */
-  async obtenerEstadoPublicacion(auth: CurrentAuth, productoId: string) {
+  async obtenerEstadoPublicacion(auth: AutorReceta, productoId: string) {
     const producto = await this.productos.obtenerProducto(
       auth.tenantId,
       productoId,
@@ -340,7 +573,7 @@ export class RecetasProductoService {
    * quedaron congeladas en cada componente; nunca reemplaza un hijo por su
    * publicación más reciente.
    */
-  async obtenerBomMultinivel(auth: CurrentAuth, revisionId: string) {
+  async obtenerBomMultinivel(auth: AutorReceta, revisionId: string) {
     try {
       const bom = await construirBomMultinivel(revisionId, (id) =>
         this.cargarRevisionBom(auth.tenantId, id),
@@ -365,6 +598,27 @@ export class RecetasProductoService {
     productoId: string,
     rutaAlternativaId: string,
   ) {
+    const existente = await this.prisma.productoReceta.findFirst({
+      where: {
+        tenantId,
+        productoId,
+        rutaAlternativaId,
+        activo: true,
+        OR: [
+          { revisionPublicadaId: { not: null } },
+          { revisiones: { some: { estado: 'BORRADOR' } } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (!existente) return null;
+    await this.conPublicacionSerializada({ tenantId }, (servicio) =>
+      servicio.actualizarRutaAutomatica(
+        { tenantId },
+        productoId,
+        rutaAlternativaId,
+      ),
+    );
     const receta = await this.prisma.productoReceta.findFirst({
       where: {
         tenantId,
@@ -395,7 +649,7 @@ export class RecetasProductoService {
     const huellaActual = huellaDe(snapshot);
     if (huellaActual !== receta.revisionPublicada.huellaConfiguracion) {
       throw new ConflictException(
-        `La receta publicada V${receta.revisionPublicada.numero} tiene cambios productivos sin publicar. Actualizá y publicá una nueva revisión antes de cotizar por esta vía.`,
+        'La configuración cambió mientras se calculaba. Reintentá cotizar con los datos actuales.',
       );
     }
     return {
@@ -438,7 +692,7 @@ export class RecetasProductoService {
   }
 
   async guardarBorrador(
-    auth: CurrentAuth,
+    auth: AutorReceta,
     productoId: string,
     dto: GuardarBorradorRecetaDto,
   ) {
@@ -474,12 +728,29 @@ export class RecetasProductoService {
       : null;
     if (
       dto.expectedUpdatedAt &&
-      (!borradorExistente ||
-        borradorExistente.updatedAt.toISOString() !== dto.expectedUpdatedAt)
+      (!revisionFuente ||
+        revisionFuente.updatedAt.toISOString() !== dto.expectedUpdatedAt)
     ) {
-      throw new ConflictException(
-        'La receta cambió en otra sesión. Recargá antes de volver a guardar.',
-      );
+      const base =
+        dto.revisionBaseId && existente
+          ? await this.prisma.productoRecetaRevision.findFirst({
+              where: {
+                id: dto.revisionBaseId,
+                tenantId: auth.tenantId,
+                recetaId: existente.id,
+              },
+              include: { documentos: true, componentes: true },
+            })
+          : null;
+      if (
+        !base ||
+        !revisionFuente ||
+        this.huellaEdicion(base) !== this.huellaEdicion(revisionFuente)
+      ) {
+        throw new ConflictException(
+          'La receta cambió en otra sesión. Recargá antes de volver a guardar.',
+        );
+      }
     }
 
     const documentos =
@@ -568,7 +839,9 @@ export class RecetasProductoService {
         : plantillaRuta?.dependencias;
     const grafoAnterior = (borradorExistente?.grafoProduccionJson ??
       existente?.revisionPublicada?.grafoProduccionJson) as
-      (GrafoProduccion & Prisma.JsonObject) | null | undefined;
+      | (GrafoProduccion & Prisma.JsonObject)
+      | null
+      | undefined;
     const gatesFuente = dto.gates
       ? dto.gates
       : (grafoAnterior?.nodos ?? []).flatMap((nodo) =>
@@ -691,7 +964,7 @@ export class RecetasProductoService {
             tenantId: auth.tenantId,
             productoId,
             rutaAlternativaId: ruta.id,
-            codigo: `REC-${producto.codigo}-${ruta.ruta.codigo}`.slice(0, 80),
+            codigo: `REC-${producto.codigo.slice(0, 35)}-${ruta.id}`,
             nombre: `Receta de ${producto.nombre} · ${ruta.nombre}`.slice(
               0,
               180,
@@ -794,7 +1067,8 @@ export class RecetasProductoService {
             requerido: item.requerido ?? true,
             configuracionJson:
               (componentesVersionados[index].configuracionJson as
-                Prisma.InputJsonValue | undefined) ?? undefined,
+                | Prisma.InputJsonValue
+                | undefined) ?? undefined,
             nodoIncorporacionClave: item.nodoIncorporacionClave ?? null,
             nodosPredecesoresClaves: item.nodosPredecesoresClaves ?? [],
             orden: item.orden ?? index,
@@ -853,7 +1127,7 @@ export class RecetasProductoService {
   }
 
   async publicar(
-    auth: CurrentAuth,
+    auth: AutorReceta,
     revisionId: string,
     dto: PublicarRecetaDto,
   ) {
@@ -919,7 +1193,9 @@ export class RecetasProductoService {
       );
     }
     const grafoActual = revision.grafoProduccionJson as
-      GrafoProduccion | null | undefined;
+      | GrafoProduccion
+      | null
+      | undefined;
     await this.validarPasosCompuestos(
       auth.tenantId,
       pasosCompuestosActuales,
@@ -939,10 +1215,17 @@ export class RecetasProductoService {
       auth.tenantId,
       revision.receta.productoId,
     );
-    if (!validacion.exitoso) {
+    const erroresRuta = validacion.errores.filter(
+      (error) =>
+        !error.ubicacion?.rutaAltId || error.ubicacion.rutaAltId === ruta.id,
+    );
+    if (erroresRuta.some((error) => error.severidad === 'ERROR')) {
       throw new BadRequestException({
-        message: 'El producto todavía no está listo para publicar su receta.',
-        errores: validacion.errores,
+        message: erroresRuta
+          .filter((error) => error.severidad === 'ERROR')
+          .map((error) => error.mensaje)
+          .join(' '),
+        errores: erroresRuta,
       });
     }
     await this.validarCiclos(
@@ -1021,7 +1304,7 @@ export class RecetasProductoService {
   }
 
   async descartarBorrador(
-    auth: CurrentAuth,
+    auth: AutorReceta,
     revisionId: string,
     dto: DescartarBorradorRecetaDto,
   ) {
@@ -1105,7 +1388,7 @@ export class RecetasProductoService {
   }
 
   async deprecar(
-    auth: CurrentAuth,
+    auth: AutorReceta,
     revisionId: string,
     dto: DeprecarRecetaDto,
   ) {
@@ -1527,6 +1810,31 @@ export class RecetasProductoService {
       );
     }
     return ruta;
+  }
+
+  /** La publicación automática puede cambiar recursos, nombres o versiones
+   * de hijos durante una edición. Sólo se permite rebasar si nadie cambió las
+   * definiciones que el editor estaba modificando. */
+  private huellaEdicion(revision: RevisionPublicadaDetalle) {
+    const grafo = revision.grafoProduccionJson as GrafoProduccion | null;
+    const componentes = this.componentesCanonicos(
+      revision.componentes.map((c) => ({ ...c, cantidad: Number(c.cantidad) })),
+    ).map((c) => {
+      const copia = { ...c } as Record<string, unknown>;
+      delete copia.recetaRevisionId;
+      delete copia.recetaVersion;
+      delete copia.recetaHuella;
+      return copia;
+    });
+    return huellaDe({
+      documentos: this.documentosCanonicos(revision.documentos),
+      componentes,
+      pasosCompuestos: revision.pasosCompuestosJson ?? [],
+      dependencias: grafo?.aristas ?? [],
+      gates: (grafo?.nodos ?? [])
+        .filter((n) => n.gates?.length)
+        .map((n) => ({ clave: n.clave, gates: n.gates })),
+    });
   }
 
   private async snapshotActualPublicado(
@@ -2096,8 +2404,14 @@ export class RecetasProductoService {
         tenantId,
         productoId: { in: ids },
         activo: true,
+        rutaAlternativa: { activo: true },
         revisionPublicadaId: { not: null },
       },
+      orderBy: [
+        { rutaAlternativa: { esPreferida: 'desc' } },
+        { rutaAlternativa: { orden: 'asc' } },
+        { rutaAlternativaId: 'asc' },
+      ],
       select: {
         productoId: true,
         producto: { select: { precioConfigJson: true } },
@@ -2112,11 +2426,13 @@ export class RecetasProductoService {
       },
     });
     const porProducto = new Map(
-      recetas.flatMap((receta) =>
-        receta.revisionPublicada
-          ? [[receta.productoId, receta.revisionPublicada] as const]
-          : [],
-      ),
+      [...recetas]
+        .reverse()
+        .flatMap((receta) =>
+          receta.revisionPublicada
+            ? [[receta.productoId, receta.revisionPublicada] as const]
+            : [],
+        ),
     );
     const precioPorProducto = new Map(
       recetas.map((receta) => [
@@ -2320,11 +2636,17 @@ export class RecetasProductoService {
         return {
           pasoClave: paso.clave,
           pasoNombre: paso.nombre,
-          slotCodigo: String(slot.slotCodigo ?? `slot_${index}`),
+          slotCodigo:
+            typeof slot.slotCodigo === 'string'
+              ? slot.slotCodigo
+              : `slot_${index}`,
           slotNombre:
             typeof slot.slotNombre === 'string' ? slot.slotNombre : null,
           rol: typeof slot.slotRol === 'string' ? slot.slotRol : null,
-          modoSeleccion: String(slot.modoSeleccion ?? 'HARDCODED'),
+          modoSeleccion:
+            typeof slot.modoSeleccion === 'string'
+              ? slot.modoSeleccion
+              : 'HARDCODED',
           materialVarianteId: varianteId,
           materialSku:
             varianteCatalogo?.sku ??
@@ -2339,7 +2661,10 @@ export class RecetasProductoService {
                 ? materialVariante.nombreVariante
                 : null),
           unidad: varianteCatalogo?.unidad ?? null,
-          formula: String(slot.formula ?? 'por_unidad_productiva'),
+          formula:
+            typeof slot.formula === 'string'
+              ? slot.formula
+              : 'por_unidad_productiva',
           cantidadBase:
             typeof slot.cantidadBase === 'string' ? slot.cantidadBase : null,
           cantidadFactor:
@@ -2692,7 +3017,7 @@ export class RecetasProductoService {
   ) {
     for (const paso of snapshot.pasos) {
       for (const slot of paso.slots) {
-        const formula = String(slot.formula ?? '');
+        const formula = typeof slot.formula === 'string' ? slot.formula : '';
         const unidadesSlot = new Set(
           this.idsVariantesSlot(slot)
             .map((id) => variantes.get(id)?.unidad)
@@ -2747,14 +3072,18 @@ export class RecetasProductoService {
     return [...ids];
   }
 
-  private async actorNombre(auth: CurrentAuth) {
+  private async actorNombre(auth: AutorReceta) {
+    if (!auth.userId) return 'Grafoprint · Publicación automática';
     const user = await this.prisma.user.findUnique({
       where: { id: auth.userId },
       select: { nombreCompleto: true, email: true },
     });
-    return firmaActor(
-      auth,
-      user?.nombreCompleto?.trim() || user?.email || auth.email,
+    return (
+      auth.impersonacion?.actorNombre ??
+      (user?.nombreCompleto?.trim() ||
+        user?.email ||
+        auth.email ||
+        'Grafoprint')
     );
   }
 }

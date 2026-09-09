@@ -7,7 +7,6 @@ import { agruparPatronesNesting } from "@/lib/nesting-patrones";
 import {
   crearSvgDePatron,
   crearDxfFabricacionDePatron,
-  crearResumenPatrones,
   nombreArchivoPatron,
 } from "@/lib/nesting-patrones-export";
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
@@ -51,7 +50,7 @@ export function NestingPatronesDescargas({
       toast.error(
         error instanceof Error
           ? error.message
-          : "No se pudo exportar el patrón.",
+          : "No se pudo exportar el layout.",
       );
     } finally {
       setDescargando(false);
@@ -59,16 +58,17 @@ export function NestingPatronesDescargas({
   };
   if (!patrones.length) return null;
   return (
-    <section className={styles.downloads} aria-label="Archivos por patrón">
+    <section className={styles.downloads} aria-label="Archivos por layout">
       <EstadoCapasFabricacion {...estadoCapas} />
       <p className="text-sm text-muted-foreground">
-        Un archivo por patrón. Fabricá la cantidad de copias indicada.
+        Un archivo por layout. Fabricá la cantidad de copias indicada.
       </p>
       <div className={styles.downloadRows}>
         {patrones.map((p) => (
           <div key={p.id} className={styles.downloadRow}>
             <span className="text-sm">
-              Patrón {p.id} · {p.repeticiones} copias
+              Layout {p.id} · {p.repeticiones}{" "}
+              {p.repeticiones === 1 ? "copia" : "copias"}
             </span>
             <Button
               disabled={
@@ -77,7 +77,7 @@ export function NestingPatronesDescargas({
               type="button"
               variant="outline"
               size="sm"
-              aria-label={`Descargar patrón ${p.id} SVG, ${p.repeticiones} copias`}
+              aria-label={`Descargar layout ${p.id} SVG, ${p.repeticiones} copias`}
               onClick={() =>
                 descargar(
                   async () =>
@@ -101,7 +101,7 @@ export function NestingPatronesDescargas({
                 type="button"
                 variant="outline"
                 size="sm"
-                aria-label={`Descargar patrón ${p.id} DXF, ${p.repeticiones} copias`}
+                aria-label={`Descargar layout ${p.id} DXF, ${p.repeticiones} copias`}
                 onClick={() =>
                   descargar(
                     () => crearDxfFabricacionDePatron(result, p.id),
@@ -116,21 +116,6 @@ export function NestingPatronesDescargas({
             )}
           </div>
         ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            descargar(
-              () => crearResumenPatrones(result),
-              `${nombreBase}-plan-de-fabricacion.txt`,
-              "text/plain;charset=utf-8",
-            )
-          }
-        >
-          <DownloadIcon data-icon="inline-start" />
-          Resumen del plan
-        </Button>
       </div>
     </section>
   );

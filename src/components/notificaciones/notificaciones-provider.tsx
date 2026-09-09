@@ -62,7 +62,18 @@ export function NotificacionesProvider({
   React.useEffect(() => {
     let activo = true;
     let fallback: number | undefined;
+    let recargaPendiente: number | undefined;
     void recargar().catch(() => setCargando(false));
+
+    // Una publicación puede actualizar varios productos dependientes y emitir
+    // sus eventos juntos. La bandeja sólo necesita consultar el resultado final.
+    const programarRecarga = () => {
+      if (recargaPendiente !== undefined) window.clearTimeout(recargaPendiente);
+      recargaPendiente = window.setTimeout(() => {
+        recargaPendiente = undefined;
+        if (activo) void recargar().catch(() => setCargando(false));
+      }, 250);
+    };
 
     const iniciarFallback = () => {
       if (fallback) return;
@@ -103,7 +114,7 @@ export function NotificacionesProvider({
       setEstado("en_vivo");
       detenerFallback();
       despachar(cambio);
-      void recargar();
+      programarRecarga();
     });
     source.onerror = iniciarFallback;
 
@@ -111,6 +122,7 @@ export function NotificacionesProvider({
       activo = false;
       source.close();
       detenerFallback();
+      if (recargaPendiente !== undefined) window.clearTimeout(recargaPendiente);
     };
   }, [despachar, recargar]);
 

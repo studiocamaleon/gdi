@@ -51,16 +51,15 @@ export function PiezaInterpretacionPreview({
   // Compartimos los trazos entre ambas vistas sin recalcularlos al mover el mouse.
   const trazos = React.useMemo(() => {
     const operaciones = new Set(seleccion.operaciones.map((o) => o.entidadId));
+    const exteriores = new Set(seleccion.exteriorIds ?? [seleccion.exteriorId]);
     const excluidas = new Set(seleccion.excluidas);
     return entidades
       .filter((e) => e.puntos.length > 1)
       .sort(
-        (a, b) =>
-          Number(b.id === seleccion.exteriorId) -
-          Number(a.id === seleccion.exteriorId),
+        (a, b) => Number(exteriores.has(b.id)) - Number(exteriores.has(a.id)),
       )
       .map((e) => {
-        const exterior = e.id === seleccion.exteriorId;
+        const exterior = exteriores.has(e.id);
         return (
           <path
             key={e.id}
@@ -124,7 +123,7 @@ export function PiezaInterpretacionPreview({
           className={styles.canvas}
           viewBox={viewBox}
           role="img"
-          aria-label="Silueta seleccionada y trazos del archivo"
+          aria-label="Piezas seleccionadas y trazos del archivo"
           aria-describedby={ayudaId}
           tabIndex={0}
           onFocus={(event) => {

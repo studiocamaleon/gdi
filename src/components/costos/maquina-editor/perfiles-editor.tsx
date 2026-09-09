@@ -1,3 +1,5 @@
+import { PerfilesCorteEditor } from "./perfiles-corte-editor";
+import corteStyles from "./procesamiento-corte.module.css";
 /**
  * Editor de perfiles operativos de una máquina — tabla estilo Holdprint
  * (2026-07-28): una fila por perfil, columnas generadas desde los campos
@@ -16,6 +18,7 @@ import {
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -28,6 +31,7 @@ import {
 } from "@/components/ui/select-buscable";
 
 import { PerfilTintasModal } from "./consumibles-editor";
+import materialStyles from "./materiales-perfil-picker.module.css";
 import {
   FieldInput,
   PRINTER_TEMPLATES_WITH_CONSUMIBLES,
@@ -62,18 +66,20 @@ const FAMILIAS_MATERIAL: Record<string, string> = {
   sellos: "Sellos",
 };
 
-function MaterialesPerfilPicker({
+export function MaterialesPerfilPicker({
   value,
   onChange,
   materiasPrimas,
   loading,
   opcionesLegadas,
+  soloRigidos = true,
 }: {
   value: unknown;
   onChange: (value: string[]) => void;
   materiasPrimas: MateriaPrima[];
   loading: boolean;
   opcionesLegadas?: MaquinariaTemplateField["options"];
+  soloRigidos?: boolean;
 }) {
   const seleccionados = Array.isArray(value)
     ? value.map(String)
@@ -87,7 +93,7 @@ function MaterialesPerfilPicker({
     .filter(
       (material) =>
         material.activo &&
-        material.subfamilia === "sustrato_rigido" &&
+        (!soloRigidos || material.subfamilia === "sustrato_rigido") &&
         !material.esConsumible &&
         !material.esRepuesto &&
         !material.esProductoBase &&
@@ -111,20 +117,20 @@ function MaterialesPerfilPicker({
     onChange(seleccionados.filter((seleccionado) => seleccionado !== id));
 
   return (
-    <div className="maq-material-field">
+    <div className={materialStyles.field}>
       <SelectBuscable
         value=""
         opciones={opciones}
         onChange={(id) => id && onChange([...seleccionados, id])}
         placeholder={loading ? "Cargando materiales…" : "Buscar material…"}
         placeholderBusqueda="Escribí un material y presioná Enter…"
-        vacio="No hay sustratos rígidos activos que coincidan."
+        vacio="No hay materiales activos que coincidan."
         disabled={loading || opciones.length === 0}
         ariaLabel="Agregar material de inventario al perfil"
         minimoParaBuscar={0}
       />
       {seleccionados.length > 0 ? (
-        <div className="maq-material-chips">
+        <ul className={materialStyles.selection} aria-label="Materiales seleccionados">
           {seleccionados.map((id) => {
             const material = porId.get(id);
             const legado = opcionesLegadas?.find(
@@ -132,20 +138,25 @@ function MaterialesPerfilPicker({
             );
             const label = material?.nombre ?? legado?.label ?? id;
             return (
-              <button
-                key={id}
-                type="button"
-                className="maq-material-chip"
-                title={`Quitar ${label}${material && !material.activo ? " (inactivo)" : ""}`}
-                onClick={() => quitar(id)}
-              >
-                <span>{label}</span>
-                <XIcon aria-hidden />
-                <span className="sr-only">Quitar</span>
-              </button>
+              <li key={id} className={materialStyles.item}>
+                <Badge variant="outline" className={materialStyles.chip}>
+                  <span className={materialStyles.name}>{label}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className={materialStyles.remove}
+                    aria-label={`Quitar ${label}`}
+                    title={`Quitar ${label}${material && !material.activo ? " (inactivo)" : ""}`}
+                    onClick={() => quitar(id)}
+                  >
+                    <XIcon aria-hidden />
+                  </Button>
+                </Badge>
+              </li>
             );
           })}
-        </div>
+        </ul>
       ) : null}
     </div>
   );
@@ -217,6 +228,67 @@ export function PerfilesOperativosEditor({
       perfiles.some((perfil) => shouldShowPerfilField(field, form, perfil)),
   );
 
+  if (form.parametrosTecnicos?.procesamientoCorte) {
+    const tradicionales = perfiles.filter(
+      (p) => p.detalle?.procesamientoCorteVersion !== 1,
+    );
+    return (
+      <>
+        <PerfilesCorteEditor
+          perfiles={perfiles.filter(
+            (p) => p.detalle?.procesamientoCorteVersion === 1,
+          )}
+          setPerfiles={setPerfiles}
+          form={form}
+          materiasPrimas={materiasPrimas}
+          loadingMaterias={loadingMaterias}
+          onEliminar={onEliminar}
+        />
+        {tradicionales.length > 0 && (
+          <details className={corteStyles.advanced}>
+            <summary>
+              Perfiles por productividad · {tradicionales.length}
+            </summary>
+            <p className={corteStyles.help}>
+              Los productos que no cotizan por operaciones siguen usando estos
+              perfiles.
+            </p>
+            <PerfilesOperativosEditor
+              perfiles={tradicionales}
+              setPerfiles={(next) =>
+                setPerfiles((prev) => [
+                  ...prev.filter(
+                    (p) => p.detalle?.procesamientoCorteVersion === 1,
+                  ),
+                  ...(typeof next === "function"
+                    ? next(
+                        prev.filter(
+                          (p) => p.detalle?.procesamientoCorteVersion !== 1,
+                        ),
+                      )
+                    : next),
+                ])
+              }
+              sectionFields={sectionFields}
+              form={{
+                ...form,
+                parametrosTecnicos: {
+                  ...form.parametrosTecnicos,
+                  procesamientoCorte: undefined,
+                },
+              }}
+              setForm={setForm}
+              materiasPrimas={materiasPrimas}
+              loadingMaterias={loadingMaterias}
+              onAgregar={onAgregar}
+              onEliminar={onEliminar}
+              onDuplicar={onDuplicar}
+            />
+          </details>
+        )}
+      </>
+    );
+  }
   return (
     <div className="maq-perfiles">
       {perfiles.length === 0 ? (

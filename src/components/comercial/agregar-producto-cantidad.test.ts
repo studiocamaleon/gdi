@@ -64,6 +64,39 @@ function configVectorial(): typeof DEFAULT_MOTOR_CONFIG {
 }
 
 describe("cantidad enviada a cotización y al snapshot del ítem", () => {
+  it("conserva la lista del padre para ambos componentes sin convertir piezas en productos", () => {
+    const producto = productoPolyfan();
+    producto.estructuraProducto = "COMPUESTO";
+    producto.atributosComercialesJson = { geometriasComerciales: { version: 1, modo: "VECTORIAL", fuentes: [{ id: "principal", nombre: "Diseño principal", requerida: true }] } };
+    const config = configVectorial();
+    config.coleccionesVectoriales = { principal: [1, 2].map((cantidadPorUnidad, i) => ({
+      id: `letras${i}`, nombre: `Letras ${i}`, cantidadPorUnidad, fuente: config.disenoVectorialFuente!,
+    })) };
+    const ctx = buildJobContext(producto, config, 10, []);
+    expect(ctx.cantidad).toBe(10);
+    expect(ctx.coleccionesVectoriales).toEqual(config.coleccionesVectoriales);
+    expect(ctx.disenosVectoriales).toEqual(config.coleccionesVectoriales.principal);
+    expect(ctx.piezas).toBeUndefined();
+    expect(ctx.disenoVectorialFuente).toBeUndefined();
+  });
+
+  it("envía todos los diseños de un producto simple sin medidas residuales ni duplicar cantidades", () => {
+    const producto = productoPolyfan();
+    producto.rutasAlternativas[0].configPasos[0].rutaPaso.familiaCodigo = "corte_laser";
+    const config = configVectorial();
+    config.disenosVectoriales = [1, 3].map((cantidadPorUnidad, i) => ({
+      id: `diseno_${i}`, nombre: `Diseño ${i}`, cantidadPorUnidad,
+      fuente: { ...config.disenoVectorialFuente!, nombreArchivo: `pieza-${i}.svg` },
+    }));
+    const ctx = buildJobContext(producto, config, 5, []);
+    expect(ctx.cantidad).toBe(5);
+    expect(ctx.disenosVectoriales).toEqual(config.disenosVectoriales);
+    expect(ctx.piezas).toBeUndefined();
+    expect(ctx.medidaCustomMm).toBeUndefined();
+    expect(ctx.disenoVectorialFuente).toBeUndefined();
+    expect(ctx.disenoVectorialCacheKey).toBeUndefined();
+    expect(ctx.piezaAreaTotalM2).toBeUndefined();
+  });
   it.each([2, 3])("conserva %i carteles y sus tres formas sin sumar ni multiplicar dos veces", (cantidad) => {
     const ctx = buildJobContext(productoPolyfan(), configVectorial(), cantidad, []);
 

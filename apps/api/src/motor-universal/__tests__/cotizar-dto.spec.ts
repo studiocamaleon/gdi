@@ -12,6 +12,22 @@ import {
 } from '../../productos-servicios/geometrias/interpretar-vector';
 
 describe('CotizarDto', () => {
+  it('valida cada colección heredable con las mismas restricciones de piezas', () => {
+    const pieza = { id: 'letras', nombre: 'Letras', cantidadPorUnidad: 2, fuente: { schemaVersion: 1, nombreArchivo: 'letras.svg', svg: '<svg/>', anchoFinalMm: 100 } };
+    expect(jobContextCotizacionValido({ cantidad: 10, coleccionesVectoriales: { principal: [pieza] } })).toBe(true);
+    for (const coleccionesVectoriales of [[], { principal: [] }, { principal: [pieza, pieza] }, { 'clave.invalida': [pieza] }, { principal: [{ ...pieza, cantidadPorUnidad: 1.5 }] }])
+      expect(jobContextCotizacionValido({ cantidad: 10, coleccionesVectoriales })).toBe(false);
+  });
+
+  it('valida cantidades e identidades de todos los diseños vectoriales del producto simple', () => {
+    const pieza = { id: 'a', nombre: 'Acrílico', cantidadPorUnidad: 2,
+      fuente: { schemaVersion: 1, nombreArchivo: 'pieza.svg', svg: '<svg/>', anchoFinalMm: 100 } };
+    expect(jobContextCotizacionValido({ cantidad: 5, disenosVectoriales: [pieza] })).toBe(true);
+    for (const cantidadPorUnidad of [0, -1, 1.5, 10001])
+      expect(jobContextCotizacionValido({ cantidad: 5, disenosVectoriales: [{ ...pieza, cantidadPorUnidad }] })).toBe(false);
+    expect(jobContextCotizacionValido({ cantidad: 5, disenosVectoriales: [pieza, structuredClone(pieza)] })).toBe(false);
+    expect(jobContextCotizacionValido({ cantidad: 5, disenosVectoriales: [] })).toBe(false);
+  });
   it('acepta por HTTP piezas rectangulares dentro de grupos y rechaza contratos adulterados', async () => {
     const pieza = { id: 'frente', tipo: 'RECTANGULAR', nombre: 'Frente', cantidadPorUnidad: 2, medidas: { anchoMm: 300, altoMm: 100 } };
     const contexto = (p: unknown) => ({ cantidad: 10, componentesConfiguracion: { VINILO: { __ocurrenciasAdicionales: [{ id: 'sucursal-a', nombre: 'Sucursal A', valores: { piezas: [p] } }] } } });

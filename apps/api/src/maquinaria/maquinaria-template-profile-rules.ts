@@ -1,4 +1,9 @@
 import {
+  CAMPOS_PERFIL_CORTE,
+  erroresPerfilCorte,
+  PLANTILLAS_PROCESAMIENTO_CORTE,
+} from './procesamiento-corte';
+import {
   type MaquinaPerfilOperativoItemDto,
   PlantillaMaquinariaDto,
   TipoPerfilOperativoMaquinaDto,
@@ -202,6 +207,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'espesorMinMm',
       'espesorMaxMm',
       'anchoCorteMm',
+      ...CAMPOS_PERFIL_CORTE,
     ],
     requiredFieldKeys: [
       'nombre',
@@ -225,6 +231,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
       'espesorMinMm',
       'espesorMaxMm',
       'anchoCorteMm',
+      ...CAMPOS_PERFIL_CORTE,
     ],
     requiredFieldKeys: [
       'nombre',
@@ -260,7 +267,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
 
   // ─── MESA_DE_CORTE (postergada — evaluar) ────────────────────────
   [PlantillaMaquinariaDto.mesa_de_corte]: buildRule({
-    detalleKeys: ['tipoCorte', 'modoOperacion'],
+    detalleKeys: ['tipoCorte', 'modoOperacion', ...CAMPOS_PERFIL_CORTE],
     requiredFieldKeys: ['nombre'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
@@ -380,6 +387,32 @@ export function validatePerfilOperativoByTemplate(
   perfil: MaquinaPerfilOperativoItemDto,
   parametrosTecnicos?: Record<string, unknown>,
 ) {
+  if (perfil.detalle?.procesamientoCorteVersion === 1) {
+    if (
+      !PLANTILLAS_PROCESAMIENTO_CORTE.includes(plantilla) ||
+      perfil.tipoPerfil !==
+        (plantilla === PlantillaMaquinariaDto.router_cnc
+          ? 'mecanizado'
+          : 'corte')
+    )
+      throw new Error(
+        'El perfil por herramienta no corresponde al tipo de máquina.',
+      );
+    const desconocidos = Object.keys(perfil.detalle).filter(
+      (k) => !CAMPOS_PERFIL_CORTE.includes(k) && k !== 'tipoOperacion',
+    );
+    if (desconocidos.length)
+      throw new Error(
+        `Campos de perfil no admitidos: ${desconocidos.join(', ')}.`,
+      );
+    const errores = erroresPerfilCorte(
+      perfil,
+      parametrosTecnicos?.procesamientoCorte,
+    );
+    if (errores.length)
+      throw new Error(`Perfil ${perfil.nombre}: ${errores.join(' ')}`);
+    return;
+  }
   const rule = RULES[plantilla];
   const perfilName = perfil.nombre.trim() || 'sin nombre';
   const allowedProfileTypes = new Set(rule.allowedProfileTypes);
@@ -486,6 +519,7 @@ export function getPerfilOperativoConfigurationIssues(
   perfil: MaquinaPerfilOperativoItemDto,
   parametrosTecnicos?: Record<string, unknown>,
 ) {
+  if (perfil.detalle?.procesamientoCorteVersion === 1) return [];
   const rule = RULES[plantilla];
   if (!rule) return [{ tipo: 'plantilla' as const }];
 

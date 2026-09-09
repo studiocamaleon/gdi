@@ -123,7 +123,10 @@ export async function ejecutarOrdenF4(
 
 export async function emitirCotizacionF4(
   tx: Prisma.TransactionClient,
-  guardada: Awaited<ReturnType<MotorUniversalService['cotizarYGuardar']>>,
+  guardada: Pick<
+    Awaited<ReturnType<MotorUniversalService['cotizarYGuardar']>>,
+    'cotizacionId' | 'cotizacionItemId'
+  >,
 ) {
   const cotizado = await tx.cotizacionItem.findUniqueOrThrow({
     where: { id: guardada.cotizacionItemId! },

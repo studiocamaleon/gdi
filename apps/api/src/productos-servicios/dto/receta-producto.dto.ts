@@ -154,6 +154,10 @@ export class RecetaGateOperativoDto {
 }
 
 export class GuardarBorradorRecetaDto {
+  @IsOptional()
+  @IsUUID()
+  revisionBaseId?: string;
+
   @IsUUID()
   rutaAlternativaId!: string;
 

@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -12,7 +13,10 @@ import type { Response } from 'express';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
-import { PreparacionesRecorridoService } from './preparaciones-recorrido.service';
+import {
+  PreparacionesRecorridoService,
+  type SeleccionRecorrido,
+} from './preparaciones-recorrido.service';
 
 @Permiso('produccion.ver')
 @Controller('recorridos-vectoriales')
@@ -20,8 +24,17 @@ export class PreparacionesRecorridoController {
   constructor(private readonly preparations: PreparacionesRecorridoService) {}
 
   @Post('items/:itemId/corte/preparar')
-  list(@CurrentSession() auth: CurrentAuth, @Param('itemId') itemId: string) {
-    return this.preparations.asegurarParaItem(auth, itemId);
+  list(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId') itemId: string,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    return this.preparations.asegurarParaItem(
+      auth,
+      itemId,
+      false,
+      seleccionRecorrido(query),
+    );
   }
 
   @Get('items/:itemId/plantilla-instalacion')
@@ -34,6 +47,7 @@ export class PreparacionesRecorridoController {
       auth,
       itemId,
       templateConfig(query),
+      seleccionRecorrido(query),
     );
   }
 
@@ -54,6 +68,7 @@ export class PreparacionesRecorridoController {
       itemId,
       panel,
       templateConfig(query),
+      seleccionRecorrido(query),
     );
     response.setHeader('Content-Type', file.mime);
     response.setHeader(
@@ -90,6 +105,7 @@ export class PreparacionesRecorridoController {
       formato,
       panel,
       templateConfig(query),
+      seleccionRecorrido(query),
     );
     response.setHeader('Content-Type', file.mime);
     response.setHeader(
@@ -104,8 +120,14 @@ export class PreparacionesRecorridoController {
   regenerate(
     @CurrentSession() auth: CurrentAuth,
     @Param('itemId') itemId: string,
+    @Query() query: Record<string, string | undefined>,
   ) {
-    return this.preparations.asegurarParaItem(auth, itemId, true);
+    return this.preparations.asegurarParaItem(
+      auth,
+      itemId,
+      true,
+      seleccionRecorrido(query),
+    );
   }
 
   @Permiso('produccion.supervisar')
@@ -134,6 +156,29 @@ export class PreparacionesRecorridoController {
     );
     response.end(file.bytes);
   }
+}
+
+export function seleccionRecorrido(
+  query: Record<string, string | undefined>,
+): SeleccionRecorrido {
+  let rutaComponentes: unknown = [];
+  try {
+    rutaComponentes = query.componentes ? JSON.parse(query.componentes) : [];
+  } catch {
+    throw new BadRequestException('La selección del componente no es válida.');
+  }
+  if (
+    !Array.isArray(rutaComponentes) ||
+    rutaComponentes.length > 20 ||
+    rutaComponentes.some((c) => typeof c !== 'string' || !c || c.length > 180)
+  ) {
+    throw new BadRequestException('La selección del componente no es válida.');
+  }
+  return {
+    rutaComponentes: rutaComponentes as string[],
+    rutaPasoId: query.paso,
+    fuenteId: query.fuente,
+  };
 }
 
 function templateConfig(query: Record<string, string | undefined>) {

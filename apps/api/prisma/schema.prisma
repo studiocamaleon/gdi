@@ -675,6 +675,10 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  nestingsGuardados NestingGuardado[]
+  checkpointsNesting NestingCheckpoint[]
+  carterasNestingGuardadas CarteraNestingGuardada[]
+  preparacionesNesting PreparacionNestingProducto[]
   geometriasProducto GeometriaProducto[]
   configuracionNotificaciones                      ConfiguracionNotificaciones?
   notificacionEventos                              NotificacionEvento[]
@@ -2643,6 +2647,7 @@ model ProductoSubcategoriaComercial {
 }
 
 model Producto {
+  preparacionesNesting PreparacionNestingProducto[]
   geometriasGuardadas GeometriaProducto[]
   id                         String                            @id @default(uuid()) @db.Uuid
   tenantId                   String                            @db.Uuid
@@ -5846,4 +5851,62 @@ model GeometriaProducto {
   archivo Archivo @relation(fields: [archivoId], references: [id], onDelete: Restrict)
   @@index([tenantId, productoId])
   @@index([archivoId])
+}
+
+/// Acomodo geométrico validado. Nunca contiene precios ni operaciones de producto.
+model NestingGuardado {
+  tenantId      String   @db.Uuid
+  clave         String   @db.VarChar(64)
+  resultadoJson Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, clave])
+}
+
+/// Mejor candidato validado de una búsqueda interrumpible; no es un resultado publicado.
+model NestingCheckpoint {
+  tenantId      String   @db.Uuid
+  clave         String   @db.VarChar(64)
+  resultadoJson Json
+  solicitudId   String
+  transcurridoMs Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, clave])
+}
+
+/// Patrones compactos reutilizables entre cantidades, aislados por fábrica y restricciones.
+model CarteraNestingGuardada {
+  tenantId     String   @db.Uuid
+  clave        String   @db.VarChar(64)
+  patronesJson Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, clave])
+}
+
+/// Preparaciones solicitadas en el catálogo; el resultado geométrico vive en NestingGuardado.
+model PreparacionNestingProducto {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  productoId  String   @db.Uuid
+  rutaClave   String   @db.VarChar(50)
+  cantidad    Int
+  estado      String   @default("PENDIENTE") @db.VarChar(20)
+  jobId       String?
+  error       String?
+  duracionMs  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  producto    Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, productoId, rutaClave, cantidad])
+  @@index([tenantId, productoId])
 }

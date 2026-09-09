@@ -13,6 +13,7 @@ import { ImpersonacionGuard } from './auth/impersonacion.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { PermisosGuard } from './auth/permisos.guard';
 import { MargenesInterceptor } from './auth/margenes.interceptor';
+import { JsonCompartidoInterceptor } from './common/interceptors/json-compartido.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { AuthModule } from './auth/auth.module';
@@ -143,6 +144,9 @@ import { GeometriaJobsModule } from './workers/geometria/geometria-jobs.module';
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,
     },
+    // Los interceptores responden en orden inverso: compactar siempre luego
+    // de podar costos/márgenes, conservando el JSON convencional sin Accept.
+    { provide: APP_INTERCEPTOR, useClass: JsonCompartidoInterceptor },
     // Poda la plata de las respuestas marcadas con @OcultaMargenes cuando el
     // usuario no puede verla. Ver auth/margenes.ts.
     {

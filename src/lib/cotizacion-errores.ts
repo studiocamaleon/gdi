@@ -78,6 +78,17 @@ export function presentarErrorCotizacion(
     };
   }
 
+  if (/^nesting_calculo_(fallido|cancelado|tiempo_agotado)$/i.test(codigo)) {
+    return {
+      codigo,
+      titulo: "No se pudo completar el nesting",
+      mensaje: fuente.mensaje,
+      sugerencia: fuente.sugerencia ?? "Reintentá la cotización. Los datos cargados se conservan.",
+      accion: { tipo: "REINTENTAR", etiqueta: "Reintentar ahora" },
+      referencia: fuente.referencia,
+    };
+  }
+
   if (
     codigo === "SERVICIO_NO_DISPONIBLE" ||
     /api|servicio|conexi[oó]n|timeout|tiempo m[aá]ximo|network|fetch/i.test(

@@ -1,3 +1,4 @@
+import { CotizacionJobsService } from './cotizacion-jobs.service';
 import type { CotizarInput } from '../../motor-universal/tipos';
 import {
   errorPublicoCotizacion,
@@ -74,5 +75,44 @@ describe('errores públicos de cotización', () => {
       accion: { tipo: 'REINTENTAR' },
     });
     expect(error.mensaje).not.toContain('TypeError');
+  });
+});
+
+describe('cotizaciones con nesting reutilizable', () => {
+  it('no reutiliza precios de una cotización terminada aunque sus inputs coincidan', async () => {
+    const servicio = new CotizacionJobsService();
+    const cotizacion = {
+      tenantId: 'empresa-prueba',
+      productoId: 'producto-prueba',
+      jobContext: { cantidad: 50 },
+    };
+    const getJob = jest
+      .fn()
+      .mockResolvedValueOnce({ getState: () => Promise.resolve('completed') })
+      .mockResolvedValueOnce(null);
+    const add = jest
+      .fn()
+      .mockImplementation(
+        (_tipo: string, data: unknown, options: { jobId: string }) => ({
+          id: options.jobId,
+          data,
+          timestamp: Date.now(),
+          progress: 0,
+          getState: () => Promise.resolve('waiting'),
+        }),
+      );
+    jest
+      .spyOn(servicio as unknown as { getQueue(): unknown }, 'getQueue')
+      .mockReturnValue({ getJob, add });
+    const resultado = await servicio.crear({
+      cotizacion,
+      claveSolicitud: 'sheet',
+    });
+    expect(resultado.estado).toBe('pendiente');
+    expect(resultado.id).not.toBe(
+      idTrabajoCotizacion(cotizacion.tenantId, 'sheet', cotizacion),
+    );
+    expect(resultado.resultado).toBeUndefined();
+    expect(add).toHaveBeenCalledTimes(1);
   });
 });

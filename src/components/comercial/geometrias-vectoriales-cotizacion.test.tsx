@@ -62,7 +62,7 @@ describe("presentación compacta de fabricación", () => {
     expect(html).toContain('aria-expanded="true"');
     expect(html).not.toContain("<tr hidden");
   });
-  it("el resumen multiplica las copias del patrón sin duplicar impresión y corte", () => {
+  it("el resumen multiplica las copias del layout sin duplicar impresión y corte", () => {
     const n = { algorithm: "grid-2d-multi", cantidadCalculada: 3, unidad: "pliegos", aprovechamientoPct: 50, piezasAcomodadas: 3,
       substrates: [{ kind: "sheet", count: 3, widthMm: 860, heightMm: 564 }],
       placements: [{ pieceId: "estante", xMm: 5, yMm: 5, widthMm: 100, heightMm: 170, rotated: false }] };
@@ -72,7 +72,7 @@ describe("presentación compacta de fabricación", () => {
     ] }] } as unknown as CotizacionFabricacion;
     const html = renderToStaticMarkup(<PlanLotesCotizacion cotizacion={c} />);
     expect(html).toContain("<b>3</b> placas");
-    expect(html).toContain("<b>1</b> patrón");
+    expect(html).toContain("<b>1</b> layout");
     expect(html).toContain("<b>3</b> piezas");
   });
   it("el estado pendiente no se presenta como calculando ni permite abrir un plan viejo", () => {

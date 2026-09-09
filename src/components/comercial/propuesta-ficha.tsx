@@ -1,6 +1,9 @@
 "use client";
 
+import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
+
 import campanaStyles from "./propuesta-campana.module.css";
+import { esFamiliaCorteNesting } from "@/lib/nesting-procesos";
 import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-descargas";
 import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
 
@@ -243,6 +246,7 @@ import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
 import { DocumentosLiberadosOtTab } from "@/components/comercial/documentos-liberados-ot-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import nestingStyles from "@/components/nesting/nesting-viewer.module.css";
 import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
 import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
 import {
@@ -1846,6 +1850,7 @@ type FuenteNesting = {
   editable: boolean;
   /** Metadatos internos para reemplazar participantes por su lote común. */
   componenteCodigo?: string;
+  rutaComponentes?: string[];
   pasoClave?: string;
   orden: number;
 };
@@ -1869,6 +1874,7 @@ function recolectarNestingsCotizacion(
     editable: boolean,
     componenteCodigo?: string,
     contextoVectorial?: Record<string, unknown>,
+    rutaComponentes?: string[],
   ) => {
     if (paso.nestingResult) paso = { ...paso, nestingResult: vincularFuentesFabricacion(paso.nestingResult, contextoVectorial) };
     if (paso.nestingResult) {
@@ -1881,6 +1887,7 @@ function recolectarNestingsCotizacion(
         paso: paso as PanelEditorPaso,
         editable,
         componenteCodigo,
+        rutaComponentes,
         pasoClave: paso.configPasoId,
         orden: secuencia,
       });
@@ -1917,6 +1924,7 @@ function recolectarNestingsCotizacion(
         paso: pasoInterno,
         editable: false,
         componenteCodigo,
+        rutaComponentes,
         orden: secuencia,
       });
     }
@@ -1927,11 +1935,13 @@ function recolectarNestingsCotizacion(
   const recorrerComponentes = (
     componentes: ComponenteNestingRecursivo[],
     rutaPadre: string[] = [],
+    codigosPadre: string[] = [],
   ) => {
     for (const componente of componentes) {
       const nombre =
         componente.nombre?.trim() || componente.codigo || "Componente";
       const ruta = [...rutaPadre, nombre];
+      const codigos = [...codigosPadre, componente.codigo ?? ""];
       for (const paso of componente.pasos ?? []) {
         agregarPaso(
           paso as PasoCosteo,
@@ -1939,9 +1949,10 @@ function recolectarNestingsCotizacion(
           false,
           componente.codigo,
           componente.jobContext,
+          codigos,
         );
       }
-      recorrerComponentes(componente.componentes ?? [], ruta);
+      recorrerComponentes(componente.componentes ?? [], ruta, codigos);
     }
   };
 
@@ -2738,6 +2749,10 @@ function ProduccionItemView({
     : (nestingTabs.find((tab) => tab.key === activeNestingKey) ??
       nestingTabs[0] ??
       null);
+  const seleccionRecorrido = React.useMemo(() => ({
+    rutaComponentes: activeNestingTab?.rutaComponentes,
+    rutaPasoId: activeNestingTab?.paso.rutaPasoId,
+  }), [activeNestingTab?.rutaComponentes, activeNestingTab?.paso.rutaPasoId]);
 
   // Los tabs de "Disposición de piezas": los del nesting primero y el visor 3D
   // del bastidor al final (cuando el ítem lo tiene). Comparten la misma tira.
@@ -2818,7 +2833,7 @@ function ProduccionItemView({
               </div>
             </div>
           )}
-          <div className="production-nestings">
+          <div className={nestingStyles.itemNestings}>
             {tabsDisposicion.length > 1 ? (
               <div
                 className="production-nesting-tabs"
@@ -2854,32 +2869,6 @@ function ProduccionItemView({
               </div>
             ) : activeNestingTab ? (
               <div className="production-nesting" key={activeNestingTab.key}>
-                {activeNestingTab.paso.nestingResult?.algorithm ===
-                "irregular-2d-bottom-left-v1" ? (
-                  <div className="mb-3 flex flex-wrap justify-end gap-2">
-                    {fuenteVectorial ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          descargarTexto(
-                            fuenteVectorial.svg,
-                            fuenteVectorial.nombreArchivo,
-                          )
-                        }
-                      >
-                        <DownloadIcon />
-                        SVG original
-                      </Button>
-                    ) : null}
-                    <NestingPatronesDescargas
-                      result={activeNestingTab.paso.nestingResult}
-                      nombreBase={nombreBaseSvg(item.productoNombre)}
-                      permitirDxf={activeNestingTab.paso.familiaCodigo === "cnc" || activeNestingTab.paso.familiaCodigo === "corte_laser"}
-                    />
-                  </div>
-                ) : null}
                 {onEditPanels &&
                 activeNestingTab.editable &&
                 isPanelEditableStep(activeNestingTab.paso) ? (
@@ -2895,6 +2884,35 @@ function ProduccionItemView({
                   </div>
                 ) : null}
                 <NestingViewer
+                  archivos={
+                    esFamiliaCorteNesting(activeNestingTab.paso.familiaCodigo) &&
+                    activeNestingTab.paso.nestingResult?.algorithm ===
+                      "irregular-2d-bottom-left-v1" ? (
+                      <div className="flex flex-col gap-3">
+                        {fuenteVectorial ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              descargarTexto(
+                                fuenteVectorial.svg,
+                                fuenteVectorial.nombreArchivo,
+                              )
+                            }
+                          >
+                            <DownloadIcon />
+                            SVG original
+                          </Button>
+                        ) : null}
+                        <NestingPatronesDescargas
+                          result={activeNestingTab.paso.nestingResult}
+                          nombreBase={nombreBaseSvg(item.productoNombre)}
+                          permitirDxf
+                        />
+                      </div>
+                    ) : undefined
+                  }
                   result={activeNestingTab.paso.nestingResult!}
                   copias={getCopiasItem(item)}
                   costingDetails={activeNestingTab.paso.materiales ?? []}
@@ -2912,8 +2930,8 @@ function ProduccionItemView({
                 activeNestingTab.paso.familiaCodigo ===
                   "corte_hilo_caliente" ? (
                   <>
-                    <RecorridoCortePanel itemId={item.id} />
-                    <PlantillaInstalacionPanel itemId={item.id} />
+                    <RecorridoCortePanel key={`corte-${activeNestingTab.key}`} itemId={item.id} seleccion={seleccionRecorrido} />
+                    <PlantillaInstalacionPanel key={`instalacion-${activeNestingTab.key}`} itemId={item.id} seleccion={seleccionRecorrido} />
                   </>
                 ) : null}
               </div>
@@ -3280,6 +3298,7 @@ function pasoTieneDetalleCosteo(paso: PasoCosteo) {
     paso.activado &&
     (Boolean(paso.tiempo) ||
       Boolean(paso.mutacionAplicada) ||
+      Boolean(paso.tiempo?.procesamientoCorte) ||
       (paso.materiales?.length ?? 0) > 0 ||
       (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
       (paso.cargosDirectosPaso?.length ?? 0) > 0)
@@ -3290,6 +3309,7 @@ function operacionTieneDetalleDesplegable(paso: PasoCosteo) {
   return (
     paso.activado &&
     (Boolean(paso.mutacionAplicada) ||
+      Boolean(paso.tiempo?.procesamientoCorte) ||
       (paso.materiales?.length ?? 0) > 0 ||
       (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
       Number(paso.tiempo?.runMermaMin ?? 0) > 0 ||
@@ -3489,6 +3509,7 @@ function PasoCostDetail({
         />
       </div>
 
+      <DesgloseOperacionesCorte valor={paso.tiempo?.procesamientoCorte}/>
       <MermaPasoCollapsible paso={paso} cotizacion={cotizacion} />
 
       {tiemposExtra.length > 0 ? (

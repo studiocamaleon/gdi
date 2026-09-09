@@ -31,14 +31,20 @@ export type InspeccionVector = {
   unidadDeclarada: string | null;
   entidades: EntidadInspeccion[];
   sugeridaId: string;
+  piezas?: Array<{ exteriorId: string; interioresIds: string[] }>;
+  piezasSugeridas?: string[];
   avisos: string[];
 };
 export type SeleccionVector = {
   exteriorId: string;
+  exteriorIds?: string[];
   unidad: string;
   cerrarExterior: boolean;
   excluidas?: string[];
-  operaciones: Array<{ entidadId: string; tipo: "CORTE_INTERIOR" | "HENDIDO" }>;
+  operaciones: Array<{
+    entidadId: string;
+    tipo: "CORTE_INTERIOR" | "CORTE_PARCIAL" | "HENDIDO";
+  }>;
 };
 export type FuenteGuardada = {
   schemaVersion: 2;
@@ -57,6 +63,7 @@ export type FuenteGuardada = {
     hash: string;
     capa: string;
     exteriorId: string;
+    entidadesExcluidas?: string[];
     unidadDeclarada: string | null;
     cierreConfirmado: boolean;
     aperturaOriginalMm: number;
@@ -64,7 +71,7 @@ export type FuenteGuardada = {
   operaciones: Array<{
     entidadId: string;
     capa: string;
-    tipo: "CORTE_INTERIOR" | "HENDIDO";
+    tipo: "CORTE_INTERIOR" | "CORTE_PARCIAL" | "HENDIDO";
     puntos: Punto[];
     cerrada: boolean;
   }>;
@@ -93,5 +100,16 @@ export function guardarInterpretacionProducto(
       method: "POST",
       body: JSON.stringify({ archivoId, ...seleccion }),
     },
+  );
+}
+
+export function guardarInterpretacionesProducto(
+  productoId: string,
+  archivoId: string,
+  seleccion: SeleccionVector,
+) {
+  return apiRequest<{ fuentes: FuenteGuardada[] }>(
+    `/productos-servicios/productos/${productoId}/geometrias/interpretaciones-lote`,
+    { method: "POST", body: JSON.stringify({ archivoId, ...seleccion }) },
   );
 }

@@ -1,4 +1,8 @@
 import {
+  erroresConfiguracionCorte,
+  erroresPerfilCorte,
+} from './procesamiento-corte';
+import {
   EstadoConfiguracionMaquinaDto,
   PlantillaMaquinariaDto,
   TipoComponenteDesgasteMaquinaDto,
@@ -162,6 +166,28 @@ export function getMaquinaDiagnosticoConfiguracion(
     }
   }
 
+  if (payload.parametrosTecnicos?.procesamientoCorte != null) {
+    const config = payload.parametrosTecnicos.procesamientoCorte;
+    const erroresCorte = [
+      ...erroresConfiguracionCorte(config, payload.plantilla),
+      ...perfilesActivos
+        .filter((p) => p.detalle?.procesamientoCorteVersion === 1)
+        .flatMap((p) =>
+          erroresPerfilCorte(p, config).map((e) => `${p.nombre}: ${e}`),
+        ),
+    ];
+    if (
+      !perfilesActivos.some((p) => p.detalle?.procesamientoCorteVersion === 1)
+    )
+      erroresCorte.push('Agregá un perfil por herramienta.');
+    erroresCorte.forEach((mensaje, i) =>
+      faltantes.push({
+        codigo: `procesamientoCorte.${i}`,
+        seccion: 'ajustes',
+        mensaje,
+      }),
+    );
+  }
   addConsumableIssues(payload, faltantes);
   addWearIssues(payload, faltantes);
 
@@ -288,6 +314,7 @@ function addWearIssues(
   payload: UpsertMaquinaDto,
   faltantes: MaquinaConfiguracionFaltante[],
 ) {
+  if (payload.parametrosTecnicos?.procesamientoCorte != null) return;
   if (!WEAR_REQUIRED_TEMPLATES.has(payload.plantilla)) return;
   const esCabezalCad = payload.plantilla === PlantillaMaquinariaDto.plotter_cad;
   const valid = payload.componentesDesgaste.some(

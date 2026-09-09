@@ -1,5 +1,7 @@
 "use client";
 
+import { HerramientasCorteEditor } from "./herramientas-corte-editor";
+
 /**
  * Cuerpo del editor de una máquina, en dos piezas que la ficha reparte en
  * sus tabs:
@@ -333,10 +335,18 @@ export function MaquinaEditorSecciones({
   // Las tintas y el tóner se configuran desde la tabla de perfiles (modal por
   // fila), así que la sección Consumibles ya no tiene nada que mostrar.
   const secciones =
-    template?.sections.filter((sec) => sec.id !== "consumibles") ?? [];
+    template?.sections.filter(
+      (sec) =>
+        sec.id !== "consumibles" &&
+        !(
+          sec.id === "desgaste_repuestos" &&
+          form.parametrosTecnicos?.procesamientoCorte
+        ),
+    ) ?? [];
 
   return (
     <>
+      <HerramientasCorteEditor editor={editor} />
       {secciones.map((sec) => (
         <Card
           key={sec.id}
@@ -347,10 +357,18 @@ export function MaquinaEditorSecciones({
           }
         >
           <CardHeader>
-            <CardTitle className="text-base">{sec.title}</CardTitle>
+            <CardTitle className="text-base">
+              {sec.id === "perfiles_operativos" &&
+              form.parametrosTecnicos?.procesamientoCorte
+                ? "Perfiles por herramienta y material"
+                : sec.title}
+            </CardTitle>
             {sec.description ? (
               <CardDescription className="text-xs">
-                {sec.description}
+                {sec.id === "perfiles_operativos" &&
+                form.parametrosTecnicos?.procesamientoCorte
+                  ? "Recetas de trabajo para cada operación y rango de espesor."
+                  : sec.description}
               </CardDescription>
             ) : null}
           </CardHeader>

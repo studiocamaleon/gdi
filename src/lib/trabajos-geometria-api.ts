@@ -44,7 +44,7 @@ export type TrabajoNestingOpenNest = {
   };
   resultado?: {
     schemaVersion: 1;
-    algoritmo: "opennest-v1" | "grafonest-baseline-v1";
+    algoritmo: "opennest-v1" | "grafonest-baseline-v1" | "grafonest-packingsolver-v1";
     motor: "collision" | "nfp";
     versionMotor: string;
     cantidadSolicitada: number;
@@ -60,7 +60,8 @@ export type TrabajoNestingOpenNest = {
       motivoFin:
         | "MINIMO_PLACAS"
         | "PRESUPUESTO_AGOTADO"
-        | "MOTOR_NO_DISPONIBLE";
+        | "MOTOR_NO_DISPONIBLE"
+        | "PLAN_REUTILIZADO";
       presupuestoMs: number;
       intentos: number;
       candidatosValidos: number;

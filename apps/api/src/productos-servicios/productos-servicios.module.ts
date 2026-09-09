@@ -1,3 +1,4 @@
+import { PublicacionAutomaticaInterceptor } from './publicacion-automatica.interceptor';
 import { ExportarFabricacionController } from './geometrias/exportar-fabricacion.controller';
 import { GeometriasProductoController } from './geometrias/geometrias-producto.controller';
 import { StorageModule } from '../archivos/storage/storage.module';
@@ -33,8 +34,13 @@ import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module'
  */
 @Module({
   imports: [StorageModule, PrismaModule, PrecioModule, EventosSistemaModule],
-  controllers: [ProductosServiciosController, GeometriasProductoController, ExportarFabricacionController],
+  controllers: [
+    ProductosServiciosController,
+    GeometriasProductoController,
+    ExportarFabricacionController,
+  ],
   providers: [
+    PublicacionAutomaticaInterceptor,
     ProductosServiciosService,
     ProductosService,
     RutasProduccionService,

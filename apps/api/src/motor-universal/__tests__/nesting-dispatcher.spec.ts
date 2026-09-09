@@ -1,3 +1,4 @@
+import { MotorCotizacionError } from '../motor-error';
 import {
   esSustratoRollo,
   fuenteMedidaEfectiva,
@@ -560,7 +561,7 @@ describe('runNestingForPaso geometría vectorial', () => {
         cargosDirectosPaso: [],
         maquina: null,
       };
-      const result = await runNestingForPaso(
+      const ejecutar = () => runNestingForPaso(
         paso as never,
         {
           cantidad: 2,
@@ -612,11 +613,16 @@ describe('runNestingForPaso geometría vectorial', () => {
         { resolveIrregularNesting },
       );
 
+      const result = await ejecutar();
       expect(result?.algorithm).toBe('irregular-2d-bottom-left-v1');
       expect(result?.cantidadCalculada).toBe(1);
       expect(result?.unidad).toBe('pliegos');
       expect(result?.placements).toHaveLength(2);
       expect(resolveIrregularNesting).toHaveBeenCalledTimes(1);
+      const falloWorker = new MotorCotizacionError('nesting_calculo_fallido', 'No se pudo completar el nesting.');
+      resolveIrregularNesting.mockRejectedValueOnce(falloWorker);
+      // Null dispararía el aviso de que la pieza no entra en el material.
+      await expect(ejecutar()).rejects.toBe(falloWorker);
     },
   );
 

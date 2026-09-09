@@ -227,6 +227,7 @@ export type BomMultinivel = {
 };
 
 export interface ProductoRecetaRevision {
+  publicacionAutomatica?: { bloqueos: Array<{ productoId: string; rutaAlternativaId: string; mensaje: string }> };
   id: string;
   numero: number;
   estado: "BORRADOR" | "PUBLICADA" | "DEPRECADA";
@@ -685,6 +686,7 @@ export function guardarBorradorReceta(
     rutaAlternativaId: string;
     cambios?: string;
     expectedUpdatedAt?: string;
+    revisionBaseId?: string;
     documentos?: ProductoRecetaDocumentoInput[];
     componentes?: ProductoRecetaComponenteInput[];
     pasosCompuestos?: ConfiguracionPasoCompuesto[];
@@ -1866,6 +1868,7 @@ export interface AnalisisNestingCompuestoInput {
     };
     lote?: {
       id: string;
+      procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
       layoutOrigenLoteId?: string;
       versionContrato: 1;
       estado: "CONGELADO";
@@ -1960,6 +1963,7 @@ export interface OperacionInternaCosteadaInput {
   tiempo?: {
     totalMin: number;
     setupMin?: number;
+    procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
     runMin?: number;
     runTrabajoMin?: number;
     runMermaMin?: number;
@@ -2213,7 +2217,8 @@ export interface CotizarResponse {
         tiempo?: {
           totalMin: number;
           setupMin?: number;
-          runMin?: number;
+          procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
+    runMin?: number;
           runTrabajoMin?: number;
           runMermaMin?: number;
           cleanupMin?: number;
@@ -2389,7 +2394,8 @@ export interface CotizarResponse {
         /** Incluye los minutos de `tiemposExtra` (la ETA los cuenta). */
         totalMin: number;
         setupMin?: number;
-        runMin?: number;
+        procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;
+    runMin?: number;
         runTrabajoMin?: number;
         runMermaMin?: number;
         cleanupMin?: number;
@@ -2809,7 +2815,7 @@ export interface AnalisisSvgFabricacion {
   };
   nesting: {
     algorithm: "irregular-2d-bottom-left-v1";
-    motorNesting?: "opennest-v1" | "grafonest-baseline-v1";
+    motorNesting?: "opennest-v1" | "grafonest-baseline-v1" | "grafonest-packingsolver-v1";
     versionMotor?: string;
     duracionMs?: number;
     estrategiaOrientacion?: "uniforme" | "cardinal" | "libre";
@@ -2822,7 +2828,8 @@ export interface AnalisisSvgFabricacion {
       motivoFin:
         | "MINIMO_PLACAS"
         | "PRESUPUESTO_AGOTADO"
-        | "MOTOR_NO_DISPONIBLE";
+        | "MOTOR_NO_DISPONIBLE"
+        | "PLAN_REUTILIZADO";
       presupuestoMs: number;
       intentos: number;
       candidatosValidos: number;

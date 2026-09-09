@@ -55,6 +55,8 @@ export interface NestingViewerProps {
   maxPx?: number;
   showLabels?: boolean;
   className?: string;
+  /** Descargas habilitadas por el proceso de corte, dentro del visor. */
+  archivos?: React.ReactNode;
   /**
    * Modificaciones físicas a superponer sobre cada pieza: la franja de demasía
    * (bolsillo / refuerzo) y dónde van los ojales. Las posiciones vienen del
@@ -243,6 +245,7 @@ export function NestingViewer({
   maxPx = 560,
   showLabels = true,
   className,
+  archivos,
   modificaciones,
 }: NestingViewerProps) {
   const { result, ...estadoCapas } = useCapasFabricacion(original);
@@ -297,11 +300,19 @@ export function NestingViewer({
     );
   }
 
-  if (verPatrones && admitePatrones) return <NestingPatronesView result={result} onVerDetalle={() => setVerPatrones(false)} />;
+  if (verPatrones && admitePatrones) {
+    return (
+      <NestingPatronesView
+        result={result}
+        onVerDetalle={() => setVerPatrones(false)}
+        archivos={archivos}
+      />
+    );
+  }
   return (
     <section className={cn("nesting-viewer", className)}>
       <EstadoCapasFabricacion {...estadoCapas} />
-      {admitePatrones && <button type="button" className="text-sm underline" onClick={() => setVerPatrones(true)}>Volver a los patrones</button>}
+      {admitePatrones && <button type="button" className="text-sm underline" onClick={() => setVerPatrones(true)}>Volver a los layouts</button>}
       <div className="nesting-strat-row">
         <div className="nesting-strat on">
           <span className="ix">01</span>
@@ -448,6 +459,12 @@ export function NestingViewer({
         seleccion={result.pliegoImpresionSeleccionado}
       />
       <TalonarioGrouping grouping={result.talonarioGrouping} copias={copias} />
+      {archivos && (
+        <details className={s.cutFiles}>
+          <summary>Archivos de corte</summary>
+          {archivos}
+        </details>
+      )}
     </section>
   );
 }

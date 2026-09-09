@@ -5,6 +5,11 @@
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`  
 **Contrato visual:** `docs/visual-ilusion-lenguaje-visual.md`
 
+> Actualización del 8 de septiembre de 2026: por pedido del usuario, el flujo
+> manual de publicación descrito en este documento se reemplaza por
+> [publicación automática al guardar y sincronización de dependencias](publicacion-automatica-productos-2026-09-08.md).
+> Se mantienen las versiones inmutables y la trazabilidad de cotización/OT.
+
 ## 1. Resultado buscado
 
 La fase convierte la configuración productiva vigente de un `Producto` en una

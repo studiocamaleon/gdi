@@ -779,7 +779,12 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     itemIds: string[],
   ): Promise<void> {
-    for (const itemId of itemIds) {
+    const pendientes = [...itemIds];
+    const visitados = new Set<string>();
+    for (let indice = 0; indice < pendientes.length; indice++) {
+      const itemId = pendientes[indice];
+      if (visitados.has(itemId)) continue;
+      visitados.add(itemId);
       try {
         await this.preparacionesRecorrido.asegurarParaItem(auth, itemId);
       } catch (error) {
@@ -790,6 +795,11 @@ export class OrdenesTrabajoService {
           message: error instanceof Error ? error.message : 'Error desconocido',
         });
       }
+      const hijos = await this.prisma.ordenTrabajoItem.findMany({
+        where: { tenantId: auth.tenantId, parentItemId: itemId },
+        select: { id: true },
+      });
+      pendientes.push(...hijos.map((hijo) => hijo.id));
     }
   }
 
@@ -1532,19 +1542,13 @@ export class OrdenesTrabajoService {
     let creada: { id: string };
     try {
       creada = await this.prisma.$transaction(async (tx) => {
-        const anio = ahora.getFullYear();
-        const contador = await tx.ordenTrabajoContador.upsert({
-          where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
-          create: { tenantId: auth.tenantId, anio, ultimo: 1 },
-          update: { ultimo: { increment: 1 } },
-        });
-        const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
-
         const orden = await tx.ordenTrabajo.create({
           data: {
             tenantId: auth.tenantId,
             idempotencyKey: payload.idempotencyKey ?? null,
-            numero,
+            // Identidad provisional sólo dentro de esta transacción. Nunca
+            // se publica ni consume un número si la materialización falla.
+            numero: `pendiente-${randomUUID()}`,
             clienteId: payload.clienteId ?? null,
             vendedorEmpleadoId,
             cotizacionId: payload.cotizacionId ?? null,
@@ -1609,6 +1613,31 @@ export class OrdenesTrabajoService {
             },
           },
         });
+
+        if (emitida) {
+          const itemsCreados = await tx.ordenTrabajoItem.findMany({
+            where: { ordenId: orden.id },
+            select: { id: true, ordenId: true, cotizacionItemId: true },
+          });
+          await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
+        }
+
+        // Numerar después del trabajo geométrico: el lock por empresa sólo
+        // dura las escrituras finales y mantiene secuencia + rollback.
+        const anio = ahora.getFullYear();
+        const contador = await tx.ordenTrabajoContador.upsert({
+          where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
+          create: { tenantId: auth.tenantId, anio, ultimo: 1 },
+          update: { ultimo: { increment: 1 } },
+        });
+        const numero = `OT-${anio}-${String(contador.ultimo).padStart(4, '0')}`;
+
+        await tx.ordenTrabajo.update({
+          where: { id: orden.id },
+          data: { numero },
+          select: { id: true },
+        });
+        orden.numero = numero;
 
         if (tokenSeguimiento) {
           await this.enlaces.emitir(tx, {
@@ -1683,11 +1712,6 @@ export class OrdenesTrabajoService {
         // Emitir al taller materializa los pasos de producción del Tablero
         // desde la trazabilidad del snapshot (el borrador espera a emitirse).
         if (emitida) {
-          const itemsCreados = await tx.ordenTrabajoItem.findMany({
-            where: { ordenId: orden.id },
-            select: { id: true, ordenId: true, cotizacionItemId: true },
-          });
-          await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
           // Cupones: la redención (contador + auditoría) va en la MISMA
           // transacción que emite — si el cupón se agotó o venció entre
           // aplicarlo y emitir, la emisión entera se cae con error claro.
@@ -4658,6 +4682,7 @@ export class OrdenesTrabajoService {
             topologiaProduccion: grafo.topologia,
             grafoProduccionSnapshotJson: grafo as Prisma.InputJsonValue,
           },
+          select: { id: true },
         });
       }
 
@@ -4665,6 +4690,12 @@ export class OrdenesTrabajoService {
         tx,
         tenantId,
         conSnapshot.map((item) => item.id),
+        new Map(
+          conSnapshot.map((item) => [
+            item.id,
+            trazabilidadPorId.get(item.cotizacionItemId!),
+          ]),
+        ),
       );
     }
   }
@@ -4679,6 +4710,7 @@ export class OrdenesTrabajoService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     padresIniciales: string[],
+    trazasPorItem: Map<string, unknown> = new Map(),
   ) {
     const pendientes = [...padresIniciales];
     const visitados = new Set<string>();
@@ -4693,9 +4725,13 @@ export class OrdenesTrabajoService {
       visitados.add(padreId);
       const padre = await tx.ordenTrabajoItem.findFirst({
         where: { id: padreId, tenantId },
+        omit: { trazabilidadSnapshotJson: trazasPorItem.has(padreId) },
         include: {
           cotizacionItem: {
-            select: { jobContextJson: true, trazabilidadJson: true },
+            select: {
+              jobContextJson: true,
+              trazabilidadJson: !trazasPorItem.has(padreId),
+            },
           },
           recetaRevision: {
             include: { componentes: { orderBy: { orden: 'asc' } } },
@@ -4716,9 +4752,12 @@ export class OrdenesTrabajoService {
         cantidad: Number(padre.cantidad),
         ...contextoPadreLeido,
       };
-      const trazaCruda =
-        padre.trazabilidadSnapshotJson ??
-        padre.cotizacionItem?.trazabilidadJson;
+      // Ya fue leído una vez en esta materialización. No volver a descargar
+      // e hidratar el mismo plan para cada nivel y luego para los lotes.
+      const trazaCruda = trazasPorItem.has(padre.id)
+        ? trazasPorItem.get(padre.id)
+        : padre.trazabilidadSnapshotJson ?? padre.cotizacionItem?.trazabilidadJson;
+      trazasPorItem.set(padre.id, trazaCruda);
       const traza =
         trazaCruda &&
         typeof trazaCruda === 'object' &&
@@ -4835,45 +4874,56 @@ export class OrdenesTrabajoService {
             parentItemId: padre.id,
             componenteCodigo,
           },
+          select: { id: true },
         });
         if (!hijo) {
+          const datosHijo = {
+            tenantId,
+            ordenId: padre.ordenId,
+            parentItemId: padre.id,
+            componenteCodigo,
+            nodoIncorporacionClave,
+            recetaRevisionId: revisionHija.id,
+            recetaVersion: revisionHija.numero,
+            recetaHuella: revisionHija.huellaConfiguracion,
+            recetaSnapshotJson:
+              revisionHija.snapshotJson as Prisma.InputJsonValue,
+            jobContextSnapshotJson: jobContextHijo as Prisma.InputJsonValue,
+            trazabilidadSnapshotJson: snapshot
+              ? (trazabilidadDeComponente(snapshot) as Prisma.InputJsonValue)
+              : undefined,
+            topologiaProduccion: revisionHija.topologiaProduccion,
+            grafoProduccionSnapshotJson:
+              (revisionHija.grafoProduccionJson as Prisma.InputJsonValue) ??
+              undefined,
+            codigo: `${padre.codigo}/${componenteCodigo}`.slice(0, 180),
+            nombre: componenteNombre,
+            familia: 'Componente fabricado',
+            categoriaComercial: 'Producción interna',
+            subcategoriaComercial: 'Componente fabricado',
+            cantidad: Number(jobContextHijo.cantidad),
+            cantidadUnidad:
+              typeof snapshot?.unidad === 'string'
+                ? snapshot.unidad
+                : plantilla.unidad,
+            subtotal: 0,
+            impuestos: 0,
+            total: 0,
+            ordenIndice: padre.ordenIndice,
+          };
           hijo = await tx.ordenTrabajoItem.create({
-            data: {
-              tenantId,
-              ordenId: padre.ordenId,
-              parentItemId: padre.id,
-              componenteCodigo,
-              nodoIncorporacionClave,
-              recetaRevisionId: revisionHija.id,
-              recetaVersion: revisionHija.numero,
-              recetaHuella: revisionHija.huellaConfiguracion,
-              recetaSnapshotJson:
-                revisionHija.snapshotJson as Prisma.InputJsonValue,
-              jobContextSnapshotJson: jobContextHijo as Prisma.InputJsonValue,
-              trazabilidadSnapshotJson: snapshot
-                ? (trazabilidadDeComponente(snapshot) as Prisma.InputJsonValue)
-                : undefined,
-              topologiaProduccion: revisionHija.topologiaProduccion,
-              grafoProduccionSnapshotJson:
-                (revisionHija.grafoProduccionJson as Prisma.InputJsonValue) ??
-                undefined,
-              codigo: `${padre.codigo}/${componenteCodigo}`.slice(0, 180),
-              nombre: componenteNombre,
-              familia: 'Componente fabricado',
-              categoriaComercial: 'Producción interna',
-              subcategoriaComercial: 'Componente fabricado',
-              cantidad: Number(jobContextHijo.cantidad),
-              cantidadUnidad:
-                typeof snapshot?.unidad === 'string'
-                  ? snapshot.unidad
-                  : plantilla.unidad,
-              subtotal: 0,
-              impuestos: 0,
-              total: 0,
-              ordenIndice: padre.ordenIndice,
-            },
+            // Antes de que Prisma clone los argumentos: conservar las
+            // referencias diferidas sin expandir otra vez sus contornos.
+            data:
+              this.prisma?.prepararSnapshot?.('OrdenTrabajoItem', datosHijo) ??
+              datosHijo,
+            select: { id: true },
           });
         }
+        trazasPorItem.set(
+          hijo.id,
+          snapshot ? trazabilidadDeComponente(snapshot) : null,
+        );
         const componentesAnidadosCrudos = snapshot?.componentes;
         const tieneComponentesAnidados = Array.isArray(
           componentesAnidadosCrudos,
@@ -5035,18 +5085,66 @@ export class OrdenesTrabajoService {
           },
           select: { id: true },
         });
+        let destinosIncorporacion = incorporacion ? [incorporacion] : [];
         if (!incorporacion) {
-          throw new ConflictException(
-            `No se pudo ubicar el nodo de incorporación de "${componenteNombre}" en la OT.`,
+          const pasosPadreCotizados = Array.isArray(traza?.pasos)
+            ? (traza.pasos as PasoTrazabilidad[])
+            : [];
+          const incorporacionOmitida = pasosPadreCotizados.some(
+            (paso) =>
+              paso?.activado === false &&
+              Boolean(paso.rutaPasoId) &&
+              (nodoIncorporacionClave === `ruta:${paso.rutaPasoId}` ||
+                nodoIncorporacionClave === `extra:${paso.rutaPasoId}`),
+          );
+          const grafoPadreCompleto =
+            grafoDesdeSnapshotReceta(padre.recetaSnapshotJson) ??
+            grafoDesdeSnapshotReceta({
+              grafoProduccion: padre.recetaRevision.grafoProduccionJson,
+            });
+          if (
+            !incorporacionOmitida ||
+            !grafoPadreCompleto?.nodos.some(
+              (nodo) => nodo.clave === nodoIncorporacionClave,
+            )
+          ) {
+            throw new ConflictException(
+              `No se pudo ubicar el nodo de incorporación de "${componenteNombre}" en la OT.`,
+            );
+          }
+          const pasosPadre = await tx.ordenTrabajoItemPaso.findMany({
+            where: { tenantId, itemId: padre.id },
+            select: { id: true, nodoClave: true },
+          });
+          // La incorporación también se proyecta sobre la ruta cotizada: un
+          // opcional omitido deriva la espera a sus primeros sucesores activos.
+          // Sin sucesores, el componente termina su propia rama; la OT sigue
+          // esperando todos sus pasos, sin inventar otra operación ni costo.
+          const grafoIncorporacion = reducirGrafoAClaves(
+            grafoPadreCompleto,
+            new Set([
+              nodoIncorporacionClave,
+              ...pasosPadre.flatMap((paso) => paso.nodoClave ?? []),
+            ]),
+          );
+          const clavesDestino = new Set(
+            grafoIncorporacion.aristas
+              .filter((arista) => arista.desdeClave === nodoIncorporacionClave)
+              .map((arista) => arista.haciaClave),
+          );
+          destinosIncorporacion = pasosPadre.filter(
+            (paso) => paso.nodoClave && clavesDestino.has(paso.nodoClave),
           );
         }
-        const convergencias = grafoHijoEfectivo.terminales.map((clave) => ({
-          tenantId,
-          ordenId: padre.ordenId,
-          predecesorPasoId: idPorClave.get(clave)!,
-          sucesorPasoId: incorporacion.id,
-          tipo: 'componente_fabricado',
-        }));
+        const convergencias = destinosIncorporacion.flatMap((destino) =>
+          grafoHijoEfectivo.terminales.map((clave) => ({
+            tenantId,
+            ordenId: padre.ordenId,
+            predecesorPasoId: idPorClave.get(clave)!,
+            sucesorPasoId: destino.id,
+            tipo: 'componente_fabricado',
+          })),
+        );
         const clavesPredecesoras = Array.isArray(
           snapshot?.nodosPredecesoresClaves,
         )
@@ -5091,7 +5189,12 @@ export class OrdenesTrabajoService {
       }
     }
 
-    await this.materializarLotesNestingCompuesto(tx, tenantId, [...visitados]);
+    await this.materializarLotesNestingCompuesto(
+      tx,
+      tenantId,
+      [...visitados],
+      trazasPorItem,
+    );
   }
 
   /**
@@ -5104,20 +5207,24 @@ export class OrdenesTrabajoService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     padresIniciales: string[],
+    trazasPorItem: Map<string, unknown> = new Map(),
   ) {
     for (const padreId of padresIniciales) {
       const padre = await tx.ordenTrabajoItem.findFirst({
         where: { id: padreId, tenantId },
         select: {
           ordenId: true,
-          trazabilidadSnapshotJson: true,
-          cotizacionItem: { select: { trazabilidadJson: true } },
+          trazabilidadSnapshotJson: !trazasPorItem.has(padreId),
+          cotizacionItem: trazasPorItem.has(padreId)
+            ? false
+            : { select: { trazabilidadJson: true } },
         },
       });
       if (!padre) continue;
       const lotes = lotesNestingAplicados(
-        padre.trazabilidadSnapshotJson ??
-          padre.cotizacionItem?.trazabilidadJson,
+        trazasPorItem.has(padreId)
+          ? trazasPorItem.get(padreId)
+          : padre.trazabilidadSnapshotJson ?? padre.cotizacionItem?.trazabilidadJson,
       ).map((lote) => loteEnItem(lote, padreId));
       if (lotes.length === 0) continue;
 

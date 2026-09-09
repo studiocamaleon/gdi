@@ -1,5 +1,7 @@
 "use client";
 
+import { DesgloseOperacionesCorte } from "@/components/comercial/desglose-operaciones-corte";
+
 import * as React from "react";
 import { ArrowUpRightIcon, Layers3Icon, LoaderCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,11 +26,13 @@ import styles from "./plan-fabricacion.module.css";
 
 export function PlanLotesCotizacion({
   cotizacion,
+  jobContext,
   esperado = false,
   estado = "listo",
   onOpenChange,
 }: {
   cotizacion?: CotizacionFabricacion | null;
+  jobContext?: Record<string, unknown>;
   esperado?: boolean;
   estado?: "listo" | "calculando" | "pendiente" | "error";
   onOpenChange?: (open: boolean) => void;
@@ -41,8 +45,8 @@ export function PlanLotesCotizacion({
   const [seleccionado, setSeleccionado] = React.useState("");
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const planes = React.useMemo(
-    () => obtenerPlanesFabricacion(cotizacion),
-    [cotizacion],
+    () => obtenerPlanesFabricacion(cotizacion, jobContext),
+    [cotizacion, jobContext],
   );
   const resumen = React.useMemo(
     () =>
@@ -88,6 +92,7 @@ export function PlanLotesCotizacion({
   }, [visible, onOpenChange]);
   if (!planes.length && !esperado) return null;
   const actual = planes.find((p) => p.id === seleccionado) ?? planes[0];
+  const cortes = actual?.operaciones.filter((o) => o.esCorte) ?? [];
   const formato = (n: number) => n.toLocaleString("es-AR");
   return (
     <>
@@ -134,7 +139,7 @@ export function PlanLotesCotizacion({
               {resumen.patrones > 0 ? (
                 <span>
                   <b>{formato(resumen.patrones)}</b>{" "}
-                  {resumen.patrones === 1 ? "patrón" : "patrones"}
+                  {resumen.patrones === 1 ? "layout" : "layouts"}
                 </span>
               ) : null}
               <span>
@@ -160,10 +165,10 @@ export function PlanLotesCotizacion({
         ) : (
           <p className={styles.pending}>
             {estado === "calculando"
-              ? "Estamos calculando las placas y sus patrones para esta configuración."
+              ? "Estamos calculando las placas y sus layouts para esta configuración."
               : estado === "error"
                 ? "Resolvé el aviso de cotización para obtener el plan de fabricación."
-                : "Al calcular la cotización vas a poder revisar las placas y los patrones."}
+                : "Al calcular la cotización vas a poder revisar las placas y los layouts."}
           </p>
         )}
       </section>
@@ -218,24 +223,34 @@ export function PlanLotesCotizacion({
                     operaciones. Las placas se contabilizan una sola vez.
                   </p>
                 ) : null}
+                {actual.operaciones
+                  .filter((o) => o.procesamientoCorte)
+                  .map((o) => (
+                    <DesgloseOperacionesCorte
+                      key={o.id}
+                      valor={o.procesamientoCorte}
+                    />
+                  ))}
                 {agruparPatronesNesting(actual.result).length ? (
                   <NestingPatronesView
                     key={actual.id}
                     result={actual.result}
                     ampliacionEnLinea
                     archivos={
-                      <div className={styles.exports}>
-                        {actual.operaciones.map((o) => (
-                          <section key={o.id}>
-                            <h3>{o.nombre}</h3>
-                            <NestingPatronesDescargas
-                              result={o.result}
-                              nombreBase={`${nombreBaseSvg(cotizacion?.productoNombre ?? "producto")}-lote-${planes.indexOf(actual) + 1}-${nombreBaseSvg(o.nombre)}`}
-                              permitirDxf={o.esCorte}
-                            />
-                          </section>
-                        ))}
-                      </div>
+                      cortes.length > 0 ? (
+                        <div className={styles.exports}>
+                          {cortes.map((o) => (
+                            <section key={o.id}>
+                              <h3>{o.nombre}</h3>
+                              <NestingPatronesDescargas
+                                result={o.result}
+                                nombreBase={`${nombreBaseSvg(cotizacion?.productoNombre ?? "producto")}-lote-${planes.indexOf(actual) + 1}-${nombreBaseSvg(o.nombre)}`}
+                                permitirDxf
+                              />
+                            </section>
+                          ))}
+                        </div>
+                      ) : undefined
                     }
                   />
                 ) : (

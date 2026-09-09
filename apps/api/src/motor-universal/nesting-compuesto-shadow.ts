@@ -1,3 +1,5 @@
+import { recalcularOperacionesCongeladas } from './procesamiento-corte';
+import { aplicarRepartoCorte, planificarRepartoCorte } from './repartir-operaciones-corte';
 import { registrarCortesDelLote, corteHeredadoDe } from './registrar-corte-lote';
 import { consolidarCortesRegistrados } from './consolidar-cortes-registrados';
 import { claveOperacionNesting, controlPrecedenciasNesting, type ProduccionPadreNesting } from './precedencias-nesting-compuesto';
@@ -384,6 +386,11 @@ function candidatoDesdePaso(args: {
     !nesting.talonarioGrouping;
   const corteRegistrado = (componente.pasos ?? []).find(p =>
     corteHeredadoDe(p) === paso.rutaPasoId);
+  if ([paso, ...(componente.pasos ?? []).filter(p => corteHeredadoDe(p) === paso.rutaPasoId)]
+    .some(p => p.tiempo?.procesamientoCorte && p.cargosDirectosPaso?.length)) {
+    return { exclusion: { ...baseExclusion, codigo: 'CONFIGURACION_INCOMPLETA',
+      motivo: 'La tanda por herramientas conserva el cálculo individual cuando el nodo tiene cargos directos adicionales.' } };
+  }
   const vectorImpreso = Boolean(nesting?.layoutVinculadoGeometriaVectorial &&
     nesting.demandaNesting?.length && corteRegistrado &&
     !nesting.visualConfig?.pieceBleedMm && !corteRegistrado.nestingResult?.visualConfig?.manejoPlaca);
@@ -535,6 +542,7 @@ function candidatoDesdePaso(args: {
       algoritmo: algorithmPolicy,
       maquinaId: nesting.maquina.id,
       perfilId: nesting.perfil?.id ?? null,
+      operacionesCorte: paso.tiempo?.procesamientoCorte ? { firma: paso.tiempo.procesamientoCorte.firmaConfiguracion, redondeo: paso.tiempo.procesamientoCorte.redondeo } : null,
       modoColor: nesting.modoColor ?? null,
       tecnologia: nesting.tecnologia ?? null,
       carasProcesadas: nesting.carasProcesadas ?? 1,
@@ -657,6 +665,7 @@ function candidatoDesdePaso(args: {
       : nesting.algorithm,
     maquinaId: nesting.maquina.id,
     perfilId: nesting.perfil?.id ?? null,
+      operacionesCorte: paso.tiempo?.procesamientoCorte ? { firma: paso.tiempo.procesamientoCorte.firmaConfiguracion, redondeo: paso.tiempo.procesamientoCorte.redondeo } : null,
     modoColor: nesting.modoColor ?? null,
     tecnologia: nesting.tecnologia ?? null,
     carasProcesadas: nesting.carasProcesadas ?? 1,
@@ -1205,6 +1214,23 @@ function aplicarGrupoConsolidado(args: {
     ((setupCompartido + cleanupCompartido) / 60) * tarifaHora,
     6,
   );
+  let operacionesCorte: ReturnType<typeof recalcularOperacionesCongeladas> | undefined;
+  let repartoCorte: ReturnType<typeof planificarRepartoCorte> | undefined;
+  if (args.participantes.some(p => p.paso.tiempo?.procesamientoCorte)) {
+    try {
+      const snapshots = args.participantes.map(p => p.paso.tiempo?.procesamientoCorte);
+      if (snapshots.some(s => !s)) return noAplicado('No se mezclan nodos por productividad con nodos por herramientas.');
+      operacionesCorte = recalcularOperacionesCongeladas(snapshots.filter(s => s != null), {
+        placements: args.consolidado.placements, substrates: args.consolidado.substrates,
+        commonLine: args.consolidado.solucionNesting?.resultado.commonLine,
+      });
+      repartoCorte = planificarRepartoCorte(operacionesCorte, args.participantes.map(p => p.paso), args.participantes.map(p => p.areaPiezasMm2), args.id);
+    } catch (e) {
+      return noAplicado(e instanceof Error ? e.message : 'No se pudieron reproducir los recorridos de la tanda.');
+    }
+  }
+  const costoOperacionAnterior = operacionesCorte ? args.participantes.reduce((s,p) => s + p.paso.tiempo!.costo + p.paso.tiempo!.procesamientoCorte!.desgasteCosto, 0) : costoPreparacionIndependiente;
+  const costoOperacionNuevo = repartoCorte ? repartoCorte.reduce((s,p) => s + p.tiempo.costo + p.materiales.reduce((n,m) => n+m.costoTotal, 0), 0) : costoPreparacionConsolidado;
   const empeoraConsumo =
     args.consolidado.superficie === 'roll'
       ? args.consolidado.metrics.areaTotalMm2 >
@@ -1220,9 +1246,9 @@ function aplicarGrupoConsolidado(args: {
           0,
         );
   const costoTotalIndependiente =
-    costoMaterialIndependiente + costoPreparacionIndependiente;
+    costoMaterialIndependiente + costoOperacionAnterior;
   const costoTotalConsolidado =
-    costoMaterialConsolidado + costoPreparacionConsolidado;
+    costoMaterialConsolidado + costoOperacionNuevo;
   if (
     empeoraConsumo ||
     costoTotalConsolidado > costoTotalIndependiente + 0.000001
@@ -1326,7 +1352,9 @@ function aplicarGrupoConsolidado(args: {
 
     let diferenciaPreparacion = 0;
     let diferenciaEjecucion = 0;
-    if (paso.tiempo) {
+    if (repartoCorte) {
+      diferenciaEjecucion = aplicarRepartoCorte(paso, repartoCorte[index]);
+    } else if (paso.tiempo) {
       const preparacionMinAnterior =
         paso.tiempo.setupMin + paso.tiempo.cleanupMin;
       const runMinAnterior = paso.tiempo.runMin;
@@ -1499,6 +1527,7 @@ function aplicarGrupoConsolidado(args: {
       : baseVisual;
   const lote: LoteNestingCompuestoSnapshot = {
     id: args.id,
+    procesamientoCorte: operacionesCorte,
     versionContrato: 1,
     estado: 'CONGELADO',
     firmaCompatibilidad: args.firma,
@@ -1564,10 +1593,10 @@ function aplicarGrupoConsolidado(args: {
     costoMaterialTotal: costoMaterialConsolidado,
     costoPreparacionTotal: costoPreparacionConsolidado,
     costoTotalAsignado: redondear(
-      costoMaterialConsolidado + costoPreparacionConsolidado,
+      costoMaterialConsolidado + costoOperacionNuevo,
       6,
     ),
-    duracionEstimadaMin,
+    duracionEstimadaMin: repartoCorte ? repartoCorte.reduce((s,r) => s+r.tiempo.totalMin,0) : duracionEstimadaMin,
   };
   return {
     aplicacion: {
@@ -1577,10 +1606,7 @@ function aplicarGrupoConsolidado(args: {
       costoPreparacionIndependiente,
       costoPreparacionConsolidado,
       ahorroCostoTotal: redondear(
-        costoMaterialIndependiente +
-          costoPreparacionIndependiente -
-          costoMaterialConsolidado -
-          costoPreparacionConsolidado,
+        costoTotalIndependiente - costoTotalConsolidado,
         6,
       ),
     },

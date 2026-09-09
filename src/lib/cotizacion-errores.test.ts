@@ -54,3 +54,15 @@ describe("presentarErrorCotizacion", () => {
     expect(error.accion.tipo).toBe("REINTENTAR");
   });
 });
+
+
+it.each(["fallido", "cancelado", "tiempo_agotado"])("ofrece reintentar un nesting %s, también en un producto compuesto", (motivo) => {
+  const error = presentarErrorCotizacion({
+    codigo: `nesting_calculo_${motivo}`,
+    mensaje: 'No se pudo costear el componente fabricado "Piezas de corrugado": No se pudo completar el nesting irregular.',
+    productoId: 'exhibidor',
+  });
+  expect(error.titulo).toBe("No se pudo completar el nesting");
+  expect(error.accion.tipo).toBe("REINTENTAR");
+  expect(error.sugerencia).not.toMatch(/panelizado|medidas|material|configuración/i);
+});
