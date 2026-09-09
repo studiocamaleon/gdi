@@ -1,6 +1,6 @@
 # Cierre de las ampliaciones de F4 — 09/09/2026
 
-**Estado: validación funcional y técnica aprobada; integración local en preparación.** Este cierre sucede a la [auditoría del 09/09](visual-ilusion-fase-4-revision-final-2026-09-09.md). No inicia F5 ni declara demostrado un óptimo geométrico global.
+**Estado: F4 y sus ampliaciones CERRADAS, VALIDADAS E INTEGRADAS EN LOCAL.** Este cierre sucede a la [auditoría del 09/09](visual-ilusion-fase-4-revision-final-2026-09-09.md). No inicia F5 ni declara demostrado un óptimo geométrico global.
 
 ## Corrección de H10 y volumen de snapshots
 
@@ -66,3 +66,11 @@ Esta corrección cierra la persistencia del plan cotizado y su ejecución histó
 Capacidad física de CPU/RAM y pruebas prolongadas con cientos de sesiones deben medirse en la infraestructura de despliegue. No basta extrapolar el nesting de un producto ni la capacidad de esta máquina de desarrollo.
 
 Evidencia de esta intervención: `output/cierre-fase-4-2026-09-09/`. La primera corrida conjunta de build API, build web y regresión agotó recursos del equipo de desarrollo y produjo timeouts de hooks; las verificaciones afectadas se repitieron de forma aislada y aprobaron. Tailwind ahora toma sus clases desde `src/`, evitando leer archivos CAD/fixtures como estilos.
+
+## Integración y referencia recuperable
+
+Implementación guardada en `db59fc660`; rama de origen `codex/cotizacion-operaciones-herramientas-corte`, conservada. Merge local `516e584ef` en `visual-ilusion/analisis` el 09/09/2026, incluyendo los tres commits previos de herramientas, piezas vectoriales y archivos de producción.
+
+El árbol del merge coincide exactamente con el árbol validado (`5c95845aa8afefc411fb76816f3557def465bce2`); no hubo conflictos ni cambios de implementación durante la integración. Se verificó con `git diff --exit-code` entre ambas referencias. La actualización posterior al merge sólo registra este cierre documental. API y worker locales ejecutan el build aprobado. No se publicó a `main`, no se hizo push y no constituye despliegue a producción.
+
+F5 queda habilitada para análisis y diseño; no se inicia automáticamente. El backlog de optimización global de GrafoNest y la capacidad física de despliegue conservan su alcance independiente.
