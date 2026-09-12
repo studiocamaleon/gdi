@@ -1,5 +1,6 @@
 "use client";
 
+import { ProgresoValor, ProgresoExplicado } from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
 import {
@@ -506,6 +507,7 @@ export function CampanaDetalleView({
         </div>
       </section>
 
+      {campana.dashboard.produccion.progreso ? <ProgresoExplicado titulo="Avance productivo de la campaña" progreso={campana.dashboard.produccion.progreso} /> : null}
       <div className={styles.detailGrid}>
         <div>
           <section className={styles.panel}>
@@ -621,9 +623,7 @@ export function CampanaDetalleView({
                           </TableCell>
                           <TableCell>{fecha(orden.fechaEntrega)}</TableCell>
                           <TableCell className={styles.number}>
-                            {orden.progresoPct == null
-                              ? "—"
-                              : `${orden.progresoPct}%`}
+                            <ProgresoValor progreso={orden.progreso} valor={orden.progresoPct} />
                           </TableCell>
                           <TableCell className={styles.number}>
                             {money(orden.total)}

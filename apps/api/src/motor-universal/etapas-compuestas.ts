@@ -1,3 +1,4 @@
+import { demandaDesdeTiempo, combinarDemandas } from '../eta/motor/demanda-humana';
 import type { PasoEjecutado } from './tipos';
 
 type ComponenteVinculable = {
@@ -146,6 +147,10 @@ export function consolidarEtapasCompuestas(
     const tiempo = tiempos.length
       ? {
           ...tiempos[0],
+          demandaHumana: {
+            ...combinarDemandas(tiempos.map(t => demandaDesdeTiempo(t)), tiempos.reduce((s,t)=>s+t.totalMin,0)),
+            verificada: maquinas.size <= 1 && centrosIds.size <= 1 && tiempos.every(t=>demandaDesdeTiempo(t)?.verificada),
+          },
           setupMin: tiempos.reduce((total, item) => total + item.setupMin, 0),
           runMin: tiempos.reduce((total, item) => total + item.runMin, 0),
           cleanupMin: tiempos.reduce(

@@ -34,7 +34,6 @@ import { EntregaService } from './entrega.service';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
-import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
@@ -154,22 +153,6 @@ export class OrdenesTrabajoController {
   @Get('tablero')
   tablero(@CurrentSession() auth: CurrentAuth) {
     return this.ordenesTrabajoService.tablero(auth);
-  }
-
-  /** Completar varios pasos de una (simulador de impresión). */
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
-  @Post('tablero/pasos/completar-lote')
-  completarPasosLote(
-    @CurrentSession() auth: CurrentAuth,
-    @Body() payload: CompletarPasosLoteDto,
-  ) {
-    return this.ordenesTrabajoService.completarPasosLote(
-      auth,
-      payload.pasoIds,
-      payload.duracionTandaMin,
-      payload.ahorro,
-      payload.validarCompatibilidadLaser,
-    );
   }
 
   /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */

@@ -5,6 +5,7 @@ import { EtaModule } from '../eta/eta.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
+import { AccionesColaController } from './acciones-cola.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { EntregaService } from './entrega.service';
 import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorridos-vectoriales.module';
@@ -22,7 +23,7 @@ import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-
     RecorridosVectorialesModule,
     DesarrolloDocumentalModule,
   ],
-  controllers: [OrdenesTrabajoController],
+  controllers: [OrdenesTrabajoController, AccionesColaController],
   providers: [OrdenesTrabajoService, EntregaService],
   // Presupuestos convierte en OT reusando el create canónico.
   exports: [OrdenesTrabajoService],

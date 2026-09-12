@@ -46,6 +46,10 @@ export const ETAPAS_ESTACION = [
 export type EtapaEstacion = (typeof ETAPAS_ESTACION)[number];
 
 export class UpsertEstacionDto {
+  @IsOptional()
+  @IsUUID()
+  equipoProduccionId?: string | null;
+
   @IsString()
   @MinLength(1)
   @MaxLength(120)

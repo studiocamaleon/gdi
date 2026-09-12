@@ -1,3 +1,4 @@
+import { PlanificacionEntregasModule } from './planificacion-entregas/planificacion.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
@@ -123,6 +124,7 @@ import { GeometriaJobsModule } from './workers/geometria/geometria-jobs.module';
     EgresosModule,
     ReportesModule,
     EtaModule,
+    PlanificacionEntregasModule,
     ArchivosModule,
     IntegracionesModule,
     CentroCopiadoModule,

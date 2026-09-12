@@ -192,7 +192,7 @@ export type ProduccionPanel = {
     pausas: Array<{ motivo: string; veces: number }>;
     operadores: Array<{ operador: string; minutos: number; pasos: number }>;
   };
-  /** Ahorro de material por consolidar tandas (simulador gran formato). */
+  /** Histórico de ahorro de material por consolidar tandas. */
   ahorros: {
     periodo: { tandas: number; jobs: number; ahorroMl: number; ahorroPesos: number };
     historico: { tandas: number; jobs: number; ahorroMl: number; ahorroPesos: number };

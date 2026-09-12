@@ -1,9 +1,15 @@
 "use client";
+import { CalendarioEditor, diasInvalidos } from "./calendario-editor";
+import { EquiposProduccion } from "./equipos-produccion";
+import { getEquiposProduccion } from "@/lib/estaciones-api";
+import type { EquipoProduccion } from "@/lib/estaciones";
+import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@/components/ui/select";
+import equiposStyles from "./equipos-produccion.module.css";
 
 import * as React from "react";
 import {
   BookOpenIcon,
-  ChevronRightIcon,
   CircleDotIcon,
   CogIcon,
   FactoryIcon,
@@ -38,12 +44,9 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   createEmptyEstacion,
-  DIAS_SEMANA,
   ETAPAS_ESTACION,
   etapaDeEstacion,
   etiquetaCalendario,
-  type CalendarioEstacion,
-  type DiaSemana,
   type Estacion,
   type EstacionPayload,
   type FamiliaPasoCatalogo,
@@ -62,12 +65,13 @@ import {
   type DiaNoLaborable,
 } from "@/lib/estaciones-api";
 import { CATEGORIAS_FAMILIA } from "@/lib/tablero-produccion";
-import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
 import {
   SelectBuscable,
   type OpcionSelect,
 } from "@/components/ui/select-buscable";
 import s2 from "./estaciones-panel.module.css";
+import sheetStyles from "./estaciones-sheet.module.css";
+import { cn } from "@/lib/utils";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
@@ -283,7 +287,7 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent className="est-sheet feriados-sheet gap-0 p-0 sm:max-w-none" showCloseButton={false}>
+      <SheetContent className={cn(sheetStyles.sheet, "feriados-sheet gap-0 p-0 sm:max-w-none")} showCloseButton={false}>
         <div className="sheet-head est-sheet-head">
           <div>
             <div className="kicker">PRODUCCIÓN</div>
@@ -387,176 +391,10 @@ function FeriadosSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Editor del calendario semanal ────────────────────────────────────────
-
-const DIA_NOMBRE: Record<DiaSemana, string> = {
-  lun: "Lunes",
-  mar: "Martes",
-  mie: "Miércoles",
-  jue: "Jueves",
-  vie: "Viernes",
-  sab: "Sábado",
-  dom: "Domingo",
-};
-
-/** Calendario con los 7 días inactivos (base para editar desde cero). */
-function calendarioVacio(): CalendarioEstacion {
-  return { dias: { lun: null, mar: null, mie: null, jue: null, vie: null, sab: null, dom: null } };
-}
-
-/**
- * Días con franjas inválidas: alguna con desde >= hasta, o dos que se
- * solapan (comparadas ya ordenadas). Bloquean el guardado con aviso.
- */
-function diasInvalidos(calendario: CalendarioEstacion | null): DiaSemana[] {
-  if (!calendario) return [];
-  return DIAS_SEMANA.filter((dia) => {
-    const franjas = calendario.dias[dia];
-    if (!franjas) return false;
-    if (franjas.some((franja) => franja.desde >= franja.hasta)) return true;
-    const ordenadas = [...franjas].sort((a, b) => (a.desde < b.desde ? -1 : 1));
-    return ordenadas.some(
-      (franja, i) => i > 0 && franja.desde < ordenadas[i - 1].hasta,
-    );
-  });
-}
-
-/** Franja nueva a continuación de la última del día (turno tarde típico). */
-function franjaSiguiente(franjas: Array<{ desde: string; hasta: string }>) {
-  const ultima = franjas[franjas.length - 1];
-  if (!ultima) return { desde: "09:00", hasta: "18:00" };
-  const [hh] = ultima.hasta.split(":").map(Number);
-  const desde = Math.min(hh + 1, 22);
-  const hasta = Math.min(desde + 4, 23);
-  const aHora = (h: number) => `${String(h).padStart(2, "0")}:00`;
-  return { desde: aHora(desde), hasta: aHora(hasta) };
-}
-
-/**
- * Editor semanal: toggle por día + N franjas desde/hasta (jornada cortada:
- * 9–12 y 15–19). Al activar un día hereda las franjas del último día activo
- * anterior (o 9–18). "Copiar horarios de:" pisa el calendario del borrador
- * con el de otra estación (sólo el calendario; los puestos no se copian) —
- * acción de cliente pura.
- */
-function CalendarioEditor({
-  value,
-  onChange,
-  fuentes,
-}: {
-  value: CalendarioEstacion | null;
-  onChange: (calendario: CalendarioEstacion | null) => void;
-  fuentes: Estacion[];
-}) {
-  const calendario = value ?? calendarioVacio();
-  const invalidos = new Set(diasInvalidos(calendario));
-
-  const setDia = (dia: DiaSemana, franjas: Array<{ desde: string; hasta: string }> | null) => {
-    onChange({ dias: { ...calendario.dias, [dia]: franjas } });
-  };
-
-  const setFranja = (dia: DiaSemana, indice: number, franja: { desde: string; hasta: string }) => {
-    const franjas = calendario.dias[dia] ?? [];
-    setDia(dia, franjas.map((previa, i) => (i === indice ? franja : previa)));
-  };
-
-  const quitarFranja = (dia: DiaSemana, indice: number) => {
-    const franjas = (calendario.dias[dia] ?? []).filter((_, i) => i !== indice);
-    setDia(dia, franjas.length > 0 ? franjas : null);
-  };
-
-  const toggleDia = (dia: DiaSemana) => {
-    if (calendario.dias[dia]) {
-      setDia(dia, null);
-      return;
-    }
-    // Hereda las franjas del día activo anterior: cargar L y activar M-V sale gratis.
-    const previos = DIAS_SEMANA.slice(0, DIAS_SEMANA.indexOf(dia)).reverse();
-    const heredadas = previos.map((previo) => calendario.dias[previo]).find(Boolean);
-    setDia(
-      dia,
-      heredadas ? heredadas.map((franja) => ({ ...franja })) : [{ desde: "09:00", hasta: "18:00" }],
-    );
-  };
-
-  const copiables = fuentes.filter((estacion) => estacion.calendario !== null);
-
-  return (
-    <div className="cal-editor">
-      <div className="cal-editor-head">
-        <label>Calendario operativo</label>
-        {copiables.length > 0 ? (
-          <select
-            className="cal-copy"
-            value=""
-            onChange={(event) => {
-              const fuente = copiables.find((estacion) => estacion.id === event.target.value);
-              if (fuente?.calendario) onChange({ dias: { ...fuente.calendario.dias } });
-            }}
-          >
-            <option value="" disabled>Copiar horarios de…</option>
-            {copiables.map((estacion) => (
-              <option key={estacion.id} value={estacion.id}>{estacion.nombre} — {etiquetaCalendario(estacion.calendario)}</option>
-            ))}
-          </select>
-        ) : null}
-      </div>
-      <div className="cal-rows">
-        {DIAS_SEMANA.map((dia) => {
-          const franjas = calendario.dias[dia];
-          return (
-            <div key={dia} className={`cal-row ${franjas ? "on" : ""} ${invalidos.has(dia) ? "invalid" : ""}`}>
-              <button type="button" className="cal-day" onClick={() => toggleDia(dia)} aria-pressed={franjas !== null}>
-                <span className="dot" />{DIA_NOMBRE[dia]}
-              </button>
-              {franjas ? (
-                <div className="cal-franjas">
-                  {franjas.map((franja, indice) => (
-                    <div key={indice} className="cal-times">
-                      <input type="time" value={franja.desde} onChange={(event) => setFranja(dia, indice, { ...franja, desde: event.target.value })} />
-                      <span className="sep">–</span>
-                      <input type="time" value={franja.hasta} onChange={(event) => setFranja(dia, indice, { ...franja, hasta: event.target.value })} />
-                      {franjas.length > 1 ? (
-                        <button
-                          type="button"
-                          className="cal-quitar"
-                          onClick={() => quitarFranja(dia, indice)}
-                          aria-label={`Quitar franja ${franja.desde}–${franja.hasta} de ${DIA_NOMBRE[dia]}`}
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="cal-agregar"
-                    onClick={() => setDia(dia, [...franjas, franjaSiguiente(franjas)])}
-                    aria-label={`Agregar franja a ${DIA_NOMBRE[dia]}`}
-                    title="Agregar otra franja (jornada cortada)"
-                  >
-                    +
-                  </button>
-                </div>
-              ) : (
-                <span className="cal-off">No se trabaja</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className={`help ${invalidos.size > 0 ? "err" : ""}`}>
-        {invalidos.size > 0
-          ? `Revisá ${[...invalidos].map((dia) => DIA_NOMBRE[dia]).join(", ")}: cada franja necesita "desde" anterior a "hasta", sin solaparse con las demás.`
-          : "Horas disponibles para proyectar la cola del tablero en días. El + de cada día agrega otra franja (ej.: 9–12 y 15–19)."}
-      </div>
-    </div>
-  );
-}
-
 function StationForm({
   initial,
   etapaInicial,
+  equipos,
   estaciones,
   familias,
   empleados,
@@ -571,6 +409,7 @@ function StationForm({
 }: {
   initial?: Estacion;
   etapaInicial?: string;
+  equipos: EquipoProduccion[];
   /** Todas las estaciones (fuentes de "Copiar horarios de:"). */
   estaciones: Estacion[];
   familias: FamiliaPasoCatalogo[];
@@ -595,12 +434,13 @@ function StationForm({
           etapa: initial.etapa,
           icono: initial.icono ?? "Tool",
           capacidadConcurrente: initial.capacidadConcurrente,
+          equipoProduccionId: initial.equipoProduccionId ?? null,
           tiempoPreparacionMin: initial.tiempoPreparacionMin,
           calendario: initial.calendario,
-          familias: initial.familias,
+          familias: initial.pasosSinMaquina ?? [...new Set([...initial.familias, ...(initial.reglas ?? []).filter(r => r.tipo === "paso").map(r => r.valor)])].filter(c => familias.some(f => f.codigo === c)),
           empleadoIds: initial.empleados.map((entry) => entry.id),
           maquinaIds: initial.maquinas.map((entry) => entry.id),
-          reglas: initial.reglas ?? [],
+          reglas: [],
         }
       : { ...createEmptyEstacion(), ...(etapaInicial ? { etapa: etapaInicial } : {}) },
   );
@@ -613,44 +453,6 @@ function StationForm({
       return { ...current, [key]: [...next] };
     });
   };
-  // Reglas de captura por tecnología / paso concreto (rediseño por reglas):
-  // conviven con la familia y la máquina como filtros de la estación.
-  const tieneRegla = (tipo: "tecnologia" | "paso", valor: string) =>
-    (draft.reglas ?? []).some((r) => r.tipo === tipo && r.valor === valor);
-  const toggleRegla = (tipo: "tecnologia" | "paso", valor: string) => {
-    setDraft((current) => {
-      const reglas = current.reglas ?? [];
-      const existe = reglas.some((r) => r.tipo === tipo && r.valor === valor);
-      return {
-        ...current,
-        reglas: existe
-          ? reglas.filter((r) => !(r.tipo === tipo && r.valor === valor))
-          : [...reglas, { tipo, valor }],
-      };
-    });
-  };
-  // Qué OTRA estación ya captura una tecnología / paso: una tecnología o un
-  // paso concreto vive en una sola estación (evita el ruteo ambiguo). Espeja el
-  // "en X" de las familias, contra la lista de estaciones cargadas.
-  const reglaEnEstacion = (tipo: "tecnologia" | "paso") => {
-    const mapa = new Map<string, string>();
-    for (const est of estaciones) {
-      if (est.id === initial?.id) continue;
-      for (const regla of est.reglas ?? []) {
-        if (regla.tipo === tipo && !mapa.has(regla.valor)) {
-          mapa.set(regla.valor, est.nombre);
-        }
-      }
-    }
-    return mapa;
-  };
-  const tecnologiaEnEstacion = reglaEnEstacion("tecnologia");
-  const pasoEnEstacion = reglaEnEstacion("paso");
-  // El ajuste fino por paso concreto arranca plegado, salvo que ya tenga reglas.
-  const [mostrarPaso, setMostrarPaso] = React.useState(() =>
-    (initial?.reglas ?? []).some((r) => r.tipo === "paso"),
-  );
-
   const valid =
     draft.nombre.trim().length > 0 &&
     diasInvalidos(draft.calendario ?? null).length === 0;
@@ -661,72 +463,20 @@ function StationForm({
   const catLabel = new Map(CATEGORIAS_FAMILIA.map((cat) => [cat.key, cat.nm]));
   const nombreFamilia = (codigo: string) =>
     familias.find((f) => f.codigo === codigo)?.nombre ?? codigo;
-  const labelTecnologia = (valor: string) =>
-    tecnologiaMaquinaItems.find((t) => t.value === valor)?.label ?? valor;
-
-  const reglasTecnologia = (draft.reglas ?? []).filter(
-    (r) => r.tipo === "tecnologia",
-  );
-  const reglasPaso = (draft.reglas ?? []).filter((r) => r.tipo === "paso");
-
-  // Opciones del buscable = catálogo MENOS lo ya elegido; las tomadas por otra
-  // estación quedan deshabilitadas con la dueña en el detalle.
-  const opcionesTecnologia: OpcionSelect[] = tecnologiaMaquinaItems
-    .filter((t) => !tieneRegla("tecnologia", t.value))
-    .map((t) => {
-      const enOtra = tecnologiaEnEstacion.get(t.value);
-      return {
-        value: t.value,
-        label: t.label,
-        disabled: Boolean(enOtra),
-        detalle: enOtra ? `Ya en "${enOtra}"` : null,
-      };
-    });
-
   const opcionesFamilia: OpcionSelect[] = familias
-    .filter(
-      (f) =>
-        (f.visibleEnSelector || draft.familias.includes(f.codigo)) &&
-        !draft.familias.includes(f.codigo),
-    )
-    .map((f) => {
-      const otras = f.estaciones.filter((e) => e.id !== initial?.id);
-      const generalAjena = otras.find((e) => !e.conMaquinas);
-      // Bloqueada sólo si crearía dos estaciones generales con la misma familia.
-      const bloqueada = Boolean(generalAjena) && draft.maquinaIds.length === 0;
+    .filter(f => f.visibleEnSelector && !draft.familias.includes(f.codigo))
+    .map(f => {
+      const otra = f.estaciones.find(e => e.id !== initial?.id);
       return {
-        value: f.codigo,
-        label: f.nombre,
+        value: f.codigo, label: f.nombre,
         grupo: catLabel.get(f.categoria) ?? f.categoria,
-        disabled: bloqueada,
-        detalle: bloqueada
-          ? `General en "${generalAjena?.nombre}"`
-          : otras.length > 0
-            ? `también en ${otras[0].nombre}`
-            : null,
-      };
-    });
-
-  const opcionesPaso: OpcionSelect[] = familias
-    .filter(
-      (f) =>
-        (f.visibleEnSelector || tieneRegla("paso", f.codigo)) &&
-        !tieneRegla("paso", f.codigo),
-    )
-    .map((f) => {
-      const enOtra = pasoEnEstacion.get(f.codigo);
-      return {
-        value: f.codigo,
-        label: f.nombre,
-        grupo: catLabel.get(f.categoria) ?? f.categoria,
-        disabled: Boolean(enOtra),
-        detalle: enOtra ? `Ya en "${enOtra}"` : null,
+        disabled: Boolean(otra), detalle: otra ? `Ya en “${otra.nombre}”` : null,
       };
     });
 
   // Recursos: mismo patrón compacto (chips elegidos + buscable para agregar).
   const nombreMaquina = (id: string) =>
-    maquinas.find((m) => m.id === id)?.nombre ?? id;
+    maquinas.find((m) => m.id === id)?.nombre ?? initial?.maquinas.find(m => m.id === id)?.nombre ?? id;
   const nombreEmpleado = (id: string) =>
     empleados.find((e) => e.id === id)?.nombreCompleto ?? id;
 
@@ -755,7 +505,7 @@ function StationForm({
 
   return (
     <Sheet open onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <SheetContent className="est-sheet est-editor-sheet gap-0 p-0 sm:max-w-none" showCloseButton={false}>
+      <SheetContent className={cn(sheetStyles.sheet, sheetStyles.editor, "gap-0 p-0 sm:max-w-none")} showCloseButton={false}>
         <div className="sheet-head est-sheet-head">
           <div className="head-icon" style={{ background: etapa.color }}>{iconEl(draft.icono)}</div>
           <div className="body">
@@ -818,103 +568,31 @@ function StationForm({
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">02</span><div><div className="ttl">Reglas de captura</div><div className="sub">Qué pasos agarra esta estación. Se evalúan de lo más específico a lo general: <strong>máquina</strong> (en Recursos) › <strong>tecnología</strong> › <strong>paso concreto</strong> › <strong>familia</strong>. Un paso cae en una sola estación: gana la regla más específica.</div></div></div>
-
+            <div className="est-section-head"><span className="num">02</span><div><div className="ttl">Pasos sin máquina</div><div className="sub">Elegí el trabajo que se realiza acá sin máquina, como diseño, embalaje o instalación. Los pasos de una máquina llegan automáticamente a la estación donde está asignada.</div></div></div>
             <div className={s2.eje}>
-              <div className={s2.ejeHead}>
-                <label>Por tecnología<InfoTip text="La máquina del paso es de esta tecnología. Ej: UV y eco solvente, cada una a su estación de impresión. La tecnología sale de la máquina que ejecutó el paso." /></label>
-                {reglasTecnologia.length > 0 ? <span className={s2.conteo}>{reglasTecnologia.length}</span> : null}
-              </div>
-              {reglasTecnologia.length > 0 ? (
-                <div className="multi-chips">
-                  {reglasTecnologia.map((regla) => (
-                    <button key={regla.valor} type="button" className="m-chip on" title="Quitar" onClick={() => toggleRegla("tecnologia", regla.valor)}>
-                      <span className="nm">{labelTecnologia(regla.valor)}</span>
-                      <span className={s2.quitar}><XIcon size={12} /></span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <SelectBuscable
-                className={s2.agregar}
-                value=""
-                onChange={(valor) => valor && toggleRegla("tecnologia", valor)}
-                opciones={opcionesTecnologia}
-                placeholder="Agregar tecnología…"
-                placeholderBusqueda="Buscar tecnología…"
-                vacio="No quedan tecnologías por agregar."
-                ariaLabel="Agregar regla por tecnología"
-              />
-            </div>
-
-            <div className={s2.eje}>
-              <div className={s2.ejeHead}>
-                <label>Por familia<InfoTip text="Captura todo el trabajo de esta familia de pasos. Una familia puede repetirse entre estaciones con máquinas (filtran); a lo sumo una estación general (sin máquinas) por familia." /></label>
-                {draft.familias.length > 0 ? <span className={s2.conteo}>{draft.familias.length}</span> : null}
-              </div>
               {draft.familias.length > 0 ? (
                 <div className="multi-chips">
-                  {draft.familias.map((codigo) => (
-                    <button key={codigo} type="button" className="m-chip on" title="Quitar" onClick={() => toggleLista("familias", codigo)}>
+                  {draft.familias.map(codigo => (
+                    <button key={codigo} type="button" className="m-chip on" title={`Quitar ${nombreFamilia(codigo)}`} onClick={() => toggleLista("familias", codigo)}>
                       <span className="nm">{nombreFamilia(codigo)}</span>
                       <span className={s2.quitar}><XIcon size={12} /></span>
                     </button>
                   ))}
                 </div>
-              ) : (
-                <div className={s2.vacio}>Sin familias: por este eje no recibe pasos.</div>
-              )}
-              <SelectBuscable
-                className={s2.agregar}
-                value=""
-                onChange={(valor) => valor && toggleLista("familias", valor)}
-                opciones={opcionesFamilia}
-                placeholder="Agregar familia…"
-                placeholderBusqueda="Buscar familia…"
-                vacio="No quedan familias por agregar."
-                ariaLabel="Agregar regla por familia"
-              />
-            </div>
-
-            <div className={s2.avanzado}>
-              <button type="button" className={s2.avToggle} data-abierto={mostrarPaso ? "si" : undefined} onClick={() => setMostrarPaso((v) => !v)}>
-                <ChevronRightIcon size={14} />
-                Ajuste fino por paso concreto
-                {reglasPaso.length > 0 ? <span className={s2.conteo}>· {reglasPaso.length}</span> : null}
-              </button>
-              <InfoTip text="Manda un paso puntual a esta estación aunque su familia esté en otra. Gana sobre la regla por familia." />
-              {mostrarPaso ? (
-                <div className={s2.avBody}>
-                  {reglasPaso.length > 0 ? (
-                    <div className="multi-chips">
-                      {reglasPaso.map((regla) => (
-                        <button key={regla.valor} type="button" className="m-chip on" title="Quitar" onClick={() => toggleRegla("paso", regla.valor)}>
-                          <span className="nm">{nombreFamilia(regla.valor)}</span>
-                          <span className={s2.quitar}><XIcon size={12} /></span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <SelectBuscable
-                    className={s2.agregar}
-                    value=""
-                    onChange={(valor) => valor && toggleRegla("paso", valor)}
-                    opciones={opcionesPaso}
-                    placeholder="Agregar paso…"
-                    placeholderBusqueda="Buscar paso…"
-                    vacio="No quedan pasos por agregar."
-                    ariaLabel="Agregar regla por paso concreto"
-                  />
-                </div>
-              ) : null}
+              ) : <div className={s2.vacio}>Sin pasos manuales asignados.</div>}
+              <SelectBuscable className={s2.agregar} value=""
+                onChange={valor => valor && toggleLista("familias", valor)}
+                opciones={opcionesFamilia} placeholder="Agregar paso sin máquina…"
+                placeholderBusqueda="Buscar paso…" vacio="No quedan pasos sin máquina por agregar."
+                ariaLabel="Agregar paso sin máquina" />
             </div>
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">03</span><div><div className="ttl">Recursos asignados</div><div className="sub">Máquinas y personal que opera en esta estación. La <strong>máquina</strong> es la regla de captura más específica: un paso hecho con ella cae acá antes que por tecnología, paso o familia.</div></div></div>
+            <div className="est-section-head"><span className="num">03</span><div><div className="ttl">Recursos asignados</div><div className="sub">Los trabajos que usen estas máquinas se muestran acá automáticamente. Cada máquina conserva su nombre y su propia capacidad de producción.</div></div></div>
             <div className={s2.eje}>
               <div className={s2.ejeHead}>
-                <label>Máquinas<InfoTip text="Una máquina vive en una sola estación. Es la regla de captura más específica. Elegir una que hoy está en otra estación la mueve acá." /></label>
+                <label>Máquinas<InfoTip text="Una máquina pertenece a una sola estación. Elegir una que está en otra estación la mueve acá, junto con sus tareas pendientes." /></label>
                 {draft.maquinaIds.length > 0 ? <span className={s2.conteo}>{draft.maquinaIds.length}</span> : null}
               </div>
               {draft.maquinaIds.length > 0 ? (
@@ -927,7 +605,7 @@ function StationForm({
                   ))}
                 </div>
               ) : (
-                <div className={s2.vacio}>Sin máquinas: captura por tecnología, paso o familia.</div>
+                <div className={s2.vacio}>Sin máquinas asignadas: esta estación recibe sólo los pasos sin máquina que elegiste.</div>
               )}
               <SelectBuscable
                 className={s2.agregar}
@@ -970,10 +648,10 @@ function StationForm({
           </section>
 
           <section className="est-section">
-            <div className="est-section-head"><span className="num">04</span><div><div className="ttl">Capacidad y planificación</div><div className="sub">Puestos y calendario: la cola del tablero se mide en horas.</div></div></div>
+            <div className="est-section-head"><span className="num">04</span><div><div className="ttl">Capacidad y planificación</div><div className="sub">Capacidad física, equipo compartido y días de producción.</div></div></div>
             <div className={s2.capTop}>
               <div className="est-field">
-                <label>Puestos<InfoTip text="Cuántos pasos avanzan EN PARALELO de verdad (2 mesas con 2 operarios = 2). Una impresora es 1, aunque tenga cola." /></label>
+                <label>Puestos manuales<InfoTip text="Cuántos trabajos SIN máquina pueden realizarse a la vez por el espacio o las mesas disponibles. Cada máquina tiene su propia capacidad. Las personas se cuentan en el equipo compartido." /></label>
                 <div className={`est-stepper ${s2.puestosStepper}`}>
                   <button type="button" onClick={() => update({ capacidadConcurrente: Math.max(1, (draft.capacidadConcurrente ?? 1) - 1) })}>−</button>
                   <input type="number" value={draft.capacidadConcurrente ?? 1} onChange={(event) => update({ capacidadConcurrente: Math.max(1, Number.parseInt(event.target.value, 10) || 1) })} />
@@ -982,7 +660,7 @@ function StationForm({
               </div>
 
               <div className="est-field">
-                <label>Tiempo entre pasos<InfoTip text="Traslado hasta esta estación antes de empezar un paso. Ocupa un puesto (lo hace el operario), no la máquina. «Del taller» hereda el valor global; «Propio» le da uno distinto." /></label>
+                <label>Tiempo entre pasos<InfoTip text="Separación después de cada paso para cambio de material o traslado. Reserva una persona y mantiene ocupado el recurso hasta finalizar. «Del taller» hereda el valor global; «Propio» le da uno distinto." /></label>
                 <div className={`est-toggle ${s2.tiempoToggle}`}>
                   <button type="button" className={draft.tiempoPreparacionMin == null ? "on" : ""} onClick={() => update({ tiempoPreparacionMin: null })}>
                     Del taller · {entrePasosDefault} min
@@ -1002,6 +680,14 @@ function StationForm({
               </div>
             </div>
 
+            <Field className={equiposStyles.selector}>
+              <FieldLabel htmlFor="est-equipo">Equipo que atiende esta estación</FieldLabel>
+              <Select items={[{value: "sin-equipo", label: "Sin equipo · capacidad humana sin validar"}, ...equipos.map(e => ({value: e.id, label: `${e.nombre} · ${e.personas} personas${e.activo ? "" : " · inactivo"}`}))]} value={draft.equipoProduccionId ?? "sin-equipo"} onValueChange={value => update({equipoProduccionId: value === "sin-equipo" ? null : value})}>
+                <SelectTrigger id="est-equipo"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectGroup><SelectItem value="sin-equipo">Sin equipo · capacidad humana sin validar</SelectItem>{equipos.map(e => <SelectItem key={e.id} value={e.id}>{e.nombre} · {e.personas} personas{e.activo ? "" : " · inactivo"}</SelectItem>)}</SelectGroup></SelectContent>
+              </Select>
+              <FieldDescription>Elegí el mismo equipo en todas las estaciones que comparten personas. Para producir sólo los jueves, dejá únicamente ese día activo en el calendario de esta estación.</FieldDescription>
+            </Field>
             <CalendarioEditor
               value={draft.calendario ?? null}
               onChange={(calendario) => update({ calendario })}
@@ -1009,7 +695,7 @@ function StationForm({
             />
           </section>
 
-          <div className="est-tip"><CogIcon /><span>Cada paso del Tablero cae en <strong>una sola</strong> estación: gana la regla más específica que lo matchea (<strong>máquina › tecnología › paso › familia</strong>). El tiempo estimado por paso sale de la ruta real de cada item, no se configura acá.</span></div>
+          <div className="est-tip"><CogIcon /><span>Los pasos con máquina llegan a la estación de <strong>esa máquina</strong>. Para el resto, configurá los <strong>pasos sin máquina</strong>. El tiempo estimado proviene de la cotización.</span></div>
         </div>
 
         <div className="sheet-foot est-foot">
@@ -1042,15 +728,16 @@ function EstacionCard({
         <span className="est-card-edit"><PencilIcon /></span>
       </div>
       <div className="est-card-stats">
-        <Stat label="Familias" value={est.familias.length} />
+        <Stat label="Pasos sin máquina" value={(est.pasosSinMaquina ?? est.familias).length} />
         <Stat label="Máquinas" value={est.maquinas.length} />
         <Stat label="Empleados" value={est.empleados.length} />
-        <Stat label="Puestos" value={est.capacidadConcurrente} />
+        <Stat label="Puestos manuales" value={est.capacidadConcurrente} />
       </div>
       <div className="est-card-foot">
         <span className={`est-status ${est.activo ? "ok" : "off"}`}><span className="dot" />{est.activo ? "Activa" : "Inactiva"}</span>
+        <span className="est-card-id">{est.equipoProduccion ? `Equipo: ${est.equipoProduccion.nombre}` : "Equipo humano sin configurar"}</span>
         {etiquetaCalendario(est.calendario) ? <span className="est-card-id">{etiquetaCalendario(est.calendario)}</span> : null}
-        {est.familias.length === 0 && (est.reglas?.length ?? 0) === 0 && est.maquinas.length === 0 ? <span className="est-tasks">Sin reglas: no recibe pasos</span> : null}
+        {(est.pasosSinMaquina ?? est.familias).length === 0 && est.maquinas.length === 0 ? <span className="est-tasks">Sin asignaciones: no recibe tareas</span> : null}
       </div>
     </button>
   );
@@ -1076,6 +763,13 @@ export function EstacionesPanel({
   initialLoadWarning?: string | null;
 }) {
   const [items, setItems] = React.useState(initialEstaciones);
+  const [equipos, setEquipos] = React.useState<EquipoProduccion[]>([]);
+  const [errorEquipos, setErrorEquipos] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    let vivo = true;
+    getEquiposProduccion().then(data => { if (vivo) setEquipos(data); }).catch(e => { if (vivo) setErrorEquipos(e instanceof Error ? e.message : "No se pudieron cargar los equipos."); });
+    return () => { vivo = false; };
+  }, []);
   const [familias, setFamilias] = React.useState(initialFamilias);
   const [sheet, setSheet] = React.useState<"new" | Estacion | null>(null);
   const [nuevaEtapa, setNuevaEtapa] = React.useState<string | undefined>(undefined);
@@ -1123,8 +817,11 @@ export function EstacionesPanel({
     return map;
   }, [items]);
 
+  const maquinasPendientes = maquinas.filter(m => !items.some(e => e.activo && e.maquinas.some(actual => actual.id === m.id)));
+
   const refrescar = React.useCallback(async () => {
-    const [ests, fams] = await Promise.all([getEstaciones(), getFamiliasPasos()]);
+    const [ests, fams, teams] = await Promise.all([getEstaciones(), getFamiliasPasos(), getEquiposProduccion()]);
+    setEquipos(teams); setErrorEquipos(null);
     setItems(ests);
     setFamilias(fams);
   }, []);
@@ -1174,7 +871,7 @@ export function EstacionesPanel({
       <div className="page-head">
         <div className="title-block">
           <h1>Estaciones</h1>
-          <div className="sub">Configurá las estaciones de tu taller: familias de pasos (rutean el tablero), máquinas, empleados y capacidad.</div>
+          <div className="sub">Agrupá las máquinas y los pasos sin máquina de tu taller. Configurá sus equipos, horarios y capacidad.</div>
         </div>
         <div className="page-head-actions">
           <button type="button" className="btn" onClick={() => setFeriadosOpen(true)}><CalendarOffIcon />Calendario del taller</button>
@@ -1188,6 +885,7 @@ export function EstacionesPanel({
         </Alert>
       ) : null}
 
+      <EquiposProduccion equipos={equipos} estaciones={items} error={errorEquipos} onSaved={refrescar} />
       <div className="est-toolbar">
         <div className="search">
           <SearchIcon />
@@ -1203,6 +901,16 @@ export function EstacionesPanel({
           })}
         </div>
       </div>
+
+      {maquinasPendientes.length > 0 && (
+        <Alert className={s2.pendientes}>
+          <AlertDescription>
+            <strong>{maquinasPendientes.length} máquinas sin estación activa</strong>
+            <p>Sus trabajos quedan sin estación hasta que las asignes. Abrí una estación y agregalas en Máquinas.</p>
+            <ul>{maquinasPendientes.map(m => <li key={m.id}>{m.nombre}</li>)}</ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {grouped.map(({ cat, items: groupItems }) => (
         <section key={cat.key} className="est-group">
@@ -1221,7 +929,7 @@ export function EstacionesPanel({
         <div className="est-empty">
           <div className="ic"><FactoryIcon /></div>
           <div className="ttl">Todavía no hay estaciones</div>
-          <div className="sub">Creá las estaciones de tu taller y asignales familias de pasos: el Tablero va a agrupar el trabajo por ellas.</div>
+          <div className="sub">Creá las estaciones de tu taller y asignales máquinas y pasos sin máquina. El tablero agrupa el trabajo por esas asignaciones.</div>
           <button type="button" className="btn btn-primary" onClick={() => { setNuevaEtapa(undefined); setSheet("new"); }}><PlusIcon />Nueva estación</button>
         </div>
       ) : filtered.length === 0 ? (
@@ -1236,6 +944,7 @@ export function EstacionesPanel({
           initial={sheet === "new" ? undefined : sheet}
           etapaInicial={sheet === "new" ? nuevaEtapa : undefined}
           estaciones={items}
+          equipos={equipos}
           familias={familias}
           empleados={empleados}
           maquinas={maquinas}
@@ -1257,7 +966,7 @@ export function EstacionesPanel({
         titulo="Eliminar estación"
         descripcion="La estación se elimina del taller."
         impacto={[
-          "Sus familias de pasos quedan libres: el trabajo vivo cae a \"Sin estación\" en el tablero.",
+          "Sus pasos sin máquina quedan libres: el trabajo vivo cae a \"Sin estación\" en el tablero.",
           "Las máquinas quedan sin estación asignada.",
           "Los empleados dejan de estar habilitados en ella.",
         ]}

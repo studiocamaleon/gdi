@@ -161,14 +161,14 @@ export const NAV: NavItem[] = [
         href: "/produccion/tablero",
       },
       {
-        key: "simulador",
-        label: "Simulador gran formato",
-        href: "/produccion/simulador",
+        key: "planificacion-produccion",
+        label: "Planificación",
+        href: "/produccion/planificacion",
       },
       {
-        key: "simulador-laser",
-        label: "Simulador impresión láser",
-        href: "/produccion/simulador-laser",
+        key: "colas-produccion",
+        label: "Colas de trabajo",
+        href: "/produccion/colas",
       },
       {
         key: "estaciones",

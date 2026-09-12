@@ -382,7 +382,7 @@ export class ReporteProduccionService {
     };
   }
 
-  // ── Ahorro por consolidación (simulador gran formato) ──────────────
+  // ── Histórico de ahorro por consolidación ──────────────
   // El argumento de valor del sistema: cuánto material y dinero se ahorró
   // consolidando tandas vs. imprimir cada trabajo por separado (baseline
   // del motor al cotizar). Período + ACUMULADO histórico.

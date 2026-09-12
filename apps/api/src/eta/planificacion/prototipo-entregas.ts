@@ -8,7 +8,11 @@ import {
   sumarDiasHabiles,
   type PasoProgramado,
 } from '../motor/flujo-produccion';
-import type { TableroItemData } from '../motor/tablero-tipos';
+import {
+  resolverEstacionDePaso,
+  SIN_ESTACION_KEY,
+  type TableroItemData,
+} from '../motor/tablero-tipos';
 
 export type CompromisoPiloto = {
   id: string;
@@ -16,6 +20,7 @@ export type CompromisoPiloto = {
   fechaSolicitada?: string;
 };
 export type MedicionPiloto = {
+  demandaHumana?: unknown;
   cantidadProductos: number;
   preparacionMin: number;
   ejecucionMin: number;
@@ -27,6 +32,7 @@ export type OperacionPiloto = {
   nombre: string;
   familiaCodigo: string;
   maquinaId?: string;
+  requiereMaquina?: boolean;
   centroCostoId?: string;
   plantillaCodigo?: string | null;
   tecnologia?: string | null;
@@ -55,6 +61,8 @@ export type EntradaPiloto = {
   /** Condiciones verificadas por el adaptador; no es un input de cliente. */
   condicionesPendientes: string[];
   prioridadSinFechas: 'PRIMERAS_ENTREGAS' | 'MENOR_COSTO';
+  /** Flujo comercial actual: una tanda completa por entrega. */
+  porEntrega?: boolean;
 };
 type Rango = { desde: number; hasta: number };
 export type OperacionLotePiloto = Rango & {
@@ -96,6 +104,7 @@ export type AlternativaPiloto = {
   traza: PasoProgramado[];
   trabajosDesplazados: string[];
   condiciones: string[];
+  esperaCola?: boolean;
 };
 
 const enteroPositivo = (n: number) => Number.isSafeInteger(n) && n > 0;
@@ -242,47 +251,53 @@ function generar(entrada: EntradaPiloto) {
     },
   ];
   const vistos = new Set<string>();
-  return recetas.flatMap((receta) => {
-    const gruposDe = (o: OperacionPiloto, camino: string[] = []): number[] => {
-      if (camino.includes(o.codigo))
-        throw new Error('Las particiones vinculadas contienen un ciclo.');
-      if (o.particionVinculadaA)
-        return gruposDe(
-          operaciones.find((p) => p.codigo === o.particionVinculadaA)!,
-          [...camino, o.codigo],
-        );
-      return o.unaVezPorPedido
-        ? [cantidad]
-        : terminales.has(o.codigo)
-          ? receta.finales
-          : receta.grupos;
-    };
-    const firma = JSON.stringify(operaciones.map((o) => gruposDe(o)));
-    if (vistos.has(firma)) return [];
-    vistos.add(firma);
-    const nodos: OperacionLotePiloto[] = operaciones.flatMap((o) =>
-      rangos(gruposDe(o)).map((r) => ({
-        ...r,
-        id: `f6-piloto:${receta.id}:${o.codigo}:${r.desde}-${r.hasta}`,
-        operacion: o.codigo,
-        cantidadProductos: r.hasta - r.desde,
-        cantidadPiezas: (r.hasta - r.desde) * o.piezasPorProducto,
-        predecesoras: [],
-        medicion:
-          o.mediciones.find((m) => m.cantidadProductos === r.hasta - r.desde) ??
-          null,
-      })),
-    );
-    for (const nodo of nodos) {
-      const o = operaciones.find((o) => o.codigo === nodo.operacion)!;
-      nodo.predecesoras = nodos
-        .filter(
-          (p) => o.predecesoras.includes(p.operacion) && seCruzan(nodo, p),
-        )
-        .map((p) => p.id);
-    }
-    return [{ id: receta.id, nombre: receta.nombre, nodos, terminales }];
-  });
+  return recetas
+    .filter((r) => !entrada.porEntrega || r.id === 'por-entrega')
+    .flatMap((receta) => {
+      const gruposDe = (
+        o: OperacionPiloto,
+        camino: string[] = [],
+      ): number[] => {
+        if (camino.includes(o.codigo))
+          throw new Error('Las particiones vinculadas contienen un ciclo.');
+        if (o.particionVinculadaA)
+          return gruposDe(
+            operaciones.find((p) => p.codigo === o.particionVinculadaA)!,
+            [...camino, o.codigo],
+          );
+        return o.unaVezPorPedido
+          ? [cantidad]
+          : terminales.has(o.codigo)
+            ? receta.finales
+            : receta.grupos;
+      };
+      const firma = JSON.stringify(operaciones.map((o) => gruposDe(o)));
+      if (vistos.has(firma)) return [];
+      vistos.add(firma);
+      const nodos: OperacionLotePiloto[] = operaciones.flatMap((o) =>
+        rangos(gruposDe(o)).map((r) => ({
+          ...r,
+          id: `f6-piloto:${receta.id}:${o.codigo}:${r.desde}-${r.hasta}`,
+          operacion: o.codigo,
+          cantidadProductos: r.hasta - r.desde,
+          cantidadPiezas: (r.hasta - r.desde) * o.piezasPorProducto,
+          predecesoras: [],
+          medicion:
+            o.mediciones.find(
+              (m) => m.cantidadProductos === r.hasta - r.desde,
+            ) ?? null,
+        })),
+      );
+      for (const nodo of nodos) {
+        const o = operaciones.find((o) => o.codigo === nodo.operacion)!;
+        nodo.predecesoras = nodos
+          .filter(
+            (p) => o.predecesoras.includes(p.operacion) && seCruzan(nodo, p),
+          )
+          .map((p) => p.id);
+      }
+      return [{ id: receta.id, nombre: receta.nombre, nodos, terminales }];
+    });
 }
 
 export function proponerEntregasPiloto(entrada: EntradaPiloto) {
@@ -325,8 +340,10 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
               familiaCodigo: o.familiaCodigo,
               plantillaCodigo: o.plantillaCodigo,
               tecnologia: o.tecnologia,
+              requiereMaquina: o.requiereMaquina,
               maquinaId: o.maquinaId,
               centroCostoId: o.centroCostoId ?? null,
+              demandaHumana: n.medicion?.demandaHumana,
               duracionEstimadaMin: n.medicion
                 ? n.medicion.preparacionMin + n.medicion.ejecucionMin
                 : null,
@@ -338,10 +355,44 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
           ],
         };
       });
-      const simulacion = simularFlujo({
+      let simulacion = simularFlujo({
         ...taller,
         items: [...taller.items, ...hipoteticos],
       });
+      // Si una tanda ocupa un hueco que luego necesita una OT existente,
+      // volvemos a proyectarla al final de la cola de cada recurso. Es una
+      // previsión conservadora; no mueve ni reserva trabajo ajeno.
+      let esperaCola = false;
+      const desplaza = () => {
+        const nueva = new Map(simulacion.traza.map((p) => [p.pasoId, p]));
+        return [...basePorPaso].some(([id, p]) => {
+          const actual = nueva.get(id);
+          return !actual || actual.inicio > p.inicio || actual.fin > p.fin;
+        });
+      };
+      if (entrada.porEntrega && desplaza()) {
+        esperaCola = true;
+        const conEspera = hipoteticos.map((item) => ({
+          ...item,
+          pasos: item.pasos.map((paso) => {
+            const recurso = resolverEstacionDePaso(taller.estaciones, paso);
+            const estacion = recurso?.id ?? SIN_ESTACION_KEY;
+            return {
+              ...paso,
+              predecesorPasoIds: [
+                ...(paso.predecesorPasoIds ?? []),
+                ...base.traza
+                  .filter((p) => p.estacionKey === estacion || !!recurso?.equipoProduccion?.id && p.equipoProduccionId === recurso.equipoProduccion.id)
+                  .map((p) => p.pasoId),
+              ],
+            };
+          }),
+        }));
+        simulacion = simularFlujo({
+          ...taller,
+          items: [...taller.items, ...conEspera],
+        });
+      }
       const condiciones = [
         ...entrada.condicionesPendientes,
         ...condicionesCola,
@@ -368,7 +419,7 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
         );
       if (nodos.some((n) => simulacion.porItem.get(n.id)?.parcial))
         condiciones.push(
-          'Hay operaciones sin recurso o calendario confirmado.',
+          'Hay operaciones sin estación, equipo, atención del operario o calendario confirmado.',
         );
       const proyecciones = entregas.map((e, i): EntregaProyectada => {
         const finales = nodos.filter(
@@ -430,10 +481,10 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
         ? 'SIN_ESTIMACION'
         : desplazados.length
           ? 'DESPLAZA_TRABAJOS'
-          : condiciones.length
-            ? 'CONDICIONADA'
-            : proyecciones.some((e) => e.cumple === false)
-              ? 'FUERA_DE_FECHA'
+          : proyecciones.some((e) => e.cumple === false)
+            ? 'FUERA_DE_FECHA'
+            : condiciones.length
+              ? 'CONDICIONADA'
               : proyecciones.some((e) => e.cumpleConMargen === false)
                 ? 'SIN_MARGEN'
                 : 'VIABLE';
@@ -458,10 +509,18 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
             ),
         trabajosDesplazados: desplazados,
         condiciones,
+        esperaCola,
       };
     },
   );
-  const referencia = alternativas.find((a) => a.id === 'completo')?.costo;
+  const medicionesTotal = operaciones.map((o) =>
+    o.mediciones.find((m) => m.cantidadProductos === entrada.cantidad),
+  );
+  const referencia =
+    alternativas.find((a) => a.id === 'completo')?.costo ??
+    (medicionesTotal.every((m) => !!m)
+      ? medicionesTotal.reduce((s, m) => s + m.costo, 0)
+      : null);
   alternativas.forEach((a) => {
     a.costoAdicional =
       a.costo != null && referencia != null ? a.costo - referencia : null;

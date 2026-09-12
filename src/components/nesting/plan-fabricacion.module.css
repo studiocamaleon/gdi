@@ -1,11 +1,10 @@
 .summary,
 .modal,
-.patterns,
 .downloads {
-  --plan-ink: #1c1b1a;
-  --plan-muted: #78716b;
-  --plan-line: #e5dfd8;
-  --plan-orange: #ff642b;
+  --plan-ink: var(--foreground);
+  --plan-muted: var(--muted-foreground);
+  --plan-line: var(--border);
+  --plan-orange: var(--foreground);
   color: var(--plan-ink);
 }
 .summary {
@@ -13,7 +12,7 @@
   border: 1px solid var(--plan-line);
   border-radius: 12px;
   padding: 18px;
-  background: linear-gradient(120deg, #fffaf5, #fff);
+  background: var(--card);
   margin: 14px 0;
 }
 .summaryHeading {
@@ -92,20 +91,6 @@
 .pending {
   margin-top: 12px;
 }
-.primary {
-  border-radius: 9px;
-  background: #1c1b1a;
-  color: white;
-  border: 1px solid #1c1b1a;
-  box-shadow: 0 2px 0 #ff642b;
-  padding: 9px 14px;
-  height: auto;
-  font-weight: 550;
-  flex-shrink: 0;
-}
-.primary:hover {
-  background: #38332f;
-}
 /* El sheet comercial existente ocupa 1000/1001; el diálogo debe cubrirlo. */
 .overlay {
   z-index: 1100;
@@ -121,29 +106,28 @@
   padding: 0;
   gap: 0;
   border-radius: 18px;
-  background: #fbfaf8;
-  border: 1px solid #e5dfd8;
+  background: var(--card);
+  border: 1px solid var(--border);
   box-shadow: 0 30px 100px #19110c40;
   overflow: hidden;
 }
 .modalHeader {
   padding: 24px 28px 20px;
-  border-top: 3px solid var(--plan-orange);
   border-bottom: 1px solid var(--plan-line);
   gap: 8px;
-  background: linear-gradient(110deg, #fff, #fff6ed);
+  background: var(--card);
 }
 .eyebrow {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: #b84c24;
+  color: var(--muted-foreground);
 }
 .modalTitle {
-  font-size: 24px;
+  font-size: 21px;
   letter-spacing: -0.035em;
-  font-weight: 650;
+  font-weight: 600;
 }
 .modalBody {
   overflow: auto;
@@ -158,7 +142,7 @@
   gap: 16px;
   padding: 16px 28px;
   border-top: 1px solid var(--plan-line);
-  background: white;
+  background: var(--card);
 }
 .modalFooter > span {
   font-size: 12px;
@@ -196,304 +180,8 @@
   border: 1px solid var(--plan-line);
   border-radius: 8px;
   padding: 10px;
-  background: white;
+  background: var(--card);
   color: var(--plan-ink);
-}
-.patterns {
-  container-type: inline-size;
-}
-.patternHeading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-.patternHeading h3 {
-  font-size: 18px;
-  letter-spacing: -0.035em;
-  font-weight: 600;
-  margin: 0 0 3px;
-}
-.patternHeading p {
-  font-size: 12px;
-  color: var(--plan-muted);
-}
-.tabList {
-  width: 100%;
-  justify-content: flex-start;
-  gap: 18px;
-  border-bottom: 1px solid var(--plan-line);
-  height: 36px !important;
-  margin-bottom: 6px;
-  overflow-x: auto;
-  padding: 0;
-  border-radius: 0;
-}
-.tabList button {
-  flex: none;
-  padding: 9px 0;
-  font-size: 12px;
-  color: var(--plan-muted);
-  border-radius: 0;
-}
-.tabList button[data-active] {
-  color: var(--plan-ink);
-  font-weight: 650;
-}
-.tabList button::after {
-  background: var(--plan-orange);
-  bottom: -1px !important;
-}
-.patternGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.patternCard {
-  display: flex;
-  flex-direction: column;
-  background: white;
-  border: 1px solid var(--plan-line);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.patternGrid[data-single="true"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-@container (min-width: 640px) {
-  .patternGrid[data-single="true"] .patternCard {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr);
-    grid-template-rows: auto 1fr auto;
-  }
-  .patternGrid[data-single="true"] .cardHead {
-    grid-column: 1 / -1;
-  }
-  .patternGrid[data-single="true"] .plate {
-    grid-row: 2 / 4;
-    margin-bottom: 10px;
-  }
-  .patternGrid[data-single="true"] .pieceCounts {
-    grid-column: 2;
-  }
-  .patternGrid[data-single="true"] .cardFoot {
-    grid-column: 2;
-  }
-}
-.cardHead {
-  padding: 14px 16px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.cardHead strong {
-  font-size: 13px;
-  font-weight: 650;
-}
-.copies {
-  padding: 4px 8px;
-  background: #fff0e3;
-  border-radius: 6px;
-  color: #a6441d;
-  font-size: 15px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-.plate {
-  background: #f7f5f1;
-  margin: 0 10px;
-  border-radius: 7px;
-  padding: 12px;
-}
-.plate svg {
-  height: 220px;
-  max-height: 32vh;
-  width: 100%;
-}
-.patternFigure {
-  margin: 0;
-  min-width: 0;
-}
-.plateCaption {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  text-align: center;
-  font-size: 10px;
-  color: var(--plan-muted, #78716b);
-  font-variant-numeric: tabular-nums;
-  margin-top: 8px;
-}
-.overhangLegend {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: #a6441d;
-  line-height: 1.5;
-}
-.overhangLegend i {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  border: 1px solid #efb497;
-  border-radius: 2px;
-  background: repeating-linear-gradient(
-    -45deg,
-    #fff1e8 0 3px,
-    #efb497 3px 4px
-  );
-}
-.pieceCounts {
-  list-style: none;
-  margin: 0;
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  height: 240px;
-  min-height: 0;
-  min-width: 0;
-  overflow-y: auto;
-  /* Sin desborde, o al llegar a un extremo, el scroll continúa en el plan. */
-  overscroll-behavior: auto;
-  scrollbar-gutter: stable;
-}
-.pieceCounts li {
-  flex-shrink: 0;
-  min-width: 0;
-}
-.pieceCounts button {
-  display: flex;
-  width: 100%;
-  height: 28px;
-  justify-content: flex-start;
-  padding: 4px 8px;
-  gap: 7px;
-  font-size: 11px;
-  font-weight: 400;
-  border-radius: 6px;
-  color: var(--plan-muted, #78716b);
-}
-.pieceCounts button:hover,
-.pieceCounts button:focus-visible {
-  background: #fff5ed;
-  color: var(--plan-ink, #1c1b1a);
-}
-.pieceCounts button[aria-pressed="true"] {
-  background: #fff0e3;
-  color: var(--plan-ink, #1c1b1a);
-}
-.pieceCounts button[aria-pressed="true"]:hover {
-  background: #ffe7d5;
-}
-.pieceCounts:focus-visible,
-.pieceCounts button:focus-visible {
-  outline: 2px solid var(--plan-orange, #ff642b);
-  outline-offset: -2px;
-  border-color: transparent;
-  box-shadow: none;
-}
-.pieceName {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pieceCounts i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.pieceCounts b {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--plan-ink, #1c1b1a);
-  font-weight: 550;
-  font-variant-numeric: tabular-nums;
-}
-.cardFoot {
-  margin-top: auto;
-  border-top: 1px solid var(--plan-line);
-  padding: 6px 10px;
-}
-.cardFoot button {
-  width: 100%;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--plan-muted);
-  border-radius: 6px;
-}
-.detail {
-  background: white;
-  border: 1px solid var(--plan-line);
-  padding: 16px;
-  border-radius: 12px;
-}
-.detailHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.detailHead h3 {
-  font-size: 16px;
-  font-weight: 600;
-}
-.detail p {
-  color: var(--plan-muted);
-  font-size: 12px;
-  margin: 8px 0;
-}
-.detail svg {
-  display: block;
-  width: 100%;
-  height: 55vh;
-}
-.detailLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.45fr);
-  align-items: start;
-  gap: 12px;
-}
-@media (max-width: 640px) {
-  .detailLayout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.balance {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  background: white;
-}
-.balance th {
-  color: var(--plan-muted);
-  font-weight: 500;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: #f5f2ed;
-}
-.balance th,
-.balance td {
-  padding: 13px 16px;
-  text-align: right;
-  border-bottom: 1px solid var(--plan-line);
-  font-variant-numeric: tabular-nums;
-}
-.balance th:first-child,
-.balance td:first-child {
-  text-align: left;
-}
-.balanceWrap {
-  overflow: auto;
-  border: 1px solid var(--plan-line);
-  border-radius: 10px;
 }
 .exports {
   display: grid;
@@ -515,7 +203,7 @@
   align-items: stretch;
   border: 1px solid var(--plan-line);
   border-radius: 10px;
-  background: white;
+  background: var(--card);
   overflow: hidden;
 }
 .downloadRow {
@@ -534,23 +222,10 @@
 }
 .downloadRows button {
   border: 1px solid var(--plan-line);
-  background: white;
+  background: var(--card);
   border-radius: 7px;
   font-size: 11px;
   box-shadow: none;
-}
-@container (max-width:800px) {
-  .patternGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@container (max-width:520px) {
-  .patternGrid {
-    grid-template-columns: 1fr;
-  }
-  .tabList {
-    gap: 12px;
-  }
 }
 @media (max-width: 600px) {
   .modal {

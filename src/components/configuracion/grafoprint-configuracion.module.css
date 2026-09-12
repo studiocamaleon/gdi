@@ -61,6 +61,7 @@
   font-size: 12px;
   line-height: 1.55;
 }
+.headerNavigation,
 .headerActions {
   display: flex;
   flex: none;
@@ -509,6 +510,9 @@
   }
   .headerCopy {
     flex-basis: calc(100% - 54px);
+  }
+  .headerNavigation {
+    width: 100%;
   }
   .headerActions {
     width: 100%;

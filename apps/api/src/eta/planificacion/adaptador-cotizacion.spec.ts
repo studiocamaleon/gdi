@@ -30,6 +30,10 @@ function solicitud(): SolicitudAdaptadorF6 {
       estaciones: pasos.map((p) => ({
         ...controlado.taller.estaciones[0],
         id: p.familiaCodigo,
+        equipoProduccion: {
+          ...controlado.taller.estaciones[0].equipoProduccion!,
+          id: `equipo-${p.familiaCodigo}`,
+        },
         familias: [p.familiaCodigo],
         maquinas: p.tiempo?.maquinaId
           ? [
@@ -51,6 +55,100 @@ const corte = (s: SolicitudAdaptadorF6, index = 0) =>
   s.fuentes[index].cotizacion.componentesFabricados![0].pasos!.find(
     (p) => p.familiaCodigo === 'corte_laser',
   )!;
+
+function solicitudConDesgaste() {
+  const s = solicitud();
+  s.fuentes.forEach((f, i) => {
+    const p = impresion(s, i);
+    for (const [slot, nombre, precio] of [
+      ['desgaste_drum_k', 'Drum K', 1.8],
+      ['desgaste_drum_cmy', 'Drum CMY', 5.4],
+    ] as const) {
+      const cantidad = f.cotizacion.cantidadPedida;
+      const costo = cantidad * precio;
+      p.materiales!.push({
+        slotCodigo: slot,
+        materialVarianteId: '',
+        materialNombre: nombre,
+        materialSku: '',
+        materialDisplayName: nombre,
+        tipoLineaCosto: 'DESGASTE_MAQUINA',
+        cantidad,
+        unidad: 'a4_equiv',
+        precioUnitario: precio,
+        costoTotal: costo,
+        estrategiaCosto: 'costo_por_click',
+      });
+      p.costoTotal += costo;
+      f.cotizacion.costos.total += costo;
+    }
+  });
+  return s;
+}
+
+it('planifica desgaste sin variante y conserva cada componente y su costo en todos los lotes', () => {
+  const s = solicitudConDesgaste();
+  const r = planificarCotizacionesF6(s);
+  expect(
+    r.resultado.alternativas.find((a) => a.id === 'completo')!.costo,
+  ).toBeCloseTo(s.fuentes[3].cotizacion.costos.total, 6);
+  for (const detalle of r.detalles) {
+    const desgaste = detalle.materiales.filter((m) =>
+      m.id.startsWith('desgaste:'),
+    );
+    expect(desgaste).toHaveLength(2);
+    expect(new Set(desgaste.map((m) => m.id)).size).toBe(2);
+    expect(desgaste.find((m) => m.nombre === 'Drum K')).toMatchObject({
+      cantidad: 200,
+      costo: 360,
+    });
+    expect(desgaste.find((m) => m.nombre === 'Drum CMY')).toMatchObject({
+      cantidad: 200,
+      costo: 1080,
+    });
+  }
+});
+
+it('detecta un componente de desgaste distinto entre cantidades aunque ambos carezcan de variante', () => {
+  const s = solicitudConDesgaste();
+  impresion(s).materiales!.at(-1)!.slotCodigo = 'otro_componente';
+  expect(() => adaptarCotizacionesF6(s)).toThrow('cambió');
+});
+
+it.each([
+  [
+    'material sin variante',
+    (s: SolicitudAdaptadorF6) => {
+      impresion(s).materiales![0].materialVarianteId = '';
+    },
+    'variante identificada',
+  ],
+  [
+    'desgaste sin identidad',
+    (s: SolicitudAdaptadorF6) => {
+      impresion(s).materiales!.at(-1)!.slotCodigo = '';
+    },
+    'componente de desgaste',
+  ],
+  [
+    'consumo negativo',
+    (s: SolicitudAdaptadorF6) => {
+      impresion(s).materiales!.at(-1)!.cantidad = -1;
+    },
+    'costos inválidos',
+  ],
+  [
+    'costo no finito',
+    (s: SolicitudAdaptadorF6) => {
+      impresion(s).materiales!.at(-1)!.costoTotal = NaN;
+    },
+    'costos inválidos',
+  ],
+] as const)('sigue rechazando %s', (_caso, mutar, mensaje) => {
+  const s = solicitudConDesgaste();
+  mutar(s);
+  expect(() => adaptarCotizacionesF6(s)).toThrow(mensaje);
+});
 
 it('proyecta el grafo real: pre-prensa → impresión → corte → ensamble, atravesando opcionales omitidos', () => {
   const r = adaptarCotizacionesF6(solicitud());
@@ -166,7 +264,7 @@ it('identifica la operación sin estación en lugar de presentar una fecha confi
   );
   const r = planificarCotizacionesF6(s);
   expect(r.observaciones).toContain(
-    'Ensamble estructural: falta una estación activa que reciba esta operación.',
+    'Ensamble estructural: Asigná este paso sin máquina a una única estación activa; revisá si falta la asignación o está repetida.',
   );
   expect(
     r.resultado.alternativas.every((a) => a.estado === 'CONDICIONADA'),

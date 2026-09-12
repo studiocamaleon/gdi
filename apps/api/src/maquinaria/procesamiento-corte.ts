@@ -333,6 +333,8 @@ export type ProcesamientoCorteCosteado = {
   espesorMm: number;
   operaciones: OperacionCorteCosteada[];
   placas: number;
+  /** Maniobras y recorridos por placa, derivados de los parámetros existentes. */
+  fasesRun?: import('../eta/motor/demanda-humana').FaseRun[];
   manejoMin: number;
   cambiosMin: number;
   cambiosHerramienta: number;

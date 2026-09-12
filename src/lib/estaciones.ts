@@ -211,17 +211,29 @@ export type EstacionEmpleadoRef = {
 };
 
 export type EstacionMaquinaRef = {
+  operacionMaquina?: import('./demanda-humana').ModoOperacionMaquina | null;
+  activo?: boolean;
   id: string;
   codigo: string;
   nombre: string;
   /**
-   * Centro de costo principal de la máquina: el vínculo real paso→máquina
-   * (la trazabilidad del paso guarda centroCostoId, no maquinaId).
+   * Centro de costo principal de la máquina, conservado para el cálculo.
+   * La asignación de tareas usa el id de la máquina cotizada.
    */
   centroCostoId: string | null;
 };
 
+export type EquipoProduccion = {
+  id: string;
+  nombre: string;
+  personas: number;
+  activo: boolean;
+  calendario: CalendarioEstacion | null;
+};
+
 export type Estacion = {
+  equipoProduccionId?: string | null;
+  equipoProduccion?: EquipoProduccion | null;
   id: string;
   nombre: string;
   descripcion: string;
@@ -230,19 +242,20 @@ export type Estacion = {
   etapa: string;
   /** Clave del set de iconos del tablero (Printer, Cut, Shield, …). */
   icono: string | null;
-  /** PUESTOS de trabajo simultáneos: multiplican las horas del calendario. */
+  /** Puestos físicos para trabajos SIN máquina. Cada máquina aporta capacidad propia. */
   capacidadConcurrente: number;
   /**
-   * Minutos para traer el material hasta acá y dejarlo listo. Ocupa un PUESTO
-   * (lo hace el operario) pero no la máquina. null = default del tenant.
+   * Separación entre trabajos: ocupa al equipo y al recurso que se está liberando.
+   * null = default del tenant.
    */
   tiempoPreparacionMin: number | null;
   /** Calendario semanal operativo; null = sin proyección de cola en días. */
   calendario: CalendarioEstacion | null;
+  /** Lista normalizada para editar, sin reglas de máquina retiradas. */
+  pasosSinMaquina?: string[];
   /** Códigos de familias de pasos asignadas. */
   familias: string[];
-  /** Reglas de captura nuevas (tecnología / paso). Ver
-   *  docs/estaciones-reglas-diseno.md. */
+  /** Asignaciones explícitas de pasos conservadas por compatibilidad. */
   reglas?: ReglaEstacion[];
   empleados: EstacionEmpleadoRef[];
   maquinas: EstacionMaquinaRef[];
@@ -257,6 +270,7 @@ export type ReglaEstacion = {
 };
 
 export type EstacionPayload = {
+  equipoProduccionId?: string | null;
   nombre: string;
   descripcion?: string;
   activo: boolean;
@@ -276,8 +290,8 @@ export type EstacionPayload = {
 
 /**
  * Fila del catálogo de familias con sus dueñas actuales (para el picker).
- * Una familia puede estar en varias estaciones si tienen máquinas (filtran);
- * a lo sumo una estación general (sin máquinas) por familia.
+ * Incluye sólo pasos que admiten ejecución sin máquina. Cada asignación
+ * explícita pertenece a una estación, aunque ésta contenga máquinas.
  */
 export type FamiliaPasoCatalogo = {
   codigo: string;
@@ -303,4 +317,3 @@ export function createEmptyEstacion(): EstacionPayload {
     reglas: [],
   };
 }
-

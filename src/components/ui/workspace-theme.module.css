@@ -1,0 +1,12 @@
+/* Tema optativo de vistas renovadas. Aplicar también dentro de portales. */
+.theme {
+  --border: color-mix(in srgb, var(--foreground) 10%, var(--card));
+  --muted: color-mix(in srgb, var(--foreground) 4%, var(--card));
+  --secondary: var(--muted);
+  --accent: var(--muted);
+  --input: var(--border);
+  --background: var(--card);
+  --workspace-ready: var(--ok);
+  --workspace-running: var(--chart-3);
+  --workspace-waiting: var(--chart-4);
+}

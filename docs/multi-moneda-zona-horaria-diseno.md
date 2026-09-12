@@ -351,8 +351,10 @@ Quedan (menores, sin fecha):
 - **Vistas públicas** (tracking, presupuesto/recibo/comprobante): formatean
   fechas en el navegador del cliente final. Decisión pendiente de si eso es
   correcto (el cliente lee en SU hora) o deben fijarse a la zona del taller.
-- **`etiquetaEta` del tablero**: zona del navegador del operario = la del
-  taller en la práctica; anotado por si aparece el caso remoto.
+- **ETA comercial y tablero (corregido 09/09/2026)**: etiquetas, prioridades y
+  comparaciones usan el día de la zona del taller. La ficha obtiene reloj/carga
+  del servidor y distingue producción lista de entrega sugerida con margen.
+  Ver [auditoría F6 de fechas](visual-ilusion-fase-6-fechas-2026-09-09.md).
 - **Inputs de pricing de productos-servicios**: siguen con `type="number"`
   (valores técnicos con punto decimal); funcionan, pero no usan `MoneyInput`.
 - **Snapshot ETA histórico**: los viejos quedaron con día UTC-del-proceso;

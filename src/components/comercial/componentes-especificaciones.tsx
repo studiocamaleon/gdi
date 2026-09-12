@@ -131,7 +131,7 @@ function ComponentCard({
   component: ComponenteEspecificacionesView;
   depth: number;
 }) {
-  const [open, setOpen] = React.useState(depth === 0);
+  const [open, setOpen] = React.useState(false);
   return (
     <details
       className={styles.card}

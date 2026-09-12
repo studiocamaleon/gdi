@@ -1,3 +1,4 @@
+import type { ProgresoProduccion } from "./progreso-produccion";
 import { apiRequest } from "@/lib/api";
 
 export type CampanaEstado =
@@ -26,6 +27,7 @@ export type CampanaResumen = {
   cliente: { id: string; nombre: string };
   responsable: { id: string; nombre: string } | null;
   avancePct: number | null;
+  progreso?: ProgresoProduccion;
   riesgo: boolean;
   cantidad: { cotizaciones: number; ordenes: number; hitos: number };
 };
@@ -85,6 +87,7 @@ export type CampanaDetalle = Omit<
     facturadoTotal: number;
     cobradoTotal: number;
     progresoPct: number | null;
+    progreso?: ProgresoProduccion;
     fechaEntrega: string | null;
     createdAt: string;
   }>;
@@ -115,6 +118,7 @@ export type CampanaDetalle = Omit<
     };
     produccion: {
       avancePct: number | null;
+  progreso?: ProgresoProduccion;
       porEstado: Record<string, number>;
       abiertas: number;
     };

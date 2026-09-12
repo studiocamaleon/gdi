@@ -1,5 +1,9 @@
 # CSS — convenciones y el trinquete
 
+La composición visual de las vistas que se renuevan sigue el
+[Sistema visual Shadcn](sistema-visual-shadcn.md). Este documento define cómo
+migrar y retirar CSS; ambos contratos se complementan.
+
 Cómo se escriben estilos nuevos, por qué `globals.css` llegó a 38k líneas y qué
 se hace al respecto sin frenar el desarrollo.
 

@@ -1,6 +1,5 @@
-import { fronterasEjecutablesDAG } from '../ordenes-trabajo/fronteras-ejecutables';
-export { fronterasEjecutablesDAG } from '../ordenes-trabajo/fronteras-ejecutables';
-import { snapshotPasoProduccion, requierePlanConservado, planoOperativo, type ItemSnapshotProduccion, type PasoSnapshotProduccion } from './snapshot-paso-produccion';
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
+import { leerModoOperacionMaquina } from '../eta/motor/demanda-humana';
 import {
   Injectable,
   NotFoundException,
@@ -14,7 +13,6 @@ import type { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import type { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import type { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
 import {
-  colaConsolidacionDeFamilia,
   FAMILIAS,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
@@ -23,20 +21,7 @@ import {
   parseCalendario,
   type CalendarioEstacion,
 } from './calendario';
-import { evaluateRollLayoutForConfiguredAlgorithm } from '../motor-universal/nesting-dispatcher';
 import type { EstructuraBastidorEjecutada } from '../motor-universal/tipos';
-import type { SimularNestingDto } from './dto/simular-nesting.dto';
-import {
-  aplicarFallbackConfigLaser,
-  claveCompatibilidadLoteLaser,
-  extraerCompatibilidadLaser,
-  faltantesCompatibilidadLaser,
-} from './simulador-laser-compatibilidad';
-import {
-  normalizarTecnologiaMaquina,
-  TECNOLOGIAS_MAQUINA,
-} from '../common/tecnologia-maquina';
-
 /**
  * Mínimo de pasos hechos por familia para publicar su mediana histórica:
  * no se proyecta cola sobre anécdota (D6 de capacidad-estaciones-diseno.md).
@@ -50,512 +35,6 @@ function calendarioAJson(calendario: CalendarioEstacion | null) {
     : (calendario as unknown as Prisma.InputJsonValue);
 }
 
-// ── Simulador de impresión: extracción del snapshot ──────────────────────
-
-type PiezaSimulador = { anchoMm: number; altoMm: number; cantidad: number };
-
-/** Paso de trazabilidad del snapshot (sólo lo que el simulador lee). */
-type TrazabilidadPasoSimulador = {
-  rutaPasoId?: string | null;
-  materiales?: Array<{
-    tipoLineaCosto?: string;
-    materialVarianteId?: string;
-    materialSku?: string;
-    materiaPrimaNombre?: string | null;
-    precioUnitario?: number;
-    unidad?: string;
-    atributosVarianteJson?: { anchoMm?: unknown } | null;
-    materiaPrimaId?: string | null;
-  }>;
-  nestingResult?: {
-    placements?: Array<{ widthMm?: number; heightMm?: number }>;
-    consumedLengthMm?: number;
-    algorithm?: unknown;
-    visualConfig?: {
-      margins?: {
-        topMm?: unknown;
-        leftMm?: unknown;
-        rightMm?: unknown;
-        bottomMm?: unknown;
-      } | null;
-      spacing?: { horizontalMm?: unknown; verticalMm?: unknown } | null;
-      allowRotation?: unknown;
-      pieceBleedMm?: unknown;
-    } | null;
-  } | null;
-};
-
-/**
- * Config de acomodo con la que el MOTOR costeó este paso, para volver a
- * acomodar la tanda consolidada con el mismo motor y los mismos parámetros.
- * Comparar contra un acomodo hecho con otros márgenes daba "ahorros"
- * negativos que no existían. Sin nesting en el snapshot → null.
- */
-type NestingConfigSnapshot = {
-  margenLateralMm: number;
-  margenLongitudinalMm: number;
-  separacionHMm: number;
-  separacionVMm: number;
-  /**
-   * La demasía se come un borde de cada lado ADEMÁS del margen de máquina:
-   * el motor acomoda dentro de `printable − 2×demasía` (por eso el snapshot
-   * guarda usableArea 565 contra printableArea 570 en un rollo de 600).
-   */
-  demasiaMm: number;
-  permitirRotacion: boolean;
-  algorithm: NestingAlgorithm;
-};
-
-/** Algoritmos de rollo que el simulador sabe correr (el resto → 'auto'). */
-type NestingAlgorithm = 'auto' | 'shelf-rollo' | 'maxrects-rollo';
-
-function nestingConfigDeSnapshot(
-  trazPaso: TrazabilidadPasoSimulador | null,
-): NestingConfigSnapshot | null {
-  const nesting = trazPaso?.nestingResult;
-  const visual = nesting?.visualConfig;
-  if (!visual) return null;
-  const margins = visual.margins ?? {};
-  const spacing = visual.spacing ?? {};
-  // Conservador: el lado más ancho manda, el rollo es uno solo.
-  const lateral = Math.max(
-    numeroONull(margins.leftMm) ?? 0,
-    numeroONull(margins.rightMm) ?? 0,
-  );
-  const longitudinal = Math.max(
-    numeroONull(margins.topMm) ?? 0,
-    numeroONull(margins.bottomMm) ?? 0,
-  );
-  const algorithm = nesting?.algorithm;
-  return {
-    margenLateralMm: lateral,
-    margenLongitudinalMm: longitudinal,
-    separacionHMm: numeroONull(spacing.horizontalMm) ?? 0,
-    separacionVMm: numeroONull(spacing.verticalMm) ?? 0,
-    demasiaMm: numeroONull(visual.pieceBleedMm) ?? 0,
-    permitirRotacion: visual.allowRotation !== false,
-    // Se respeta el algoritmo con el que se COTIZÓ: correr otro haría aparecer
-    // un ahorro que viene del algoritmo y no de juntar los trabajos.
-    algorithm:
-      algorithm === 'shelf-rollo' || algorithm === 'maxrects-rollo'
-        ? algorithm
-        : 'auto',
-  };
-}
-
-function numeroONull(valor: unknown): number | null {
-  return typeof valor === 'number' && Number.isFinite(valor) ? valor : null;
-}
-
-/**
- * Dos variantes pueden compartir materia prima y ancho sin ser el mismo
- * material físico (color, gramaje, acabado, adhesivo…). Sólo el ancho se
- * excluye porque es justamente el eje que compara el simulador.
- */
-export function claveCompatibilidadVariante(
-  valor: Prisma.JsonValue | null,
-): string {
-  const normalizar = (entrada: unknown): unknown => {
-    if (Array.isArray(entrada)) return entrada.map(normalizar);
-    if (entrada && typeof entrada === 'object') {
-      return Object.fromEntries(
-        Object.entries(entrada as Record<string, unknown>)
-          .filter(([clave]) => clave !== 'anchoMm')
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([clave, contenido]) => [clave, normalizar(contenido)]),
-      );
-    }
-    return entrada;
-  };
-  return JSON.stringify(normalizar(valor ?? {}));
-}
-
-/**
- * Piezas físicas del job: los placements del nestingResult (post-panelizado
- * y con demasía — lo que la máquina imprime de verdad), comprimidos por
- * dimensión. Fallback: jobContext.piezas (mm). [] = sin medidas (D2).
- */
-function piezasDeSnapshot(
-  trazPaso: TrazabilidadPasoSimulador | null,
-  jobContext: Record<string, unknown> | null,
-): PiezaSimulador[] {
-  const placements = trazPaso?.nestingResult?.placements;
-  if (Array.isArray(placements) && placements.length > 0) {
-    const porDim = new Map<string, PiezaSimulador>();
-    for (const placement of placements) {
-      const anchoMm = numeroONull(placement.widthMm);
-      const altoMm = numeroONull(placement.heightMm);
-      if (anchoMm === null || altoMm === null) continue;
-      const clave = `${anchoMm}x${altoMm}`;
-      const previa = porDim.get(clave);
-      if (previa) previa.cantidad += 1;
-      else porDim.set(clave, { anchoMm, altoMm, cantidad: 1 });
-    }
-    if (porDim.size > 0) return [...porDim.values()];
-  }
-  const piezas = jobContext?.piezas;
-  if (Array.isArray(piezas)) {
-    return piezas
-      .map((pieza) => {
-        const anchoMm = numeroONull((pieza as { anchoMm?: unknown }).anchoMm);
-        const altoMm = numeroONull((pieza as { altoMm?: unknown }).altoMm);
-        const cantidad =
-          numeroONull((pieza as { cantidad?: unknown }).cantidad) ?? 1;
-        if (anchoMm === null || altoMm === null) return null;
-        return { anchoMm, altoMm, cantidad: Math.max(1, Math.round(cantidad)) };
-      })
-      .filter((pieza): pieza is PiezaSimulador => pieza !== null);
-  }
-  return [];
-}
-
-/** Lo que `acomodarTanda` necesita de un paso ya cargado de la DB. */
-type PasoParaAcomodar = PasoSnapshotProduccion & {
-  id: string;
-  rutaPasoId: string | null;
-  item: ItemSnapshotProduccion & {
-    cotizacionItem: {
-      jobContextJson: Prisma.JsonValue;
-      trazabilidadJson: Prisma.JsonValue;
-    } | null;
-  };
-};
-
-/**
- * Acomoda la tanda consolidada con el motor real, un resultado por ancho de
- * rollo candidato. Las piezas y la config salen del snapshot de cada paso.
- * Exportada para test: es el pegamento entre el snapshot y el motor.
- */
-export function acomodarTanda(pasos: PasoParaAcomodar[], anchosMm: number[]) {
-  // Un `medidas[i]` por paso: el motor devuelve `piece-<i>-<copia>`, así se
-  // sabe de qué trabajo es cada pieza acomodada.
-  const medidas: Array<{ anchoMm: number; altoMm: number; cantidad: number }> =
-    [];
-  const pasoDeMedida: string[] = [];
-  const configs: NestingConfigSnapshot[] = [];
-  const sinMedidas: string[] = [];
-
-  for (const paso of pasos) {
-    const snapshot = snapshotPasoProduccion(paso.item, paso);
-    const jobContext = snapshot.jobContext;
-    const trazPaso = snapshot.paso;
-    if (paso.nestingLoteRol === 'PARTICIPANTE') throw new BadRequestException('La participación se ejecuta desde la operación principal de su lote.');
-    if (requierePlanConservado(trazPaso?.nestingResult, Boolean(snapshot.lote))) {
-      throw new BadRequestException('Este trabajo tiene un plan de fabricación conservado. Ejecutá su plano original desde la cola.');
-    }
-
-    const piezas = piezasDeSnapshot(trazPaso, jobContext);
-    if (piezas.length === 0) {
-      sinMedidas.push(paso.id);
-      continue;
-    }
-    const config = nestingConfigDeSnapshot(trazPaso);
-    if (config) configs.push(config);
-    for (const pieza of piezas) {
-      medidas.push({
-        anchoMm: pieza.anchoMm,
-        altoMm: pieza.altoMm,
-        cantidad: pieza.cantidad,
-      });
-      pasoDeMedida.push(paso.id);
-    }
-  }
-
-  // Config de la tanda: la más conservadora, el rollo es uno solo.
-  const config = configs.reduce<NestingConfigSnapshot | null>(
-    (acc, cur) =>
-      acc === null
-        ? cur
-        : {
-            margenLateralMm: Math.max(acc.margenLateralMm, cur.margenLateralMm),
-            margenLongitudinalMm: Math.max(
-              acc.margenLongitudinalMm,
-              cur.margenLongitudinalMm,
-            ),
-            separacionHMm: Math.max(acc.separacionHMm, cur.separacionHMm),
-            separacionVMm: Math.max(acc.separacionVMm, cur.separacionVMm),
-            demasiaMm: Math.max(acc.demasiaMm, cur.demasiaMm),
-            permitirRotacion: acc.permitirRotacion && cur.permitirRotacion,
-            algorithm: acc.algorithm === cur.algorithm ? acc.algorithm : 'auto',
-          },
-    null,
-  );
-  if (!config || medidas.length === 0)
-    return {
-      sinMedidas,
-      anchos: [],
-      margenLateralMm: null,
-      margenLongitudinalMm: null,
-    };
-
-  // Bordes efectivos: margen de máquina MÁS demasía, igual que al cotizar
-  // (el snapshot guarda usableArea 565 contra printableArea 570 en un 600).
-  const bordeLateralMm = config.margenLateralMm + config.demasiaMm;
-  const bordeLongitudinalMm = config.margenLongitudinalMm + config.demasiaMm;
-
-  const vacio = (anchoMm: number, incompatibles: string[]) => ({
-    anchoMm,
-    consumedLengthMm: null,
-    aprovechamientoPct: null,
-    piezasAcomodadas: 0,
-    incompatibles,
-    placements: [] as Array<Record<string, unknown>>,
-  });
-
-  const anchos = anchosMm.map((anchoMm) => {
-    const printableWidthMm = anchoMm - bordeLateralMm * 2;
-    // Piezas que no entran ni de canto: el job entero queda afuera del batch.
-    const incompatibles = [
-      ...new Set(
-        medidas
-          .map((medida, idx) =>
-            Math.min(medida.anchoMm, medida.altoMm) > printableWidthMm
-              ? pasoDeMedida[idx]
-              : null,
-          )
-          .filter((pasoId): pasoId is string => pasoId !== null),
-      ),
-    ];
-    const indicesUsados = medidas
-      .map((_, idx) => idx)
-      .filter((idx) => !incompatibles.includes(pasoDeMedida[idx]));
-
-    if (printableWidthMm <= 0 || indicesUsados.length === 0)
-      return vacio(anchoMm, incompatibles);
-
-    const candidato = evaluateRollLayoutForConfiguredAlgorithm(
-      {
-        printableWidthMm,
-        marginLeftMm: bordeLateralMm,
-        marginStartMm: bordeLongitudinalMm,
-        marginEndMm: bordeLongitudinalMm,
-        separacionHorizontalMm: config.separacionHMm,
-        separacionVerticalMm: config.separacionVMm,
-        permitirRotacion: config.permitirRotacion,
-        medidas: indicesUsados.map((idx) => medidas[idx]),
-      },
-      config.algorithm,
-    );
-    if (!candidato) return vacio(anchoMm, incompatibles);
-
-    const { result } = candidato;
-    const areaTotalMm2 = anchoMm * result.consumedLengthMm;
-    return {
-      anchoMm,
-      consumedLengthMm: result.consumedLengthMm,
-      aprovechamientoPct:
-        areaTotalMm2 > 0
-          ? Math.round(
-              ((result.usefulAreaM2 * 1_000_000) / areaTotalMm2) * 10000,
-            ) / 100
-          : 0,
-      piezasAcomodadas: result.placements.length,
-      incompatibles,
-      placements: result.placements.map((p) => {
-        // `piece-<medidaIndex>-<copia>`; medidaIndex indexa el array que se le
-        // pasó al motor, que acá viene filtrado por incompatibles.
-        const medidaIndex = Number.parseInt(
-          (p.sourcePieceId ?? '').split('-')[1] ?? '',
-          10,
-        );
-        const idxOriginal = indicesUsados[medidaIndex];
-        return {
-          pasoId: idxOriginal !== undefined ? pasoDeMedida[idxOriginal] : null,
-          xMm: p.centerXMm - p.widthMm / 2,
-          yMm: p.centerYMm - p.heightMm / 2,
-          widthMm: p.widthMm,
-          heightMm: p.heightMm,
-          rotated: p.rotated,
-        };
-      }),
-    };
-  });
-
-  // Bordes efectivos de la tanda (margen de máquina + demasía), los mismos que
-  // insetan las piezas. El simulador los usa para dibujar los márgenes REALES
-  // —no un adorno— y mostrar que el avance corre una vez por tanda. Son iguales
-  // para todos los anchos, así que van a nivel grupo.
-  return {
-    sinMedidas,
-    anchos,
-    margenLateralMm: bordeLateralMm,
-    margenLongitudinalMm: bordeLongitudinalMm,
-  };
-}
-
-function buildLaserJob(
-  orden: {
-    id: string;
-    numero: string;
-    fechaEntrega: Date | null;
-    cliente: { nombre: string } | null;
-  },
-  item: ItemSnapshotProduccion & {
-    id: string;
-    nombre: string;
-    ordenIndice: number;
-    cotizacionItem: {
-      jobContextJson: Prisma.JsonValue;
-      trazabilidadJson: Prisma.JsonValue;
-    } | null;
-    pasos: Array<{ indice: number; nombre: string; estado: string }>;
-  },
-  frontera: PasoSnapshotProduccion & {
-    id: string;
-    indice: number;
-    rutaPasoId: string | null;
-    estado: string;
-    centroCostoId: string | null;
-    centroCostoNombre: string | null;
-    duracionEstimadaMin: Prisma.Decimal | null;
-    iniciadoEl: Date | null;
-  },
-) {
-  const snapshot = snapshotPasoProduccion(item, frontera);
-  const compatibilidad = extraerCompatibilidadLaser(snapshot.jobContext, snapshot.traza, frontera.rutaPasoId);
-
-  // Adónde va DESPUÉS: los pasos siguientes del item, como contexto.
-  const acabados = item.pasos
-    .filter((paso) => paso.indice > frontera.indice)
-    .map((paso) => paso.nombre)
-    .slice(0, 4);
-
-  // PLIEGO DE IMPRESIÓN (lo que se carga en la máquina) ≠ formato de
-  // compra del papel: acá los outputs canónicos; si vienen null (cotización
-  // vieja) se resuelve después desde la config del paso.
-  const letraItem = String.fromCharCode(65 + (item.ordenIndice % 26));
-  return {
-    pasoId: frontera.id,
-    itemId: item.id,
-    ordenId: orden.id,
-    codigo: `${orden.numero} · ${letraItem}`,
-    cliente: (orden.cliente?.nombre ?? 'Sin cliente') as string | null,
-    producto: item.nombre,
-    fechaEntrega: orden.fechaEntrega
-      ? orden.fechaEntrega.toISOString().slice(0, 10)
-      : null,
-    estado: frontera.estado as 'pendiente' | 'en_curso',
-    iniciadoEl: frontera.iniciadoEl ? frontera.iniciadoEl.toISOString() : null,
-    duracionEstimadaMin:
-      frontera.duracionEstimadaMin != null
-        ? Number(frontera.duracionEstimadaMin)
-        : null,
-    centroCostoId: frontera.centroCostoId,
-    centroCostoNombre: frontera.centroCostoNombre,
-    configPasoId: compatibilidad.configPasoId,
-    maquinaId: compatibilidad.maquinaId,
-    maquinaNombre: null as string | null, // se resuelve con el catálogo
-    papel:
-      compatibilidad.papelNombre || compatibilidad.varianteId
-        ? {
-            materiaPrimaId: compatibilidad.materiaPrimaId,
-            varianteId: compatibilidad.varianteId,
-            nombre: compatibilidad.papelNombre ?? 'Papel sin identificar',
-            gramaje: compatibilidad.gramaje,
-          }
-        : null,
-    pliego:
-      compatibilidad.pliegoAnchoMm !== null &&
-      compatibilidad.pliegoAltoMm !== null
-        ? {
-            preset: compatibilidad.pliegoPreset,
-            anchoMm: compatibilidad.pliegoAnchoMm,
-            altoMm: compatibilidad.pliegoAltoMm,
-          }
-        : (null as {
-            preset: string | null;
-            anchoMm: number | null;
-            altoMm: number | null;
-          } | null),
-    hojas: compatibilidad.pliegos,
-    clics:
-      compatibilidad.pliegos !== null
-        ? compatibilidad.pliegos * (compatibilidad.caras ?? 1)
-        : null,
-    caras: compatibilidad.caras,
-    modoColor: compatibilidad.modoColor,
-    acabados,
-    compatibilidadKey: null as string | null,
-    faltantesCompatibilidad: [] as string[],
-  };
-}
-
-function buildSimuladorJob(
-  orden: {
-    id: string;
-    numero: string;
-    fechaEntrega: Date | null;
-    cliente: { nombre: string } | null;
-  },
-  item: ItemSnapshotProduccion & {
-    id: string;
-    codigo: string;
-    nombre: string;
-    ordenIndice: number;
-    cotizacionItem: {
-      jobContextJson: Prisma.JsonValue;
-      trazabilidadJson: Prisma.JsonValue;
-    } | null;
-  },
-  frontera: PasoSnapshotProduccion & {
-    id: string;
-    rutaPasoId: string | null;
-    duracionEstimadaMin: Prisma.Decimal | null;
-  },
-) {
-  const snapshot = snapshotPasoProduccion(item, frontera);
-  const jobContext = snapshot.jobContext;
-  const trazPaso = snapshot.paso;
-
-  // Sustrato: la línea MATERIAL del paso (las tintas son CONSUMIBLE_MAQUINA).
-  const sustrato =
-    trazPaso?.materiales?.find((mat) => mat.tipoLineaCosto === 'MATERIAL') ??
-    null;
-
-  // Tecnología elegida al cotizar: la del paso, o la global del job.
-  const tecnologiaPaso = frontera.rutaPasoId
-    ? jobContext?.[`tecnologia_${frontera.rutaPasoId}`]
-    : null;
-  const tecnologia =
-    (typeof tecnologiaPaso === 'string' && tecnologiaPaso) ||
-    (typeof jobContext?.tecnologia === 'string' && jobContext.tecnologia) ||
-    null;
-
-  const letraItem = String.fromCharCode(65 + (item.ordenIndice % 26));
-  return {
-    pasoId: frontera.id,
-    itemId: item.id,
-    ordenId: orden.id,
-    codigo: `${orden.numero} · ${letraItem}`,
-    cliente: (orden.cliente?.nombre ?? 'Sin cliente') as string | null,
-    producto: item.nombre,
-    fechaEntrega: orden.fechaEntrega
-      ? orden.fechaEntrega.toISOString().slice(0, 10)
-      : null,
-    tecnologia,
-    materiaPrimaId: null as string | null, // se resuelve abajo con la variante
-    materiaPrimaNombre: sustrato?.materiaPrimaNombre ?? null,
-    varianteCotizada: sustrato?.materialVarianteId
-      ? {
-          id: sustrato.materialVarianteId,
-          sku: sustrato.materialSku ?? '',
-          anchoMm: numeroONull(sustrato.atributosVarianteJson?.anchoMm),
-          precioMl: numeroONull(sustrato.precioUnitario),
-          compatibilidadClave: '',
-        }
-      : null,
-    consumoCotizadoMm: numeroONull(trazPaso?.nestingResult?.consumedLengthMm),
-    planFabricacion: requierePlanConservado(trazPaso?.nestingResult, Boolean(snapshot.lote))
-      ? planoOperativo(trazPaso!.nestingResult!) : null,
-    piezas: piezasDeSnapshot(trazPaso, jobContext),
-    // Prellenar "¿cuánto duró la tanda?" (registro-tiempos D11).
-    duracionEstimadaMin:
-      frontera.duracionEstimadaMin != null
-        ? Number(frontera.duracionEstimadaMin)
-        : null,
-  };
-}
-
 function isUniqueConstraintError(error: unknown) {
   return (
     typeof error === 'object' &&
@@ -567,6 +46,7 @@ function isUniqueConstraintError(error: unknown) {
 
 /** Include de la proyección completa de una estación. */
 const ESTACION_INCLUDE = {
+  equipoProduccion: true,
   // Fase D: la regla "por familia" vive en EstacionRegla (tipo='familia'), junto
   // con tecnología/paso. Ya no se lee EstacionFamilia (legacy, sólo respaldo).
   reglas: { select: { tipo: true, valor: true } },
@@ -576,13 +56,14 @@ const ESTACION_INCLUDE = {
     },
   },
   maquinas: {
-    // centroCostoPrincipalId es el vínculo real paso→máquina: la
-    // trazabilidad del paso guarda centroCostoId, no maquinaId.
+    // El id identifica la máquina cotizada; el centro se conserva para costeo.
     select: {
       id: true,
       codigo: true,
       nombre: true,
       centroCostoPrincipalId: true,
+      activo: true,
+      parametrosTecnicosJson: true,
     },
     orderBy: { codigo: 'asc' as const },
   },
@@ -600,8 +81,8 @@ export class ProduccionService {
   // La estación agrupa familias de pasos (ruteo del tablero), máquinas y
   // empleados habilitados. Ver docs/estaciones-diseno.md
 
-  async findEstaciones(tenantId: string) {
-    const rows = await this.prisma.estacion.findMany({
+  async findEstaciones(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+    const rows = await db.estacion.findMany({
       where: { tenantId: tenantId },
       include: ESTACION_INCLUDE,
       orderBy: [{ nombre: 'asc' }],
@@ -632,7 +113,7 @@ export class ProduccionService {
   async findFamiliasPasos(auth: CurrentAuth) {
     // Fase D: las reglas "por familia" viven en EstacionRegla (tipo='familia').
     const asignadas = await this.prisma.estacionRegla.findMany({
-      where: { tenantId: auth.tenantId, tipo: 'familia' },
+      where: { tenantId: auth.tenantId, tipo: { in: ['familia', 'paso'] } },
       include: {
         estacion: {
           select: {
@@ -666,7 +147,7 @@ export class ProduccionService {
       orderBy: { nombre: 'asc' },
     });
     return [
-      ...Object.values(FAMILIAS).map((familia) => ({
+      ...Object.values(FAMILIAS).filter((f) => admitePasoSinMaquina(f.codigo)).map((familia) => ({
         codigo: familia.codigo as string,
         nombre: familia.nombre,
         categoria: familia.categoria as string,
@@ -677,7 +158,7 @@ export class ProduccionService {
       // La instancia HEREDA la categoría de su plantilla; y si no tiene
       // regla propia de estación, hereda la de la plantilla (se puede
       // cambiar). docs/pasos-tenant-por-plantilla-diseno.md
-      ...pasosTenant.map((paso) => ({
+      ...pasosTenant.filter((p) => admitePasoSinMaquina(p.plantillaCodigo)).map((paso) => ({
         codigo: paso.id,
         nombre: paso.nombre,
         categoria: (resolverFamilia(paso.plantillaCodigo)?.categoria ??
@@ -685,7 +166,7 @@ export class ProduccionService {
         visibleEnSelector: true,
         origen: 'tenant' as const,
         estaciones:
-          porFamilia.get(paso.id) ?? porFamilia.get(paso.plantillaCodigo) ?? [],
+          porFamilia.get(paso.id) ?? [],
       })),
     ];
   }
@@ -698,8 +179,8 @@ export class ProduccionService {
    * estimado→"real"→estimado, y 'declarado' es percepción, no medición).
    * Mediana y no promedio: resiste el outlier.
    */
-  async findDuracionesFamilias(tenantId: string) {
-    const rows = await this.prisma.$queryRaw<
+  async findDuracionesFamilias(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+    const rows = await db.$queryRaw<
       Array<{ familiaCodigo: string; medianaMin: number; muestras: number }>
     >`
       SELECT "familiaCodigo",
@@ -722,248 +203,6 @@ export class ProduccionService {
       medianaMin: Math.round(Number(row.medianaMin) * 10) / 10,
       muestras: Number(row.muestras),
     }));
-  }
-
-  // ── Simulador de impresión (cola real por área) ──────────────────────
-  // Pasos de familia impresion_por_area en FRONTERA de órdenes vivas, con
-  // sus piezas físicas (nestingResult del snapshot), el sustrato cotizado
-  // y el catálogo de anchos/stock de cada materia prima involucrada.
-  // Ver docs/simulador-impresion-diseno.md
-
-  async simulador(auth: CurrentAuth) {
-    const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        estado: { in: ['pendiente', 'produccion'] },
-      },
-      select: {
-        id: true,
-        numero: true,
-        fechaEntrega: true,
-        cliente: { select: { nombre: true } },
-        items: {
-          orderBy: { ordenIndice: 'asc' },
-          select: {
-            id: true,
-            codigo: true,
-            nombre: true,
-            ordenIndice: true,
-            jobContextSnapshotJson: true,
-            trazabilidadSnapshotJson: true,
-            cotizacionItem: {
-              select: { jobContextJson: true, trazabilidadJson: true },
-            },
-            pasos: {
-              orderBy: { indice: 'asc' },
-              select: {
-                id: true,
-                indice: true,
-                familiaCodigo: true,
-                estado: true,
-                tipoEjecucion: true,
-                rutaPasoId: true,
-                nestingLoteRol: true,
-                nestingLoteSnapshotJson: true,
-                duracionEstimadaMin: true,
-                nodoClave: true,
-                gatesOperativos: { select: { estado: true } },
-                dependenciasEntrantes: {
-                  select: { predecesorPasoId: true },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const jobs: Array<ReturnType<typeof buildSimuladorJob>> = [];
-    for (const orden of ordenes) {
-      const pasosOrden = orden.items.flatMap((item) => item.pasos);
-      for (const item of orden.items) {
-        // Un DAG puede abrir varias ramas simultáneas. Cada cola recibe sólo
-        // los nodos cuyos predecesores (también cross-item) ya terminaron.
-        for (const frontera of fronterasEjecutablesDAG(
-          pasosOrden,
-          item.pasos,
-        )) {
-          if (
-            colaConsolidacionDeFamilia(frontera.familiaCodigo) !==
-            'gran_formato'
-          )
-            continue;
-          if (frontera.nestingLoteRol === 'PARTICIPANTE') continue;
-          if (frontera.estado === 'bloqueado') continue;
-          if (frontera.tipoEjecucion === 'tercerizado') continue;
-          jobs.push(buildSimuladorJob(orden, item, frontera));
-        }
-      }
-    }
-
-    // La trazabilidad guarda la VARIANTE pero no la materia prima: se
-    // resuelve acá para poder agrupar y traer los anchos hermanos.
-    const varianteIds = [
-      ...new Set(
-        jobs
-          .map((job) => job.varianteCotizada?.id)
-          .filter((id): id is string => typeof id === 'string'),
-      ),
-    ];
-    const variantes = varianteIds.length
-      ? await this.prisma.materiaPrimaVariante.findMany({
-          where: { tenantId: auth.tenantId, id: { in: varianteIds } },
-          select: {
-            id: true,
-            materiaPrimaId: true,
-            atributosVarianteJson: true,
-          },
-        })
-      : [];
-    const materiaPrimaPorVariante = new Map(
-      variantes.map((variante) => [variante.id, variante.materiaPrimaId]),
-    );
-    for (const job of jobs) {
-      job.materiaPrimaId = job.varianteCotizada?.id
-        ? (materiaPrimaPorVariante.get(job.varianteCotizada.id) ?? null)
-        : null;
-      if (job.varianteCotizada?.id) {
-        const variante = variantes.find(
-          (item) => item.id === job.varianteCotizada?.id,
-        );
-        job.varianteCotizada.compatibilidadClave = claveCompatibilidadVariante(
-          variante?.atributosVarianteJson ?? null,
-        );
-      }
-    }
-
-    // Catálogo de anchos por materia prima involucrada (variantes + stock).
-    const materiaPrimaIds = [
-      ...new Set(
-        jobs
-          .map((job) => job.materiaPrimaId)
-          .filter((id): id is string => id !== null),
-      ),
-    ];
-    const materiasPrimas = materiaPrimaIds.length
-      ? await this.prisma.materiaPrima.findMany({
-          where: { tenantId: auth.tenantId, id: { in: materiaPrimaIds } },
-          select: {
-            id: true,
-            nombre: true,
-            variantes: {
-              where: { activo: true },
-              select: {
-                id: true,
-                sku: true,
-                atributosVarianteJson: true,
-                precioReferencia: true,
-                stocks: { select: { cantidadDisponible: true } },
-              },
-            },
-          },
-        })
-      : [];
-
-    const materiales = materiasPrimas.map((materiaPrima) => ({
-      materiaPrimaId: materiaPrima.id,
-      nombre: materiaPrima.nombre,
-      anchos: materiaPrima.variantes
-        .map((variante) => {
-          const atributos = variante.atributosVarianteJson as {
-            anchoMm?: unknown;
-          } | null;
-          const anchoMm =
-            typeof atributos?.anchoMm === 'number' ? atributos.anchoMm : null;
-          if (anchoMm === null || anchoMm <= 0) return null;
-          const stockMl = variante.stocks.reduce(
-            (acc, stock) => acc + Number(stock.cantidadDisponible),
-            0,
-          );
-          return {
-            varianteId: variante.id,
-            sku: variante.sku,
-            anchoMm,
-            precioMl:
-              variante.precioReferencia != null
-                ? Number(variante.precioReferencia)
-                : null,
-            stockMl: variante.stocks.length > 0 ? stockMl : null,
-            compatibilidadClave: claveCompatibilidadVariante(
-              variante.atributosVarianteJson,
-            ),
-          };
-        })
-        .filter((ancho): ancho is NonNullable<typeof ancho> => ancho !== null)
-        .sort((a, b) => a.anchoMm - b.anchoMm),
-    }));
-
-    const puedeVerImportes =
-      auth.permisos?.has('finanzas.ver_margenes') ?? false;
-    const puedeVerClientes =
-      auth.permisos?.has('comercial.ver') ||
-      auth.permisos?.has('registros.ver');
-    if (!puedeVerImportes || !puedeVerClientes) {
-      for (const job of jobs) {
-        if (!puedeVerClientes) job.cliente = null;
-        if (!puedeVerImportes && job.varianteCotizada) {
-          job.varianteCotizada.precioMl = null;
-        }
-      }
-      if (!puedeVerImportes) {
-        for (const material of materiales) {
-          for (const ancho of material.anchos) ancho.precioMl = null;
-        }
-      }
-    }
-
-    return { jobs, materiales, puedeVerImportes };
-  }
-
-  /**
-   * Re-acomoda cada tanda del simulador con el MOTOR real (mismo nesting que
-   * usó la cotización) para cada ancho de rollo candidato.
-   *
-   * Existe para que el simulador no tenga packer propio: cuando lo tenía, sus
-   * márgenes y separaciones no eran los del motor, le entraban menos piezas
-   * por fila que al cotizar y el "ahorro vs. cotizado" salía negativo.
-   */
-  async simuladorNesting(auth: CurrentAuth, dto: SimularNestingDto) {
-    const pasoIds = [...new Set(dto.grupos.flatMap((grupo) => grupo.pasoIds))];
-    const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
-      where: { tenantId: auth.tenantId, id: { in: pasoIds } },
-      select: {
-        id: true,
-        rutaPasoId: true,
-        nestingLoteRol: true,
-        nestingLoteSnapshotJson: true,
-        item: {
-          select: {
-            jobContextSnapshotJson: true,
-            trazabilidadSnapshotJson: true,
-            cotizacionItem: {
-              select: { jobContextJson: true, trazabilidadJson: true },
-            },
-          },
-        },
-      },
-    });
-    if (pasos.length !== pasoIds.length || pasos.length === 0)
-      throw new NotFoundException('No se encontraron los pasos.');
-    const porId = new Map(pasos.map((paso) => [paso.id, paso]));
-
-    return {
-      grupos: dto.grupos.map((grupo) => ({
-        key: grupo.key,
-        ...acomodarTanda(
-          grupo.pasoIds
-            .map((id) => porId.get(id))
-            .filter(
-              (paso): paso is (typeof pasos)[number] => paso !== undefined,
-            ),
-          grupo.anchosMm,
-        ),
-      })),
-    };
   }
 
   /**
@@ -1016,168 +255,10 @@ export class ProduccionService {
     return estructura;
   }
 
-  // ── Simulador de impresión LÁSER (cola real por hoja) ────────────────
-  // Pasos impresion_por_hoja en FRONTERA de órdenes vivas: el operador de
-  // láser carga la bandeja una vez por batch (papel+pliego+color+caras) y
-  // manda todo junto. Datos del snapshot, no recalculados (D6).
-  // Ver docs/simulador-laser-diseno.md
-
-  async simuladorLaser(auth: CurrentAuth) {
-    const ordenes = await this.prisma.ordenTrabajo.findMany({
-      where: {
-        tenantId: auth.tenantId,
-        estado: { in: ['pendiente', 'produccion'] },
-      },
-      select: {
-        id: true,
-        numero: true,
-        fechaEntrega: true,
-        cliente: { select: { nombre: true } },
-        items: {
-          orderBy: { ordenIndice: 'asc' },
-          select: {
-            id: true,
-            nombre: true,
-            ordenIndice: true,
-            jobContextSnapshotJson: true,
-            trazabilidadSnapshotJson: true,
-            cotizacionItem: {
-              select: { jobContextJson: true, trazabilidadJson: true },
-            },
-            pasos: {
-              orderBy: { indice: 'asc' },
-              select: {
-                id: true,
-                indice: true,
-                nombre: true,
-                familiaCodigo: true,
-                estado: true,
-                tipoEjecucion: true,
-                rutaPasoId: true,
-                nestingLoteRol: true,
-                nestingLoteSnapshotJson: true,
-                centroCostoId: true,
-                centroCostoNombre: true,
-                duracionEstimadaMin: true,
-                iniciadoEl: true,
-                nodoClave: true,
-                gatesOperativos: { select: { estado: true } },
-                dependenciasEntrantes: {
-                  select: { predecesorPasoId: true },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const jobs: Array<ReturnType<typeof buildLaserJob>> = [];
-    for (const orden of ordenes) {
-      const pasosOrden = orden.items.flatMap((item) => item.pasos);
-      for (const item of orden.items) {
-        for (const frontera of fronterasEjecutablesDAG(
-          pasosOrden,
-          item.pasos,
-        )) {
-          if (colaConsolidacionDeFamilia(frontera.familiaCodigo) !== 'laser')
-            continue;
-          if (frontera.nestingLoteRol === 'PARTICIPANTE') continue;
-          if (frontera.estado === 'bloqueado') continue;
-          if (frontera.tipoEjecucion === 'tercerizado') continue;
-          jobs.push(buildLaserJob(orden, item, frontera));
-        }
-      }
-    }
-
-    // Pliego de impresión y máquina default desde la CONFIG del paso
-    // (cotizaciones viejas no traen los outputs canónicos de pliego, y la
-    // máquina del jobContext puede faltar → maquinaM1Id de la config).
-    const configIds = [
-      ...new Set(
-        jobs
-          .map((job) => job.configPasoId)
-          .filter((id): id is string => id !== null),
-      ),
-    ];
-    const configs = configIds.length
-      ? await this.prisma.productoConfigPaso.findMany({
-          where: { tenantId: auth.tenantId, id: { in: configIds } },
-          select: { id: true, paramsPasoJson: true, maquinaM1Id: true },
-        })
-      : [];
-    const configPorId = new Map(configs.map((config) => [config.id, config]));
-    for (const job of jobs) {
-      const config = job.configPasoId
-        ? configPorId.get(job.configPasoId)
-        : undefined;
-      const resuelta = aplicarFallbackConfigLaser(
-        {
-          configPasoId: job.configPasoId,
-          maquinaId: job.maquinaId,
-          varianteId: job.papel?.varianteId ?? null,
-          materiaPrimaId: job.papel?.materiaPrimaId ?? null,
-          papelNombre: job.papel?.nombre ?? null,
-          gramaje: job.papel?.gramaje ?? null,
-          pliegoAnchoMm: job.pliego?.anchoMm ?? null,
-          pliegoAltoMm: job.pliego?.altoMm ?? null,
-          pliegoPreset: job.pliego?.preset ?? null,
-          modoColor: job.modoColor,
-          caras: job.caras,
-          pliegos: job.hojas,
-        },
-        config,
-      );
-      job.maquinaId = resuelta.maquinaId;
-      job.pliego =
-        resuelta.pliegoAnchoMm !== null && resuelta.pliegoAltoMm !== null
-          ? {
-              preset: resuelta.pliegoPreset,
-              anchoMm: resuelta.pliegoAnchoMm,
-              altoMm: resuelta.pliegoAltoMm,
-            }
-          : null;
-      job.compatibilidadKey = claveCompatibilidadLoteLaser(resuelta);
-      job.faltantesCompatibilidad = faltantesCompatibilidadLaser(resuelta);
-    }
-
-    // Nombres de las máquinas asignadas.
-    const maquinaIds = [
-      ...new Set(
-        jobs
-          .map((job) => job.maquinaId)
-          .filter((id): id is string => id !== null),
-      ),
-    ];
-    const maquinas = maquinaIds.length
-      ? await this.prisma.maquina.findMany({
-          where: { tenantId: auth.tenantId, id: { in: maquinaIds } },
-          select: { id: true, nombre: true },
-        })
-      : [];
-    const maquinaPorId = new Map(
-      maquinas.map((maquina) => [maquina.id, maquina.nombre]),
-    );
-    for (const job of jobs) {
-      job.maquinaNombre = job.maquinaId
-        ? (maquinaPorId.get(job.maquinaId) ?? null)
-        : null;
-    }
-
-    const puedeVerClientes =
-      auth.permisos?.has('comercial.ver') ||
-      auth.permisos?.has('registros.ver');
-    if (!puedeVerClientes) {
-      for (const job of jobs) job.cliente = null;
-    }
-
-    return { jobs };
-  }
-
   // ── Configuración de producción (margen de la ETA sugerida) ──────────
 
-  async getConfiguracion(tenantId: string) {
-    const row = await this.prisma.configuracionProduccion.findUnique({
+  async getConfiguracion(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+    const row = await db.configuracionProduccion.findUnique({
       where: { tenantId: tenantId },
     });
     return {
@@ -1218,8 +299,8 @@ export class ProduccionService {
   // Fechas puntuales a nivel tenant que la proyección de cola y la
   // simulación de flujo saltan. Ver docs/capacidad-estaciones-diseno.md D8.
 
-  async findDiasNoLaborables(tenantId: string) {
-    const rows = await this.prisma.diaNoLaborable.findMany({
+  async findDiasNoLaborables(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+    const rows = await db.diaNoLaborable.findMany({
       where: { tenantId: tenantId },
       orderBy: { fecha: 'asc' },
     });
@@ -1291,137 +372,46 @@ export class ProduccionService {
     payload: UpsertEstacionDto,
     exceptoEstacionId?: string,
   ) {
-    const familias = [...new Set(payload.familias ?? [])];
+    if (payload.equipoProduccionId && !(await this.prisma.equipoProduccion.findFirst({
+      where: { id: payload.equipoProduccionId, tenantId: auth.tenantId }, select: { id: true },
+    }))) throw new BadRequestException('El equipo de producción no pertenece a esta empresa.');
+    if ((payload.reglas ?? []).some((r) => r.tipo === 'tecnologia')) {
+      throw new BadRequestException('Las tareas con máquina se asignan mediante la máquina. Actualizá la pantalla de estaciones.');
+    }
+    const familias = [...new Set([
+      ...(payload.familias ?? []),
+      ...(payload.reglas ?? []).filter((r) => r.tipo === 'paso').map((r) => r.valor),
+    ])];
+    const reglas: Array<{ tipo: 'paso'; valor: string }> = [];
     const empleadoIds = [...new Set(payload.empleadoIds ?? [])];
     const maquinaIds = [...new Set(payload.maquinaIds ?? [])];
-    // Reglas nuevas (tecnología / paso), dedup por tipo+valor.
-    const reglas = [
-      ...new Map(
-        (payload.reglas ?? []).map((r) => [`${r.tipo}::${r.valor}`, r]),
-      ).values(),
-    ];
-
-    const codigosPropios = [
-      ...new Set([
-        ...familias.filter((codigo) => !resolverFamilia(codigo)),
-        ...reglas
-          .filter(
-            (regla) => regla.tipo === 'paso' && !resolverFamilia(regla.valor),
-          )
-          .map((regla) => regla.valor),
-      ]),
-    ];
-    const propiosEncontrados = codigosPropios.length
-      ? await this.prisma.pasoTenant.findMany({
-          where: {
-            tenantId: auth.tenantId,
-            id: { in: codigosPropios },
-            activo: true,
-          },
-          select: { id: true },
-        })
-      : [];
-    const propiosValidos = new Set(propiosEncontrados.map((paso) => paso.id));
-    const invalidas = familias.filter(
-      (codigo) => !resolverFamilia(codigo) && !propiosValidos.has(codigo),
-    );
-    if (invalidas.length > 0) {
-      throw new BadRequestException(
-        `Familias de pasos desconocidas: ${invalidas.join(', ')}.`,
+    // Siempre verificar pertenencia de los UUID, aunque el registro en memoria
+    // conozca pasos de otras empresas.
+    const codigosPropios = familias.filter((codigo) => !Object.hasOwn(FAMILIAS, codigo));
+    const propios = codigosPropios.length ? await this.prisma.pasoTenant.findMany({
+      where: { tenantId: auth.tenantId, id: { in: codigosPropios }, activo: true },
+      select: { id: true, plantillaCodigo: true },
+    }) : [];
+    const plantillaPorId = new Map(propios.map((p) => [p.id, p.plantillaCodigo]));
+    for (const codigo of familias) {
+      const plantilla = Object.hasOwn(FAMILIAS, codigo) ? codigo : plantillaPorId.get(codigo);
+      if (!plantilla) throw new BadRequestException('Algún paso no existe o no pertenece a esta empresa.');
+      if (!admitePasoSinMaquina(plantilla)) throw new BadRequestException(
+        `“${resolverFamilia(plantilla)?.nombre ?? codigo}” requiere máquina. Asigná su máquina a la estación.`,
       );
     }
-
-    const reglasPasoInvalidas = reglas.filter(
-      (regla) =>
-        regla.tipo === 'paso' &&
-        !resolverFamilia(regla.valor) &&
-        !propiosValidos.has(regla.valor),
-    );
-    if (reglasPasoInvalidas.length > 0) {
-      throw new BadRequestException(
-        'Algún paso concreto no existe en este tenant.',
-      );
-    }
-    const tecnologiasInvalidas = reglas.filter(
-      (regla) =>
-        regla.tipo === 'tecnologia' &&
-        (!TECNOLOGIAS_MAQUINA.includes(
-          regla.valor as (typeof TECNOLOGIAS_MAQUINA)[number],
-        ) ||
-          normalizarTecnologiaMaquina(regla.valor) !== regla.valor),
-    );
-    if (tecnologiasInvalidas.length > 0) {
-      throw new BadRequestException(
-        'Alguna tecnología de estación no es válida.',
-      );
-    }
-
-    // Una familia puede repetirse entre estaciones CON máquinas (filtran por
-    // máquina y son disjuntas), pero a lo sumo hay UNA estación general (sin
-    // máquinas) por familia: dos generales serían ruteo ambiguo (D1 del doc).
-    const payloadEsGeneral = maquinaIds.length === 0;
-    if (familias.length > 0 && payloadEsGeneral) {
-      // Fase D: las reglas "por familia" viven en EstacionRegla (tipo='familia').
+    if (familias.length) {
       const tomadas = await this.prisma.estacionRegla.findMany({
         where: {
-          tenantId: auth.tenantId,
-          tipo: 'familia',
-          valor: { in: familias },
-          ...(exceptoEstacionId
-            ? { estacionId: { not: exceptoEstacionId } }
-            : {}),
-        },
-        include: {
-          estacion: {
-            select: {
-              nombre: true,
-              maquinas: { select: { id: true }, take: 1 },
-            },
-          },
-        },
-      });
-      const generales = tomadas.filter(
-        (fila) => fila.estacion.maquinas.length === 0,
-      );
-      if (generales.length > 0) {
-        const detalle = generales
-          .map(
-            (fila) =>
-              `${resolverFamilia(fila.valor)?.nombre ?? fila.valor} (en "${fila.estacion.nombre}")`,
-          )
-          .join(' · ');
-        throw new ConflictException(
-          `Sólo puede haber una estación general (sin máquinas) por familia. Ya asignadas a otra estación general: ${detalle}. Asigná máquinas a esta estación para repartir la familia por máquina.`,
-        );
-      }
-    }
-
-    // Una tecnología / paso concreto lo captura A LO SUMO UNA estación: si dos
-    // lo reclamaran, el ruteo por ese nivel sería ambiguo (docs/estaciones-
-    // reglas-diseno.md §5). Mensaje con la dueña; el front ya lo deshabilita,
-    // esto es la red de seguridad del backend.
-    if (reglas.length > 0) {
-      const enConflicto = await this.prisma.estacionRegla.findMany({
-        where: {
-          tenantId: auth.tenantId,
-          OR: reglas.map((r) => ({ tipo: r.tipo, valor: r.valor })),
-          ...(exceptoEstacionId
-            ? { estacionId: { not: exceptoEstacionId } }
-            : {}),
+          tenantId: auth.tenantId, tipo: { in: ['familia', 'paso'] }, valor: { in: familias },
+          ...(exceptoEstacionId ? { estacionId: { not: exceptoEstacionId } } : {}),
         },
         include: { estacion: { select: { nombre: true } } },
       });
-      if (enConflicto.length > 0) {
-        const detalle = enConflicto
-          .map(
-            (fila) =>
-              `${fila.tipo} "${fila.valor}" (en "${fila.estacion.nombre}")`,
-          )
-          .join(' · ');
-        throw new ConflictException(
-          `Estas reglas ya las captura otra estación: ${detalle}. Cada tecnología o paso concreto vive en una sola estación.`,
-        );
-      }
+      if (tomadas.length) throw new ConflictException(
+        `Estos pasos sin máquina ya están asignados: ${tomadas.map((r) =>
+          `${resolverFamilia(r.valor)?.nombre ?? r.valor} (en “${r.estacion.nombre}”)`).join(' · ')}. Cada paso se configura en una sola estación.`,
+      );
     }
 
     if (empleadoIds.length > 0) {
@@ -1519,47 +509,30 @@ export class ProduccionService {
     }
   }
 
-  /** Revalida el estado final, incluyendo estaciones que perdieron máquinas. */
-  private async validarInvariantesRuteo(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-  ) {
-    const estaciones = await tx.estacion.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        nombre: true,
-        maquinas: { select: { id: true }, take: 1 },
-        reglas: {
-          where: { tipo: 'familia' },
-          select: { valor: true },
-        },
-      },
+  /** Revalida dentro de la transacción, después del bloqueo por empresa. No
+   * impide corregir una estación por conflictos históricos en otras reglas. */
+  private async validarInvariantesRuteo(tx: Prisma.TransactionClient, tenantId: string, familias: string[]) {
+    if (!familias.length) return;
+    const reglas = await tx.estacionRegla.findMany({
+      where: { tenantId, tipo: { in: ['familia', 'paso'] }, valor: { in: familias } },
+      select: { valor: true, estacionId: true, estacion: { select: { nombre: true } } },
     });
-    const generalesPorFamilia = new Map<string, string[]>();
-    for (const estacion of estaciones) {
-      if (estacion.maquinas.length > 0) continue;
-      for (const regla of estacion.reglas) {
-        const nombres = generalesPorFamilia.get(regla.valor) ?? [];
-        nombres.push(estacion.nombre);
-        generalesPorFamilia.set(regla.valor, nombres);
-      }
+    const dueñas = new Map<string, Map<string, string>>();
+    for (const regla of reglas) {
+      const mapa = dueñas.get(regla.valor) ?? new Map<string, string>();
+      mapa.set(regla.estacionId, regla.estacion.nombre);
+      dueñas.set(regla.valor, mapa);
     }
-    const conflicto = [...generalesPorFamilia.entries()].find(
-      ([, nombres]) => nombres.length > 1,
+    for (const [codigo, mapa] of dueñas) if (mapa.size > 1) throw new ConflictException(
+      `El paso sin máquina “${resolverFamilia(codigo)?.nombre ?? codigo}” está repetido en ${[...mapa.values()].join(', ')}.`,
     );
-    if (conflicto) {
-      const [familia, nombres] = conflicto;
-      throw new ConflictException(
-        `Mover esas máquinas dejaría más de una estación general para ${resolverFamilia(familia)?.nombre ?? familia}: ${nombres.join(', ')}.`,
-      );
-    }
   }
 
   async createEstacion(auth: CurrentAuth, payload: UpsertEstacionDto) {
     const listas = await this.validarReferencias(auth, payload);
     try {
       const creada = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${auth.tenantId}::uuid FOR UPDATE`;
         const estacion = await tx.estacion.create({
           data: {
             tenantId: auth.tenantId,
@@ -1569,6 +542,7 @@ export class ProduccionService {
             etapa: payload.etapa ?? 'preprensa',
             icono: payload.icono?.trim() || null,
             capacidadConcurrente: payload.capacidadConcurrente ?? 1,
+            equipoProduccionId: payload.equipoProduccionId ?? null,
             tiempoPreparacionMin: payload.tiempoPreparacionMin ?? null,
             calendarioJson: calendarioAJson(
               parseCalendario(payload.calendario),
@@ -1576,7 +550,7 @@ export class ProduccionService {
           },
         });
         await this.sincronizarListas(tx, auth, estacion.id, listas);
-        await this.validarInvariantesRuteo(tx, auth.tenantId);
+        await this.validarInvariantesRuteo(tx, auth.tenantId, listas.familias);
         return estacion;
       });
       return this.findEstacion(auth, creada.id);
@@ -1603,12 +577,14 @@ export class ProduccionService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${auth.tenantId}::uuid FOR UPDATE`;
         await tx.estacion.update({
           where: { id },
           data: {
             nombre: payload.nombre.trim(),
             descripcion: payload.descripcion?.trim() || null,
             activo: payload.activo,
+            equipoProduccionId: payload.equipoProduccionId,
             etapa: payload.etapa ?? existing.etapa,
             icono: payload.icono?.trim() || null,
             capacidadConcurrente:
@@ -1625,7 +601,7 @@ export class ProduccionService {
           },
         });
         await this.sincronizarListas(tx, auth, id, listas);
-        await this.validarInvariantesRuteo(tx, auth.tenantId);
+        await this.validarInvariantesRuteo(tx, auth.tenantId, listas.familias);
       });
       return this.findEstacion(auth, id);
     } catch (error: unknown) {
@@ -1686,16 +662,27 @@ export class ProduccionService {
       etapa: item.etapa,
       icono: item.icono,
       capacidadConcurrente: item.capacidadConcurrente,
+      equipoProduccionId: item.equipoProduccionId,
+      equipoProduccion: item.equipoProduccion ? {
+        id: item.equipoProduccion.id,
+        nombre: item.equipoProduccion.nombre,
+        personas: item.equipoProduccion.personas,
+        activo: item.equipoProduccion.activo,
+        calendario: normalizarCalendarioAlmacenado(item.equipoProduccion.calendarioJson),
+      } : null,
       tiempoPreparacionMin: item.tiempoPreparacionMin,
       // Normaliza el shape legado (una franja suelta por día) al de listas.
       calendario: normalizarCalendarioAlmacenado(item.calendarioJson),
       // Fase D: familia y tecnología/paso salen de EstacionRegla. El shape de la
       // API no cambia (el front sigue viendo `familias` y `reglas` separadas).
+      pasosSinMaquina: [...new Set(item.reglas.filter((r) =>
+        (r.tipo === 'familia' || r.tipo === 'paso') && admitePasoSinMaquina(r.valor),
+      ).map((r) => r.valor))],
       familias: item.reglas
-        .filter((r) => r.tipo === 'familia')
+        .filter((r) => r.tipo === 'familia' && admitePasoSinMaquina(r.valor))
         .map((r) => r.valor),
       reglas: item.reglas
-        .filter((r) => r.tipo !== 'familia')
+        .filter((r) => r.tipo === 'paso' && admitePasoSinMaquina(r.valor))
         .map((r) => ({ tipo: r.tipo, valor: r.valor })),
       empleados: item.empleados.map((fila) => ({
         id: fila.empleado.id,
@@ -1707,6 +694,8 @@ export class ProduccionService {
         codigo: maquina.codigo,
         nombre: maquina.nombre,
         centroCostoId: maquina.centroCostoPrincipalId,
+        activo: maquina.activo,
+        operacionMaquina: leerModoOperacionMaquina((maquina.parametrosTecnicosJson as Record<string, unknown> | null)?.operacionMaquina),
       })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),

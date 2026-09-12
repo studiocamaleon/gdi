@@ -774,14 +774,29 @@ export class DesarrolloDocumentalService {
     ordenId: string,
     pasoId?: string,
     ordenItemId?: string,
+    db: Prisma.TransactionClient = this.prisma,
   ): Promise<void> {
+    const idsItem = new Set(ordenItemId ? [ordenItemId] : []);
+    if (ordenItemId) {
+      const item = await db.ordenTrabajoItem.findFirst({
+        where: { id: ordenItemId, ordenId }, select: { loteEntregaId: true, parentItemId: true },
+      });
+      if (item?.loteEntregaId) {
+        let padre = item.parentItemId;
+        while (padre && !idsItem.has(padre)) {
+          idsItem.add(padre);
+          padre = (await db.ordenTrabajoItem.findFirst({ where: { id: padre, ordenId },
+            select: { parentItemId: true } }))?.parentItemId ?? null;
+        }
+      }
+    }
     const alcances = [
       { alcance: AlcanceDocumentoProduccion.ORDEN },
       ...(ordenItemId
         ? [
             {
               alcance: AlcanceDocumentoProduccion.ITEM,
-              ordenItemId,
+              ordenItemId: { in: [...idsItem] },
             },
           ]
         : []),
@@ -794,7 +809,7 @@ export class DesarrolloDocumentalService {
           ]
         : []),
     ];
-    const gates = await this.prisma.gateProduccionDocumento.findMany({
+    const gates = await db.gateProduccionDocumento.findMany({
       where: {
         ordenId,
         activo: true,

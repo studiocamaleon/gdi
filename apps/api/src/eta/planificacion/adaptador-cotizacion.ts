@@ -1,3 +1,5 @@
+import { admitePasoSinMaquina } from '../../productos-servicios/pasos/ruteo-maquina';
+import { demandaDesdeTiempo } from '../motor/demanda-humana';
 /** Adaptación F6 aislada. Consume cotizaciones del servidor, nunca JSON de cliente.
  * Reutiliza planes completos por cantidad; no prorratea tiempos ni corta placas.
  */
@@ -7,6 +9,7 @@ import type {
   PasoEjecutado,
   ComponenteFabricadoCosteado,
   NestingEjecutado,
+  MaterialEjecutado,
 } from '../../motor-universal/tipos';
 import {
   reducirGrafoAClaves,
@@ -15,7 +18,10 @@ import {
   type AristaGrafoProduccion,
 } from '../../ordenes-trabajo/grafo-produccion';
 import { resolverFamilia } from '../../productos-servicios/pasos/familias';
-import { resolverEstacionDePaso } from '../motor/tablero-tipos';
+import {
+  motivoSinEstacion,
+  resolverEstacionDePaso,
+} from '../motor/tablero-tipos';
 import {
   proponerEntregasPiloto,
   type EntradaPiloto,
@@ -36,6 +42,8 @@ export type PiezaF6 = {
   geometriaHash: string;
 };
 export type PlanGeometricoF6 = {
+  /** El nesting rectangular se conserva entero por lote, sin asignar sus poses. */
+  modo?: 'LOTE_COMPLETO';
   cantidadProductos: number;
   fuenteId: string;
   operacion: string;
@@ -78,6 +86,13 @@ const hash = (v: unknown): string =>
     .digest('hex');
 const entero = (n: number) => Number.isSafeInteger(n) && n > 0;
 const valido = (n: number) => Number.isFinite(n) && n >= 0;
+/** El desgaste puede estar parametrizado en la máquina sin existir en stock.
+ * Su identidad es la máquina y su componente/herramienta, nunca el ID vacío. */
+function identidadConsumo(m: MaterialEjecutado, paso: PasoEjecutado): string {
+  return m.tipoLineaCosto === 'DESGASTE_MAQUINA'
+    ? `desgaste:${paso.tiempo?.maquinaId}:${m.slotCodigo}`
+    : m.materialVarianteId;
+}
 function exigir(condicion: unknown, mensaje: string): asserts condicion {
   if (!condicion)
     throw new Error(`No se puede planificar esta cotización: ${mensaje}`);
@@ -167,10 +182,23 @@ function resumirPlan(
         rotacion: objeto(p.meta).rotacionGrados ?? p.rotated,
         contornos: objeto(p.meta).contornos,
         operaciones: objeto(p.meta).operaciones,
+        cortesInternos: objeto(p.meta).cortesInternos,
+        fabricacion: objeto(p.meta).fabricacion,
       }))
       .map(hash)
       .sort();
-    const huella = hash({ sustrato: n.substrates[index], posiciones });
+    const huella = hash({
+      sustrato: n.substrates[index],
+      posiciones,
+      perfil: n.perfil?.id,
+      maquina: n.maquina?.id,
+      material: n.sustrato?.materialVarianteId,
+      modoColor: n.modoColor,
+      tecnologia: n.tecnologia,
+      caras: n.carasProcesadas,
+      tintas: n.tintasAdicionales,
+      visual: n.visualConfig,
+    });
     const layout = layouts.get(huella) ?? {
       huella,
       placasIndices: [],
@@ -190,10 +218,97 @@ function resumirPlan(
   };
 }
 
+/** Pliegos repetidos y rollos ya cotizados: se usa el acomodo entero de cada
+ * entrega. No se deducen piezas finales desde la capacidad de un pliego ni se
+ * reparten posiciones del pedido original. La huella exige aceptar su cambio. */
+function resumirLoteRectangular(
+  n: NestingEjecutado,
+  cantidad: number,
+  fuente: string,
+  operacion: string,
+): PlanGeometricoF6 {
+  exigir(
+    n.demandaRectangular?.length &&
+      n.placements.length &&
+      n.substrates.length &&
+      !n.loteNestingCompuesto &&
+      !n.layoutRegistradoLoteId &&
+      n.demandaRectangular.every(
+        (d) =>
+          entero(d.cantidad) &&
+          [d.anchoMm, d.altoMm].every(Number.isFinite) &&
+          d.anchoMm > 0 &&
+          d.altoMm > 0,
+      ),
+    'falta un acomodo rectangular completo para la entrega.',
+  );
+  exigir(
+    n.substrates.every(
+      (s) =>
+        Number.isFinite(s.widthMm) &&
+        s.widthMm > 0 &&
+        (s.kind === 'sheet'
+          ? entero(s.count) && Number.isFinite(s.heightMm) && s.heightMm > 0
+          : Number.isFinite(s.lengthMm) && s.lengthMm > 0),
+    ),
+    'hay sustratos inválidos en el acomodo de la entrega.',
+  );
+  for (const p of n.placements) {
+    const indice = p.substrateIndex ?? (n.substrates.length === 1 ? 0 : -1);
+    const s = n.substrates[indice];
+    exigir(
+      Number.isInteger(indice) &&
+        s &&
+        [p.xMm, p.yMm, p.widthMm, p.heightMm].every(valido) &&
+        p.widthMm > 0 &&
+        p.heightMm > 0 &&
+        p.xMm + p.widthMm <= s.widthMm + 0.01 &&
+        p.yMm + p.heightMm <=
+          (s.kind === 'sheet' ? s.heightMm : s.lengthMm) + 0.01,
+      'hay piezas fuera del sustrato en el acomodo de la entrega.',
+    );
+  }
+  exigir(
+    n.piezasAcomodadas === n.placements.length,
+    'el acomodo de la entrega tiene posiciones incompletas.',
+  );
+  return {
+    modo: 'LOTE_COMPLETO',
+    cantidadProductos: cantidad,
+    fuenteId: fuente,
+    operacion,
+    origenOperacion: null,
+    placas: n.substrates.reduce(
+      (s, x) => s + (x.kind === 'sheet' ? x.count : 0),
+      0,
+    ),
+    piezas: [],
+    layouts: [
+      {
+        huella: hash({
+          cantidad,
+          sustratos: n.substrates,
+          posiciones: n.placements,
+          demanda: n.demandaRectangular,
+          maquina: n.maquina?.id,
+          perfil: n.perfil?.id,
+          material: n.sustrato?.materialVarianteId,
+          color: n.modoColor,
+          tecnologia: n.tecnologia,
+          caras: n.carasProcesadas,
+          visual: n.visualConfig,
+        }),
+        placasIndices: [0],
+        contenido: {},
+      },
+    ],
+  };
+}
+
 /** Primero conecta el grafo completo (incluidos opcionales omitidos), después
  * reduce a operaciones activas. Así un ancestro omitido no borra la espera BOM.
  */
-function extraer(fuente: FuenteCotizacionF6) {
+function extraer(fuente: FuenteCotizacionF6, porEntrega = false) {
   const q = fuente.cotizacion;
   exigir(
     entero(q.cantidadPedida) &&
@@ -248,15 +363,24 @@ function extraer(fuente: FuenteCotizacionF6) {
       );
       const codigo = clave(local[0]),
         t = p.tiempo;
-      exigir(
-        (p.materiales ?? []).every(
-          (m) =>
-            m.materialVarianteId &&
-            m.unidad &&
+      for (const m of p.materiales ?? []) {
+        const nombre =
+          m.materialDisplayName || m.materialNombre || m.slotCodigo;
+        const contexto = `«${nombre}» del paso «${p.nombreVisible || p.familiaCodigo}»`;
+        exigir(
+          m.tipoLineaCosto === 'DESGASTE_MAQUINA'
+            ? p.tiempo?.maquinaId && m.slotCodigo
+            : m.materialVarianteId,
+          m.tipoLineaCosto === 'DESGASTE_MAQUINA'
+            ? `falta identificar la máquina o el componente de desgaste ${contexto}.`
+            : `el material ${contexto} no tiene una variante identificada.`,
+        );
+        exigir(
+          m.unidad &&
             [m.cantidad, m.precioUnitario, m.costoTotal].every(valido),
-        ),
-        'hay consumos o costos de material inválidos.',
-      );
+          `hay consumos o costos inválidos en ${contexto}.`,
+        );
+      }
       exigir(
         !activos.has(codigo) &&
           t &&
@@ -274,6 +398,7 @@ function extraer(fuente: FuenteCotizacionF6) {
           nombre: p.nombreVisible || p.familiaCodigo,
           familiaCodigo: p.familiaCodigo,
           maquinaId: t.maquinaId ?? undefined,
+          requiereMaquina: !admitePasoSinMaquina(p.familiaCodigo),
           centroCostoId: t.centroCostoId ?? undefined,
           plantillaCodigo:
             resolverFamilia(p.familiaCodigo)?.plantillaCodigo ?? null,
@@ -284,6 +409,7 @@ function extraer(fuente: FuenteCotizacionF6) {
             {
               cantidadProductos: q.cantidadPedida,
               preparacionMin: t.setupMin,
+              demandaHumana: demandaDesdeTiempo(t),
               ejecucionMin: t.totalMin - t.setupMin,
               costo: p.costoTotal,
               fuente: fuente.id,
@@ -358,6 +484,20 @@ function extraer(fuente: FuenteCotizacionF6) {
       .map((e) => e.desdeClave);
     const nesting = n.paso.nestingResult;
     if (!nesting) continue;
+    if (
+      porEntrega &&
+      !nesting.demandaNesting?.length &&
+      nesting.demandaRectangular?.length &&
+      !nesting.placements.some((p) => objeto(p.meta).layoutHeredadoDe)
+    ) {
+      n.plan = resumirLoteRectangular(
+        nesting,
+        q.cantidadPedida,
+        fuente.id,
+        n.operacion.codigo,
+      );
+      continue;
+    }
     const fuentes = new Set(
       nesting.placements.flatMap((p) =>
         typeof objeto(p.meta).layoutHeredadoDe === 'string'
@@ -431,6 +571,14 @@ export type SolicitudAdaptadorF6 = Omit<EntradaPiloto, 'operaciones'> & {
   /** Decisión del servidor sobre preparación reutilizable; nunca inferir por tiempo fijo. */
   operacionesUnaVez?: string[];
 };
+
+/** Lee la geometría guardada sin volver a resolverla ni copiar sus recorridos. */
+export function planesGuardadosF6(
+  fuente: FuenteCotizacionF6,
+  porEntrega = false,
+): PlanGeometricoF6[] {
+  return extraer(fuente, porEntrega).flatMap((n) => (n.plan ? [n.plan] : []));
+}
 export function adaptarCotizacionesF6(s: SolicitudAdaptadorF6) {
   exigir(
     s.fuentes.length > 0 && s.fuentes.length <= 102,
@@ -449,7 +597,7 @@ export function adaptarCotizacionesF6(s: SolicitudAdaptadorF6) {
     );
     cantidades.add(f.cotizacion.cantidadPedida);
     ids.add(f.id);
-    return { fuente: f, nodos: extraer(f) };
+    return { fuente: f, nodos: extraer(f, s.porEntrega) };
   });
   const referencia = extraidas.find(
     (f) => f.fuente.cotizacion.cantidadPedida === s.cantidad,
@@ -477,6 +625,8 @@ export function adaptarCotizacionesF6(s: SolicitudAdaptadorF6) {
         perfil: n.paso.nestingResult?.perfil?.id,
         color: n.paso.nestingResult?.modoColor,
         materiales: n.paso.materiales?.map((m) => [
+          m.tipoLineaCosto,
+          identidadConsumo(m, n.paso),
           m.materialVarianteId,
           m.unidad,
           m.precioUnitario,
@@ -538,7 +688,7 @@ export function adaptarCotizacionesF6(s: SolicitudAdaptadorF6) {
     });
     if (!estacion)
       condiciones.push(
-        `${operacion.nombre}: falta una estación activa que reciba esta operación.`,
+        `${operacion.nombre}: ${motivoSinEstacion(s.taller.estaciones, { ...operacion, centroCostoId: operacion.centroCostoId ?? null })}`,
       );
     else if (!estacion.calendario)
       condiciones.push(
@@ -553,6 +703,7 @@ export function adaptarCotizacionesF6(s: SolicitudAdaptadorF6) {
     prioridadSinFechas: s.prioridadSinFechas,
     condicionesPendientes: condiciones,
     operaciones,
+    porEntrega: s.porEntrega,
   };
   return {
     entrada,
@@ -624,10 +775,12 @@ export function planificarCotizacionesF6(s: SolicitudAdaptadorF6) {
         const p = o.medicion
           ? pasosPorFuente.get(o.medicion.fuente)?.get(o.operacion)
           : undefined;
-        for (const m of p?.materiales ?? []) {
-          const key = `${m.materialVarianteId}:${m.unidad}`;
+        if (!p) continue;
+        for (const m of p.materiales ?? []) {
+          const id = identidadConsumo(m, p);
+          const key = `${id}:${m.unidad}`;
           const fila = materiales.get(key) ?? {
-            id: m.materialVarianteId,
+            id,
             nombre: m.materialDisplayName || m.materialNombre,
             unidad: m.unidad,
             cantidad: 0,

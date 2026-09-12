@@ -169,6 +169,8 @@ function leer(valor: unknown): unknown {
 const CAMPOS: Record<string, Set<string>> = Object.fromEntries(
   Object.entries({
     CotizacionItem: ['trazabilidadJson', 'jobContextJson', 'snapshotJson'],
+    PlanEntregaRevision: ['solicitudJson', 'resultadoJson'],
+    FuenteProduccionEntrega: ['calculoJson', 'contextoJson'],
     OrdenTrabajoItem: [
       'trazabilidadSnapshotJson',
       'jobContextSnapshotJson',

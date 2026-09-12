@@ -60,19 +60,20 @@ function SelectContent({
   className,
   children,
   positionerClassName,
+  container,
   side = "bottom",
   sideOffset = 4,
   align = "center",
   alignOffset = 0,
   alignItemWithTrigger = true,
   ...props
-}: SelectPrimitive.Popup.Props & { positionerClassName?: string } &
+}: SelectPrimitive.Popup.Props & { positionerClassName?: string; container?: React.ComponentProps<typeof SelectPrimitive.Portal>["container"] } &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={container}>
       <SelectPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}

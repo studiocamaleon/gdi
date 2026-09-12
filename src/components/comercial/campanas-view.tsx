@@ -1,5 +1,6 @@
 "use client";
 
+import { ProgresoValor } from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -297,9 +298,7 @@ export function CampanasView({
                   </TableCell>
                   <TableCell>
                     <span className={styles.number}>
-                      {campana.avancePct == null
-                        ? "—"
-                        : `${campana.avancePct}%`}
+                      <ProgresoValor progreso={campana.progreso} valor={campana.avancePct} />
                     </span>
                     <div className={styles.progressTrack} aria-hidden="true">
                       <div

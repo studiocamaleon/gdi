@@ -1,37 +1,3 @@
-/* Herramientas de la fila "Referencias" del nesting viewer (boca de impresora). */
-
-.tools {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.toolBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--ink-2, #2c2c33);
-  background: var(--surface, #fff);
-  border: 1px solid var(--border-strong, #d4d2cd);
-  border-radius: 7px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.toolBtn:hover {
-  background: var(--surface-2, #fafaf9);
-}
-
-.toolBtn[aria-pressed="true"] {
-  background: var(--ink, #14141a);
-  border-color: var(--ink, #14141a);
-  color: #fff;
-}
-
 .sheetHandlingNotice {
   display: flex;
   align-items: flex-start;
@@ -78,7 +44,7 @@
 
 .planImposicion {
   padding: 12px 18px 14px;
-  border-top: 1px solid var(--hairline, #efece8);
+  border-top: 1px solid var(--border);
 }
 
 .planHead {
@@ -94,12 +60,12 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted, #6e6e76);
+  color: var(--muted-foreground);
 }
 
 .planResumen {
   font-size: 12px;
-  color: var(--muted, #6e6e76);
+  color: var(--muted-foreground);
 }
 
 .planTabla {
@@ -113,7 +79,7 @@
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted-2, #92929b);
+  color: var(--muted-foreground);
   font-weight: 600;
   padding: 0 18px 4px 0;
   border-bottom: 1px solid var(--border, #e7e5e2);
@@ -121,8 +87,8 @@
 
 .planTabla td {
   padding: 3px 18px 3px 0;
-  border-bottom: 1px solid var(--hairline, #efece8);
-  color: var(--ink-2, #2c2c33);
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
   white-space: nowrap;
 }
 
@@ -134,22 +100,131 @@
   display: block;
   margin-top: 6px;
   font-size: 11px;
-  color: var(--muted-2, #92929b);
-}
-.cutFiles {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
+  color: var(--muted-foreground);
 }
 .itemNestings {
   display: grid;
   gap: 12px;
   min-width: 0;
 }
-.cutFiles > summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  padding: 12px 0;
 }
-.cutFiles[open] > summary {
-  margin-bottom: 12px;
+.stat {
+  min-width: 0;
+}
+.label,
+.key {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.value {
+  color: var(--foreground);
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.hint {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+}
+.config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+}
+.group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.valueSmall {
+  color: var(--foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.costing {
+  padding: 12px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.costing > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px 0;
+  font-size: 11px;
+}
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.dashed {
+  border-style: dashed;
+}
+.name {
+  color: var(--muted-foreground);
+}
+.count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.footer,
+.outputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.footer .key {
+  margin-right: 5px;
+}
+.items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.output {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--muted);
+  font-size: 12px;
 }

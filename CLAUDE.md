@@ -5,6 +5,12 @@ deduce leyendo el código y que, si se ignora, rompe algo.
 
 ## Estilos: no escribir en `globals.css`
 
+La dirección visual vigente para pantallas renovadas está en
+[docs/sistema-visual-shadcn.md](docs/sistema-visual-shadcn.md), con Colas de trabajo
+como primera referencia aprobada. Migrar una vista por vez y retirar sus estilos
+sustituidos cuando ya no tengan consumidores. El contrato Visual Ilusión anterior
+no exige reproducir la estética vieja en estas vistas.
+
 `src/app/globals.css` mide ~38k líneas y entra entero en todas las páginas. CSS
 no tiene módulos, así que **toda clase sin ancestro es una variable global de la
 app** — hoy hay ~1.600.

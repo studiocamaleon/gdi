@@ -1,3 +1,4 @@
+import type { FaseRun } from '../eta/motor/demanda-humana';
 import { createHash } from 'node:crypto';
 import {
   erroresConfiguracionCorte,
@@ -270,7 +271,7 @@ export function calcularProcesamientoCorte(
     const mediciones = medirPieza(
       {
         id: p.pieceId,
-        contornos: meta.contornos,
+        contornos: meta.contornos as PiezaVectorial['contornos'],
         operaciones: meta.operaciones as PiezaVectorial['operaciones'],
         fabricacion: meta.fabricacion as PiezaVectorial['fabricacion'],
         cortesInternos: meta.cortesInternos as PiezaVectorial['cortesInternos'],
@@ -365,7 +366,16 @@ export function calcularProcesamientoCorte(
       recorridoMin,
       ajusteMin: 0,
       desgasteCosto,
-      fuentes: fuente.map(({ operacion: _op, entradas: _entradas, ...f }) => f),
+      fuentes: fuente.map(
+        ({ piezaId, geometriaId, archivoHash, entidadId, capa, metros }) => ({
+          piezaId,
+          geometriaId,
+          archivoHash,
+          entidadId,
+          capa,
+          metros,
+        }),
+      ),
     });
   }
   // Una misma posición admite una herramienta por vez. Conservamos el montaje
@@ -375,22 +385,65 @@ export function calcularProcesamientoCorte(
       .filter((h) => h.activo && h.montada)
       .map((h) => [h.posicion, h.id]),
   );
+  const fasesRun: FaseRun[] = [];
+  let secuenciaCompleta = true;
+  function fase(minutos: number, operario: boolean) {
+    if (minutos <= 0 || !secuenciaCompleta) return;
+    const anterior = fasesRun.at(-1);
+    if (anterior?.operario === operario) anterior.minutos += minutos;
+    else if (fasesRun.length < 19900) fasesRun.push({ minutos, operario });
+    else secuenciaCompleta = false;
+  }
   let cambiosHerramienta = 0,
     activaciones = 0,
     herramientaAnterior: string | undefined;
   for (const [, mediciones] of [...porPlaca].sort(([a], [b]) => a - b)) {
+    // El parámetro existente agrupa carga y descarga: se reserva como manejo
+    // de placa en el límite del ciclo, junto al registro. No se inventa un
+    // reparto entre carga y descarga que el perfil no distingue.
+    fase(
+      configuracion.cargaDescargaPlacaMin + configuracion.registroPlacaMin,
+      true,
+    );
     for (const op of operaciones) {
       if (!mediciones.some((m) => m.operacion === op.operacion)) continue;
       const h = op.herramienta;
       if (montadas.get(h.posicion) !== h.id) {
         cambiosHerramienta++;
+        fase(configuracion.cambioMin, true);
         montadas.set(h.posicion, h.id);
       }
       if (herramientaAnterior !== h.id) {
         activaciones++;
+        fase(configuracion.activacionSeg / 60, true);
         herramientaAnterior = h.id;
       }
       op.ajusteMin += op.parametros.ajusteMin ?? 0;
+      fase(op.parametros.ajusteMin ?? 0, true);
+      const fuentesPlaca = mediciones.filter(
+        (m) => m.operacion === op.operacion,
+      );
+      const metrosPlaca = fuentesPlaca.reduce((n, m) => n + m.metros, 0);
+      const entradasPlaca = fuentesPlaca.reduce((n, m) => n + m.entradas, 0);
+      // La reducción global de common-line se reparte por recorrido. Conserva
+      // exactamente el costo y el tiempo de recorrido ya calculados.
+      const metrosNetos =
+        metrosPlaca *
+        (op.metros > 0 ? (op.metros - op.ahorroRecorridoM) / op.metros : 1);
+      fase(
+        runMinPorProductividad(
+          op.parametros.modoVelocidad === 'POR_PASADA'
+            ? metrosNetos * op.parametros.pasadas
+            : metrosNetos,
+          op.velocidad,
+          op.unidadVelocidad,
+        ) +
+          (entradasPlaca *
+            (op.parametros.entradaSeg ?? 0) *
+            op.parametros.pasadas) /
+            60,
+        false,
+      );
     }
   }
   const ajustesMin = operaciones.reduce((s, o) => s + o.ajusteMin, 0);
@@ -412,6 +465,7 @@ export function calcularProcesamientoCorte(
     operaciones,
     placas,
     manejoMin,
+    ...(secuenciaCompleta ? { fasesRun } : {}),
     cambiosMin,
     cambiosHerramienta,
     activaciones,

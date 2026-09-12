@@ -675,6 +675,9 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  planesEntregaItems PlanEntregaItem[]
+  planesEntregaRevisiones PlanEntregaRevision[]
+  planesEntregaSolicitudes PlanEntregaSolicitud[]
   nestingsGuardados NestingGuardado[]
   checkpointsNesting NestingCheckpoint[]
   carterasNestingGuardadas CarteraNestingGuardada[]
@@ -772,6 +775,7 @@ model Tenant {
   movimientosFidelizacion                          FidelizacionMovimiento[]
   reservasFidelizacion                             FidelizacionReserva[]
   estaciones                                       Estacion[]
+  equiposProduccion                                EquipoProduccion[]
   estacionFamilias                                 EstacionFamilia[]
   pasosTenant                                      PasoTenant[]
   diasNoLaborables                                 DiaNoLaborable[]
@@ -1901,6 +1905,9 @@ model Estacion {
   /// null = sin calendario (el tablero no proyecta la cola en días).
   calendarioJson       Json?
   activo               Boolean            @default(true)
+  /// Capacidad humana compartida entre todas las estaciones vinculadas.
+  equipoProduccionId   String?            @db.Uuid
+  equipoProduccion     EquipoProduccion?  @relation(fields: [equipoProduccionId], references: [id], onDelete: Restrict)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1908,6 +1915,25 @@ model Estacion {
   empleados            EstacionEmpleado[]
   maquinas             Maquina[]
   reglas               EstacionRegla[]
+
+  @@unique([tenantId, nombre])
+  @@index([tenantId, activo])
+  @@index([tenantId, equipoProduccionId])
+}
+
+/// Un equipo representa personas distintas. Se reutiliza entre estaciones;
+/// habilitar empleados en una estación sigue siendo una regla de permisos.
+model EquipoProduccion {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @db.Uuid
+  nombre               String
+  personas             Int
+  calendarioJson       Json
+  activo               Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  estaciones           Estacion[]
 
   @@unique([tenantId, nombre])
   @@index([tenantId, activo])
@@ -3540,6 +3566,7 @@ model ConfiguracionPresupuestos {
 }
 
 model CotizacionItem {
+  planEntrega PlanEntregaItem?
   id                                String                  @id @default(uuid()) @db.Uuid
   tenantId                          String                  @db.Uuid
   cotizacionId                      String                  @db.Uuid
@@ -3623,7 +3650,8 @@ model OrdenTrabajo {
   fechaEmision                DateTime?
   fechaEntrega                DateTime?                     @db.Date
   observaciones               String?
-  /// 'mostrador' | 'web' | 'vendedor_externo' | 'telefono'.
+  /// Canales activos: whatsapp, mostrador (Presencial), email, web, app_movil.
+  /// Históricos conservados: vendedor_externo, telefono; sin canal en registros anteriores = null.
   canalVenta                  String?
   /// Denormalizados para el listado; la fuente de verdad es items/snapshot.
   subtotal                    Decimal?                      @db.Decimal(14, 2)
@@ -3739,6 +3767,14 @@ model OrdenTrabajo {
 }
 
 model OrdenTrabajoItem {
+  /// Agrupador comercial: sus lotes ejecutan el trabajo, nunca la ruta del total.
+  contieneLotesEntrega Boolean @default(false)
+  loteEntregaId String? @db.Uuid
+  loteEntrega LoteProduccionEntrega? @relation("TrabajoDelLote", fields: [loteEntregaId], references: [id], onDelete: Cascade)
+  lotesEntrega LoteProduccionEntrega[] @relation("ProductoDelLote")
+  planEntrega PlanEntregaItem?
+  /// Fecha del ítem sin distribución. La alternativa elegida puede repartirla en entregas.
+  fechaEntrega DateTime? @db.Date
   id                          String                       @id @default(uuid()) @db.Uuid
   tenantId                    String                       @db.Uuid
   ordenId                     String                       @db.Uuid
@@ -3832,6 +3868,121 @@ model OrdenTrabajoItem {
   @@index([tenantId, recetaRevisionId])
   @@index([tenantId, parentItemId])
   @@index([ordenId, entregadoEl])
+}
+
+/// Propuesta de distribución de un ítem. La elección NO reserva capacidad ni
+/// sustituye los pasos ejecutables de la OT; la adopción productiva es otro hito.
+model PlanEntregaItem {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  ordenItemId String? @unique @db.Uuid
+  cotizacionItemId String? @unique @db.Uuid
+  cotizacionItem CotizacionItem? @relation(fields: [cotizacionItemId], references: [id], onDelete: Cascade)
+  version Int @default(0)
+  revisionActual Int @default(0)
+  alternativaElegidaId String? @db.VarChar(80)
+  /// Aceptación explícita ligada a la revisión, junto al actor y fecha de elección.
+  ajusteNestingAceptado Boolean @default(false)
+  cambioEntregasAceptado Boolean @default(false)
+  reprogramacionAplicadaRevisionId String? @db.Uuid
+  elegidaEl DateTime?
+  elegidaPorId String? @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordenItem OrdenTrabajoItem? @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
+  revisiones PlanEntregaRevision[]
+  @@unique([id, tenantId])
+  @@index([tenantId, ordenItemId])
+}
+
+model PlanEntregaRevision {
+  /// Elección por revisión: un borrador conserva su agenda aunque se explore otra.
+  eleccionJson Json?
+  aplicadaEl DateTime?
+  fuentesProduccion FuenteProduccionEntrega[]
+  lotesProduccion LoteProduccionEntrega[]
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  planId String @db.Uuid
+  numero Int
+  idempotencyKey String @db.Uuid
+  solicitudHuella String @db.VarChar(64)
+  origenHuella String @db.VarChar(64)
+  contextoHuella String? @db.VarChar(64)
+  /// SOLICITADA / CALCULANDO / LISTA / FALLIDA / SUPERADA.
+  estado String @default("SOLICITADA") @db.VarChar(20)
+  ejecucionId String? @db.Uuid
+  cantidad Int
+  cantidadCalculada Int?
+  solicitadoPorId String @db.Uuid
+  /// Inputs de cotización congelados; nunca se aceptan tiempos/costos del cliente.
+  solicitudJson Json
+  /// Alternativas y mediciones compactas, sin repetir el CAD de las cotizaciones.
+  resultadoJson Json?
+  error String?
+  calculadaEl DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan PlanEntregaItem @relation(fields: [planId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  entregas PlanEntregaSolicitud[]
+  @@unique([id, tenantId])
+  @@unique([tenantId, idempotencyKey])
+  @@unique([planId, numero])
+  @@index([estado, createdAt])
+  @@index([tenantId, planId])
+}
+
+/// Una sola copia comprimida del cálculo aprobado por cantidad y revisión.
+/// No es una nueva venta ni una cotización editable del catálogo.
+model FuenteProduccionEntrega {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  revisionId String @db.Uuid
+  cantidad Int
+  calculoJson Json
+  contextoJson Json
+  revision PlanEntregaRevision @relation(fields: [revisionId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  lotes LoteProduccionEntrega[]
+  @@unique([id, tenantId])
+  @@unique([revisionId, cantidad])
+}
+
+/// Primera política F6: una entrega corresponde a un lote completo del producto.
+model LoteProduccionEntrega {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  revisionId String @db.Uuid
+  fuenteId String @db.Uuid
+  productoItemId String @db.Uuid
+  clave String @db.VarChar(80)
+  secuencia Int
+  cantidad Int
+  fechaEntrega DateTime @db.Date
+  createdAt DateTime @default(now())
+  revision PlanEntregaRevision @relation(fields: [revisionId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  fuente FuenteProduccionEntrega @relation(fields: [fuenteId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  producto OrdenTrabajoItem @relation("ProductoDelLote", fields: [productoItemId], references: [id], onDelete: Cascade)
+  trabajos OrdenTrabajoItem[] @relation("TrabajoDelLote")
+  @@unique([productoItemId, clave])
+  @@index([tenantId, productoItemId])
+}
+
+/// Compromisos solicitados, todavía sin promesa ni cantidades entregadas.
+model PlanEntregaSolicitud {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  revisionId String @db.Uuid
+  clave String @db.VarChar(80)
+  secuencia Int
+  cantidad Int
+  fechaSolicitada DateTime? @db.Date
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  revision PlanEntregaRevision @relation(fields: [revisionId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  @@unique([revisionId, clave])
+  @@unique([revisionId, secuencia])
+  @@index([tenantId, revisionId])
 }
 
 /// Preparación inmutable de una placa para una máquina de recorrido vectorial.
@@ -3951,6 +4102,12 @@ model EtaSnapshotItem {
 /// inmutable; acá vive el estado de EJECUCIÓN en el taller.
 /// Ver docs/tablero-produccion-conexion-diseno.md
 model OrdenTrabajoItemPaso {
+  /// Inicio de referencia aceptado en F6: ETA no adelanta automáticamente la tanda.
+  planificadoDesde DateTime?
+  /// Fin del intervalo publicado en la agenda; no es un registro de ejecución.
+  planificadoHasta DateTime?
+  /// Reservas humanas exactas de la agenda aceptada; no modifica la cotización.
+  atencionPlanificadaJson Json?
   id                                   String                        @id @default(uuid()) @db.Uuid
   tenantId                             String                        @db.Uuid
   ordenId                              String                        @db.Uuid
@@ -3979,6 +4136,8 @@ model OrdenTrabajoItemPaso {
   /// Ver docs/estaciones-reglas-diseno.md.
   maquinaId                            String?                       @db.Uuid
   duracionEstimadaMin                  Decimal?                      @db.Decimal(10, 2)
+  /// Fases y dotación congeladas desde la cotización; nunca editables en Gantt.
+  demandaHumanaJson                    Json?
   /// Desglose congelado de las subtareas aportadas por relaciones BOM al
   /// paso compuesto. No gobierna estados; explica duración, recursos y costo.
   operacionesIncorporacionSnapshotJson Json?

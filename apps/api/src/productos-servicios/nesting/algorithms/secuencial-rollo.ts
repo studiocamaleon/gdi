@@ -35,7 +35,9 @@ export function evaluateGranFormatoSequentialRollLayout(
     // plano y devolvemos null (el motor sigue con su fallback).
     const orientations = [
       { widthMm: piece.widthMm, heightMm: piece.heightMm, rotated: false },
-      ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+      ...(input.permitirRotacion &&
+      piece.allowRotation !== false &&
+      piece.widthMm !== piece.heightMm
         ? [{ widthMm: piece.heightMm, heightMm: piece.widthMm, rotated: true }]
         : []),
     ].filter((option) => option.widthMm <= input.printableWidthMm);

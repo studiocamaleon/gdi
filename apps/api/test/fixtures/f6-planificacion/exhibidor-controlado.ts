@@ -17,7 +17,7 @@ const mediciones = (filas: number[][]): MedicionPiloto[] =>
   }));
 
 export function exhibidorControlado(): EntradaPiloto {
-  return {
+  const entrada: EntradaPiloto = {
     cantidad: 200,
     entregas: [1, 2, 3, 4].map((i) => ({ id: `entrega-${i}`, cantidad: 50 })),
     prioridadSinFechas: 'PRIMERAS_ENTREGAS',
@@ -118,6 +118,16 @@ export function exhibidorControlado(): EntradaPiloto {
       ],
     },
   };
+  // Esta fixture presupone un equipo independiente por estación, confirmado.
+  for (const est of entrada.taller.estaciones) est.equipoProduccion = {
+    id: `equipo-${est.id}`, nombre: est.id, personas: est.capacidadConcurrente,
+    activo: true, calendario: est.calendario,
+  };
+  for (const operacion of entrada.operaciones) for (const m of operacion.mediciones)
+    m.demandaHumana = {version:1, verificada:true, fases:[{minutos:m.preparacionMin+m.ejecucionMin,personas:1}]};
+  for (const item of entrada.taller.items) for (const paso of item.pasos)
+    paso.demandaHumana = {version:1, verificada:true, fases:[{minutos:paso.duracionEstimadaMin,personas:1}]};
+  return entrada;
 }
 
 export function conFechasAlcanzables(): EntradaPiloto {

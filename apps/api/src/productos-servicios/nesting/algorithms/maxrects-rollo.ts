@@ -6,7 +6,7 @@
  * el viewer no necesiten ramas nuevas.
  */
 
-import { MaxRectsPacker } from 'maxrects-packer';
+import { MaxRectsPacker, Rectangle } from 'maxrects-packer';
 
 import {
   buildGranFormatoManualPieces,
@@ -142,9 +142,10 @@ function packAtContentHeight(
   // el ancho útil. Sin este chequeo el packer podía ubicar piezas con overflow
   // (aprovechamiento > 100%) en vez de rechazarlas.
   for (const piece of orderedPieces) {
-    const ladoQueCruzaElAncho = input.permitirRotacion
-      ? Math.min(piece.widthMm, piece.heightMm)
-      : piece.widthMm;
+    const ladoQueCruzaElAncho =
+      input.permitirRotacion && piece.allowRotation !== false
+        ? Math.min(piece.widthMm, piece.heightMm)
+        : piece.widthMm;
     if (ladoQueCruzaElAncho > input.printableWidthMm) return null;
   }
 
@@ -167,15 +168,19 @@ function packAtContentHeight(
     // ancho las agregamos ya rotadas nosotros.
     const prerotated =
       input.permitirRotacion &&
+      piece.allowRotation !== false &&
       piece.widthMm > input.printableWidthMm &&
       piece.heightMm <= input.printableWidthMm;
     const addWidthMm = prerotated ? piece.heightMm : piece.widthMm;
     const addHeightMm = prerotated ? piece.widthMm : piece.heightMm;
-    packer.add(
+    const rect = new Rectangle(
       addWidthMm + input.separacionHorizontalMm,
       addHeightMm + input.separacionVerticalMm,
-      { piece, prerotated } satisfies PackedRectData,
     );
+    rect.data = { piece, prerotated } satisfies PackedRectData;
+    rect.allowRotation =
+      input.permitirRotacion && piece.allowRotation !== false;
+    packer.add(rect);
   }
 
   if (packer.bins.length !== 1) return null;
@@ -195,7 +200,8 @@ function packAtContentHeight(
     if (!piece) return null;
     // Rotación neta = pre-rotación nuestra XOR rotación del packer. Usamos las
     // dims reales de la pieza (no las del rect, que arrastran separaciones).
-    const rotated = (packed.data?.prerotated === true) !== (packed.rot === true);
+    const rotated =
+      (packed.data?.prerotated === true) !== (packed.rot === true);
     const widthMm = rotated ? piece.heightMm : piece.widthMm;
     const heightMm = rotated ? piece.widthMm : piece.heightMm;
     return toPlacement(
@@ -298,7 +304,13 @@ export function evaluateGranFormatoMaxRectsRollLayout(
   );
   const maxCandidateHeightMm = pieces.reduce(
     (max, piece) =>
-      Math.max(max, piece.heightMm, input.permitirRotacion ? piece.widthMm : 0),
+      Math.max(
+        max,
+        piece.heightMm,
+        input.permitirRotacion && piece.allowRotation !== false
+          ? piece.widthMm
+          : 0,
+      ),
     0,
   );
   const lowerContentHeightMm = Math.max(

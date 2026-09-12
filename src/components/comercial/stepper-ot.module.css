@@ -84,3 +84,24 @@
   opacity: 1;
   transform: translateY(0);
 }
+
+.flow[data-orientation="vertical"] {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.flow[data-orientation="vertical"] .line {
+  flex: none;
+  width: 1px;
+  min-width: 1px;
+  height: 9px;
+  margin-left: 4px;
+}
+
+.flow[data-orientation="vertical"] .tip {
+  left: 0;
+  right: auto;
+  max-width: 240px;
+  white-space: normal;
+}

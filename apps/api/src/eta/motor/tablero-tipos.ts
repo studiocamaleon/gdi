@@ -1,3 +1,8 @@
+import {
+  claveFechaEnZona,
+  diasEntreClaves,
+  ZONA_DEFAULT,
+} from '../../common/zona';
 /**
  * Espejo backend de src/lib/tablero-produccion.ts — SOLO lo que consume el
  * motor de simulación de flujo (ETA). Mantener en sync con el front: todo
@@ -17,6 +22,13 @@ export type TableroPasoEstado =
 
 /** Campos de un paso que el motor de ETA necesita. */
 export type TableroPasoData = {
+  demandaHumana?: unknown;
+  /** Intervalos registrados de ejecución; no incluyen pausas entre tramos. */
+  tramosEjecucion?: Array<{ inicio: string; fin: string | null }>;
+  /** Inicio aceptado del lote; la proyección no lo adelanta automáticamente. */
+  planificadoDesde?: string | null;
+  planificadoHasta?: string | null;
+  atencionPlanificada?: unknown;
   id: string;
   indice: number;
   /** Null en OTs históricas; en órdenes nuevas habilita precedencia explícita. */
@@ -30,6 +42,8 @@ export type TableroPasoData = {
   centroCostoId: string | null;
   /** Máquina que ejecutó el paso (rediseño de estaciones por reglas). */
   maquinaId?: string | null;
+  /** La familia exige máquina; una OT histórica sin id no se considera manual. */
+  requiereMaquina?: boolean;
   /** Tecnología de esa máquina (derivada). */
   tecnologia?: string | null;
   duracionEstimadaMin: number | null;
@@ -43,11 +57,16 @@ export type TableroPasoData = {
 
 /** Campos de un item que el motor de ETA necesita. */
 export type TableroItemData = {
+  /** Sólo escenarios internos; no se acepta desde la API. */
+  prioridadPlanificacion?: number;
   id: string;
   ordenId: string;
   /** Número de OT — desempate final del scheduler (FIFO por emisión). */
   ordenNumero: string;
   ordenEstado: string;
+  nombre?: string;
+  parentItemId?: string | null;
+  loteEntregaId?: string | null;
   /** ISO date o null (a nivel orden). */
   fechaEntrega: string | null;
   /** Item manual/histórico sin snapshot: no tiene ruta de producción. */
@@ -64,13 +83,13 @@ export const SIN_ESTACION_KEY = 'sin-estacion';
 export function diasHastaEntrega(
   fechaEntrega: string | null,
   ahora: Date = new Date(),
+  zona: string = ZONA_DEFAULT,
 ): number | null {
   if (!fechaEntrega) return null;
-  const [y, m, d] = fechaEntrega.slice(0, 10).split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const entrega = new Date(y, m - 1, d);
-  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-  return Math.round((entrega.getTime() - hoy.getTime()) / 86_400_000);
+  return diasEntreClaves(
+    claveFechaEnZona(ahora, zona),
+    fechaEntrega.slice(0, 10),
+  );
 }
 
 /**
@@ -80,8 +99,9 @@ export function diasHastaEntrega(
 export function prioridadDerivada(
   fechaEntrega: string | null,
   ahora: Date = new Date(),
+  zona: string = ZONA_DEFAULT,
 ): TableroPrioridad {
-  const dias = diasHastaEntrega(fechaEntrega, ahora);
+  const dias = diasHastaEntrega(fechaEntrega, ahora, zona);
   if (dias === null) return 'normal';
   if (dias <= 0) return 'urgent';
   if (dias <= 2) return 'high';
@@ -114,67 +134,48 @@ type EstacionRuteo = {
   id: string;
   activo: boolean;
   familias: string[];
-  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
+  maquinas: Array<{ id?: string | null; activo?: boolean; centroCostoId: string | null }>;
+  /** Lectura compatible de asignaciones anteriores. Tecnología ya no asigna tareas. */
   reglas?: Array<{ tipo: string; valor: string }>;
 };
 
-/**
- * Ruteo paso → estación (rediseño "estaciones por reglas",
- * docs/estaciones-reglas-diseno.md). Prioridad de lo más específico a lo
- * general: 1) máquina del paso en la estación; 2) tecnología (regla); 3) paso
- * concreto (regla); 4) FALLBACK legacy familia + centro (intacto → neutral para
- * órdenes viejas y estaciones sin reglas). Espejo de src/lib/tablero-produccion.ts.
- */
+type PasoRuteo = Pick<TableroPasoData,
+  "familiaCodigo" | "plantillaCodigo" | "centroCostoId" | "maquinaId" | "tecnologia" | "requiereMaquina"
+> & Partial<Pick<TableroPasoData, "tipoEjecucion">>;
+
+/** Una máquina sólo se ejecuta donde está asignada. Las reglas de pasos se
+ * aplican exclusivamente sin máquina. Una asignación propia prevalece sobre
+ * la heredada de su plantilla; una ambigüedad nunca se resuelve por orden.
+ * Mantener idéntico en frontend y backend. */
 export function resolverEstacionDePaso<T extends EstacionRuteo>(
-  estaciones: T[],
-  paso: Pick<
-    TableroPasoData,
-    | 'familiaCodigo'
-    | 'plantillaCodigo'
-    | 'centroCostoId'
-    | 'maquinaId'
-    | 'tecnologia'
-  >,
+  estaciones: T[], paso: PasoRuteo,
 ): T | null {
-  const activas = estaciones.filter((estacion) => estacion.activo);
-
+  if (paso.tipoEjecucion === "tercerizado") return null;
+  const activas = estaciones.filter((e) => e.activo);
   if (paso.maquinaId) {
-    const porMaquina = activas.find((estacion) =>
-      estacion.maquinas.some((maquina) => maquina.id === paso.maquinaId),
-    );
-    if (porMaquina) return porMaquina;
+    const candidatas = activas.filter((e) => e.maquinas.some(
+      (m) => m.id === paso.maquinaId && m.activo !== false,
+    ));
+    return candidatas.length === 1 ? candidatas[0] : null;
   }
-  if (paso.tecnologia) {
-    const porTecnologia = activas.find((estacion) =>
-      (estacion.reglas ?? []).some(
-        (regla) =>
-          regla.tipo === 'tecnologia' && regla.valor === paso.tecnologia,
-      ),
-    );
-    if (porTecnologia) return porTecnologia;
+  // No confundir una OT incompleta con una operación manual.
+  if (paso.requiereMaquina || paso.tecnologia) return null;
+  for (const codigo of [paso.familiaCodigo, paso.plantillaCodigo]) {
+    if (!codigo) continue;
+    // Compatibilidad: la antigua regla explícita tiene prioridad sobre familia.
+    const explicitas = activas.filter((e) => (e.reglas ?? []).some(
+      (r) => r.tipo === "paso" && r.valor === codigo,
+    ));
+    if (explicitas.length) return explicitas.length === 1 ? explicitas[0] : null;
+    const heredadas = activas.filter((e) => e.familias.includes(codigo));
+    if (heredadas.length) return heredadas.length === 1 ? heredadas[0] : null;
   }
-  const porPaso = activas.find((estacion) =>
-    (estacion.reglas ?? []).some(
-      (regla) =>
-        regla.tipo === 'paso' &&
-        (regla.valor === paso.familiaCodigo ||
-          (paso.plantillaCodigo != null &&
-            regla.valor === paso.plantillaCodigo)),
-    ),
-  );
-  if (porPaso) return porPaso;
-
-  // 4. Por familia: general (sin máquinas) o única candidata. Sin centro de
-  //    costo (Fase D). Espejo de src/lib/tablero-produccion.ts.
-  const candidatas = activas.filter(
-    (estacion) =>
-      estacion.familias.includes(paso.familiaCodigo) ||
-      (paso.plantillaCodigo != null &&
-        estacion.familias.includes(paso.plantillaCodigo)),
-  );
-  if (candidatas.length === 0) return null;
-  const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
-  if (general) return general;
-  if (candidatas.length === 1) return candidatas[0];
   return null;
+}
+
+export function motivoSinEstacion(estaciones: EstacionRuteo[], paso: PasoRuteo): string | null {
+  if (paso.tipoEjecucion === "tercerizado" || resolverEstacionDePaso(estaciones, paso)) return null;
+  if (paso.maquinaId) return "Asigná la máquina cotizada a una estación activa y verificá que la máquina esté habilitada.";
+  if (paso.requiereMaquina || paso.tecnologia) return "Este paso requiere máquina, pero la orden no identifica cuál. Revisá su configuración de origen.";
+  return "Asigná este paso sin máquina a una única estación activa; revisá si falta la asignación o está repetida.";
 }

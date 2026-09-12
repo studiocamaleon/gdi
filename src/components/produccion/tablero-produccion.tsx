@@ -1,5 +1,7 @@
 "use client";
 
+import { calcularProgreso } from "@/lib/progreso-produccion";
+import { ProgresoValor } from "./progreso-produccion";
 import * as React from "react";
 import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
 import Link from "next/link";
@@ -23,7 +25,6 @@ import {
   PackageIcon,
   PaintbrushIcon,
   PauseIcon,
-  PlayIcon,
   PrinterIcon,
   RefreshCwIcon,
   ScissorsIcon,
@@ -31,7 +32,6 @@ import {
   SquareDashedIcon,
   ShieldCheckIcon,
   TruckIcon,
-  UnlockIcon,
   UserIcon,
   WrenchIcon,
   ZapIcon,
@@ -39,6 +39,9 @@ import {
 
 import {
   codigoVisibleItem,
+  compararTareasEstacion,
+  nombreTrabajoTablero,
+  textoDependenciaTablero,
   bucketKanbanProduccion,
   debeRefrescarTablero,
   etiquetaDuracion,
@@ -54,7 +57,6 @@ import {
   itemTerminado,
   esItemEnCursoOperativo,
   lineaEstado,
-  MOTIVOS_PAUSA,
   resolverEstacionDePaso,
   pasoActivo,
   pasosActivos,
@@ -71,6 +73,7 @@ import {
   type TableroPasoData,
   type TableroPrioridad,
 } from "@/lib/tablero-produccion";
+import { PasoAccionesProduccion } from "./paso-acciones";
 import {
   accionPasoProduccion,
   getOrdenTrabajo,
@@ -99,6 +102,7 @@ import {
   type ResultadoSimulacion,
   type SimulacionItem,
 } from "@/lib/flujo-produccion";
+import { claveFechaEnZona, ZONA_DEFAULT } from "@/lib/zona";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
@@ -113,10 +117,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { BriefDisenoProduccion } from "@/components/comercial/brief-diseno-resumen";
 import { leerBriefDiseno, type BriefDiseno } from "@/lib/brief-diseno";
+import { Badge } from "@/components/ui/badge";
+import loteStyles from "./tablero-lotes.module.css";
 import operationStyles from "./tablero-operaciones-incorporacion.module.css";
+import planificacionStyles from "./planificacion-page.module.css";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
-type Mode = "items" | "estacion" | "kanban" | "simulacion";
+type Mode = "items" | "estacion" | "kanban";
 type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
 type PriorityFilter = "all" | TableroPrioridad;
 type KanbanBucketKey =
@@ -134,15 +141,13 @@ const BOARD_MODE_LABELS: Record<Mode, string> = {
   items: "Por items",
   estacion: "Por estación",
   kanban: "Kanban",
-  simulacion: "Simulación",
 };
 
 function isBoardMode(value: string | null): value is Mode {
   return (
     value === "items" ||
     value === "estacion" ||
-    value === "kanban" ||
-    value === "simulacion"
+    value === "kanban"
   );
 }
 
@@ -150,6 +155,7 @@ function readStoredBoardMode(): Mode {
   if (typeof window === "undefined") return DEFAULT_BOARD_MODE;
   try {
     const saved = window.localStorage.getItem(BOARD_MODE_STORAGE_KEY);
+    // La antigua preferencia "simulacion" vuelve a Por items: el Gantt vive en Planificación.
     return isBoardMode(saved) ? saved : DEFAULT_BOARD_MODE;
   } catch {
     return DEFAULT_BOARD_MODE;
@@ -305,6 +311,7 @@ type ItemView = {
   delayed: boolean;
   blocked: boolean;
   blockedReason: string | null;
+  dependencias: NonNullable<TableroPasoData["dependenciasPendientes"]>;
   started: boolean;
   finished: boolean;
   sinRuta: boolean;
@@ -351,6 +358,8 @@ function ElapsedMin({ desdeIso }: { desdeIso: string }) {
 function buildItemView(
   item: TableroItemData,
   estaciones: Estacion[],
+  zona = ZONA_DEFAULT,
+  ahora = new Date(),
 ): ItemView {
   const activos = pasosActivos(item);
   const actual = activos[0];
@@ -370,6 +379,11 @@ function buildItemView(
   const currentSteps = steps.filter((step) => step.esActivo);
   const blocked = itemBloqueado(item);
   const bloqueadoPaso = item.pasos.find((paso) => paso.estado === "bloqueado");
+  const proximo = actual ?? item.pasos.find((paso) => paso.estado !== "hecho");
+  const dependencias = proximo?.dependenciasPendientes ?? [];
+  const espera = dependencias.length
+    ? `Espera: ${dependencias.slice(0, 2).map(textoDependenciaTablero).join("; ")}${dependencias.length > 2 ? ` y ${dependencias.length - 2} más` : ""}`
+    : "Esperando componentes o pasos anteriores";
   // El resumen une valores SIN etiqueta, así que la medida de corte no puede
   // entrar acá: quedarían dos medidas sueltas y ninguna diría cuál cortar.
   const esSpecCorte = (etiqueta: string) =>
@@ -390,24 +404,25 @@ function buildItemView(
     otCode: item.ordenNumero,
     customer: item.clienteNombre,
     vendedor: item.vendedorNombre,
-    product: item.nombre,
-    spec: spec || item.codigo,
+    product: nombreTrabajoTablero(item),
+    spec: spec || (item.loteEntrega ? "" : item.codigo),
     corteLabel,
     qtyLabel: `${item.cantidad.toLocaleString("es-AR")} ${item.cantidadUnidad}`,
-    priority: prioridadDerivada(item.fechaEntrega),
-    dueLabel: etiquetaEntrega(item.fechaEntrega),
-    dueIn: etiquetaRestante(item.fechaEntrega),
-    dueDays: diasHastaEntrega(item.fechaEntrega),
-    delayed: itemConRetraso(item),
+    priority: prioridadDerivada(item.fechaEntrega, ahora, zona),
+    dueLabel: etiquetaEntrega(item.fechaEntrega, ahora, zona),
+    dueIn: etiquetaRestante(item.fechaEntrega, ahora, zona),
+    dueDays: diasHastaEntrega(item.fechaEntrega, ahora, zona),
+    delayed: itemConRetraso(item, ahora, zona),
     blocked,
     blockedReason:
       bloqueadoPaso?.motivoBloqueo ??
-      (blocked && !actual ? "Esperando componentes o pasos anteriores" : null),
+      (blocked && !actual ? espera : null),
+    dependencias,
     started: itemIniciado(item),
     finished: itemTerminado(item),
     sinRuta: item.sinRuta,
     progressPct: progresoItem(item),
-    statusLine: lineaEstado(item),
+    statusLine: blocked && !actual && dependencias.length ? espera : lineaEstado(item),
     station: actual
       ? actual.tipoEjecucion === "tercerizado"
         ? "Proveedor tercerizado"
@@ -418,6 +433,20 @@ function buildItemView(
     currentSteps,
     steps,
   };
+}
+
+function EtiquetaLote({ item }: { item: TableroItemData }) {
+  if (!item.loteEntrega) return null;
+  return <span className={loteStyles.etiqueta}><Badge variant="outline"><LayersIcon data-icon="inline-start" />{item.loteEntrega.nombre}</Badge></span>;
+}
+
+function ContextoLote({ item }: { item: TableroItemData }) {
+  const lote = item.loteEntrega;
+  if (!lote) return null;
+  return <div className={loteStyles.contexto}>
+    <span><strong>{lote.cantidad.toLocaleString("es-AR")} {lote.unidad}</strong> · {lote.esProductoDelLote ? "Producto del lote" : "Componente del lote"}</span>
+    {!lote.esProductoDelLote ? <span className={loteStyles.producto} title={lote.productoNombre}>{lote.productoNombre}</span> : null}
+  </div>;
 }
 
 // ── Ruta compacta (strip de pasos) ───────────────────────────────────────
@@ -493,12 +522,13 @@ function EtaLine({
   item: ItemView;
   eta: SimulacionItem | undefined;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   if (!eta || item.finished) return null;
   if (eta.sinEstimar)
     return <span className="eta-line none">fin sin estimar</span>;
   if (!eta.finEstimado) return null;
   const fin = eta.finEstimado;
-  const finClave = `${fin.getFullYear()}-${String(fin.getMonth() + 1).padStart(2, "0")}-${String(fin.getDate()).padStart(2, "0")}`;
+  const finClave = claveFechaEnZona(fin, zonaHoraria);
   const late = item.data.fechaEntrega
     ? finClave > item.data.fechaEntrega.slice(0, 10)
     : false;
@@ -514,7 +544,7 @@ function EtaLine({
       className={`eta-line ${late ? "late" : ""}`}
       title={motivo || undefined}
     >
-      fin {aprox ? "~" : "≈"} {etiquetaEta(fin)}
+      fin {aprox ? "~" : "≈"} {etiquetaEta(fin, new Date(), zonaHoraria)}
       {late ? " · no llega" : ""}
     </span>
   );
@@ -543,10 +573,10 @@ const ItemRow = React.memo(function ItemRow({
           <span className="ot-badge" title="Orden de trabajo origen">
             {item.otCode}
           </span>
-          {item.data.componenteDe ? (
+          {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
             <span
               className="ot-badge"
-              title={`Componente fabricado de ${item.data.componenteDe.nombre}`}
+              title={`${item.data.loteEntregaId ? "Producción por lote" : "Componente fabricado"} de ${item.data.componenteDe.nombre}`}
             >
               Componente
             </span>
@@ -558,6 +588,7 @@ const ItemRow = React.memo(function ItemRow({
           ) : null}
         </div>
         <div className="tab-row-product">{item.product}</div>
+        <ContextoLote item={item.data} />
         {/* Sólo el cliente: el detalle del producto vive en el sheet. */}
         <div className="tab-row-spec">
           <span className="cust">{item.customer}</span>
@@ -715,6 +746,7 @@ type AccionHandler = (
     motivo?: string;
     motivoDetalle?: string;
     tiempoDeclaradoMin?: number;
+    sinTiempoConfirmado?: boolean;
   },
 ) => Promise<void>;
 
@@ -778,41 +810,6 @@ export function GatesOperativos({
   );
 }
 
-/**
- * ¿Completar este paso dejaría el tiempo INVÁLIDO (D8, el "inicio y
- * completo en 1 seg")? Espejo del criterio del backend: suma de tramos
- * cerrados (`tiempoAcumuladoMin`) + el abierto si corre, contra el umbral
- * de 1 min o 10% del estimado. Cubre pendiente, en curso y pausado.
- */
-function completarSeriaInstantaneo(paso: TableroPasoData): boolean {
-  if (paso.modoRegistro !== "cronometro") return false;
-  if (
-    paso.estado !== "pendiente" &&
-    paso.estado !== "en_curso" &&
-    paso.estado !== "pausado"
-  )
-    return false;
-  const abiertoMin = paso.tramoAbierto
-    ? (Date.now() - new Date(paso.tramoAbierto.inicioEl).getTime()) / 60_000
-    : 0;
-  const suma = paso.tiempoAcumuladoMin + abiertoMin;
-  const umbral = Math.max(1, (paso.duracionEstimadaMin ?? 0) * 0.1);
-  return suma < umbral;
-}
-
-/** Chips del micro-prompt de tiempo declarado (D8): estimado, mitad, doble. */
-function chipsDeclarar(estimado: number | null): number[] {
-  if (estimado == null || estimado <= 0) return [];
-  const redondo = (n: number) => Math.max(1, Math.round(n));
-  return [
-    ...new Set([
-      redondo(estimado / 2),
-      redondo(estimado),
-      redondo(estimado * 2),
-    ]),
-  ];
-}
-
 /** Estado de la compra de un paso tercerizado, en lenguaje del taller. */
 const COMPRA_LABELS: Record<string, string> = {
   pendiente: "Compra pendiente",
@@ -836,299 +833,11 @@ function PasoAcciones({
   canSupervise: boolean;
   onAccion: AccionHandler;
 }) {
-  const [bloqueando, setBloqueando] = React.useState(false);
-  const [motivo, setMotivo] = React.useState("");
-  const [pausando, setPausando] = React.useState(false);
-  const [motivoPausa, setMotivoPausa] = React.useState<string | null>(null);
-  const [detallePausa, setDetallePausa] = React.useState("");
-  const [declarando, setDeclarando] = React.useState(false);
-  const [tiempoOtro, setTiempoOtro] = React.useState("");
   const paso = step.paso;
-  const esActual = step.esActivo;
-  const esCronometro = paso.modoRegistro === "cronometro";
-  const gatePendiente = (paso.gatesOperativos ?? []).some(
-    (gate) => gate.estado !== "CUMPLIDO",
-  );
-
-  if (!canManage) return null;
-  if (gatePendiente && paso.estado === "pendiente") return null;
-
-  // Un paso TERCERIZADO es una compra al proveedor, no trabajo del taller: no se
-  // ejecuta desde el tablero (se avanza en "Compras / Tercerizados" de la OT).
-  // Igual se muestra —y sigue contando para la secuencia— porque bloquea al paso
-  // interno siguiente hasta que la compra esté recibida.
-  // docs/productos-tercerizados-diseno.md §6.
-  if (paso.tipoEjecucion === "tercerizado") {
-    const estadoCompra = paso.estadoCompra ?? "pendiente";
-    return (
-      <div className="ds-terc">
-        <span className={`dst-badge ${estadoCompra}`}>Tercerizado</span>
-        <span className="dst-info">
-          {paso.proveedorNombre ? `${paso.proveedorNombre} · ` : ""}
-          {COMPRA_LABELS[estadoCompra] ?? estadoCompra}
-          {paso.plazoProveedorDias != null
-            ? ` · plazo ${paso.plazoProveedorDias} d`
-            : ""}
-        </span>
-        <span className="dst-hint">Se gestiona desde la orden</span>
-      </div>
-    );
-  }
-
-  if (paso.estado === "hecho") {
-    // Reabrir sólo el último hecho: deshacer en el medio rompe la secuencia.
-    if (!canSupervise || !pasoReabrible(item.data, paso)) return null;
-    return (
-      <div className="ds-acciones">
-        <button
-          type="button"
-          className="sta-btn ghost"
-          disabled={busy}
-          onClick={() => void onAccion(item, paso, "reabrir")}
-        >
-          Reabrir
-        </button>
-      </div>
-    );
-  }
-  if (paso.estado === "bloqueado") {
-    if (!canSupervise) return null;
-    return (
-      <div className="ds-acciones">
-        <button
-          type="button"
-          className="sta-btn primary"
-          disabled={busy}
-          onClick={() => void onAccion(item, paso, "desbloquear")}
-        >
-          <UnlockIcon />
-          Desbloquear
-        </button>
-      </div>
-    );
-  }
-  if (!esActual && paso.estado === "pendiente") return null;
-
-  if (bloqueando) {
-    return (
-      <div className="ds-acciones ds-bloqueo-form">
-        <input
-          autoFocus
-          placeholder="¿Qué está frenando este paso?"
-          value={motivo}
-          onChange={(event) => setMotivo(event.target.value)}
-        />
-        <button
-          type="button"
-          className="sta-btn primary"
-          disabled={busy || motivo.trim().length === 0}
-          onClick={() => {
-            void onAccion(item, paso, "bloquear", { motivo: motivo.trim() });
-            setBloqueando(false);
-            setMotivo("");
-          }}
-        >
-          Bloquear
-        </button>
-        <button
-          type="button"
-          className="sta-btn ghost"
-          onClick={() => setBloqueando(false)}
-        >
-          Cancelar
-        </button>
-      </div>
-    );
-  }
-
-  // Pausar con motivo del catálogo (D7); "Otro" pide un detalle corto.
-  if (pausando) {
-    const necesitaDetalle = motivoPausa === "otro";
-    return (
-      <div className="ds-acciones ds-pausa-form">
-        <div className="ds-form-title">¿Por qué se pausa?</div>
-        <div className="ds-chips">
-          {MOTIVOS_PAUSA.map((entry) => (
-            <button
-              key={entry.codigo}
-              type="button"
-              className={`ds-chip ${motivoPausa === entry.codigo ? "on" : ""}`}
-              onClick={() => setMotivoPausa(entry.codigo)}
-            >
-              {entry.etiqueta}
-            </button>
-          ))}
-        </div>
-        {necesitaDetalle ? (
-          <input
-            autoFocus
-            placeholder="Contanos brevemente el motivo"
-            value={detallePausa}
-            onChange={(event) => setDetallePausa(event.target.value)}
-          />
-        ) : null}
-        <div className="ds-form-actions">
-          <button
-            type="button"
-            className="sta-btn primary"
-            disabled={
-              busy ||
-              !motivoPausa ||
-              (necesitaDetalle && detallePausa.trim().length === 0)
-            }
-            onClick={() => {
-              void onAccion(item, paso, "pausar", {
-                motivo: motivoPausa ?? undefined,
-                motivoDetalle: necesitaDetalle
-                  ? detallePausa.trim()
-                  : undefined,
-              });
-              setPausando(false);
-              setMotivoPausa(null);
-              setDetallePausa("");
-            }}
-          >
-            <PauseIcon />
-            Pausar
-          </button>
-          <button
-            type="button"
-            className="sta-btn ghost"
-            onClick={() => setPausando(false)}
-          >
-            Cancelar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Micro-prompt D8: el paso se completa sin tiempo medido — se ofrece
-  // declarar cuánto llevó (opcional, un toque) o completar sin tiempo.
-  if (declarando) {
-    const otroMin = Number(tiempoOtro);
-    const completar = (tiempoDeclaradoMin?: number) => {
-      void onAccion(item, paso, "completar", { tiempoDeclaradoMin });
-      setDeclarando(false);
-      setTiempoOtro("");
-    };
-    return (
-      <div className="ds-acciones ds-declarar-form">
-        <div className="ds-form-title">
-          Sin tiempo registrado. ¿Cuánto llevó aprox?
-        </div>
-        <div className="ds-chips">
-          {chipsDeclarar(paso.duracionEstimadaMin).map((min) => (
-            <button
-              key={min}
-              type="button"
-              className="ds-chip"
-              disabled={busy}
-              onClick={() => completar(min)}
-            >
-              {etiquetaDuracion(min)}
-            </button>
-          ))}
-          <input
-            className="ds-chip-input"
-            type="number"
-            min={1}
-            placeholder="min"
-            value={tiempoOtro}
-            onChange={(event) => setTiempoOtro(event.target.value)}
-          />
-          {Number.isFinite(otroMin) && otroMin >= 1 ? (
-            <button
-              type="button"
-              className="ds-chip on"
-              disabled={busy}
-              onClick={() => completar(otroMin)}
-            >
-              Usar {etiquetaDuracion(otroMin)}
-            </button>
-          ) : null}
-        </div>
-        <div className="ds-form-actions">
-          <button
-            type="button"
-            className="sta-btn ghost"
-            disabled={busy}
-            onClick={() => completar(undefined)}
-          >
-            Completar sin tiempo
-          </button>
-          <button
-            type="button"
-            className="sta-btn ghost"
-            onClick={() => setDeclarando(false)}
-          >
-            Cancelar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="ds-acciones">
-      {/* Cronómetro: Iniciar/Pausar/Continuar. Un paso de máquina
-          (solo_completar) se completa de un click, sin cronómetro. */}
-      {esCronometro && paso.estado === "pendiente" ? (
-        <button
-          type="button"
-          className="sta-btn primary"
-          disabled={busy}
-          onClick={() => void onAccion(item, paso, "iniciar")}
-        >
-          <PlayIcon />
-          Iniciar
-        </button>
-      ) : null}
-      {esCronometro && paso.estado === "en_curso" ? (
-        <button
-          type="button"
-          className="sta-btn ghost"
-          disabled={busy}
-          onClick={() => setPausando(true)}
-        >
-          <PauseIcon />
-          Pausar
-        </button>
-      ) : null}
-      {esCronometro && paso.estado === "pausado" ? (
-        <button
-          type="button"
-          className="sta-btn primary"
-          disabled={busy}
-          onClick={() => void onAccion(item, paso, "continuar")}
-        >
-          <PlayIcon />
-          Continuar
-        </button>
-      ) : null}
-      <button
-        type="button"
-        className={`sta-btn ${paso.estado === "en_curso" || !esCronometro ? "primary" : "ghost"}`}
-        disabled={busy}
-        onClick={() => {
-          if (completarSeriaInstantaneo(paso)) setDeclarando(true);
-          else void onAccion(item, paso, "completar");
-        }}
-      >
-        <CheckIcon />
-        Completar
-      </button>
-      <button
-        type="button"
-        className="sta-btn ghost"
-        disabled={busy}
-        onClick={() => setBloqueando(true)}
-      >
-        <BanIcon />
-        Bloquear
-      </button>
-    </div>
-  );
+  if (paso.tipoEjecucion === "tercerizado") return canManage ? (
+    <div className="ds-terc"><span className="dst-badge">Tercerizado</span><span className="dst-info">{paso.proveedorNombre ? `${paso.proveedorNombre} · ` : ""}{COMPRA_LABELS[paso.estadoCompra ?? "pendiente"] ?? paso.estadoCompra}{paso.plazoProveedorDias != null ? ` · plazo ${paso.plazoProveedorDias} d` : ""}</span><span className="dst-hint">Se gestiona desde la orden</span></div>
+  ) : null;
+  return <PasoAccionesProduccion enLinea paso={paso} esActual={step.esActivo} canManage={canManage} canSupervise={canSupervise} reabrible={pasoReabrible(item.data, paso)} busy={busy} onAccion={(accion, opts) => onAccion(item, paso, accion, opts)} />;
 }
 
 function DetailRuta({
@@ -1619,7 +1328,7 @@ function ItemDetailSheet({
         className="sheet"
         role="dialog"
         aria-modal="true"
-        aria-label={`Detalle ${item.code}`}
+        aria-label={`Detalle ${item.code}${item.data.loteEntrega ? ` · ${item.data.loteEntrega.nombre}` : ""}`}
       >
         <div className="sheet-head item-sheet-head">
           <div className="sheet-title-row">
@@ -1627,12 +1336,12 @@ function ItemDetailSheet({
               <div className="sheet-codes">
                 <span className="item-code">{item.code}</span>
                 <span className="ot-badge">{item.otCode}</span>
-                {item.data.componenteDe ? (
+                {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
                   <span
                     className="ot-badge"
                     title={`Se incorpora en ${item.data.componenteDe.nombre}`}
                   >
-                    Componente de {item.data.componenteDe.nombre}
+                    {item.data.loteEntregaId ? "Producción de" : "Componente de"} {item.data.componenteDe.nombre}
                   </span>
                 ) : null}
                 {item.priority !== "normal" ? (
@@ -1648,8 +1357,9 @@ function ItemDetailSheet({
                 ) : null}
               </div>
               <h2>{item.product}</h2>
+              <ContextoLote item={item.data} />
               <div className="sub">
-                {item.customer} · {item.spec}
+                {item.customer}{item.spec ? ` · ${item.spec}` : ""}
               </div>
               {item.corteLabel ? (
                 <div className="sub corte-medida">
@@ -1673,8 +1383,8 @@ function ItemDetailSheet({
           >
             <span className="dot" />
             <div className="body">
-              <div className="ttl">{item.statusLine}</div>
-              {item.blocked && item.blockedReason ? (
+              <div className="ttl">{item.dependencias.length && item.statusLine === item.blockedReason ? "En espera de otros trabajos" : item.statusLine}</div>
+              {item.blocked && item.blockedReason && item.statusLine !== item.blockedReason ? (
                 <div className="sub">{item.blockedReason}</div>
               ) : null}
               {!item.blocked && currentStep ? (
@@ -1705,6 +1415,18 @@ function ItemDetailSheet({
             </div>
           </div>
 
+          {item.dependencias.length > 0 ? (
+            <section className={loteStyles.dependencias} aria-label="Dependencias pendientes">
+              <strong>Para continuar, espera a</strong>
+              <ul>{item.dependencias.map((d) => (
+                <li key={d.pasoId}>
+                  {d.loteNombre ? <Badge variant="outline">{d.loteNombre}</Badge> : null}
+                  <span><strong>{d.pasoNombre}</strong><span>{d.itemNombre}</span></span>
+                </li>
+              ))}</ul>
+            </section>
+          ) : null}
+
           {notaProduccion ? (
             <div className="item-nota-produccion">
               <div className="lbl">Nota de producción</div>
@@ -1716,7 +1438,7 @@ function ItemDetailSheet({
             <div className="m">
               <div className="k">Avance</div>
               <div className="v">
-                {item.progressPct}%
+                <ProgresoValor progreso={calcularProgreso(item.data.pasos)} />
                 <span className="sub">
                   · {doneSteps}/{totalSteps} pasos
                 </span>
@@ -1871,13 +1593,7 @@ type IncomingTask = {
 };
 
 function ordenarTareas(tasks: StationTask[]): StationTask[] {
-  return tasks.sort((a, b) => {
-    const aw =
-      (a.isBlocked ? 0 : 1) + (a.overdue ? 0 : 2) + (a.isCurrent ? 1 : 4);
-    const bw =
-      (b.isBlocked ? 0 : 1) + (b.overdue ? 0 : 2) + (b.isCurrent ? 1 : 4);
-    return aw - bw;
-  });
+  return tasks.sort(compararTareasEstacion);
 }
 
 /**
@@ -2172,7 +1888,7 @@ function StationCard({
             {station.tercerizada
               ? "Compras a proveedores"
               : station.sinEstacion
-                ? "Familias sin estación asignada"
+                ? "Máquinas o pasos sin asignación"
                 : (etapa?.nm ?? "Estación del taller")}
           </div>
         </div>
@@ -2539,6 +2255,7 @@ function TaskCard({
           </span>
         ) : null}
         <span className="code">{task.item.code}</span>
+        <EtiquetaLote item={task.item.data} />
         <span className={`task-status ${statusCls}`}>{statusLabel}</span>
         {task.overdue ? (
           <span className="task-vencido">
@@ -2573,6 +2290,7 @@ function TaskCard({
             <span className="qty">· {task.item.qtyLabel}</span>
           </span>
         </div>
+        <ContextoLote item={task.item.data} />
         <div className="meta step">
           <span className="ic">
             <CogIcon />
@@ -3029,12 +2747,12 @@ const KanbanCard = React.memo(function KanbanCard({
       className={`kan-card priority-${item.priority} ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`}
       onClick={() => onOpen(item.id)}
     >
-      <div className="kan-card-top">
+      <div className={`kan-card-top ${loteStyles.cabecera}`}>
         <span className="item-code">{item.code}</span>
-        {item.data.componenteDe ? (
+        {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
           <span
             className="ot-badge"
-            title={`Componente fabricado de ${item.data.componenteDe.nombre}`}
+            title={`${item.data.loteEntregaId ? "Producción por lote" : "Componente fabricado"} de ${item.data.componenteDe.nombre}`}
           >
             Componente
           </span>
@@ -3044,10 +2762,11 @@ const KanbanCard = React.memo(function KanbanCard({
             {priorityLabel(item.priority)}
           </span>
         ) : null}
-        <span className="kan-pct">{item.progressPct}%</span>
+        <span className="kan-pct"><ProgresoValor progreso={calcularProgreso(item.data.pasos)} /></span>
       </div>
       <div className="kan-customer">{item.customer}</div>
-      <div className="kan-title">{item.product}</div>
+      <div className="kan-title" title={item.product}>{item.product}</div>
+      <ContextoLote item={item.data} />
       <div className="kan-step">
         <span
           className={`kan-step-ico ${
@@ -3076,7 +2795,7 @@ const KanbanCard = React.memo(function KanbanCard({
           ) : null}
         </div>
       </div>
-      <div className="kan-progress" aria-label={`Avance ${item.progressPct}%`}>
+      <div className="kan-progress" aria-label={calcularProgreso(item.data.pasos).explicacion}>
         <span style={{ width: `${item.progressPct}%` }} />
       </div>
       <div className="kan-foot">
@@ -3242,6 +2961,7 @@ export function TableroProduccion({
   duracionesFamilias,
   diasNoLaborables,
   tiempoEntrePasosMin = 0,
+  modoPlanificacion = false,
 }: {
   initialItems: TableroItemData[];
   initialMeta: {
@@ -3257,6 +2977,8 @@ export function TableroProduccion({
   diasNoLaborables: DiaNoLaborable[];
   /** Default del tenant para el traslado entre pasos. */
   tiempoEntrePasosMin?: number;
+  /** Acceso dedicado al Gantt; conserva los mismos datos, permisos y refresco. */
+  modoPlanificacion?: boolean;
 }) {
   const { zonaHoraria } = useConfigRegional();
   const permisoEjecutar = usePuede("produccion.ejecutar");
@@ -3292,10 +3014,11 @@ export function TableroProduccion({
     (permisoEjecutar || permisoSupervisar) && meta.puedeGestionar;
 
   React.useEffect(() => {
+    if (modoPlanificacion) return;
     const savedMode = readStoredBoardMode();
     setDefaultMode(savedMode);
     setMode(savedMode);
-  }, []);
+  }, [modoPlanificacion]);
 
   // Deep-link del widget "En curso": /produccion/tablero?item=<id> abre el
   // sheet de ese item directo (searchParams cambia de instancia en cada
@@ -3426,8 +3149,8 @@ export function TableroProduccion({
   }, [tabMenu]);
 
   const views = React.useMemo(
-    () => items.map((item) => buildItemView(item, estaciones)),
-    [items, estaciones],
+    () => items.map((item) => buildItemView(item, estaciones, zonaHoraria)),
+    [items, estaciones, zonaHoraria],
   );
 
   /** familiaCodigo → mediana histórica en minutos (fallback de la cola). */
@@ -3496,6 +3219,7 @@ export function TableroProduccion({
         motivo?: string;
         motivoDetalle?: string;
         tiempoDeclaradoMin?: number;
+    sinTiempoConfirmado?: boolean;
       },
     ) => {
       if (!canManage) return;
@@ -3521,6 +3245,7 @@ export function TableroProduccion({
         setError(
           err instanceof Error ? err.message : "No se pudo ejecutar la acción.",
         );
+        throw err;
       } finally {
         mutacionesRef.current -= 1;
         setBusy(false);
@@ -3599,7 +3324,6 @@ export function TableroProduccion({
     { mode: "items", label: BOARD_MODE_LABELS.items, count: views.length },
     { mode: "estacion", label: BOARD_MODE_LABELS.estacion },
     { mode: "kanban", label: BOARD_MODE_LABELS.kanban },
-    { mode: "simulacion", label: BOARD_MODE_LABELS.simulacion },
   ];
 
   const tabMenuStyle = React.useMemo<React.CSSProperties | undefined>(() => {
@@ -3644,7 +3368,7 @@ export function TableroProduccion({
       if (filters.query) {
         const query = filters.query.toLowerCase();
         const haystack =
-          `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec}`.toLowerCase();
+          `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec} ${item.data.loteEntrega?.nombre ?? ""} ${item.data.loteEntrega?.productoNombre ?? ""}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;
@@ -3671,13 +3395,15 @@ export function TableroProduccion({
     : undefined;
 
   return (
-    <div className="tablero-produccion">
-      <div className="tab-page">
+    <div className={`tablero-produccion${modoPlanificacion ? ` ${planificacionStyles.root}` : ""}`}>
+      <div className={`tab-page${modoPlanificacion ? ` ${planificacionStyles.page}` : ""}`}>
         <div className="page-head">
           <div className="title-block">
-            <h1>Tablero de producción en tiempo real</h1>
+            <h1>{modoPlanificacion ? "Planificación" : "Tablero de producción en tiempo real"}</h1>
             <div className="sub">
-              Items de las órdenes emitidas, con cliente y ruta real de pasos.
+              {modoPlanificacion
+                ? "Calendario de producción, carga de estaciones y dependencias por lote."
+                : "Items de las órdenes emitidas, con cliente y ruta real de pasos."}
               {actualizadoEl
                 ? ` Actualizado a las ${actualizadoEl.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
                 : " Todavía no se pudo actualizar."}
@@ -3720,7 +3446,7 @@ export function TableroProduccion({
           </Alert>
         ) : null}
 
-        <div className="d-kpi-row">
+        {!modoPlanificacion ? <div className="d-kpi-row">
           <div className="d-kpi">
             <div className="d-kpi-head">
               <span className="d-kpi-lbl">Items en producción</span>
@@ -3776,8 +3502,7 @@ export function TableroProduccion({
               <span className="d-kpi-sub">prioridad de despacho</span>
             </div>
           </div>
-        </div>
-
+        </div> : null}
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>No se pudo completar la acción</AlertTitle>
@@ -3785,7 +3510,7 @@ export function TableroProduccion({
           </Alert>
         ) : null}
 
-        <div
+        {!modoPlanificacion ? <div
           className="dash-tabs"
           role="tablist"
           aria-label="Vistas del tablero de producción"
@@ -3837,9 +3562,8 @@ export function TableroProduccion({
               ) : null}
             </button>
           ))}
-        </div>
-
-        {tabMenu ? (
+        </div> : null}
+        {!modoPlanificacion && tabMenu ? (
           <div
             className="dash-tab-menu"
             role="menu"
@@ -3867,8 +3591,10 @@ export function TableroProduccion({
 
         <div
           id="tablero-panel-vista"
-          role="tabpanel"
-          aria-labelledby={`tablero-tab-${mode}`}
+          className={modoPlanificacion ? planificacionStyles.panel : undefined}
+          role={modoPlanificacion ? "region" : "tabpanel"}
+          aria-label={modoPlanificacion ? "Calendario de producción" : undefined}
+          aria-labelledby={modoPlanificacion ? undefined : `tablero-tab-${mode}`}
         >
           {loadError && views.length === 0 ? (
             <Alert variant="destructive">
@@ -3905,6 +3631,14 @@ export function TableroProduccion({
                 </>
               )}
             </div>
+          ) : modoPlanificacion ? (
+            <SimulacionView
+              items={items}
+              estaciones={estaciones}
+              sim={sim}
+              noLaborables={noLaborables}
+              onOpen={setSelectedId}
+            />
           ) : (
             <>
               {mode === "items" ? (
@@ -3931,15 +3665,6 @@ export function TableroProduccion({
                   canManage={canManage}
                   estacionIdsEjecutables={meta.estacionIdsEjecutables}
                   onMesa={handleMesa}
-                  onOpen={setSelectedId}
-                />
-              ) : null}
-              {mode === "simulacion" ? (
-                <SimulacionView
-                  items={items}
-                  estaciones={estaciones}
-                  sim={sim}
-                  noLaborables={noLaborables}
                   onOpen={setSelectedId}
                 />
               ) : null}

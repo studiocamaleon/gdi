@@ -1,5 +1,7 @@
 "use client";
 
+import { ProgresoValor } from "./progreso-produccion";
+import type { ProgresoProduccion } from "@/lib/progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -47,18 +49,20 @@ export function EstadoOtBadge({
 function ProgresoMini({
   valor,
   estado,
+  progreso,
 }: {
   valor: number | null;
+  progreso?: ProgresoProduccion;
   estado: OrdenTrabajoEstado;
 }) {
-  if (valor === null) return <span className="dash">—</span>;
+  if (valor === null) return <ProgresoValor progreso={progreso} valor={valor} />;
   const e = ORDEN_TRABAJO_ESTADOS[estado];
   return (
     <div className="otl-prog">
       <div className="otl-prog-track">
         <span style={{ width: `${valor}%`, background: e.dot }} />
       </div>
-      <span className="otl-prog-v mono">{valor}%</span>
+      <span className="otl-prog-v mono"><ProgresoValor progreso={progreso} valor={valor} /></span>
     </div>
   );
 }
@@ -462,7 +466,7 @@ export function OrdenesTrabajoView({
                     <EstadoOtBadge estado={o.estado} sm />
                   </span>
                   <span>
-                    <ProgresoMini valor={o.progresoPct} estado={o.estado} />
+                    <ProgresoMini valor={o.progresoPct} estado={o.estado} progreso={o.progreso} />
                   </span>
                   <span className="c mono">{o.itemsCount}</span>
                   <span className="mono entrega">
@@ -508,7 +512,7 @@ export function OrdenesTrabajoView({
                     {o.estado === "borrador" ? (
                       <span className="dash">Sin emitir</span>
                     ) : (
-                      <ProgresoMini valor={o.progresoPct} estado={o.estado} />
+                      <ProgresoMini valor={o.progresoPct} estado={o.estado} progreso={o.progreso} />
                     )}
                   </div>
                   <div className="otl-card-foot">

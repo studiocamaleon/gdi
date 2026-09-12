@@ -128,7 +128,12 @@ describe('requisitos documentales de receta en OT', () => {
   it('al ejecutar un paso consulta gates de OT, subruta y paso', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const instance = new DesarrolloDocumentalService(
-      { gateProduccionDocumento: { findMany } } as never,
+      {
+        gateProduccionDocumento: { findMany },
+        ordenTrabajoItem: {
+          findFirst: jest.fn().mockResolvedValue({ loteEntregaId: null }),
+        },
+      } as never,
       {} as never,
       {} as never,
       undefined,
@@ -141,7 +146,7 @@ describe('requisitos documentales de receta en OT', () => {
         where: expect.objectContaining({
           OR: [
             { alcance: 'ORDEN' },
-            { alcance: 'ITEM', ordenItemId: 'item-1' },
+            { alcance: 'ITEM', ordenItemId: { in: ['item-1'] } },
             { alcance: 'PASO', pasoId: 'paso-ot-1' },
           ],
         }),

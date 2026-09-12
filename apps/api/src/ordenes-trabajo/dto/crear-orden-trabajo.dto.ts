@@ -1,3 +1,4 @@
+import { VincularPlanEntregaDto } from '../../planificacion-entregas/planificacion.dto';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -7,6 +8,7 @@ import {
   IsIn,
   IsInt,
   IsISO8601,
+  Matches,
   IsNumber,
   IsObject,
   IsOptional,
@@ -18,14 +20,11 @@ import {
   Min,
   MinLength,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 
-export const ORDEN_CANALES_VENTA = [
-  'mostrador',
-  'web',
-  'vendedor_externo',
-  'telefono',
-] as const;
+import { ORDEN_CANALES_VENTA, MENSAJE_CANAL_REQUERIDO } from '../canales-venta';
+export { ORDEN_CANALES_VENTA } from '../canales-venta';
 
 export class OrdenTrabajoItemSpecDto {
   @IsString()
@@ -39,6 +38,16 @@ export class OrdenTrabajoItemSpecDto {
 }
 
 export class CrearOrdenTrabajoItemDto {
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  fechaEntrega?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => VincularPlanEntregaDto)
+  planEntrega?: VincularPlanEntregaDto;
+
   /** FK obligatoria: los montos de la OT se toman de este snapshot. */
   @IsUUID()
   cotizacionItemId: string;
@@ -179,11 +188,16 @@ export class CrearOrdenTrabajoDto {
 
   /** ISO date (YYYY-MM-DD). */
   @IsOptional()
-  @IsISO8601()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message:
+      'La fecha de entrega debe ser una fecha de calendario (AAAA-MM-DD), sin hora.',
+  })
   fechaEntrega?: string;
 
-  @IsOptional()
-  @IsIn(ORDEN_CANALES_VENTA)
+  // Requerido en HTTP, incluso para borradores. La conversión interna de
+  // presupuestos históricos puede recibir un snapshot sin canal.
+  @IsIn(ORDEN_CANALES_VENTA, { message: MENSAJE_CANAL_REQUERIDO })
   canalVenta?: string;
 
   @IsOptional()
@@ -231,13 +245,17 @@ export class EditarOrdenTrabajoDto {
   @IsUUID()
   vendedorEmpleadoId?: string;
 
-  @IsOptional()
-  @IsIn(ORDEN_CANALES_VENTA)
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsIn(ORDEN_CANALES_VENTA, { message: MENSAJE_CANAL_REQUERIDO })
   canalVenta?: string;
 
   /** ISO date (YYYY-MM-DD). */
   @IsOptional()
-  @IsISO8601()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message:
+      'La fecha de entrega debe ser una fecha de calendario (AAAA-MM-DD), sin hora.',
+  })
   fechaEntrega?: string;
 
   @IsOptional()

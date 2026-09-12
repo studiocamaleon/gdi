@@ -17,7 +17,9 @@ import type {
  */
 
 export type CrearOrdenTrabajoItemPayload = {
+  fechaEntrega?: string;
   cotizacionItemId?: string;
+  planEntrega?: import("./planificacion-entregas").VinculoPlanEntrega;
   /**
    * Descuento comercial de la línea (F1 descuentos). `tipo`/`valor` = lo que
    * pidió el vendedor; `monto` = lo que resolvió el motor (ya restado dentro de
@@ -54,7 +56,7 @@ export type CrearOrdenTrabajoPayload = {
   estado?: "borrador" | "pendiente";
   /** ISO date (YYYY-MM-DD). */
   fechaEntrega?: string;
-  canalVenta?: string;
+  canalVenta: string;
   observaciones?: string;
   /** Sólo compatibilidad con presupuestos históricos; una OT nueva usa `cargos`. */
   cargosDirectos?: number;
@@ -234,7 +236,7 @@ export async function getOrdenPasos(
  */
 export const TRAMOS_CAMBIARON_EVENT = "gdi:tramos-cambiaron";
 
-function avisarTramosCambiaron() {
+export function avisarTramosCambiaron() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(TRAMOS_CAMBIARON_EVENT));
   }
@@ -253,6 +255,7 @@ export async function accionPasoProduccion(
     motivoDetalle?: string;
     /** Completar con tiempo medido inválido: cuánto llevó aprox (D8). */
     tiempoDeclaradoMin?: number;
+    sinTiempoConfirmado?: boolean;
   },
 ): Promise<TableroItemData> {
   const item = await apiRequest<TableroItemData>(
@@ -289,43 +292,6 @@ export async function resolverGatePasoProduccion(
     method: "PATCH",
     body: JSON.stringify(payload),
   });
-}
-
-/**
- * Completar varios pasos de una (simulador de impresión): resultado
- * PARCIAL honesto — los que no pudieron, con su motivo. `duracionTandaMin`
- * (opcional) prorratea la duración real de la tanda entre los pasos (D11).
- */
-/**
- * Ahorro de material concretado al consolidar la tanda (simulador gran
- * formato): se persiste como valor generado por el sistema y alimenta el
- * acumulado de Reportes.
- */
-export type AhorroConsolidacionPayload = {
-  varianteId: string;
-  anchoMm: number;
-};
-
-export async function completarPasosLote(
-  pasoIds: string[],
-  duracionTandaMin?: number,
-  ahorro?: AhorroConsolidacionPayload,
-  validarCompatibilidadLaser?: boolean,
-) {
-  const resultado = await apiRequest<{
-    completados: number;
-    errores: Array<{ pasoId: string; motivo: string }>;
-  }>("/ordenes-trabajo/tablero/pasos/completar-lote", {
-    method: "POST",
-    body: JSON.stringify({
-      pasoIds,
-      duracionTandaMin,
-      ahorro,
-      validarCompatibilidadLaser,
-    }),
-  });
-  avisarTramosCambiaron();
-  return resultado;
 }
 
 /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */

@@ -1,6 +1,7 @@
 "use client";
 
 import { HerramientasCorteEditor } from "./herramientas-corte-editor";
+import { OperacionMaquinaEditor } from "./operacion-maquina-editor";
 
 /**
  * Cuerpo del editor de una máquina, en dos piezas que la ficha reparte en
@@ -346,6 +347,7 @@ export function MaquinaEditorSecciones({
 
   return (
     <>
+      <OperacionMaquinaEditor editor={editor} />
       <HerramientasCorteEditor editor={editor} />
       {secciones.map((sec) => (
         <Card

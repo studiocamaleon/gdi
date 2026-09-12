@@ -1,4 +1,4 @@
-/* Sección "Reglas de captura" del panel de estación (rediseño por reglas).
+/* Configuración de máquinas y pasos sin máquina en estaciones.
    Sólo lo NUEVO del patrón compacto (chips de lo elegido + un buscador para
    agregar). Los chips reusan .multi-chips/.m-chip de globals.css. */
 
@@ -58,39 +58,6 @@
   padding: 2px 0;
 }
 
-/* Ajuste fino (paso concreto): plegado por default para no ensuciar. */
-.avanzado {
-  margin-top: 18px;
-  border-top: 1px dashed var(--border);
-  padding-top: 14px;
-}
-.avToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-2);
-  cursor: pointer;
-  letter-spacing: -0.01em;
-}
-.avToggle:hover {
-  color: var(--ink);
-}
-.avToggle svg {
-  transition: transform 0.15s ease;
-}
-.avToggle[data-abierto="si"] svg {
-  transform: rotate(90deg);
-}
-.avBody {
-  margin-top: 12px;
-}
-
 /* Sección 04: Puestos y Tiempo entre pasos, unificados en una fila compacta
    arriba (ninguno ocupa todo el ancho); el calendario va full width debajo. */
 .capTop {
@@ -140,3 +107,8 @@
   outline-offset: 2px;
   border-radius: 999px;
 }
+
+.pendientes { margin-bottom: 20px; }
+.pendientes p { margin: 4px 0 10px; }
+.pendientes ul { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; max-height: 112px; overflow-y: auto; list-style: none; }
+.pendientes li { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted); font-size: 12px; }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ProgresoValor } from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -132,13 +133,13 @@ function TrabajoEntrega({
                     {producto.nombre}
                   </span>
                   <span className="shrink-0 font-mono text-[10px] opacity-75">
-                    {producto.progresoPct}%
+                    {producto.progresoPct == null ? "—" : `${producto.progresoPct}%`}
                   </span>
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-background/20">
                   <div
                     className="h-full rounded-full bg-background"
-                    style={{ width: `${producto.progresoPct}%` }}
+                    style={{ width: `${producto.progresoPct ?? 0}%` }}
                   />
                 </div>
               </div>
@@ -226,10 +227,10 @@ function ProximasEntregas({
                       <div className={s.track}>
                         <div
                           className={s.fill}
-                          style={{ width: `${entrega.progresoPct}%` }}
+                          style={{ width: `${entrega.progresoPct ?? 0}%` }}
                         />
                       </div>
-                      <span>{entrega.progresoPct}%</span>
+                      <ProgresoValor progreso={entrega.progreso} valor={entrega.progresoPct} />
                     </div>
                   </td>
                 </tr>

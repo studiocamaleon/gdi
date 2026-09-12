@@ -21,6 +21,8 @@ export type GranFormatoMeasure = {
   anchoMm: number;
   altoMm: number;
   cantidad: number;
+  /** Una pieza puede restringir la rotación global del acomodo. */
+  allowRotation?: boolean;
 };
 
 export type GranFormatoPanelAxis = 'vertical' | 'horizontal';
@@ -28,6 +30,7 @@ export type GranFormatoPanelAxisInput = GranFormatoPanelAxis | 'automatic';
 
 export type GranFormatoPiece = {
   id: string;
+  allowRotation?: boolean;
   sourcePieceId: string;
   originalWidthMm: number;
   originalHeightMm: number;
@@ -110,6 +113,7 @@ export function buildGranFormatoPieceInstances(
             { length: Math.ceil(medida.cantidad) },
             (_, copyIndex) => ({
               id: `piece-${medidaIndex}-${copyIndex}`,
+              allowRotation: medida.allowRotation,
               sourcePieceId: `piece-${medidaIndex}-${copyIndex}`,
               originalWidthMm: medida.anchoMm,
               originalHeightMm: medida.altoMm,
@@ -225,6 +229,7 @@ export function buildGranFormatoPanelizedPieces(
     sourcePieceId: string,
   ): GranFormatoPiece => ({
     id: sourcePieceId,
+    allowRotation: medida.allowRotation,
     sourcePieceId,
     originalWidthMm: medida.anchoMm,
     originalHeightMm: medida.altoMm,
@@ -244,7 +249,9 @@ export function buildGranFormatoPanelizedPieces(
 
   const pieceCanFitWhole = (medida: GranFormatoMeasure) =>
     medida.anchoMm <= input.printableWidthMm ||
-    (input.allowRotation !== false && medida.altoMm <= input.printableWidthMm);
+    (input.allowRotation !== false &&
+      medida.allowRotation !== false &&
+      medida.altoMm <= input.printableWidthMm);
 
   const buildPanelsForAxis = (
     medida: GranFormatoMeasure,
@@ -292,6 +299,7 @@ export function buildGranFormatoPanelizedPieces(
       const fitsRoll =
         finalWidthMm <= input.printableWidthMm ||
         (input.allowRotation !== false &&
+          medida.allowRotation !== false &&
           finalHeightMm <= input.printableWidthMm);
       return (
         withinConfiguredLimit &&
@@ -317,6 +325,7 @@ export function buildGranFormatoPanelizedPieces(
           : medida.altoMm;
       return {
         id: `${sourcePieceId}-panel-${index + 1}`,
+        allowRotation: medida.allowRotation,
         sourcePieceId,
         originalWidthMm: medida.anchoMm,
         originalHeightMm: medida.altoMm,
@@ -373,6 +382,7 @@ export function buildGranFormatoPanelizedPieces(
                 (panel) =>
                   panel.widthMm <= input.printableWidthMm ||
                   (input.allowRotation !== false &&
+                    panel.allowRotation !== false &&
                     panel.heightMm <= input.printableWidthMm),
               ),
           )
@@ -556,6 +566,7 @@ export function buildGranFormatoManualPieces(
       }
       pieces.push({
         id: `${layout.sourcePieceId}-panel-${panel.panelIndex}`,
+        allowRotation: sourcePiece.allowRotation,
         sourcePieceId: layout.sourcePieceId,
         originalWidthMm: layout.pieceWidthMm,
         originalHeightMm: layout.pieceHeightMm,

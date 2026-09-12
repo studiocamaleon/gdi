@@ -1,4 +1,9 @@
 import {
+  progresoDeOrden,
+  progresoDeCampana,
+} from '../common/progreso-produccion';
+import { pasosProgresoSelect } from '../ordenes-trabajo/progreso-select';
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -72,6 +77,7 @@ const CAMPANA_INCLUDE = {
       facturadoTotal: true,
       cobradoTotal: true,
       progresoPct: true,
+      pasos: { select: pasosProgresoSelect },
       fechaEntrega: true,
       createdAt: true,
       items: {
@@ -154,7 +160,9 @@ export class CampanasService {
               select: { cotizaciones: true, ordenes: true, hitos: true },
             },
             hitos: { select: { estado: true, fechaObjetivo: true } },
-            ordenes: { select: { estado: true, progresoPct: true } },
+            ordenes: {
+              select: { estado: true, pasos: { select: pasosProgresoSelect } },
+            },
           },
           orderBy: [{ fechaObjetivo: 'asc' }, { createdAt: 'desc' }],
           skip: query.skip,
@@ -209,7 +217,8 @@ export class CampanasService {
           responsable: row.responsable
             ? { id: row.responsable.id, nombre: row.responsable.nombreCompleto }
             : null,
-          avancePct: this.avance(row.ordenes),
+          avancePct: progresoDeCampana(row.ordenes).porcentaje,
+          progreso: progresoDeCampana(row.ordenes),
           riesgo: this.enRiesgo(row, hoy),
           cantidad: row._count,
         })),
@@ -892,7 +901,8 @@ export class CampanasService {
         total: Number(o.total ?? 0),
         facturadoTotal: Number(o.facturadoTotal),
         cobradoTotal: Number(o.cobradoTotal),
-        progresoPct: o.progresoPct,
+        progresoPct: progresoDeOrden(o).porcentaje,
+        progreso: progresoDeOrden(o),
         fechaEntrega: this.isoFecha(o.fechaEntrega),
         createdAt: o.createdAt.toISOString(),
       })),
@@ -917,7 +927,8 @@ export class CampanasService {
       dashboard: {
         comercial: { presupuestado, vendido, facturado, cobrado },
         produccion: {
-          avancePct: this.avance(c.ordenes),
+          avancePct: progresoDeCampana(c.ordenes).porcentaje,
+          progreso: progresoDeCampana(c.ordenes),
           porEstado: this.contar(c.ordenes.map((o) => o.estado)),
           abiertas: c.ordenes.filter(
             (o) => !['entregada', 'cancelada'].includes(o.estado),
@@ -1048,16 +1059,6 @@ export class CampanasService {
     return new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
-  }
-
-  private avance(ordenes: Array<{ progresoPct: number | null }>) {
-    const conDato = ordenes.filter((o) => o.progresoPct !== null);
-    return conDato.length
-      ? Math.round(
-          conDato.reduce((s, o) => s + (o.progresoPct ?? 0), 0) /
-            conDato.length,
-        )
-      : null;
   }
 
   private enRiesgo(

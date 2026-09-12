@@ -1,11 +1,82 @@
 import {
   cantidadesParaPlanificar,
+  contextoParaCantidad,
   obtenerCotizacionesF6,
 } from './cotizaciones-por-cantidad';
 import { cotizacionesExhibidor } from '../../../test/fixtures/f6-planificacion/cotizaciones-exhibidor';
 import type { CotizarInput, CotizarOutput } from '../../motor-universal/tipos';
 
+it('recalcula piezas y métricas para 100 de 500 tarjetas sin alterar medidas ni el contexto original', () => {
+  const contexto = {
+    cantidad: 500,
+    piezas: [{ cantidad: 500, anchoMm: 90, altoMm: 50 }],
+    piezasVisibles: [{ cantidad: 500, anchoMm: 85, altoMm: 45 }],
+    piezaAreaTotalM2: 2.25,
+    piezaPerimetroTotalM: 140,
+    piezaAnchoMaxMm: 90,
+    piezaAltoMaxMm: 50,
+    modoColor: 'CMYK',
+  };
+  const antes = structuredClone(contexto);
+  const lote = contextoParaCantidad(contexto, 100);
+  expect(lote).toMatchObject({
+    cantidad: 100,
+    piezas: [{ cantidad: 100, anchoMm: 90, altoMm: 50 }],
+    piezasVisibles: [{ cantidad: 100, anchoMm: 85, altoMm: 45 }],
+    piezaAreaTotalM2: 0.45,
+    piezaPerimetroTotalM: 28,
+    piezaAnchoMaxMm: 90,
+    piezaAltoMaxMm: 50,
+    modoColor: 'CMYK',
+  });
+  expect(contexto).toEqual(antes);
+});
+
+it('conserva las piezas por unidad de una colección al calcular otro lote', () => {
+  expect(
+    contextoParaCantidad(
+      {
+        cantidad: 500,
+        piezas: [
+          { cantidad: 1000, cantidadPorUnidad: 2, anchoMm: 90, altoMm: 50 },
+          { cantidad: 500, cantidadPorUnidad: 1, anchoMm: 45, altoMm: 50 },
+        ],
+      },
+      100,
+    ).piezas?.map((p) => p.cantidad),
+  ).toEqual([200, 100]);
+});
+
+it('no distribuye silenciosamente diseños que no representan unidades completas', () => {
+  expect(() =>
+    contextoParaCantidad(
+      {
+        cantidad: 500,
+        piezas: [
+          { cantidad: 250, anchoMm: 90, altoMm: 50 },
+          { cantidad: 250, anchoMm: 90, altoMm: 50 },
+        ],
+      },
+      100,
+    ),
+  ).toThrow('unidades completas');
+  expect(() => contextoParaCantidad({ cantidad: 0 }, 100)).toThrow('positivas');
+});
+
 const entregas = [1, 2, 3, 4].map((i) => ({ id: `e${i}`, cantidad: 50 }));
+it('en comercial sólo cotiza el total y las cantidades de cada entrega una vez', () => {
+  expect(cantidadesParaPlanificar(200, entregas, true)).toEqual([200, 50]);
+  expect(
+    cantidadesParaPlanificar(
+      200,
+      [
+        { id: 'a', cantidad: 60 },
+        { id: 'b', cantidad: 140 },
+      ],
+      true,
+    ),
+  ).toEqual([200, 60, 140]);
+});
 it('solicita sólo 200/50/100/150 una vez, sin cambiar opciones ni cantidad original', async () => {
   const fuentes = cotizacionesExhibidor();
   const input: CotizarInput = {

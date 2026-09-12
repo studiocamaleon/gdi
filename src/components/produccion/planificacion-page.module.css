@@ -1,0 +1,36 @@
+.root {
+  width: 100%;
+  min-width: 0;
+}
+
+.root .page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: none;
+  height: calc(100dvh - 128px);
+  min-height: 440px;
+  margin: 0;
+}
+
+.page > :global(.page-head) {
+  flex: none;
+  margin: 0;
+}
+
+.panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.panel > :global(.simu) {
+  min-height: 100%;
+}
+
+@media (max-width: 700px) {
+  .root .page {
+    height: calc(100dvh - 104px);
+  }
+}

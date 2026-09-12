@@ -1,3 +1,5 @@
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
+import { demandaDesdeTiempo, combinarDemandas, leerModoOperacionMaquina } from '../eta/motor/demanda-humana';
 import { lineasDesgasteCorte } from './repartir-operaciones-corte';
 import { usaProcesamientoCorte, prepararProcesamientoCorte, calcularProcesamientoCorte } from './procesamiento-corte';
 import { geometriaDeColeccion } from "./geometria-vectorial/geometria-coleccion";
@@ -29,6 +31,7 @@ import {
   REGISTRO_FACTOR_VELOCIDAD,
   REGISTRO_SELECCION_PERFIL,
   REGISTRO_TIEMPO_RUN,
+  REGISTRO_FASES_RUN,
 } from './primitivas';
 import type {
   DefinicionFamiliaResuelta,
@@ -1968,6 +1971,10 @@ export class MotorUniversalService {
           ...(pasoDestino.operacionesIncorporacion ?? []),
           costeada,
         ];
+        pasoDestino.tiempo.demandaHumana = combinarDemandas([
+          demandaDesdeTiempo(pasoDestino.tiempo),
+          {version:1, verificada:true, fases:[{minutos:operacion.duracionMin,personas:operacion.dotacionOperarios}]},
+        ], pasoDestino.tiempo.totalMin + operacion.duracionMin);
         pasoDestino.tiempo.runMin += operacion.duracionMin;
         pasoDestino.tiempo.totalMin += operacion.duracionMin;
         pasoDestino.tiempo.costo += costo;
@@ -1998,6 +2005,10 @@ export class MotorUniversalService {
     // comercial posterior capaz de duplicar margen, impuestos o redondeo.
     // La topología se expresa con nodos ejecutables, incluidos los contenedores
     // compuestos, no con sus operaciones privadas de cálculo.
+    for (const paso of pasosEjecutados) {
+      paso.requiereMaquina = !admitePasoSinMaquina(paso.familiaCodigo);
+      paso.plantillaCodigo = resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null;
+    }
     const pasosOperativos = consolidarEtapasCompuestas(pasosEjecutados);
     const grafoProduccion =
       (recetaPublicada?.snapshot &&
@@ -4996,6 +5007,7 @@ export class MotorUniversalService {
       tiempoManualMin != null ? 0 : tiempoFijoEfectivoMin(paso);
 
     let runMin = 0;
+    let fasesRun: import('../eta/motor/demanda-humana').FaseRun[] | undefined;
 
     if (procesamientoCorte) {
       if (tiempoManualMin != null) errores.push({ codigo: 'tiempo_manual_con_operaciones_corte', severidad: 'ERROR',
@@ -5080,6 +5092,13 @@ export class MotorUniversalService {
       primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun
     ) {
       runMin = this.runPorPrimitivaTiempo(paso, jobContext);
+      const codigo = primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun;
+      const desglose = codigo ? REGISTRO_FASES_RUN[codigo] : undefined;
+      fasesRun = desglose?.(paso,jobContext,{
+        resolverCantidad:(p,jc)=>this.resolverCantidad(p,jc,null),
+      });
+      // Una primitiva sin secuencia conocida no se presume autónoma.
+      fasesRun ??= [{minutos:runMin,operario:true}];
     } else if (modoTiempo === 'T-3') {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
@@ -5171,6 +5190,8 @@ export class MotorUniversalService {
       mermaOperativaPct,
     );
     runMin = desgloseRun.cantidadTotal;
+    if (fasesRun && runMinTrabajo > 0 && runMin !== runMinTrabajo)
+      fasesRun = fasesRun.map(f=>({...f,minutos:f.minutos*runMin/runMinTrabajo}));
 
     // Por defecto el tiempo del paso se factura en minutos ENTEROS (ceil): un
     // trabajo de 1 hoja y uno de 40 pagan el mismo minuto de máquina, y el precio
@@ -5284,6 +5305,14 @@ export class MotorUniversalService {
       cleanupMin,
       tiempoFijoMin,
       extraMin,
+      ...(fasesRun ? {fasesRun} : {}),
+      ...(paso.maquina ? { operacionMaquina: leerModoOperacionMaquina(paso.maquina.parametrosTecnicosJson?.operacionMaquina) } : {}),
+      demandaHumana: demandaDesdeTiempo({
+        totalMin: trabajoMin + extraMin, setupMin, runMin, cleanupMin,
+        tiempoFijoMin, tiemposExtra, dotacionOperarios,
+        maquinaId: paso.maquina?.id ?? null, fasesRun, procesamientoCorte,
+        operacionMaquina: leerModoOperacionMaquina(paso.maquina?.parametrosTecnicosJson?.operacionMaquina),
+      }),
       totalMin: trabajoMin + extraMin,
       centroCostoId: centroCosto.id,
       centroCostoNombre: centroCosto.nombre,

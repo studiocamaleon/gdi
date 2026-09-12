@@ -920,7 +920,7 @@ export function TabProduccion({ d }: { d: ProduccionPanel }) {
         >
           {ahorros.historico.tandas === 0 ? (
             <div className="d-empty" style={{ padding: 30 }}>
-              Todavía no hay tandas consolidadas registradas: el ahorro se asienta al marcar impresos en el Simulador gran formato.
+              Todavía no hay ahorros por consolidación registrados.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

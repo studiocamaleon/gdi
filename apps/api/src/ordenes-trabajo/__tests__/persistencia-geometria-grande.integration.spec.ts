@@ -178,7 +178,7 @@ it.each([50, 100, 150])(
     expect(almacenado.variable).toBe(1);
     expect(almacenado.bytes).toBeLessThan(medicion.originalBytes / 20);
     t = performance.now();
-    const { orden, ordenes, produccion, auth } = await emitirCotizacionF4(
+    const { orden, ordenes, auth } = await emitirCotizacionF4(
       prisma,
       guardada,
     );
@@ -236,12 +236,8 @@ it.each([50, 100, 150])(
       orden.id,
       async (paso) => {
         if (paso.familiaCodigo !== 'impresion_por_area') return;
-        const cola = await produccion.simulador(auth);
-        const plan = cola.jobs.find(
-          (j) => j.pasoId === paso.id,
-        )!.planFabricacion!;
+        const plan = snapshotPasoProduccion(hijo as never, paso as never).paso!.nestingResult!;
         expect(plan.placements).toHaveLength(cantidad * 9);
-        expect(plan).not.toHaveProperty('costingPreview');
       },
     );
     expect(Number(final.orden.total)).toBe(Number(reabierta.precioTotal));

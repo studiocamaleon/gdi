@@ -396,6 +396,7 @@ export class PreparacionesRecorridoService {
       id: true,
       codigo: true,
       nombre: true,
+      contieneLotesEntrega: true,
       jobContextSnapshotJson: true,
       trazabilidadSnapshotJson: true,
       recetaSnapshotJson: true,
@@ -420,6 +421,7 @@ export class PreparacionesRecorridoService {
       select,
     });
     if (!item) throw new NotFoundException('No se encontró el item de la OT.');
+    if (item.contieneLotesEntrega) throw new BadRequestException('Seleccioná un lote de entrega para preparar sus archivos de corte.');
     for (const codigo of seleccion.rutaComponentes ?? []) {
       item = await this.prisma.ordenTrabajoItem.findFirst({
         where: {

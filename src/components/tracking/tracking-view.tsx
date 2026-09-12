@@ -1,5 +1,6 @@
 "use client";
 
+import { ProgresoExplicado } from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 
 import {
@@ -380,7 +381,7 @@ function ItemPanel({
   // La animación de producción aparece SÓLO si hay un paso en la máquina, no
   // por progreso a medias: un item al 67% entre dos pasos no está "produciendo".
   const enProduccion = item.pasos.some(pasoEnProduccion);
-  const listo = item.progresoPct >= 100;
+  const listo = item.progresoPct === 100;
   // Las specs (material, archivo, tamaño…) arrancan colapsadas: son el detalle
   // fino que el cliente casi nunca necesita y que, abierto, empuja la tarjeta.
   const [verSpecs, setVerSpecs] = React.useState(false);
@@ -406,7 +407,7 @@ function ItemPanel({
                 : "Por iniciar"}
           </div>
         </div>
-        <span className={`prog ${listo ? "ok" : ""}`}>{item.progresoPct}%</span>
+        <span className={`prog ${listo ? "ok" : ""}`}>{item.progresoPct == null ? "—" : `${item.progresoPct}%`}</span>
         <span className="chev">
           <IcoChevron open={open} />
         </span>
@@ -414,8 +415,9 @@ function ItemPanel({
       {open ? (
         <div className="t-item-body">
           <div className="t-item-track">
-            <span className="fill" style={{ width: `${item.progresoPct}%` }} />
+            <span className="fill" style={{ width: `${item.progresoPct ?? 0}%` }} />
           </div>
+          {item.progreso ? <ProgresoExplicado progreso={item.progreso} titulo="Avance del producto" /> : null}
           {enProduccion ? (
             <ProdHero item={item} total={item.pasos.length} />
           ) : null}
@@ -539,7 +541,7 @@ export function TrackingView({
   // Abrimos el item en producción; si no hay, el primero.
   const abiertoInicial = React.useMemo(() => {
     const enProd = data.items.findIndex(
-      (i) => i.progresoPct > 0 && i.progresoPct < 100,
+      (i) => i.progresoPct != null && i.progresoPct > 0 && i.progresoPct < 100,
     );
     return new Set<string>(
       [data.items[enProd >= 0 ? enProd : 0]?.id].filter(Boolean) as string[],
@@ -715,10 +717,12 @@ export function TrackingView({
             <div className="sub">
               {data.items.length}{" "}
               {data.items.length === 1 ? "producto" : "productos"} ·{" "}
-              {data.progresoPct}% del total
+              {data.progresoPct == null ? "Avance por confirmar" : `${data.progresoPct}% del trabajo previsto`}
             </div>
           </div>
         </div>
+
+        {data.progreso ? <ProgresoExplicado progreso={data.progreso} /> : null}
 
         {/* Acordeón de items */}
         <div className="t-card">

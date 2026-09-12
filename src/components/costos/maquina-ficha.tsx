@@ -147,7 +147,7 @@ export function MaquinaFicha({
         <EncabezadoConfiguracion
           area="maquinaria"
           titulo={nombreGuardado}
-          acciones={
+          navegacion={
             <Button
               type="button"
               variant="outline"

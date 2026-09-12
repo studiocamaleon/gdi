@@ -14,6 +14,7 @@ import { MotorUniversalService } from '../motor.service';
 import type { ErrorMotor, JobContext, PasoCargado } from '../tipos';
 
 type TiempoPaso = {
+  demandaHumana?: import('../../eta/motor/demanda-humana').DemandaHumana | null;
   setupMin: number;
   runMin: number;
   runTrabajoMin?: number;
@@ -92,6 +93,7 @@ describe('Motor — el tiempo se cobra a la tarifa del centro', () => {
     plantilla: 'PLANA',
     centroCostoPrincipalId: 'cc-maq',
     centroCostoPrincipalNombre: 'Impresión',
+    parametrosTecnicosJson: { operacionMaquina: 'autonoma' },
   };
 
   it('paso CON máquina: cobra todo el tiempo ocupado, run incluido', () => {
@@ -106,6 +108,55 @@ describe('Motor — el tiempo se cobra a la tarifa del centro', () => {
     // El run no se descuenta: el sueldo que el centro absorbió sólo se
     // recupera si se reparte entre todas las horas que el centro vende.
     expect(t.costo).toBeCloseTo((75 / 60) * 6000); // 7500
+  });
+
+  it('deriva la atención de setup/run/cleanup sin otro campo y conserva tiempo y costo', () => {
+    const tarifas = new Map<string, unknown>([
+      ['cc-maq', { tarifa: 6000, manoObra: 2000 }],
+    ]);
+    const t = calcular(pasoBase({ maquina }), tarifas);
+    expect(t.totalMin).toBe(75);
+    expect(t.costo).toBe(7500);
+    expect(t.demandaHumana?.verificada).toBe(true);
+    expect(t.demandaHumana?.fases).toEqual([
+      { minutos: 10, personas: 1 },
+      { minutos: 60, personas: 0, operacionMaquina: true },
+      { minutos: 5, personas: 1 },
+    ]);
+    expect(t).not.toHaveProperty('atencionOperario');
+  });
+
+  it('separa las recargas de guillotina entre ciclos sin cambiar los minutos cobrados', () => {
+    const paso = pasoBase({
+      maquina: { ...maquina, parametrosTecnicosJson: { operacionMaquina: 'con_operario' } },
+      familiaCodigo: 'corte_guillotina',
+      modoTiempo: 'T-3',
+      perfil: {
+        id: 'p',
+        nombre: 'Guillotina',
+        tipoPerfil: 'corte',
+        activo: true,
+        feedReloadMin: 2,
+        detalleJson: { pliegosMaxPorTanda: 100, tiempoPorCorteSeg: 30 },
+      },
+    });
+    const t = calcular(paso, new Map([['cc-maq', { tarifa: 60 }]]), {
+      cantidad: 250,
+      cortes_calculados: 2,
+    });
+    expect(t.runMin).toBe(7); // 3 ciclos de 1 minuto + 2 recargas de 2 minutos
+    expect(t.totalMin).toBe(22);
+    expect(t.costo).toBe(22);
+    expect(t.demandaHumana?.verificada).toBe(true);
+    expect(t.demandaHumana?.fases).toEqual([
+      { minutos: 10, personas: 1 },
+      { minutos: 1, personas: 1, operacionMaquina: true },
+      { minutos: 2, personas: 1 },
+      { minutos: 1, personas: 1, operacionMaquina: true },
+      { minutos: 2, personas: 1 },
+      { minutos: 1, personas: 1, operacionMaquina: true },
+      { minutos: 5, personas: 1 },
+    ]);
   });
 
   it('paso SIN máquina: mismo criterio, la tarifa entera por el tiempo', () => {

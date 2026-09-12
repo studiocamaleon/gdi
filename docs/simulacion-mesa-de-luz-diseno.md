@@ -1,7 +1,9 @@
 # Mesa de luz — visualizar la simulación del motor de ETA
 
 Documento de diseño para la vista que muestra **qué decidió el motor de ETA y
-por qué**. Estado: **IMPLEMENTADO** como cuarto tab del Tablero de producción.
+por qué**. Estado: **IMPLEMENTADO** en Producción → Planificación; originalmente se incorporó como cuarto tab del Tablero de producción.
+
+**Actualización 10/09/2026:** la visualización se consulta exclusivamente en Producción → Planificación, con espacio independiente. Se retiró la pestaña Simulación del tablero. La renovación de las vistas por recursos/órdenes, el análisis previo del reparto automático entre puestos y la futura reprogramación manual se describen en el [plan de renovación del Gantt](produccion-planificacion-gantt-renovacion-2026-09-10.md); todavía no están implementados.
 
 - Motor: `simularFlujo` devuelve `traza` — [`src/lib/flujo-produccion.ts`](../src/lib/flujo-produccion.ts)
 - Eje: [`src/lib/eje-laboral.ts`](../src/lib/eje-laboral.ts)

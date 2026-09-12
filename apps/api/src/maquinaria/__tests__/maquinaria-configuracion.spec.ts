@@ -31,6 +31,13 @@ function base(plantilla: PlantillaMaquinariaDto): UpsertMaquinaDto {
 }
 
 describe('diagnóstico de configuración de maquinaria', () => {
+  it('descarta el control experimental de atención y acepta los tiempos de recarga', () => {
+    const perfil = {nombre:'Prueba',tipoPerfil:TipoPerfilOperativoMaquinaDto.corte,activo:true,
+      productivityValue:10,productivityUnit:UnidadProduccionMaquinaDto.m2_h,feedReloadMin:2,
+      detalle:{atencionOperario:'AUTONOMA'}};
+    expect(() => validatePerfilOperativoByTemplate(PlantillaMaquinariaDto.plotter_de_corte,perfil)).not.toThrow();
+    expect(perfil.detalle).toEqual({});
+  });
   it('deja lista una duplicadora con tinta negra, máster y perfiles simple/doble faz', () => {
     const payload = base(PlantillaMaquinariaDto.duplicadora_digital);
     Object.assign(payload, {

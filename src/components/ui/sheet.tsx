@@ -40,16 +40,18 @@ function SheetContent({
   className,
   overlayClassName,
   children,
+  keepMounted = false,
   side = "right",
   showCloseButton = true,
   ...props
 }: SheetPrimitive.Popup.Props & {
   overlayClassName?: string;
+  keepMounted?: boolean;
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
 }) {
   return (
-    <SheetPortal>
+    <SheetPortal keepMounted={keepMounted}>
       <SheetOverlay className={overlayClassName} />
       <SheetPrimitive.Popup
         data-slot="sheet-content"

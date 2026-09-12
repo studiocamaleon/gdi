@@ -1,3 +1,4 @@
+import { resolverEstacionDePaso as resolverBackend } from "../../apps/api/src/eta/motor/tablero-tipos";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -175,136 +176,63 @@ describe("clasificación operativa del tablero", () => {
 });
 
 type Est = {
-  id: string;
-  activo: boolean;
-  familias: string[];
-  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
+  id: string; activo: boolean; familias: string[];
+  maquinas: Array<{ id?: string | null; activo?: boolean; centroCostoId: string | null }>;
   reglas?: Array<{ tipo: string; valor: string }>;
 };
-
 function est(id: string, over: Partial<Est> = {}): Est {
-  return {
-    id,
-    activo: true,
-    familias: [],
-    maquinas: [],
-    ...over,
-  };
+  return { id, activo: true, familias: [], maquinas: [], ...over };
 }
+type Paso = { familiaCodigo: string; plantillaCodigo?: string | null; centroCostoId: string | null; maquinaId?: string | null; tecnologia?: string | null; requiereMaquina?: boolean; tipoEjecucion?: string };
+const paso = (over: Partial<Paso> = {}): Paso => ({ familiaCodigo: "impresion", centroCostoId: null, ...over });
+const maquina = (id: string, activo = true) => ({ id, activo, centroCostoId: "cc-compartido" });
 
-type Paso = {
-  familiaCodigo: string;
-  centroCostoId: string | null;
-  maquinaId?: string | null;
-  tecnologia?: string | null;
-};
-
-function paso(over: Partial<Paso> = {}): Paso {
-  return { familiaCodigo: "impresion", centroCostoId: null, ...over };
+// El mismo contrato protege tablero, ETA y permisos de ejecución backend.
+for (const [nombre, resolver] of [["tablero", resolverEstacionDePaso], ["ETA backend", resolverBackend]] as const) {
+  describe(`asignación de estaciones — ${nombre}`, () => {
+    it("distingue dos máquinas de la misma tecnología y centro de costo", () => {
+      const estaciones = [est("Digital A", { maquinas: [maquina("A")] }), est("Digital B", { maquinas: [maquina("B")] })];
+      expect(resolver(estaciones, paso({ maquinaId: "B", tecnologia: "laser" }))?.id).toBe("Digital B");
+    });
+    it("una máquina sin estación no cae en reglas de tecnología, paso ni familia", () => {
+      const estaciones = [est("Manual", { familias: ["impresion"], reglas: [{ tipo: "paso", valor: "impresion" }, { tipo: "tecnologia", valor: "uv" }] })];
+      expect(resolver(estaciones, paso({ maquinaId: "sin-asignar", tecnologia: "uv" }))).toBeNull();
+    });
+    it("una estación inactiva o máquina deshabilitada no reciben tareas", () => {
+      const manual = est("Manual", { familias: ["impresion"] });
+      expect(resolver([manual, est("Inactiva", { activo: false, maquinas: [maquina("A")] })], paso({ maquinaId: "A" }))).toBeNull();
+      expect(resolver([manual, est("Inactiva", { maquinas: [maquina("A", false)] })], paso({ maquinaId: "A" }))).toBeNull();
+    });
+    it("un paso histórico que exige máquina no se confunde con uno manual", () => {
+      const estaciones = [est("Manual", { familias: ["impresion"] })];
+      expect(resolver(estaciones, paso({ requiereMaquina: true }))).toBeNull();
+      expect(resolver(estaciones, paso({ tecnologia: "uv" }))).toBeNull();
+    });
+    it("una estación con máquinas también puede recibir pasos manuales", () => {
+      const taller = est("Taller", { maquinas: [maquina("A")], familias: ["embalaje"] });
+      expect(resolver([taller], paso({ familiaCodigo: "embalaje" }))?.id).toBe("Taller");
+    });
+    it("el paso propio prevalece sobre su plantilla, independientemente del orden", () => {
+      const plantilla = est("General", { reglas: [{ tipo: "paso", valor: "diseno_grafico" }] });
+      const propia = est("Diseño especial", { familias: ["uuid-propio"] });
+      for (const estaciones of [[plantilla, propia], [propia, plantilla]]) {
+        expect(resolver(estaciones, paso({ familiaCodigo: "uuid-propio", plantillaCodigo: "diseno_grafico" }))?.id).toBe("Diseño especial");
+      }
+      expect(resolver([plantilla], paso({ familiaCodigo: "otro-uuid", plantillaCodigo: "diseno_grafico" }))?.id).toBe("General");
+    });
+    it("dos asignaciones manuales ambiguas quedan sin estación", () => {
+      const a = est("A", { familias: ["embalaje"], maquinas: [maquina("A")] });
+      const b = est("B", { familias: ["embalaje"] });
+      expect(resolver([a, b], paso({ familiaCodigo: "embalaje" }))).toBeNull();
+      expect(resolver([b, a], paso({ familiaCodigo: "embalaje" }))).toBeNull();
+    });
+    it("respeta las antiguas asignaciones explícitas de pasos manuales", () => {
+      const a = est("A", { familias: ["embalaje"] });
+      const b = est("B", { reglas: [{ tipo: "paso", valor: "embalaje" }] });
+      expect(resolver([a, b], paso({ familiaCodigo: "embalaje" }))?.id).toBe("B");
+    });
+    it("los tercerizados permanecen en el flujo de proveedores", () => {
+      expect(resolver([est("Manual", { familias: ["impresion"] })], paso({ tipoEjecucion: "tercerizado" }))).toBeNull();
+    });
+  });
 }
-
-describe("resolverEstacionDePaso — fallback por familia (Fase D)", () => {
-  it("única candidata por familia → la devuelve", () => {
-    const e = est("A", { familias: ["impresion"] });
-    expect(resolverEstacionDePaso([e], paso())?.id).toBe("A");
-  });
-
-  it("Fase D: el centro de costo YA NO rutea — dos candidatas con máquinas → null", () => {
-    // Antes ganaba la estación cuya máquina compartía el centro del paso; ahora
-    // el centro es sólo un eje de costeo y no participa del ruteo.
-    const a = est("A", {
-      familias: ["impresion"],
-      maquinas: [{ centroCostoId: "c1" }],
-    });
-    const b = est("B", {
-      familias: ["impresion"],
-      maquinas: [{ centroCostoId: "c2" }],
-    });
-    expect(resolverEstacionDePaso([a, b], paso({ centroCostoId: "c2" }))).toBeNull();
-  });
-
-  it("gana la general (con familia, sin máquinas) sobre las que tienen máquinas", () => {
-    const conMaq = est("A", {
-      familias: ["impresion"],
-      maquinas: [{ centroCostoId: "c1" }],
-    });
-    const general = est("G", { familias: ["impresion"] });
-    const r = resolverEstacionDePaso([conMaq, general], paso());
-    expect(r?.id).toBe("G");
-  });
-
-  it("sin familia que matchee → null", () => {
-    const e = est("A", { familias: ["corte"] });
-    expect(resolverEstacionDePaso([e], paso())).toBeNull();
-  });
-
-  it("dos candidatas con máquinas, sin general → null", () => {
-    const a = est("A", { familias: ["impresion"], maquinas: [{ centroCostoId: "c1" }] });
-    const b = est("B", { familias: ["impresion"], maquinas: [{ centroCostoId: "c2" }] });
-    expect(resolverEstacionDePaso([a, b], paso())).toBeNull();
-  });
-});
-
-describe("resolverEstacionDePaso — reglas nuevas", () => {
-  it("por MÁQUINA (id): rutea sin depender de la familia", () => {
-    const uv = est("UV", { maquinas: [{ id: "m-uv", centroCostoId: "c1" }] });
-    const eco = est("ECO", { maquinas: [{ id: "m-eco", centroCostoId: "c2" }] });
-    const r = resolverEstacionDePaso(
-      [uv, eco],
-      paso({ maquinaId: "m-eco" }),
-    );
-    expect(r?.id).toBe("ECO");
-  });
-
-  it("dos digitales misma tecnología, distinta máquina → cada una a su estación", () => {
-    const prod = est("PROD", { maquinas: [{ id: "laser-A", centroCostoId: "c" }] });
-    const copia = est("COPIA", { maquinas: [{ id: "laser-B", centroCostoId: "c" }] });
-    // Mismo centro 'c' compartido: el centro NO alcanza, la máquina sí.
-    expect(resolverEstacionDePaso([prod, copia], paso({ maquinaId: "laser-A", centroCostoId: "c" }))?.id).toBe("PROD");
-    expect(resolverEstacionDePaso([prod, copia], paso({ maquinaId: "laser-B", centroCostoId: "c" }))?.id).toBe("COPIA");
-  });
-
-  it("por TECNOLOGÍA (regla)", () => {
-    const uv = est("UV", { reglas: [{ tipo: "tecnologia", valor: "uv" }] });
-    const r = resolverEstacionDePaso([uv], paso({ tecnologia: "uv" }));
-    expect(r?.id).toBe("UV");
-  });
-
-  it("por PASO concreto: separa dos pasos de la misma familia", () => {
-    const a = est("A", { reglas: [{ tipo: "paso", valor: "acabado_x" }] });
-    const b = est("B", { reglas: [{ tipo: "paso", valor: "acabado_y" }] });
-    expect(resolverEstacionDePaso([a, b], paso({ familiaCodigo: "acabado_y" }))?.id).toBe("B");
-  });
-});
-
-describe("resolverEstacionDePaso — prioridad", () => {
-  it("máquina gana a tecnología", () => {
-    const porMaq = est("MAQ", { maquinas: [{ id: "m1", centroCostoId: "c" }] });
-    const porTec = est("TEC", { reglas: [{ tipo: "tecnologia", valor: "uv" }] });
-    const r = resolverEstacionDePaso(
-      [porTec, porMaq],
-      paso({ maquinaId: "m1", tecnologia: "uv" }),
-    );
-    expect(r?.id).toBe("MAQ");
-  });
-
-  it("tecnología gana a paso concreto", () => {
-    const porTec = est("TEC", { reglas: [{ tipo: "tecnologia", valor: "uv" }] });
-    const porPaso = est("PASO", { reglas: [{ tipo: "paso", valor: "impresion" }] });
-    const r = resolverEstacionDePaso(
-      [porPaso, porTec],
-      paso({ tecnologia: "uv", familiaCodigo: "impresion" }),
-    );
-    expect(r?.id).toBe("TEC");
-  });
-
-  it("regla nueva gana al fallback por familia", () => {
-    const porFamilia = est("FAM", { familias: ["impresion"] });
-    const porTec = est("TEC", { reglas: [{ tipo: "tecnologia", valor: "uv" }] });
-    const r = resolverEstacionDePaso(
-      [porFamilia, porTec],
-      paso({ familiaCodigo: "impresion", tecnologia: "uv" }),
-    );
-    expect(r?.id).toBe("TEC");
-  });
-});

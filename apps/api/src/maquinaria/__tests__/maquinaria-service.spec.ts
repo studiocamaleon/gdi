@@ -5,7 +5,15 @@ import {
 } from '@prisma/client';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { CurrentAuth } from '../../auth/auth.types';
-import type { UpsertMaquinaDto } from '../dto/upsert-maquina.dto';
+import {
+  EstadoMaquinaDto,
+  GeometriaTrabajoMaquinaDto,
+  PlantillaMaquinariaDto,
+  TipoConsumibleMaquinaDto,
+  UnidadConsumoMaquinaDto,
+  UnidadProduccionMaquinaDto,
+  type UpsertMaquinaDto,
+} from '../dto/upsert-maquina.dto';
 import { MaquinariaService } from '../maquinaria.service';
 
 const auth: CurrentAuth = {
@@ -153,6 +161,31 @@ describe('MaquinariaService — parámetros técnicos', () => {
     } as UpsertMaquinaDto);
   };
 
+  it('valida el comportamiento por máquina sin aceptar valores o formatos ajenos', () => {
+    const { service } = buildService({});
+    for (const modo of ['con_operario', 'autonoma']) {
+      expect(() => validarParametrosTecnicos(service, { operacionMaquina: modo })).not.toThrow();
+    }
+    for (const modo of ['automatica', true, {}, 0]) {
+      expect(() => validarParametrosTecnicos(service, { operacionMaquina: modo })).toThrow(BadRequestException);
+    }
+  });
+
+  it('admite los parámetros de una duplicadora existente al editar su operación', () => {
+    const { service } = buildService({});
+
+    expect(() =>
+      validarParametrosTecnicos(service, {
+        tecnologia: 'fotoduplicacion',
+        margenesNoImprimiblesMm: { sup: 20, inf: 20, izq: 12.5, der: 12.5 },
+        soporteDobleFaz: true,
+        coloresSoportados: ['BN'],
+        tamborInstalado: 'negro',
+        operacionMaquina: 'autonoma',
+      }),
+    ).not.toThrow();
+  });
+
   it('admite la política configurable de uniones del corte con hilo caliente', () => {
     const { service } = buildService({});
 
@@ -177,5 +210,61 @@ describe('MaquinariaService — parámetros técnicos', () => {
     expect(() =>
       validarParametrosTecnicos(service, { parametroInventado: true }),
     ).toThrow(BadRequestException);
+  });
+});
+
+describe('MaquinariaService — consumibles de duplicadora', () => {
+  const validar = (detalle: Record<string, unknown>, plantilla = PlantillaMaquinariaDto.duplicadora_digital) => {
+    const { service, prisma } = buildService({});
+    const varianteId = '33333333-3333-4333-8333-333333333333';
+    Object.assign(prisma, {
+      planta: { findFirst: jest.fn().mockResolvedValue({ id: auth.tenantId }) },
+      materiaPrimaVariante: { findMany: jest.fn().mockResolvedValue([{
+        id: varianteId,
+        activo: true,
+        materiaPrima: { nombre: 'Consumible de prueba', activo: true, esConsumible: true },
+      }]) },
+    });
+    const payload: UpsertMaquinaDto = {
+      nombre: 'Ricoh DX 2430',
+      plantilla,
+      plantaId: auth.tenantId,
+      estado: EstadoMaquinaDto.inactiva,
+      geometriaTrabajo: GeometriaTrabajoMaquinaDto.pliego,
+      unidadProduccionPrincipal: UnidadProduccionMaquinaDto.ppm,
+      activo: false,
+      perfilesOperativos: [],
+      componentesDesgaste: [],
+      consumibles: [{
+        nombre: 'Consumible de prueba',
+        materiaPrimaVarianteId: varianteId,
+        tipo: TipoConsumibleMaquinaDto.otro,
+        unidad: UnidadConsumoMaquinaDto.unidad,
+        rendimientoEstimado: 100,
+        activo: true,
+        detalle,
+      }],
+    };
+    return (service as unknown as {
+      validateReferences: (auth: CurrentAuth, payload: UpsertMaquinaDto) => Promise<void>;
+    }).validateReferences(auth, payload);
+  };
+
+  it.each(['master', 'máster'])('admite el %s sin exigirle un color de tinta', async (rol) => {
+    await expect(validar({ rol })).resolves.toBeUndefined();
+  });
+
+  it('sigue exigiendo un canal a los consumibles de tinta', async () => {
+    await expect(validar({ color: 'negro' })).resolves.toBeUndefined();
+    await expect(validar({})).rejects.toThrow('canal/color valido');
+  });
+
+  it('rechaza el rol de máster en otra plantilla', async () => {
+    await expect(validar({ rol: 'master' }, PlantillaMaquinariaDto.impresora_laser)).rejects.toThrow('campo rol');
+  });
+
+  it('rechaza roles y detalles ajenos al catálogo', async () => {
+    await expect(validar({ rol: 'inventado' })).rejects.toThrow('campo rol');
+    await expect(validar({ rol: 'master', parametroInventado: true })).rejects.toThrow('campo parametroInventado');
   });
 });

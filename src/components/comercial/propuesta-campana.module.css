@@ -1,48 +1,39 @@
 /* Estilos de esta vista, extraídos de globals.css. */
 
 @layer components {
-  .ofield--campana {
-    align-items: center;
-    justify-content: center;
-    padding-inline: 10px;
-  }
-}
-
-@layer components {
   .campana-trigger {
     position: relative;
     display: inline-flex;
-    width: 38px;
-    height: 38px;
+    width: 100%;
+    min-height: 36px;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 12px;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     border: 1px solid var(--border);
     border-radius: var(--r-2);
-    background: var(--surface-2);
-    color: var(--muted);
+    background: var(--surface);
+    color: var(--muted-text);
     cursor: pointer;
     transition:
       border-color 0.15s ease,
       background 0.15s ease,
-      color 0.15s ease,
-      transform 0.15s ease;
+      color 0.15s ease;
   }
 }
 
 @layer components {
   .campana-trigger:hover {
-    border-color: color-mix(in srgb, var(--signal) 45%, var(--border));
+    border-color: var(--border-strong);
     background: var(--surface);
     color: var(--ink);
-    transform: translateY(-1px);
   }
 }
 
 @layer components {
   .campana-trigger[data-active="true"] {
-    border-color: color-mix(in srgb, var(--signal) 40%, var(--border));
-    background: color-mix(in srgb, var(--signal) 8%, var(--surface));
-    color: var(--signal);
+    color: var(--ink);
   }
 }
 
@@ -63,15 +54,11 @@
 }
 
 @layer components {
-  .campana-indicator {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 6px;
-    height: 6px;
-    border: 1.5px solid var(--surface);
-    border-radius: 999px;
-    background: var(--signal);
+  .campana-trigger > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -155,21 +142,5 @@
   .campana-selector-field select:focus {
     border-color: color-mix(in srgb, var(--signal) 55%, var(--border));
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 10%, transparent);
-  }
-}
-
-@layer components {
-  @media (max-width: 1100px) {
-    .ofield--campana {
-      align-items: stretch;
-    }
-  }
-}
-
-@layer components {
-  @media (max-width: 1100px) {
-    .campana-trigger {
-      width: 100%;
-    }
   }
 }

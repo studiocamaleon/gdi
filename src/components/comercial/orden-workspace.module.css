@@ -1,0 +1,74 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: 20px;
+}
+
+.workspace[data-sidebar="true"] {
+  grid-template-columns: 272px minmax(0, 1fr);
+}
+
+.sidebar {
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+
+.sidebarBody {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 2px 18px 20px 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sidebarBody > * { flex-shrink: 0; }
+.sidebarFooter { margin-top: auto; padding-top: 24px; }
+
+.content {
+  container: orden-content / inline-size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toggle { flex-shrink: 0; }
+.drawer { gap: 0; }
+.drawer .sidebarBody { padding: 8px 20px 24px; }
+
+.heading { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+.identity { display: flex; flex-direction: column; gap: 10px; }
+.title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 21px; font-weight: 650; line-height: 1.25; letter-spacing: -.035em; }
+.titleText { flex-basis: 100%; }
+.description { color: var(--muted-text); font-size: 12px; line-height: 1.6; }
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted-text); }
+.metaValue { color: var(--foreground); font-variant-numeric: tabular-nums; }
+.quickActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.breadcrumb { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-text); font-size: 11px; }
+.breadcrumb:hover { color: var(--foreground); }
+.progress { margin-bottom: 24px; }
+.fields { padding-top: 20px; border-top: 1px solid var(--border); }
+
+/* Los controles existentes conservan su comportamiento; sólo cambia su distribución. */
+.fields :global(.ofield) { padding: 0; border: 0; }
+.fieldLabel { display: inline-flex; align-items: center; gap: 5px; color: var(--muted-text); font-size: 12px; font-weight: 500; line-height: 1.5; }
+.fieldLabel > span:first-child { display: inline-flex; flex: none; }
+.fieldLabel svg { width: 13px; height: 13px; }
+.fields :global(.ctrl-input),
+.fields :global(.cliente-combobox-trigger) { background: var(--surface); font-size: 12px; }
+.fields :global(.cliente-combobox-popover) { min-width: 0; width: 100%; }
+.heading :global(.orden-toggle) { display: flex; width: 100%; padding: 3px; gap: 2px; }
+.heading :global(.oseg) { flex: 1; justify-content: center; padding: 7px 6px; font-size: 11px; gap: 5px; }
+
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .workspace[data-sidebar="true"] { grid-template-columns: 244px minmax(0, 1fr); gap: 16px; }
+  .sidebarBody { padding-right: 14px; }
+}

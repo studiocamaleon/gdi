@@ -121,9 +121,25 @@
   flex: none;
 }
 
+.cargoAction { color: var(--signal); }
+
 /* En pantallas angostas el desglose se esconde: total + acciones siempre. */
 @media (max-width: 860px) {
   .brk {
     display: none;
   }
+}
+
+/* La ficha puede tener dos columnas aunque el viewport sea ancho. La barra
+ * responde al espacio de trabajo que le queda, no sólo a la ventana. */
+@container orden-content (max-width: 860px) {
+  .brk { display: none; }
+  .in { gap: 14px; }
+  .acts { min-width: 0; flex-shrink: 1; overflow-x: auto; }
+}
+
+@container orden-content (max-width: 560px) {
+  .wrap { height: auto; min-height: 96px; }
+  .in { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .acts { flex-basis: 100%; padding-block: 2px; }
 }

@@ -194,7 +194,7 @@ export function PasosEnCursoWidget() {
       if (!document.hidden) void refetch();
     }, POLL_MS);
     // Refresco INSTANTÁNEO: cualquier acción propia sobre pasos (tablero,
-    // simuladores o el propio widget) avisa por evento; y al volver el
+    // la orden o el propio widget) avisa por evento; y al volver el
     // foco a la pestaña no se espera el próximo poll.
     const onCambio = () => void refetch();
     const onFoco = () => {
@@ -261,7 +261,7 @@ export function PasosEnCursoWidget() {
       accion: "pausar" | "completar";
       motivo?: string;
       motivoDetalle?: string;
-      tiempoDeclaradoMin?: number;
+      tiempoDeclaradoMin?: number; sinTiempoConfirmado?: boolean;
     },
   ) => {
     setBusyId(tramo.pasoId);
@@ -432,7 +432,7 @@ export function PasosEnCursoWidget() {
                       type="button"
                       className="pw-btn"
                       disabled={busy}
-                      onClick={() => void accion(tramo, { accion: "completar" })}
+                      onClick={() => void accion(tramo, { accion: "completar", sinTiempoConfirmado: true })}
                     >
                       Completar sin tiempo
                     </button>

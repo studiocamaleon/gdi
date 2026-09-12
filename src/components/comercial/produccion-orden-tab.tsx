@@ -7,6 +7,8 @@
  * (`orden-detail.jsx` → ProduccionTab) conectados a `GET /ordenes-trabajo/:id/pasos`.
  */
 
+import { calcularProgreso } from "@/lib/progreso-produccion";
+import { ProgresoExplicado, type ProgresoLote } from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 import {
   ChevronDownIcon,
@@ -772,14 +774,6 @@ function WorkflowOrden({
 }
 
 /* ─── Anillo de avance ─── */
-function Ring({ pct }: { pct: number }) {
-  return (
-    <div className="otp-ring" style={{ ["--p" as string]: pct }}>
-      <span className="otp-ring-hole" />
-      <span className="otp-ring-val mono">{pct}%</span>
-    </div>
-  );
-}
 
 export function ProduccionOrdenTab({
   ordenId,
@@ -856,41 +850,19 @@ export function ProduccionOrdenTab({
   const etapasTotales = pasosTotales.filter(
     (paso) => (paso.operacionesIncorporacionSnapshotJson?.length ?? 0) > 0,
   ).length;
-  const pasosTerminados = pasosTotales.filter(
-    (paso) => paso.estado === "hecho",
-  ).length;
-  const overall =
-    pasosTotales.length > 0
-      ? Math.round((pasosTerminados / pasosTotales.length) * 100)
-      : 0;
-  const productosRaiz = conRuta.filter((item) => !item.parentItemId);
-  const terminados = productosRaiz.filter((producto) => {
-    const ids = new Set([producto.id]);
-    let crecio = true;
-    while (crecio) {
-      crecio = false;
-      for (const candidate of conRuta) {
-        if (
-          candidate.parentItemId &&
-          ids.has(candidate.parentItemId) &&
-          !ids.has(candidate.id)
-        ) {
-          ids.add(candidate.id);
-          crecio = true;
-        }
-      }
-    }
-    return conRuta
-      .filter((candidate) => ids.has(candidate.id))
-      .flatMap((candidate) => candidate.pasos)
-      .every((paso) => paso.estado === "hecho");
-  }).length;
-  const enCurso = conRuta.filter((p) =>
-    p.pasos.some((s) => s.estado === "en_curso"),
-  );
-  const bloqueados = conRuta.filter((p) =>
-    p.pasos.some((s) => s.estado === "bloqueado"),
-  );
+  const progreso = calcularProgreso(pasosTotales, conRuta[0]?.ordenEstado);
+  const porLote = new Map<string, TableroItemData[]>();
+  for (const item of conRuta) {
+    if (!item.loteEntrega) continue;
+    const grupo = porLote.get(item.loteEntrega.id) ?? [];
+    grupo.push(item);
+    porLote.set(item.loteEntrega.id, grupo);
+  }
+  const progresoLotes: ProgresoLote[] = [...porLote.values()].map((grupo) => ({
+    ...grupo[0].loteEntrega!,
+    progreso: calcularProgreso(grupo.flatMap((i) => i.pasos), grupo[0].ordenEstado),
+  }));
+  const productosRaiz = conRuta.filter((item) => !item.parentItemId || item.loteEntrega?.esProductoDelLote);
   const toggleSubruta = (itemId: string) => {
     if (vistaWorkflow === "resumen") {
       setVistaWorkflow("completo");
@@ -913,44 +885,7 @@ export function ProduccionOrdenTab({
 
   return (
     <div className="prodtab">
-      {/* Avance general */}
-      <div className="otd-card otp-overall">
-        <Ring pct={overall} />
-        <div className="otp-overall-body">
-          <div className="otp-overall-ttl">Avance general de la orden</div>
-          <div className="otp-overall-track">
-            <div
-              className="otp-overall-fill"
-              style={{ width: `${overall}%` }}
-            />
-          </div>
-          <div className="otp-overall-stats">
-            <span>
-              {productosRaiz.length} producto
-              {productosRaiz.length === 1 ? "" : "s"} en ruta
-            </span>
-            <span className="dot-sep">·</span>
-            <span>
-              {terminados} terminado{terminados === 1 ? "" : "s"}
-            </span>
-            {enCurso.length > 0 ? (
-              <>
-                <span className="dot-sep">·</span>
-                <span className="run">{enCurso.length} en curso</span>
-              </>
-            ) : null}
-            {bloqueados.length > 0 ? (
-              <>
-                <span className="dot-sep">·</span>
-                <span className="warn">
-                  {bloqueados.length} bloqueado
-                  {bloqueados.length === 1 ? "" : "s"}
-                </span>
-              </>
-            ) : null}
-          </div>
-        </div>
-      </div>
+      <ProgresoExplicado progreso={progreso} lotes={progresoLotes} />
 
       {/* Compras / Tercerizados (F2) */}
       <PanelComprasOt items={conRuta} onChanged={cargar} />

@@ -1,0 +1,80 @@
+.cabecera {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.etiqueta {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.etiqueta [data-slot="badge"] {
+  border-color: var(--accent-border, #ffd3bd);
+  background: var(--accent-soft, #fff2eb);
+  color: var(--accent-ink, #bc3d0b);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.contexto {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.contexto strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.producto {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.dependencias {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2, #faf9f7);
+  font-size: 12px;
+}
+
+.dependencias > strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.dependencias ul {
+  display: grid;
+  gap: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+
+.dependencias li {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+}
+
+.dependencias li > span:last-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  color: var(--muted-text);
+}
+
+.dependencias li strong {
+  color: var(--ink);
+  font-weight: 500;
+}

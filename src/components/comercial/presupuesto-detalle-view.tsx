@@ -37,7 +37,7 @@ import {
   useFecha,
 } from "@/components/navigation/config-regional-provider";
 import type { MembershipRole } from "@/lib/auth";
-import { CANALES_VENTA } from "@/lib/propuestas";
+import { nombreCanalVenta } from "@/lib/canales-venta";
 import { fechaConDia } from "@/lib/fecha";
 
 /**
@@ -82,7 +82,7 @@ const MOTIVOS_PERDIDA = [
 
 /** El canal se guarda como slug ("mostrador"); se muestra con su etiqueta. */
 const canalLabel = (v: string | null) =>
-  v ? (CANALES_VENTA.find((c) => c.value === v)?.label ?? v) : "—";
+  nombreCanalVenta(v);
 
 const fmtMoneda = (n: number, moneda: Moneda) =>
   formatearMoneda(n, moneda, { decimales: 0 });

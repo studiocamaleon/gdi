@@ -1,3 +1,4 @@
+import type { ProgresoProduccion } from "./progreso-produccion";
 import { apiRequest } from "@/lib/api";
 
 export type PanelGeneralVista =
@@ -31,10 +32,12 @@ export type PanelGeneralEntrega = {
   productos: Array<{
     id: string;
     nombre: string;
-    progresoPct: number;
+    progresoPct: number | null;
+    progreso?: ProgresoProduccion;
   }>;
   fechaEntrega: string;
-  progresoPct: number;
+  progresoPct: number | null;
+  progreso?: ProgresoProduccion;
   riesgo: "atrasada" | "hoy" | "proxima";
   pasoActual: string | null;
   estacionActual: string | null;

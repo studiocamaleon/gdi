@@ -118,3 +118,13 @@ export async function deleteEstacion(id: string) {
     method: "DELETE",
   });
 }
+
+export async function getEquiposProduccion() {
+  return apiRequest<import("./estaciones").EquipoProduccion[]>("/produccion/equipos");
+}
+export async function guardarEquipoProduccion(payload: Omit<import("./estaciones").EquipoProduccion, "id">, id?: string) {
+  const { nombre, personas, activo, calendario } = payload;
+  return apiRequest<{id: string}>(id ? `/produccion/equipos/${id}` : "/produccion/equipos", {
+    method: id ? "PUT" : "POST", body: JSON.stringify({ nombre, personas, activo, calendario }),
+  });
+}

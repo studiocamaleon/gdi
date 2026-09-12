@@ -1,0 +1,41 @@
+.prevision {
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.valorConsulta {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.notas {
+  display: grid;
+  gap: 8px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.condicion,
+.alerta { margin: 0; }
+.alerta {
+  color: var(--signal);
+}
+
+.filaTiempo {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.valorTiempo {
+  margin-left: auto;
+  text-align: right;
+  overflow-wrap: anywhere;
+}

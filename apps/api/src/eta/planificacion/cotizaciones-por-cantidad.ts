@@ -1,13 +1,61 @@
 import { createHash } from 'node:crypto';
-import type { CotizarInput, CotizarOutput } from '../../motor-universal/tipos';
+import type {
+  CotizarInput,
+  CotizarOutput,
+  JobContext,
+} from '../../motor-universal/tipos';
 import type { CompromisoPiloto } from './prototipo-entregas';
 import type { FuenteCotizacionF6 } from './adaptador-cotizacion';
+
+/** Cantidades de piezas y métricas de trabajo deben corresponder al lote,
+ * no al pedido completo. Las geometrías por unidad mantienen sus medidas. */
+export function contextoParaCantidad(
+  contexto: JobContext,
+  cantidad: number,
+): JobContext {
+  if (
+    ![contexto.cantidad, cantidad].every(
+      (n) => Number.isSafeInteger(n) && n > 0,
+    )
+  )
+    throw new Error(
+      'La cantidad del producto y del lote deben ser enteras y positivas.',
+    );
+  const factor = cantidad / contexto.cantidad;
+  const resultado: JobContext = { ...contexto, cantidad };
+  const escalarPieza = <
+    P extends { cantidad: number; cantidadPorUnidad?: number },
+  >(
+    p: P,
+  ): P => {
+    const unidades = p.cantidadPorUnidad ?? p.cantidad / contexto.cantidad;
+    const total = unidades * cantidad;
+    if (
+      !Number.isSafeInteger(unidades) ||
+      unidades <= 0 ||
+      !Number.isSafeInteger(total)
+    )
+      throw new Error(
+        'Las piezas del producto no se pueden distribuir en lotes de unidades completas.',
+      );
+    return { ...p, cantidad: total };
+  };
+  if (contexto.piezas) resultado.piezas = contexto.piezas.map(escalarPieza);
+  if (contexto.piezasVisibles)
+    resultado.piezasVisibles = contexto.piezasVisibles.map(escalarPieza);
+  for (const clave of ['piezaAreaTotalM2', 'piezaPerimetroTotalM'] as const) {
+    const valor = contexto[clave];
+    if (typeof valor === 'number') resultado[clave] = valor * factor;
+  }
+  return resultado;
+}
 
 /** Cantidades que consumen los seis candidatos del piloto. Primero el total
  * de referencia, después cantidades repetidas una sola vez. */
 export function cantidadesParaPlanificar(
   cantidad: number,
   entregas: CompromisoPiloto[],
+  porEntrega = false,
 ) {
   if (
     !Number.isSafeInteger(cantidad) ||
@@ -31,8 +79,7 @@ export function cantidadesParaPlanificar(
       [
         cantidad,
         ...entregas.map((e) => e.cantidad),
-        ...pares,
-        cantidad - entregas[0].cantidad,
+        ...(porEntrega ? [] : [...pares, cantidad - entregas[0].cantidad]),
       ].filter((q) => q > 0),
     ),
   ];
@@ -53,11 +100,13 @@ export async function obtenerCotizacionesF6(options: {
   ) => Promise<CotizarOutput>;
   signal?: AbortSignal;
   maxCotizaciones?: number;
+  porEntrega?: boolean;
 }): Promise<FuenteCotizacionF6[]> {
   const { input, signal } = options;
   const cantidades = cantidadesParaPlanificar(
     Number(input.jobContext.cantidad),
     options.entregas,
+    options.porEntrega,
   );
   const limite = options.maxCotizaciones ?? 12;
   if (
@@ -87,7 +136,7 @@ export async function obtenerCotizacionesF6(options: {
     signal?.throwIfAborted();
     const solicitud = {
       ...input,
-      jobContext: { ...input.jobContext, cantidad },
+      jobContext: contextoParaCantidad(input.jobContext, cantidad),
     };
     const resultado = await options.cotizar(solicitud, signal);
     signal?.throwIfAborted();

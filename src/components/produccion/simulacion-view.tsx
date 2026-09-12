@@ -23,6 +23,10 @@ import {
   zoomDeSlider,
 } from "@/lib/eje-laboral";
 import { fechaNumerica, hora } from "@/lib/fecha";
+import {
+  contextoFlujoSimulacion,
+  focoFlujosSimulacion,
+} from "@/lib/simulacion-flujos";
 import { fuentesSimulacion } from "@/lib/fuentes-simulacion";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
@@ -33,6 +37,7 @@ import {
 import type { Estacion } from "@/lib/estaciones";
 import {
   SIN_ESTACION_KEY,
+  nombreTrabajoTablero,
   type TableroItemData,
   type TableroPasoData,
 } from "@/lib/tablero-produccion";
@@ -116,7 +121,7 @@ const diaCorto = (d: Date, zona?: string) => {
   return `${DIA_CORTO[idx]} ${String(dd).padStart(2, "0")}/${String(mm).padStart(2, "0")}`;
 };
 
-type Bloque = {
+type Bloque = ReturnType<typeof contextoFlujoSimulacion> & {
   orden: number;
   itemId: string;
   pasoId: string;
@@ -241,6 +246,7 @@ export function SimulacionView({
   const [corte, setCorte] = React.useState<number | null>(null);
   const [soloTarde, setSoloTarde] = React.useState(false);
   const [consulta, setConsulta] = React.useState("");
+  const [flujoBuscado, setFlujoBuscado] = React.useState<string | null>(null);
   const [sugerencias, setSugerencias] = React.useState(false);
   const [sel, setSel] = React.useState<Bloque | null>(null);
   const [hov, setHov] = React.useState<string | null>(null);
@@ -388,19 +394,16 @@ export function SimulacionView({
   const q = consulta.trim().toLowerCase();
   const coincide = React.useCallback(
     (b: Bloque) =>
-      !q ||
-      b.ot.toLowerCase().includes(q) ||
-      b.cliente.toLowerCase().includes(q) ||
-      b.itemNombre.toLowerCase().includes(q),
-    [q],
+      flujoBuscado
+        ? b.flujoClave === flujoBuscado
+        : !q || `${b.flujoNombre} ${b.cliente} ${b.itemNombre}`.toLowerCase().includes(q),
+    [q, flujoBuscado],
   );
 
-  const focoOTs = React.useMemo(() => {
-    if (hov) return new Set([hov]);
-    if (q) return new Set(bloques.filter(coincide).map((b) => b.ot));
-    if (sel) return new Set([sel.ot]);
-    return null;
-  }, [hov, q, sel, bloques, coincide]);
+  const focoFlujos = React.useMemo(
+    () => focoFlujosSimulacion(bloques, hov, sel, q ? coincide : undefined),
+    [hov, q, sel, bloques, coincide],
+  );
 
   const otsInfo = React.useMemo(() => {
     const m = new Map<string, { cliente: string; items: Set<string> }>();
@@ -416,15 +419,32 @@ export function SimulacionView({
     }));
   }, [bloques]);
 
+  const flujosInfo = React.useMemo(() => {
+    const m = new Map<string, {
+      clave: string;
+      nombre: string;
+      ot: string;
+      cliente: string;
+      items: Set<string>;
+    }>();
+    bloques.forEach((b) => {
+      const flujo = m.get(b.flujoClave) ?? {
+        clave: b.flujoClave,
+        nombre: b.flujoNombre,
+        ot: b.ot,
+        cliente: b.cliente,
+        items: new Set<string>(),
+      };
+      flujo.items.add(b.itemNombre);
+      m.set(b.flujoClave, flujo);
+    });
+    return [...m.values()].map((f) => ({ ...f, items: [...f.items] }));
+  }, [bloques]);
+
   const hits = q
-    ? otsInfo
-        .filter(
-          (o) =>
-            o.ot.toLowerCase().includes(q) ||
-            o.cliente.toLowerCase().includes(q) ||
-            o.items.some((i) => i.toLowerCase().includes(q)),
-        )
-        .slice(0, 8)
+    ? flujosInfo.filter((f) =>
+        `${f.nombre} ${f.cliente} ${f.items.join(" ")}`.toLowerCase().includes(q),
+      ).slice(0, 8)
     : [];
 
   if (bloques.length === 0) {
@@ -564,13 +584,15 @@ export function SimulacionView({
             <input
               type="search"
               value={consulta}
-              placeholder="N° de OT o cliente"
+              placeholder="N° de OT, lote o cliente"
               autoComplete="off"
               role="combobox"
               aria-expanded={sugerencias && hits.length > 0}
               aria-controls="simu-sugg"
               onChange={(e) => {
                 setConsulta(e.target.value);
+                setFlujoBuscado(null);
+                setSel(null);
                 setSugerencias(true);
               }}
               onFocus={() => setSugerencias(true)}
@@ -578,6 +600,7 @@ export function SimulacionView({
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   setConsulta("");
+                  setFlujoBuscado(null);
                   setSugerencias(false);
                 }
               }}
@@ -586,13 +609,15 @@ export function SimulacionView({
               <div className="simu-sugg" id="simu-sugg" role="listbox">
                 {hits.map((o) => (
                   <div
-                    key={o.ot}
+                    key={o.clave}
                     className="simu-si"
                     role="option"
                     aria-selected={false}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      setConsulta(o.ot);
+                      setConsulta(o.nombre);
+                      setFlujoBuscado(o.clave);
+                      setSel(null);
                       setSugerencias(false);
                     }}
                   >
@@ -603,7 +628,7 @@ export function SimulacionView({
                       {o.ot.replace(/^OT-\d{4}-/, "")}
                     </span>
                     <div className="simu-sc">
-                      <div className="simu-cn">{o.cliente}</div>
+                      <div className="simu-cn">{o.nombre} · {o.cliente}</div>
                       <div className="simu-it">{o.items.join(" · ")}</div>
                     </div>
                   </div>
@@ -640,7 +665,7 @@ export function SimulacionView({
           eje={eje}
           z={z}
           cursor={cursor}
-          focoOTs={focoOTs}
+          focoFlujos={focoFlujos}
           soloTarde={soloTarde}
           sel={sel}
           otsInfo={otsInfo}
@@ -717,7 +742,7 @@ function Readout({
         )}
         .{" "}
         <span className="muted">
-          Pasá el mouse por un bloque para seguir el recorrido de esa orden.
+          Pasá el mouse por un bloque para seguir el recorrido de ese lote u orden.
         </span>
       </>
     );
@@ -726,7 +751,7 @@ function Readout({
     <>
       <b>Decisión {cursor}</b> — coloca{" "}
       <span className="acc">
-        {b.ot} · {b.pasoNombre}
+        {b.flujoNombre} · {b.pasoNombre}
       </span>{" "}
       en <b>{b.estNombre}</b>, arranca{" "}
       <b>
@@ -758,7 +783,7 @@ function LineaDeTiempo({
   eje,
   z,
   cursor,
-  focoOTs,
+  focoFlujos,
   soloTarde,
   sel,
   otsInfo,
@@ -771,23 +796,26 @@ function LineaDeTiempo({
   eje: ReturnType<typeof construirEje>;
   z: number;
   cursor: number;
-  focoOTs: Set<string> | null;
+  focoFlujos: Set<string> | null;
   soloTarde: boolean;
   sel: Bloque | null;
   otsInfo: Array<{ ot: string }>;
-  onHover: (ot: string | null) => void;
+  onHover: (flujoClave: string | null) => void;
   onSel: (b: Bloque) => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
   xAhora: number;
 }) {
   const { zonaHoraria } = useConfigRegional();
   const ancho = eje.totalMin * z + 60;
-  const hiloOT = focoOTs && focoOTs.size === 1 ? [...focoOTs][0] : null;
+  const hiloFlujo = focoFlujos && focoFlujos.size === 1 ? [...focoFlujos][0] : null;
+  const flujoActivo = hiloFlujo
+    ? carriles.flatMap((c) => c.bloques).find((b) => b.flujoClave === hiloFlujo)
+    : null;
 
   /* Tooltip propio en lugar del title nativo: un solo nodo fixed que sigue
      al puntero. La posición se escribe directo sobre el DOM (ref) para no
      re-renderizar cientos de bloques en cada mousemove; el estado sólo
-     cambia al entrar/salir de un bloque, igual que el hover de OT. */
+     cambia al entrar/salir de un bloque, igual que el hover del flujo. */
   const tipRef = React.useRef<HTMLDivElement>(null);
   const ratonRef = React.useRef({ x: 0, y: 0 });
   const [tip, setTip] = React.useState<Bloque | null>(null);
@@ -841,6 +869,11 @@ function LineaDeTiempo({
   return (
     <>
       <div className="simu-legend">
+        {flujoActivo ? (
+          <span className="simu-lg" role="status">
+            Flujo: <b>{flujoActivo.flujoNombre}</b>
+          </span>
+        ) : null}
         {otsInfo.slice(0, 8).map((o) => (
           <span key={o.ot} className="simu-lg">
             <span
@@ -945,10 +978,13 @@ function LineaDeTiempo({
                     const atenuado =
                       !oculto &&
                       ((soloTarde && !b.tarde) ||
-                        (focoOTs !== null && !focoOTs.has(b.ot)));
+                        (focoFlujos !== null && !focoFlujos.has(b.flujoClave)));
                     return (
                       <div
                         key={b.pasoId}
+                        role="button"
+                        tabIndex={oculto ? -1 : 0}
+                        aria-label={`${b.flujoNombre} · ${b.itemNombre} · ${b.pasoNombre}`}
                         className={[
                           "simu-blk",
                           b.tercerizado ? "terc" : "",
@@ -968,10 +1004,16 @@ function LineaDeTiempo({
                           boxShadow: `inset 3px 0 0 ${col}`,
                         }}
                         onClick={() => onSel(b)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSel(b);
+                          }
+                        }}
                         onMouseEnter={(e) => {
                           ratonRef.current = { x: e.clientX, y: e.clientY };
                           setTip(b);
-                          onHover(b.ot);
+                          onHover(b.flujoClave);
                         }}
                         onMouseMove={(e) => {
                           ratonRef.current = { x: e.clientX, y: e.clientY };
@@ -991,7 +1033,7 @@ function LineaDeTiempo({
                           className="t"
                           style={{ opacity: opacidadEtiqueta(w, 26, 58) }}
                         >
-                          {b.ot.replace(/^OT-\d{4}-/, "")} · {b.pasoNombre}
+                          {b.flujoNombre.replace(/^OT-\d{4}-/, "")} · {b.pasoNombre}
                         </span>
                       </div>
                     );
@@ -1020,7 +1062,7 @@ function LineaDeTiempo({
 
             <Hilo
               carriles={carriles}
-              ot={hiloOT}
+              flujoClave={hiloFlujo}
               z={z}
               cursor={cursor}
               otsInfo={otsInfo}
@@ -1034,7 +1076,7 @@ function LineaDeTiempo({
       {tip !== null && (
         <div className="simu-tip" ref={tipRef} role="tooltip">
           <span className="t1">
-            {tip.ot} · {tip.pasoNombre}
+            {tip.flujoNombre} · {tip.pasoNombre}
           </span>
           <span className="t2">
             {diaCorto(tip.inicio, zonaHoraria)} {hhmm(tip.inicio, zonaHoraria)}{" "}
@@ -1052,24 +1094,27 @@ function LineaDeTiempo({
 }
 
 /**
- * Dependencias reales del workflow. No se infieren por índice ni por item:
+ * Dependencias reales del flujo seleccionado (lote o, si no tiene, OT).
+ * No se infieren por índice ni por item:
  * el motor entrega las aristas resueltas del DAG, incluidas las que cruzan
  * desde la ruta de un componente hacia una etapa del producto padre.
  */
 function Hilo({
   carriles,
-  ot,
+  flujoClave,
   z,
   cursor,
   otsInfo,
 }: {
   carriles: Carril[];
-  ot: string | null;
+  flujoClave: string | null;
   z: number;
   cursor: number;
   otsInfo: Array<{ ot: string }>;
 }) {
-  if (!ot) return null;
+  if (!flujoClave) return null;
+  const flujo = carriles.flatMap((c) => c.bloques).find((b) => b.flujoClave === flujoClave);
+  if (!flujo) return null;
   const porPaso = new Map<
     string,
     {
@@ -1083,7 +1128,7 @@ function Hilo({
   let yOff = 0;
   carriles.forEach((c) => {
     c.bloques.forEach((b) => {
-      if (b.ot !== ot || b.orden >= cursor) return;
+      if (b.flujoClave !== flujoClave || b.orden >= cursor) return;
       porPaso.set(b.pasoId, {
         pasoId: b.pasoId,
         predecesorPasoIds: b.predecesorPasoIds,
@@ -1096,7 +1141,7 @@ function Hilo({
   });
   if (porPaso.size === 0) return null;
 
-  const col = tintaDe(ot, otsInfo);
+  const col = tintaDe(flujo.ot, otsInfo);
   const aristas = [...porPaso.values()].flatMap((destino) =>
     destino.predecesorPasoIds.flatMap((predecesorId) => {
       const origen = porPaso.get(predecesorId);
@@ -1119,7 +1164,7 @@ function Hilo({
     <svg
       className="simu-thread"
       style={{ top: AXIS_H }}
-      aria-label={`Dependencias reales del flujo de producción de ${ot}`}
+      aria-label={`Dependencias reales del flujo de producción de ${flujo.flujoNombre}`}
     >
       {aristas.map((arista) => (
         <path
@@ -1294,7 +1339,7 @@ function Proyeccion({
                           {b.pasoNombre}
                         </div>
                         <div className="psub">
-                          {b.itemNombre} · {b.cliente}
+                          {b.loteNombre ? `${b.loteNombre} · ` : ""}{b.itemNombre} · {b.cliente}
                         </div>
                       </div>
                       <div className="simu-pflags">
@@ -1423,7 +1468,7 @@ function Inspector({
           Decisión {b.orden + 1} de {total}
         </div>
         <h2 style={{ color }}>
-          {b.ot} · {b.pasoNombre}
+          {b.flujoNombre} · {b.pasoNombre}
         </h2>
         <div className="simu-isub">
           {b.itemNombre} — {b.cliente}
@@ -1517,6 +1562,7 @@ function construir(
       const eta = sim.porItem.get(p.itemId);
       const entrega = item.fechaEntrega ? new Date(item.fechaEntrega) : null;
       const bloque: Bloque = {
+        ...contextoFlujoSimulacion(item),
         orden: p.orden,
         itemId: p.itemId,
         pasoId: p.pasoId,
@@ -1524,7 +1570,7 @@ function construir(
         predecesorPasoIds: p.predecesorPasoIds,
         ot: item.ordenNumero,
         ordenId: item.ordenId,
-        itemNombre: item.nombre,
+        itemNombre: nombreTrabajoTablero(item),
         cliente: item.clienteNombre,
         pasoNombre: paso.nombre,
         familia: paso.familiaCodigo,

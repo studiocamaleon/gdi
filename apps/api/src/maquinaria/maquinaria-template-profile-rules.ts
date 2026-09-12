@@ -387,6 +387,9 @@ export function validatePerfilOperativoByTemplate(
   perfil: MaquinaPerfilOperativoItemDto,
   parametrosTecnicos?: Record<string, unknown>,
 ) {
+  // Compatibilidad con el control experimental retirado: no guardar ni aplicar
+  // ese campo. La atención se deriva de los tiempos cotizados.
+  if (perfil.detalle) delete perfil.detalle.atencionOperario;
   if (perfil.detalle?.procesamientoCorteVersion === 1) {
     if (
       !PLANTILLAS_PROCESAMIENTO_CORTE.includes(plantilla) ||

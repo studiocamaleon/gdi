@@ -134,7 +134,7 @@ aceptar(
                 cotizacionId: cotizacion.id,
                 cotizacionItemId: item.id,
               };
-              const { orden, ordenes, produccion, auth } =
+              const { orden, ordenes, auth } =
                 await emitirCotizacionF4(tx, guardada);
               const lectura = await tx.ordenTrabajoItem.findMany({
                 where: { ordenId: orden.id },
@@ -237,22 +237,17 @@ aceptar(
                     archivo !== 'backlight' &&
                     paso.familiaCodigo === 'impresion_por_area'
                   ) {
-                    const cola = await produccion.simulador(auth);
-                    const job = cola.jobs.find((j) => j.pasoId === paso.id)!;
-                    expect(job).toBeDefined();
-                    expect(job.planFabricacion?.piezasAcomodadas).toBe(
+                    const plan = snapshotPasoProduccion(hijo as never, paso as never).paso!.nestingResult!;
+                    expect(plan.piezasAcomodadas).toBe(
                       cantidad * 9,
                     );
-                    expect(job.planFabricacion?.placements).toHaveLength(
+                    expect(plan.placements).toHaveLength(
                       cantidad * 9,
-                    );
-                    expect(job.planFabricacion).not.toHaveProperty(
-                      'costingPreview',
                     );
                     if (cantidad === 1)
                       writeFileSync(
-                        join(carpeta!, 'simulador-impresion-catalogo.json'),
-                        JSON.stringify({ ...cola, jobs: [job] }),
+                        join(carpeta!, 'plan-impresion-catalogo.json'),
+                        JSON.stringify({ pasoId: paso.id, plan }),
                       );
                   }
                 },

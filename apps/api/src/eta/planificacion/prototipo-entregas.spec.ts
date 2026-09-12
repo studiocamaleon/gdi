@@ -142,6 +142,12 @@ describe('Piloto F6: propuestas por entrega con el ETA real', () => {
       true,
     );
     expect(r.alternativas[0].trabajosDesplazados).toContain('corte-previo');
+    const porEntrega = proponerEntregasPiloto({ ...e, porEntrega: true });
+    expect(porEntrega.alternativas).toHaveLength(1);
+    expect(porEntrega.alternativas[0].id).toBe('por-entrega');
+    expect(porEntrega.alternativas[0].esperaCola).toBe(true);
+    expect(porEntrega.alternativas[0].trabajosDesplazados).toEqual([]);
+    expect(porEntrega.alternativas[0].entregas).toHaveLength(4);
   });
 
   it('respeta feriados, zona del taller y margen de promesa', () => {

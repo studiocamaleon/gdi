@@ -20,15 +20,18 @@ export function EncabezadoConfiguracion({
   titulo,
   descripcion,
   acciones,
+  navegacion,
 }: {
   area: keyof typeof iconos;
   titulo: ReactNode;
   descripcion: ReactNode;
   acciones?: ReactNode;
+  navegacion?: ReactNode;
 }) {
   const Icono = iconos[area];
   return (
     <header className={s.header}>
+      {navegacion ? <div className={s.headerNavigation}>{navegacion}</div> : null}
       <span className={s.headerIcon} aria-hidden="true">
         <Icono />
       </span>

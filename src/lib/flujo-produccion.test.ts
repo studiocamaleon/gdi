@@ -205,7 +205,8 @@ const enMaquina = (
   familia: string,
   minutos: number,
   cc: string,
-) => paso(indice, familia, { duracionEstimadaMin: minutos, centroCostoId: cc });
+  maquinaIndice = 0,
+) => paso(indice, familia, { duracionEstimadaMin: minutos, centroCostoId: cc, maquinaId: maquina(cc, maquinaIndice).id });
 
 // ── Aritmética de calendario ─────────────────────────────────────────────
 
@@ -373,7 +374,7 @@ describe("simularFlujo · pasos internos", () => {
     expect(porItem.get("A")).toEqual({
       finEstimado: jul(20, 9, 0),
       sinEstimar: false,
-      parcial: false,
+      parcial: true, // Fixture histórica sin equipo ni demanda confirmados.
       asumeDesbloqueo: false,
     });
   });
@@ -837,7 +838,7 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
     expect(traza[1].inicio).toEqual(jul(20, 9, 0));
   });
 
-  it("pasos de máquinas distintas sí usan los dos puestos en paralelo", () => {
+  it("pasos de máquinas distintas corren en paralelo", () => {
     const { traza } = correr(
       [
         item("A", [enMaquina(0, "guillotina", 60, "cc-guillotina")]),
@@ -850,7 +851,7 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
     expect(traza[1].inicio).toEqual(jul(20, 8, 0));
   });
 
-  it("misma familia + mismo centro = una sola máquina: serializan", () => {
+  it("la identidad de máquina prevalece aunque compartan centro de costo", () => {
     // El caso real de "Corte y terminación": tres máquinas físicas distintas
     // comparten UN centro de costo. Antes el motor las contaba como pool 3 y
     // dejaba dos guillotinas en paralelo. La familia las separa.
@@ -871,7 +872,7 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
       [
         item("A", [enMaquina(0, "guillotina", 60, "cc-corte")]),
         item("B", [enMaquina(0, "guillotina", 60, "cc-corte")]),
-        item("C", [enMaquina(0, "laminado", 60, "cc-corte")]),
+        item("C", [enMaquina(0, "laminado", 60, "cc-corte", 1)]),
       ],
       { estaciones: compartido },
     );
@@ -884,7 +885,7 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
     expect(traza.find((t) => t.itemId === "C")!.inicio).toEqual(jul(20, 8, 0));
   });
 
-  it("dos guillotinas de verdad = dos centros de costo → en paralelo", () => {
+  it("dos guillotinas físicas trabajan en paralelo", () => {
     const dos = [
       estacion({
         id: "corte",
@@ -905,7 +906,7 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
     expect(traza[1].inicio).toEqual(jul(20, 8, 0));
   });
 
-  it("el puesto sigue mandando: 3 máquinas pero 1 puesto no paralelizan", () => {
+  it("un solo puesto manual no limita máquinas independientes", () => {
     const cuelloDePuesto = [
       estacion({
         id: "corte",
@@ -921,12 +922,12 @@ describe("simularFlujo · la máquina es un recurso aparte del puesto", () => {
     const { traza } = correr(
       [
         item("A", [enMaquina(0, "guillotina", 60, "cc-guillotina")]),
-        item("B", [enMaquina(0, "guillotina", 60, "cc-guillotina")]),
+        item("B", [enMaquina(0, "guillotina", 60, "cc-guillotina", 1)]),
       ],
       { estaciones: cuelloDePuesto },
     );
 
-    expect(traza[1].inicio).toEqual(jul(20, 9, 0));
+    expect(traza[1].inicio).toEqual(jul(20, 8, 0));
   });
 
   it("un paso sin centro de costo no toma máquina: sólo compite por puesto", () => {

@@ -1,3 +1,4 @@
+import { calcularProgreso } from '../common/progreso-produccion';
 import { productosComercialesConTrabajo } from '../ordenes-trabajo/productos-comerciales';
 import { Injectable } from '@nestjs/common';
 import { RolSistema, type Prisma } from '@prisma/client';
@@ -85,10 +86,12 @@ type EntregaPanel = {
   productos: Array<{
     id: string;
     nombre: string;
-    progresoPct: number;
+    progresoPct: number | null;
+    progreso?: ReturnType<typeof calcularProgreso>;
   }>;
   fechaEntrega: string;
-  progresoPct: number;
+  progresoPct: number | null;
+  progreso?: ReturnType<typeof calcularProgreso>;
   riesgo: 'atrasada' | 'hoy' | 'proxima';
   pasoActual: string | null;
   estacionActual: string | null;
@@ -316,10 +319,7 @@ export class PanelGeneralService {
   }
 
   private progreso(item: TableroItem) {
-    if (item.sinRuta) return 100;
-    if (item.pasos.length === 0) return 0;
-    const hechos = item.pasos.filter((p) => p.estado === 'hecho').length;
-    return Math.round((hechos / item.pasos.length) * 100);
+    return calcularProgreso(item.pasos).porcentaje ?? 0;
   }
 
   private pasoActual(item: TableroItem) {
@@ -429,6 +429,7 @@ export class PanelGeneralService {
               select: {
                 estado: true,
                 nestingLoteRol: true,
+                duracionEstimadaMin: true,
                 nombre: true,
                 centroCostoNombre: true,
               },
@@ -440,20 +441,14 @@ export class PanelGeneralService {
     return filas.map((orden) => {
       const comerciales = productosComercialesConTrabajo(orden.items);
       const pasos = comerciales.flatMap((i) => i.pasos);
-      const hechos = pasos.filter((p) => p.estado === 'hecho').length;
+
       const productos = comerciales.map((item) => {
-        const pasosHechos = item.pasos.filter(
-          (paso) => paso.estado === 'hecho',
-        ).length;
+
         return {
           id: item.id,
           nombre: item.nombre,
-          progresoPct:
-            orden.estado === 'finalizada'
-              ? 100
-              : item.pasos.length > 0
-                ? Math.round((pasosHechos / item.pasos.length) * 100)
-                : 0,
+          progresoPct: calcularProgreso(item.pasos, orden.estado).porcentaje,
+          progreso: calcularProgreso(item.pasos, orden.estado),
         };
       });
       const actual =
@@ -471,12 +466,8 @@ export class PanelGeneralService {
             : `${comerciales.length} productos`,
         productos,
         fechaEntrega: fecha,
-        progresoPct:
-          orden.estado === 'finalizada'
-            ? 100
-            : pasos.length > 0
-              ? Math.round((hechos / pasos.length) * 100)
-              : 0,
+        progresoPct: calcularProgreso(pasos, orden.estado).porcentaje,
+        progreso: calcularProgreso(pasos, orden.estado),
         riesgo: fecha < hoy ? 'atrasada' : fecha === hoy ? 'hoy' : 'proxima',
         pasoActual: actual?.nombre ?? null,
         estacionActual: actual?.centroCostoNombre ?? null,

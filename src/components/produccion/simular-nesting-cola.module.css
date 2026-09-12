@@ -1,0 +1,23 @@
+.dialog { width: min(1120px, calc(100vw - 32px)); max-width: min(1120px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; gap: 0; display: flex; flex-direction: column; overflow: hidden; }
+.header { padding: 24px 48px 20px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.body { padding: 20px 24px; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
+.loading { display: flex; flex-direction: column; gap: 16px; }
+.widths { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.widths > div { flex-wrap: wrap; }
+.metrics { display: flex; flex-wrap: wrap; gap: 24px 48px; margin: 0; }
+.metrics dt, .note { color: var(--muted-foreground); font-size: 12px; line-height: 1.6; }
+.metrics dd { margin: 2px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.drawing { flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; overflow: auto; background: var(--card); }
+.details { border-top: 1px solid var(--border); padding-top: 14px; }
+.details summary { cursor: pointer; font-size: 13px; font-weight: 500; padding-bottom: 12px; }
+.footer { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 16px 24px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.footer p { font-size: 11px; line-height: 1.5; color: var(--muted-foreground); max-width: 480px; }
+.actions { display: flex; gap: 8px; flex-shrink: 0; }
+@media(max-width: 640px) {
+  .header { padding: 20px 40px 16px 16px; }
+  .body { padding: 16px; }
+  .footer { padding: 12px 16px; flex-direction: column; align-items: stretch; gap: 10px; }
+  .actions { justify-content: flex-end; }
+  .metrics { gap: 12px 20px; }
+  .metrics dd { font-size: 20px; }
+}

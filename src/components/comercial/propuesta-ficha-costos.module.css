@@ -2,9 +2,9 @@
   display: grid;
   gap: 0;
   overflow: hidden;
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--border);
   border-radius: var(--r-1);
-  background: var(--surface);
+  background: var(--card);
 }
 
 .trigger {
@@ -17,8 +17,8 @@
   justify-content: flex-start;
   border: 0;
   border-radius: 0;
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--card);
+  color: var(--foreground);
   cursor: pointer;
   font: inherit;
   padding: 10px 12px;
@@ -27,7 +27,7 @@
 }
 
 .trigger:hover {
-  background: var(--surface-2);
+  background: var(--muted);
 }
 
 .trigger:focus-visible {
@@ -36,12 +36,12 @@
 }
 
 .trigger[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--surface) 94%, var(--ps-accent));
+  background: color-mix(in srgb, var(--card) 94%, var(--foreground));
 }
 
 .chevron {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--muted-foreground);
   transition: transform 140ms ease;
 }
 
@@ -61,13 +61,13 @@
 .triggerCopy strong,
 .itemCopy strong,
 .itemQuantity strong {
-  color: var(--ink);
+  color: var(--foreground);
 }
 
 .triggerCopy small,
 .itemCopy small,
 .itemQuantity small {
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 500;
   line-height: 1.35;
@@ -75,12 +75,12 @@
 
 .triggerTotal {
   margin-left: auto;
-  color: var(--ps-accent);
-  font-family: var(--font-mono);
+  color: var(--foreground);
+  font-family: inherit;
 }
 
 .content {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--border);
 }
 
 .stageTableWrap {
@@ -93,11 +93,11 @@
 
 .stageRow:hover,
 .stageRow:hover td {
-  background: color-mix(in srgb, var(--surface) 96%, var(--ps-accent));
+  background: color-mix(in srgb, var(--card) 96%, var(--foreground));
 }
 
 .inactiveRow {
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .operationCell {
@@ -122,17 +122,17 @@
 .operationTrigger:hover,
 .operationTrigger[aria-expanded="true"] {
   background: transparent;
-  color: var(--ink);
+  color: var(--foreground);
 }
 
 .operationChevron {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--muted-foreground);
   transition: transform 140ms ease;
 }
 
 .operationChevron[data-open="true"] {
-  color: var(--ps-accent);
+  color: var(--foreground);
   transform: rotate(90deg);
 }
 
@@ -142,24 +142,20 @@
 
 .operationIndex {
   flex: 0 0 auto;
-  color: var(--muted);
-  font-family: var(--font-mono);
+  color: var(--muted-foreground);
+  font-family: inherit;
   font-size: 10px;
   font-weight: 500;
 }
 
 .operationDetailRow:hover td {
-  background: color-mix(in srgb, var(--muted-bg) 48%, transparent);
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
 }
 
 .detailCell {
   padding: 0 !important;
-  background: color-mix(in srgb, var(--muted-bg) 48%, transparent);
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
   white-space: normal !important;
-}
-
-.stageDetail :global(.cost-step-expanded) {
-  padding: 12px 14px 14px 42px;
 }
 
 .item {
@@ -167,11 +163,11 @@
   grid-template-columns: minmax(0, 1fr) minmax(110px, auto) minmax(90px, auto);
   align-items: center;
   gap: 14px;
-  padding: 10px 12px 10px 42px;
+  padding: 12px;
 }
 
 .item + .item {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--border);
 }
 
 .itemQuantity {
@@ -180,8 +176,8 @@
 }
 
 .itemCost {
-  color: var(--ink);
-  font-family: var(--font-mono);
+  color: var(--foreground);
+  font-family: inherit;
   text-align: right;
   white-space: nowrap;
 }

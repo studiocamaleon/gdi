@@ -1,3 +1,4 @@
+import { demandaDesdeTiempo } from '../eta/motor/demanda-humana';
 import type { ProcesamientoCorteCosteado } from '../maquinaria/procesamiento-corte';
 import type { MaterialEjecutado, PasoEjecutado } from './tipos';
 
@@ -99,6 +100,7 @@ export function planificarRepartoCorte(
           : {}),
       },
     };
+    tiempo.demandaHumana = demandaDesdeTiempo({...tiempo, demandaHumana:null});
     return { tiempo, materiales };
   });
 }
