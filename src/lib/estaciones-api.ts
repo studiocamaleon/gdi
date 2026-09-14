@@ -10,7 +10,7 @@ export async function getEstaciones() {
 }
 
 export type RecursosEstaciones = {
-  empleados: Array<{ id: string; nombreCompleto: string; sector: string }>;
+  empleados: import("./estaciones").EstacionEmpleadoRef[];
   maquinas: Array<{ id: string; codigo: string; nombre: string }>;
 };
 
@@ -52,7 +52,10 @@ export async function getDiasNoLaborables() {
   return apiRequest<DiaNoLaborable[]>("/produccion/dias-no-laborables");
 }
 
-export async function crearDiaNoLaborable(payload: { fecha: string; descripcion?: string }) {
+export async function crearDiaNoLaborable(payload: {
+  fecha: string;
+  descripcion?: string;
+}) {
   return apiRequest<DiaNoLaborable>("/produccion/dias-no-laborables", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -116,15 +119,5 @@ export async function toggleEstacion(id: string) {
 export async function deleteEstacion(id: string) {
   return apiRequest<{ ok: boolean }>(`/produccion/estaciones/${id}`, {
     method: "DELETE",
-  });
-}
-
-export async function getEquiposProduccion() {
-  return apiRequest<import("./estaciones").EquipoProduccion[]>("/produccion/equipos");
-}
-export async function guardarEquipoProduccion(payload: Omit<import("./estaciones").EquipoProduccion, "id">, id?: string) {
-  const { nombre, personas, activo, calendario } = payload;
-  return apiRequest<{id: string}>(id ? `/produccion/equipos/${id}` : "/produccion/equipos", {
-    method: id ? "PUT" : "POST", body: JSON.stringify({ nombre, personas, activo, calendario }),
   });
 }

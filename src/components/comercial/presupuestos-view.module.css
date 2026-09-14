@@ -1,0 +1,144 @@
+/* Sólo geometría de Presupuestos; el marco y los controles son compartidos. */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.scroller {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.table > thead > tr > th {
+  height: 44px;
+  padding: 12px 16px;
+  border: 0;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  white-space: nowrap;
+}
+.table > tbody > tr {
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.table > tbody > tr:last-child {
+  border-bottom: 0;
+}
+.table > tbody > tr:hover {
+  background: var(--background);
+}
+.table > tbody > tr > td {
+  height: 80px;
+  padding: 18px 16px;
+  border: 0;
+  color: var(--foreground);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.table > tbody > tr > .number {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.client {
+  min-width: 150px;
+}
+.detail {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.date {
+  white-space: nowrap;
+  font-size: 12px;
+}
+.table > thead > tr > th:nth-child(6),
+.table > tbody > tr > .total {
+  text-align: right;
+  white-space: nowrap;
+}
+.total {
+  font-weight: 600;
+}
+.converted {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.state,
+.seen {
+  --state-fg: var(--muted-text);
+  --state-bg: var(--default);
+  height: 23px;
+  gap: 5px;
+  padding-inline: 8px;
+  color: var(--state-fg);
+  background: var(--state-bg);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.state[data-estado="pendiente_aprobacion"] {
+  --state-fg: var(--warning);
+  --state-bg: var(--warning-soft);
+}
+.state[data-estado="enviado"] {
+  --state-fg: var(--info-foreground);
+  --state-bg: var(--info-soft);
+}
+.state[data-estado="aprobado"],
+.seen {
+  --state-fg: var(--success);
+  --state-bg: var(--success-soft);
+}
+.state[data-estado="rechazado"] {
+  --state-fg: var(--danger);
+  --state-bg: var(--danger-soft);
+}
+.state[data-estado="convertido"] {
+  --state-fg: var(--foreground);
+}
+@container list-page (max-width: 1050px) {
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .table > thead > tr > th,
+  .table > tbody > tr > td {
+    padding-inline: 12px;
+  }
+}
+@container list-page (max-width: 580px) {
+  .kpis {
+    gap: 10px;
+  }
+  .kpis > :nth-child(-n + 2) {
+    grid-column: 1 / -1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .table > tbody > tr {
+    transition: none;
+  }
+}

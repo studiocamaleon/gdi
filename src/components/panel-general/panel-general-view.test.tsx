@@ -33,6 +33,34 @@ const base: PanelGeneralData = {
 };
 
 describe("PanelGeneralView", () => {
+  it("aplica HeroUI sólo al panel propio del administrador", () => {
+    const propio = renderToStaticMarkup(<PanelGeneralView initialData={base} nombreUsuario="Lucas" esAdministrador />);
+    expect(propio).toContain('data-panel-vista="administrador"');
+    expect(propio).toContain('data-ui="heroui"');
+    expect(propio).not.toContain("Actividad reciente"); // Sin alcance general en el payload.
+    expect(propio).not.toContain("Agenda");
+    const otroRol = renderToStaticMarkup(<PanelGeneralView initialData={base} nombreUsuario="Lucas" />);
+    expect(otroRol).not.toContain('data-panel-vista="administrador"');
+    const preview = renderToStaticMarkup(<PanelGeneralView initialData={{ ...base, vistaActual: "operario", previsualizando: true }} nombreUsuario="Lucas" esAdministrador />);
+    expect(preview).not.toContain('data-panel-vista="administrador"');
+    expect(preview).toContain("Tus permisos no cambiaron");
+  });
+
+  it("presenta métricas reales y actividad con enlaces, sin confundir ítems con órdenes", () => {
+    const data: PanelGeneralData = { ...base,
+      taller: { itemsActivos: 26, pasosEnCurso: 1, pasosBloqueados: 2, cuelloBotella: null },
+      administrador: { pasosCompletadosHoy: 8, documentacionPendiente: { total: 0, ordenes: [] }, actividad: { siguienteCursor: null, items: [{
+        id: "orden:1", fecha: base.generadoEl, tipo: "orden.emision", titulo: "OT-001 emitida", detalle: "Al taller", actor: "Lucas", href: "/produccion/ordenes/1",
+      }] } },
+    };
+    const html = renderToStaticMarkup(<PanelGeneralView initialData={data} nombreUsuario="Lucas" esAdministrador />);
+    expect(html).toContain("Ítems activos");
+    expect(html).toContain("Pasos completados hoy");
+    expect(html).toContain("OT-001 emitida");
+    expect(html).toContain('href="/produccion/ordenes/1"');
+    expect(html).not.toContain("Órdenes activas");
+  });
+
   it("adapta el saludo a la hora local del tenant", () => {
     const zona = "America/Argentina/Buenos_Aires";
 

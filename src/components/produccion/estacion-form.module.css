@@ -1,0 +1,221 @@
+.est-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.est-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.est-section-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.est-section-head .num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  flex: none;
+}
+.ttl {
+  font-size: 13px;
+  font-weight: 600;
+}
+.sub,
+.help {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 4px 0 0;
+}
+.est-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+.est-field > label {
+  font-size: 12px;
+  font-weight: 500;
+}
+.req {
+  color: var(--accent);
+}
+.est-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.est-input {
+  width: 100%;
+  font-size: 13px;
+  box-shadow: none;
+}
+.est-input:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: none;
+}
+.etapa-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.etapa-chip {
+  justify-content: flex-start;
+  padding: 8px;
+  height: auto;
+  white-space: normal;
+  font-size: 11px;
+}
+.etapa-chip .num {
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.etapa-chip[aria-pressed="true"],
+.est-toggle [aria-pressed="true"],
+.icon-chip[aria-pressed="true"] {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.est-toggle {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.est-toggle button {
+  flex: 1;
+}
+.etapa-chip {
+  width: 100%;
+}
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.icon-chip {
+  width: 32px;
+  padding: 0;
+}
+.icon-chip svg {
+  width: 16px;
+  height: 16px;
+}
+.est-stepper {
+  display: inline-flex;
+  width: 156px;
+  align-items: center;
+  gap: 4px;
+}
+.est-stepper > button {
+  width: 30px;
+  flex: none;
+  padding: 0;
+}
+.est-stepper input {
+  width: 70px;
+  min-width: 0;
+  text-align: center;
+  padding: 4px;
+  height: 32px;
+}
+.unit {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.est-tip {
+  display: flex;
+  gap: 10px;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 14px;
+  background: var(--surface-secondary);
+  border-radius: 8px;
+}
+.est-tip svg {
+  width: 16px;
+  flex: none;
+}
+.spacer {
+  flex: 1;
+}
+.danger {
+  color: var(--danger);
+}
+.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+.feriados-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.feriados-add input {
+  flex: 1;
+  min-width: 150px;
+}
+.feriados-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.feriados-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.feriados-row.pasado {
+  color: var(--muted-text);
+}
+.fecha {
+  font-weight: 500;
+}
+.motivo {
+  flex: 1;
+  color: var(--muted-text);
+}
+.quitar {
+  width: 32px;
+  padding: 0;
+  color: var(--danger);
+}
+.feriados-empty {
+  font-size: 12px;
+  color: var(--muted-text);
+  padding: 12px 0;
+}
+@media (max-width: 560px) {
+  .est-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .etapa-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .feriados-row {
+    flex-wrap: wrap;
+  }
+}

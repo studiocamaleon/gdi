@@ -1,0 +1,106 @@
+.cal-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cal-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cal-editor-head > label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.cal-editor-head > div {
+  max-width: 320px;
+}
+.cal-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cal-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.cal-row + .cal-row {
+  border-top: 1px solid var(--border);
+}
+.cal-row.invalid {
+  background: var(--danger-soft);
+}
+.cal-day {
+  justify-content: flex-start;
+  font-size: 11px;
+}
+.cal-day[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  border-color: var(--accent);
+}
+.cal-franjas {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cal-times {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cal-times input {
+  width: 105px;
+  height: 32px;
+  min-width: 0;
+  font-size: 12px;
+  padding: 4px 7px;
+}
+.cal-times input:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: none;
+}
+.cal-quitar,
+.cal-agregar {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+.cal-quitar {
+  color: var(--danger);
+}
+.cal-off {
+  font-size: 11px;
+  color: var(--muted-text);
+  align-self: center;
+}
+.sep {
+  color: var(--muted-text);
+}
+.help {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.err {
+  color: var(--danger);
+}
+@media (max-width: 500px) {
+  .cal-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .cal-day {
+    width: 112px;
+  }
+}

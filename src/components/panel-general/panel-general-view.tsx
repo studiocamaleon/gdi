@@ -33,6 +33,7 @@ import {
   type PanelGeneralData,
   type PanelGeneralVista,
 } from "@/lib/panel-general-api";
+import { PanelAdminView } from "./panel-admin-view";
 import s from "./panel-general-view.module.css";
 
 const POLL_MS = 30_000;
@@ -133,7 +134,9 @@ function TrabajoEntrega({
                     {producto.nombre}
                   </span>
                   <span className="shrink-0 font-mono text-[10px] opacity-75">
-                    {producto.progresoPct == null ? "—" : `${producto.progresoPct}%`}
+                    {producto.progresoPct == null
+                      ? "—"
+                      : `${producto.progresoPct}%`}
                   </span>
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-background/20">
@@ -230,7 +233,10 @@ function ProximasEntregas({
                           style={{ width: `${entrega.progresoPct ?? 0}%` }}
                         />
                       </div>
-                      <ProgresoValor progreso={entrega.progreso} valor={entrega.progresoPct} />
+                      <ProgresoValor
+                        progreso={entrega.progreso}
+                        valor={entrega.progresoPct}
+                      />
                     </div>
                   </td>
                 </tr>
@@ -246,9 +252,11 @@ function ProximasEntregas({
 export function PanelGeneralView({
   initialData,
   nombreUsuario,
+  esAdministrador = false,
 }: {
   initialData: PanelGeneralData | null;
   nombreUsuario: string;
+  esAdministrador?: boolean;
 }) {
   const router = useRouter();
   const { moneda, zonaHoraria } = useConfigRegional();
@@ -260,22 +268,28 @@ export function PanelGeneralView({
     initialData?.vistaActual ?? "actual",
   );
 
+  const ultimaConsulta = React.useRef(0);
   const refrescar = React.useCallback(async (vista = vistaRef.current) => {
+    const consulta = ++ultimaConsulta.current;
     setCargando(true);
     try {
       const siguiente = await getPanelGeneral(vista);
+      if (consulta !== ultimaConsulta.current) return;
       vistaRef.current = siguiente.vistaActual;
       setData(siguiente);
       setError(null);
     } catch (e) {
+      if (consulta !== ultimaConsulta.current) return;
       setError(
         e instanceof Error
           ? e.message
           : "No pudimos actualizar la información del Panel.",
       );
     } finally {
-      setCargando(false);
-      setAhora(Date.now());
+      if (consulta === ultimaConsulta.current) {
+        setCargando(false);
+        setAhora(Date.now());
+      }
     }
   }, []);
 
@@ -316,6 +330,24 @@ export function PanelGeneralView({
     data?.generadoEl ?? new Date(ahora).toISOString(),
     zonaHoraria,
   );
+
+  if (esAdministrador && data?.vistaActual === "actual") {
+    return (
+      <PanelAdminView
+        data={data}
+        nombre={primeraPalabra(nombreUsuario)}
+        fecha={fecha}
+        saludo={saludo}
+        actualizado={haceCuanto(data.generadoEl, ahora)}
+        ahora={ahora}
+        cargando={cargando}
+        error={error}
+        refrescar={() => void refrescar()}
+        cambiarVista={cambiarVista}
+        abrir={router.push}
+      />
+    );
+  }
 
   return (
     <div className={s.page}>

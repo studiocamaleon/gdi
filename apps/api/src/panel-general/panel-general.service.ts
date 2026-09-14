@@ -8,6 +8,8 @@ import { expandir, ROLES_PREDEFINIDOS } from '../auth/permisos';
 import { claveFechaEnZona, sumarDiasAClave } from '../common/zona';
 import { regionalDelTenant } from '../common/regional';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
+import { puedeConsultarActividadGeneral } from './panel-actividad.service';
+import { PanelAdminService } from './panel-admin.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type KpiFormato = 'cantidad' | 'moneda';
@@ -160,6 +162,7 @@ export class PanelGeneralService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordenesTrabajo: OrdenesTrabajoService,
+    private readonly admin: PanelAdminService,
   ) {}
 
   async obtener(auth: CurrentAuth, vistaSolicitada?: VistaPanelGeneral) {
@@ -227,22 +230,31 @@ export class PanelGeneralService {
           vendedorSinVinculo: false,
         });
 
-    const [tablero, ordenesProximas, comerciales, administracion, cuello] =
-      await Promise.all([
-        tableroPromise,
-        perfilSoloProductivo || (!veProduccion && !veComercial)
-          ? Promise.resolve([])
-          : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
-        veComercial && !vendedorSinVinculo
-          ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
-          : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
-        gestionaAdministracion
-          ? this.resumenAdministracion(auth.tenantId, hoy, enSiete)
-          : Promise.resolve<ResumenAdministracion | null>(null),
-        veProduccion && !perfilSoloProductivo && !comercialSoloPropio
-          ? this.cuelloBotella(auth.tenantId, hoy)
-          : Promise.resolve(null),
-      ]);
+    const [
+      tablero,
+      ordenesProximas,
+      comerciales,
+      administracion,
+      cuello,
+      administrador,
+    ] = await Promise.all([
+      tableroPromise,
+      perfilSoloProductivo || (!veProduccion && !veComercial)
+        ? Promise.resolve([])
+        : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
+      veComercial && !vendedorSinVinculo
+        ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
+        : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
+      gestionaAdministracion
+        ? this.resumenAdministracion(auth.tenantId, hoy, enSiete)
+        : Promise.resolve<ResumenAdministracion | null>(null),
+      veProduccion && !perfilSoloProductivo && !comercialSoloPropio
+        ? this.cuelloBotella(auth.tenantId, hoy)
+        : Promise.resolve(null),
+      puedeConsultarActividadGeneral(auth) && vistaActual === 'actual'
+        ? this.admin.obtener(auth, hoy, zonaHoraria)
+        : Promise.resolve(null),
+    ]);
 
     const prod = veProduccion
       ? await this.resumenProduccion(
@@ -268,9 +280,24 @@ export class PanelGeneralService {
       veComercial,
       veProduccion,
     });
+    if (administrador?.documentacionPendiente.total) {
+      atencion.push({
+        id: 'documentacion-pendiente',
+        dominio: 'produccion',
+        severidad: 'atencion',
+        titulo: 'Documentación pendiente',
+        detalle: 'Órdenes con requisitos documentales aún sin cumplir.',
+        cantidad: administrador.documentacionPendiente.total,
+        href: '#documentacion-pendiente',
+      });
+      atencion.sort(
+        (a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad],
+      );
+    }
     const trabajoPersonal = this.trabajoPersonal(tablero);
 
     return {
+      administrador,
       generadoEl: ahora.toISOString(),
       fechaLocal: hoy,
       vistaActual,
@@ -384,7 +411,10 @@ export class PanelGeneralService {
         this.prisma.ordenTrabajoItemPaso.count({
           where: {
             tenantId,
-            OR: [{ nestingLoteRol: null }, { nestingLoteRol: { not: 'PARTICIPANTE' } }],
+            OR: [
+              { nestingLoteRol: null },
+              { nestingLoteRol: { not: 'PARTICIPANTE' } },
+            ],
             estado: 'bloqueado',
             orden: {
               ...filtroVendedor,
@@ -443,7 +473,6 @@ export class PanelGeneralService {
       const pasos = comerciales.flatMap((i) => i.pasos);
 
       const productos = comerciales.map((item) => {
-
         return {
           id: item.id,
           nombre: item.nombre,

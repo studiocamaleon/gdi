@@ -1,3 +1,4 @@
+import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module';
 import { Module } from '@nestjs/common';
 
 import { ArchivosController } from './archivos.controller';
@@ -10,7 +11,7 @@ import { SuscripcionesModule } from '../suscripciones/suscripciones.module';
 @Module({
   // Suscripciones: el tope de espacio sale del plan cuando el tenant no tiene
   // un ajuste propio. No hay ciclo — suscripciones no consume archivos.
-  imports: [StorageModule, SuscripcionesModule],
+  imports: [StorageModule, SuscripcionesModule, EventosSistemaModule],
   controllers: [ArchivosController, ArchivosLocalController],
   providers: [ArchivosService, ArchivosScheduler],
   // Presupuestos (logo en el PDF) y Tenants (definir el logo) lo consumen.

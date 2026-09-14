@@ -174,7 +174,6 @@ export const NAV: NavItem[] = [
         key: "estaciones",
         label: "Estaciones",
         href: "/produccion/estaciones",
-        permiso: "produccion.configurar",
       },
     ],
   },

@@ -266,6 +266,7 @@ type EstacionSim = {
   /** null = sin restricción de capacidad (bucket "sin estación", D5). */
   servers: Date[] | null;
   equipo?: Estacion['equipoProduccion'];
+  empleados?: import('./estaciones-tipos').PersonaProduccion[];
   /** Corre con supuestos (calendario default o sin estación). */
   parcial: boolean;
   /** Una capacidad por máquina física, compartida por toda la simulación. */
@@ -362,14 +363,25 @@ export function simularFlujo({
     const sinCalendario = calendarioVacio(estacion.calendario);
     registros.set(estacion.id, {
       key: estacion.id,
-      equipo: estacion.equipoProduccion,
+      equipo: estacion.planificacionPorEmpleados
+        ? null
+        : estacion.equipoProduccion,
+      empleados: estacion.planificacionPorEmpleados
+        ? (estacion.empleados ?? []).map((e) => ({
+            id: e.id,
+            activo: e.activo,
+            calendario: e.calendario ?? null,
+          }))
+        : undefined,
       calendario: sinCalendario
         ? calendarioDefault()
         : (estacion.calendario as CalendarioEstacion),
-      servers: Array.from(
-        { length: Math.max(1, estacion.capacidadConcurrente) },
-        () => new Date(ahora),
-      ),
+      servers: estacion.planificacionPorEmpleados
+        ? null
+        : Array.from(
+            { length: Math.max(1, estacion.capacidadConcurrente) },
+            () => new Date(ahora),
+          ),
       parcial: sinCalendario,
       maquinas: maquinasGlobales,
       preparacionMin: Math.max(
@@ -410,6 +422,7 @@ export function simularFlujo({
       demanda: recortarDemanda(demandaDePaso(paso, total), total, total),
       calendario: est.calendario,
       equipo: est.equipo,
+      empleados: est.empleados,
       preparacionMin: est.preparacionMin,
       zona,
       noLaborables,
@@ -458,12 +471,67 @@ export function simularFlujo({
   }
   const proyectar = (c: CalendarioEstacion, d: Date, m: number) =>
     tramosLaborales(c, d, m, noLaborables, zona);
+  // Puente conservador mientras se configura cada estación del antiguo equipo.
+  // Una reserva anónima anterior bloquea a sus miembros ya identificados;
+  // una reserva personal descuenta esos mismos cupos de los equipos anteriores.
+  const personasPorEquipo = new Map<string, Set<string>>();
+  for (const e of estaciones)
+    if (e.planificacionPorEmpleados && e.equipoProduccionId) {
+      const ids =
+        personasPorEquipo.get(e.equipoProduccionId) ?? new Set<string>();
+      for (const persona of e.empleados ?? []) ids.add(persona.id);
+      personasPorEquipo.set(e.equipoProduccionId, ids);
+    }
+  const agregarReservas = (
+    mapa: Map<string, ReservaHumana[]>,
+    est: EstacionSim,
+    reservas: ReservaHumana[],
+  ) => {
+    const agregar = (key: string, lista: ReservaHumana[]) => {
+      mapa.set(key, [...(mapa.get(key) ?? []), ...lista]);
+    };
+    if (est.empleados !== undefined) {
+      agregar('@empleados', reservas);
+      for (const [equipoId, ids] of personasPorEquipo) {
+        agregar(
+          equipoId,
+          reservas.flatMap((r) => {
+            const comunes = (r.empleadoIds ?? []).filter((id) => ids.has(id));
+            return comunes.length ? [{ ...r, personas: comunes.length }] : [];
+          }),
+        );
+      }
+    } else if (est.equipo) {
+      agregar(est.equipo.id, reservas);
+      const ids = [...(personasPorEquipo.get(est.equipo.id) ?? [])];
+      if (ids.length) {
+        const activas = reservas.filter((r) => r.personas > 0);
+        agregar(
+          '@empleados',
+          activas.map((r) => ({
+            ...r,
+            personas: ids.length,
+            empleadoIds: ids,
+          })),
+        );
+        for (const [otroEquipo, otras] of personasPorEquipo) {
+          if (otroEquipo === est.equipo.id) continue;
+          const comunes = ids.filter((id) => otras.has(id));
+          if (comunes.length)
+            agregar(
+              otroEquipo,
+              activas.map((r) => ({ ...r, personas: comunes.length })),
+            );
+        }
+      }
+    }
+  };
   const ocupacionEquipos = new Map<string, ReservaHumana[]>();
   const agendaEquipos = new Map<string, ReservaHumana[]>();
   for (const reservas of reservasPorEstacion.values())
     for (const r of reservas) {
       const est = estacionDe(r.paso);
-      if (!est.equipo) continue;
+      if (!est.equipo && est.empleados === undefined) continue;
       const total = duracionDePaso(r.paso, medianas);
       if (total == null) continue;
       const demanda = recortarDemanda(
@@ -475,6 +543,7 @@ export function simularFlujo({
         desde: new Date(r.inicio),
         demanda,
         equipo: est.equipo,
+        empleados: est.empleados,
         calendario: est.calendario,
         reservas: [],
         preparacionMin: est.preparacionMin,
@@ -488,20 +557,35 @@ export function simularFlujo({
         r.inicio,
         new Date(r.paso.planificadoHasta!).getTime(),
       );
-      const intervalos = guardada
-        ? guardada.reservas
-        : plan && plan.finOcupacion.getTime() === r.fin
-          ? plan.reservas
-          : [
+      const intervalos =
+        est.empleados !== undefined && !guardada
+          ? [
               {
                 inicio: r.inicio,
                 fin: r.fin,
-                personas: Math.max(1, ...demanda.fases.map((f) => f.personas)),
+                personas: est.empleados.length,
+                empleadoIds: est.empleados.map((e) => e.id),
               },
-            ];
-      const existentes = agendaEquipos.get(est.equipo.id) ?? [];
-      existentes.push(...intervalos.map((v) => ({ ...v, pasoId: r.paso.id })));
-      agendaEquipos.set(est.equipo.id, existentes);
+            ]
+          : guardada
+            ? guardada.reservas
+            : plan && plan.finOcupacion.getTime() === r.fin
+              ? plan.reservas
+              : [
+                  {
+                    inicio: r.inicio,
+                    fin: r.fin,
+                    personas: Math.max(
+                      1,
+                      ...demanda.fases.map((f) => f.personas),
+                    ),
+                  },
+                ];
+      agregarReservas(
+        agendaEquipos,
+        est,
+        intervalos.map((v) => ({ ...v, pasoId: r.paso.id })),
+      );
     }
   const predecesores = new Map<string, string[]>();
   for (const item of items) {
@@ -519,9 +603,13 @@ export function simularFlujo({
     }
   }
 
-  const liberacionTanda = !tandas.length ? new Map<string, string>() : precedenciasTanda(
-    [...pasoPorId.values()].map(n => n.paso), predecesores, tandas,
-  );
+  const liberacionTanda = !tandas.length
+    ? new Map<string, string>()
+    : precedenciasTanda(
+        [...pasoPorId.values()].map((n) => n.paso),
+        predecesores,
+        tandas,
+      );
 
   const resultadoDe = (item: TableroItemData) => {
     let resultado = porItem.get(item.id);
@@ -567,12 +655,26 @@ export function simularFlujo({
     duracion: number | null;
     atencion?: PlanAtencion;
   };
-  const prioridadItems = new Map(items.map(item => [item.id, {
-    urgente: prioridadDerivada(item.fechaEntrega, ahora, zona) === 'urgent',
-    entrega: item.fechaEntrega ? new Date(item.fechaEntrega).getTime() : Number.POSITIVE_INFINITY,
-  }]));
+  const prioridadItems = new Map(
+    items.map((item) => [
+      item.id,
+      {
+        urgente: prioridadDerivada(item.fechaEntrega, ahora, zona) === 'urgent',
+        entrega: item.fechaEntrega
+          ? new Date(item.fechaEntrega).getTime()
+          : Number.POSITIVE_INFINITY,
+      },
+    ]),
+  );
   // Duración, atención pendiente y ruteo son constantes durante esta simulación.
-  const preparados = new Map<string, { est: EstacionSim; demanda: ReturnType<typeof recortarDemanda>; claveDemanda: string }>();
+  const preparados = new Map<
+    string,
+    {
+      est: EstacionSim;
+      demanda: ReturnType<typeof recortarDemanda>;
+      claveDemanda: string;
+    }
+  >();
   const esMejor = (a: Candidato, b: Candidato) => {
     if ((a.paso.estado === 'en_curso') !== (b.paso.estado === 'en_curso'))
       return a.paso.estado === 'en_curso';
@@ -587,7 +689,8 @@ export function simularFlujo({
     const prioridadA = prioridadItems.get(a.item.id)!;
     const prioridadB = prioridadItems.get(b.item.id)!;
     if (prioridadA.urgente !== prioridadB.urgente) return prioridadA.urgente;
-    const entregaA = prioridadA.entrega, entregaB = prioridadB.entrega;
+    const entregaA = prioridadA.entrega,
+      entregaB = prioridadB.entrega;
     if (entregaA !== entregaB) return entregaA < entregaB;
     if (a.item.ordenNumero !== b.item.ordenNumero)
       return a.item.ordenNumero < b.item.ordenNumero;
@@ -676,6 +779,7 @@ export function simularFlujo({
             ahora,
             calendario: est.calendario,
             equipo: est.equipo,
+            empleados: est.empleados,
             proyectar,
           });
           // Sin confirmación de fin no se da por terminado ni se repite el setup.
@@ -701,9 +805,14 @@ export function simularFlujo({
       const duracion = demanda.fases.reduce((s, f) => s + f.minutos, 0);
       // Sin reservas publicadas, misma máquina/estación, llegada y demanda
       // producen la misma ventana. Sólo cambia la identidad y prioridad del paso.
-      const claveColocacion = reservasPorEstacion.size || enCurso ? null
-        : `${est.key}|${nodo.paso.maquinaId ?? ''}|${listo.getTime()}|${preparado.claveDemanda}`;
-      const equivalente = claveColocacion === null ? null : colocacionesEquivalentes.get(claveColocacion);
+      const claveColocacion =
+        reservasPorEstacion.size || enCurso
+          ? null
+          : `${est.key}|${nodo.paso.maquinaId ?? ''}|${listo.getTime()}|${preparado.claveDemanda}`;
+      const equivalente =
+        claveColocacion === null
+          ? null
+          : colocacionesEquivalentes.get(claveColocacion);
       if (equivalente) {
         const candidato = { ...equivalente, ...nodo };
         candidatos += 1;
@@ -738,12 +847,25 @@ export function simularFlujo({
       const reservas = (reservasPorEstacion.get(est.key) ?? []).filter(
         (r) => r.paso.id !== nodo.paso.id && !programados.has(r.paso.id),
       );
-      const agendaHumana = est.equipo ? agendaEquipos.get(est.equipo.id) ?? [] : [];
-      const ocupadasHumanas = est.equipo ? ocupacionEquipos.get(est.equipo.id) ?? [] : [];
+      const agendaHumana =
+        est.empleados !== undefined || est.equipo
+          ? (agendaEquipos.get(
+              est.empleados !== undefined ? '@empleados' : est.equipo!.id,
+            ) ?? [])
+          : [];
+      const ocupadasHumanas =
+        est.empleados !== undefined || est.equipo
+          ? (ocupacionEquipos.get(
+              est.empleados !== undefined ? '@empleados' : est.equipo!.id,
+            ) ?? [])
+          : [];
       const reservasHumanas = agendaHumana.length
-        ? [...ocupadasHumanas, ...agendaHumana.filter(
-            (r) => r.pasoId !== nodo.paso.id && !programados.has(r.pasoId!),
-          )]
+        ? [
+            ...ocupadasHumanas,
+            ...agendaHumana.filter(
+              (r) => r.pasoId !== nodo.paso.id && !programados.has(r.pasoId!),
+            ),
+          ]
         : ocupadasHumanas;
       let atencion: PlanAtencion | null = null;
       for (
@@ -753,9 +875,13 @@ export function simularFlujo({
       ) {
         // Con agenda publicada cada paso excluye su propia reserva: no se
         // comparte esa evaluación. El cache se descarta al elegir cada paso.
-        const claveAtencion = agendaHumana.length ? null
+        const claveAtencion = agendaHumana.length
+          ? null
           : `${est.key}|${inicio.getTime()}|${JSON.stringify(demanda)}`;
-        if (claveAtencion !== null && atencionesEquivalentes.has(claveAtencion)) {
+        if (
+          claveAtencion !== null &&
+          atencionesEquivalentes.has(claveAtencion)
+        ) {
           atencion = atencionesEquivalentes.get(claveAtencion)!;
         } else {
           atencion = programarAtencion({
@@ -763,11 +889,13 @@ export function simularFlujo({
             demanda,
             calendario: est.calendario,
             equipo: est.equipo,
+            empleados: est.empleados,
             reservas: reservasHumanas,
             preparacionMin: est.preparacionMin,
             proyectar,
           });
-          if (claveAtencion !== null) atencionesEquivalentes.set(claveAtencion, atencion);
+          if (claveAtencion !== null)
+            atencionesEquivalentes.set(claveAtencion, atencion);
         }
         if (!atencion) {
           inicio = null;
@@ -817,9 +945,12 @@ export function simularFlujo({
       }
       if (!inicio || !atencion) {
         itemsSinVentana.add(nodo.item.id);
-        resultadoDe(nodo.item).motivoSinEstimar = est.equipo
-          ? 'No hay capacidad suficiente del equipo o una ventana común con la estación.'
-          : 'No hay una ventana de producción en el horizonte.';
+        resultadoDe(nodo.item).motivoSinEstimar =
+          est.empleados !== undefined
+            ? 'No hay empleados con horarios coincidentes suficientes para la dotación requerida.'
+            : est.equipo
+              ? 'No hay capacidad suficiente del equipo o una ventana común con la estación.'
+              : 'No hay una ventana de producción en el horizonte.';
         marcoSinEstimacion = true;
         continue;
       }
@@ -831,7 +962,8 @@ export function simularFlujo({
         duracion,
         atencion,
       };
-      if (claveColocacion !== null) colocacionesEquivalentes.set(claveColocacion, candidato);
+      if (claveColocacion !== null)
+        colocacionesEquivalentes.set(claveColocacion, candidato);
       candidatos += 1;
       if (!mejor || esMejor(candidato, mejor)) mejor = candidato;
     }
@@ -857,13 +989,11 @@ export function simularFlujo({
       fin = mejor.atencion!.fin;
       finSeparado = mejor.atencion!.finOcupacion;
       preparacionMin = est!.preparacionMin;
-      if (est!.equipo) {
-        const existentes = ocupacionEquipos.get(est!.equipo.id) ?? [];
-        existentes.push(
-          ...mejor.atencion!.reservas.map((r) => ({ ...r, pasoId: paso.id })),
-        );
-        ocupacionEquipos.set(est!.equipo.id, existentes);
-      }
+      agregarReservas(
+        ocupacionEquipos,
+        est!,
+        mejor.atencion!.reservas.map((r) => ({ ...r, pasoId: paso.id })),
+      );
       if (!paso.maquinaId) ocupar(est!, finSeparado);
       ocuparMaquina(est!, paso, finSeparado, ahora);
       if (est!.parcial || mejor.atencion?.parcial)

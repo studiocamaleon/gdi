@@ -1,0 +1,82 @@
+/* Sin el reset ni el tema :root de HeroUI: la adopción es por superficie.
+ * El plugin postcss-heroui-scope limita estos componentes a data-ui=heroui.
+ */
+@import "@heroui/styles/utilities";
+@import "@heroui/styles/components/card.css" layer(components.heroui);
+@import "@heroui/styles/components/button.css" layer(components.heroui);
+@import "@heroui/styles/components/tabs.css" layer(components.heroui);
+@import "@heroui/styles/components/scroll-shadow.css" layer(components.heroui);
+@import "@heroui/styles/components/toggle-button.css" layer(components.heroui);
+@import "@heroui/styles/components/toggle-button-group.css"
+  layer(components.heroui);
+@import "@heroui/styles/components/chip.css" layer(components.heroui);
+@import "@heroui/styles/components/avatar.css" layer(components.heroui);
+@import "@heroui/styles/components/input.css" layer(components.heroui);
+@import "@heroui/styles/components/autocomplete.css" layer(components.heroui);
+@import "@heroui/styles/components/search-field.css" layer(components.heroui);
+@import "@heroui/styles/components/select.css" layer(components.heroui);
+@import "@heroui/styles/components/list-box.css" layer(components.heroui);
+@import "@heroui/styles/components/list-box-item.css" layer(components.heroui);
+@import "@heroui/styles/components/modal.css" layer(components.heroui);
+@import "@heroui/styles/components/close-button.css" layer(components.heroui);
+@import "@heroui/styles/components/tooltip.css" layer(components.heroui);
+@import "@heroui/styles/components/drawer.css" layer(components.heroui);
+@import "@heroui/styles/components/number-field.css" layer(components.heroui);
+@import "@heroui/styles/components/checkbox.css" layer(components.heroui);
+@import "@heroui/styles/components/textarea.css" layer(components.heroui);
+@import "@heroui/styles/components/label.css" layer(components.heroui);
+@import "@heroui/styles/components/accordion.css" layer(components.heroui);
+@import "@heroui/styles/components/switch.css" layer(components.heroui);
+@import "@heroui/styles/components/slider.css" layer(components.heroui);
+
+/* Sólo aliases nuevos; los tokens existentes de Shadcn no se redefinen. */
+@theme inline {
+  --color-default: var(--default);
+  --color-default-foreground: var(--foreground);
+  --color-default-soft: var(--default);
+  --color-default-soft-foreground: var(--foreground);
+  --color-default-hover: var(--default-hover);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-tertiary: var(--default);
+  --shadow-surface: var(--field-shadow);
+  --color-surface-foreground: var(--foreground);
+  --color-overlay: var(--overlay);
+  --color-overlay-foreground: var(--foreground);
+  --color-segment: var(--segment);
+  --color-segment-foreground: var(--foreground);
+  --color-separator: var(--separator);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft-foreground: var(--accent-soft-foreground);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
+  --color-field: var(--field-background);
+  --color-field-hover: var(--field-hover);
+  --border-width-field: var(--field-border-width);
+  --color-field-foreground: var(--foreground);
+  --color-field-placeholder: var(--muted-text);
+  --color-field-border: var(--field-border);
+  --color-field-border-hover: var(--field-border-hover);
+  --color-field-border-focus: var(--field-border-focus);
+  --color-field-border-invalid: var(--danger);
+  --color-backdrop: var(--backdrop);
+  --shadow-overlay: var(--overlay-shadow);
+  --shadow-field: var(--field-shadow);
+  --radius-field: var(--field-radius);
+  --ease-smooth: ease;
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+}

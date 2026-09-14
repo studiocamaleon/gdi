@@ -1,4 +1,14 @@
 "use client";
+import { Input } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SelectField } from "@/components/design-system/select-field";
+import s from "./calendario-editor.module.css";
+const cx = (names: string) =>
+  names
+    .split(/\s+/)
+    .map((name) => s[name])
+    .filter(Boolean)
+    .join(" ");
 import {
   DIAS_SEMANA,
   etiquetaCalendario,
@@ -74,7 +84,9 @@ export function CalendarioEditor({
   value,
   onChange,
   fuentes,
+  titulo = "Calendario operativo",
 }: {
+  titulo?: string;
   value: CalendarioEstacion | null;
   onChange: (calendario: CalendarioEstacion | null) => void;
   fuentes: Pick<Estacion, "id" | "nombre" | "calendario">[];
@@ -127,55 +139,55 @@ export function CalendarioEditor({
   const copiables = fuentes.filter((estacion) => estacion.calendario !== null);
 
   return (
-    <div className="cal-editor">
-      <div className="cal-editor-head">
-        <label>Calendario operativo</label>
+    <div className={cx("cal-editor")}>
+      <div className={cx("cal-editor-head")}>
+        <label>{titulo}</label>
         {copiables.length > 0 ? (
-          <select
-            className="cal-copy"
+          <SelectField
+            aria-label={`Copiar ${titulo.toLowerCase()}`}
             value=""
-            onChange={(event) => {
-              const fuente = copiables.find(
-                (estacion) => estacion.id === event.target.value,
-              );
+            options={[
+              { value: "", label: "Copiar horarios de…" },
+              ...copiables.map((e) => ({
+                value: e.id,
+                label: `${e.nombre} — ${etiquetaCalendario(e.calendario)}`,
+              })),
+            ]}
+            onChange={(id) => {
+              const fuente = copiables.find((e) => e.id === id);
               if (fuente?.calendario)
                 onChange({ dias: { ...fuente.calendario.dias } });
             }}
-          >
-            <option value="" disabled>
-              Copiar horarios de…
-            </option>
-            {copiables.map((estacion) => (
-              <option key={estacion.id} value={estacion.id}>
-                {estacion.nombre} — {etiquetaCalendario(estacion.calendario)}
-              </option>
-            ))}
-          </select>
+          />
         ) : null}
       </div>
-      <div className="cal-rows">
+      <div className={cx("cal-rows")}>
         {DIAS_SEMANA.map((dia) => {
           const franjas = calendario.dias[dia];
           return (
             <div
               key={dia}
-              className={`cal-row ${franjas ? "on" : ""} ${invalidos.has(dia) ? "invalid" : ""}`}
+              className={cx(
+                `cal-row ${franjas ? "on" : ""} ${invalidos.has(dia) ? "invalid" : ""}`,
+              )}
             >
-              <button
+              <ActionButton
+                variant="outline"
                 type="button"
-                className="cal-day"
-                onClick={() => toggleDia(dia)}
+                className={cx("cal-day")}
+                onPress={() => toggleDia(dia)}
                 aria-pressed={franjas !== null}
               >
-                <span className="dot" />
+                <span className={cx("dot")} />
                 {DIA_NOMBRE[dia]}
-              </button>
+              </ActionButton>
               {franjas ? (
-                <div className="cal-franjas">
+                <div className={cx("cal-franjas")}>
                   {franjas.map((franja, indice) => (
-                    <div key={indice} className="cal-times">
-                      <input
+                    <div key={indice} className={cx("cal-times")}>
+                      <Input
                         type="time"
+                        aria-label={`Desde ${DIA_NOMBRE[dia]} franja ${indice + 1}`}
                         value={franja.desde}
                         onChange={(event) =>
                           setFranja(dia, indice, {
@@ -184,9 +196,10 @@ export function CalendarioEditor({
                           })
                         }
                       />
-                      <span className="sep">–</span>
-                      <input
+                      <span className={cx("sep")}>–</span>
+                      <Input
                         type="time"
+                        aria-label={`Hasta ${DIA_NOMBRE[dia]} franja ${indice + 1}`}
                         value={franja.hasta}
                         onChange={(event) =>
                           setFranja(dia, indice, {
@@ -196,40 +209,42 @@ export function CalendarioEditor({
                         }
                       />
                       {franjas.length > 1 ? (
-                        <button
+                        <ActionButton
+                          variant="outline"
                           type="button"
-                          className="cal-quitar"
-                          onClick={() => quitarFranja(dia, indice)}
+                          className={cx("cal-quitar")}
+                          onPress={() => quitarFranja(dia, indice)}
                           aria-label={`Quitar franja ${franja.desde}–${franja.hasta} de ${DIA_NOMBRE[dia]}`}
                         >
                           ×
-                        </button>
+                        </ActionButton>
                       ) : null}
                     </div>
                   ))}
-                  <button
+                  <ActionButton
+                    variant="outline"
                     type="button"
-                    className="cal-agregar"
-                    onClick={() =>
+                    className={cx("cal-agregar")}
+                    onPress={() =>
                       setDia(dia, [...franjas, franjaSiguiente(franjas)])
                     }
                     aria-label={`Agregar franja a ${DIA_NOMBRE[dia]}`}
                     title="Agregar otra franja (jornada cortada)"
                   >
                     +
-                  </button>
+                  </ActionButton>
                 </div>
               ) : (
-                <span className="cal-off">No se trabaja</span>
+                <span className={cx("cal-off")}>No se trabaja</span>
               )}
             </div>
           );
         })}
       </div>
-      <div className={`help ${invalidos.size > 0 ? "err" : ""}`}>
+      <div className={cx(`help ${invalidos.size > 0 ? "err" : ""}`)}>
         {invalidos.size > 0
           ? `Revisá ${[...invalidos].map((dia) => DIA_NOMBRE[dia]).join(", ")}: cada franja necesita "desde" anterior a "hasta", sin solaparse con las demás.`
-          : "Horas disponibles para proyectar la cola del tablero en días. El + de cada día agrega otra franja (ej.: 9–12 y 15–19)."}
+          : "El + de cada día agrega otra franja para una jornada cortada (ej.: 9–12 y 15–19). Los días desactivados no aportan disponibilidad."}
       </div>
     </div>
   );

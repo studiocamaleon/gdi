@@ -51,8 +51,17 @@ const ESTACION_INCLUDE = {
   // con tecnología/paso. Ya no se lee EstacionFamilia (legacy, sólo respaldo).
   reglas: { select: { tipo: true, valor: true } },
   empleados: {
+    orderBy: { empleadoId: 'asc' as const },
     include: {
-      empleado: { select: { id: true, nombreCompleto: true, sector: true } },
+      empleado: {
+        select: {
+          id: true,
+          nombreCompleto: true,
+          sector: true,
+          activo: true,
+          calendarioProduccionJson: true,
+        },
+      },
     },
   },
   maquinas: {
@@ -81,7 +90,10 @@ export class ProduccionService {
   // La estación agrupa familias de pasos (ruteo del tablero), máquinas y
   // empleados habilitados. Ver docs/estaciones-diseno.md
 
-  async findEstaciones(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+  async findEstaciones(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     const rows = await db.estacion.findMany({
       where: { tenantId: tenantId },
       include: ESTACION_INCLUDE,
@@ -94,7 +106,13 @@ export class ProduccionService {
     const [empleados, maquinas] = await Promise.all([
       this.prisma.empleado.findMany({
         where: { tenantId, activo: true },
-        select: { id: true, nombreCompleto: true, sector: true },
+        select: {
+          id: true,
+          nombreCompleto: true,
+          sector: true,
+          activo: true,
+          calendarioProduccionJson: true,
+        },
         orderBy: { nombreCompleto: 'asc' },
       }),
       this.prisma.maquina.findMany({
@@ -103,7 +121,13 @@ export class ProduccionService {
         orderBy: { nombre: 'asc' },
       }),
     ]);
-    return { empleados, maquinas };
+    return {
+      empleados: empleados.map(({ calendarioProduccionJson, ...e }) => ({
+        ...e,
+        calendario: normalizarCalendarioAlmacenado(calendarioProduccionJson),
+      })),
+      maquinas,
+    };
   }
 
   /**
@@ -147,27 +171,30 @@ export class ProduccionService {
       orderBy: { nombre: 'asc' },
     });
     return [
-      ...Object.values(FAMILIAS).filter((f) => admitePasoSinMaquina(f.codigo)).map((familia) => ({
-        codigo: familia.codigo as string,
-        nombre: familia.nombre,
-        categoria: familia.categoria as string,
-        visibleEnSelector: familia.visibleEnSelector !== false,
-        origen: 'sistema' as const,
-        estaciones: porFamilia.get(familia.codigo) ?? [],
-      })),
+      ...Object.values(FAMILIAS)
+        .filter((f) => admitePasoSinMaquina(f.codigo))
+        .map((familia) => ({
+          codigo: familia.codigo as string,
+          nombre: familia.nombre,
+          categoria: familia.categoria as string,
+          visibleEnSelector: familia.visibleEnSelector !== false,
+          origen: 'sistema' as const,
+          estaciones: porFamilia.get(familia.codigo) ?? [],
+        })),
       // La instancia HEREDA la categoría de su plantilla; y si no tiene
       // regla propia de estación, hereda la de la plantilla (se puede
       // cambiar). docs/pasos-tenant-por-plantilla-diseno.md
-      ...pasosTenant.filter((p) => admitePasoSinMaquina(p.plantillaCodigo)).map((paso) => ({
-        codigo: paso.id,
-        nombre: paso.nombre,
-        categoria: (resolverFamilia(paso.plantillaCodigo)?.categoria ??
-          'operaciones_manuales') as string,
-        visibleEnSelector: true,
-        origen: 'tenant' as const,
-        estaciones:
-          porFamilia.get(paso.id) ?? [],
-      })),
+      ...pasosTenant
+        .filter((p) => admitePasoSinMaquina(p.plantillaCodigo))
+        .map((paso) => ({
+          codigo: paso.id,
+          nombre: paso.nombre,
+          categoria: (resolverFamilia(paso.plantillaCodigo)?.categoria ??
+            'operaciones_manuales') as string,
+          visibleEnSelector: true,
+          origen: 'tenant' as const,
+          estaciones: porFamilia.get(paso.id) ?? [],
+        })),
     ];
   }
 
@@ -179,7 +206,10 @@ export class ProduccionService {
    * estimado→"real"→estimado, y 'declarado' es percepción, no medición).
    * Mediana y no promedio: resiste el outlier.
    */
-  async findDuracionesFamilias(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+  async findDuracionesFamilias(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     const rows = await db.$queryRaw<
       Array<{ familiaCodigo: string; medianaMin: number; muestras: number }>
     >`
@@ -224,10 +254,16 @@ export class ProduccionService {
   ): Promise<EstructuraBastidorEjecutada> {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
-      select: { trazabilidadSnapshotJson: true, cotizacionItem: { select: { trazabilidadJson: true } } },
+      select: {
+        trazabilidadSnapshotJson: true,
+        cotizacionItem: { select: { trazabilidadJson: true } },
+      },
     });
 
-    let trazabilidad = item?.trazabilidadSnapshotJson ?? item?.cotizacionItem?.trazabilidadJson ?? null;
+    let trazabilidad =
+      item?.trazabilidadSnapshotJson ??
+      item?.cotizacionItem?.trazabilidadJson ??
+      null;
     if (!item) {
       // Borrador del cotizador: el id es el CotizacionItem, sin OT todavía.
       const cotizacionItem = await this.prisma.cotizacionItem.findFirst({
@@ -257,7 +293,10 @@ export class ProduccionService {
 
   // ── Configuración de producción (margen de la ETA sugerida) ──────────
 
-  async getConfiguracion(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+  async getConfiguracion(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     const row = await db.configuracionProduccion.findUnique({
       where: { tenantId: tenantId },
     });
@@ -299,7 +338,10 @@ export class ProduccionService {
   // Fechas puntuales a nivel tenant que la proyección de cola y la
   // simulación de flujo saltan. Ver docs/capacidad-estaciones-diseno.md D8.
 
-  async findDiasNoLaborables(tenantId: string, db: Prisma.TransactionClient = this.prisma) {
+  async findDiasNoLaborables(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     const rows = await db.diaNoLaborable.findMany({
       where: { tenantId: tenantId },
       orderBy: { fecha: 'asc' },
@@ -372,46 +414,84 @@ export class ProduccionService {
     payload: UpsertEstacionDto,
     exceptoEstacionId?: string,
   ) {
-    if (payload.equipoProduccionId && !(await this.prisma.equipoProduccion.findFirst({
-      where: { id: payload.equipoProduccionId, tenantId: auth.tenantId }, select: { id: true },
-    }))) throw new BadRequestException('El equipo de producción no pertenece a esta empresa.');
+    if (
+      payload.equipoProduccionId &&
+      !(await this.prisma.equipoProduccion.findFirst({
+        where: { id: payload.equipoProduccionId, tenantId: auth.tenantId },
+        select: { id: true },
+      }))
+    )
+      throw new BadRequestException(
+        'El equipo de producción no pertenece a esta empresa.',
+      );
     if ((payload.reglas ?? []).some((r) => r.tipo === 'tecnologia')) {
-      throw new BadRequestException('Las tareas con máquina se asignan mediante la máquina. Actualizá la pantalla de estaciones.');
+      throw new BadRequestException(
+        'Las tareas con máquina se asignan mediante la máquina. Actualizá la pantalla de estaciones.',
+      );
     }
-    const familias = [...new Set([
-      ...(payload.familias ?? []),
-      ...(payload.reglas ?? []).filter((r) => r.tipo === 'paso').map((r) => r.valor),
-    ])];
+    const familias = [
+      ...new Set([
+        ...(payload.familias ?? []),
+        ...(payload.reglas ?? [])
+          .filter((r) => r.tipo === 'paso')
+          .map((r) => r.valor),
+      ]),
+    ];
     const reglas: Array<{ tipo: 'paso'; valor: string }> = [];
     const empleadoIds = [...new Set(payload.empleadoIds ?? [])];
     const maquinaIds = [...new Set(payload.maquinaIds ?? [])];
     // Siempre verificar pertenencia de los UUID, aunque el registro en memoria
     // conozca pasos de otras empresas.
-    const codigosPropios = familias.filter((codigo) => !Object.hasOwn(FAMILIAS, codigo));
-    const propios = codigosPropios.length ? await this.prisma.pasoTenant.findMany({
-      where: { tenantId: auth.tenantId, id: { in: codigosPropios }, activo: true },
-      select: { id: true, plantillaCodigo: true },
-    }) : [];
-    const plantillaPorId = new Map(propios.map((p) => [p.id, p.plantillaCodigo]));
+    const codigosPropios = familias.filter(
+      (codigo) => !Object.hasOwn(FAMILIAS, codigo),
+    );
+    const propios = codigosPropios.length
+      ? await this.prisma.pasoTenant.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: { in: codigosPropios },
+            activo: true,
+          },
+          select: { id: true, plantillaCodigo: true },
+        })
+      : [];
+    const plantillaPorId = new Map(
+      propios.map((p) => [p.id, p.plantillaCodigo]),
+    );
     for (const codigo of familias) {
-      const plantilla = Object.hasOwn(FAMILIAS, codigo) ? codigo : plantillaPorId.get(codigo);
-      if (!plantilla) throw new BadRequestException('Algún paso no existe o no pertenece a esta empresa.');
-      if (!admitePasoSinMaquina(plantilla)) throw new BadRequestException(
-        `“${resolverFamilia(plantilla)?.nombre ?? codigo}” requiere máquina. Asigná su máquina a la estación.`,
-      );
+      const plantilla = Object.hasOwn(FAMILIAS, codigo)
+        ? codigo
+        : plantillaPorId.get(codigo);
+      if (!plantilla)
+        throw new BadRequestException(
+          'Algún paso no existe o no pertenece a esta empresa.',
+        );
+      if (!admitePasoSinMaquina(plantilla))
+        throw new BadRequestException(
+          `“${resolverFamilia(plantilla)?.nombre ?? codigo}” requiere máquina. Asigná su máquina a la estación.`,
+        );
     }
     if (familias.length) {
       const tomadas = await this.prisma.estacionRegla.findMany({
         where: {
-          tenantId: auth.tenantId, tipo: { in: ['familia', 'paso'] }, valor: { in: familias },
-          ...(exceptoEstacionId ? { estacionId: { not: exceptoEstacionId } } : {}),
+          tenantId: auth.tenantId,
+          tipo: { in: ['familia', 'paso'] },
+          valor: { in: familias },
+          ...(exceptoEstacionId
+            ? { estacionId: { not: exceptoEstacionId } }
+            : {}),
         },
         include: { estacion: { select: { nombre: true } } },
       });
-      if (tomadas.length) throw new ConflictException(
-        `Estos pasos sin máquina ya están asignados: ${tomadas.map((r) =>
-          `${resolverFamilia(r.valor)?.nombre ?? r.valor} (en “${r.estacion.nombre}”)`).join(' · ')}. Cada paso se configura en una sola estación.`,
-      );
+      if (tomadas.length)
+        throw new ConflictException(
+          `Estos pasos sin máquina ya están asignados: ${tomadas
+            .map(
+              (r) =>
+                `${resolverFamilia(r.valor)?.nombre ?? r.valor} (en “${r.estacion.nombre}”)`,
+            )
+            .join(' · ')}. Cada paso se configura en una sola estación.`,
+        );
     }
 
     if (empleadoIds.length > 0) {
@@ -437,7 +517,41 @@ export class ProduccionService {
       }
     }
 
-    return { familias, empleadoIds, maquinaIds, reglas };
+    const horarios = (payload.horariosEmpleados ?? []).map((h) => {
+      if (!empleadoIds.includes(h.empleadoId))
+        throw new BadRequestException(
+          'El horario debe pertenecer a un empleado asignado a esta estación.',
+        );
+      const calendario = parseCalendario(h.calendario);
+      if (!calendario)
+        throw new BadRequestException('Completá el horario del empleado.');
+      return { empleadoId: h.empleadoId, calendario };
+    });
+    if (new Set(horarios.map((h) => h.empleadoId)).size !== horarios.length)
+      throw new BadRequestException(
+        'El horario de un empleado no puede repetirse.',
+      );
+    if (payload.planificacionPorEmpleados && empleadoIds.length) {
+      const personas = await this.prisma.empleado.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          id: { in: empleadoIds },
+          activo: true,
+        },
+        select: { id: true, calendarioProduccionJson: true },
+      });
+      if (
+        personas.some(
+          (p) =>
+            !horarios.some((h) => h.empleadoId === p.id) &&
+            !normalizarCalendarioAlmacenado(p.calendarioProduccionJson),
+        )
+      )
+        throw new BadRequestException(
+          'Completá el horario de cada empleado asignado.',
+        );
+    }
+    return { familias, empleadoIds, maquinaIds, reglas, horarios };
   }
 
   /**
@@ -454,6 +568,7 @@ export class ProduccionService {
       empleadoIds: string[];
       maquinaIds: string[];
       reglas: Array<{ tipo: string; valor: string }>;
+      horarios: Array<{ empleadoId: string; calendario: CalendarioEstacion }>;
     },
   ) {
     // Fase D: todo el ruteo declarado (familia + tecnología + paso) vive en
@@ -492,6 +607,16 @@ export class ProduccionService {
       });
     }
 
+    // El horario pertenece a la persona: editar acá actualiza todas sus estaciones.
+    for (const h of listas.horarios) {
+      const updated = await tx.empleado.updateMany({
+        where: { id: h.empleadoId, tenantId: auth.tenantId, activo: true },
+        data: { calendarioProduccionJson: calendarioAJson(h.calendario) },
+      });
+      if (updated.count !== 1)
+        throw new BadRequestException('El empleado ya no está disponible.');
+    }
+
     // Desasigna las que salieron de la estación, asigna (o mueve) las nuevas.
     await tx.maquina.updateMany({
       where: {
@@ -511,11 +636,23 @@ export class ProduccionService {
 
   /** Revalida dentro de la transacción, después del bloqueo por empresa. No
    * impide corregir una estación por conflictos históricos en otras reglas. */
-  private async validarInvariantesRuteo(tx: Prisma.TransactionClient, tenantId: string, familias: string[]) {
+  private async validarInvariantesRuteo(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    familias: string[],
+  ) {
     if (!familias.length) return;
     const reglas = await tx.estacionRegla.findMany({
-      where: { tenantId, tipo: { in: ['familia', 'paso'] }, valor: { in: familias } },
-      select: { valor: true, estacionId: true, estacion: { select: { nombre: true } } },
+      where: {
+        tenantId,
+        tipo: { in: ['familia', 'paso'] },
+        valor: { in: familias },
+      },
+      select: {
+        valor: true,
+        estacionId: true,
+        estacion: { select: { nombre: true } },
+      },
     });
     const dueñas = new Map<string, Map<string, string>>();
     for (const regla of reglas) {
@@ -523,9 +660,11 @@ export class ProduccionService {
       mapa.set(regla.estacionId, regla.estacion.nombre);
       dueñas.set(regla.valor, mapa);
     }
-    for (const [codigo, mapa] of dueñas) if (mapa.size > 1) throw new ConflictException(
-      `El paso sin máquina “${resolverFamilia(codigo)?.nombre ?? codigo}” está repetido en ${[...mapa.values()].join(', ')}.`,
-    );
+    for (const [codigo, mapa] of dueñas)
+      if (mapa.size > 1)
+        throw new ConflictException(
+          `El paso sin máquina “${resolverFamilia(codigo)?.nombre ?? codigo}” está repetido en ${[...mapa.values()].join(', ')}.`,
+        );
   }
 
   async createEstacion(auth: CurrentAuth, payload: UpsertEstacionDto) {
@@ -542,7 +681,11 @@ export class ProduccionService {
             etapa: payload.etapa ?? 'preprensa',
             icono: payload.icono?.trim() || null,
             capacidadConcurrente: payload.capacidadConcurrente ?? 1,
-            equipoProduccionId: payload.equipoProduccionId ?? null,
+            planificacionPorEmpleados:
+              payload.planificacionPorEmpleados ?? false,
+            equipoProduccionId: payload.planificacionPorEmpleados
+              ? null
+              : (payload.equipoProduccionId ?? null),
             tiempoPreparacionMin: payload.tiempoPreparacionMin ?? null,
             calendarioJson: calendarioAJson(
               parseCalendario(payload.calendario),
@@ -584,7 +727,15 @@ export class ProduccionService {
             nombre: payload.nombre.trim(),
             descripcion: payload.descripcion?.trim() || null,
             activo: payload.activo,
-            equipoProduccionId: payload.equipoProduccionId,
+            planificacionPorEmpleados:
+              existing.planificacionPorEmpleados ||
+              payload.planificacionPorEmpleados,
+            // Conserva la referencia anterior sólo para coordinar la transición con estaciones aún no migradas.
+            equipoProduccionId:
+              existing.planificacionPorEmpleados ||
+              payload.planificacionPorEmpleados
+                ? existing.equipoProduccionId
+                : payload.equipoProduccionId,
             etapa: payload.etapa ?? existing.etapa,
             icono: payload.icono?.trim() || null,
             capacidadConcurrente:
@@ -661,23 +812,36 @@ export class ProduccionService {
       activo: item.activo,
       etapa: item.etapa,
       icono: item.icono,
+      planificacionPorEmpleados: item.planificacionPorEmpleados,
       capacidadConcurrente: item.capacidadConcurrente,
       equipoProduccionId: item.equipoProduccionId,
-      equipoProduccion: item.equipoProduccion ? {
-        id: item.equipoProduccion.id,
-        nombre: item.equipoProduccion.nombre,
-        personas: item.equipoProduccion.personas,
-        activo: item.equipoProduccion.activo,
-        calendario: normalizarCalendarioAlmacenado(item.equipoProduccion.calendarioJson),
-      } : null,
+      equipoProduccion: item.equipoProduccion
+        ? {
+            id: item.equipoProduccion.id,
+            nombre: item.equipoProduccion.nombre,
+            personas: item.equipoProduccion.personas,
+            activo: item.equipoProduccion.activo,
+            calendario: normalizarCalendarioAlmacenado(
+              item.equipoProduccion.calendarioJson,
+            ),
+          }
+        : null,
       tiempoPreparacionMin: item.tiempoPreparacionMin,
       // Normaliza el shape legado (una franja suelta por día) al de listas.
       calendario: normalizarCalendarioAlmacenado(item.calendarioJson),
       // Fase D: familia y tecnología/paso salen de EstacionRegla. El shape de la
       // API no cambia (el front sigue viendo `familias` y `reglas` separadas).
-      pasosSinMaquina: [...new Set(item.reglas.filter((r) =>
-        (r.tipo === 'familia' || r.tipo === 'paso') && admitePasoSinMaquina(r.valor),
-      ).map((r) => r.valor))],
+      pasosSinMaquina: [
+        ...new Set(
+          item.reglas
+            .filter(
+              (r) =>
+                (r.tipo === 'familia' || r.tipo === 'paso') &&
+                admitePasoSinMaquina(r.valor),
+            )
+            .map((r) => r.valor),
+        ),
+      ],
       familias: item.reglas
         .filter((r) => r.tipo === 'familia' && admitePasoSinMaquina(r.valor))
         .map((r) => r.valor),
@@ -688,6 +852,10 @@ export class ProduccionService {
         id: fila.empleado.id,
         nombreCompleto: fila.empleado.nombreCompleto,
         sector: fila.empleado.sector,
+        activo: fila.empleado.activo,
+        calendario: normalizarCalendarioAlmacenado(
+          fila.empleado.calendarioProduccionJson,
+        ),
       })),
       maquinas: item.maquinas.map((maquina) => ({
         id: maquina.id,
@@ -695,7 +863,10 @@ export class ProduccionService {
         nombre: maquina.nombre,
         centroCostoId: maquina.centroCostoPrincipalId,
         activo: maquina.activo,
-        operacionMaquina: leerModoOperacionMaquina((maquina.parametrosTecnicosJson as Record<string, unknown> | null)?.operacionMaquina),
+        operacionMaquina: leerModoOperacionMaquina(
+          (maquina.parametrosTecnicosJson as Record<string, unknown> | null)
+            ?.operacionMaquina,
+        ),
       })),
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),

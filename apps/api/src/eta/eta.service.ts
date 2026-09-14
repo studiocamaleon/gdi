@@ -417,6 +417,8 @@ export class EtaService {
       nombre: e.nombre,
       calendario: e.calendario,
       capacidadConcurrente: e.capacidadConcurrente,
+      planificacionPorEmpleados: e.planificacionPorEmpleados,
+      empleados: e.empleados,
     }));
     const fotosEstacion = construirSnapshotsEstacion(
       traza.map((p) => ({
@@ -425,6 +427,8 @@ export class EtaService {
         esperaMin: p.esperaMin,
         candidatos: p.candidatos,
         inicio: p.inicio,
+        fin: p.fin,
+        reservasHumanas: p.reservasHumanas,
         tercerizado: p.tercerizado,
       })),
       estacionesInfo,

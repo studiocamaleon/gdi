@@ -1,0 +1,203 @@
+/* Tabla semántica: neutraliza sólo aquí los th/tr globales heredados. */
+.scroller {
+  /* Contiene también los textos accesibles absolutos de las columnas. */
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.table > thead {
+  background: var(--surface-secondary);
+}
+.table > thead > tr > th {
+  height: 48px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: right;
+  white-space: nowrap;
+}
+.table > thead > tr > th:first-child {
+  text-align: left;
+}
+.table > thead > tr > th:last-child {
+  width: 52px;
+}
+.table > tbody > tr > td {
+  padding: 18px 12px;
+  border: 0;
+  text-align: right;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.table > tbody > tr > td:first-child {
+  min-width: 250px;
+  text-align: left;
+  white-space: normal;
+}
+.table > tbody > tr {
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.table > tbody > tr:last-child {
+  border-bottom: 0;
+}
+.table > tbody > tr[data-expanded="true"] {
+  background: var(--accent-soft);
+}
+.table > tbody > tr[aria-busy="true"] {
+  opacity: 0.6;
+}
+.table .detail > td {
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+.table .sort {
+  margin: -4px -8px;
+  height: 30px;
+  padding: 4px 8px;
+  color: inherit;
+  font-size: 12px;
+}
+.table .sort svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0.6;
+}
+.product {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.product:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.product:hover {
+  color: var(--accent);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.emptyCopy p {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.print {
+  background: var(--default);
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  padding: 36px 24px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 15px color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.emptyIcon svg {
+  width: 27px;
+  height: 27px;
+  stroke-width: 1.7;
+}
+.emptyCopy h3 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--action-height-sm);
+  padding: 4px var(--action-padding-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--action-radius);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.linkButton svg {
+  width: 16px;
+  height: 16px;
+}
+.linkButton:hover {
+  background: var(--default);
+}
+.linkButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+@container orden-content (max-width: 550px) {
+  .empty {
+    padding: 28px 12px;
+  }
+}

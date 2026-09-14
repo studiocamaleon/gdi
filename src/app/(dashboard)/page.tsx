@@ -30,6 +30,7 @@ export default async function DashboardPage({
   return (
     <PanelGeneralView
       initialData={panel}
+      esAdministrador={currentUser.tenantActual.rol === "administrador"}
       nombreUsuario={currentUser.nombreCompleto ?? currentUser.email}
     />
   );

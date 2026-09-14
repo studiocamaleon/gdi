@@ -37,11 +37,22 @@ function dependencias() {
     etaSnapshotEstacion: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   const ordenes = { tablero: jest.fn().mockResolvedValue({ items: [] }) };
-  const servicio = new PanelGeneralService(prisma as never, ordenes as never);
-  return { prisma, ordenes, servicio };
+  const admin = { obtener: jest.fn().mockResolvedValue({ actividad: { items: [], siguienteCursor: null }, pasosCompletadosHoy: 0, documentacionPendiente: { total: 0, ordenes: [] } }) };
+  const servicio = new PanelGeneralService(prisma as never, ordenes as never, admin as never);
+  return { prisma, ordenes, servicio, admin };
 }
 
 describe('Panel General', () => {
+  it('consulta los datos nuevos sólo en la vista propia del administrador', async () => {
+    const { servicio, admin } = dependencias();
+    const auth = authCon(['panel.ver', 'configuracion.gestionar']);
+    await servicio.obtener({ ...auth, role: 'OPERADOR' });
+    await servicio.obtener(auth, 'operario');
+    expect(admin.obtener).not.toHaveBeenCalled();
+    await servicio.obtener(auth);
+    expect(admin.obtener).toHaveBeenCalledTimes(1);
+  });
+
   afterEach(() => {
     jest.useRealTimers();
   });

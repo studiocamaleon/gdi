@@ -1,0 +1,47 @@
+.choice {
+  --toggle-button-bg: transparent;
+  --toggle-button-bg-selected-hover: color-mix(
+    in srgb,
+    var(--accent) 16%,
+    var(--surface)
+  );
+  --toggle-button-bg-selected-pressed: var(--toggle-button-bg-selected-hover);
+  height: var(--action-height-sm);
+  gap: 6px;
+  padding-inline: var(--action-padding-sm);
+  font-size: var(--action-font-sm);
+}
+.segmented {
+  max-width: 100%;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--default);
+}
+.segmented .choice {
+  border-radius: 9px;
+}
+.segmented .choice[data-selected="true"] {
+  background: var(--action-primary-gradient);
+  color: var(--action-primary-foreground);
+}
+.icons {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.icons .choice {
+  width: var(--action-height-sm);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--action-radius);
+}
+.icons .choice[data-selected="true"] {
+  border-color: var(--accent-soft-foreground);
+}
+.choice:is(:focus-visible, [data-focus-visible="true"]) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  box-shadow: none;
+}

@@ -1,5 +1,9 @@
 import type { DemandaHumana } from './demanda-humana';
-import type { CalendarioEstacion, EquipoProduccion } from './estaciones-tipos';
+import type {
+  CalendarioEstacion,
+  EquipoProduccion,
+  PersonaProduccion,
+} from './estaciones-tipos';
 import type { PlanAtencion, ReservaHumana } from './capacidad-humana';
 
 /** Agenda productiva aceptada, separada de las fases y tiempos cotizados. */
@@ -16,6 +20,7 @@ export function contextoAtencion(args: {
   demanda: DemandaHumana;
   calendario: CalendarioEstacion;
   equipo?: EquipoProduccion | null;
+  empleados?: PersonaProduccion[];
   preparacionMin: number;
   zona: string;
   noLaborables: Set<string>;
@@ -23,6 +28,13 @@ export function contextoAtencion(args: {
   const { equipo } = args;
   return JSON.stringify(
     ordenar({
+      ...(args.empleados !== undefined
+        ? {
+            empleados: [...args.empleados].sort((a, b) =>
+              a.id.localeCompare(b.id),
+            ),
+          }
+        : {}),
       demanda: args.demanda,
       calendario: args.calendario,
       equipo: equipo
@@ -50,10 +62,11 @@ export function guardarAtencion(
     inicio: plan.inicio.getTime(),
     fin: plan.fin.getTime(),
     finOcupacion: plan.finOcupacion.getTime(),
-    reservas: plan.reservas.map(({ inicio, fin, personas }) => ({
+    reservas: plan.reservas.map(({ inicio, fin, personas, empleadoIds }) => ({
       inicio,
       fin,
       personas,
+      ...(empleadoIds ? { empleadoIds: [...empleadoIds] } : {}),
     })),
   };
 }
@@ -87,7 +100,12 @@ export function leerAtencionPlanificada(
         r.fin > p.finOcupacion ||
         r.fin <= r.inicio ||
         !Number.isInteger(r.personas) ||
-        r.personas < 1,
+        r.personas < 1 ||
+        (r.empleadoIds !== undefined &&
+          (!Array.isArray(r.empleadoIds) ||
+            r.empleadoIds.length !== r.personas ||
+            new Set(r.empleadoIds).size !== r.empleadoIds.length ||
+            r.empleadoIds.some((id) => typeof id !== 'string' || !id))),
     )
   )
     return null;

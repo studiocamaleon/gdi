@@ -1,8 +1,6 @@
-/* Configuración de máquinas y pasos sin máquina en estaciones.
-   Sólo lo NUEVO del patrón compacto (chips de lo elegido + un buscador para
-   agregar). Los chips reusan .multi-chips/.m-chip de globals.css. */
+/* Composición del editor de estaciones sobre el tema HeroUI. */
 
-/* Un eje de reglas: etiqueta, chips de lo elegido y el "Agregar…". */
+/* Cada recurso mantiene etiqueta, buscador y lista de asignaciones. */
 .eje {
   display: flex;
   flex-direction: column;
@@ -12,7 +10,7 @@
   margin-top: 18px;
 }
 
-/* Encabezado del eje: nombre a la izquierda, cantidad a la derecha. */
+/* Etiqueta y ayuda de cada recurso. */
 .ejeHead {
   display: flex;
   align-items: baseline;
@@ -24,42 +22,98 @@
   align-items: center;
   font-size: 12px;
   font-weight: 600;
-  color: var(--ink-2);
+  color: var(--foreground);
   letter-spacing: -0.01em;
 }
-.conteo {
+.asignaciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.seleccion {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.seleccionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--surface-secondary);
+}
+.seleccionHead h4 {
+  margin: 0;
+  color: var(--foreground);
   font-size: 11px;
-  color: var(--muted-text);
-  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
-
-/* Chip elegido (removible). Hereda el look "on" de .m-chip; acá sólo el X. */
-.quitar {
+.seleccionLista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(224px, 32dvh);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+.seleccionLista li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+}
+.seleccionLista li + li {
+  border-top: 1px solid var(--border);
+}
+.seleccionIcono {
   display: inline-flex;
-  margin: -1px -4px -1px 0;
-  padding: 1px;
-  border-radius: 999px;
-  opacity: 0.7;
+  justify-content: center;
+  align-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
 }
-.quitar:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.18);
+.seleccionIcono svg {
+  width: 15px;
+  height: 15px;
 }
-
-/* El buscable "Agregar…": angosto, no ocupa toda la fila. */
-.agregar {
-  max-width: 260px;
+.seleccionTexto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-wrap: anywhere;
 }
-
-/* Fila vacía: dice qué pasa si el eje queda sin reglas. */
-.vacio {
-  font-size: 11.5px;
+.seleccionTexto strong {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.seleccionTexto span {
   color: var(--muted-text);
-  padding: 2px 0;
+  font-size: 11px;
+}
+.seleccionLista button {
+  flex: none;
+}
+.seleccionVacia {
+  margin: 0;
+  padding: 14px 12px;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
 }
 
-/* Sección 04: Puestos y Tiempo entre pasos, unificados en una fila compacta
-   arriba (ninguno ocupa todo el ancho); el calendario va full width debajo. */
+/* Tiempo entre pasos compacto; el calendario operativo va debajo. */
 .capTop {
   display: flex;
   flex-wrap: wrap;
@@ -67,19 +121,11 @@
   align-items: flex-start;
   margin-bottom: 6px;
 }
-.capTop :global(.est-field) {
-  margin-bottom: 0;
-}
-/* Stepper de Puestos: compacto, no a todo el ancho de la columna. */
-.puestosStepper {
-  width: 132px;
-}
-/* Toggle Del taller / Propio: cada botón mide su texto (el global los fuerza a
-   partes iguales y "Del taller · N min" se cortaba en dos líneas). */
+/* Del taller / Propio conserva el ancho del texto. */
 .tiempoToggle {
   width: fit-content;
 }
-.tiempoToggle :global(button) {
+.tiempoToggle button {
   flex: 0 0 auto;
   padding: 0 14px;
   white-space: nowrap;
@@ -95,20 +141,15 @@
   display: inline-flex;
   align-items: center;
   margin-left: 5px;
-  color: var(--muted-text-2);
+  color: var(--muted-text);
   cursor: help;
   vertical-align: -1px;
 }
 .info:hover {
-  color: var(--ink-2);
+  color: var(--foreground);
 }
 .info:focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 999px;
 }
-
-.pendientes { margin-bottom: 20px; }
-.pendientes p { margin: 4px 0 10px; }
-.pendientes ul { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; max-height: 112px; overflow-y: auto; list-style: none; }
-.pendientes li { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted); font-size: 12px; }

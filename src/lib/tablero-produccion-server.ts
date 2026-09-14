@@ -15,8 +15,8 @@ import type { Estacion } from "@/lib/estaciones";
 
 /**
  * El Tablero lee las órdenes emitidas reales (pendiente + producción) con
- * sus pasos materializados, las estaciones configuradas para agrupar la
- * vista Por estación (familia → estación), las medianas históricas por
+ * sus pasos materializados, las estaciones configuradas (compartidas con
+ * la vista operativa de Estaciones), las medianas históricas por
  * familia (fallback de la cola en horas) y los días no laborables del
  * taller (los saltan la proyección y la simulación). Si la API no
  * responde, la vista arranca vacía y muestra su estado sin datos.

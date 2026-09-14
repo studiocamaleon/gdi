@@ -1,5 +1,9 @@
 # Equipos compartidos, estaciones y ETA
 
+> Actualización 14/09: la configuración y planificación por empleados reemplaza
+> este modelo al completar cada estación. Este documento conserva el diseño
+> anterior; ver [regla vigente y transición](produccion-empleados-horarios-2026-09-14.md).
+
 Actualización: la asignación automática por máquina y la configuración exclusiva de pasos sin máquina están implementadas. Ver [criterio vigente, compatibilidad y pendientes](produccion-estaciones-asignacion-2026-09-10.md).
 
 ## Decisión y caso de aceptación

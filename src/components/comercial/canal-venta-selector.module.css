@@ -1,8 +1,0 @@
-.field { gap: 6px; }
-.options { width: 100%; }
-.options > button { flex: 1; cursor: pointer; }
-.options > button[aria-pressed="true"] {
-  color: var(--signal);
-  background: var(--signal-bg);
-  border-color: var(--signal);
-}

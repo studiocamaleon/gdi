@@ -170,7 +170,7 @@ export function gruposPorRecursos(operaciones: OperacionPlan[], estaciones: Esta
     }));
     return {
       id: `recurso:${id}`, nombre: ops[0].estacionNombre, tipo: "estacion", operaciones: ops,
-      detalle: estacion?.equipoProduccion?.nombre ?? (id === PROVEEDOR_KEY ? "Plazos de proveedores" : "Equipo sin configurar"),
+      detalle: estacion?.planificacionPorEmpleados ? `${estacion.empleados.length} empleados · horarios personales` : estacion?.equipoProduccion?.nombre ?? (id === PROVEEDOR_KEY ? "Plazos de proveedores" : "Equipo sin configurar"),
       hijos: ops.some((op) => op.paso.maquinaId) ? hijos : [], entrega: null,
     };
   });

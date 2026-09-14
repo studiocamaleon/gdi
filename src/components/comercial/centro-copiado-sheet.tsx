@@ -81,7 +81,8 @@ type GrupoState = {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAgregar: (items: PropuestaItem[]) => void;
+  /** Devuelve false si el formulario ya no admite cambios. */
+  onAgregar: (items: PropuestaItem[]) => void | boolean;
   /** Cliente de la propuesta; habilita su precio especial en el motor. */
   clienteId?: string | null;
   /** Edición: la CARGA completa (todos los renglones que entraron juntos). */
@@ -781,7 +782,7 @@ export default function CentroCopiadoSheet({
         const files = filesDe(ic);
         return files.length ? { ...pi, archivosPendientes: files } : pi;
       });
-      onAgregar(items);
+      if (onAgregar(items) === false) return;
       toast.success(
         `${items.length} renglón(es) agregados desde el centro de copiado.`,
       );

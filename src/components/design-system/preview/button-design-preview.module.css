@@ -1,0 +1,114 @@
+/* Alternativas de laboratorio. La opción C reutiliza ActionButton aprobado. */
+.lab {
+  --preview-orange: var(--accent);
+  --preview-ink: var(--accent-foreground);
+  --preview-deep: var(--action-primary-start);
+  --preview-burnt: var(--action-primary-end);
+  --preview-coral: #ce401b;
+  --preview-red: #b82f30;
+  --preview-white: #fff;
+}
+
+.sample {
+  height: var(--preview-height);
+  padding-inline: var(--preview-padding);
+  border-radius: var(--preview-radius);
+  font-size: var(--preview-font);
+  font-weight: 600;
+  box-shadow: none;
+  transition:
+    background-color 150ms ease,
+    background-position 180ms ease,
+    transform 150ms ease;
+}
+
+.sample[data-tone="original"] {
+  --button-bg: var(--preview-orange);
+  --button-fg: var(--preview-ink);
+  --button-bg-hover: color-mix(
+    in srgb,
+    var(--preview-orange) 90%,
+    var(--preview-ink)
+  );
+  --button-bg-pressed: var(--button-bg-hover);
+}
+
+.sample[data-tone="deep"] {
+  --button-bg: var(--preview-deep);
+  --button-fg: var(--preview-white);
+  --button-bg-hover: var(--preview-burnt);
+  --button-bg-pressed: var(--preview-burnt);
+}
+
+.sample[data-tone="coral"] {
+  --button-fg: var(--preview-white);
+  --button-bg: var(--preview-deep);
+  background-size: 180% 100%;
+  background-image: linear-gradient(
+    115deg,
+    var(--preview-coral),
+    var(--preview-red)
+  );
+}
+
+.sample:is([data-tone="outline"], [data-tone="soft"]) {
+  --button-fg: var(--accent-soft-foreground);
+  --button-bg: transparent;
+  --button-bg-hover: var(--accent-soft);
+  --button-bg-pressed: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.sample[data-tone="outline"] {
+  border: 1px solid var(--accent-soft-foreground);
+}
+
+.sample[data-tone="soft"] {
+  --button-bg: var(--accent-soft);
+  --button-bg-hover: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+.sample[data-tone="quiet"] {
+  --button-bg: transparent;
+  --button-fg: var(--muted-foreground);
+  --button-bg-hover: var(--default);
+  --button-bg-pressed: var(--default-hover);
+}
+
+.sample[data-icon-only="true"] {
+  width: var(--preview-height);
+  padding: 0;
+}
+
+.sample[data-preview-state="hover"] {
+  background-color: var(--button-bg-hover);
+  background-position: right center;
+}
+
+.sample:is([data-preview-state="pressed"], [data-pressed="true"]) {
+  background-color: var(--button-bg-pressed);
+  background-position: right center;
+  transform: scale(0.97);
+}
+
+/* Foco continuo: nunca sumar un anillo separado al borde del botón. */
+.sample:is(
+  :focus-visible,
+  [data-focus-visible="true"],
+  [data-preview-state="focus"]
+) {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .sample:hover {
+    background-position: right center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sample {
+    transition: none;
+  }
+}

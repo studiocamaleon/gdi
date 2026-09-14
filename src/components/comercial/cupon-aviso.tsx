@@ -3,6 +3,8 @@
 import * as React from "react";
 import { CheckIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ActionButton } from "@/components/design-system/action-button";
 import s from "./cupon-aviso.module.css";
 
 /**
@@ -38,14 +40,19 @@ export function CuponAvisoModal({
   // El callback en un ref: si dependiera de la función, cada render del padre
   // reiniciaría los timers y el aviso no se cerraría nunca.
   const onCerrarRef = React.useRef(onCerrar);
-  onCerrarRef.current = onCerrar;
+  React.useEffect(() => {
+    onCerrarRef.current = onCerrar;
+  }, [onCerrar]);
 
   React.useEffect(() => {
     if (!aviso) return;
     setSaliendo(false);
     const duracion = DURACION_MS[aviso.tipo];
     const irse = setTimeout(() => setSaliendo(true), duracion);
-    const cerrar = setTimeout(() => onCerrarRef.current(), duracion + SALIDA_MS);
+    const cerrar = setTimeout(
+      () => onCerrarRef.current(),
+      duracion + SALIDA_MS,
+    );
     return () => {
       clearTimeout(irse);
       clearTimeout(cerrar);
@@ -64,27 +71,26 @@ export function CuponAvisoModal({
         : TriangleAlertIcon;
 
   return (
-    <div
-      className={`${s.overlay} ${s[aviso.tipo]}${saliendo ? ` ${s.saliendo}` : ""}`}
-      onClick={onCerrar}
-      role="alert"
-      aria-live="assertive"
+    <FormDialog
+      isOpen={!saliendo}
+      onOpenChange={(open) => !open && onCerrar()}
+      title={aviso.titulo}
+      description={aviso.detalle ?? "Resultado de la validación del cupón."}
     >
-      <div className={s.card} onClick={(event) => event.stopPropagation()}>
+      <div className={`${s.body} ${s[aviso.tipo]}`} role="status">
         <span className={s.ico}>
-          <Icono />
+          <Icono aria-hidden />
         </span>
-        <div className={s.titulo}>{aviso.titulo}</div>
-        {aviso.detalle ? (
-          <div className={s.detalle}>{aviso.detalle}</div>
-        ) : null}
-        {aviso.monto ? <div className={s.monto}>{aviso.monto}</div> : null}
-        <div className={s.barra}>
-          <span
-            style={{ animationDuration: `${DURACION_MS[aviso.tipo]}ms` }}
-          />
+        {aviso.monto && <strong className={s.monto}>{aviso.monto}</strong>}
+        <div className={s.barra} aria-hidden>
+          <span style={{ animationDuration: `${DURACION_MS[aviso.tipo]}ms` }} />
         </div>
       </div>
-    </div>
+      <div className={s.footer}>
+        <ActionButton variant="outline" onPress={onCerrar}>
+          Cerrar
+        </ActionButton>
+      </div>
+    </FormDialog>
   );
 }

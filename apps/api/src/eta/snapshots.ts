@@ -7,10 +7,12 @@
  * horaria D10): antes usaba la del proceso, que en el server es UTC.
  */
 
+import { DIAS_SEMANA, type CalendarioEstacion } from '../produccion/calendario';
 import {
-  DIAS_SEMANA,
-  type CalendarioEstacion,
-} from '../produccion/calendario';
+  intersectarCalendarios,
+  type ReservaHumana,
+} from './motor/capacidad-humana';
+import type { PersonaProduccion } from './motor/estaciones-tipos';
 import { calendarioDefault } from './motor/estaciones-tipos';
 import { PROVEEDOR_KEY } from './motor/flujo-produccion';
 import { percentil } from './metricas';
@@ -85,11 +87,50 @@ function proyectarHorizonteDias(
   return null;
 }
 
+/** El horizonte personal sale del plan factible, no de dividir por puestos retirados. */
+function horizontePersonal(
+  cal: CalendarioEstacion | null,
+  pasos: PasoTraza[],
+  ahora: Date,
+  noLaborables: Set<string>,
+  zona: string,
+): number | null {
+  if (!cal || pasos.some((p) => !p.fin)) return null;
+  const fin = Math.max(ahora.getTime(), ...pasos.map((p) => p.fin!.getTime()));
+  let dias = 0;
+  const hoy = claveFechaEnZona(ahora, zona);
+  for (let i = 0; i < 366; i++) {
+    const clave = sumarDiasAClave(hoy, i);
+    if (instanteDe(clave, '00:00', zona).getTime() >= fin) break;
+    if (noLaborables.has(clave)) continue;
+    const total = minutosDeClave(cal, clave);
+    if (!total) continue;
+    const transcurridos = (cal.dias[diaSemanaDeClave(clave)] ?? []).reduce(
+      (sum, f) =>
+        sum +
+        Math.max(
+          0,
+          Math.min(fin, instanteDe(clave, f.hasta, zona).getTime()) -
+            Math.max(
+              ahora.getTime(),
+              instanteDe(clave, f.desde, zona).getTime(),
+            ),
+        ) /
+          60000,
+      0,
+    );
+    dias += transcurridos / total;
+  }
+  return Math.round(dias * 10) / 10;
+}
+
 export type EstacionInfo = {
   id: string;
   nombre: string;
   calendario: CalendarioEstacion | null;
   capacidadConcurrente: number;
+  planificacionPorEmpleados?: boolean;
+  empleados?: PersonaProduccion[];
 };
 
 /** Subconjunto de PasoProgramado que la foto por estación necesita. */
@@ -99,6 +140,8 @@ export type PasoTraza = {
   esperaMin: number;
   candidatos: number | null;
   inicio: Date;
+  fin?: Date;
+  reservasHumanas?: ReservaHumana[];
   tercerizado: boolean;
 };
 
@@ -140,7 +183,9 @@ export function construirSnapshotsEstacion(
   for (const [estacionKey, pasos] of grupos) {
     // La cola son los minutos de trabajo del taller: los tercerizados corren
     // en el proveedor y no ocupan puesto, no son "cola" de la estación.
-    const propios = pasos.filter((p) => !p.tercerizado && p.duracionMin != null);
+    const propios = pasos.filter(
+      (p) => !p.tercerizado && p.duracionMin != null,
+    );
     const colaMin = Math.round(
       propios.reduce((acc, p) => acc + (p.duracionMin ?? 0), 0),
     );
@@ -163,27 +208,80 @@ export function construirSnapshotsEstacion(
           ? calendarioDefault()
           : null;
     const puestos = est?.capacidadConcurrente ?? 1;
-    const cap5d = cal
-      ? capacidad5dMin(cal, puestos, ahora, noLaborables, zona)
-      : 0;
+    const personas = [
+      ...new Map(
+        (est?.empleados ?? [])
+          .filter((e) => e.activo !== false && e.calendario)
+          .map((e) => [e.id, e]),
+      ).values(),
+    ];
+    const cap5d =
+      est?.planificacionPorEmpleados && cal
+        ? personas.reduce(
+            (sum, e) =>
+              sum +
+              capacidad5dMin(
+                intersectarCalendarios(cal, e.calendario!),
+                1,
+                ahora,
+                noLaborables,
+                zona,
+              ),
+            0,
+          )
+        : cal
+          ? capacidad5dMin(cal, puestos, ahora, noLaborables, zona)
+          : 0;
 
     salida.push({
       estacionKey,
       estacionNombre:
         est?.nombre ?? NOMBRE_SINTETICO[estacionKey] ?? estacionKey,
       colaMin,
-      horizonteDias: cal
-        ? proyectarHorizonteDias(cal, colaMin, puestos, ahora, noLaborables, zona)
-        : null,
+      horizonteDias: est?.planificacionPorEmpleados
+        ? horizontePersonal(cal, propios, ahora, noLaborables, zona)
+        : cal
+          ? proyectarHorizonteDias(
+              cal,
+              colaMin,
+              puestos,
+              ahora,
+              noLaborables,
+              zona,
+            )
+          : null,
       esperaP50Min: esperas.length ? Math.round(percentil(esperas, 0.5)) : 0,
       esperaP90Min: esperas.length ? Math.round(percentil(esperas, 0.9)) : 0,
       contencionMax,
       utilizacion5dPct:
-        cap5d > 0 ? Math.round((programado5d / cap5d) * 1000) / 10 : 0,
+        cap5d > 0
+          ? Math.round(
+              ((est?.planificacionPorEmpleados
+                ? propios
+                    .flatMap((p) => p.reservasHumanas ?? [])
+                    .reduce(
+                      (sum, r) =>
+                        sum +
+                        (Math.max(
+                          0,
+                          Math.min(r.fin, finVentana5d) -
+                            Math.max(r.inicio, ahora.getTime()),
+                        ) /
+                          60000) *
+                          r.personas,
+                      0,
+                    )
+                : programado5d) /
+                cap5d) *
+                1000,
+            ) / 10
+          : 0,
       pasosEnPlan: pasos.length,
     });
   }
-  return salida.sort((a, b) => a.estacionNombre.localeCompare(b.estacionNombre));
+  return salida.sort((a, b) =>
+    a.estacionNombre.localeCompare(b.estacionNombre),
+  );
 }
 
 export type SnapshotItem = {

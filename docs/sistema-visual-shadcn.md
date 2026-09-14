@@ -2,7 +2,13 @@
 
 **Decisión aprobada:** 11/09/2026. **Primera referencia:** Producción → Colas de trabajo.
 
-El usuario aprobó esta pantalla como dirección para renovar gradualmente la aplicación. Este documento es la referencia vigente para las vistas que se migren. El [lenguaje Visual Ilusión anterior](visual-ilusion-lenguaje-visual.md) conserva valor histórico, pero no obliga a reproducir la estética de Tesorería o de la OT en una vista renovada.
+El usuario aprobó esta pantalla como dirección para renovar gradualmente la aplicación. Este documento conserva el contrato de Colas y sus superficies actuales. Desde el 12/09/2026, las próximas migraciones siguen el [piloto HeroUI de Orden de trabajo](sistema-visual-heroui.md); su aspecto todavía debe ser validado por el usuario. El [lenguaje Visual Ilusión anterior](visual-ilusion-lenguaje-visual.md) conserva valor histórico, pero no obliga a reproducir la estética de Tesorería o de la OT en una vista renovada.
+
+> **Actualización 14/09/2026:** la vista principal de Colas adopta
+> [HeroUI](sistema-visual-heroui.md#colas-de-trabajo-vista-principal--14092026).
+> Este documento conserva el antecedente visual y el contrato operativo.
+> El simulador y los formularios compartidos de producción mantienen su tema
+> anterior hasta su migración específica.
 
 ## Dirección
 

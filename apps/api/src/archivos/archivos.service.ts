@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Archivo, ArchivoEstado, ArchivoScope, Prisma } from '@prisma/client';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import { randomUUID } from 'node:crypto';
 
 import type { CurrentAuth } from '../auth/auth.types';
@@ -127,6 +128,7 @@ export class ArchivosService {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
     private readonly suscripciones: SuscripcionesService,
+    private readonly eventos: EventosSistemaService,
   ) {}
 
   /**
@@ -334,21 +336,42 @@ export class ArchivosService {
     }
 
     const bytes = BigInt(meta.bytes);
-    const [actualizado] = await this.prisma.$transaction([
-      this.prisma.archivo.update({
-        where: { id: archivo.id },
+    const actualizado = await this.prisma.$transaction(async (tx) => {
+      // Sólo quien confirma PENDIENTE → LISTO contabiliza y publica. Reintentar
+      // una confirmación no duplica bytes ni actividad, incluso concurrentemente.
+      const cambio = await tx.archivo.updateMany({
+        where: { id: archivo.id, tenantId: auth.tenantId, estado: ArchivoEstado.PENDIENTE },
         data: { estado: ArchivoEstado.LISTO, bytes },
-        include: {
-          subidoPor: { select: { nombreCompleto: true, email: true } },
-        },
-      }),
-      // Contador denormalizado en la MISMA transacción — mismo patrón que
-      // Comprobante.saldoPendiente y OrdenTrabajo.facturadoTotal.
-      this.prisma.tenant.update({
+      });
+      const listo = await tx.archivo.findFirstOrThrow({
+        where: { id: archivo.id, tenantId: auth.tenantId },
+        include: { subidoPor: { select: { nombreCompleto: true, email: true } } },
+      });
+      if (!cambio.count) {
+        if (listo.estado !== ArchivoEstado.LISTO) throw new NotFoundException('El archivo fue eliminado.');
+        return listo;
+      }
+      await tx.tenant.update({
         where: { id: auth.tenantId },
         data: { bytesArchivos: { increment: bytes } },
-      }),
-    ]);
+      });
+      const item = archivo.ordenItemId ? await tx.ordenTrabajoItem.findFirst({
+        where: { id: archivo.ordenItemId, tenantId: auth.tenantId }, select: { ordenId: true },
+      }) : null;
+      const ordenId = archivo.ordenId ?? item?.ordenId;
+      const entidad = ordenId ? { tipo: 'orden', id: ordenId, ruta: '/produccion/ordenes/' }
+        : archivo.clienteId ? { tipo: 'cliente', id: archivo.clienteId, ruta: '/comercial/clientes/' }
+        : archivo.proyectoCampanaId ? { tipo: 'campana', id: archivo.proyectoCampanaId, ruta: '/comercial/campanas/' }
+        : null;
+      if (entidad) {
+        await this.eventos.publicarDesdeAuth(auth, {
+          tipo: `archivo.${entidad.tipo}_confirmado`, entidadTipo: 'archivo', entidadId: archivo.id,
+          titulo: 'Archivo subido', mensaje: archivo.nombreOriginal,
+          href: `${entidad.ruta}${entidad.id}`, topicos: ['archivos', 'panel-general'],
+        }, tx);
+      }
+      return listo;
+    });
     return this.aDto(actualizado);
   }
 

@@ -1,11 +1,34 @@
 "use client";
 
-import { ProgresoValor } from "./progreso-produccion";
-import type { ProgresoProduccion } from "@/lib/progreso-produccion";
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DownloadIcon, PlusIcon, SearchIcon } from "lucide-react";
+import { Button, Card, Chip, SearchField } from "@heroui/react";
+import {
+  CalendarCheck2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  ClipboardList,
+  Clock3,
+  DownloadIcon,
+  FilePlus2,
+  LayoutGrid,
+  PlusIcon,
+  Table2,
+  TriangleAlert,
+} from "lucide-react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { useDesignScope } from "@/components/design-system/appearance";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { IdentityAvatar } from "@/components/design-system/identity-avatar";
+import theme from "@/components/design-system/theme.module.css";
+import fieldFocus from "@/components/design-system/field-focus.module.css";
+import tabStyles from "@/components/design-system/navigation-tab-list.module.css";
+import { EstadoListado, ProgresoListado } from "./ordenes-trabajo-presentacion";
+import s from "./ordenes-trabajo-view.module.css";
+import layout from "@/components/design-system/list-page.module.css";
+import { ListMetric } from "@/components/design-system/list-metric";
 import { toast } from "sonner";
 
 import {
@@ -46,27 +69,6 @@ export function EstadoOtBadge({
   );
 }
 
-function ProgresoMini({
-  valor,
-  estado,
-  progreso,
-}: {
-  valor: number | null;
-  progreso?: ProgresoProduccion;
-  estado: OrdenTrabajoEstado;
-}) {
-  if (valor === null) return <ProgresoValor progreso={progreso} valor={valor} />;
-  const e = ORDEN_TRABAJO_ESTADOS[estado];
-  return (
-    <div className="otl-prog">
-      <div className="otl-prog-track">
-        <span style={{ width: `${valor}%`, background: e.dot }} />
-      </div>
-      <span className="otl-prog-v mono"><ProgresoValor progreso={progreso} valor={valor} /></span>
-    </div>
-  );
-}
-
 export function OrdenesTrabajoView({
   ordenes = [],
   stats,
@@ -91,6 +93,7 @@ export function OrdenesTrabajoView({
   urgencia?: "atrasadas";
   errorCarga?: string | null;
 }) {
+  const scope = useDesignScope();
   const { moneda, zonaHoraria } = useConfigRegional();
   const { fechaNumerica } = useFecha();
   const router = useRouter();
@@ -281,309 +284,312 @@ export function OrdenesTrabajoView({
   ];
 
   return (
-    <div
-      className="otl-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        width: "auto",
-        maxWidth: "none",
-        margin: 0,
-        padding: "28px 34px 60px",
-      }}
+    <section
+      {...scope}
+      className={`${theme.theme} ${layout.page}`}
+      aria-label="Órdenes de trabajo"
     >
-      <div className="otl-inner">
-        <div className="otl-head">
-          <div className="left">
-            <h1>Órdenes de trabajo</h1>
-            <div className="sub">
-              Seguimiento de todas las OT emitidas y en curso.
-            </div>
-          </div>
-          <div className="right">
-            <button
-              type="button"
-              className="btn"
-              disabled={exportando || Boolean(errorCarga)}
-              onClick={exportarCsv}
-            >
-              <DownloadIcon />
-              {exportando ? "Exportando…" : "Exportar"}
-            </button>
-            <Link href="/comercial/crear-propuesta" className="btn btn-primary">
-              <PlusIcon />
-              Nueva orden
-            </Link>
-          </div>
+      <header className={layout.header}>
+        <div className="min-w-0">
+          <h1>Órdenes de trabajo</h1>
+          <p className={layout.subtitle}>
+            Seguimiento de todas las OT emitidas y en curso.
+          </p>
         </div>
-
-        <div className="otl-kpis">
-          <div className="otl-kpi">
-            <div className="k-lbl">Órdenes activas</div>
-            <div className="k-val mono">{kpis.activas}</div>
-            <div className="k-hint">Pendientes + en producción</div>
-          </div>
-          <button
-            type="button"
-            className={`otl-kpi danger ${urgencia === "atrasadas" ? "on" : ""}`}
-            onClick={() => navegar({ estado: "todas", urgencia: "atrasadas" })}
+        <div className="flex flex-wrap items-center gap-2">
+          <ActionButton
+            variant="outline"
+            isDisabled={exportando || Boolean(errorCarga)}
+            onPress={exportarCsv}
           >
-            <div className="k-lbl">Entregas atrasadas</div>
-            <div className="k-val mono">{kpis.atrasadas}</div>
-            <div className="k-hint">Pendientes + en producción</div>
-          </button>
-          <div className="otl-kpi">
-            <div className="k-lbl">Valor en curso</div>
-            <div className="k-val mono">
-              {formatMonedaOrden(kpis.valorEnCurso, moneda)}
-            </div>
-            <div className="k-hint">Sin entregadas ni borradores</div>
-          </div>
-          <div className="otl-kpi">
-            <div className="k-lbl">Próximas a entregar</div>
-            <div className="k-val mono">{kpis.proximasEntregar}</div>
-            <div className="k-hint">Dentro de 7 días</div>
-          </div>
-          <div className="otl-kpi accent">
-            <div className="k-lbl">Emitidas hoy</div>
-            <div className="k-val mono">{kpis.emitidasHoy}</div>
-            <div className="k-hint">{fechaNumerica(hoy.toISOString())}</div>
-          </div>
+            <DownloadIcon size={15} aria-hidden />
+            {exportando ? "Exportando…" : "Exportar"}
+          </ActionButton>
+          <ActionLink href="/comercial/crear-propuesta">
+            <PlusIcon size={15} aria-hidden />
+            Nueva orden
+          </ActionLink>
         </div>
+      </header>
 
-        <div className="otl-toolbar">
-          <div className="otl-filters">
+      <div className={s.kpis}>
+        <ListMetric
+          label="Órdenes activas"
+          value={kpis.activas}
+          hint="Pendientes + en producción"
+          icon={ClipboardList}
+        />
+        <ListMetric
+          label="Entregas atrasadas"
+          value={kpis.atrasadas}
+          hint="Pendientes + en producción"
+          icon={Clock3}
+          tone="danger"
+          selected={urgencia === "atrasadas"}
+          onClick={() => navegar({ estado: "todas", urgencia: "atrasadas" })}
+        />
+        <ListMetric
+          label="Valor en curso"
+          value={formatMonedaOrden(kpis.valorEnCurso, moneda)}
+          hint="Sin entregadas ni borradores"
+          icon={CircleDollarSign}
+        />
+        <ListMetric
+          label="Próximas a entregar"
+          value={kpis.proximasEntregar}
+          hint="Dentro de 7 días"
+          icon={CalendarCheck2}
+        />
+        <ListMetric
+          label="Emitidas hoy"
+          value={kpis.emitidasHoy}
+          hint={fechaNumerica(hoy.toISOString())}
+          icon={FilePlus2}
+          tone="brand"
+        />
+      </div>
+
+      <Card className={layout.results}>
+        <div className={layout.toolbar}>
+          <div
+            className={layout.filters}
+            role="group"
+            aria-label="Filtrar por estado"
+          >
             {filtros.map((f) => (
-              <button
+              <Button
                 key={f.k}
                 type="button"
-                className={`otl-fchip ${!urgencia && filtro === f.k ? "on" : ""}`}
-                onClick={() => navegar({ estado: f.k, urgencia: undefined })}
+                variant="ghost"
+                className={`${tabStyles.tab} ${layout.filter}`}
+                aria-pressed={!urgencia && filtro === f.k}
+                onPress={() => navegar({ estado: f.k, urgencia: undefined })}
               >
                 {f.label}
-                <span className="ct">{counts[f.k]}</span>
-              </button>
+                <span className={tabStyles.count}>{counts[f.k]}</span>
+              </Button>
             ))}
           </div>
-          <div className="otl-tools-right">
-            <div className="otl-search">
-              <SearchIcon size={15} />
-              <input
-                placeholder="Buscar por Nº, cliente…"
-                value={busqueda}
-                onChange={(event) => setBusqueda(event.target.value)}
-              />
-            </div>
-            <div className="otl-viewtoggle">
-              <button
-                type="button"
-                className={modo === "tabla" ? "on" : ""}
-                onClick={() => setModo("tabla")}
-                title="Tabla"
-                aria-label="Ver como tabla"
+          <div className={layout.tools}>
+            <SearchField
+              aria-label="Buscar órdenes por número o cliente"
+              className={layout.search}
+              value={busqueda}
+              onChange={setBusqueda}
+            >
+              <SearchField.Group
+                className={`${layout.searchGroup} ${fieldFocus.singleBorder}`}
               >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <path d="M3 9h18M3 15h18M4 4h16v16H4z" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className={modo === "tarjetas" ? "on" : ""}
-                onClick={() => setModo("tarjetas")}
-                title="Tarjetas"
-                aria-label="Ver como tarjetas"
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </button>
-            </div>
+                <SearchField.SearchIcon />
+                <SearchField.Input placeholder="Buscar por Nº, cliente…" />
+              </SearchField.Group>
+            </SearchField>
+            <SegmentedControl
+              aria-label="Vista de órdenes"
+              value={modo}
+              onChange={(value) => setModo(value as ModoVista)}
+              options={[
+                {
+                  value: "tabla",
+                  label: "Tabla",
+                  icon: <Table2 size={15} aria-hidden />,
+                },
+                {
+                  value: "tarjetas",
+                  label: "Tarjetas",
+                  icon: <LayoutGrid size={15} aria-hidden />,
+                },
+              ]}
+            />
           </div>
         </div>
 
-        <div
-          style={{
-            opacity: navegando ? 0.55 : 1,
-            transition: "opacity 0.15s",
-          }}
-        >
+        <div className={s.content} aria-busy={navegando}>
           {modo === "tabla" ? (
-            <div className="otl-table">
-              <div className="otl-tr otl-th">
-                <span>Nº / Cliente</span>
-                <span>Estado</span>
-                <span>Progreso</span>
-                <span className="c">Ítems</span>
-                <span>Entrega</span>
-                <span className="r">Total</span>
-                <span className="r">Vendedor</span>
-              </div>
-              {lista.map((o) => (
-                <div
-                  key={o.id}
-                  className={`otl-tr otl-row ${diasDeAtraso(o) > 0 ? "late" : ""}`}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => abrirOrden(o.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      abrirOrden(o.id);
-                    }
-                  }}
-                >
-                  <span className="otl-idcell">
-                    <span className="nro mono">
-                      {o.numero}
-                      {esNueva(o) ? (
-                        <span className="otl-new-tag">NUEVA</span>
+            <div className={s.tableScroller}>
+              <div className={s.table}>
+                <div className={`${s.row} ${s.tableHead}`}>
+                  <span>Nº / Cliente</span>
+                  <span>Estado</span>
+                  <span>Progreso</span>
+                  <span className="text-center">Ítems</span>
+                  <span>Entrega</span>
+                  <span className="text-right">Total</span>
+                  <span>Vendedor</span>
+                </div>
+                {lista.map((o) => (
+                  <div
+                    key={o.id}
+                    className={`${s.row} ${s.orderRow}`}
+                    data-late={diasDeAtraso(o) > 0 || undefined}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => abrirOrden(o.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        abrirOrden(o.id);
+                      }
+                    }}
+                  >
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className={s.number}>
+                        {o.numero}
+                        {esNueva(o) ? (
+                          <Chip size="sm" className={s.newTag}>
+                            NUEVA
+                          </Chip>
+                        ) : null}
+                      </span>
+                      <span
+                        className={s.client}
+                        title={`${o.clienteNombre} · ${o.resumen}`}
+                      >
+                        {o.clienteNombre} ·{" "}
+                        <span className="text-muted-foreground">
+                          {o.resumen}
+                        </span>
+                      </span>
+                    </span>
+                    <span>
+                      <EstadoListado estado={o.estado} />
+                    </span>
+                    <span>
+                      <ProgresoListado
+                        valor={o.progresoPct}
+                        estado={o.estado}
+                        progreso={o.progreso}
+                      />
+                    </span>
+                    <span className="text-center tabular-nums">
+                      {o.itemsCount}
+                    </span>
+                    <span className={s.delivery}>
+                      {formatFechaOrden(o.fechaEntrega)}
+                      {diasDeAtraso(o) > 0 ? (
+                        <span className={s.lateTag}>
+                          {diasDeAtraso(o)} d tarde
+                        </span>
                       ) : null}
                     </span>
-                    <span className="cli">
-                      {o.clienteNombre} ·{" "}
-                      <span className="res">{o.resumen}</span>
+                    <span className="text-right font-semibold whitespace-nowrap tabular-nums">
+                      {formatMonedaOrden(o.total, moneda)}
                     </span>
-                  </span>
-                  <span>
-                    <EstadoOtBadge estado={o.estado} sm />
-                  </span>
-                  <span>
-                    <ProgresoMini valor={o.progresoPct} estado={o.estado} progreso={o.progreso} />
-                  </span>
-                  <span className="c mono">{o.itemsCount}</span>
-                  <span className="mono entrega">
-                    {formatFechaOrden(o.fechaEntrega)}
-                    {diasDeAtraso(o) > 0 ? (
-                      <span className="otl-late-tag">
-                        {diasDeAtraso(o)} d tarde
+                    <span className={layout.seller} title={o.vendedorNombre}>
+                      <span aria-hidden>
+                        <IdentityAvatar name={o.vendedorNombre} />
                       </span>
-                    ) : null}
-                  </span>
-                  <span className="r mono total">
-                    {formatMonedaOrden(o.total, moneda)}
-                  </span>
-                  <span className="r vend">{o.vendedorNombre}</span>
-                </div>
-              ))}
+                      <span className="truncate">{o.vendedorNombre}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
-            <div className="otl-cards">
+            <div className={s.cards}>
               {lista.map((o) => (
-                <button
+                <Card<"button">
                   key={o.id}
+                  render={(props) => <button {...props} />}
                   type="button"
-                  className="otl-card"
+                  className={s.orderCard}
                   onClick={() => abrirOrden(o.id)}
                 >
-                  <div className="otl-card-top">
-                    <span className="nro mono">{o.numero}</span>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className={s.number}>{o.numero}</span>
                     {esNueva(o) ? (
-                      <span className="otl-new-tag">NUEVA</span>
+                      <Chip size="sm" className={s.newTag}>
+                        NUEVA
+                      </Chip>
                     ) : (
-                      <EstadoOtBadge estado={o.estado} sm />
+                      <EstadoListado estado={o.estado} />
                     )}
-                  </div>
+                  </span>
                   {esNueva(o) ? (
-                    <div style={{ marginTop: -2 }}>
-                      <EstadoOtBadge estado={o.estado} sm />
-                    </div>
+                    <span>
+                      <EstadoListado estado={o.estado} />
+                    </span>
                   ) : null}
-                  <div className="otl-card-cli">{o.clienteNombre}</div>
-                  <div className="otl-card-res">{o.resumen}</div>
-                  <div className="otl-card-prog">
+                  <span className={s.cardClient}>{o.clienteNombre}</span>
+                  <span className={s.cardDescription}>{o.resumen}</span>
+                  <span className={s.cardProgress}>
                     {o.estado === "borrador" ? (
-                      <span className="dash">Sin emitir</span>
+                      <span className="text-muted-foreground">Sin emitir</span>
                     ) : (
-                      <ProgresoMini valor={o.progresoPct} estado={o.estado} progreso={o.progreso} />
+                      <ProgresoListado
+                        valor={o.progresoPct}
+                        estado={o.estado}
+                        progreso={o.progreso}
+                      />
                     )}
-                  </div>
-                  <div className="otl-card-foot">
-                    <span className="cf">
-                      <span className="l">Entrega</span>
-                      <span className="v mono">
+                  </span>
+                  <span className={s.cardFoot}>
+                    <span className="flex flex-col gap-1">
+                      <span className={s.caption}>Entrega</span>
+                      <span className={s.delivery}>
                         {formatFechaOrden(o.fechaEntrega)}
                         {diasDeAtraso(o) > 0 ? (
-                          <span className="otl-late-tag">
+                          <span className={s.lateTag}>
                             {diasDeAtraso(o)} d tarde
                           </span>
                         ) : null}
                       </span>
                     </span>
-                    <span className="cf r">
-                      <span className="l">Total</span>
-                      <span className="v mono total">
+                    <span className="flex flex-col gap-1 text-right">
+                      <span className={s.caption}>Total</span>
+                      <span className="font-semibold whitespace-nowrap tabular-nums">
                         {formatMonedaOrden(o.total, moneda)}
                       </span>
                     </span>
-                  </div>
-                </button>
+                  </span>
+                </Card>
               ))}
             </div>
           )}
 
           {errorCarga ? (
-            <div className="otl-empty" role="alert">
-              {errorCarga}{" "}
-              <button
-                type="button"
-                className="btn"
-                onClick={() => router.refresh()}
-              >
+            <div className={layout.empty} role="alert">
+              <TriangleAlert size={24} aria-hidden />
+              <p>{errorCarga}</p>
+              <ActionButton variant="outline" onPress={() => router.refresh()}>
                 Reintentar
-              </button>
+              </ActionButton>
             </div>
           ) : lista.length === 0 ? (
-            <div className="otl-empty">
-              Sin órdenes que coincidan con el filtro.
+            <div className={layout.empty}>
+              <ClipboardList size={28} aria-hidden />
+              <p>Sin órdenes que coincidan con el filtro.</p>
             </div>
           ) : null}
         </div>
 
         {pages > 1 ? (
-          <div className="otl-pager">
-            <span className="rango mono">
+          <footer className={layout.pager}>
+            <span className="text-muted-foreground tabular-nums">
               {(page - 1) * limit + 1}–{Math.min(page * limit, total)} de{" "}
               {total}
             </span>
-            <div className="botones">
-              <button
-                type="button"
-                className="btn"
-                disabled={page <= 1 || navegando}
-                onClick={() => navegar({ page: page - 1 })}
+            <div className="flex items-center gap-2">
+              <ActionButton
+                variant="outline"
+                isDisabled={page <= 1 || navegando}
+                onPress={() => navegar({ page: page - 1 })}
               >
+                <ChevronLeft size={15} aria-hidden />
                 Anterior
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={page >= pages || navegando}
-                onClick={() => navegar({ page: page + 1 })}
+              </ActionButton>
+              <ActionButton
+                variant="outline"
+                isDisabled={page >= pages || navegando}
+                onPress={() => navegar({ page: page + 1 })}
               >
                 Siguiente
-              </button>
+                <ChevronRight size={15} aria-hidden />
+              </ActionButton>
             </div>
-          </div>
+          </footer>
         ) : null}
-      </div>
-    </div>
+      </Card>
+    </section>
   );
 }

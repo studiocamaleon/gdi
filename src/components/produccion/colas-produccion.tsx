@@ -1,23 +1,21 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
-import { ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, RefreshCw, Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
+import { ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
+import { Button, Card, Checkbox, Chip, SearchField, Tabs } from '@heroui/react';
+import { ActionButton } from '@/components/design-system/action-button';
+import { ActionLink } from '@/components/design-system/action-link';
+import { SelectField } from '@/components/design-system/select-field';
+import { NavigationTabList } from '@/components/design-system/navigation-tab-list';
+import { useDesignScope } from '@/components/design-system/appearance';
+import theme from '@/components/design-system/theme.module.css';
+import layout from '@/components/design-system/list-page.module.css';
+import focus from '@/components/design-system/field-focus.module.css';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import workspaceTheme from '@/components/ui/workspace-theme.module.css';
-import workspaceUi from '@/components/ui/workspace-ui.module.css';
 import { PasoAccionesProduccion, ETIQUETAS_ACCION } from './paso-acciones';
 import { CompletarSeleccionCola } from './completar-seleccion-cola';
 import { SimularNestingCola } from './simular-nesting-cola';
@@ -43,28 +41,28 @@ export function TablaCola({ datos, seleccion = SELECCION_COLA_VACIA, onAlternar,
   datos: DatosCola; seleccion?: SeleccionCola; ocupado?: boolean; onAccion?: AccionColaHandler; onTomarMesa?: (item: TrabajoCola) => void; onAlternar?: (item: TrabajoCola) => void; onGrupo?: (items: TrabajoCola[]) => void;
 }) {
   const grupos = gruposVisualesCola(datos.items);
-  return <Table className={workspaceUi.dataTable}>
-    <TableHeader><TableRow>
-      <TableHead><div className={s.badges}>{onGrupo && <Checkbox aria-label="Seleccionar todos los trabajos de esta página" disabled={ocupado}
-        checked={datos.items.length > 0 && datos.items.every(i => seleccion.ids.includes(i.id))}
-        indeterminate={datos.items.some(i => seleccion.ids.includes(i.id)) && !datos.items.every(i => seleccion.ids.includes(i.id))}
-        onCheckedChange={() => onGrupo(datos.items)} />}Trabajo</div></TableHead><TableHead>Medidas</TableHead><TableHead>Sustrato</TableHead>
-      <TableHead>Modo de color</TableHead><TableHead>Entrega</TableHead><TableHead>Estado</TableHead>
-    </TableRow></TableHeader>
-    {grupos.map(grupo => <TableBody key={grupo.key}>
-      <TableRow className={workspaceUi.groupRow}><TableCell colSpan={6}>
+  return <table className={s.dataTable} aria-label="Trabajos agrupados por material">
+    <thead><tr>
+      <th scope="col"><div className={s.badges}>{onGrupo && <Checkbox aria-label="Seleccionar todos los trabajos de esta página" isDisabled={ocupado}
+        isSelected={datos.items.length > 0 && datos.items.every(i => seleccion.ids.includes(i.id))}
+        isIndeterminate={datos.items.some(i => seleccion.ids.includes(i.id)) && !datos.items.every(i => seleccion.ids.includes(i.id))}
+        onChange={() => onGrupo(datos.items)}><Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control></Checkbox.Content></Checkbox>}Trabajo</div></th><th scope="col">Medidas</th><th scope="col">Sustrato</th>
+      <th scope="col">Modo de color</th><th scope="col">Entrega</th><th scope="col">Estado</th><th scope="col" className={s.actionsColumn}>Acciones</th>
+    </tr></thead>
+    {grupos.map(grupo => <tbody key={grupo.key}>
+      <tr className={s.groupRow}><td colSpan={7}>
         <ConfiguracionGrupoCola materialNombre={grupo.configuracion.materialNombre}>
           <span className={s.groupCount}>{grupo.items.length} {grupo.items.length === 1 ? 'trabajo' : 'trabajos'}{datos.pages > 1 ? ' en esta página' : ''}</span>
-          {onGrupo && <Button variant="ghost" size="sm"
-            disabled={ocupado || grupo.items.every(i => Boolean(motivoSeleccionCola(i, seleccion)))}
-            onClick={() => onGrupo(grupo.items)}>
+          {onGrupo && <ActionButton variant="ghost"
+            isDisabled={ocupado || grupo.items.every(i => Boolean(motivoSeleccionCola(i, seleccion)))}
+            onPress={() => onGrupo(grupo.items)}>
             {grupo.items.every(i => seleccion.ids.includes(i.id)) ? 'Quitar selección' : 'Seleccionar grupo'}
-          </Button>}
+          </ActionButton>}
         </ConfiguracionGrupoCola>
-      </TableCell></TableRow>
+      </td></tr>
       {grupo.items.map(item => <FilaTrabajo key={item.id} item={item} seleccion={seleccion} onAlternar={onAlternar} onAccion={onAccion} onTomarMesa={onTomarMesa} ocupado={ocupado} />)}
-    </TableBody>)}
-  </Table>;
+    </tbody>)}
+  </table>;
 }
 
 type AccionColaHandler = (item: TrabajoCola, accion: TableroPasoAccion, opts?: OpcionesAccionProduccion) => Promise<void>;
@@ -89,58 +87,58 @@ function FilaTrabajo({ item, seleccion, onAlternar, onAccion, onTomarMesa, ocupa
   const IconoEstado = ICONO_ESTADO[item.estadoCola];
   const seleccionado = seleccion.ids.includes(item.id);
   const motivo = motivoSeleccionCola(item, seleccion);
-  return <TableRow data-state={seleccionado ? 'selected' : undefined}>
-    <TableCell><div className={s.work}>
+  return <tr data-state={seleccionado ? 'selected' : undefined}>
+    <td><div className={s.work}>
       <div className={s.badges}>
         {onAlternar &&
           <span className={s.check} title={seleccionado ? 'Quitar de la selección' : motivo ?? 'Seleccionar trabajo'}>
-            <Checkbox checked={seleccionado} disabled={ocupado || (!seleccionado && Boolean(motivo))}
+            <Checkbox isSelected={seleccionado} isDisabled={ocupado || (!seleccionado && Boolean(motivo))}
               aria-label={`Seleccionar ${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`}
-              onCheckedChange={() => onAlternar(item)} />
+              onChange={() => onAlternar(item)}><Checkbox.Content><Checkbox.Control><Checkbox.Indicator /></Checkbox.Control></Checkbox.Content></Checkbox>
           </span>}
-        <strong>{item.ordenNumero}</strong>{item.lote && <Badge variant="outline">{item.lote.nombre}</Badge>}
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" className={s.workLink} nativeButton={false}
-            aria-label={`Ver trabajo ${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`}
-            render={<Link href={`/produccion/tablero?item=${encodeURIComponent(item.itemId)}`} />} />}>
-            <ArrowUpRight />
-          </TooltipTrigger>
-          <TooltipContent>Ver trabajo</TooltipContent>
-        </Tooltip>
+        <strong>{item.ordenNumero}</strong>{item.lote && <Chip size="sm" variant="soft" className={s.chip}>{item.lote.nombre}</Chip>}
+        <ActionLink variant="ghost" className={s.workLink} title="Ver trabajo"
+          aria-label={`Ver trabajo ${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`}
+          href={`/produccion/tablero?item=${encodeURIComponent(item.itemId)}`}>
+          <ArrowUpRight size={15} aria-hidden />
+        </ActionLink>
       </div>
       <span className={s.workName} title={item.producto}>{item.producto}</span>
       {item.componenteDe && item.componenteDe !== item.producto && <span className={s.secondary} title={item.componenteDe}>{item.componenteDe}</span>}
       <span className={s.secondary}>{item.cliente}{!c.piezas?.length && !c.productoCompuesto && <> · {item.cantidad} {item.unidad}</>}</span>
       <span className={s.secondary}>{item.nombre}</span>
-      {c.layoutConservado && <Badge variant="outline" title={c.productoCompuesto ? 'Producto compuesto: se conserva su layout calculado.' : 'Se conserva la distribución calculada.'}><LockKeyhole data-icon="inline-start" />{c.productoCompuesto ? 'Layout bloqueado' : 'Conservar layout'}</Badge>}
+      {c.layoutConservado && <Chip size="sm" variant="soft" className={s.chip} title={c.productoCompuesto ? 'Producto compuesto: se conserva su layout calculado.' : 'Se conserva la distribución calculada.'}><LockKeyhole data-icon="inline-start" />{c.productoCompuesto ? 'Layout bloqueado' : 'Conservar layout'}</Chip>}
       {c.ejecucionCompartida && <span className={s.secondary}>Ejecución compartida</span>}
-    </div></TableCell>
-    <TableCell><MedidasTrabajoCola configuracion={c} /></TableCell>
-    <TableCell><div className={s.format}>
+    </div></td>
+    <td><MedidasTrabajoCola configuracion={c} /></td>
+    <td><div className={s.format}>
       <span className={s.dimension}>{formatoCola(c.formatos, c.materialSubfamilia)}</span>
       {c.formatoModificado && <small>Cotizado: {formatoCola(c.formatosCotizados, c.materialSubfamilia)}</small>}
-    </div></TableCell>
-    <TableCell><div className={s.format}>
-      <Badge variant="secondary">{c.modoColor ?? 'Sin dato'}</Badge>
+    </div></td>
+    <td><div className={s.format}>
+      <Chip size="sm" variant="soft" className={s.chip}>{c.modoColor ?? 'Sin dato'}</Chip>
       {perfil && <small title={c.perfilNombre ?? undefined}>Perfil: {perfil}</small>}
       {c.caras && <small>{c.caras === 2 ? 'Doble faz' : 'Una cara'}</small>}
-    </div></TableCell>
-    <TableCell><span className={s.date}>{fechaCola(item.fechaEntrega)}</span></TableCell>
-    <TableCell><div className={s.status} data-estado={item.estadoCola}>
-      <Badge variant="outline"><IconoEstado data-icon="inline-start" className={s.statusIcon} />{ESTADO_FILA[item.estadoCola]}</Badge>
-      {item.control && onAccion && <PasoAccionesProduccion {...item.control} busy={ocupado} referencia={`${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`} onAccion={(accion, opts) => onAccion(item, accion, opts)} />}
-      {item.control?.puedeTomarMesa && onTomarMesa && <Button variant="outline" size="sm" disabled={ocupado} onClick={() => onTomarMesa(item)}>Mover a mi mesa</Button>}
+    </div></td>
+    <td><span className={s.date}>{fechaCola(item.fechaEntrega)}</span></td>
+    <td><div className={s.status} data-estado={item.estadoCola}>
+      <Chip size="sm" variant="soft" className={s.statusChip}><IconoEstado data-icon="inline-start" />{ESTADO_FILA[item.estadoCola]}</Chip>
       {item.responsable && <span className={s.secondary}>{item.responsable}</span>}
       {item.motivos.length > 0 && <details className={s.reasons}><summary>Ver motivo{item.motivos.length > 1 ? 's' : ''}</summary>
         <ul>{item.motivos.map((m, i) => <li key={i}>{m}</li>)}</ul>
       </details>}
-    </div></TableCell>
-  </TableRow>;
+    </div></td>
+    <td className={s.actionsColumn}><div className={s.rowActions}>
+      {item.control && onAccion && <PasoAccionesProduccion {...item.control} busy={ocupado} referencia={`${item.ordenNumero} · ${item.producto}${item.lote ? ` · ${item.lote.nombre}` : ''}`} onAccion={(accion, opts) => onAccion(item, accion, opts)} renderAccion={({ label, disabled, onPress, children }) => <ActionButton variant="outline" className={s.rowAction} aria-label={label} isDisabled={disabled} onPress={onPress}>{children}</ActionButton>} />}
+      {item.control?.puedeTomarMesa && onTomarMesa && <ActionButton variant="outline" className={s.rowAction} isDisabled={ocupado} onPress={() => onTomarMesa(item)}>Mover a mi mesa</ActionButton>}
+    </div></td>
+  </tr>;
 }
 
 export function ColasProduccion({ initialResumen, initialError, initialMaquinaId }: {
   initialResumen: ResumenColas; initialError: string | null; initialMaquinaId?: string;
 }) {
+  const scope = useDesignScope();
   const [resumen, setResumen] = React.useState(initialResumen);
   const [maquinaId, setMaquinaId] = React.useState(initialMaquinaId ?? initialResumen.maquinas.find(m => m.pendientes > 0)?.id ?? initialResumen.maquinas[0]?.id ?? '');
   const [filtro, setFiltro] = React.useState({ estado: 'todos' as EstadoCola, q: '', page: 1 });
@@ -268,72 +266,77 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
   const totalMaquina = datos?.totales.todos ?? maquina?.pendientes ?? 0;
   const maquinas = resumen.maquinas.filter(m => `${m.nombre} ${m.estacion?.nombre ?? ''}`.toLocaleLowerCase('es').includes(buscarMaquina.toLocaleLowerCase('es')));
 
-  return <div className={cn(workspaceTheme.theme, s.page)}>
+  return <div {...scope} className={cn(theme.theme, layout.page, s.page)}>
     {revisionTiempos && <CompletarSeleccionCola items={revisionTiempos} onConfirmar={completar} onCancelar={() => setRevisionTiempos(null)} />}
     {simulacionIds && <SimularNestingCola maquinaId={maquinaId} pasoIds={simulacionIds} onCerrar={() => setSimulacionIds(null)} />}
-    <header className={s.header}>
+    <header className={cn(layout.header, s.header)}>
       <div className={s.title}><span className={s.eyebrow}>Producción</span><h1>Colas de trabajo</h1></div>
       <div className={s.actions}>
-        <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/produccion/planificacion" />}>Planificación<ArrowUpRight data-icon="inline-end" /></Button>
-        <Button variant="ghost" size="sm" onClick={() => void refrescar()} disabled={refrescando}><RefreshCw data-icon="inline-start" className={refrescando ? 'animate-spin' : undefined} />Actualizar</Button>
+        <ActionLink variant="outline" href="/produccion/planificacion">Planificación<ArrowUpRight size={15} aria-hidden /></ActionLink>
+        <ActionButton variant="outline" onPress={() => void refrescar()} isDisabled={refrescando}><RefreshCw data-icon="inline-start" className={refrescando ? 'animate-spin' : undefined} />Actualizar</ActionButton>
       </div>
     </header>
-    {error && <Alert variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-    <div className={s.workspace}>
+    {error && <Alert className={workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+    <Card className={s.workspace}>
       <aside className={s.machines} aria-label="Máquinas">
         <div className={s.machineSearch}>
-          <div className={s.railHeading}><span>Máquinas con trabajo</span><Badge variant="secondary">{resumen.maquinas.length}</Badge></div>
-          <InputGroup><InputGroupInput aria-label="Buscar máquina" placeholder="Buscar máquina…" value={buscarMaquina} onChange={e => setBuscarMaquina(e.target.value)} /><InputGroupAddon><Search /></InputGroupAddon></InputGroup>
+          <div className={s.railHeading}><span>Máquinas con trabajo</span><Chip size="sm" variant="soft" className={s.chip}>{resumen.maquinas.length}</Chip></div>
+          <SearchField aria-label="Buscar máquina" value={buscarMaquina} onChange={setBuscarMaquina}>
+            <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
+              <SearchField.SearchIcon /><SearchField.Input placeholder="Buscar máquina…" />
+            </SearchField.Group>
+          </SearchField>
         </div>
-        <ScrollArea className={s.machineScroll}>
+        <div className={s.machineScroll}>
         <nav className={s.machineList} aria-label="Colas por máquina">
-          {maquinas.map(m => <Button key={m.id} variant={m.id === maquinaId ? 'default' : 'ghost'} className={s.machineButton} aria-pressed={m.id === maquinaId} onClick={() => seleccionar(m.id)}>
+          {maquinas.map(m => <Button key={m.id} variant={m.id === maquinaId ? 'secondary' : 'ghost'} className={s.machineButton} aria-pressed={m.id === maquinaId} onPress={() => seleccionar(m.id)}>
             <span className={s.machineIcon}><Factory /></span>
             <span className={s.machineCopy}><span>{m.nombre}</span><small>{m.estacion?.nombre ?? 'Sin estación'}{m.enCurso ? ` · ${m.enCurso} en curso` : ''}{!m.activo ? ' · Inactiva' : ''}</small></span>
-            <Badge variant={m.id === maquinaId ? 'secondary' : 'outline'}>{m.pendientes}</Badge>
+            <Chip size="sm" variant="soft" className={s.chip}>{m.pendientes}</Chip>
           </Button>)}
           {!maquinas.length && <p className={s.noMachines}>{buscarMaquina ? 'No hay máquinas con trabajo que coincidan.' : 'No hay máquinas con trabajo pendiente.'}</p>}
         </nav>
-        </ScrollArea>
-        {resumen.sinMaquina > 0 && <div className={s.unassigned}><span>{resumen.sinMaquina} operaciones sin máquina</span><Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/produccion/tablero" />}>Ver en tablero<ArrowUpRight data-icon="inline-end" /></Button></div>}
+        </div>
+        {resumen.sinMaquina > 0 && <div className={s.unassigned}><span>{resumen.sinMaquina} operaciones sin máquina</span><ActionLink variant="ghost" href="/produccion/tablero">Ver en tablero<ArrowUpRight size={15} aria-hidden /></ActionLink></div>}
       </aside>
       <section className={s.queue} aria-label="Trabajo de la máquina">
-        <div className={s.mobileMachine}><Select value={maquinaId || null} onValueChange={id => { if (id) seleccionar(id); }} items={resumen.maquinas.map(m => ({ value: m.id, label: m.nombre }))}>
-          <SelectTrigger aria-label="Seleccionar máquina"><SelectValue placeholder="Elegir máquina" /></SelectTrigger>
-          <SelectContent><SelectGroup>{resumen.maquinas.map(m => <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>)}</SelectGroup></SelectContent>
-        </Select></div>
+        <div className={s.mobileMachine}><SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: m.nombre })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} /></div>
         <div className={s.queueHeader}>
-          <div><h2 className={workspaceUi.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
+          <div><h2 className={s.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
           {maquina && <div className={s.queueTotal}><strong>{totalMaquina}</strong><span>{totalMaquina === 1 ? 'operación' : 'operaciones'}</span></div>}
         </div>
-        <Tabs value={filtro.estado} onValueChange={v => filtrar({ estado: v as EstadoCola, page: 1 })} className={s.tabs}>
+        <Tabs selectedKey={filtro.estado} onSelectionChange={v => filtrar({ estado: v as EstadoCola, page: 1 })} className={s.tabs}>
           <div className={s.toolbar}>
-            <TabsList>{ESTADOS.map(e => <TabsTrigger key={e.id} value={e.id}>{e.label}{datos && <span className={s.tabCount}>{datos.totales[e.id]}</span>}</TabsTrigger>)}</TabsList>
-            <div className={s.search}><InputGroup><InputGroupInput aria-label="Buscar OT, cliente, lote o trabajo" placeholder="Buscar OT, cliente o trabajo…" maxLength={120} value={filtro.q} onChange={e => filtrar({ q: e.target.value, page: 1 })} /><InputGroupAddon><Search /></InputGroupAddon></InputGroup></div>
+            <NavigationTabList label="Estado de los trabajos" items={ESTADOS.map(e => ({ id: e.id, label: e.label, count: datos?.totales[e.id] }))} />
+            <SearchField className={s.search} aria-label="Buscar OT, cliente, lote o trabajo" value={filtro.q} onChange={value => filtrar({ q: value, page: 1 })}>
+              <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
+                <SearchField.SearchIcon /><SearchField.Input placeholder="Buscar OT, cliente o trabajo…" maxLength={120} />
+              </SearchField.Group>
+            </SearchField>
           </div>
-          <TabsContent value={filtro.estado} className={s.content}>
+          <Tabs.Panel id={filtro.estado} className={s.content}>
             <div className={s.context}><Layers aria-hidden="true" /><span>Agrupados por material</span><span className={s.contextSource}>Plan de fabricación vigente</span></div>
             <div className={s.selectionBar}>
               <div className={s.selectionCopy}><strong aria-live="polite">{haySeleccion ? `${seleccion.ids.length} ${seleccion.ids.length === 1 ? 'trabajo seleccionado' : 'trabajos seleccionados'}` : 'Sin trabajos seleccionados'}</strong>
                 <span id="motivo-nesting-cola" aria-live="polite" title={detalleSeleccion}>{detalleSeleccion}</span>
               </div>
-              <div className={s.actions}><Button variant="ghost" size="sm" disabled={!haySeleccion || ocupado} onClick={() => { setSeleccion(SELECCION_COLA_VACIA); setErrorAccion(null); }}>Limpiar</Button>
-                <Button variant="outline" size="sm" disabled={!haySeleccion || Boolean(motivoNesting) || cargando || ocupado} aria-describedby="motivo-nesting-cola" onClick={() => { if (!motivoNesting) setSimulacionIds([...seleccion.ids]); }}><Scan data-icon="inline-start" />Simular nesting</Button>
-                {puedeCompletar && <Button size="sm" disabled={!haySeleccion || !seleccionVigente || cargando || ocupado} onClick={prepararCompletado}><CircleCheck data-icon="inline-start" />{completando ? 'Completando…' : 'Completar seleccionados'}</Button>}</div>
+              <div className={s.actions}><ActionButton variant="ghost" isDisabled={!haySeleccion || ocupado} onPress={() => { setSeleccion(SELECCION_COLA_VACIA); setErrorAccion(null); }}>Limpiar</ActionButton>
+                <ActionButton variant="outline" isDisabled={!haySeleccion || Boolean(motivoNesting) || cargando || ocupado} aria-describedby="motivo-nesting-cola" onPress={() => { if (!motivoNesting) setSimulacionIds([...seleccion.ids]); }}><Scan data-icon="inline-start" />Simular nesting</ActionButton>
+                {puedeCompletar && <ActionButton isDisabled={!haySeleccion || !seleccionVigente || cargando || ocupado} onPress={prepararCompletado}><CircleCheck data-icon="inline-start" />{completando ? 'Completando…' : 'Completar seleccionados'}</ActionButton>}</div>
             </div>
-            {errorAccion && <Alert variant="destructive"><AlertTitle>No se pudo registrar la acción</AlertTitle><AlertDescription>{errorAccion}</AlertDescription></Alert>}
+            {errorAccion && <Alert className={workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo registrar la acción</AlertTitle><AlertDescription>{errorAccion}</AlertDescription></Alert>}
             <div className={s.tableScroll} aria-busy={cargando}>
-              {cargando ? <div className={s.loading} role="status" aria-label="Cargando trabajos">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+              {cargando ? <div className={s.loading} role="status" aria-label="Cargando trabajos">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className={`${workspaceTheme.theme} h-16 w-full`} />)}</div>
                 : datos?.items.length ? <TablaCola datos={datos} seleccion={seleccion} ocupado={ocupado} onAccion={puedeCompletar ? ejecutarAccion : undefined} onTomarMesa={puedeCompletar ? item => void tomarMesa(item) : undefined} onAlternar={item => setSeleccion(actual => alternarSeleccionCola(actual, item))} onGrupo={seleccionarGrupo} />
-                : !error && <Empty><EmptyHeader><EmptyMedia variant="icon"><Factory /></EmptyMedia><EmptyTitle>{maquinaId ? 'No hay trabajos en esta selección' : 'No hay trabajo pendiente en máquinas'}</EmptyTitle><EmptyDescription>{filtro.estado === 'listos' ? 'Podés revisar En espera para ver qué falta antes de producir.' : 'Las operaciones de las órdenes emitidas aparecerán en la máquina que tienen asignada.'}</EmptyDescription></EmptyHeader></Empty>}
+                : !error && <Empty className={workspaceTheme.theme}><EmptyHeader><EmptyMedia variant="icon"><Factory /></EmptyMedia><EmptyTitle>{maquinaId ? 'No hay trabajos en esta selección' : 'No hay trabajo pendiente en máquinas'}</EmptyTitle><EmptyDescription>{filtro.estado === 'listos' ? 'Podés revisar En espera para ver qué falta antes de producir.' : 'Las operaciones de las órdenes emitidas aparecerán en la máquina que tienen asignada.'}</EmptyDescription></EmptyHeader></Empty>}
             </div>
-          </TabsContent>
+          </Tabs.Panel>
         </Tabs>
         <footer className={s.footer} aria-live="polite"><span>{datos ? `${datos.total} ${datos.total === 1 ? 'operación' : 'operaciones'} · Página ${datos.page} de ${datos.pages}` : cargando ? 'Cargando…' : 'Sin resultados'}</span>
-          <div className={s.actions}><Button size="icon-sm" variant="outline" aria-label="Página anterior" disabled={cargando || !datos || datos.page <= 1} onClick={() => filtrar({ page: (datos?.page ?? 1) - 1 })}><ChevronLeft /></Button>
-            <Button size="icon-sm" variant="outline" aria-label="Página siguiente" disabled={cargando || !datos || datos.page >= datos.pages} onClick={() => filtrar({ page: (datos?.page ?? 1) + 1 })}><ChevronRight /></Button></div>
+          <div className={s.actions}><ActionButton isIconOnly variant="outline" aria-label="Página anterior" isDisabled={cargando || !datos || datos.page <= 1} onPress={() => filtrar({ page: (datos?.page ?? 1) - 1 })}><ChevronLeft size={16} /></ActionButton>
+            <ActionButton isIconOnly variant="outline" aria-label="Página siguiente" isDisabled={cargando || !datos || datos.page >= datos.pages} onPress={() => filtrar({ page: (datos?.page ?? 1) + 1 })}><ChevronRight size={16} /></ActionButton></div>
         </footer>
       </section>
-    </div>
+    </Card>
   </div>;
 }

@@ -60,6 +60,7 @@ function armar({
     prisma,
     {} as StorageDriver,
     suscripciones,
+    {} as never,
   );
   // `verificarCuota` es privado: es un guard interno, no una operación pública.
   const verificar = (bytes: number) =>

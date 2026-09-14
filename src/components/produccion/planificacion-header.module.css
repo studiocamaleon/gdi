@@ -1,0 +1,99 @@
+/* Sólo indicadores y controles. El calendario conserva su tema y geometría. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex: none;
+  container: planificacion-metrics / inline-size;
+}
+.viewControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: none;
+}
+.periodControls,
+.periodNavigation,
+.toolbarActions,
+.zoomControls,
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.periodControls {
+  flex-wrap: wrap;
+}
+.periodNavigation {
+  gap: 2px;
+}
+.periodLabel {
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.periodControls .periodSelect {
+  width: 132px;
+}
+.toolbar {
+  --accent-foreground: var(--action-primary-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  background: var(--surface);
+}
+.search {
+  width: 300px;
+  max-width: 100%;
+  min-width: 0;
+}
+.toolbarActions {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.switchLabel {
+  gap: 7px;
+  white-space: nowrap;
+}
+.switchLabel > :global([data-slot="label"]) {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.zoomControls {
+  gap: 3px;
+}
+.zoomControls > span {
+  color: var(--muted-text);
+  font-size: 11px;
+  margin-right: 3px;
+}
+.zoomControls .zoomSlider {
+  width: clamp(96px, 8vw, 128px);
+  flex: none;
+  margin-inline: 5px;
+}
+.zoomValue {
+  min-width: 39px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+  .stats { gap: 8px; }
+  .toolbar { padding: 12px; }
+  .search { width: 100%; }
+}
+@media (max-width: 480px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats > :last-child { grid-column: 1 / -1; }
+  .periodControls { gap: 8px 4px; }
+}

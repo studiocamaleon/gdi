@@ -1,8 +1,8 @@
-/* Sidebar "constelación" — mismo idioma visual que el encabezado del sheet:
- * fondo papel, malla 3D arriba velada hacia abajo. Portado del diseño de
- * claude.ai/design a módulo CSS con los tokens de la app. Toda la lógica
+/* Sidebar "constelación" con el fondo claro compartido de Crear propuesta.
+ * Conserva la estructura original. Toda la lógica
  * (permisos, búsqueda, acordeón, ruta activa, colapso) vive en app-sidebar.tsx. */
 .sb {
+  composes: canvas from "./design-system/theme.module.css";
   /* Paleta FIJA del sidebar (look papel del diseño). No hereda los tokens del
    * dashboard: ahí `--ink-2`/`--muted` resuelven claros (venían del sidebar
    * oscuro viejo) y el texto quedaba lavado. Un punto más oscuros que el
@@ -23,7 +23,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: linear-gradient(180deg, #fbfaf8, #f4f2ee);
+  background: var(--canvas-background);
   border-right: 1px solid var(--border, #e5e2db);
   transition: width 0.18s ease;
 }
@@ -364,7 +364,7 @@
   flex-direction: column;
   gap: 2px;
   flex: none;
-  background: rgba(255, 255, 255, 0.55);
+  background: transparent;
 }
 .user {
   display: flex;

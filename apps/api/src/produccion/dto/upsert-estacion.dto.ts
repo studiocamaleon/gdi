@@ -45,7 +45,26 @@ export const ETAPAS_ESTACION = [
 
 export type EtapaEstacion = (typeof ETAPAS_ESTACION)[number];
 
+export class HorarioEmpleadoDto {
+  @IsUUID()
+  empleadoId: string;
+
+  @IsObject()
+  calendario: CalendarioEstacion;
+}
+
 export class UpsertEstacionDto {
+  @IsOptional()
+  @IsBoolean()
+  planificacionPorEmpleados?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => HorarioEmpleadoDto)
+  horariosEmpleados?: HorarioEmpleadoDto[];
+
   @IsOptional()
   @IsUUID()
   equipoProduccionId?: string | null;

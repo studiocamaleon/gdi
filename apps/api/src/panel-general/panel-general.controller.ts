@@ -1,3 +1,4 @@
+import { PanelActividadService } from './panel-actividad.service';
 import { Controller, Get, Query } from '@nestjs/common';
 
 import { CurrentSession } from '../auth/current-auth.decorator';
@@ -11,7 +12,18 @@ import {
 @Controller('panel-general')
 @Permiso('panel.ver')
 export class PanelGeneralController {
-  constructor(private readonly panel: PanelGeneralService) {}
+  constructor(
+    private readonly panel: PanelGeneralService,
+    private readonly actividad: PanelActividadService,
+  ) {}
+
+  @Get('actividad')
+  listarActividad(
+    @CurrentSession() auth: CurrentAuth,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.actividad.listar(auth, cursor);
+  }
 
   @Get()
   obtener(

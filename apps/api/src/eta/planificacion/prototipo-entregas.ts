@@ -382,7 +382,7 @@ export function proponerEntregasPiloto(entrada: EntradaPiloto) {
               predecesorPasoIds: [
                 ...(paso.predecesorPasoIds ?? []),
                 ...base.traza
-                  .filter((p) => p.estacionKey === estacion || !!recurso?.equipoProduccion?.id && p.equipoProduccionId === recurso.equipoProduccion.id)
+                  .filter((p) => p.estacionKey === estacion || (recurso?.planificacionPorEmpleados && p.reservasHumanas?.some(r => r.empleadoIds?.some(id => recurso.empleados?.some(e => e.id === id)))) || !!recurso?.equipoProduccion?.id && p.equipoProduccionId === recurso.equipoProduccion.id)
                   .map((p) => p.pasoId),
               ],
             };

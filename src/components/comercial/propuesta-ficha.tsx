@@ -12,13 +12,8 @@ import fechasStyles from "./propuesta-fechas.module.css";
 
 import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
 
-import campanaStyles from "./propuesta-campana.module.css";
-import {
-  OrdenWorkspace,
-  OrdenDatosToggle,
-  OrdenCampoLabel,
-  type OrdenWorkspaceHandle,
-} from "./orden-workspace";
+import { CampanaSelectorOrden } from "./campana-selector-orden";
+import { OrdenWorkspace, type OrdenWorkspaceHandle } from "./orden-workspace";
 import { CanalVentaSelector } from "./canal-venta-selector";
 import { canalVentaValido, nombreCanalVenta } from "@/lib/canales-venta";
 import workspaceStyles from "./orden-workspace.module.css";
@@ -26,6 +21,24 @@ import itemStyles from "./orden-item-detalle.module.css";
 import itemCostStyles from "./orden-item-costos.module.css";
 import workspaceTheme from "@/components/ui/workspace-theme.module.css";
 import { cn } from "@/lib/utils";
+import { Chip, Input as HeroInput, Tabs as HeroTabs } from "@heroui/react";
+import { IdentityAvatar } from "@/components/design-system/identity-avatar";
+import { ActionButton as HeroButton } from "@/components/design-system/action-button";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
+import designTheme from "@/components/design-system/theme.module.css";
+import {
+  calcularResumenOrden,
+  descuentoMontoDeItem,
+  getItemOrderVisibleAmounts,
+} from "@/lib/orden-productos-presentacion";
+import { OrdenSummaryDetails } from "./orden-summary-details";
+import { OrdenProductosTable } from "./orden-productos-table";
+import {
+  OrdenSegmented,
+  OrdenTabs,
+  FieldCard,
+  type OrdenTab,
+} from "./orden-ficha-presentacion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Empty,
@@ -42,7 +55,6 @@ import {
   CardAction,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { FieldGroup } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { esFamiliaCorteNesting } from "@/lib/nesting-procesos";
 import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-descargas";
@@ -58,43 +70,29 @@ import type { VinculoPlanEntrega } from "@/lib/planificacion-entregas";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeftIcon,
   BadgePercentIcon,
   BlocksIcon,
   CalendarIcon,
   ClockIcon,
   CheckIcon,
   ChevronRightIcon,
-  CircleDollarSignIcon,
-  CreditCardIcon,
   DownloadIcon,
   Edit3Icon,
   XCircleIcon,
   ExternalLinkIcon,
   ExpandIcon,
   FactoryIcon,
-  FileIcon,
-  FileCheck2Icon,
   FileXIcon,
-  EyeIcon,
   FolderIcon,
   GitCommitHorizontalIcon,
-  HistoryIcon,
   PackageCheckIcon,
   PackageIcon,
   PlusIcon,
   QrCodeIcon,
   LinkIcon,
-  ReceiptTextIcon,
   SaveIcon,
-  SearchIcon,
-  StarIcon,
-  TicketPercentIcon,
-  Trash2Icon,
   TriangleAlertIcon,
   UserIcon,
-  XIcon,
-  ZapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
@@ -123,7 +121,8 @@ import {
   emitirPresupuesto,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
-import { validarCupon, type ValidarCuponResultado } from "@/lib/cupones-api";
+import { type ValidarCuponResultado } from "@/lib/cupones-api";
+import { validarYAplicarCuponOrden } from "@/lib/cupones-orden";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
 import {
   getCampanasOpciones,
@@ -184,7 +183,6 @@ import {
   formatCurrency,
   formatMaterialUnitPrice,
   formatUnidad,
-  formatUnitPrice,
   offsetDate,
   type CotizacionPropuestaSnapshot,
   type PropuestaCargoDirecto,
@@ -223,7 +221,6 @@ import {
 import { briefDisenoTieneContenido, leerBriefDiseno } from "@/lib/brief-diseno";
 import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
 import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
-import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
 import {
   guardarTomoCentroCopiado,
   cantidadLibrosCentroCopiado,
@@ -245,11 +242,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -295,10 +288,19 @@ import {
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
 import costC from "./propuesta-ficha-costos.module.css";
-import descM from "./descuento-modal.module.css";
-import { ConstelacionCanvas } from "@/components/constelacion-canvas";
-import resumenBar from "./resumen-financiero-bar.module.css";
-import { listClientes } from "@/lib/clientes-api";
+import { netoListaDeItem, type DescuentoInput } from "@/lib/descuentos-orden";
+import { CargoOrdenDialog } from "./cargo-orden-dialog";
+import { OrdenCargosList } from "./orden-cargos-list";
+import {
+  DescuentoOrdenDialog,
+  type DescuentoTarget,
+} from "./descuento-orden-dialog";
+import { OrdenCuponField } from "./orden-cupon-field";
+import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
+import { OrdenFinancialActions } from "./orden-financial-actions";
+import { OrdenDatosSections } from "./orden-datos-sections";
+import { ClienteLista } from "./cliente-selector-orden";
+import { useClientesOrden } from "./use-clientes-orden";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -330,15 +332,6 @@ type PropuestaFichaProps = {
   initialDocumentos?: EstadoDocumentalOrden | null;
 };
 
-type OrdenTab =
-  | "productos"
-  | "produccion"
-  | "pagos"
-  | "comprobantes"
-  | "archivos"
-  | "documentos"
-  | "costos"
-  | "historial";
 type InnerTab = "specs" | "costos" | "produccion" | "aprovechamiento";
 type PasoCosteo = CotizacionPropuestaSnapshot["pasos"][number];
 type MaterialCosteo = NonNullable<PasoCosteo["materiales"]>[number];
@@ -898,428 +891,6 @@ function applyPanelRuntimeOverride(args: {
   runtime[args.configPasoId] = stepRuntime;
   next.configPasoRuntime = runtime;
   return next;
-}
-
-function OrdenSegmented({
-  value,
-  onChange,
-}: {
-  value: "orden" | "presupuesto";
-  onChange: (value: "orden" | "presupuesto") => void;
-}) {
-  return (
-    <div className="orden-toggle">
-      <button
-        type="button"
-        className={`oseg ${value === "orden" ? "on" : ""}`}
-        onClick={() => onChange("orden")}
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.7}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <path d="M8 9h8M8 13h8M8 17h5" />
-        </svg>
-        Orden de trabajo
-      </button>
-      <button
-        type="button"
-        className={`oseg ${value === "presupuesto" ? "on" : ""}`}
-        onClick={() => onChange("presupuesto")}
-      >
-        <FileIcon />
-        Presupuesto
-      </button>
-    </div>
-  );
-}
-
-function OrdenTabs({
-  value,
-  onChange,
-  count,
-  historialCount,
-  comprobantesCount,
-  archivosCount,
-  documentosCount,
-}: {
-  value: OrdenTab;
-  onChange: (value: OrdenTab) => void;
-  count: number;
-  /** Presente sólo en modo orden: agrega el tab Historial. */
-  historialCount?: number;
-  /** Presente sólo en modo orden: agrega el tab Comprobantes. */
-  comprobantesCount?: number;
-  /** null hasta que el tab de Archivos se abre y los cuenta. */
-  archivosCount?: number | null;
-  documentosCount?: number;
-}) {
-  const verMargenes = usePuede("finanzas.ver_margenes");
-  const tabs: Array<{
-    key: OrdenTab;
-    label: string;
-    count?: number;
-    icon: React.ReactNode;
-  }> = [
-    { key: "productos", label: "Productos", count, icon: <PackageIcon /> },
-    { key: "produccion", label: "Producción", icon: <FactoryIcon /> },
-    { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
-    ...(comprobantesCount !== undefined
-      ? [
-          {
-            key: "comprobantes" as const,
-            label: "Comprobantes",
-            icon: <ReceiptTextIcon />,
-          },
-        ]
-      : []),
-    {
-      key: "archivos",
-      label: "Archivos",
-      // Sin badge hasta que se sepa el número de verdad: un contador que
-      // miente es peor que no tenerlo.
-      count: archivosCount ?? undefined,
-      icon: <FolderIcon />,
-    },
-    ...(documentosCount !== undefined
-      ? [
-          {
-            key: "documentos" as const,
-            label: "Documentos",
-            count: documentosCount,
-            icon: <FileCheck2Icon />,
-          },
-        ]
-      : []),
-    // El tab Costos es el desglose de lo que le sale a la imprenta: material,
-    // máquina, mano de obra. Quien no puede ver márgenes tampoco lo ve — y el
-    // API ya le manda la orden sin esos campos, así que el tab estaría vacío.
-    ...(verMargenes
-      ? [
-          {
-            key: "costos" as const,
-            label: "Costos",
-            icon: <CircleDollarSignIcon />,
-          },
-        ]
-      : []),
-    ...(historialCount !== undefined
-      ? [
-          {
-            key: "historial" as const,
-            label: "Historial",
-            count: historialCount,
-            icon: <HistoryIcon />,
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <div
-      className="orden-tabs"
-      role="tablist"
-      // overflow-x:auto (scroll horizontal de pestañas) fuerza overflow-y a
-      // `auto` y saca una barra vertical fantasma por 1px de desborde. Inline
-      // para no depender del recompile de globals.css (Turbopack lo saltea).
-      style={{ overflowY: "hidden" }}
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          className={`otab ${value === tab.key ? "on" : ""}`}
-          onClick={() => onChange(tab.key)}
-        >
-          <span className="ic">{tab.icon}</span>
-          <span>{tab.label}</span>
-          {tab.count != null ? <span className="ct">{tab.count}</span> : null}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FieldCard({
-  label,
-  icon,
-  children,
-  hint,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div className="ofield">
-      <OrdenCampoLabel icon={icon}>{label}</OrdenCampoLabel>
-      <div className="ofield-ctrl">{children}</div>
-      {hint ? <div className="ofield-hint">{hint}</div> : null}
-    </div>
-  );
-}
-
-function normalizeClienteQuery(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function sortClientesByName(clientes: ClienteDetalle[]) {
-  return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
-}
-
-function mergeClientes(current: ClienteDetalle[], incoming: ClienteDetalle[]) {
-  const map = new Map<string, ClienteDetalle>();
-  for (const cliente of [...current, ...incoming]) {
-    map.set(cliente.id, cliente);
-  }
-  return sortClientesByName([...map.values()]);
-}
-
-function ClienteCombobox({
-  value,
-  onChange,
-  initialClientes,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  initialClientes: ClienteDetalle[];
-}) {
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const listboxId = React.useId();
-  const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState("");
-  const [options, setOptions] = React.useState(() =>
-    sortClientesByName(initialClientes),
-  );
-  const [total, setTotal] = React.useState(initialClientes.length);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [debouncedQuery, setDebouncedQuery] = React.useState("");
-  const [activeIndex, setActiveIndex] = React.useState(0);
-
-  const selectedCliente = React.useMemo(
-    () => options.find((cliente) => cliente.id === value) ?? null,
-    [options, value],
-  );
-
-  const visibleOptions = React.useMemo(() => {
-    const normalized = normalizeClienteQuery(query);
-    if (!normalized) return options;
-    return options.filter((cliente) => {
-      const haystack = [
-        cliente.nombre,
-        cliente.razonSocial,
-        cliente.email,
-        cliente.contacto,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(normalized);
-    });
-  }, [options, query]);
-
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(query), 220);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-
-  React.useEffect(() => {
-    setActiveIndex(0);
-  }, [query, open]);
-
-  React.useEffect(() => {
-    setOptions((current) => mergeClientes(current, initialClientes));
-    setTotal((current) => Math.max(current, initialClientes.length));
-  }, [initialClientes]);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    window.setTimeout(() => inputRef.current?.focus(), 0);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    listClientes({ q: debouncedQuery, limit: 30 })
-      .then((response) => {
-        if (cancelled) return;
-        setOptions((current) => mergeClientes(current, response.data));
-        setTotal(response.total);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("No se pudieron cargar clientes.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery, open]);
-
-  const selectCliente = (cliente: ClienteDetalle) => {
-    setOptions((current) => mergeClientes(current, [cliente]));
-    onChange(cliente.id);
-    setQuery("");
-    setOpen(false);
-  };
-
-  return (
-    <div className="cliente-combobox" ref={rootRef}>
-      <button
-        type="button"
-        className="cliente-combobox-trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span className={selectedCliente ? "" : "placeholder"}>
-          {selectedCliente?.nombre ?? "Seleccionar cliente"}
-        </span>
-        <ChevronRightIcon />
-      </button>
-
-      {open ? (
-        <div className="cliente-combobox-popover">
-          <div className="cliente-combobox-search">
-            <SearchIcon />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por nombre, razón social o email..."
-              aria-label="Buscar cliente"
-              role="combobox"
-              aria-expanded={open}
-              aria-controls={listboxId}
-              aria-activedescendant={
-                visibleOptions[activeIndex]
-                  ? `${listboxId}-${visibleOptions[activeIndex].id}`
-                  : undefined
-              }
-              onKeyDown={(event) => {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  setActiveIndex((current) =>
-                    visibleOptions.length === 0
-                      ? 0
-                      : Math.min(current + 1, visibleOptions.length - 1),
-                  );
-                } else if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  setActiveIndex((current) => Math.max(0, current - 1));
-                } else if (
-                  event.key === "Enter" &&
-                  visibleOptions[activeIndex]
-                ) {
-                  event.preventDefault();
-                  selectCliente(visibleOptions[activeIndex]);
-                }
-              }}
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Limpiar búsqueda"
-              >
-                <XIcon />
-              </button>
-            ) : null}
-          </div>
-
-          <div
-            id={listboxId}
-            className="cliente-combobox-results"
-            role="listbox"
-          >
-            {visibleOptions.map((cliente, index) => (
-              <button
-                key={cliente.id}
-                id={`${listboxId}-${cliente.id}`}
-                type="button"
-                className={`cliente-option ${cliente.id === value ? "selected" : ""}${index === activeIndex ? " keyboard" : ""}`}
-                role="option"
-                aria-selected={cliente.id === value}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => selectCliente(cliente)}
-              >
-                <span className="cliente-option-main">
-                  <strong>{cliente.nombre}</strong>
-                  <small>
-                    {[cliente.razonSocial, cliente.email]
-                      .filter(Boolean)
-                      .join(" · ") || "Sin datos adicionales"}
-                  </small>
-                </span>
-                {cliente.id === value ? <CheckIcon /> : null}
-              </button>
-            ))}
-
-            {!loading && visibleOptions.length === 0 ? (
-              <div className="cliente-combobox-empty">
-                No encontramos clientes con esa búsqueda.
-              </div>
-            ) : null}
-          </div>
-
-          <div className="cliente-combobox-foot">
-            <span>
-              {loading
-                ? "Buscando clientes..."
-                : `Mostrando ${Math.min(visibleOptions.length, total)} de ${total}`}
-            </span>
-            {error ? <span className="error">{error}</span> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function formatCantidadItem(item: PropuestaItem) {
-  const acceptsDecimals =
-    item.unidadMedida === "m2" || item.unidadMedida === "metro_lineal";
-  const maximumFractionDigits = acceptsDecimals ? 2 : 0;
-  const minimumFractionDigits =
-    acceptsDecimals && !Number.isInteger(item.cantidad) ? 2 : 0;
-
-  return item.cantidad.toLocaleString("es-AR", {
-    minimumFractionDigits,
-    maximumFractionDigits,
-  });
 }
 
 function isDuplicateModoColorSpec(item: PropuestaItem, key: string) {
@@ -2580,9 +2151,9 @@ function WorkflowCotizacion({
                       componente.pasos?.filter((p) => p.activado).length ?? 0;
                     const esColeccion = Boolean(
                       componente.jobContext?.disenosVectoriales?.length ||
-                      componente.jobContext?.piezas?.some(
-                        (p) => p.cantidadPorUnidad != null,
-                      ),
+                        componente.jobContext?.piezas?.some(
+                          (p) => p.cantidadPorUnidad != null,
+                        ),
                     );
                     return (
                       <article
@@ -3096,9 +2667,14 @@ function PanelesManualEditor({
   if (!layout) {
     return (
       <PanelEditorShell title="Editar paneles" onClose={onClose}>
-        <Empty><EmptyHeader><EmptyTitle>No se pudo reconstruir el panelizado</EmptyTitle>
-          <EmptyDescription>El ítem no tiene piezas suficientes para armar un layout manual.</EmptyDescription>
-        </EmptyHeader></Empty>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No se pudo reconstruir el panelizado</EmptyTitle>
+            <EmptyDescription>
+              El ítem no tiene piezas suficientes para armar un layout manual.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </PanelEditorShell>
     );
   }
@@ -3188,7 +2764,9 @@ function PanelesManualEditor({
           </div>
 
           {invalidMessage ? (
-            <div className={itemStyles["panel-editor-error"]}>{invalidMessage}</div>
+            <div className={itemStyles["panel-editor-error"]}>
+              {invalidMessage}
+            </div>
           ) : null}
         </div>
       </div>
@@ -3232,11 +2810,20 @@ function PanelEditorShell({
   onClose: () => void;
 }) {
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className={cn(workspaceTheme.theme, itemStyles.panelEditorDialog)}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        className={cn(workspaceTheme.theme, itemStyles.panelEditorDialog)}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Ajustá las divisiones sin superar el ancho imprimible de la máquina.</DialogDescription>
+          <DialogDescription>
+            Ajustá las divisiones sin superar el ancho imprimible de la máquina.
+          </DialogDescription>
         </DialogHeader>
         {children}
       </DialogContent>
@@ -4179,25 +3766,15 @@ const TECNOLOGIA_TERCERIZADO_LABEL: Record<string, string> = {
   otra: "Otra",
 };
 
-/** Columnas de la fila/encabezado de productos SIN la columna Imp. (se saca el
- *  110px del IVA). Se aplica inline cuando la orden es sin comprobante, para no
- *  agregar una clase global nueva (rompe css:guard). §6 cuaderno de margen. */
-const ORDEN_COLS_SIN_IMP =
-  "36px 22px minmax(220px, 1fr) 110px 130px 140px 130px 36px";
-
-export function ProductRow({
+export function OrdenProductoDetalle({
   item,
-  index,
   expanded,
   etaSistema,
   ahoraEta,
   margenEtaDias = 0,
   noLaborables,
-  onToggle,
-  onRemove,
   onEdit,
   onDescuento,
-  onVerPrecios,
   onEditPanels,
   onChangeFechaEntrega,
   fechaEstimada,
@@ -4210,7 +3787,6 @@ export function ProductRow({
   sinComprobante = false,
 }: {
   item: PropuestaItem;
-  index: number;
   expanded: boolean;
   /** ETA simulada del item contra las colas del taller (fase 3); null = sin dato. */
   etaSistema?: SimulacionItem | null;
@@ -4218,14 +3794,11 @@ export function ProductRow({
   /** Margen del taller en días hábiles (D13) para el nivel "sin margen". */
   margenEtaDias?: number;
   noLaborables?: Set<string>;
-  onToggle: () => void;
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
-  onRemove?: () => void;
   onEdit?: () => void;
   /** Abre el modal de descuento con esta línea como objetivo. */
   onDescuento?: () => void;
   /** Sólo para ítems de centro de copiado: abre el resumen de precios por hoja. */
-  onVerPrecios?: () => void;
   onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
@@ -4239,7 +3812,7 @@ export function ProductRow({
   /** Orden sin comprobante fiscal: la fila oculta Imp. y muestra Total neto. */
   sinComprobante?: boolean;
 }) {
-  const { moneda, zonaHoraria } = useConfigRegional();
+  const { zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
   const [loteId, setLoteId] = React.useState<string>();
   const [vistaAmpliada, setVistaAmpliada] =
@@ -4248,13 +3821,6 @@ export function ProductRow({
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
-  const tienePrecioEspecial = Boolean(
-    item.cotizacion?.desglosePrecio?.precioEspecialCliente,
-  );
-  const visibleAmounts = React.useMemo(
-    () => getItemOrderVisibleAmounts(item),
-    [item],
-  );
   const optionalMaterialDetails = React.useMemo(
     () =>
       new Map(
@@ -4283,154 +3849,8 @@ export function ProductRow({
     specs.length > 0 || briefDisenoTieneContenido(briefDiseno);
   const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
 
-  // Neto por ítem cuando la orden es sin comprobante: Total = subtotal (sin
-  // IVA) y el unitario se recalcula sobre el neto. El snapshot no se toca.
-  const totalItemVisible = sinComprobante
-    ? visibleAmounts.subtotal
-    : visibleAmounts.total;
-
   return (
-    <div className={`oprow ${expanded ? "open" : ""}`}>
-      <button
-        type="button"
-        className="oprow-head"
-        onClick={onToggle}
-        style={
-          sinComprobante
-            ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
-            : undefined
-        }
-      >
-        <span className="ix">{index + 1}</span>
-        <span className="chev">
-          <ChevronRightIcon
-            style={{
-              transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform .15s ease",
-            }}
-          />
-        </span>
-        <div className="prod">
-          <div className="nm">
-            {item.productoNombre}
-            {item.varianteNombre ? (
-              <span className={ccFicha.variante}>· {item.varianteNombre}</span>
-            ) : null}
-            {onVerPrecios ? (
-              <span
-                role="button"
-                tabIndex={0}
-                className={ccFicha.verPrecios}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onVerPrecios();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onVerPrecios();
-                  }
-                }}
-                title="Ver precios de impresión por hoja"
-              >
-                <EyeIcon />
-              </span>
-            ) : null}
-            {tienePrecioEspecial ? (
-              <span
-                className="op-especial"
-                title="Cotizado con el precio especial configurado para el cliente de la orden."
-              >
-                <StarIcon aria-hidden="true" />
-                Precio especial
-              </span>
-            ) : null}
-          </div>
-          <div className="cd">
-            <span className="fam">
-              {item.categoriaComercialNombre} ·{" "}
-              {item.subcategoriaComercialNombre}
-            </span>
-          </div>
-        </div>
-        <div className="num qty">
-          <span className="v">{formatCantidadItem(item)}</span>
-          <span className="u">{formatUnidad(item.unidadMedida)}</span>
-        </div>
-        <div className="num">
-          {calculoPendiente ? (
-            "A cotizar"
-          ) : item.cotizacion.desglosePrecio?.descuento?.aplicado ? (
-            <span className={descM.cellDesc}>
-              <span className={descM.cellLista}>
-                {formatCurrency(
-                  visibleAmounts.subtotal +
-                    Math.round(
-                      item.cotizacion.desglosePrecio.descuento.montoTotal,
-                    ),
-                  moneda,
-                )}
-              </span>
-              <span className={descM.cellRow}>
-                <span className={descM.cellTag}>
-                  {item.descuentoInput?.tipo === "PORCENTAJE"
-                    ? `−${formatDecimal(item.descuentoInput.valor, 1)}%`
-                    : `−${formatCurrency(item.cotizacion.desglosePrecio.descuento.montoTotal, moneda)}`}
-                </span>
-                <span>{formatCurrency(visibleAmounts.subtotal, moneda)}</span>
-              </span>
-            </span>
-          ) : (
-            formatCurrency(visibleAmounts.subtotal, moneda)
-          )}
-        </div>
-        {sinComprobante ? null : (
-          <div className="num">
-            {calculoPendiente
-              ? "-"
-              : formatCurrency(visibleAmounts.impuestos, moneda)}
-          </div>
-        )}
-        {/* Precio por unidad de la magnitud cotizada (m², ml, u., hoja): el
-            total dividido por la cantidad. Le da al comercial "¿cuánto sale el
-            m²/cada folleto?" sin sacar la cuenta a mano. Usa el total visible,
-            así unitario × cantidad = total mostrado. */}
-        <div className="num">
-          {calculoPendiente || item.cantidad <= 0
-            ? "—"
-            : `${formatUnitPrice(totalItemVisible / item.cantidad, moneda)} / ${formatUnidad(item.unidadMedida)}`}
-        </div>
-        <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
-          {calculoPendiente
-            ? "Pendiente"
-            : formatCurrency(totalItemVisible, moneda)}
-        </div>
-        {!onRemove ? (
-          <span className="x" aria-hidden="true" />
-        ) : (
-          <span
-            className="x"
-            role="button"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRemove();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                event.stopPropagation();
-                onRemove();
-              }
-            }}
-            title="Quitar producto"
-          >
-            <Trash2Icon />
-          </span>
-        )}
-      </button>
-
+    <div>
       {expanded ? (
         <Tabs
           className={cn(workspaceTheme.theme, itemStyles.detail)}
@@ -4784,60 +4204,6 @@ function EmptyTab({
   );
 }
 
-type ImpuestoResumenLinea = {
-  key: string;
-  nombre: string;
-  porcentaje: number;
-  monto: number;
-};
-
-function getImpuestosItemResumen(item: PropuestaItem) {
-  const desglose = item.cotizacion.desglosePrecio;
-  const lineas: ImpuestoResumenLinea[] = [];
-  let ocultos = 0;
-
-  if (!desglose) {
-    return { visibles: lineas, ocultos };
-  }
-
-  // Solo los impuestos POR_FUERA (IVA) son líneas que se agregan al neto y
-  // pueden mostrarse/ocultarse al cliente: su monto es % del neto. Los
-  // POR_DENTRO (IIBB, imp. al cheque) son costos ya embebidos en el precio
-  // neto — nunca se listan ni ajustan el subtotal.
-  const netoTotal = desglose.precioNetoTotal ?? 0;
-  for (const impuesto of desglose.impuestos ?? []) {
-    if ((impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA") continue;
-    const monto = netoTotal * (impuesto.porcentaje / 100);
-    if (monto <= 0) continue;
-    if (impuesto.desglosarCliente === false) {
-      ocultos += monto;
-      continue;
-    }
-
-    lineas.push({
-      key: impuesto.catalogoId || impuesto.codigo || impuesto.nombre,
-      nombre: impuesto.nombre,
-      porcentaje: impuesto.porcentaje,
-      monto,
-    });
-  }
-
-  return { visibles: lineas, ocultos };
-}
-
-function roundVisibleCurrency(value: number) {
-  return Math.round(value);
-}
-
-/** Input crudo de un descuento comercial (lo que pide el vendedor). Con
- * `cuponId` viene de un cupón: exento del gate y redimido al emitir. */
-type DescuentoInput = {
-  tipo: "PORCENTAJE" | "MONTO";
-  valor: number;
-  cuponId?: string;
-  cuponCodigo?: string;
-};
-
 /**
  * Proyección del descuento para el MOTOR: sólo { tipo, valor }. El cupón
  * (cuponId/cuponCodigo) es asunto comercial — el DTO del motor no lo conoce
@@ -4855,115 +4221,6 @@ function descuentoParaMotor(
  * (`aprobacionDescuentoMaxPct`). Ver docs/descuentos-diseno.md §10.
  */
 const DESCUENTO_MARGEN_ALERTA_PCT = 15;
-
-/**
- * Neto de LISTA de la línea (antes del descuento): base para prorratear un
- * descuento de orden por peso. Cae al neto normal / subtotal en snapshots que
- * no traen el bloque de descuento.
- */
-function netoListaDeItem(item: PropuestaItem): number {
-  const desglose = item.cotizacion.desglosePrecio;
-  return (
-    desglose?.descuento?.netoListaTotal ??
-    desglose?.precioNetoTotal ??
-    item.subtotal ??
-    0
-  );
-}
-
-/** Monto del descuento ya resuelto por el motor para la línea (0 si no hubo). */
-function descuentoMontoDeItem(item: PropuestaItem): number {
-  const descuento = item.cotizacion.desglosePrecio?.descuento;
-  return descuento?.aplicado ? descuento.montoTotal : 0;
-}
-
-function getItemOrderVisibleAmounts(item: PropuestaItem) {
-  const impuestosResumen = getImpuestosItemResumen(item);
-  const subtotal = roundVisibleCurrency(
-    item.subtotal + impuestosResumen.ocultos,
-  );
-  const impuestos = roundVisibleCurrency(
-    Math.max(0, item.impuestoMonto - impuestosResumen.ocultos),
-  );
-  return {
-    subtotal,
-    impuestos,
-    total: roundVisibleCurrency(item.total),
-  };
-}
-
-function asNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function getCargoConfig(cargo: CargoDirectoCatalogo | null) {
-  return (cargo?.configJson ?? {}) as Record<string, unknown>;
-}
-
-function getCargoDefaultMonto(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-  const firstZona = zonas[0] as { monto?: unknown } | undefined;
-  return asNumber(config.monto ?? firstZona?.monto, 0);
-}
-
-function getCargoDefaultPorcentaje(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  return asNumber(config.porcentaje ?? config.porcentajeDefault, 0);
-}
-
-function getCargoDefaultPrecioUnidad(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  return asNumber(config.precioPorUnidad, 0);
-}
-
-function getCargoInputLabel(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  const inputCantidad =
-    typeof config.inputCantidad === "string"
-      ? config.inputCantidad
-      : "cantidad";
-  const unidad = typeof config.unidad === "string" ? config.unidad : "";
-  const labels: Record<string, string> = {
-    distanciaKm: "Distancia",
-    bultos: "Bultos",
-    horas: "Horas",
-    viajes: "Viajes",
-    paradas: "Paradas",
-    cajas: "Cajas",
-    cantidad: "Cantidad",
-  };
-  const label = labels[inputCantidad] ?? humanizeCodigo(inputCantidad);
-  return unidad ? `${label} (${unidad})` : label;
-}
-
-function calcularResumenOrden(
-  items: PropuestaItem[],
-  cargosOrden: PropuestaCargoDirecto[],
-) {
-  const productos = calcularResumen(items);
-  const cargosSubtotal = cargosOrden.reduce(
-    (acc, cargo) => acc + cargo.montoNeto,
-    0,
-  );
-  const cargosImpuestos = cargosOrden.reduce(
-    (acc, cargo) => acc + cargo.impuestoMonto,
-    0,
-  );
-  const cargosTotal = cargosOrden.reduce((acc, cargo) => acc + cargo.total, 0);
-
-  return {
-    productos,
-    cargosSubtotal,
-    cargosImpuestos,
-    cargosTotal,
-    subtotal: productos.subtotal + cargosSubtotal,
-    impuestos: productos.impuestos + cargosImpuestos,
-    total: productos.total + cargosTotal,
-    cantidadItems: productos.cantidadItems,
-  };
-}
 
 /**
  * Overlay de emisión (diseño Grafo V2 · ordenes.jsx): pasos animados mientras
@@ -5111,1145 +4368,10 @@ function EmitOverlay({
  *  cuaderno de margen — nada oculto, se ve de frente. */
 function ChipSinComprobante() {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 12,
-        fontWeight: 600,
-        padding: "2px 10px",
-        borderRadius: 999,
-        background: "#fff7ed",
-        color: "#c2410c",
-        border: "1px solid #fed7aa",
-      }}
-      title="Orden sin comprobante fiscal en el sistema."
-    >
-      <FileXIcon size={13} /> Sin comprobante
-    </span>
-  );
-}
-
-export function ResumenBar({
-  items,
-  cargosOrden,
-  tipo,
-  onEmitir,
-  onEmitirPresupuesto,
-  emitiendo = false,
-  onGuardarBorrador,
-  guardandoBorrador = false,
-  onDescuentoOrden,
-  onCuponOrden,
-  onAgregarCargo,
-  sinComprobante = false,
-  fidelizacionCanjeMonto = 0,
-  onToggleTratamientoFiscal,
-  togglingFiscal = false,
-  readOnly = false,
-  resumenPersistido,
-  accionesOrden,
-}: {
-  items: PropuestaItem[];
-  cargosOrden: PropuestaCargoDirecto[];
-  tipo: "orden" | "presupuesto";
-  /** Ausente en modo lectura (OT emitida): sin acciones de guardado/emisión. */
-  onEmitir?: () => void;
-  /** Emisión del PRESUPUESTO (toggle en "Presupuesto"). */
-  onEmitirPresupuesto?: () => void;
-  emitiendo?: boolean;
-  onGuardarBorrador?: () => void;
-  guardandoBorrador?: boolean;
-  /** Abre el modal de descuento a nivel orden (ausente en modo lectura). */
-  onDescuentoOrden?: () => void;
-  /** Abre el modal directo en modo escaneo de cupón (F4). */
-  onCuponOrden?: () => void;
-  /** Cargo directo de la orden, junto a las demás acciones financieras. */
-  onAgregarCargo?: () => void;
-  /** Orden marcada SIN comprobante fiscal: el desglose oculta el IVA y el
-   *  total baja al neto. §6 del cuaderno de margen. */
-  sinComprobante?: boolean;
-  /** Bonificación comercial aplicada mediante el canje de puntos. */
-  fidelizacionCanjeMonto?: number;
-  /** Alterna el tratamiento fiscal (FISCAL ↔ SIN_COMPROBANTE). Ausente cuando
-   *  la orden ya no admite el cambio (facturada / no editable). */
-  onToggleTratamientoFiscal?: () => void;
-  togglingFiscal?: boolean;
-  readOnly?: boolean;
-  resumenPersistido?: {
-    subtotal: number;
-    impuestos: number;
-    descuentoTotal: number;
-    total: number;
-  };
-  /** Acciones de la OT emitida (Editar / Cancelar): van acá, no en el header,
-   *  para ganar alto. Sólo en modo lectura. */
-  accionesOrden?: React.ReactNode;
-}) {
-  const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatCurrency(v, moneda);
-  const resumen = calcularResumenOrden(items, cargosOrden);
-  const productosVisibles = items.reduce(
-    (acc, item) => {
-      const amounts = getItemOrderVisibleAmounts(item);
-      return {
-        subtotal: acc.subtotal + amounts.subtotal,
-        impuestos: acc.impuestos + amounts.impuestos,
-        total: acc.total + amounts.total,
-      };
-    },
-    { subtotal: 0, impuestos: 0, total: 0 },
-  );
-  // Los cargos DEL PASO ya integran el precio neto de cada producto: volver a
-  // mostrarlos como sumando sería contarlos visualmente dos veces. Sólo los
-  // cargos cargados a nivel ORDEN viven fuera del subtotal de los ítems.
-  const subtotal = productosVisibles.subtotal;
-  const impuestosVisibles = productosVisibles.impuestos;
-  const cargosOrdenMostrados = sinComprobante
-    ? resumen.cargosSubtotal
-    : resumen.cargosTotal;
-  const totalConCargos = productosVisibles.total + resumen.cargosTotal;
-
-  // Las comisiones ya están dentro del subtotal (son parte del precio): no se
-  // muestran como línea aparte ni en la barra ni en el desglose del item.
-  // Descuento comercial total: suma de lo que resolvió el motor por línea. El
-  // subtotal de arriba YA está descontado (el motor lo restó del neto); esta
-  // línea es informativa, para que el precio de lista quede a la vista.
-  const descuentoTotal = items.reduce(
-    (acc, item) => acc + descuentoMontoDeItem(item),
-    0,
-  );
-  // Sin comprobante: se oculta el IVA y el total cae al neto (§6 del cuaderno
-  // de margen). Se suman el subtotal neto de productos y los cargos netos DE
-  // LA ORDEN; no se usa `total − IVA`, porque arrastra redondeos.
-  const impuestosMostrados = sinComprobante ? 0 : impuestosVisibles;
-  const totalSinComprobante = subtotal + resumen.cargosSubtotal;
-  const totalAntesCanje =
-    readOnly && resumenPersistido
-      ? resumenPersistido.total
-      : sinComprobante
-        ? totalSinComprobante
-        : totalConCargos;
-  // En una OT persistida `resumenPersistido.total` ya incluye el canje. En el
-  // cotizador todavía hay que reflejar la simulación en esta barra.
-  const canjeMostrado = readOnly ? 0 : Math.max(0, fidelizacionCanjeMonto);
-  const totalMostrado = Math.max(0, totalAntesCanje - canjeMostrado);
-  const descuentoMostrado =
-    readOnly && resumenPersistido
-      ? resumenPersistido.descuentoTotal
-      : descuentoTotal;
-  const subtotalMostrado =
-    readOnly && resumenPersistido ? resumenPersistido.subtotal : subtotal;
-  const brk = [
-    {
-      k: descuentoMostrado > 0 ? "Subtotal de lista" : "Subtotal",
-      v: subtotalMostrado + descuentoMostrado,
-    },
-    ...(descuentoMostrado > 0
-      ? [{ k: "Descuento", v: -descuentoMostrado }]
-      : []),
-    {
-      k: "Impuestos",
-      v:
-        readOnly && resumenPersistido
-          ? resumenPersistido.impuestos
-          : impuestosMostrados,
-    },
-    ...(cargosOrdenMostrados > 0
-      ? [{ k: "Cargos de la orden", v: cargosOrdenMostrados }]
-      : []),
-    ...(canjeMostrado > 0 ? [{ k: "Canje de puntos", v: -canjeMostrado }] : []),
-  ];
-
-  // Toggle "sin comprobante fiscal" (FileX). Estado, no acción de una vez:
-  // aria-pressed + relleno naranja cuando está activo. §6 cuaderno de margen.
-  const toggleFiscalBtn = onToggleTratamientoFiscal ? (
-    <button
-      type="button"
-      className="btn"
-      onClick={onToggleTratamientoFiscal}
-      disabled={togglingFiscal || items.length === 0}
-      aria-pressed={sinComprobante}
-      aria-label="Sin comprobante fiscal en el sistema"
-      title={
-        sinComprobante
-          ? "Sin comprobante fiscal en el sistema — click o tecla X para volver a fiscal"
-          : "Marcar la orden sin comprobante fiscal en el sistema (tecla X)"
-      }
-      style={
-        sinComprobante
-          ? { color: "#fff", background: "#c2410c", borderColor: "#c2410c" }
-          : { color: "#c2410c" }
-      }
-    >
-      <FileXIcon />
-    </button>
-  ) : null;
-
-  // Modelo C del diseño: barra anclada al fondo del scroll, con el papel y la
-  // constelación del encabezado. La lista de productos corre por detrás y el
-  // total nunca se pierde de vista. Ver producto/Resumen financiero.html.
-  return (
-    <div className={resumenBar.wrap}>
-      <ConstelacionCanvas
-        className={resumenBar.canvas}
-        nodes={34}
-        pulses={3}
-        cx={0.88}
-        cy={0.5}
-        radius={1.5}
-      />
-      <span className={resumenBar.veil} />
-      <div className={resumenBar.in}>
-        <span className={resumenBar.tot}>
-          <span className={resumenBar.totK}>
-            Total{sinComprobante ? " (sin comprobante)" : ""}
-          </span>
-          <span className={resumenBar.totV}>{fmt(totalMostrado)}</span>
-        </span>
-        <span className={resumenBar.brk}>
-          {brk.map((c) => (
-            <span
-              key={c.k}
-              className={`${resumenBar.cell}${c.v !== 0 ? "" : ` ${resumenBar.zero}`}`}
-            >
-              <span className={resumenBar.cellK}>{c.k}</span>
-              <span className={resumenBar.cellV}>{fmt(c.v)}</span>
-            </span>
-          ))}
-        </span>
-        {readOnly ? (
-          accionesOrden || toggleFiscalBtn ? (
-            <span className={resumenBar.acts}>
-              {toggleFiscalBtn}
-              {accionesOrden}
-            </span>
-          ) : null
-        ) : (
-          <span className={resumenBar.acts}>
-            {onAgregarCargo ? (
-              <Tooltip>
-                <TooltipTrigger render={
-                  <Button
-                    variant="outline"
-                    className={cn("btn", resumenBar.cargoAction)}
-                    onClick={onAgregarCargo}
-                    disabled={emitiendo || guardandoBorrador}
-                    aria-label="Agregar cargo"
-                  />
-                }>
-                  <CircleDollarSignIcon aria-hidden="true" />
-                </TooltipTrigger>
-                <TooltipContent>Agregar cargo</TooltipContent>
-              </Tooltip>
-            ) : null}
-            {toggleFiscalBtn}
-            {onDescuentoOrden ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={onDescuentoOrden}
-                disabled={emitiendo || items.length === 0}
-                aria-label="Aplicar un descuento a toda la orden"
-                title={
-                  descuentoTotal > 0
-                    ? "Descuento aplicado — editar"
-                    : "Aplicar un descuento a toda la orden"
-                }
-                style={{ color: "#c2410c" }}
-              >
-                <BadgePercentIcon />
-              </button>
-            ) : null}
-            {onCuponOrden ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={onCuponOrden}
-                disabled={emitiendo || items.length === 0}
-                aria-label="Escanear o ingresar un cupón"
-                title="Cupón: escaneá el QR o tecleá el código"
-                style={{ color: "#c2410c" }}
-              >
-                <TicketPercentIcon />
-              </button>
-            ) : null}
-            {tipo === "orden" ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={onGuardarBorrador}
-                disabled={guardandoBorrador || emitiendo || items.length === 0}
-              >
-                <SaveIcon />
-                {guardandoBorrador ? "Guardando…" : "Borrador"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={emitiendo || items.length === 0}
-              onClick={tipo === "orden" ? onEmitir : onEmitirPresupuesto}
-            >
-              {tipo === "orden" ? (
-                <>
-                  <CheckIcon />
-                  {emitiendo ? "Emitiendo…" : "Emitir OT"}
-                </>
-              ) : (
-                <>
-                  <ExternalLinkIcon />
-                  {emitiendo ? "Emitiendo…" : "Emitir presupuesto"}
-                </>
-              )}
-            </button>
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function buildCargoOrdenSnapshot({
-  cargo,
-  monto,
-  porcentaje,
-  precioUnidad,
-  cantidadInput,
-  zonaCodigo,
-  subtotalBase,
-  nota,
-  moneda,
-}: {
-  cargo: CargoDirectoCatalogo;
-  monto: number;
-  porcentaje: number;
-  precioUnidad: number;
-  cantidadInput: number;
-  zonaCodigo: string;
-  subtotalBase: number;
-  nota: string;
-  moneda: Moneda;
-}): PropuestaCargoDirecto {
-  const config = getCargoConfig(cargo);
-  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-  const zona =
-    zonaCodigo && zonas.length > 0
-      ? (zonas.find(
-          (candidate) =>
-            typeof candidate === "object" &&
-            candidate !== null &&
-            "codigo" in candidate &&
-            String((candidate as { codigo: unknown }).codigo) === zonaCodigo,
-        ) as { codigo?: string; nombre?: string; monto?: number } | undefined)
-      : undefined;
-  let montoNeto = monto;
-  let detalle = "Monto fijo";
-  const nextConfig: Record<string, unknown> = { ...config };
-
-  if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
-    montoNeto = zona ? asNumber(zona.monto, monto) : monto;
-    nextConfig.montoAplicado = montoNeto;
-    if (zona) {
-      nextConfig.zonaAplicada = {
-        codigo: zona.codigo,
-        nombre: zona.nombre,
-        monto: montoNeto,
-      };
-      detalle = zona.nombre ? `Zona ${zona.nombre}` : `Zona ${zona.codigo}`;
-    }
-  }
-
-  if (cargo.modoCalculo === "PORCENTAJE_SOBRE_BASE") {
-    montoNeto = (subtotalBase * porcentaje) / 100;
-    nextConfig.porcentajeAplicado = porcentaje;
-    detalle = `${porcentaje.toLocaleString("es-AR", { maximumFractionDigits: 2 })}% sobre subtotal`;
-  }
-
-  if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
-    montoNeto = precioUnidad * cantidadInput;
-    nextConfig.precioPorUnidadAplicado = precioUnidad;
-    nextConfig.cantidadAplicada = cantidadInput;
-    detalle = `${cantidadInput.toLocaleString("es-AR")} x ${formatCurrency(precioUnidad, moneda)}`;
-  }
-
-  const montoRedondeado = Math.max(0, Math.round(montoNeto));
-  const impuestoPorcentaje = 21;
-  const impuestoMonto = Math.round(
-    montoRedondeado * (impuestoPorcentaje / 100),
-  );
-
-  return {
-    id: `cargo-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    cargoDirectoCatalogoId: cargo.id,
-    codigoSnapshot: cargo.codigo,
-    nombreSnapshot: cargo.nombre,
-    descripcionSnapshot: cargo.descripcion,
-    modoCalculoSnapshot:
-      cargo.modoCalculo as PropuestaCargoDirecto["modoCalculoSnapshot"],
-    configSnapshot: nextConfig,
-    baseCalculo: subtotalBase,
-    cantidadInput:
-      cargo.modoCalculo === "POR_UNIDAD_INPUT" ? cantidadInput : undefined,
-    montoNeto: montoRedondeado,
-    impuestoPorcentaje,
-    impuestoMonto,
-    total: montoRedondeado + impuestoMonto,
-    detalle,
-    nota: nota.trim() || undefined,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function CargoOrdenSheet({
-  open,
-  cargos,
-  subtotalBase,
-  onClose,
-  onAdd,
-}: {
-  open: boolean;
-  cargos: CargoDirectoCatalogo[];
-  subtotalBase: number;
-  onClose: () => void;
-  onAdd: (cargo: PropuestaCargoDirecto) => void;
-}) {
-  const { moneda } = useConfigRegional();
-  const [cargoId, setCargoId] = React.useState("");
-  const selectedCargo = React.useMemo(
-    () => cargos.find((cargo) => cargo.id === cargoId) ?? null,
-    [cargos, cargoId],
-  );
-  const zonas = React.useMemo(() => {
-    const selectedConfig = getCargoConfig(selectedCargo);
-    return Array.isArray(selectedConfig.zonas)
-      ? (selectedConfig.zonas as Array<{
-          codigo?: string;
-          nombre?: string;
-          monto?: number;
-        }>)
-      : [];
-  }, [selectedCargo]);
-  const [monto, setMonto] = React.useState(0);
-  const [porcentaje, setPorcentaje] = React.useState(0);
-  const [precioUnidad, setPrecioUnidad] = React.useState(0);
-  const [cantidadInput, setCantidadInput] = React.useState(1);
-  const [zonaCodigo, setZonaCodigo] = React.useState("");
-  const [nota, setNota] = React.useState("");
-
-  React.useEffect(() => {
-    if (!open) return;
-    const first = cargos[0];
-    setCargoId(first?.id ?? "");
-  }, [cargos, open]);
-
-  React.useEffect(() => {
-    setMonto(getCargoDefaultMonto(selectedCargo));
-    setPorcentaje(getCargoDefaultPorcentaje(selectedCargo));
-    setPrecioUnidad(getCargoDefaultPrecioUnidad(selectedCargo));
-    setCantidadInput(1);
-    setZonaCodigo(zonas[0]?.codigo ?? "");
-    setNota("");
-  }, [selectedCargo, zonas]);
-
-  if (!open) return null;
-
-  const preview = selectedCargo
-    ? buildCargoOrdenSnapshot({
-        cargo: selectedCargo,
-        monto,
-        porcentaje,
-        precioUnidad,
-        cantidadInput,
-        zonaCodigo,
-        subtotalBase,
-        nota,
-        moneda,
-      })
-    : null;
-
-  const handleAdd = () => {
-    if (!selectedCargo || !preview) {
-      toast.error("Seleccioná un cargo del catálogo.");
-      return;
-    }
-    if (preview.montoNeto <= 0) {
-      toast.error("El monto del cargo debe ser mayor a cero.");
-      return;
-    }
-    onAdd(preview);
-  };
-
-  return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose} />
-      <aside
-        className="sheet sheet-ap cargo-sheet"
-        aria-modal="true"
-        role="dialog"
-      >
-        <div className="sheet-head">
-          <span className="sheet-ico">
-            <CircleDollarSignIcon />
-          </span>
-          <div className="body">
-            <h2>Agregar cargo a la OT</h2>
-            <div className="sub">
-              Usa el catálogo de Costos, pero guarda un snapshot para esta
-              orden.
-            </div>
-          </div>
-          <button
-            type="button"
-            className="close"
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        <div className="sheet-body cargo-sheet-body">
-          {cargos.length === 0 ? (
-            <div className="orden-tab-empty">
-              <div className="ttl">Sin cargos disponibles</div>
-              <div className="sub">
-                Creá cargos en Costos &gt; Cargos directos.
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="cargo-field">
-                <label>Cargo</label>
-                <select
-                  value={cargoId}
-                  onChange={(event) => setCargoId(event.target.value)}
-                >
-                  {cargos.map((cargo) => (
-                    <option key={cargo.id} value={cargo.id}>
-                      {cargo.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedCargo ? (
-                <div className="cargo-calc-card">
-                  <div>
-                    <span className="lbl">Tipo de cálculo</span>
-                    <strong>
-                      {selectedCargo.modoCalculo.replaceAll("_", " ")}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="lbl">Base actual</span>
-                    <strong>{formatCurrency(subtotalBase, moneda)}</strong>
-                  </div>
-                </div>
-              ) : null}
-
-              {selectedCargo?.modoCalculo === "MONTO_FIJO_PLANO" ? (
-                <>
-                  {zonas.length > 0 ? (
-                    <div className="cargo-field">
-                      <label>Zona</label>
-                      <select
-                        value={zonaCodigo}
-                        onChange={(event) => setZonaCodigo(event.target.value)}
-                      >
-                        {zonas.map((zona) => (
-                          <option key={zona.codigo} value={zona.codigo}>
-                            {zona.nombre ?? zona.codigo} ·{" "}
-                            {formatCurrency(asNumber(zona.monto), moneda)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {zonas.length === 0 ? (
-                    <div className="cargo-field">
-                      <label>Monto neto</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={monto}
-                        onChange={(event) =>
-                          setMonto(Number(event.target.value) || 0)
-                        }
-                      />
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-
-              {selectedCargo?.modoCalculo === "PORCENTAJE_SOBRE_BASE" ? (
-                <div className="cargo-field">
-                  <label>Porcentaje sobre subtotal</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={porcentaje}
-                    onChange={(event) =>
-                      setPorcentaje(Number(event.target.value) || 0)
-                    }
-                  />
-                </div>
-              ) : null}
-
-              {selectedCargo?.modoCalculo === "POR_UNIDAD_INPUT" ? (
-                <div className="cargo-grid-2">
-                  <div className="cargo-field">
-                    <label>{getCargoInputLabel(selectedCargo)}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={cantidadInput}
-                      onChange={(event) =>
-                        setCantidadInput(Number(event.target.value) || 0)
-                      }
-                    />
-                  </div>
-                  <div className="cargo-field">
-                    <label>Precio por unidad</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={precioUnidad}
-                      onChange={(event) =>
-                        setPrecioUnidad(Number(event.target.value) || 0)
-                      }
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="cargo-field">
-                <label>Nota interna</label>
-                <textarea
-                  rows={3}
-                  value={nota}
-                  onChange={(event) => setNota(event.target.value)}
-                  placeholder="Opcional"
-                />
-              </div>
-
-              {preview ? (
-                <div className="cargo-preview">
-                  <span>
-                    {preview.nombreSnapshot}
-                    <small>{preview.detalle}</small>
-                  </span>
-                  <strong>{formatCurrency(preview.total, moneda)}</strong>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-
-        <div className="sheet-foot">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancelar
-          </button>
-          <div className="spacer" />
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleAdd}
-            disabled={cargos.length === 0}
-          >
-            <PlusIcon />
-            Agregar cargo
-          </button>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-/** Qué se va a descontar: abierto desde una fila (item) o desde la barra
- * (orden). `cupon` abre directo en modo escaneo de cupón. */
-type DescuentoTarget = {
-  scope: "item" | "orden";
-  itemId: string | null;
-  cupon?: boolean;
-};
-
-/**
- * Modal de descuento comercial (F1). Alcance item u orden, % o monto. El preview
- * es sólo monetario (neto de lista → descontado); el margen efectivo y su aviso
- * los resuelve el motor al aplicar (recotización). Ver §10 del diseño.
- */
-function DescuentoModal({
-  target,
-  items,
-  clienteId,
-  aplicando,
-  onClose,
-  onApply,
-  onApplyCupon,
-  onAviso,
-}: {
-  /** null = cerrado. `scope`/`itemId` fijan el estado inicial del formulario. */
-  target: DescuentoTarget | null;
-  /** Sólo los items recotizables (con jobContext + motor). */
-  items: PropuestaItem[];
-  /** Para validar cupones con alcance CLIENTE. */
-  clienteId: string | null;
-  aplicando: boolean;
-  onClose: () => void;
-  onApply: (
-    scope: "item" | "orden",
-    targetItemId: string | null,
-    descuento: DescuentoInput | null,
-  ) => void;
-  /** Cupón validado por el backend, listo para materializar por línea. */
-  onApplyCupon: (resultado: ValidarCuponResultado) => void;
-  /** Los errores de cupón se muestran en el modal centrado, no en toast. */
-  onAviso: (aviso: AvisoCupon) => void;
-}) {
-  const { moneda } = useConfigRegional();
-  const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">("PORCENTAJE");
-  const [valor, setValor] = React.useState(0);
-  // Cupón (sólo alcance orden): el código define su propio alcance, el
-  // backend valida y dice qué líneas toca. El lector 2D tipea + Enter.
-  const [modo, setModo] = React.useState<"manual" | "cupon">("manual");
-  const [codigoCupon, setCodigoCupon] = React.useState("");
-  const [validandoCupon, setValidandoCupon] = React.useState(false);
-  const [cuponValidado, setCuponValidado] =
-    React.useState<ValidarCuponResultado | null>(null);
-  // Modo ESCANEO: input invisible con foco capturando lo que tipea el lector;
-  // al Enter valida y aplica directo, sin mostrar el código.
-  const [escaneando, setEscaneando] = React.useState(false);
-  const scanRef = React.useRef<HTMLInputElement | null>(null);
-  const abierto = target != null;
-
-  // Ref con los items para leerlos en el efecto de init sin volverlo a disparar.
-  const itemsRefDescuento = React.useRef(items);
-  itemsRefDescuento.current = items;
-
-  // El alcance y el item los fija el punto de entrada (la fila o la barra), no el
-  // usuario. Init en el flanco de apertura: precarga tipo/valor desde el descuento
-  // existente del objetivo (o de cualquiera, si es a nivel orden) para editarlo.
-  React.useEffect(() => {
-    if (!target) return;
-    const itemsRecotizables = itemsRefDescuento.current;
-    const ref =
-      target.scope === "item"
-        ? itemsRecotizables.find((item) => item.id === target.itemId)
-        : itemsRecotizables.find((item) => item.descuentoInput);
-    if (ref?.descuentoInput) {
-      setTipo(ref.descuentoInput.tipo);
-      setValor(ref.descuentoInput.valor);
-    } else {
-      setTipo("PORCENTAJE");
-      setValor(0);
-    }
-    setModo(target.cupon ? "cupon" : "manual");
-    setEscaneando(Boolean(target.cupon));
-    setCodigoCupon("");
-    setCuponValidado(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.scope, target?.itemId, target?.cupon]);
-
-  // El input de escaneo pelea por el foco mientras dura el modo: el lector
-  // tipea "a ciegas" y cualquier click no puede robárselo.
-  React.useEffect(() => {
-    if (!abierto || !escaneando) return;
-    const focus = () => scanRef.current?.focus();
-    focus();
-    const timer = setInterval(focus, 400);
-    return () => clearInterval(timer);
-  }, [abierto, escaneando]);
-
-  React.useEffect(() => {
-    if (!abierto) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [abierto, onClose]);
-
-  if (!abierto) return null;
-
-  const scope = target.scope;
-  const itemObjetivo =
-    scope === "item"
-      ? (items.find((item) => item.id === target.itemId) ?? null)
-      : null;
-  const objetivoLabel =
-    scope === "item"
-      ? (itemObjetivo?.productoNombre ?? "Producto")
-      : `Toda la orden · ${items.length} ${items.length === 1 ? "producto" : "productos"}`;
-  const netoLista =
-    scope === "item"
-      ? itemObjetivo
-        ? netoListaDeItem(itemObjetivo)
-        : 0
-      : items.reduce((acc, item) => acc + netoListaDeItem(item), 0);
-  const descuentoInput: DescuentoInput | null =
-    valor > 0 ? { tipo, valor } : null;
-  // Preview monetario (no es la matemática de precio del motor, sólo la resta
-  // sobre el neto de lista para que el vendedor vea el orden de magnitud).
-  const montoPreview =
-    tipo === "PORCENTAJE"
-      ? (netoLista * Math.min(Math.max(valor, 0), 100)) / 100
-      : Math.min(Math.max(valor, 0), netoLista);
-  const netoDescontado = Math.max(0, netoLista - montoPreview);
-  const hayDescuentoActivo =
-    scope === "item"
-      ? Boolean(itemObjetivo?.descuentoInput)
-      : items.some((item) => item.descuentoInput);
-
-  const handleApply = () => {
-    if (scope === "item" && !itemObjetivo) {
-      toast.error("No se pudo identificar el producto a descontar.");
-      return;
-    }
-    if (!descuentoInput) {
-      toast.error("Ingresá un descuento mayor a cero.");
-      return;
-    }
-    if (tipo === "PORCENTAJE" && valor > 100) {
-      toast.error("El porcentaje no puede superar el 100%.");
-      return;
-    }
-    onApply(scope, scope === "item" ? target.itemId : null, descuentoInput);
-  };
-
-  // Función plana a propósito: vive después del early return del modal
-  // cerrado, así que NO puede ser un hook (rompería el orden de hooks).
-  const validarContraCarrito = (codigo: string) =>
-    validarCupon({
-      codigo,
-      clienteId: clienteId ?? undefined,
-      items: items.map((item) => ({
-        key: item.id,
-        productoId: item.motorCodigo || undefined,
-        productoCodigo: item.productoCodigo || undefined,
-        categoriaCodigo: item.categoriaComercialCodigo || undefined,
-        subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
-        neto: netoListaDeItem(item),
-      })),
-    });
-
-  const handleValidarCupon = async () => {
-    const codigo = codigoCupon.trim();
-    if (!codigo) {
-      onAviso({
-        tipo: "aviso",
-        titulo: "Falta el código",
-        detalle: "Escaneá el QR del cupón o tecleá su código.",
-      });
-      return;
-    }
-    setValidandoCupon(true);
-    setCuponValidado(null);
-    try {
-      setCuponValidado(await validarContraCarrito(codigo));
-    } catch (error) {
-      onAviso({
-        tipo: "error",
-        titulo: "Cupón no válido",
-        detalle:
-          error instanceof Error
-            ? error.message
-            : "No se pudo validar el cupón.",
-      });
-    } finally {
-      setValidandoCupon(false);
-    }
-  };
-
-  /** Escaneo: valida y APLICA de una, sin mostrar el código. Si el cupón no
-   * pasa, avisa y sigue escuchando (el buffer se limpia solo). */
-  const handleEscaneado = async (codigo: string) => {
-    if (!codigo.trim() || validandoCupon) return;
-    setValidandoCupon(true);
-    try {
-      const resultado = await validarContraCarrito(codigo.trim());
-      onApplyCupon(resultado);
-    } catch (error) {
-      onAviso({
-        tipo: "error",
-        titulo: "Cupón no válido",
-        detalle:
-          error instanceof Error
-            ? error.message
-            : "No se pudo validar el cupón.",
-      });
-    } finally {
-      setCodigoCupon("");
-      setValidandoCupon(false);
-    }
-  };
-
-  return (
-    <div className={descM.overlay} onClick={onClose}>
-      <div
-        className={descM.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Aplicar descuento"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          className={descM.close}
-          onClick={onClose}
-          aria-label="Cerrar"
-        >
-          <XIcon />
-        </button>
-
-        <div className={descM.head}>
-          <span className={descM.ico}>
-            <BadgePercentIcon />
-          </span>
-          <div>
-            <h2>Aplicar descuento</h2>
-            <div className={descM.sub}>
-              Reduce la base antes de impuestos. El costo no baja: come margen.
-            </div>
-          </div>
-        </div>
-
-        <div className={descM.body}>
-          <div className={descM.target}>
-            <span className={descM.targetLbl}>Descuento para</span>
-            <strong>{objetivoLabel}</strong>
-          </div>
-
-          {/* El cupón define su propio alcance → sólo se ofrece al entrar
-              por la orden. Desde una fila, siempre manual. */}
-          {scope === "orden" ? (
-            <div className={descM.modos}>
-              <button
-                type="button"
-                className={modo === "manual" ? descM.modoOn : ""}
-                onClick={() => setModo("manual")}
-              >
-                Manual
-              </button>
-              <button
-                type="button"
-                className={modo === "cupon" ? descM.modoOn : ""}
-                onClick={() => setModo("cupon")}
-              >
-                Cupón
-              </button>
-            </div>
-          ) : null}
-
-          {modo === "manual" ? (
-            <>
-              <div className={descM.grid2}>
-                <div className={descM.field}>
-                  <label>Tipo</label>
-                  <select
-                    value={tipo}
-                    onChange={(event) =>
-                      setTipo(event.target.value as "PORCENTAJE" | "MONTO")
-                    }
-                  >
-                    <option value="PORCENTAJE">Porcentaje (%)</option>
-                    <option value="MONTO">Monto ($)</option>
-                  </select>
-                </div>
-                <div className={descM.field}>
-                  <label>
-                    {tipo === "PORCENTAJE" ? "Porcentaje" : "Monto neto"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step={tipo === "PORCENTAJE" ? "0.5" : "1"}
-                    max={tipo === "PORCENTAJE" ? "100" : undefined}
-                    value={valor}
-                    onChange={(event) =>
-                      setValor(Number(event.target.value) || 0)
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className={descM.calc}>
-                <div>
-                  <span className={descM.lbl}>Neto de lista</span>
-                  <strong>{formatCurrency(netoLista, moneda)}</strong>
-                </div>
-                <div className={descM.neg}>
-                  <span className={descM.lbl}>Descuento</span>
-                  <strong>−{formatCurrency(montoPreview, moneda)}</strong>
-                </div>
-                <div>
-                  <span className={descM.lbl}>Neto con descuento</span>
-                  <strong>{formatCurrency(netoDescontado, moneda)}</strong>
-                </div>
-              </div>
-
-              <div className={descM.note}>
-                {scope === "orden"
-                  ? tipo === "MONTO"
-                    ? "Se reparte entre los productos según su peso."
-                    : "Se aplica el mismo porcentaje a cada producto."
-                  : "El margen resultante se recalcula al aplicar."}
-                <small>
-                  Impuestos y comisiones se recalculan sobre el neto descontado.
-                </small>
-              </div>
-            </>
-          ) : escaneando ? (
-            <>
-              {/* Escaneo: input invisible que captura al lector; el código
-                  nunca se muestra — valida y aplica de una. */}
-              <div className={descM.scan}>
-                <input
-                  ref={scanRef}
-                  className={descM.scanInput}
-                  type="text"
-                  value={codigoCupon}
-                  onChange={(event) =>
-                    setCodigoCupon(event.target.value.toUpperCase())
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleEscaneado(codigoCupon);
-                    }
-                  }}
-                  aria-label="Escaneá el cupón"
-                />
-                <span
-                  className={`${descM.scanBox}${validandoCupon ? ` ${descM.scanOk}` : ""}`}
-                >
-                  <TicketPercentIcon />
-                  <span className={descM.scanLine} />
-                </span>
-                <strong>
-                  {validandoCupon ? "Validando…" : "Escaneá el cupón"}
-                </strong>
-                <small>Apuntá el lector al QR: se valida y aplica solo.</small>
-                <button
-                  type="button"
-                  className="btn-link"
-                  onClick={() => {
-                    setEscaneando(false);
-                    setCodigoCupon("");
-                  }}
-                >
-                  Ingresar el código a mano
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={descM.field}>
-                <label>Código del cupón</label>
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Tecleá o escaneá el QR…"
-                  value={codigoCupon}
-                  onChange={(event) => {
-                    setCodigoCupon(event.target.value.toUpperCase());
-                    setCuponValidado(null);
-                  }}
-                  onKeyDown={(event) => {
-                    // El lector 2D tipea el código y manda Enter: valida solo.
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleValidarCupon();
-                    }
-                  }}
-                />
-              </div>
-              {cuponValidado ? (
-                <div className={descM.calc}>
-                  <div>
-                    <span className={descM.lbl}>Cupón</span>
-                    <strong>{cuponValidado.cupon.codigo}</strong>
-                  </div>
-                  <div className={descM.neg}>
-                    <span className={descM.lbl}>Descuento</span>
-                    <strong>
-                      {cuponValidado.cupon.tipo === "PORCENTAJE"
-                        ? `−${cuponValidado.cupon.valor.toLocaleString("es-AR")}%`
-                        : `−${formatCurrency(cuponValidado.cupon.valor, moneda)}`}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className={descM.lbl}>Alcanza</span>
-                    <strong>
-                      {cuponValidado.alcanzadas.length} de {items.length}
-                    </strong>
-                  </div>
-                </div>
-              ) : null}
-              <div className={descM.note}>
-                {cuponValidado
-                  ? (cuponValidado.cupon.descripcion ??
-                    "Validado: se aplica a las líneas del alcance y se redime al emitir la orden.")
-                  : "El cupón valida vigencia, usos y alcance contra esta orden. Si alguna línea tenía descuento manual, el cupón lo reemplaza."}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className={descM.foot}>
-          <button type="button" className="btn" onClick={onClose}>
-            Cancelar
-          </button>
-          {hayDescuentoActivo ? (
-            <button
-              type="button"
-              className="btn"
-              disabled={aplicando}
-              onClick={() =>
-                onApply(scope, scope === "item" ? target.itemId : null, null)
-              }
-            >
-              <Trash2Icon />
-              Quitar
-            </button>
-          ) : null}
-          <div className={descM.spacer} />
-          {modo === "manual" ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleApply}
-              disabled={aplicando || items.length === 0}
-            >
-              <BadgePercentIcon />
-              {aplicando ? "Aplicando…" : "Aplicar descuento"}
-            </button>
-          ) : cuponValidado ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={aplicando}
-              onClick={() => onApplyCupon(cuponValidado)}
-            >
-              <TicketPercentIcon />
-              {aplicando ? "Aplicando…" : "Aplicar cupón"}
-            </button>
-          ) : escaneando ? null : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={validandoCupon || codigoCupon.trim().length === 0}
-              onClick={() => void handleValidarCupon()}
-            >
-              {validandoCupon ? "Validando…" : "Validar cupón"}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <Chip size="sm" color="warning" variant="soft">
+      <FileXIcon className="size-3" />
+      Sin comprobante
+    </Chip>
   );
 }
 
@@ -6701,7 +4823,9 @@ export function PropuestaFicha({
   }, [recienConvertida]);
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
-  const [tab, setTab] = React.useState<OrdenTab>("productos");
+  const [tab, setTab] = React.useState<OrdenTab>(
+    ordenProp ? "productos" : "datos",
+  );
   // QR que el cliente presenta en el mostrador para retirar.
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
   // Acceso manual al mismo circuito de mostrador cuando no se usa el QR.
@@ -6715,6 +4839,7 @@ export function PropuestaFicha({
   const { fechaHora } = useFecha();
   // Acreditar una factura ante ARCA no es cosa de cualquiera: es el mismo
   // permiso que rige anular comprobantes.
+  const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
   const puedeEntregar = usePuede("produccion.gestionar");
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
@@ -6800,6 +4925,9 @@ export function PropuestaFicha({
     PropuestaItem[] | null
   >(null);
   const [cargoOpen, setCargoOpen] = React.useState(false);
+  const [cuponAbierto, setCuponAbierto] = React.useState(false);
+  const [cuponValidando, setCuponValidando] = React.useState(false);
+  const cuponEnCurso = React.useRef(false);
   const [descuentoTarget, setDescuentoTarget] =
     React.useState<DescuentoTarget | null>(null);
   const [descuentoAplicando, setDescuentoAplicando] = React.useState(false);
@@ -6818,7 +4946,6 @@ export function PropuestaFicha({
   const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
     orden?.proyectoCampana?.id ?? "",
   );
-  const [campanaSelectorOpen, setCampanaSelectorOpen] = React.useState(false);
   const [campanasCliente, setCampanasCliente] = React.useState<
     CampanaReferencia[]
   >([]);
@@ -6876,6 +5003,8 @@ export function PropuestaFicha({
         : [...initialClientes, ...clientesEscaneados],
     [initialClientes, clientesEscaneados],
   );
+  // La caché sobrevive al cierre del panel de datos en móvil.
+  const selectorClientes = useClientesOrden(clientesDisponibles);
   const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? "");
   const datosOrdenRef = React.useRef<OrdenWorkspaceHandle>(null);
   const canalSelectorId = React.useId();
@@ -7125,6 +5254,21 @@ export function PropuestaFicha({
    * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
   const itemsEnEdicion = puedeTocarItems && editandoOrden;
+  // Misma puerta para botones, atajos y confirmación de ambos sheets.
+  const puedeModificarProductos =
+    !guardandoEdicion &&
+    !cuponValidando &&
+    !descuentoAplicando &&
+    (!modoOrden || itemsEnEdicion);
+  const permisoProductosRef = React.useRef(puedeModificarProductos);
+  React.useLayoutEffect(() => {
+    permisoProductosRef.current = puedeModificarProductos;
+    if (puedeModificarProductos) return;
+    setAddOpen(false);
+    setEditingItem(null);
+    setCopiadoOpen(false);
+    setCopiadoEditItems(null);
+  }, [puedeModificarProductos]);
 
   /** Ids reales de los items persistidos (para diferenciar altas locales). */
   const persistedItemIds = React.useMemo(
@@ -7788,9 +5932,9 @@ export function PropuestaFicha({
     router.push(destino);
   }, [navPendiente, router]);
   const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
-  const rowRefs = React.useRef(new Map<string, HTMLDivElement>());
+  const rowRefs = React.useRef(new Map<string, HTMLElement>());
 
-  const focusProductRow = React.useCallback((itemId: string) => {
+  const focusOrdenProductoDetalle = React.useCallback((itemId: string) => {
     window.requestAnimationFrame(() => {
       rowRefs.current.get(itemId)?.scrollIntoView({
         behavior: "smooth",
@@ -7800,15 +5944,17 @@ export function PropuestaFicha({
   }, []);
 
   const abrirAgregarProducto = React.useCallback(() => {
+    if (!puedeModificarProductos) return;
     setEditingItem(null);
     setTab("productos");
     setAddOpen(true);
-  }, []);
+  }, [puedeModificarProductos]);
 
   const abrirCentroCopiado = React.useCallback(() => {
+    if (!puedeModificarProductos || !ccActivo) return;
     setCopiadoEditItems(null);
     setCopiadoOpen(true);
-  }, []);
+  }, [puedeModificarProductos, ccActivo]);
 
   /** Un renglón que salió del centro de copiado (para rutear su edición). */
   const esCentroCopiado = React.useCallback(
@@ -7844,6 +5990,7 @@ export function PropuestaFicha({
    */
   const abrirEdicion = React.useCallback(
     (item: PropuestaItem) => {
+      if (!puedeModificarProductos) return;
       if (esCentroCopiado(item)) {
         const carga = cargaDeItem(item);
         const deLaCarga = carga
@@ -7856,7 +6003,7 @@ export function PropuestaFicha({
         setAddOpen(true);
       }
     },
-    [esCentroCopiado, cargaDeItem, items],
+    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items],
   );
 
   /**
@@ -8292,6 +6439,8 @@ export function PropuestaFicha({
   // re-disparos del efecto por cada actualización progresiva).
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
+  const contextoCuponRef = React.useRef({ clienteId, items });
+  contextoCuponRef.current = { clienteId, items };
 
   const recotizarItemsPorCliente = React.useCallback(
     async (targetClienteId: string) => {
@@ -8608,7 +6757,7 @@ export function PropuestaFicha({
           detalle:
             "Ningún producto de la orden entra en el alcance de este cupón.",
         });
-        return;
+        return false;
       }
       const pisadas = objetivo.filter(
         (item) => item.descuentoInput && !item.descuentoInput.cuponId,
@@ -8656,7 +6805,7 @@ export function PropuestaFicha({
                 ? `${cause.message} Se restauraron las líneas anteriores.`
                 : "La recotización falló y se restauraron las líneas anteriores.",
           });
-          return;
+          return false;
         }
         setItems((current) =>
           current.map(
@@ -8681,7 +6830,7 @@ export function PropuestaFicha({
               ? `−${formatCurrency(descontado, moneda)}`
               : undefined,
         });
-        setDescuentoTarget(null);
+        return true;
       } finally {
         setDescuentoAplicando(false);
       }
@@ -8689,53 +6838,67 @@ export function PropuestaFicha({
     [recotizarItemConDescuento, moneda],
   );
 
-  /**
-   * Cupón escaneado SIN abrir nada: valida contra el carrito y aplica. Lo
-   * dispara el detector de lector 2D (ver useEscaneoCodigo); el modal sigue
-   * disponible para tipear el código a mano.
-   */
-  const aplicarCuponEscaneado = React.useCallback(
-    async (codigo: string) => {
-      const recotizables = itemsRef.current.filter(
+  /** Código manual o del lector: valida y aplica el mismo plan del backend. */
+  const aplicarCuponCodigo = React.useCallback(
+    async (codigo: string): Promise<boolean> => {
+      if (
+        cuponEnCurso.current ||
+        descuentoAplicando ||
+        modoOrden ||
+        emitiendo ||
+        emitiendoPresupuesto ||
+        guardandoBorrador
+      )
+        return false;
+      const contexto = contextoCuponRef.current;
+      const recotizables = contexto.items.filter(
         (item) => item.jobContext && item.motorCodigo,
       );
       if (recotizables.length === 0) {
         setAvisoCupon({
           tipo: "aviso",
           titulo: "Agregá productos primero",
-          detalle:
-            "El cupón descuenta sobre los productos de la orden, y todavía no hay ninguno.",
+          detalle: "No hay productos con datos para aplicar un cupón.",
         });
-        return;
+        return false;
       }
+      cuponEnCurso.current = true;
+      setCuponValidando(true);
       try {
-        const resultado = await validarCupon({
+        const aplicado = await validarYAplicarCuponOrden({
           codigo,
-          clienteId: clienteId || undefined,
-          items: recotizables.map((item) => ({
-            key: item.id,
-            productoId: item.motorCodigo || undefined,
-            productoCodigo: item.productoCodigo || undefined,
-            categoriaCodigo: item.categoriaComercialCodigo || undefined,
-            subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
-            neto: netoListaDeItem(item),
-          })),
+          clienteId: contexto.clienteId,
+          items: recotizables,
+          contextoVigente: () =>
+            contextoCuponRef.current.clienteId === contexto.clienteId &&
+            contextoCuponRef.current.items === contexto.items,
+          aplicar: aplicarCupon,
         });
-        await aplicarCupon(resultado);
+        if (aplicado) setCuponAbierto(false);
+        return aplicado;
       } catch (error) {
-        // El motivo del backend ya viene sin el código ("está vencido", "no
-        // tiene usos disponibles"…), así que se muestra tal cual.
         setAvisoCupon({
           tipo: "error",
           titulo: "Cupón no válido",
           detalle:
             error instanceof Error
               ? error.message
-              : "No se pudo validar el cupón escaneado.",
+              : "No se pudo validar el cupón.",
         });
+        return false;
+      } finally {
+        cuponEnCurso.current = false;
+        setCuponValidando(false);
       }
     },
-    [clienteId, aplicarCupon],
+    [
+      aplicarCupon,
+      descuentoAplicando,
+      modoOrden,
+      emitiendo,
+      emitiendoPresupuesto,
+      guardandoBorrador,
+    ],
   );
 
   // Escaneo global: el vendedor apunta el lector y listo. Se apaga en modo
@@ -8747,6 +6910,9 @@ export function PropuestaFicha({
     activo:
       !modoOrden &&
       descuentoTarget == null &&
+      !cuponAbierto &&
+      !cuponValidando &&
+      !descuentoAplicando &&
       !addOpen &&
       !copiadoOpen &&
       !cargoOpen &&
@@ -8757,7 +6923,7 @@ export function PropuestaFicha({
       // los mandaba a validar como cupón y devolvía "no existe" — mientras
       // el watcher global, en paralelo, hacía lo correcto.
       if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return;
-      void aplicarCuponEscaneado(codigo);
+      void aplicarCuponCodigo(codigo);
     },
   });
 
@@ -8771,6 +6937,8 @@ export function PropuestaFicha({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (!puedeModificarProductos || event.defaultPrevented || event.repeat)
+        return;
       const target = event.target as HTMLElement | null;
       const isEditableTarget =
         target?.closest("input, textarea, select, [contenteditable='true']") !=
@@ -8797,6 +6965,7 @@ export function PropuestaFicha({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
+    puedeModificarProductos,
     abrirAgregarProducto,
     abrirCentroCopiado,
     addOpen,
@@ -8890,738 +7059,775 @@ export function PropuestaFicha({
   }
 
   return (
-    <section className="ot-v1 flex min-h-0 min-w-0 flex-1 flex-col p-4 md:p-6">
-      {initialLoadErrors.length > 0 ? (
-        <div className="orden-load-warning" role="alert">
-          No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
-          recargando antes de emitir para no trabajar con un catálogo
-          incompleto.
-        </div>
-      ) : null}
-      <OrdenWorkspace
-        ref={datosOrdenRef}
-        sidebar={
-          <>
-            <div className={workspaceStyles.heading}>
-              <div className={workspaceStyles.identity}>
-                {modoOrden ? (
-                  <Link
-                    className={workspaceStyles.breadcrumb}
-                    href="/produccion/ordenes"
-                  >
-                    <ArrowLeftIcon /> Órdenes de trabajo
-                  </Link>
-                ) : null}
-                {orden ? (
-                  <h1 className={workspaceStyles.title}>
-                    <span className={workspaceStyles.titleText}>
-                      {orden.numero}
-                    </span>
-                    <EstadoOtBadge estado={orden.estado} />
-                    {sinComprobante ? <ChipSinComprobante /> : null}
-                    {mostrarRecienEmitida ? (
-                      <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
-                    ) : null}
-                  </h1>
-                ) : (
-                  <h1 className={workspaceStyles.title}>
-                    <span className={workspaceStyles.titleText}>
-                      Nueva{" "}
-                      {ordenTipo === "orden" ? "orden de trabajo" : "propuesta"}
-                    </span>
-                    <Badge variant="outline">Borrador</Badge>
-                    {sinComprobante ? <ChipSinComprobante /> : null}
-                  </h1>
-                )}
-                {!orden && ordenTipo !== "orden" ? (
-                  <div className={workspaceStyles.description}>
-                    Arma la propuesta para enviar al cliente antes de confirmar la OT.
-                  </div>
-                ) : null}
-              </div>
-              <div className={workspaceStyles.identity}>
-                {!modoOrden ? (
-                  <OrdenSegmented
-                    value={ordenTipo}
-                    onChange={(value) => setTipo(fromOrdenTipo(value))}
-                  />
-                ) : orden && orden.estado !== "cancelada" ? (
-                  // Acciones rápidas de la orden; edición y cancelación se
-                  // mantienen junto al total y facturación en Comprobantes.
-                  <div className={workspaceStyles.quickActions}>
-                    {orden.estado === "borrador" ? (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => void emitirBorrador()}
-                        disabled={emitiendoBorrador}
-                      >
-                        <CheckIcon />
-                        {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
-                      </button>
-                    ) : null}
-                    {orden.estado === "finalizada" && puedeEntregar ? (
-                      <Button
-                        size="lg"
-                        onClick={() => setEntregaManualOpen(true)}
-                        title="Registrar la entrega al cliente"
-                      >
-                        <PackageCheckIcon data-icon="inline-start" />
-                        Entregar
-                      </Button>
-                    ) : null}
-                    {publicToken ? (
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={compartirSeguimiento}
-                        title="Copiar el link público de seguimiento para el cliente"
-                      >
-                        {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
-                        {trackCopiado ? "Copiado" : "Seguimiento"}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setQrRetiroOpen(true)}
-                      title="QR que el cliente presenta para retirar el trabajo"
-                    >
-                      <QrCodeIcon />
-                      QR
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {/* Cancelada: en vez del stepper —que mostraría un recorrido que no va a
-                seguir— se cuenta qué pasó. El motivo es lo primero que pregunta
-                cualquiera que abre una orden cancelada. */}
-            {orden?.cancelacion ? (
-              <div className="prf-cancelada">
-                <div className="prf-cancelada-t">
-                  <XCircleIcon width={15} height={15} />
-                  Cancelada
-                  {orden.cancelacion.estadoAlCancelar
-                    ? ` cuando estaba ${(
-                        ORDEN_TRABAJO_ESTADOS[
-                          orden.cancelacion
-                            .estadoAlCancelar as keyof typeof ORDEN_TRABAJO_ESTADOS
-                        ]?.label ?? orden.cancelacion.estadoAlCancelar
-                      ).toLowerCase()}`
-                    : ""}
-                </div>
-                <div className="prf-cancelada-m">
-                  “{orden.cancelacion.motivo}”
-                </div>
-                <div className="prf-cancelada-f">
-                  {orden.cancelacion.por ? `${orden.cancelacion.por} · ` : ""}
-                  {fechaHora(orden.cancelacion.fecha)}
-                  {orden.cancelacion.pasosTotal > 0
-                    ? ` · ${orden.cancelacion.pasosHechos} de ${orden.cancelacion.pasosTotal} pasos hechos`
-                    : ""}
-                  {orden.cancelacion.minutosReales > 0
-                    ? ` · ${Math.round(orden.cancelacion.minutosReales)} min trabajados`
-                    : ""}
-                </div>
-              </div>
-            ) : null}
-
-            {orden && !orden.cancelacion ? (
-              <div className={workspaceStyles.progress}>
-                <StepperOt
-                  estado={orden.estado}
-                  fechasEstado={orden.fechasEstado}
-                  orientation="vertical"
-                />
-              </div>
-            ) : null}
-
-            <FieldGroup className={workspaceStyles.fields}>
-              <FieldCard label="Cliente" icon={<UserIcon />}>
-                {campoEditable("clienteId") ? (
-                  <ClienteCombobox
-                    value={clienteId}
-                    onChange={setClienteId}
-                    initialClientes={clientesDisponibles}
-                  />
-                ) : (
-                  <div className="ctrl-input">
-                    <span>{orden?.clienteNombre}</span>
-                  </div>
-                )}
-              </FieldCard>
-
-              <FieldCard label="Campaña" icon={<FolderIcon />}>
-                {!orden ? (
-                  <Popover
-                    open={campanaSelectorOpen}
-                    onOpenChange={setCampanaSelectorOpen}
-                  >
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <PopoverTrigger
-                            className={campanaStyles["campana-trigger"]}
-                            data-active={Boolean(proyectoCampanaId)}
-                            disabled={!clienteId}
-                            aria-label={
-                              proyectoCampanaId
-                                ? "Cambiar campaña"
-                                : "Elegir campaña"
-                            }
-                          />
-                        }
-                      >
-                        <span>
-                          {campanasCliente.find(
-                            (campana) => campana.id === proyectoCampanaId,
-                          )?.nombre ?? "Sin campaña"}
-                        </span>
-                        <ChevronRightIcon aria-hidden="true" />
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        {!clienteId
-                          ? "Elegí primero un cliente"
-                          : proyectoCampanaId
-                            ? `Campaña: ${
-                                campanasCliente.find(
-                                  (campana) => campana.id === proyectoCampanaId,
-                                )?.nombre ?? "seleccionada"
-                              }`
-                            : "Asociar a una campaña"}
-                      </TooltipContent>
-                    </Tooltip>
-                    <PopoverContent
-                      align="start"
-                      className={campanaStyles["campana-selector-popover"]}
-                    >
-                      <div
-                        className={campanaStyles["campana-selector-heading"]}
-                      >
-                        <FolderIcon aria-hidden="true" />
-                        <div>
-                          <strong>Campaña</strong>
-                          <span>Opcional para esta orden</span>
-                        </div>
-                      </div>
-                      <label
-                        className={campanaStyles["campana-selector-field"]}
-                      >
-                        <span>Seleccionar campaña</span>
-                        <select
-                          value={proyectoCampanaId}
-                          onChange={(event) => {
-                            setProyectoCampanaId(event.target.value);
-                            setCampanaSelectorOpen(false);
-                          }}
-                          aria-label="Campaña opcional"
-                        >
-                          <option value="">Sin campaña</option>
-                          {campanasCliente.map((campana) => (
-                            <option key={campana.id} value={campana.id}>
-                              {campana.codigo} · {campana.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </PopoverContent>
-                  </Popover>
-                ) : orden.proyectoCampana ? (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Link
-                          className={campanaStyles["campana-trigger"]}
-                          data-active="true"
-                          href={`/comercial/campanas/${orden.proyectoCampana.id}`}
-                          aria-label={`Abrir campaña ${orden.proyectoCampana.nombre}`}
-                        />
-                      }
-                    >
-                      <span>{orden.proyectoCampana.nombre}</span>
-                      <ExternalLinkIcon aria-hidden="true" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {orden.proyectoCampana.codigo} ·{" "}
-                      {orden.proyectoCampana.nombre}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span
-                          className={campanaStyles["campana-trigger"]}
-                          aria-label="Sin campaña"
-                          aria-disabled="true"
-                        />
-                      }
-                    >
-                      <span>Sin campaña</span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Sin campaña</TooltipContent>
-                  </Tooltip>
-                )}
-              </FieldCard>
-
-              <FieldCard label="Vendedor" icon={<UserIcon />}>
-                <div className="ctrl-input has-avatar">
-                  {orden ? (
-                    <>
-                      <span className="av-sm">
-                        {vendedorOrdenNombre(orden).slice(0, 2).toUpperCase()}
-                      </span>
-                      <span>{vendedorOrdenNombre(orden)}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="av-sm">
-                        {(
-                          currentUser?.nombreCompleto ??
-                          currentUser?.email ??
-                          "US"
-                        )
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </span>
-                      <span>
-                        {currentUser?.nombreCompleto ??
-                          currentUser?.email ??
-                          "Usuario actual"}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </FieldCard>
-
-              {campoEditable("canalVenta") ? (
-                <CanalVentaSelector
-                  id={canalSelectorId}
-                  value={canalVenta}
-                  invalid={errorCanalVenta}
-                  onChange={(value) => {
-                    setCanalVenta(value);
-                    setErrorCanalVenta(false);
-                  }}
-                />
-              ) : (
-                <FieldCard label="Canal de venta" icon={<PackageIcon />}>
-                  <div className="ctrl-input">
-                    <span>{nombreCanalVenta(canalVenta)}</span>
-                  </div>
-                </FieldCard>
-              )}
-
-              <FieldCard
-                label="Entrega prevista de OT"
-                icon={<CalendarIcon />}
-              >
-                {campoEditable("fechaEntrega") ? (
-                  <div className="ctrl-input">
-                    <input
-                      ref={fechaEstimadaInputRef}
-                      type="date"
-                      value={fechaFinalVisible}
-                      readOnly={ordenTipo === "orden" && items.length > 0}
-                      onClick={() => {
-                        if (ordenTipo !== "orden" || !items.length)
-                          fechaEstimadaInputRef.current?.showPicker?.();
-                      }}
-                      onChange={(event) => {
-                        otFechaTocadaRef.current = true;
-                        setFechaEstimada(event.target.value);
-                      }}
-                      aria-label="Entrega prevista de OT"
-                    />
-                  </div>
-                ) : (
-                  <div className="ctrl-input">
-                    <span>{formatFechaOrden(orden?.fechaEntrega ?? null)}</span>
-                  </div>
-                )}
-              </FieldCard>
-              {(() => {
-                if (
-                  items.some((i) =>
-                    !orden
-                      ? !!entregasPrevias.fechaPara(i)
-                      : !!fechaFinalDistribucion(i.distribucionEntregas),
-                  )
-                )
-                  return null;
-                const eta = describirEta(demoraOrden, fechaFinalVisible, {
-                  margenDias: margenEtaDias,
-                  noLaborables: colasTaller?.noLaborables,
-                  zona: colasTaller?.zona ?? zonaHoraria,
-                  ahora: colasTaller?.ahora,
-                });
-                if (!eta) return null;
-                return (
-                  <FieldGroup
-                    className={fechasStyles.prevision}
-                    role="group"
-                    aria-label="Estimación de producción y entrega"
-                  >
-                    <FieldCard
-                      label="Producción estimada"
-                      icon={<FactoryIcon />}
-                    >
-                      <div className={fechasStyles.valorConsulta}>
-                        {eta.fechaProduccion ? (
-                          <time dateTime={eta.fechaProduccion}>
-                            {formatFechaOrden(eta.fechaProduccion)}
-                          </time>
-                        ) : (
-                          "Sin estimación completa"
-                        )}
-                      </div>
-                    </FieldCard>
-                    <FieldCard
-                      label="Entrega sugerida"
-                      icon={<PackageCheckIcon />}
-                    >
-                      <div className={fechasStyles.valorConsulta}>
-                        {eta.fechaSugerida ? (
-                          <time dateTime={eta.fechaSugerida}>
-                            {formatFechaOrden(eta.fechaSugerida)}
-                          </time>
-                        ) : (
-                          "Sin estimación completa"
-                        )}
-                      </div>
-                    </FieldCard>
-                    <FieldCard label="Margen de producción" icon={<ClockIcon />}>
-                      <div className={fechasStyles.valorConsulta}>
-                        {eta.margenDias}{" "}
-                        {eta.margenDias === 1 ? "día hábil" : "días hábiles"}
-                      </div>
-                    </FieldCard>
-                    {eta.motivo || eta.nivel !== "ok" ? (
-                      <div className={fechasStyles.notas}>
-                        {eta.motivo ? (
-                          <p className={fechasStyles.condicion}>
-                            Proyección condicionada. {eta.motivo}
-                          </p>
-                        ) : null}
-                        {eta.nivel !== "ok" ? (
-                          <p className={fechasStyles.alerta}>
-                            {eta.nivel === "tarde"
-                              ? "La producción terminaría después de la fecha elegida."
-                              : "La fecha elegida queda sin el margen del taller."}
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </FieldGroup>
-                );
-              })()}
-            </FieldGroup>
-            {orden ? (
-              <div className={workspaceStyles.sidebarFooter}>
-                <div className={workspaceStyles.meta}>
-                  <span>{orden.fechaEmision ? "Emitida" : "Creada"}</span>
-                  <span className={workspaceStyles.metaValue}>
-                    {formatFechaOrden(orden.fechaEmision ?? orden.creadaEl)}
-                  </span>
-                </div>
-              </div>
-            ) : null}
-          </>
-        }
+    <DesignSystemProvider>
+      <section
+        data-ui="heroui"
+        className={cn(
+          designTheme.theme,
+          "flex min-h-0 min-w-0 flex-1 flex-col bg-background",
+          workspaceStyles.page,
+        )}
       >
-        {/* Columna flex que llena el alto disponible: deja que el resumen
-            financiero de la pestaña Productos caiga anclado al fondo (margin-top
-            auto) aun con la OT vacía, y que el `sticky` lo mantenga abajo al
-            scrollear cuando hay muchos productos. */}
-        <div
-          className="orden-main-full"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: "1 1 auto",
-            minHeight: 0,
-          }}
-        >
-          <div className="orden-tabs-row">
-            <OrdenDatosToggle />
-            <OrdenTabs
-              value={tab}
-              onChange={setTab}
-              count={items.length}
-              historialCount={orden ? orden.eventosTotal : undefined}
-              comprobantesCount={orden ? 0 : undefined}
-              archivosCount={archivosCount}
-              documentosCount={
-                orden ? (initialDocumentos?.gates.length ?? 0) : undefined
-              }
-            />
-            {!modoOrden || itemsEnEdicion ? (
-              <div className="orden-actions">
-                {ccActivo ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={abrirCentroCopiado}
-                    title="Impresiones (C)"
-                  >
-                    {/* Rayo en el naranja de acento del sistema. */}
-                    <ZapIcon style={{ color: "#c2410c" }} />
-                    Impresiones
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={abrirAgregarProducto}
-                  title="Agregar producto (P)"
-                >
-                  <PlusIcon />
-                  Agregar producto
-                </button>
-              </div>
-            ) : null}
+        {initialLoadErrors.length > 0 ? (
+          <div className="orden-load-warning" role="alert">
+            No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
+            recargando antes de emitir para no trabajar con un catálogo
+            incompleto.
           </div>
-
-          <div className={resumenBar.scroll}>
-            {tab === "productos" ? (
-              <div className="orden-table">
-                <div
-                  className="ohead"
-                  style={
-                    sinComprobante
-                      ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
+        ) : null}
+        <HeroTabs
+          selectedKey={tab}
+          onSelectionChange={(key) => setTab(String(key) as OrdenTab)}
+          className={workspaceStyles.tabs}
+        >
+          <OrdenWorkspace
+            activeSection={tab}
+            onShowData={() => setTab("datos")}
+            navigation={
+              <OrdenTabs
+                clientePendiente={!clienteId}
+                verMargenes={verMargenes}
+                count={items.length}
+                historialCount={orden ? orden.eventosTotal : undefined}
+                comprobantesCount={orden ? 0 : undefined}
+                archivosCount={archivosCount}
+                documentosCount={
+                  orden ? (initialDocumentos?.gates.length ?? 0) : undefined
+                }
+              />
+            }
+            summary={
+              <OrdenSummaryDetails
+                cliente={
+                  orden?.clienteNombre ??
+                  selectorClientes.options.find((c) => c.id === clienteId)
+                    ?.nombre
+                }
+                campana={
+                  campanasCliente.find((c) => c.id === proyectoCampanaId)
+                    ?.nombre ??
+                  (proyectoCampanaId &&
+                  orden?.proyectoCampana?.id === proyectoCampanaId
+                    ? orden.proyectoCampana.nombre
+                    : undefined)
+                }
+                fecha={formatFechaOrden(
+                  fechaFinalVisible || orden?.fechaEntrega || null,
+                )}
+                vendedor={
+                  orden
+                    ? vendedorOrdenNombre(orden)
+                    : (currentUser?.nombreCompleto ??
+                      currentUser?.email ??
+                      "Usuario actual")
+                }
+                onShowData={() => setTab("datos")}
+              >
+                <OrdenFinancialActions
+                  empty={items.length === 0}
+                  emitiendo={emitiendo || emitiendoPresupuesto}
+                  guardandoBorrador={guardandoBorrador}
+                  sinComprobante={sinComprobante}
+                  onAgregarCargo={
+                    !modoOrden ? () => setCargoOpen(true) : undefined
+                  }
+                  onDescuentoOrden={
+                    modoOrden
+                      ? undefined
+                      : () =>
+                          setDescuentoTarget({ scope: "orden", itemId: null })
+                  }
+                  onCuponOrden={
+                    modoOrden
+                      ? undefined
+                      : () => setCuponAbierto((value) => !value)
+                  }
+                  cuponAbierto={cuponAbierto}
+                  cuponFieldId="orden-cupon"
+                  operacionPendiente={cuponValidando || descuentoAplicando}
+                  onToggleTratamientoFiscal={
+                    puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+                  }
+                  togglingFiscal={togglingFiscal}
+                />
+                {cuponAbierto && !modoOrden && (
+                  <OrdenCuponField
+                    id="orden-cupon"
+                    isDisabled={
+                      !items.length ||
+                      emitiendo ||
+                      emitiendoPresupuesto ||
+                      guardandoBorrador ||
+                      descuentoAplicando
+                    }
+                    onValidar={aplicarCuponCodigo}
+                  />
+                )}
+                <ResumenBar
+                  layout="sidebar"
+                  items={items}
+                  cargosOrden={cargosOrden}
+                  sinComprobante={sinComprobante}
+                  fidelizacionCanjeMonto={fidelizacionCanjeMonto}
+                  readOnly={modoOrden}
+                  resumenPersistido={
+                    orden
+                      ? {
+                          subtotal: orden.subtotal,
+                          impuestos: orden.impuestos,
+                          descuentoTotal: orden.descuentoTotal,
+                          total: orden.total,
+                        }
                       : undefined
                   }
-                >
-                  <span className="ix">#</span>
-                  <span className="chev" />
-                  <span className="prod">Producto</span>
-                  <span className="num qty">Cantidad</span>
-                  <span className="num">Subtotal</span>
-                  {sinComprobante ? null : <span className="num">Imp.</span>}
-                  <span className="num">Unitario</span>
-                  <span className="num">Total</span>
-                  <span className="x" />
-                </div>
-                {recotizandoIds.size > 0 ? (
-                  <div
-                    className="orden-recotizando"
-                    role="status"
-                    aria-live="polite"
+                />
+              </OrdenSummaryDetails>
+            }
+            ref={datosOrdenRef}
+            header={
+              <div className={workspaceStyles.heading}>
+                <div className={workspaceStyles.identity}>
+                  <nav
+                    aria-label="Ruta de navegación"
+                    className={workspaceStyles.breadcrumb}
                   >
-                    <span className="spin" aria-hidden="true" />
-                    Recotizando {recotizandoIds.size}{" "}
-                    {recotizandoIds.size === 1 ? "producto" : "productos"} con
-                    los precios del cliente seleccionado…
+                    <span>Comercial</span>
+                    <ChevronRightIcon />
+                    <Link href="/produccion/ordenes">Órdenes de trabajo</Link>
+                    <ChevronRightIcon />
+                    <span aria-current="page">
+                      {orden?.numero ?? "Nueva orden"}
+                    </span>
+                  </nav>
+                  {orden ? (
+                    <h1 className={workspaceStyles.title}>
+                      <span className={workspaceStyles.titleText}>
+                        {orden.numero}
+                      </span>
+                      <EstadoOtBadge estado={orden.estado} />
+                      {sinComprobante ? <ChipSinComprobante /> : null}
+                      {mostrarRecienEmitida ? (
+                        <Chip size="sm" color="success" variant="soft">
+                          Recién emitida
+                        </Chip>
+                      ) : null}
+                    </h1>
+                  ) : (
+                    <h1 className={workspaceStyles.title}>
+                      <span className={workspaceStyles.titleText}>
+                        Nueva{" "}
+                        {ordenTipo === "orden"
+                          ? "orden de trabajo"
+                          : "propuesta"}
+                      </span>
+                      {sinComprobante ? <ChipSinComprobante /> : null}
+                    </h1>
+                  )}
+                  {!orden && (
+                    <p className={workspaceStyles.description}>
+                      {ordenTipo === "orden"
+                        ? "Creá una orden de trabajo, agregá productos y definí todos los detalles."
+                        : "Armá la propuesta para enviar al cliente antes de confirmar la OT."}
+                    </p>
+                  )}
+                </div>
+                <div className={workspaceStyles.identity}>
+                  {!modoOrden ? (
+                    <OrdenSaveActions
+                      operacionPendiente={cuponValidando || descuentoAplicando}
+                      tipo={ordenTipo}
+                      clienteSeleccionado={Boolean(clienteId)}
+                      empty={items.length === 0}
+                      onEmitir={emitirOrden}
+                      onEmitirPresupuesto={emitirPresupuestoCb}
+                      emitiendo={emitiendo || emitiendoPresupuesto}
+                      guardandoBorrador={guardandoBorrador}
+                      onGuardarBorrador={() =>
+                        cobrosStaged.length > 0
+                          ? setConfirmBorradorConCobros(true)
+                          : void guardarBorrador()
+                      }
+                    />
+                  ) : orden && orden.estado !== "cancelada" ? (
+                    // Acciones de la orden en la cabecera fija; facturación en Comprobantes.
+                    <div className={workspaceStyles.quickActions}>
+                      {camposEditablesOrden(orden.estado).size > 0 ||
+                      esCancelable(orden.estado) ? (
+                        editandoOrden ? (
+                          <>
+                            <HeroButton
+                              type="button"
+                              variant="tertiary"
+                              size="sm"
+                              onPress={cancelarEdicion}
+                              isDisabled={guardandoEdicion}
+                            >
+                              Cancelar
+                            </HeroButton>
+                            <HeroButton
+                              type="button"
+                              variant="primary"
+                              size="sm"
+                              onPress={() => void guardarEdicion()}
+                              isDisabled={
+                                guardandoEdicion || cambiosSinGuardar === 0
+                              }
+                            >
+                              <CheckIcon />
+                              {guardandoEdicion
+                                ? "Guardando…"
+                                : cambiosSinGuardar > 0
+                                  ? `Guardar cambios (${cambiosSinGuardar})`
+                                  : "Guardar cambios"}
+                            </HeroButton>
+                          </>
+                        ) : (
+                          <>
+                            {camposEditablesOrden(orden.estado).size > 0 ? (
+                              <HeroButton
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                onPress={() => setEditandoOrden(true)}
+                              >
+                                <Edit3Icon />
+                                Editar orden
+                              </HeroButton>
+                            ) : null}
+                            {esCancelable(orden.estado) ? (
+                              <HeroButton
+                                type="button"
+                                variant="tertiary"
+                                size="sm"
+                                onPress={() => setConfirmCancelar(true)}
+                                isDisabled={
+                                  cancelando || (facturaViva && !puedeAnular)
+                                }
+                                title={
+                                  facturaViva && !puedeAnular
+                                    ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
+                                    : acreditaYCancela
+                                      ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
+                                      : "Cancelar la orden: sale del taller y deja de contar como venta"
+                                }
+                              >
+                                <XCircleIcon />
+                                Cancelar orden
+                              </HeroButton>
+                            ) : null}
+                          </>
+                        )
+                      ) : undefined}
+                      {orden.estado === "borrador" ? (
+                        <HeroButton
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onPress={() => void emitirBorrador()}
+                          isDisabled={
+                            emitiendoBorrador ||
+                            editandoOrden ||
+                            !orden.clienteId
+                          }
+                          title={
+                            !orden.clienteId
+                              ? "Asigná un cliente y guardá el borrador para emitir"
+                              : undefined
+                          }
+                        >
+                          <CheckIcon />
+                          {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
+                        </HeroButton>
+                      ) : null}
+                      {orden.estado === "finalizada" && puedeEntregar ? (
+                        <Button
+                          size="lg"
+                          onClick={() => setEntregaManualOpen(true)}
+                          title="Registrar la entrega al cliente"
+                        >
+                          <PackageCheckIcon data-icon="inline-start" />
+                          Entregar
+                        </Button>
+                      ) : null}
+                      {publicToken ? (
+                        <HeroButton
+                          type="button"
+                          variant="tertiary"
+                          size="sm"
+                          onPress={compartirSeguimiento}
+                          title="Copiar el link público de seguimiento para el cliente"
+                        >
+                          {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
+                          {trackCopiado ? "Copiado" : "Seguimiento"}
+                        </HeroButton>
+                      ) : null}
+                      <HeroButton
+                        type="button"
+                        variant="tertiary"
+                        size="sm"
+                        onPress={() => setQrRetiroOpen(true)}
+                        title="QR que el cliente presenta para retirar el trabajo"
+                      >
+                        <QrCodeIcon />
+                        QR
+                      </HeroButton>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            }
+            sidebar={
+              <>
+                {/* Cancelada: en vez del stepper —que mostraría un recorrido que no va a
+                seguir— se cuenta qué pasó. El motivo es lo primero que pregunta
+                cualquiera que abre una orden cancelada. */}
+                {orden?.cancelacion ? (
+                  <div className="prf-cancelada">
+                    <div className="prf-cancelada-t">
+                      <XCircleIcon width={15} height={15} />
+                      Cancelada
+                      {orden.cancelacion.estadoAlCancelar
+                        ? ` cuando estaba ${(
+                            ORDEN_TRABAJO_ESTADOS[
+                              orden.cancelacion
+                                .estadoAlCancelar as keyof typeof ORDEN_TRABAJO_ESTADOS
+                            ]?.label ?? orden.cancelacion.estadoAlCancelar
+                          ).toLowerCase()}`
+                        : ""}
+                    </div>
+                    <div className="prf-cancelada-m">
+                      “{orden.cancelacion.motivo}”
+                    </div>
+                    <div className="prf-cancelada-f">
+                      {orden.cancelacion.por
+                        ? `${orden.cancelacion.por} · `
+                        : ""}
+                      {fechaHora(orden.cancelacion.fecha)}
+                      {orden.cancelacion.pasosTotal > 0
+                        ? ` · ${orden.cancelacion.pasosHechos} de ${orden.cancelacion.pasosTotal} pasos hechos`
+                        : ""}
+                      {orden.cancelacion.minutosReales > 0
+                        ? ` · ${Math.round(orden.cancelacion.minutosReales)} min trabajados`
+                        : ""}
+                    </div>
                   </div>
                 ) : null}
-                <div className="orows">
-                  {items.map((item, index) => {
-                    const tomo = tomoDeItem(item);
-                    const iniciaTomo =
-                      !!tomo && tomo !== tomoDeItem(items[index - 1]);
-                    const cuentaTomo = tomo
-                      ? items.filter((x) => tomoDeItem(x) === tomo).length
-                      : 0;
-                    return (
-                      <React.Fragment key={item.id}>
-                        {iniciaTomo && (
-                          <div className={ccFicha.tomoHead}>
-                            Tomo anillado
-                            {tomoNombreDeItem(item)
-                              ? ` · ${tomoNombreDeItem(item)}`
-                              : ""}
-                            <span className={ccFicha.cuenta}>
-                              · {cuentaTomo} documentos
+
+                {orden && !orden.cancelacion ? (
+                  <div className={workspaceStyles.progress}>
+                    <StepperOt
+                      estado={orden.estado}
+                      fechasEstado={orden.fechasEstado}
+                      orientation="vertical"
+                    />
+                  </div>
+                ) : null}
+
+                <OrdenDatosSections
+                  tipo={
+                    !modoOrden ? (
+                      <OrdenSegmented
+                        value={ordenTipo}
+                        onChange={(value) => setTipo(fromOrdenTipo(value))}
+                      />
+                    ) : (
+                      <span className="text-sm font-medium">
+                        Orden de trabajo
+                      </span>
+                    )
+                  }
+                  vendedor={
+                    <FieldCard label="Vendedor" icon={<UserIcon />}>
+                      <div className="flex items-center gap-2 text-sm">
+                        {orden ? (
+                          <>
+                            <IdentityAvatar name={vendedorOrdenNombre(orden)} />
+                            <span>{vendedorOrdenNombre(orden)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <IdentityAvatar
+                              name={
+                                currentUser?.nombreCompleto ??
+                                currentUser?.email ??
+                                "Usuario actual"
+                              }
+                              initials={(
+                                currentUser?.nombreCompleto ??
+                                currentUser?.email ??
+                                "US"
+                              )
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            />
+                            <span>
+                              {currentUser?.nombreCompleto ??
+                                currentUser?.email ??
+                                "Usuario actual"}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </FieldCard>
+                  }
+                  cliente={
+                    <FieldCard label="Cliente" icon={<UserIcon />}>
+                      {campoEditable("clienteId") ? (
+                        <ClienteLista
+                          value={clienteId}
+                          onChange={setClienteId}
+                          {...selectorClientes}
+                        />
+                      ) : (
+                        <div className="text-sm text-foreground">
+                          <span>{orden?.clienteNombre}</span>
+                        </div>
+                      )}
+                    </FieldCard>
+                  }
+                  campana={
+                    <FieldCard
+                      label="Campaña"
+                      icon={<FolderIcon />}
+                      hint={
+                        !orden && !clienteId
+                          ? "Elegí primero un cliente"
+                          : undefined
+                      }
+                    >
+                      {!orden ? (
+                        <CampanaSelectorOrden
+                          value={proyectoCampanaId}
+                          onChange={setProyectoCampanaId}
+                          options={campanasCliente}
+                          isDisabled={!clienteId}
+                        />
+                      ) : orden.proyectoCampana ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Link
+                                className="flex min-h-9 w-full items-center justify-between gap-2 rounded-field border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-default aria-disabled:opacity-60 [&_svg]:size-4"
+                                data-active="true"
+                                href={`/comercial/campanas/${orden.proyectoCampana.id}`}
+                                aria-label={`Abrir campaña ${orden.proyectoCampana.nombre}`}
+                              />
+                            }
+                          >
+                            <span>{orden.proyectoCampana.nombre}</span>
+                            <ExternalLinkIcon aria-hidden="true" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            {orden.proyectoCampana.codigo} ·{" "}
+                            {orden.proyectoCampana.nombre}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span
+                                className="flex min-h-9 w-full items-center justify-between gap-2 rounded-field border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-default aria-disabled:opacity-60 [&_svg]:size-4"
+                                aria-label="Sin campaña"
+                                aria-disabled="true"
+                              />
+                            }
+                          >
+                            <span>Sin campaña</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Sin campaña
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </FieldCard>
+                  }
+                  canalVenta={
+                    campoEditable("canalVenta") ? (
+                      <CanalVentaSelector
+                        id={canalSelectorId}
+                        value={canalVenta}
+                        invalid={errorCanalVenta}
+                        onChange={(value) => {
+                          setCanalVenta(value);
+                          setErrorCanalVenta(false);
+                        }}
+                      />
+                    ) : (
+                      <FieldCard label="Canal de venta" icon={<PackageIcon />}>
+                        <div className="text-sm text-foreground">
+                          <span>{nombreCanalVenta(canalVenta)}</span>
+                        </div>
+                      </FieldCard>
+                    )
+                  }
+                  entrega={
+                    <>
+                      <FieldCard
+                        label="Entrega prevista"
+                        icon={<CalendarIcon />}
+                      >
+                        {campoEditable("fechaEntrega") ? (
+                          <div className="text-sm text-foreground">
+                            <HeroInput
+                              className="w-full"
+                              ref={fechaEstimadaInputRef}
+                              type="date"
+                              value={fechaFinalVisible}
+                              readOnly={
+                                ordenTipo === "orden" && items.length > 0
+                              }
+                              onClick={() => {
+                                if (ordenTipo !== "orden" || !items.length)
+                                  fechaEstimadaInputRef.current?.showPicker?.();
+                              }}
+                              onChange={(event) => {
+                                otFechaTocadaRef.current = true;
+                                setFechaEstimada(event.target.value);
+                              }}
+                              aria-label="Entrega prevista"
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-sm text-foreground">
+                            <span>
+                              {formatFechaOrden(orden?.fechaEntrega ?? null)}
                             </span>
                           </div>
                         )}
-                        <div
-                          className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}${tomo ? ` ${ccFicha.enTomo}` : ""}`}
-                          ref={(node) => {
-                            if (node) {
-                              rowRefs.current.set(item.id, node);
-                            } else {
-                              rowRefs.current.delete(item.id);
-                            }
-                          }}
-                        >
-                          <ProductRow
-                            item={item}
-                            index={index}
-                            sinComprobante={sinComprobante}
-                            expanded={openIds.has(item.id)}
-                            etaSistema={demoraPorItem?.get(item.id) ?? null}
-                            ahoraEta={colasTaller?.ahora}
-                            margenEtaDias={margenEtaDias}
-                            noLaborables={colasTaller?.noLaborables}
-                            onToggle={() => toggle(item.id)}
-                            onRemove={
-                              modoOrden
-                                ? itemsEnEdicion
-                                  ? () => quitarItemDeOrden(item)
-                                  : undefined
-                                : () =>
-                                    setItems((current) =>
-                                      current.filter(
-                                        (candidate) => candidate.id !== item.id,
-                                      ),
-                                    )
-                            }
-                            onEdit={
-                              modoOrden
-                                ? itemsEnEdicion &&
-                                  item.jobContext &&
-                                  item.motorCodigo
-                                  ? () => abrirEdicion(item)
-                                  : undefined
-                                : () => abrirEdicion(item)
-                            }
-                            onDescuento={
-                              !modoOrden && item.jobContext && item.motorCodigo
-                                ? () =>
-                                    setDescuentoTarget({
-                                      scope: "item",
-                                      itemId: item.id,
-                                    })
-                                : undefined
-                            }
-                            onVerPrecios={
-                              esCentroCopiado(item)
-                                ? () => setPreciosOpen(true)
-                                : undefined
-                            }
-                            onEditPanels={(targetItem, paso) => {
-                              setPanelEditor({ item: targetItem, paso });
-                            }}
-                            onChangeFechaEntrega={(fechaEntrega) => {
-                              itemFechaTocadaRef.current.add(item.id);
-                              if (
-                                itemsEnEdicion &&
-                                persistedItemIds.has(item.id)
-                              )
-                                setEditadosIds(
-                                  (prev) => new Set([...prev, item.id]),
-                                );
-                              setItems((current) =>
-                                current.map((candidate) =>
-                                  candidate.id === item.id
-                                    ? {
-                                        ...candidate,
-                                        fechaEntrega:
-                                          fechaEntrega || fechaEstimada,
-                                      }
-                                    : candidate,
-                                ),
-                              );
-                            }}
-                            fechaEstimada={fechaEstimada}
-                            readOnly={modoOrden}
-                            editarFecha={itemsEnEdicion}
-                            prepararCorte={
-                              modoOrden && persistedItemIds.has(item.id)
-                            }
-                            onDistribucionGuardada={
-                              orden
-                                ? () => {
-                                    void recargarOrden();
-                                  }
-                                : undefined
-                            }
-                            planificarEntregas={
-                              !!orden &&
-                              !editandoOrden &&
-                              (orden.estado === "borrador" ||
-                                orden.estado === "pendiente") &&
-                              persistedItemIds.has(item.id)
-                            }
-                            entregasPrevias={
-                              !orden &&
-                              ordenTipo === "orden" &&
-                              item.motorCodigo &&
-                              item.jobContext &&
-                              item.unidadMedida === "unidad" &&
-                              !esCentroCopiado(item)
-                                ? entregasPrevias.propsPara(item)
-                                : undefined
-                            }
-                          />
-                        </div>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-                {!modoOrden || itemsEnEdicion ? (
-                  <button
-                    type="button"
-                    className="orden-add-ghost"
-                    onClick={abrirAgregarProducto}
-                  >
-                    <PlusIcon />
-                    Agregar otro producto a la{" "}
-                    {modoOrden || ordenTipo === "orden" ? "orden" : "propuesta"}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+                      </FieldCard>
+                      {(() => {
+                        const porProducto = items.some((i) =>
+                          !orden
+                            ? !!entregasPrevias.fechaPara(i)
+                            : !!fechaFinalDistribucion(i.distribucionEntregas),
+                        );
+                        const eta = porProducto
+                          ? null
+                          : describirEta(demoraOrden, fechaFinalVisible, {
+                              margenDias: margenEtaDias,
+                              noLaborables: colasTaller?.noLaborables,
+                              zona: colasTaller?.zona ?? zonaHoraria,
+                              ahora: colasTaller?.ahora,
+                            });
+                        return (
+                          <>
+                            <FieldCard
+                              label="Producción estimada"
+                              icon={<FactoryIcon />}
+                            >
+                              <div className={fechasStyles.valorConsulta}>
+                                {eta?.fechaProduccion ? (
+                                  <time dateTime={eta?.fechaProduccion}>
+                                    {formatFechaOrden(eta?.fechaProduccion)}
+                                  </time>
+                                ) : porProducto ? (
+                                  "Según cada producto"
+                                ) : (
+                                  "Sin estimación completa"
+                                )}
+                              </div>
+                            </FieldCard>
+                            <FieldCard
+                              label="Entrega sugerida"
+                              icon={<PackageCheckIcon />}
+                            >
+                              <div className={fechasStyles.valorConsulta}>
+                                {eta?.fechaSugerida ? (
+                                  <time dateTime={eta?.fechaSugerida}>
+                                    {formatFechaOrden(eta?.fechaSugerida)}
+                                  </time>
+                                ) : porProducto ? (
+                                  "Según cada producto"
+                                ) : (
+                                  "Sin estimación completa"
+                                )}
+                              </div>
+                            </FieldCard>
+                            <FieldCard
+                              label="Margen de producción"
+                              icon={<ClockIcon />}
+                            >
+                              <div className={fechasStyles.valorConsulta}>
+                                {margenEtaDias}{" "}
+                                {margenEtaDias === 1
+                                  ? "día hábil"
+                                  : "días hábiles"}
+                              </div>
+                            </FieldCard>
+                            {eta && (eta.motivo || eta.nivel !== "ok") ? (
+                              <div
+                                className={cn(
+                                  fechasStyles.notas,
+                                  workspaceStyles.deliveryNotes,
+                                )}
+                              >
+                                {eta.motivo ? (
+                                  <p className={fechasStyles.condicion}>
+                                    Proyección condicionada. {eta.motivo}
+                                  </p>
+                                ) : null}
+                                {eta.nivel !== "ok" ? (
+                                  <p className={fechasStyles.alerta}>
+                                    {eta.nivel === "tarde"
+                                      ? "La producción terminaría después de la fecha elegida."
+                                      : "La fecha elegida queda sin el margen del taller."}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
+                    </>
+                  }
+                />
 
-            {tab === "productos" && cargosOrden.length > 0 ? (
-              <section className="orden-cargos-card">
-                <div className="orden-cargos-head">
-                  <div>
-                    <div className="ttl">Cargos de la orden</div>
-                    <div className="sub">
-                      Aplicados al total general con snapshot del catálogo.
+                {orden ? (
+                  <div className={workspaceStyles.sidebarFooter}>
+                    <div className={workspaceStyles.meta}>
+                      <span>{orden.fechaEmision ? "Emitida" : "Creada"}</span>
+                      <span className={workspaceStyles.metaValue}>
+                        {formatFechaOrden(orden.fechaEmision ?? orden.creadaEl)}
+                      </span>
                     </div>
                   </div>
-                </div>
-                <div className="orden-cargos-list">
-                  {cargosOrden.map((cargo) => (
-                    <div className="orden-cargo-row" key={cargo.id}>
-                      <div className="cargo-main">
-                        <strong>{cargo.nombreSnapshot}</strong>
-                        <small>{cargo.detalle}</small>
-                        {cargo.nota ? <em>{cargo.nota}</em> : null}
-                      </div>
-                      <div className="cargo-num">
-                        <span>Neto</span>
-                        <strong>
-                          {formatCurrency(cargo.montoNeto, moneda)}
-                        </strong>
-                      </div>
-                      <div className="cargo-num">
-                        <span>IVA</span>
-                        <strong>
-                          {formatCurrency(cargo.impuestoMonto, moneda)}
-                        </strong>
-                      </div>
-                      <div className="cargo-num total">
-                        <span>Total</span>
-                        <strong>{formatCurrency(cargo.total, moneda)}</strong>
-                      </div>
-                      {!modoOrden ? (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          onClick={() =>
-                            setCargosOrden((current) =>
-                              current.filter(
-                                (candidate) => candidate.id !== cargo.id,
-                              ),
-                            )
+                ) : null}
+              </>
+            }
+          >
+            {tab === "productos" ? (
+              <OrdenProductosTable
+                items={items}
+                sinComprobante={sinComprobante}
+                expandedIds={openIds}
+                onToggle={toggle}
+                recotizandoIds={recotizandoIds}
+                onAdd={
+                  puedeModificarProductos
+                    ? () => abrirAgregarProducto()
+                    : undefined
+                }
+                onPrint={
+                  puedeModificarProductos
+                    ? ccActivo
+                      ? abrirCentroCopiado
+                      : undefined
+                    : undefined
+                }
+                getTomo={(item) => ({
+                  id: tomoDeItem(item),
+                  nombre: tomoNombreDeItem(item),
+                })}
+                rowRef={(id, node) => {
+                  if (node) rowRefs.current.set(id, node);
+                  else rowRefs.current.delete(id);
+                }}
+                getActions={(item) => ({
+                  onRemove: modoOrden
+                    ? itemsEnEdicion
+                      ? () => quitarItemDeOrden(item)
+                      : undefined
+                    : () =>
+                        setItems((current) =>
+                          current.filter(
+                            (candidate) => candidate.id !== item.id,
+                          ),
+                        ),
+                  onVerPrecios: esCentroCopiado(item)
+                    ? () => setPreciosOpen(true)
+                    : undefined,
+                })}
+                renderDetail={(item) => (
+                  <OrdenProductoDetalle
+                    item={item}
+                    sinComprobante={sinComprobante}
+                    expanded={openIds.has(item.id)}
+                    etaSistema={demoraPorItem?.get(item.id) ?? null}
+                    ahoraEta={colasTaller?.ahora}
+                    margenEtaDias={margenEtaDias}
+                    noLaborables={colasTaller?.noLaborables}
+                    onEdit={
+                      modoOrden
+                        ? itemsEnEdicion && item.jobContext && item.motorCodigo
+                          ? () => abrirEdicion(item)
+                          : undefined
+                        : () => abrirEdicion(item)
+                    }
+                    onDescuento={
+                      !modoOrden && item.jobContext && item.motorCodigo
+                        ? () =>
+                            setDescuentoTarget({
+                              scope: "item",
+                              itemId: item.id,
+                            })
+                        : undefined
+                    }
+                    onEditPanels={(targetItem, paso) => {
+                      setPanelEditor({ item: targetItem, paso });
+                    }}
+                    onChangeFechaEntrega={(fechaEntrega) => {
+                      itemFechaTocadaRef.current.add(item.id);
+                      if (itemsEnEdicion && persistedItemIds.has(item.id))
+                        setEditadosIds((prev) => new Set([...prev, item.id]));
+                      setItems((current) =>
+                        current.map((candidate) =>
+                          candidate.id === item.id
+                            ? {
+                                ...candidate,
+                                fechaEntrega: fechaEntrega || fechaEstimada,
+                              }
+                            : candidate,
+                        ),
+                      );
+                    }}
+                    fechaEstimada={fechaEstimada}
+                    readOnly={modoOrden}
+                    editarFecha={itemsEnEdicion}
+                    prepararCorte={modoOrden && persistedItemIds.has(item.id)}
+                    onDistribucionGuardada={
+                      orden
+                        ? () => {
+                            void recargarOrden();
                           }
-                          aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
-                        >
-                          <Trash2Icon />
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </section>
+                        : undefined
+                    }
+                    planificarEntregas={
+                      !!orden &&
+                      !editandoOrden &&
+                      (orden.estado === "borrador" ||
+                        orden.estado === "pendiente") &&
+                      persistedItemIds.has(item.id)
+                    }
+                    entregasPrevias={
+                      !orden &&
+                      ordenTipo === "orden" &&
+                      item.motorCodigo &&
+                      item.jobContext &&
+                      item.unidadMedida === "unidad" &&
+                      !esCentroCopiado(item)
+                        ? entregasPrevias.propsPara(item)
+                        : undefined
+                    }
+                  />
+                )}
+              />
             ) : null}
+
+            {tab === "productos" && (
+              <OrdenCargosList
+                cargos={cargosOrden}
+                isDisabled={cuponValidando || descuentoAplicando}
+                onRemove={
+                  modoOrden
+                    ? undefined
+                    : (id) =>
+                        setCargosOrden((current) =>
+                          current.filter((cargo) => cargo.id !== id),
+                        )
+                }
+              />
+            )}
 
             {tab === "produccion" ? (
               orden ? (
@@ -9748,425 +7954,311 @@ export function PropuestaFicha({
                 )}
               </div>
             ) : null}
-          </div>
 
-          {tab === "productos" ? (
-            <div className="space-y-4">
-              {modoOrden &&
-              orden &&
-              (orden.fidelizacion.canjePuntos > 0 ||
-                orden.fidelizacion.puntosEstimados > 0) ? (
-                <div className="rounded-xl border bg-card p-4 text-sm">
-                  <div className="font-semibold">Fidelización</div>
-                  <div className="mt-1 text-muted-foreground">
-                    {orden.fidelizacion.canjePuntos > 0
-                      ? `${orden.fidelizacion.canjePuntos} puntos · −${formatCurrency(orden.fidelizacion.canjeMonto, moneda)}`
-                      : `Esta orden suma ${orden.fidelizacion.puntosEstimados} puntos cuando esté entregada y pagada con fondos acreditados.`}
-                  </div>
-                </div>
-              ) : null}
-              {!modoOrden ? (
-                <FidelizacionCotizador
-                  clienteId={clienteId}
-                  margen={costosFidelizacion.margenMonto}
-                  total={totalPropuestaAntesCanje}
-                  moneda={moneda}
-                  value={fidelizacionCanjePuntos}
-                  onChange={setFidelizacionCanjePuntos}
-                  onSimulation={actualizarSimulacionFidelizacion}
-                />
-              ) : null}
-              {modoOrden &&
-              editandoOrden &&
-              polyfanPendientesDeGuardar.length > 0 ? (
-                <div
-                  role="status"
-                  className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-950"
-                >
-                  <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-700">
-                    <SaveIcon className="size-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold">
-                      Preparación de corte pendiente de guardar
-                    </div>
-                    <div className="mt-0.5 text-xs leading-relaxed text-emerald-800">
-                      Al guardar la orden se prepararán automáticamente los
-                      recorridos y archivos TAP de{" "}
-                      {polyfanPendientesDeGuardar.length === 1
-                        ? `“${polyfanPendientesDeGuardar[0].productoNombre}”`
-                        : `${polyfanPendientesDeGuardar.length} productos de Polyfan`}
-                      . Luego quedarán disponibles en Producción.
+            {tab === "productos" ? (
+              <div className="flex shrink-0 flex-col gap-4">
+                {modoOrden &&
+                orden &&
+                (orden.fidelizacion.canjePuntos > 0 ||
+                  orden.fidelizacion.puntosEstimados > 0) ? (
+                  <div className="rounded-xl border bg-card p-4 text-sm">
+                    <div className="font-semibold">Fidelización</div>
+                    <div className="mt-1 text-muted-foreground">
+                      {orden.fidelizacion.canjePuntos > 0
+                        ? `${orden.fidelizacion.canjePuntos} puntos · −${formatCurrency(orden.fidelizacion.canjeMonto, moneda)}`
+                        : `Esta orden suma ${orden.fidelizacion.puntosEstimados} puntos cuando esté entregada y pagada con fondos acreditados.`}
                     </div>
                   </div>
-                </div>
-              ) : null}
-              <ResumenBar
-                items={items}
-                cargosOrden={cargosOrden}
-                onAgregarCargo={!modoOrden ? () => setCargoOpen(true) : undefined}
-                tipo={ordenTipo}
-                onEmitir={emitirOrden}
-                onEmitirPresupuesto={emitirPresupuestoCb}
-                emitiendo={emitiendo || emitiendoPresupuesto}
-                onGuardarBorrador={() =>
-                  cobrosStaged.length > 0
-                    ? setConfirmBorradorConCobros(true)
-                    : void guardarBorrador()
-                }
-                guardandoBorrador={guardandoBorrador}
-                onDescuentoOrden={
-                  modoOrden
-                    ? undefined
-                    : () => setDescuentoTarget({ scope: "orden", itemId: null })
-                }
-                onCuponOrden={
-                  modoOrden
-                    ? undefined
-                    : () =>
-                        setDescuentoTarget({
-                          scope: "orden",
-                          itemId: null,
-                          cupon: true,
-                        })
-                }
-                sinComprobante={sinComprobante}
-                fidelizacionCanjeMonto={fidelizacionCanjeMonto}
-                onToggleTratamientoFiscal={
-                  puedeToggleFiscal ? toggleTratamientoFiscal : undefined
-                }
-                togglingFiscal={togglingFiscal}
-                readOnly={modoOrden}
-                resumenPersistido={
-                  orden
-                    ? {
-                        subtotal: orden.subtotal,
-                        impuestos: orden.impuestos,
-                        descuentoTotal: orden.descuentoTotal,
-                        total: orden.total,
-                      }
-                    : undefined
-                }
-                accionesOrden={
-                  modoOrden &&
-                  orden &&
-                  orden.estado !== "cancelada" &&
-                  (camposEditablesOrden(orden.estado).size > 0 ||
-                    esCancelable(orden.estado)) ? (
-                    editandoOrden ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn"
-                          onClick={cancelarEdicion}
-                          disabled={guardandoEdicion}
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => void guardarEdicion()}
-                          disabled={guardandoEdicion}
-                        >
-                          <CheckIcon />
-                          {guardandoEdicion
-                            ? "Guardando…"
-                            : cambiosSinGuardar > 0
-                              ? `Guardar cambios (${cambiosSinGuardar})`
-                              : "Guardar cambios"}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {camposEditablesOrden(orden.estado).size > 0 ? (
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => setEditandoOrden(true)}
-                          >
-                            <Edit3Icon />
-                            Editar orden
-                          </button>
-                        ) : null}
-                        {esCancelable(orden.estado) ? (
-                          <button
-                            type="button"
-                            className="btn"
-                            style={{
-                              background: "#ea580c",
-                              color: "#fff",
-                              borderColor: "#ea580c",
-                            }}
-                            onClick={() => setConfirmCancelar(true)}
-                            disabled={
-                              cancelando || (facturaViva && !puedeAnular)
-                            }
-                            title={
-                              facturaViva && !puedeAnular
-                                ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
-                                : acreditaYCancela
-                                  ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
-                                  : "Cancelar la orden: sale del taller y deja de contar como venta"
-                            }
-                          >
-                            <XCircleIcon />
-                            Cancelar orden
-                          </button>
-                        ) : null}
-                      </>
-                    )
-                  ) : undefined
-                }
-              />
-            </div>
-          ) : null}
-        </div>
-      </OrdenWorkspace>
+                ) : null}
+                {!modoOrden ? (
+                  <FidelizacionCotizador
+                    clienteId={clienteId}
+                    margen={costosFidelizacion.margenMonto}
+                    total={totalPropuestaAntesCanje}
+                    moneda={moneda}
+                    value={fidelizacionCanjePuntos}
+                    onChange={setFidelizacionCanjePuntos}
+                    onSimulation={actualizarSimulacionFidelizacion}
+                  />
+                ) : null}
+                {modoOrden &&
+                editandoOrden &&
+                polyfanPendientesDeGuardar.length > 0 ? (
+                  <div
+                    role="status"
+                    className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-950"
+                  >
+                    <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-700">
+                      <SaveIcon className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold">
+                        Preparación de corte pendiente de guardar
+                      </div>
+                      <div className="mt-0.5 text-xs leading-relaxed text-emerald-800">
+                        Al guardar la orden se prepararán automáticamente los
+                        recorridos y archivos TAP de{" "}
+                        {polyfanPendientesDeGuardar.length === 1
+                          ? `“${polyfanPendientesDeGuardar[0].productoNombre}”`
+                          : `${polyfanPendientesDeGuardar.length} productos de Polyfan`}
+                        . Luego quedarán disponibles en Producción.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </OrdenWorkspace>
+        </HeroTabs>
 
-      {emitiendo ? (
-        <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
-      ) : null}
+        {emitiendo ? (
+          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
+        ) : null}
 
-      {/* Montado SIEMPRE y controlado por `open`, igual que los demás
+        {/* Montado SIEMPRE y controlado por `open`, igual que los demás
           modales de la ficha: montarlo condicionalmente agrega/saca un
           consumidor de useId y desalinea los ids generados entre server y
           cliente (hydration mismatch en el menú de usuario del topbar). */}
-      <AvisoOtEnBorrador
-        open={avisoBorradorAbierto && orden?.estado === "borrador"}
-        numero={orden?.numero ?? ""}
-        emitiendo={emitiendoBorrador}
-        onEmitirAhora={emitirDesdeAviso}
-        onEmitirDespues={() => setAvisoBorradorAbierto(false)}
-      />
-
-      <ConfirmacionSalida
-        open={navPendiente !== null}
-        cambios={cambiosSinGuardar}
-        guardando={guardandoEdicion}
-        onGuardarYSalir={() => {
-          if (orden) {
-            void guardarEdicion({ destino: navPendiente ?? undefined });
-            return;
-          }
-          if (cobrosStaged.length > 0) {
-            setNavPendiente(null);
-            setConfirmBorradorConCobros(true);
-            return;
-          }
-          void guardarBorrador();
-        }}
-        onDescartarYSalir={descartarYSalir}
-        onSeguirEditando={() => setNavPendiente(null)}
-      />
-
-      <ConfirmacionDestructiva
-        open={confirmBorradorConCobros}
-        onOpenChange={setConfirmBorradorConCobros}
-        titulo="El borrador no guarda los cobros"
-        descripcion={`Tenés ${cobrosStaged.length} cobro${cobrosStaged.length === 1 ? "" : "s"} cargado${cobrosStaged.length === 1 ? "" : "s"} en la pestaña Pagos. Los cobros se registran recién al emitir la orden: un borrador no puede recibir plata.`}
-        impacto={[
-          "El borrador se guarda con productos, cliente y condiciones.",
-          "Los cobros cargados se descartan (volvé a cargarlos al emitir).",
-        ]}
-        requiereTipear={false}
-        accionLabel="Guardar borrador igualmente"
-        onConfirmar={() => guardarBorrador()}
-      />
-
-      <ConfirmacionDestructiva
-        open={confirmCancelar}
-        onOpenChange={setConfirmCancelar}
-        titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
-        descripcion={
-          acreditaYCancela
-            ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
-            : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
-        }
-        impacto={impactoCancelacion}
-        requiereTipear={false}
-        motivo={{
-          label: "¿Por qué se cancela? Queda en el historial de la orden.",
-          placeholder:
-            "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
-        }}
-        accionLabel="Cancelar la orden"
-        onConfirmar={(motivo) => cancelarOrden(motivo)}
-      />
-
-      <AgregarProductoSheet
-        open={addOpen}
-        onOpenChange={(open) => {
-          setAddOpen(open);
-          if (!open) setEditingItem(null);
-        }}
-        productos={initialProductos}
-        clienteId={clienteId || null}
-        fechaEntregaDefault={fechaEstimada}
-        editingItem={editingItem}
-        onAddItem={(item) => {
-          // En modo orden es staging: la fila queda local y el POST real va
-          // recién en "Guardar cambios".
-          setItems((current) => [...current, item]);
-          // Se agrega COLAPSADO: la fila aparece cerrada (igual que el centro
-          // de copiado) y el comercial la expande si la necesita. Antes se
-          // abría sola y ocupaba media pantalla en cada alta.
-          setAddOpen(false);
-          setEditingItem(null);
-          focusProductRow(item.id);
-        }}
-        onSaveItem={(item) => {
-          // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
-          // sobre la nueva config (recotización) para no perderlo.
-          const descuentoPrevio =
-            items.find((candidate) => candidate.id === item.id)
-              ?.descuentoInput ?? null;
-          if (descuentoPrevio) {
-            void recotizarItemConDescuento(item, descuentoPrevio)
-              .then((actualizado) =>
-                setItems((current) =>
-                  current.map((candidate) =>
-                    candidate.id === item.id
-                      ? (actualizado ?? {
-                          ...item,
-                          descuentoInput: descuentoPrevio,
-                        })
-                      : candidate,
-                  ),
-                ),
-              )
-              .catch(() => {
-                setItems((current) =>
-                  current.map((candidate) =>
-                    candidate.id === item.id ? item : candidate,
-                  ),
-                );
-                toast.warning(
-                  "El producto se guardó, pero no se pudo reaplicar el descuento. Volvé a cargarlo.",
-                );
-              });
-          } else {
-            setItems((current) =>
-              current.map((candidate) =>
-                candidate.id === item.id ? item : candidate,
-              ),
-            );
-          }
-          if (modoOrden && persistedItemIds.has(item.id)) {
-            // Marca el item persistido como editado en el staging.
-            setEditadosIds((prev) => new Set(prev).add(item.id));
-          }
-          setOpenIds(new Set([item.id]));
-          setAddOpen(false);
-          setEditingItem(null);
-          focusProductRow(item.id);
-        }}
-      />
-      <CentroCopiadoSheet
-        open={copiadoOpen}
-        clienteId={clienteId || null}
-        editItems={copiadoEditItems}
-        onOpenChange={(open) => {
-          setCopiadoOpen(open);
-          if (!open) setCopiadoEditItems(null);
-        }}
-        onAgregar={(nuevos) => {
-          if (nuevos.length === 0) return;
-          // En edición se reemplaza la CARGA completa (todos sus renglones).
-          const cargaEditada = copiadoEditItems?.length
-            ? cargaDeItem(copiadoEditItems[0])
-            : null;
-          const nuevosConHerencia = cargaEditada
-            ? nuevos.map((nuevo, indice) => ({
-                ...nuevo,
-                archivosOrigenItemIds: copiadoEditItems!
-                  .filter(
-                    (_, origenIndice) =>
-                      Math.min(origenIndice, nuevos.length - 1) === indice,
-                  )
-                  .map((origen) => origen.id)
-                  .filter((id) => persistedItemIds.has(id)),
-              }))
-            : nuevos;
-          setItems((current) => {
-            const base = cargaEditada
-              ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
-              : current;
-            return [...base, ...nuevosConHerencia];
-          });
-          // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
-          // demasiado). Se los diferencia por la referencia (varianteNombre).
-          setCopiadoOpen(false);
-          setCopiadoEditItems(null);
-          focusProductRow(nuevosConHerencia[0].id);
-        }}
-      />
-      <CentroCopiadoPreciosSheet
-        open={preciosOpen}
-        onClose={() => setPreciosOpen(false)}
-        items={items}
-        moneda={moneda}
-      />
-      <CargoOrdenSheet
-        open={cargoOpen}
-        cargos={initialCargosDirectos}
-        subtotalBase={calcularResumen(items).subtotal}
-        onClose={() => setCargoOpen(false)}
-        onAdd={(cargo) => {
-          setCargosOrden((current) => [...current, cargo]);
-          setCargoOpen(false);
-          toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);
-        }}
-      />
-      <DescuentoModal
-        target={descuentoTarget}
-        items={items.filter((item) => item.jobContext && item.motorCodigo)}
-        clienteId={clienteId || null}
-        aplicando={descuentoAplicando}
-        onClose={() => setDescuentoTarget(null)}
-        onApply={(scope, targetItemId, descuento) =>
-          void aplicarDescuento(scope, targetItemId, descuento)
-        }
-        onApplyCupon={(resultado) => void aplicarCupon(resultado)}
-        onAviso={setAvisoCupon}
-      />
-
-      {/* Va fuera del modal de descuento a propósito: el aviso sobrevive a
-          que ese modal se cierre al aplicar. */}
-      <CuponAvisoModal
-        aviso={avisoCupon}
-        onCerrar={() => setAvisoCupon(null)}
-      />
-
-      {qrRetiroOpen && orden ? (
-        <QrRetiroModal
-          numero={orden.numero}
-          cliente={orden.clienteNombre}
-          onClose={() => setQrRetiroOpen(false)}
+        <AvisoOtEnBorrador
+          open={avisoBorradorAbierto && orden?.estado === "borrador"}
+          numero={orden?.numero ?? ""}
+          emitiendo={emitiendoBorrador}
+          onEmitirAhora={emitirDesdeAviso}
+          onEmitirDespues={() => setAvisoBorradorAbierto(false)}
         />
-      ) : null}
-      {entregaManualOpen && orden ? (
-        <EntregaModal
-          codigo={orden.numero}
-          onClose={() => setEntregaManualOpen(false)}
-        />
-      ) : null}
-      {panelEditor ? (
-        <PanelesManualEditor
-          item={panelEditor.item}
-          paso={panelEditor.paso}
-          saving={panelSaving}
-          onClose={() => {
-            if (!panelSaving) setPanelEditor(null);
+
+        <ConfirmacionSalida
+          open={navPendiente !== null}
+          cambios={cambiosSinGuardar}
+          guardando={guardandoEdicion}
+          onGuardarYSalir={() => {
+            if (orden) {
+              void guardarEdicion({ destino: navPendiente ?? undefined });
+              return;
+            }
+            if (cobrosStaged.length > 0) {
+              setNavPendiente(null);
+              setConfirmBorradorConCobros(true);
+              return;
+            }
+            void guardarBorrador();
           }}
-          onSave={(layout) =>
-            void recotizarPaneles(panelEditor.item, panelEditor.paso, layout)
+          onDescartarYSalir={descartarYSalir}
+          onSeguirEditando={() => setNavPendiente(null)}
+        />
+
+        <ConfirmacionDestructiva
+          open={confirmBorradorConCobros}
+          onOpenChange={setConfirmBorradorConCobros}
+          titulo="El borrador no guarda los cobros"
+          descripcion={`Tenés ${cobrosStaged.length} cobro${cobrosStaged.length === 1 ? "" : "s"} cargado${cobrosStaged.length === 1 ? "" : "s"} en la pestaña Pagos. Los cobros se registran recién al emitir la orden: un borrador no puede recibir plata.`}
+          impacto={[
+            "El borrador se guarda con productos, cliente y condiciones.",
+            "Los cobros cargados se descartan (volvé a cargarlos al emitir).",
+          ]}
+          requiereTipear={false}
+          accionLabel="Guardar borrador igualmente"
+          onConfirmar={() => guardarBorrador()}
+        />
+
+        <ConfirmacionDestructiva
+          open={confirmCancelar}
+          onOpenChange={setConfirmCancelar}
+          titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
+          descripcion={
+            acreditaYCancela
+              ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
+              : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
           }
-          onRestoreAutomatic={() =>
-            void recotizarPaneles(panelEditor.item, panelEditor.paso, null)
+          impacto={impactoCancelacion}
+          requiereTipear={false}
+          motivo={{
+            label: "¿Por qué se cancela? Queda en el historial de la orden.",
+            placeholder:
+              "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
+          }}
+          accionLabel="Cancelar la orden"
+          onConfirmar={(motivo) => cancelarOrden(motivo)}
+        />
+
+        <AgregarProductoSheet
+          open={addOpen && puedeModificarProductos}
+          onOpenChange={(open) => {
+            if (open && !permisoProductosRef.current) return;
+            setAddOpen(open);
+            if (!open) setEditingItem(null);
+          }}
+          productos={initialProductos}
+          clienteId={clienteId || null}
+          fechaEntregaDefault={fechaEstimada}
+          editingItem={editingItem}
+          onAddItem={(item) => {
+            if (!permisoProductosRef.current) return false;
+            // En modo orden es staging: la fila queda local y el POST real va
+            // recién en "Guardar cambios".
+            setItems((current) => [...current, item]);
+            // Se agrega COLAPSADO: la fila aparece cerrada (igual que el centro
+            // de copiado) y el comercial la expande si la necesita. Antes se
+            // abría sola y ocupaba media pantalla en cada alta.
+            setAddOpen(false);
+            setEditingItem(null);
+            focusOrdenProductoDetalle(item.id);
+          }}
+          onSaveItem={(item) => {
+            if (!permisoProductosRef.current) return false;
+            // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
+            // sobre la nueva config (recotización) para no perderlo.
+            const descuentoPrevio =
+              items.find((candidate) => candidate.id === item.id)
+                ?.descuentoInput ?? null;
+            if (descuentoPrevio) {
+              void recotizarItemConDescuento(item, descuentoPrevio)
+                .then((actualizado) => {
+                  if (!permisoProductosRef.current) return;
+                  setItems((current) =>
+                    current.map((candidate) =>
+                      candidate.id === item.id
+                        ? (actualizado ?? {
+                            ...item,
+                            descuentoInput: descuentoPrevio,
+                          })
+                        : candidate,
+                    ),
+                  );
+                })
+                .catch(() => {
+                  if (!permisoProductosRef.current) return;
+                  setItems((current) =>
+                    current.map((candidate) =>
+                      candidate.id === item.id ? item : candidate,
+                    ),
+                  );
+                  toast.warning(
+                    "El producto se guardó, pero no se pudo reaplicar el descuento. Volvé a cargarlo.",
+                  );
+                });
+            } else {
+              setItems((current) =>
+                current.map((candidate) =>
+                  candidate.id === item.id ? item : candidate,
+                ),
+              );
+            }
+            if (modoOrden && persistedItemIds.has(item.id)) {
+              // Marca el item persistido como editado en el staging.
+              setEditadosIds((prev) => new Set(prev).add(item.id));
+            }
+            setOpenIds(new Set([item.id]));
+            setAddOpen(false);
+            setEditingItem(null);
+            focusOrdenProductoDetalle(item.id);
+          }}
+        />
+        <CentroCopiadoSheet
+          open={copiadoOpen && puedeModificarProductos}
+          clienteId={clienteId || null}
+          editItems={copiadoEditItems}
+          onOpenChange={(open) => {
+            if (open && !permisoProductosRef.current) return;
+            setCopiadoOpen(open);
+            if (!open) setCopiadoEditItems(null);
+          }}
+          onAgregar={(nuevos) => {
+            if (!permisoProductosRef.current) return false;
+            if (nuevos.length === 0) return;
+            // En edición se reemplaza la CARGA completa (todos sus renglones).
+            const cargaEditada = copiadoEditItems?.length
+              ? cargaDeItem(copiadoEditItems[0])
+              : null;
+            const nuevosConHerencia = cargaEditada
+              ? nuevos.map((nuevo, indice) => ({
+                  ...nuevo,
+                  archivosOrigenItemIds: copiadoEditItems!
+                    .filter(
+                      (_, origenIndice) =>
+                        Math.min(origenIndice, nuevos.length - 1) === indice,
+                    )
+                    .map((origen) => origen.id)
+                    .filter((id) => persistedItemIds.has(id)),
+                }))
+              : nuevos;
+            setItems((current) => {
+              const base = cargaEditada
+                ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
+                : current;
+              return [...base, ...nuevosConHerencia];
+            });
+            // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
+            // demasiado). Se los diferencia por la referencia (varianteNombre).
+            setCopiadoOpen(false);
+            setCopiadoEditItems(null);
+            focusOrdenProductoDetalle(nuevosConHerencia[0].id);
+          }}
+        />
+        <CentroCopiadoPreciosSheet
+          open={preciosOpen}
+          onClose={() => setPreciosOpen(false)}
+          items={items}
+          moneda={moneda}
+        />
+        <CargoOrdenDialog
+          open={cargoOpen}
+          cargos={initialCargosDirectos}
+          subtotalBase={calcularResumen(items).subtotal}
+          onClose={() => setCargoOpen(false)}
+          onAdd={(cargo) => {
+            setCargosOrden((current) => [...current, cargo]);
+            setCargoOpen(false);
+            toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);
+          }}
+        />
+        <DescuentoOrdenDialog
+          target={descuentoTarget}
+          items={items.filter((item) => item.jobContext && item.motorCodigo)}
+          aplicando={descuentoAplicando}
+          onClose={() => setDescuentoTarget(null)}
+          onApply={(scope, targetItemId, descuento) =>
+            void aplicarDescuento(scope, targetItemId, descuento)
           }
         />
-      ) : null}
-    </section>
+
+        {/* Va fuera del modal de descuento a propósito: el aviso sobrevive a
+          que ese modal se cierre al aplicar. */}
+        <CuponAvisoModal
+          aviso={avisoCupon}
+          onCerrar={() => setAvisoCupon(null)}
+        />
+
+        {qrRetiroOpen && orden ? (
+          <QrRetiroModal
+            numero={orden.numero}
+            cliente={orden.clienteNombre}
+            onClose={() => setQrRetiroOpen(false)}
+          />
+        ) : null}
+        {entregaManualOpen && orden ? (
+          <EntregaModal
+            codigo={orden.numero}
+            onClose={() => setEntregaManualOpen(false)}
+          />
+        ) : null}
+        {panelEditor ? (
+          <PanelesManualEditor
+            item={panelEditor.item}
+            paso={panelEditor.paso}
+            saving={panelSaving}
+            onClose={() => {
+              if (!panelSaving) setPanelEditor(null);
+            }}
+            onSave={(layout) =>
+              void recotizarPaneles(panelEditor.item, panelEditor.paso, layout)
+            }
+            onRestoreAutomatic={() =>
+              void recotizarPaneles(panelEditor.item, panelEditor.paso, null)
+            }
+          />
+        ) : null}
+      </section>
+    </DesignSystemProvider>
   );
 }

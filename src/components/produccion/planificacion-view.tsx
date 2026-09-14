@@ -5,18 +5,21 @@ import { leerModoOperacionMaquina } from "@/lib/demanda-humana";
 
 import Link from "next/link";
 import { useId, useMemo, useRef, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Clock3, Factory, Info, Layers3, ListTree, RefreshCw, Search, TriangleAlert, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Clock3, Factory, Info, Layers3, ListTree, RefreshCw, TriangleAlert, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Label, SearchField, Slider, Switch } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { SelectField } from "@/components/design-system/select-field";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import layout from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { construirEje } from "@/lib/eje-laboral";
 import { claveFechaEnZona, instanteDe, sumarDiasAClave } from "@/lib/zona";
 import { abrirGruposRecorridoPlan, dependenciasPlan, entregaFinal, estadoEntregaPlan, etaConjuntoPlan, filtrarGruposPlan, filtrarRecorridoPlan, gruposPorOrdenes, gruposPorRecursos, hitosEntregasPlan, periodoCalendarioPlan, plazoEntregaPlan, rangoRecorridoPlan, type GrupoPlan, type OperacionPlan } from "@/lib/planificacion-vista";
@@ -25,10 +28,12 @@ import { etiquetaCalendario } from "@/lib/estaciones";
 import { duracionPlan, fechaPlan, grupoAbierto, PlanificacionGantt } from "./planificacion-gantt";
 import { type DatosPlanificacion, usePlanificacion } from "./use-planificacion";
 import styles from "./planificacion-view.module.css";
+import header from "./planificacion-header.module.css";
 
 const NIVELES_ZOOM = [25, 50, 75, 100, 150, 200, 300, 400];
 
 export function PlanificacionView(inicial: DatosPlanificacion) {
+  const scope = useDesignScope();
   const { datos, operaciones, simulacion, ahora, zona, noLaborables, actualizar, actualizando, error, calculando, sinSimulacion } = usePlanificacion(inicial);
   const [modo, setModo] = useState<"recursos" | "ordenes">("recursos");
   const [consulta, setConsulta] = useState("");
@@ -140,39 +145,69 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
     {calculando && <Badge variant="secondary"><RefreshCw className={styles.spinning} />Actualizando fechas</Badge>}
     {(datos.initialPartialWarning || datos.initialMeta.alcance !== "completo") && <Alert><Info /><AlertDescription>{datos.initialPartialWarning ?? "Tu acceso muestra sólo parte del taller. Esta proyección puede omitir carga de otros trabajos y no confirma la capacidad total."}</AlertDescription></Alert>}
 
-    <div className={styles.stats}>
-      <Card><CardContent className={styles.statContent}><div><span>Órdenes en producción</span><strong>{numeroOrdenes}<small>OT</small></strong></div><ListTree aria-hidden="true" /></CardContent></Card>
-      <Card><CardContent className={styles.statContent}><div><span>Operaciones con fecha</span><strong>{programadas}<small>de {operaciones.length}</small></strong></div><CalendarDays aria-hidden="true" /></CardContent></Card>
-      <Card><CardContent className={styles.statContent}><div><span>Entregas para revisar</span><strong>{ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo}<small>{ordenesVencidas} vencidas · {ordenesEnRiesgo} en riesgo · {ordenesPorRevisar} por confirmar</small></strong></div><TriangleAlert aria-hidden="true" /></CardContent></Card>
+    {/* El alcance HeroUI termina en los controles: no cambia los tokens del Gantt. */}
+    <div {...scope} className={`${theme.theme} ${header.stats}`}>
+      <ListMetric label="Órdenes en producción" value={numeroOrdenes} hint="Órdenes de trabajo" icon={ListTree} />
+      <ListMetric label="Operaciones con fecha" value={programadas} hint={`De ${operaciones.length} operaciones`} icon={CalendarDays} />
+      <ListMetric label="Entregas para revisar" value={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo} hint={`${ordenesVencidas} vencidas · ${ordenesEnRiesgo} en riesgo · ${ordenesPorRevisar} por confirmar`} icon={TriangleAlert} tone={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo ? "danger" : "neutral"} />
     </div>
 
-    <Tabs value={modo} onValueChange={(valor) => { setModo(valor as "recursos" | "ordenes"); if (valor === "ordenes" && seleccionId) setAbiertos((actual) => ({ ...actual, ...abrirGruposRecorridoPlan(ordenes, relacionadas) })); }} className={styles.workbench}>
-    <div className={styles.viewControls}>
-      <TabsList aria-label="Agrupar planificación"><TabsTrigger value="recursos"><Factory />Por recursos</TabsTrigger><TabsTrigger value="ordenes"><ListTree />Por órdenes</TabsTrigger></TabsList>
-      <div className={styles.periodControls}>
-        <Button size="icon" variant="ghost" aria-label="Período anterior" disabled={desde <= hoy} onClick={() => cambiarPeriodo(sumarDiasAClave(desde, -Number(periodo)))}><ChevronLeft /></Button>
-        <span className={styles.periodLabel}>{fechaPlan(eje.dias[0]?.fecha ?? desde).slice(0, 5)} — {fechaPlan(hasta)}</span>
-        <Button size="icon" variant="ghost" aria-label="Período siguiente" onClick={() => cambiarPeriodo(sumarDiasAClave(desde, Number(periodo)))}><ChevronRight /></Button>
-        <Button variant="outline" onClick={() => { cambiarPeriodo(hoy); void actualizar(); }}>Ahora</Button>
-        <Select items={[{ value: "7", label: "Semana" }, { value: "14", label: "2 semanas" }, { value: "recorrido", label: "Recorrido" }]} value={recorridoVisible ? "recorrido" : periodo} onValueChange={(valor) => { if (valor === "recorrido") verRecorrido(); else if (valor) { setFocoRecorrido(false); setPeriodo(valor); } }}><SelectTrigger aria-label="Período del calendario"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="7">Semana</SelectItem><SelectItem value="14">2 semanas</SelectItem><SelectItem value="recorrido" disabled={!rangoRecorrido}>Recorrido</SelectItem></SelectGroup></SelectContent></Select>
+    <div className={styles.workbench}>
+    <div {...scope} className={`${theme.theme} ${header.viewControls}`}>
+      <SegmentedControl aria-label="Agrupar planificación" value={modo} options={[
+        { value: "recursos", label: "Por recursos", icon: <Factory size={15} aria-hidden /> },
+        { value: "ordenes", label: "Por órdenes", icon: <ListTree size={15} aria-hidden /> },
+      ]} onChange={(valor) => { setModo(valor as "recursos" | "ordenes"); if (valor === "ordenes" && seleccionId) setAbiertos((actual) => ({ ...actual, ...abrirGruposRecorridoPlan(ordenes, relacionadas) })); }} />
+      <div className={header.periodControls}>
+        <div className={header.periodNavigation} role="group" aria-label="Navegar por el calendario">
+          <ActionButton isIconOnly variant="ghost" aria-label="Período anterior" isDisabled={desde <= hoy} onPress={() => cambiarPeriodo(sumarDiasAClave(desde, -Number(periodo)))}><ChevronLeft size={16} /></ActionButton>
+          <span className={header.periodLabel}>{fechaPlan(eje.dias[0]?.fecha ?? desde).slice(0, 5)} — {fechaPlan(hasta)}</span>
+          <ActionButton isIconOnly variant="ghost" aria-label="Período siguiente" onPress={() => cambiarPeriodo(sumarDiasAClave(desde, Number(periodo)))}><ChevronRight size={16} /></ActionButton>
+        </div>
+        <ActionButton variant="outline" onPress={() => { cambiarPeriodo(hoy); void actualizar(); }}>Ahora</ActionButton>
+        <SelectField className={header.periodSelect} aria-label="Período del calendario" options={[{ value: "7", label: "Semana" }, { value: "14", label: "2 semanas" }, { value: "recorrido", label: "Recorrido", disabled: !rangoRecorrido }]} value={recorridoVisible ? "recorrido" : periodo} onChange={(valor) => { if (valor === "recorrido") verRecorrido(); else if (valor) { setFocoRecorrido(false); setPeriodo(valor); } }} />
       </div>
     </div>
 
-    <TabsContent value={modo} key={modo} className={styles.ganttCard}>
-      <div className={styles.toolbar}>
-        <InputGroup className={styles.search}><InputGroupAddon><Search /></InputGroupAddon><InputGroupInput placeholder="Buscar OT, cliente, lote o tarea…" value={consulta} onChange={(e) => { setFocoRecorrido(false); setConsulta(e.target.value); }} aria-label="Buscar en planificación" /></InputGroup>
-        <div className={styles.toolbarActions}>
-          <label className={styles.switchLabel}><Switch size="sm" checked={mostrarDependencias} onCheckedChange={setMostrarDependencias} />Dependencias</label>
-          <div className={styles.zoomControls} role="group" aria-label="Zoom horizontal">
+    <div key={modo} className={styles.ganttCard} role="region" aria-label={`Calendario por ${modo === "recursos" ? "recursos" : "órdenes"}`}>
+      <div {...scope} className={`${theme.theme} ${header.toolbar}`}>
+        <SearchField className={header.search} value={consulta} onChange={(valor) => { setFocoRecorrido(false); setConsulta(valor); }} aria-label="Buscar en planificación">
+          <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
+            <SearchField.SearchIcon />
+            <SearchField.Input placeholder="Buscar OT, cliente, lote o tarea…" />
+          </SearchField.Group>
+        </SearchField>
+        <div className={header.toolbarActions}>
+          <Switch size="sm" isSelected={mostrarDependencias} onChange={setMostrarDependencias}>
+            <Switch.Content className={header.switchLabel}>
+              <Switch.Control><Switch.Thumb /></Switch.Control>
+              <Label>Dependencias</Label>
+            </Switch.Content>
+          </Switch>
+          <div className={header.zoomControls} role="group" aria-label="Zoom horizontal" onKeyDownCapture={(event) => {
+            if (!(event.target instanceof HTMLInputElement) || (event.key !== "PageUp" && event.key !== "PageDown")) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const salto = event.key === "PageUp" ? 25 : -25;
+            setZoom(actual => Math.min(400, Math.max(25, actual + salto)));
+          }}>
             <span id={zoomLabelId}>Zoom<span className="sr-only"> horizontal, porcentaje</span></span>
-            <Button variant="ghost" size="icon-sm" aria-label="Reducir zoom horizontal" title="Reducir zoom horizontal" disabled={zoom <= 25} onClick={() => setZoom(NIVELES_ZOOM.filter(nivel => nivel < zoom).at(-1) ?? 25)}><ZoomOut /></Button>
-            <Slider className={styles.zoomSlider} aria-labelledby={zoomLabelId} min={25} max={400} step={5} largeStep={25} value={[zoom]} onValueChange={valor => setZoom(typeof valor === "number" ? valor : valor[0] ?? 100)} />
-            <Button variant="ghost" size="icon-sm" aria-label="Aumentar zoom horizontal" title="Aumentar zoom horizontal" disabled={zoom >= 400} onClick={() => setZoom(NIVELES_ZOOM.find(nivel => nivel > zoom) ?? 400)}><ZoomIn /></Button>
-            <output className={styles.zoomValue} aria-label="Zoom actual">{zoom}%</output>
+            <ActionButton variant="ghost" isIconOnly aria-label="Reducir zoom horizontal" title="Reducir zoom horizontal" isDisabled={zoom <= 25} onPress={() => setZoom(NIVELES_ZOOM.filter(nivel => nivel < zoom).at(-1) ?? 25)}><ZoomOut size={16} /></ActionButton>
+            <Slider className={header.zoomSlider} aria-labelledby={zoomLabelId} minValue={25} maxValue={400} step={5} value={zoom} onChange={valor => setZoom(typeof valor === "number" ? valor : valor[0] ?? 100)}>
+              <Slider.Track>
+                <Slider.Fill />
+                <Slider.Thumb aria-label="Zoom horizontal, porcentaje" />
+              </Slider.Track>
+            </Slider>
+            <ActionButton variant="ghost" isIconOnly aria-label="Aumentar zoom horizontal" title="Aumentar zoom horizontal" isDisabled={zoom >= 400} onPress={() => setZoom(NIVELES_ZOOM.find(nivel => nivel > zoom) ?? 400)}><ZoomIn size={16} /></ActionButton>
+            <output className={header.zoomValue} aria-label="Zoom actual">{zoom}%</output>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => expandir(true)}>Desplegar filas</Button><Button variant="ghost" size="sm" onClick={() => expandir(false)}>Plegar filas</Button>
-          {seleccionId && <Button variant="ghost" size="icon-sm" onClick={() => { setSeleccionId(null); setPanelAbierto(false); setFocoRecorrido(false); }} aria-label="Limpiar selección"><X /></Button>}
-          <Button variant="outline" size="icon-sm" onClick={() => void actualizar()} disabled={actualizando} aria-label="Actualizar planificación" title={actualizando ? "Actualizando planificación" : "Actualizar planificación"}><RefreshCw className={actualizando ? styles.spinning : undefined} /></Button>
+          <div className={header.rowActions} role="group" aria-label="Desplegar o plegar filas">
+            <ActionButton variant="outline" onPress={() => expandir(true)}>Desplegar filas</ActionButton>
+            <ActionButton variant="outline" onPress={() => expandir(false)}>Plegar filas</ActionButton>
+          </div>
+          {seleccionId && <ActionButton variant="ghost" isIconOnly onPress={() => { setSeleccionId(null); setPanelAbierto(false); setFocoRecorrido(false); }} aria-label="Limpiar selección"><X size={16} /></ActionButton>}
+          <ActionButton variant="outline" isIconOnly onPress={() => void actualizar()} isDisabled={actualizando} aria-label="Actualizar planificación" title={actualizando ? "Actualizando planificación" : "Actualizar planificación"}><RefreshCw size={16} className={actualizando ? styles.spinning : undefined} /></ActionButton>
         </div>
       </div>
       <PlanificacionGantt grupos={grupos} entregas={entregas} modo={modo} eje={eje} desde={desde} hasta={hasta} zona={zona} ahora={ahora} zoom={zoom} volverAlInicio={volverAlInicio} abiertos={abiertos} alternar={alternar} seleccionId={seleccionId} relacionadas={relacionadas} mostrarDependencias={mostrarDependencias} seleccionar={seleccionarEnGantt} riesgo={riesgo} />
@@ -184,8 +219,8 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
           <Button variant="outline" size="sm" onClick={() => setPanelAbierto(true)}>Ver detalle</Button>
         </div> : <span>{consulta ? `${visibles.size} de ${operaciones.length} operaciones` : `${operaciones.length} operaciones`} · Seleccioná una tarea para ver sus dependencias</span>}
       </div>
-    </TabsContent>
-    </Tabs>
+    </div>
+    </div>
 
     <footer className={styles.footer}>
       <div className={styles.footerNotes}><span>Calendario laboral · {zona.replaceAll("_", " ")} · Desplazá horizontalmente para recorrer los días</span><span>Consulta: {fechaHora(ahora)} · Indicadores sobre todas las órdenes accesibles.</span></div>
@@ -230,7 +265,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
               const fases = resumenOperacionPlan(seleccion.agenda?.tramosOperacion);
               const reservas = seleccion.agenda?.reservasHumanas ?? [];
               const minutosHumanos = reservas.reduce((sum, reserva) => sum + (reserva.fin - reserva.inicio) / 60_000 * reserva.personas, 0);
-              return <><dl className={styles.facts}>{seleccion.paso.maquinaId && <><dt>Operación de máquina</dt><dd>{operacionSeleccion === "con_operario" ? "Con operario" : operacionSeleccion === "autonoma" ? "Autónoma" : "Sin configurar"}</dd></>}<dt>Calendario</dt><dd>{estacion ? etiquetaCalendario(estacion.calendario) ?? "Sin calendario propio; estimación orientativa" : "Sin estación configurada"}</dd><dt>Equipo compartido</dt><dd>{equipo ? `${equipo.nombre} · ${equipo.personas} personas` : "Sin configurar"}</dd>{reservas.length > 0 && <><dt>Equipo, incluida separación</dt><dd>{duracionPlan(minutosHumanos)} · persona</dd></>}{fases.operario > 0 && <><dt>Trabajo de operario</dt><dd>{duracionPlan(fases.operario)}</dd></>}{fases.maquina_atendida > 0 && <><dt>Operación con operario</dt><dd>{duracionPlan(fases.maquina_atendida)}</dd></>}{fases.maquina > 0 && <><dt>Operación autónoma</dt><dd>{duracionPlan(fases.maquina)}</dd></>}{fases.sin_verificar > 0 && <><dt>Atención sin verificar</dt><dd>{duracionPlan(fases.sin_verificar)}</dd></>}</dl><p className={styles.note}>{fases.sin_verificar > 0 ? "El desglose no permite confirmar toda la atención: se reserva al equipo de forma conservadora." : "Preparación, carga, recarga y cierre ocupan al equipo. La operación autónoma permite atender otra máquina; la operación con operario mantiene al equipo ocupado."}{seleccion.agenda?.faseEnCursoEstimada && " La fase actual se proyecta con el calendario y los tramos registrados."}</p>{seleccion.paso.maquinaId && <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/costos/maquinaria/${seleccion.paso.maquinaId}`} />}>Ver configuración de máquina<ArrowUpRight data-icon="inline-end" /></Button>}</>;
+              return <><dl className={styles.facts}>{seleccion.paso.maquinaId && <><dt>Operación de máquina</dt><dd>{operacionSeleccion === "con_operario" ? "Con operario" : operacionSeleccion === "autonoma" ? "Autónoma" : "Sin configurar"}</dd></>}<dt>Calendario</dt><dd>{estacion ? etiquetaCalendario(estacion.calendario) ?? "Sin calendario propio; estimación orientativa" : "Sin estación configurada"}</dd><dt>{estacion?.planificacionPorEmpleados ? "Empleados de la estación" : "Equipo compartido"}</dt><dd>{estacion?.planificacionPorEmpleados ? `${estacion.empleados.length} personas · horarios individuales` : equipo ? `${equipo.nombre} · ${equipo.personas} personas` : "Sin configurar"}</dd>{reservas.length > 0 && <><dt>Atención, incluida separación</dt><dd>{duracionPlan(minutosHumanos)} · persona</dd></>}{fases.operario > 0 && <><dt>Trabajo de operario</dt><dd>{duracionPlan(fases.operario)}</dd></>}{fases.maquina_atendida > 0 && <><dt>Operación con operario</dt><dd>{duracionPlan(fases.maquina_atendida)}</dd></>}{fases.maquina > 0 && <><dt>Operación autónoma</dt><dd>{duracionPlan(fases.maquina)}</dd></>}{fases.sin_verificar > 0 && <><dt>Atención sin verificar</dt><dd>{duracionPlan(fases.sin_verificar)}</dd></>}</dl><p className={styles.note}>{fases.sin_verificar > 0 ? "El desglose no permite confirmar toda la atención: se reservan operarios de forma conservadora." : "Preparación, carga, recarga y cierre ocupan a los operarios. La operación autónoma permite atender otra máquina; la operación con operario mantiene a los operarios ocupados."}{seleccion.agenda?.faseEnCursoEstimada && " La fase actual se proyecta con el calendario y los tramos registrados."}</p>{seleccion.paso.maquinaId && <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/costos/maquinaria/${seleccion.paso.maquinaId}`} />}>Ver configuración de máquina<ArrowUpRight data-icon="inline-end" /></Button>}</>;
             })()}</div>
             <Separator />
             <div className={styles.detailSection}><h3><ArrowDownRight />Depende de</h3>

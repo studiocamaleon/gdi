@@ -118,11 +118,19 @@ export function PasoAccionesProduccion({
   onAccion,
   referencia,
   enLinea = false,
+  renderAccion,
   ...control
 }: ControlAccionesProduccion & {
   busy: boolean;
   referencia?: string;
   enLinea?: boolean;
+  /** Permite renovar sólo los botones de una vista, conservando el flujo compartido. */
+  renderAccion?: (props: {
+    label: string;
+    disabled: boolean;
+    onPress: () => void;
+    children: React.ReactNode;
+  }) => React.ReactNode;
   onAccion: (
     accion: TableroPasoAccion,
     opts?: OpcionesAccionProduccion,
@@ -269,29 +277,36 @@ export function PasoAccionesProduccion({
       <div className="flex flex-wrap gap-2">
         {acciones.map((accion) => {
           const Icono = ICONOS[accion];
+          const label = `${ETIQUETAS_ACCION[accion]} ${referencia ?? control.paso.nombre}`;
+          const onPress = () => {
+            setError(null);
+            if (accion === "bloquear" || accion === "pausar") {
+              setMotivo("");
+              setDetalle("");
+              setFormulario(accion);
+            } else if (
+              accion === "completar" &&
+              completarSeriaInstantaneo(control.paso)
+            )
+              setFormulario("tiempo");
+            else void ejecutar(accion);
+          };
+          const children = <><Icono data-icon="inline-start" />{ETIQUETAS_ACCION[accion]}</>;
+          if (renderAccion) return (
+            <React.Fragment key={accion}>
+              {renderAccion({ label, disabled: ocupado, onPress, children })}
+            </React.Fragment>
+          );
           return (
             <Button
               key={accion}
               size="sm"
               variant="outline"
               disabled={ocupado}
-              aria-label={`${ETIQUETAS_ACCION[accion]} ${referencia ?? control.paso.nombre}`}
-              onClick={() => {
-                setError(null);
-                if (accion === "bloquear" || accion === "pausar") {
-                  setMotivo("");
-                  setDetalle("");
-                  setFormulario(accion);
-                } else if (
-                  accion === "completar" &&
-                  completarSeriaInstantaneo(control.paso)
-                )
-                  setFormulario("tiempo");
-                else void ejecutar(accion);
-              }}
+              aria-label={label}
+              onClick={onPress}
             >
-              <Icono data-icon="inline-start" />
-              {ETIQUETAS_ACCION[accion]}
+              {children}
             </Button>
           );
         })}

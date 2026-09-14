@@ -21,27 +21,8 @@
   min-height: 560px;
 }
 
-.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; flex: none; }
-.stats > :global([data-slot="card"]) { padding-block: 0; gap: 0; box-shadow: none; }
-.statContent { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; }
-.statContent > div { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.statContent span { color: var(--muted-foreground); font-size: 11px; font-weight: 500; }
-.statContent strong { display: flex; align-items: baseline; gap: 10px; font-size: 26px; line-height: 1; font-weight: 600; letter-spacing: -.7px; font-variant-numeric: tabular-nums; }
-.statContent small { font-weight: 400; font-size: 10px; letter-spacing: 0; line-height: 1.4; color: var(--muted-foreground); }
-.statContent > svg { width: 17px; height: 17px; color: var(--muted-foreground); flex: none; }
-.viewControls { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 12px; }
 .workbench { display: flex; flex: 1; flex-direction: column; gap: 18px; min-width: 0; min-height: 0; }
-.periodControls { display: flex; align-items: center; gap: 6px; }
-.periodLabel { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ganttCard { display: flex; flex-direction: column; min-height: 230px; min-width: 0; flex: 1; border: 1px solid var(--border); background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 3px rgb(0 0 0 / 1%); }
-.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); flex: none; }
-.search { max-width: 330px; }
-.toolbarActions { display: flex; align-items: center; gap: 8px; }
-.zoomControls { display: flex; align-items: center; gap: 3px; }
-.zoomControls > span { color: var(--muted-foreground); font-size: 11px; margin-right: 3px; }
-.zoomControls .zoomSlider { width: clamp(96px, 9vw, 144px); flex: none; margin-inline: 5px; }
-.zoomValue { min-width: 39px; text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; }
-.switchLabel { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted-foreground); white-space: nowrap; cursor: pointer; margin-right: 6px; }
 /* El gesto horizontal termina en el Gantt y no activa atrás/adelante en macOS. */
 .scroll { flex: 1; min-height: 0; width: 100%; overflow: auto; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-gutter: stable; scroll-padding: 70px 0 0 var(--columna); outline-offset: -3px; }
 .scroll[data-mode="recursos"] { scroll-padding-top: 122px; }
@@ -162,26 +143,12 @@
 @media (prefers-reduced-motion: reduce) { .spinning { animation: none; } .bar { transition: none; } }
 @media (min-width: 1800px) { .page { --columna: 330px; } }
 @media (max-width: 1100px) {
-  .toolbar { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
-  .search { max-width: none; flex: 1; min-width: 230px; }
-  .toolbarActions { flex-wrap: wrap; }
-  .statContent { padding: 13px; }
-  .statContent strong { flex-wrap: wrap; gap: 6px; }
-  .statContent > svg { display: none; }
+  .page { padding-inline: 20px; }
 }
 @media (max-width: 720px) {
-  .page { gap: 12px; height: calc(100dvh - 52px); min-height: 660px; padding: 16px 12px; --columna: 220px; }
-  .stats { gap: 7px; }
-  .statContent { padding: 12px 9px; }
-  .statContent span { font-size: 10px; }
-  .statContent strong { font-size: 21px; }
-  .statContent small { font-size: 9px; }
-  .viewControls { flex-wrap: wrap; }
-  .periodControls { gap: 2px; }
-  .periodLabel { font-size: 11px; }
-  .toolbar { padding: 10px; }
-  .toolbarActions { gap: 4px; }
-  .switchLabel { font-size: 10px; }
+  .page { gap: 12px; height: auto; min-height: calc(100dvh - 52px); padding: 16px; --columna: 220px; }
+  .workbench { flex: none; }
+  .ganttCard { height: 560px; flex: none; }
   .load { display: none; }
   .corner small { display: none; }
   .legend { padding: 10px; }

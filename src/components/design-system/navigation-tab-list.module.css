@@ -1,0 +1,140 @@
+/* T2: slots explícitos para poder componer herramientas junto a las pestañas. */
+.container {
+  min-width: 0;
+  max-width: 100%;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.list {
+  padding: 0;
+}
+.tab {
+  height: var(--action-height-sm);
+  gap: 6px;
+  padding-inline: var(--action-padding-sm);
+  border-radius: 0;
+  font-size: var(--action-font-sm);
+  white-space: nowrap;
+}
+.tab svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.tab[data-selected="true"] {
+  color: var(--accent-soft-foreground);
+}
+.count {
+  margin-left: 3px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.warning {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  color: var(--warning);
+}
+.indicator {
+  top: auto;
+  bottom: 0;
+  height: 2px;
+  border-radius: 0;
+  background: var(--accent-soft-foreground);
+  box-shadow: none;
+}
+.tab:is(:focus-visible, [data-focus-visible="true"]) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.container[data-variant="detailed"] {
+  container: navigation-tabs / inline-size;
+  flex: none;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.container[data-variant="detailed"] .list {
+  display: grid;
+  grid-template-columns: repeat(var(--tab-count), minmax(0, 1fr));
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  background: var(--border);
+  border-radius: inherit;
+  overflow: hidden;
+}
+.container[data-variant="detailed"] .tab {
+  min-width: 0;
+  height: 56px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  text-align: left;
+  background: var(--surface);
+}
+.container[data-variant="detailed"] .tab > svg {
+  width: 18px;
+  height: 18px;
+}
+.label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.description {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: normal;
+}
+.tab[data-selected="true"] .description {
+  color: inherit;
+}
+.container[data-variant="detailed"] .tab[data-selected="true"] {
+  box-shadow: inset 0 1px 7px rgb(30 30 40 / 5%);
+}
+@container navigation-tabs (max-width: 1200px) {
+  .container[data-variant="detailed"] .tab {
+    height: 36px;
+    justify-content: center;
+    padding: 6px 8px;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .container[data-variant="detailed"] .description,
+  .container[data-variant="detailed"] .tab > svg {
+    display: none;
+  }
+}
+@container navigation-tabs (max-width: 950px) {
+  .container[data-variant="detailed"] .list {
+    grid-template-columns: repeat(var(--tab-columns-narrow), minmax(0, 1fr));
+  }
+}
+@container navigation-tabs (max-width: 560px) {
+  .container[data-variant="detailed"] .list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container navigation-tabs (max-width: 320px) {
+  .container[data-variant="detailed"] .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.container[data-variant="detailed"] .tab[data-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-soft-foreground);
+}

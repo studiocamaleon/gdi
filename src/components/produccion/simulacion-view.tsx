@@ -923,7 +923,7 @@ function LineaDeTiempo({
                   ? "externo"
                   : c.puestos
                     ? `${c.puestos} puesto${c.puestos > 1 ? "s" : ""}`
-                    : "sin límite"}{" "}
+                    : c.key === SIN_ESTACION_KEY ? "sin límite" : "por empleados"}{" "}
                 · {c.bloques.length} pasos
               </div>
             </div>
@@ -1255,7 +1255,7 @@ function Proyeccion({
             ? "externo"
             : c.key === SIN_ESTACION_KEY
               ? "capacidad ∞"
-              : `${c.puestos} puesto${(c.puestos ?? 0) > 1 ? "s" : ""}`;
+              : c.puestos == null ? "por empleados" : `${c.puestos} puesto${(c.puestos ?? 0) > 1 ? "s" : ""}`;
         let ultimoDia: string | null = null;
         return (
           <section
@@ -1624,7 +1624,7 @@ function construir(
       return {
         key,
         nombre: bloques[0].estNombre,
-        puestos: est?.capacidadConcurrente ?? null,
+        puestos: est?.planificacionPorEmpleados ? null : est?.capacidadConcurrente ?? null,
         bloques,
         filas: Math.max(1, filas.length),
         acento:

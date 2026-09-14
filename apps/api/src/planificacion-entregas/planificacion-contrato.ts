@@ -68,7 +68,7 @@ export function huellaContextoPlan(
   // El paso del tiempo se controla con calculadaEl y una nueva simulación. La
   // huella detecta cambios de datos aunque dos lecturas sucedan en el mismo minuto.
   return huellaPlan({
-    ruteoEstaciones: 'agenda-atencion-preservada-v4',
+    ruteoEstaciones: 'personas-horarios-v5',
     zona: t.zona,
     margenDiasHabiles,
     tiempoEntrePasosMin: t.tiempoEntrePasosMin,

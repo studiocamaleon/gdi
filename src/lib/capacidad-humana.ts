@@ -1,10 +1,16 @@
-import { recortarDemanda, type DemandaHumana } from './demanda-humana';
-import type { CalendarioEstacion, EquipoProduccion } from './estaciones';
+import { programarFasePersonal } from "./capacidad-personal";
+import { recortarDemanda, type DemandaHumana } from "./demanda-humana";
+import type {
+  CalendarioEstacion,
+  EquipoProduccion,
+  PersonaProduccion,
+} from "./estaciones";
 export type ReservaHumana = {
   inicio: number;
   fin: number;
   personas: number;
   pasoId?: string;
+  empleadoIds?: string[];
 };
 export type PlanAtencion = {
   inicio: Date;
@@ -19,7 +25,7 @@ export type TramoOperacion = {
   inicio: number;
   fin: number;
   personas: number;
-  tipo: 'operario' | 'maquina' | 'maquina_atendida' | 'sin_verificar';
+  tipo: "operario" | "maquina" | "maquina_atendida" | "sin_verificar";
 };
 type Proyectar = (
   calendario: CalendarioEstacion,
@@ -43,7 +49,7 @@ export function intersectarCalendarios(
       );
       return [dia, comunes.length ? comunes : null];
     }),
-  ) as CalendarioEstacion['dias'];
+  ) as CalendarioEstacion["dias"];
   return { dias };
 }
 
@@ -82,11 +88,19 @@ export function programarAtencion(args: {
   demanda: DemandaHumana;
   calendario: CalendarioEstacion;
   equipo?: EquipoProduccion | null;
+  empleados?: PersonaProduccion[];
   reservas: ReservaHumana[];
   preparacionMin: number;
   proyectar: Proyectar;
 }): PlanAtencion | null {
-  const { demanda, equipo, calendario, proyectar } = args;
+  const { demanda, calendario, proyectar } = args;
+  const equipo = args.empleados === undefined ? args.equipo : null;
+  const empleados = args.empleados?.map((e) => ({
+    ...e,
+    calendario: e.calendario
+      ? intersectarCalendarios(calendario, e.calendario)
+      : null,
+  }));
   const requiereEquipo =
     demanda.fases.some((f) => f.personas > 0) || args.preparacionMin > 0;
   if (
@@ -116,11 +130,25 @@ export function programarAtencion(args: {
     if (equipo && fase.personas > equipo.personas) return null;
     let colocada = false;
     for (let intento = 0; intento <= args.reservas.length + 2; intento++) {
-      const tramos = proyectar(
-        fase.personas > 0 ? combinado : calendario,
-        t,
-        fase.minutos,
-      );
+      const personales =
+        empleados !== undefined && fase.personas > 0
+          ? programarFasePersonal({
+              desde: t,
+              minutos: fase.minutos,
+              personas: fase.personas,
+              empleados,
+              reservas: args.reservas,
+              proyectar,
+            })
+          : undefined;
+      const tramos =
+        personales !== undefined
+          ? personales
+          : proyectar(
+              fase.personas > 0 ? combinado : calendario,
+              t,
+              fase.minutos,
+            );
       if (!tramos?.length) return null;
       const conflicto =
         equipo && fase.personas > 0
@@ -151,13 +179,15 @@ export function programarAtencion(args: {
             ...r,
             personas: fase.personas,
             tipo: !demanda.verificada
-              ? ('sin_verificar' as const)
+              ? ("sin_verificar" as const)
               : fase.personas > 0
-                ? (fase.operacionMaquina ? 'maquina_atendida' as const : 'operario' as const)
-                : ('maquina' as const),
+                ? fase.operacionMaquina
+                  ? ("maquina_atendida" as const)
+                  : ("operario" as const)
+                : ("maquina" as const),
           })),
         );
-      if (equipo && fase.personas > 0)
+      if ((equipo || empleados !== undefined) && fase.personas > 0)
         reservas.push(
           ...tramos.map((r) => ({ ...r, personas: fase.personas })),
         );
@@ -172,7 +202,10 @@ export function programarAtencion(args: {
     finOcupacion: t,
     reservas,
     tramos: trabajo,
-    parcial: !demanda.verificada || (requiereEquipo && !equipo),
+    parcial:
+      !demanda.verificada ||
+      (requiereEquipo && !equipo && empleados === undefined) ||
+      !!empleados?.some((e) => e.activo !== false && !e.calendario),
   };
 }
 
@@ -184,6 +217,7 @@ export function demandaPendiente(args: {
   ahora: Date;
   calendario: CalendarioEstacion;
   equipo?: EquipoProduccion | null;
+  empleados?: PersonaProduccion[];
   proyectar: Proyectar;
 }): DemandaHumana {
   let pendiente = args.demanda;

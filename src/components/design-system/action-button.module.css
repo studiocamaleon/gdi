@@ -1,0 +1,80 @@
+/* C · Degradado cálido · Suave · Compacto. API de variantes nativa de HeroUI. */
+.button {
+  --action-height: var(--action-height-sm);
+  --action-padding: var(--action-padding-sm);
+  --action-font: var(--action-font-sm);
+  height: var(--action-height);
+  padding-inline: var(--action-padding);
+  border-radius: var(--action-radius);
+  font-size: var(--action-font);
+  font-weight: 600;
+  box-shadow: none;
+  transition:
+    background-color 150ms ease,
+    background-position 180ms ease,
+    transform 150ms ease;
+}
+
+.button[data-gdi-size="md"] {
+  --action-height: var(--action-height-md);
+  --action-padding: var(--action-padding-md);
+  --action-font: var(--action-font-md);
+}
+
+.button[data-gdi-size="lg"] {
+  --action-height: var(--action-height-lg);
+  --action-padding: var(--action-padding-lg);
+  --action-font: var(--action-font-lg);
+}
+
+.button[data-gdi-icon-only="true"] {
+  width: var(--action-height);
+  padding: 0;
+}
+
+.button[data-gdi-variant="primary"] {
+  --button-bg: var(--action-primary-start);
+  --button-fg: var(--action-primary-foreground);
+  background-image: var(--action-primary-gradient);
+  background-size: 180% 100%;
+}
+
+/* S2. tertiary conserva compatibilidad con las acciones auxiliares migradas. */
+.button:is([data-gdi-variant="outline"], [data-gdi-variant="tertiary"]) {
+  --button-bg: transparent;
+  --button-bg-hover: var(--default);
+  --button-bg-pressed: var(--default-hover);
+  --button-fg: var(--foreground);
+  border: 1px solid var(--border);
+}
+
+.button:is([data-hovered="true"], [data-pressed="true"]) {
+  background-position: right center;
+}
+
+.button:is(:focus-visible, [data-focus-visible="true"]) {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .button:hover {
+    background-position: right center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}
+
+/* Acción de alto contraste; la marca conserva el primario cálido. */
+.button[data-gdi-variant="primary"][data-gdi-tone="neutral"] {
+  --button-bg: var(--action-neutral-background);
+  --button-bg-hover: var(--action-neutral-hover);
+  --button-bg-pressed: var(--action-neutral-hover);
+  --button-fg: var(--action-neutral-foreground);
+  background-image: none;
+}

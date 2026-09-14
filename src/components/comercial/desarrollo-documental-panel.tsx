@@ -1,5 +1,12 @@
 "use client";
 
+import { Card, Input, TextArea, Modal, Checkbox, Label } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SelectField } from "@/components/design-system/select-field";
+import { CampanaDialog } from "./campana-dialog";
+import focus from "@/components/design-system/field-focus.module.css";
+import form from "./campana-form.module.css";
+
 import * as React from "react";
 import {
   CheckCircle2Icon,
@@ -9,7 +16,6 @@ import {
   FileClockIcon,
   FilePlus2Icon,
   FlagIcon,
-  LinkIcon,
   Link2OffIcon,
   LockKeyholeIcon,
   MessageSquareWarningIcon,
@@ -17,15 +23,6 @@ import {
   ShieldCheckIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type { Archivo } from "@/lib/archivos";
 import { formatBytes, urlDeArchivo } from "@/lib/archivos";
 import {
@@ -44,7 +41,7 @@ import {
   type PropositoArchivoMaestro,
   type TipoAprobacionDocumento,
 } from "@/lib/desarrollo-documental-api";
-import styles from "./campanas.module.css";
+import styles from "./desarrollo-documental-panel.module.css";
 
 const ETAPAS: Array<[EtapaDesarrolloDocumento, string]> = [
   ["BRIEF", "Brief"],
@@ -283,21 +280,17 @@ export function DesarrolloDocumentalPanel({
         {canManage ? (
           <div className={styles.developmentActions}>
             {ordenes.length && data.maestros.length ? (
-              <Button
+              <ActionButton
                 variant="outline"
                 size="sm"
-                onClick={() => setGateOpen(true)}
+                onPress={() => setGateOpen(true)}
               >
                 <LockKeyholeIcon data-icon="inline-start" /> Configurar gate
-              </Button>
+              </ActionButton>
             ) : null}
-            <Button
-              className={styles.primaryButton}
-              size="sm"
-              onClick={() => setMaestroOpen(true)}
-            >
+            <ActionButton size="sm" onPress={() => setMaestroOpen(true)}>
               <PlusIcon data-icon="inline-start" /> Nuevo documento
-            </Button>
+            </ActionButton>
           </div>
         ) : null}
       </div>
@@ -324,7 +317,11 @@ export function DesarrolloDocumentalPanel({
       {data.maestros.length ? (
         <div className={styles.masterList}>
           {data.maestros.map((maestro) => (
-            <article className={styles.masterCard} key={maestro.id}>
+            <Card
+              render={(props) => <article {...props} />}
+              className={styles.masterCard}
+              key={maestro.id}
+            >
               <header className={styles.masterHeader}>
                 <div className={styles.masterIdentity}>
                   <span className={styles.masterIcon}>
@@ -424,26 +421,26 @@ export function DesarrolloDocumentalPanel({
                                 <div className={styles.inlineActions}>
                                   {solicitud.permiteDecisionExterna ? (
                                     <>
-                                      <Button
+                                      <ActionButton
                                         variant="ghost"
                                         size="sm"
-                                        loading={
+                                        isPending={
                                           working === `link-${solicitud.id}`
                                         }
-                                        onClick={() =>
+                                        onPress={() =>
                                           void compartir(solicitud.id)
                                         }
                                       >
                                         <CopyIcon data-icon="inline-start" />{" "}
                                         Link
-                                      </Button>
-                                      <Button
+                                      </ActionButton>
+                                      <ActionButton
                                         variant="ghost"
                                         size="sm"
-                                        loading={
+                                        isPending={
                                           working === `revocar-${solicitud.id}`
                                         }
-                                        onClick={() =>
+                                        onPress={() =>
                                           void ejecutar(
                                             `revocar-${solicitud.id}`,
                                             () =>
@@ -456,13 +453,13 @@ export function DesarrolloDocumentalPanel({
                                       >
                                         <Link2OffIcon data-icon="inline-start" />{" "}
                                         Revocar
-                                      </Button>
+                                      </ActionButton>
                                     </>
                                   ) : null}
-                                  <Button
+                                  <ActionButton
                                     variant="outline"
                                     size="sm"
-                                    onClick={() =>
+                                    onPress={() =>
                                       setDecisionDe({
                                         solicitudId: solicitud.id,
                                         revision: `V${revision.numero}`,
@@ -471,11 +468,11 @@ export function DesarrolloDocumentalPanel({
                                     }
                                   >
                                     Observar
-                                  </Button>
-                                  <Button
+                                  </ActionButton>
+                                  <ActionButton
                                     variant="outline"
                                     size="sm"
-                                    onClick={() =>
+                                    onPress={() =>
                                       setDecisionDe({
                                         solicitudId: solicitud.id,
                                         revision: `V${revision.numero}`,
@@ -484,11 +481,10 @@ export function DesarrolloDocumentalPanel({
                                     }
                                   >
                                     Rechazar
-                                  </Button>
-                                  <Button
+                                  </ActionButton>
+                                  <ActionButton
                                     size="sm"
-                                    className={styles.approveButton}
-                                    onClick={() =>
+                                    onPress={() =>
                                       setDecisionDe({
                                         solicitudId: solicitud.id,
                                         revision: `V${revision.numero}`,
@@ -497,7 +493,7 @@ export function DesarrolloDocumentalPanel({
                                     }
                                   >
                                     Aprobar
-                                  </Button>
+                                  </ActionButton>
                                 </div>
                               ) : null}
                             </div>
@@ -508,22 +504,21 @@ export function DesarrolloDocumentalPanel({
                             {!pendiente &&
                             revision.estado !== "OBSOLETA" &&
                             revision.estado !== "APROBADA" ? (
-                              <Button
+                              <ActionButton
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setSolicitudDe(revision)}
+                                onPress={() => setSolicitudDe(revision)}
                               >
                                 <ClipboardCheckIcon data-icon="inline-start" />{" "}
                                 Solicitar
-                              </Button>
+                              </ActionButton>
                             ) : null}
                             {revision.estado === "APROBADA" &&
                             maestro.revisionLiberada?.id !== revision.id ? (
-                              <Button
+                              <ActionButton
                                 size="sm"
-                                className={styles.releaseButton}
-                                loading={working === `liberar-${revision.id}`}
-                                onClick={() =>
+                                isPending={working === `liberar-${revision.id}`}
+                                onPress={() =>
                                   void ejecutar(
                                     `liberar-${revision.id}`,
                                     () => liberarRevision(revision.id),
@@ -532,7 +527,7 @@ export function DesarrolloDocumentalPanel({
                                 }
                               >
                                 <FlagIcon data-icon="inline-start" /> Liberar
-                              </Button>
+                              </ActionButton>
                             ) : null}
                           </div>
                         ) : null}
@@ -560,16 +555,16 @@ export function DesarrolloDocumentalPanel({
                     : "Sin gates productivos configurados"}
                 </div>
                 {canManage ? (
-                  <Button
+                  <ActionButton
                     variant="ghost"
                     size="sm"
-                    onClick={() => setRevisionDe(maestro)}
+                    onPress={() => setRevisionDe(maestro)}
                   >
                     <FilePlus2Icon data-icon="inline-start" /> Agregar revisión
-                  </Button>
+                  </ActionButton>
                 ) : null}
               </footer>
-            </article>
+            </Card>
           ))}
         </div>
       ) : (
@@ -583,359 +578,368 @@ export function DesarrolloDocumentalPanel({
         </div>
       )}
 
-      <Dialog open={maestroOpen} onOpenChange={setMaestroOpen}>
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Nuevo documento controlado</DialogTitle>
-            <DialogDescription>
-              Definí el propósito lógico; cada cambio de contenido será una
-              revisión.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarMaestro}>
-            <div className={styles.dialogBody}>
-              <div className={styles.formGrid}>
-                <label className={styles.span2}>
-                  <span className={styles.label}>Nombre</span>
-                  <input
-                    className={styles.input}
-                    name="nombre"
-                    required
-                    placeholder="Arte final gráfica de cenefa"
-                  />
-                </label>
-                <label>
-                  <span className={styles.label}>Etapa</span>
-                  <select className={styles.select} name="etapa">
-                    {ETAPAS.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className={styles.label}>Propósito</span>
-                  <select className={styles.select} name="proposito">
-                    {PROPOSITOS.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.span2}>
-                  <span className={styles.label}>Descripción</span>
-                  <textarea className={styles.textarea} name="descripcion" />
-                </label>
-              </div>
+      <CampanaDialog
+        isOpen={maestroOpen}
+        onOpenChange={setMaestroOpen}
+        title={<>Nuevo documento controlado</>}
+        description={
+          <>
+            Definí el propósito lógico; cada cambio de contenido será una
+            revisión.
+          </>
+        }
+      >
+        <form onSubmit={guardarMaestro}>
+          <div className={form.body}>
+            <div className={form.grid}>
+              <label className={form.span2}>
+                <span className={form.label}>Nombre</span>
+                <Input
+                  className={`${form.input} ${focus.singleBorder}`}
+                  name="nombre"
+                  required
+                  placeholder="Arte final gráfica de cenefa"
+                />
+              </label>
+              <label>
+                <span className={form.label}>Etapa</span>
+                <SelectField
+                  className={form.select}
+                  name="etapa"
+                  aria-label="Etapa"
+                  options={[
+                    ...ETAPAS.map(([v, l]) => ({ value: v, label: l })),
+                  ]}
+                />
+              </label>
+              <label>
+                <span className={form.label}>Propósito</span>
+                <SelectField
+                  className={form.select}
+                  name="proposito"
+                  aria-label="Propósito"
+                  options={[
+                    ...PROPOSITOS.map(([v, l]) => ({ value: v, label: l })),
+                  ]}
+                />
+              </label>
+              <label className={form.span2}>
+                <span className={form.label}>Descripción</span>
+                <TextArea
+                  className={`${form.textarea} ${focus.singleBorder}`}
+                  name="descripcion"
+                />
+              </label>
             </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setMaestroOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={styles.primaryButton}
-                loading={working === "maestro"}
-              >
-                Crear documento
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </div>
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setMaestroOpen(false)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton type="submit" isPending={working === "maestro"}>
+              Crear documento
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
 
-      <Dialog
-        open={Boolean(revisionDe)}
+      <CampanaDialog
+        isOpen={Boolean(revisionDe)}
         onOpenChange={(open) => !open && setRevisionDe(null)}
+        title={<>Agregar revisión</>}
+        description={
+          <>
+            {revisionDe?.nombre}. Elegí un adjunto con SHA-256; su contenido
+            quedará inmutable.
+          </>
+        }
       >
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Agregar revisión</DialogTitle>
-            <DialogDescription>
-              {revisionDe?.nombre}. Elegí un adjunto con SHA-256; su contenido
-              quedará inmutable.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarRevision}>
-            <div className={styles.dialogBody}>
-              <div className={styles.formGrid}>
-                <label className={styles.span2}>
-                  <span className={styles.label}>Archivo de campaña</span>
-                  <select
-                    className={styles.select}
-                    name="archivoId"
-                    required
-                    defaultValue=""
-                  >
-                    <option value="" disabled>
-                      Seleccionar archivo…
-                    </option>
-                    {archivos.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.nombre} · {formatBytes(a.bytes)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.span2}>
-                  <span className={styles.label}>Qué cambió</span>
-                  <textarea
-                    className={styles.textarea}
-                    name="comentario"
-                    placeholder="Ajuste de color, medidas finales…"
-                  />
-                </label>
-              </div>
-              <p className={styles.formHint}>
-                Los adjuntos anteriores a esta fase pueden no tener hash. Si el
-                sistema lo indica, volvé a subir el archivo desde el tab
-                Archivos.
-              </p>
+        <form onSubmit={guardarRevision}>
+          <div className={form.body}>
+            <div className={form.grid}>
+              <label className={form.span2}>
+                <span className={form.label}>Archivo de campaña</span>
+                <SelectField
+                  className={form.select}
+                  name="archivoId"
+                  required
+                  defaultValue=""
+                  aria-label="Archivo de campaña"
+                  options={[
+                    {
+                      value: "",
+                      label: "Seleccionar archivo…",
+                      disabled: true,
+                    },
+                    ...archivos.map((a) => ({
+                      value: a.id,
+                      label: [
+                        a.nombre,
+                        " ",
+                        "·",
+                        " ",
+                        formatBytes(a.bytes),
+                      ].join(""),
+                    })),
+                  ]}
+                />
+              </label>
+              <label className={form.span2}>
+                <span className={form.label}>Qué cambió</span>
+                <TextArea
+                  className={`${form.textarea} ${focus.singleBorder}`}
+                  name="comentario"
+                  placeholder="Ajuste de color, medidas finales…"
+                />
+              </label>
             </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRevisionDe(null)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={styles.primaryButton}
-                loading={working === `revision-${revisionDe?.id}`}
-              >
-                Registrar revisión
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <p className={form.hint}>
+              Los adjuntos anteriores a esta fase pueden no tener hash. Si el
+              sistema lo indica, volvé a subir el archivo desde el tab Archivos.
+            </p>
+          </div>
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setRevisionDe(null)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              isPending={working === `revision-${revisionDe?.id}`}
+            >
+              Registrar revisión
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
 
-      <Dialog
-        open={Boolean(solicitudDe)}
+      <CampanaDialog
+        isOpen={Boolean(solicitudDe)}
         onOpenChange={(open) => !open && setSolicitudDe(null)}
+        title={<>Solicitar aprobación de V{solicitudDe?.numero}</>}
+        description={<>Definí quién decide y qué conformidad se necesita.</>}
       >
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>
-              Solicitar aprobación de V{solicitudDe?.numero}
-            </DialogTitle>
-            <DialogDescription>
-              Definí quién decide y qué conformidad se necesita.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarSolicitud}>
-            <div className={styles.dialogBody}>
-              <div className={styles.formGrid}>
-                <label>
-                  <span className={styles.label}>Tipo</span>
-                  <select className={styles.select} name="tipo">
-                    {TIPOS.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className={styles.label}>Rol interno</span>
-                  <select className={styles.select} name="rol">
-                    <option value="SUPERVISOR">Supervisor</option>
-                    <option value="ADMINISTRADOR">Administrador</option>
-                    <option value="OPERADOR">Operador</option>
-                  </select>
-                </label>
-                <label className={`${styles.span2} ${styles.checkRow}`}>
-                  <input type="checkbox" name="externa" defaultChecked />
-                  <span>
+        <form onSubmit={guardarSolicitud}>
+          <div className={form.body}>
+            <div className={form.grid}>
+              <label>
+                <span className={form.label}>Tipo</span>
+                <SelectField
+                  className={form.select}
+                  name="tipo"
+                  aria-label="Tipo"
+                  options={[...TIPOS.map(([v, l]) => ({ value: v, label: l }))]}
+                />
+              </label>
+              <label>
+                <span className={form.label}>Rol interno</span>
+                <SelectField
+                  className={form.select}
+                  name="rol"
+                  aria-label="Rol interno"
+                  options={[
+                    { value: "SUPERVISOR", label: "Supervisor" },
+                    { value: "ADMINISTRADOR", label: "Administrador" },
+                    { value: "OPERADOR", label: "Operador" },
+                  ]}
+                />
+              </label>
+              <Checkbox
+                className={`${form.span2} ${form.checkRow}`}
+                name="externa"
+                value="on"
+                defaultSelected
+              >
+                <Checkbox.Content>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  <Label>
                     <strong>Permitir decisión externa</strong>
                     <small>
                       Genera un link mínimo y seguro para el cliente.
                     </small>
-                  </span>
-                </label>
-                <label className={styles.span2}>
-                  <span className={styles.label}>Indicaciones</span>
-                  <textarea
-                    className={styles.textarea}
-                    name="comentario"
-                    placeholder="Revisar color institucional y textos legales."
-                  />
-                </label>
-              </div>
-            </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSolicitudDe(null)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={styles.primaryButton}
-                loading={working === `solicitud-${solicitudDe?.id}`}
-              >
-                Enviar a aprobación
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(decisionDe)}
-        onOpenChange={(open) => !open && setDecisionDe(null)}
-      >
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>
-              {decisionDe?.decision === "APROBAR"
-                ? "Aprobar"
-                : decisionDe?.decision === "RECHAZAR"
-                  ? "Rechazar"
-                  : "Observar"}{" "}
-              {decisionDe?.revision}
-            </DialogTitle>
-            <DialogDescription>
-              La decisión y el comentario quedarán en el historial inmutable.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarDecision}>
-            <div className={styles.dialogBody}>
-              <label>
-                <span className={styles.label}>
-                  Comentario{" "}
-                  {decisionDe?.decision === "OBSERVAR" ||
-                  decisionDe?.decision === "RECHAZAR"
-                    ? "obligatorio"
-                    : ""}
-                </span>
-                <textarea
-                  className={styles.textarea}
+                  </Label>
+                </Checkbox.Content>
+              </Checkbox>
+              <label className={form.span2}>
+                <span className={form.label}>Indicaciones</span>
+                <TextArea
+                  className={`${form.textarea} ${focus.singleBorder}`}
                   name="comentario"
-                  required={
-                    decisionDe?.decision === "OBSERVAR" ||
-                    decisionDe?.decision === "RECHAZAR"
-                  }
+                  placeholder="Revisar color institucional y textos legales."
                 />
               </label>
             </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDecisionDe(null)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={
-                  decisionDe?.decision === "APROBAR"
-                    ? styles.approveButton
-                    : styles.observeButton
-                }
-                loading={working === `decision-${decisionDe?.solicitudId}`}
-              >
-                {decisionDe?.decision === "APROBAR" ? (
-                  <CheckCircle2Icon data-icon="inline-start" />
-                ) : (
-                  <MessageSquareWarningIcon data-icon="inline-start" />
-                )}
-                {decisionDe?.decision === "APROBAR"
-                  ? "Aprobar revisión"
-                  : decisionDe?.decision === "RECHAZAR"
-                    ? "Confirmar rechazo"
-                    : "Registrar observación"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </div>
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setSolicitudDe(null)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              isPending={working === `solicitud-${solicitudDe?.id}`}
+            >
+              Enviar a aprobación
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
 
-      <Dialog open={gateOpen} onOpenChange={setGateOpen}>
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Configurar gate productivo</DialogTitle>
-            <DialogDescription>
-              La OT no podrá comenzar hasta que la revisión liberada tenga esta
-              aprobación.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarGate}>
-            <div className={styles.dialogBody}>
-              <div className={styles.formGrid}>
-                <label>
-                  <span className={styles.label}>Orden</span>
-                  <select className={styles.select} name="ordenId" required>
-                    {ordenes.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.numero} · {o.estado}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className={styles.label}>Documento</span>
-                  <select
-                    className={styles.select}
-                    name="archivoMaestroId"
-                    required
-                  >
-                    {data.maestros.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.span2}>
-                  <span className={styles.label}>Aprobación requerida</span>
-                  <select className={styles.select} name="tipo">
-                    {TIPOS.map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className={styles.gateWarning}>
-                <LockKeyholeIcon />
-                <span>
-                  El control se evalúa en el backend en cada intento de iniciar
-                  producción.
-                </span>
-              </div>
+      <CampanaDialog
+        isOpen={Boolean(decisionDe)}
+        onOpenChange={(open) => !open && setDecisionDe(null)}
+        title={
+          <>
+            {decisionDe?.decision === "APROBAR"
+              ? "Aprobar"
+              : decisionDe?.decision === "RECHAZAR"
+                ? "Rechazar"
+                : "Observar"}{" "}
+            {decisionDe?.revision}
+          </>
+        }
+        description={
+          <>La decisión y el comentario quedarán en el historial inmutable.</>
+        }
+      >
+        <form onSubmit={guardarDecision}>
+          <div className={form.body}>
+            <label>
+              <span className={form.label}>
+                Comentario{" "}
+                {decisionDe?.decision === "OBSERVAR" ||
+                decisionDe?.decision === "RECHAZAR"
+                  ? "obligatorio"
+                  : ""}
+              </span>
+              <TextArea
+                className={`${form.textarea} ${focus.singleBorder}`}
+                name="comentario"
+                required={
+                  decisionDe?.decision === "OBSERVAR" ||
+                  decisionDe?.decision === "RECHAZAR"
+                }
+              />
+            </label>
+          </div>
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setDecisionDe(null)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              variant={
+                decisionDe?.decision === "APROBAR" ? "primary" : "danger"
+              }
+              isPending={working === `decision-${decisionDe?.solicitudId}`}
+            >
+              {decisionDe?.decision === "APROBAR" ? (
+                <CheckCircle2Icon data-icon="inline-start" />
+              ) : (
+                <MessageSquareWarningIcon data-icon="inline-start" />
+              )}
+              {decisionDe?.decision === "APROBAR"
+                ? "Aprobar revisión"
+                : decisionDe?.decision === "RECHAZAR"
+                  ? "Confirmar rechazo"
+                  : "Registrar observación"}
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
+
+      <CampanaDialog
+        isOpen={gateOpen}
+        onOpenChange={setGateOpen}
+        title={<>Configurar gate productivo</>}
+        description={
+          <>
+            La OT no podrá comenzar hasta que la revisión liberada tenga esta
+            aprobación.
+          </>
+        }
+      >
+        <form onSubmit={guardarGate}>
+          <div className={form.body}>
+            <div className={form.grid}>
+              <label>
+                <span className={form.label}>Orden</span>
+                <SelectField
+                  className={form.select}
+                  name="ordenId"
+                  required
+                  aria-label="Orden"
+                  options={[
+                    ...ordenes.map((o) => ({
+                      value: o.id,
+                      label: [o.numero, " ", "·", " ", o.estado].join(""),
+                    })),
+                  ]}
+                />
+              </label>
+              <label>
+                <span className={form.label}>Documento</span>
+                <SelectField
+                  className={form.select}
+                  name="archivoMaestroId"
+                  required
+                  aria-label="Documento"
+                  options={[
+                    ...data.maestros.map((m) => ({
+                      value: m.id,
+                      label: m.nombre,
+                    })),
+                  ]}
+                />
+              </label>
+              <label className={form.span2}>
+                <span className={form.label}>Aprobación requerida</span>
+                <SelectField
+                  className={form.select}
+                  name="tipo"
+                  aria-label="Tipo"
+                  options={[...TIPOS.map(([v, l]) => ({ value: v, label: l }))]}
+                />
+              </label>
             </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setGateOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={styles.primaryButton}
-                loading={working === "gate"}
-              >
-                Activar gate
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            <div className={styles.gateWarning}>
+              <LockKeyholeIcon />
+              <span>
+                El control se evalúa en el backend en cada intento de iniciar
+                producción.
+              </span>
+            </div>
+          </div>
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setGateOpen(false)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton type="submit" isPending={working === "gate"}>
+              Activar gate
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
     </section>
   );
 }

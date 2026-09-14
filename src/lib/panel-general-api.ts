@@ -2,7 +2,11 @@ import type { ProgresoProduccion } from "./progreso-produccion";
 import { apiRequest } from "@/lib/api";
 
 export type PanelGeneralVista =
-  "actual" | "jefe_produccion" | "vendedor" | "administrativo" | "operario";
+  | "actual"
+  | "jefe_produccion"
+  | "vendedor"
+  | "administrativo"
+  | "operario";
 
 export type PanelGeneralKpi = {
   id: string;
@@ -69,7 +73,41 @@ export type PanelGeneralAccion = {
     | "facturacion";
 };
 
+export type PanelActividad = {
+  items: Array<{
+    id: string;
+    fecha: string;
+    tipo: string;
+    titulo: string;
+    detalle: string;
+    actor: string | null;
+    href: string | null;
+  }>;
+  siguienteCursor: string | null;
+};
+
+export type PanelAdministrador = {
+  actividad: PanelActividad;
+  pasosCompletadosHoy: number | null;
+  documentacionPendiente: {
+    total: number;
+    ordenes: Array<{
+      id: string;
+      numero: string;
+      requisitos: number;
+      href: string;
+    }>;
+  };
+};
+
+export function getPanelActividad(cursor?: string): Promise<PanelActividad> {
+  return apiRequest(
+    `/panel-general/actividad${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+  );
+}
+
 export type PanelGeneralData = {
+  administrador?: PanelAdministrador | null;
   generadoEl: string;
   fechaLocal: string;
   vistaActual: PanelGeneralVista;
