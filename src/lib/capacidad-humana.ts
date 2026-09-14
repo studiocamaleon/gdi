@@ -1,4 +1,7 @@
-import { programarFasePersonal } from "./capacidad-personal";
+import {
+  programarFasePersonal,
+  seleccionarDotacionPersonal,
+} from "./capacidad-personal";
 import { recortarDemanda, type DemandaHumana } from "./demanda-humana";
 import type {
   CalendarioEstacion,
@@ -89,6 +92,10 @@ export function programarAtencion(args: {
   calendario: CalendarioEstacion;
   equipo?: EquipoProduccion | null;
   empleados?: PersonaProduccion[];
+  obligatorioId?: string;
+  preferidoId?: string;
+  /** Sólo la reconstrucción de ejecución histórica permite los relevos anteriores. */
+  mantenerPersonal?: boolean;
   reservas: ReservaHumana[];
   preparacionMin: number;
   proyectar: Proyectar;
@@ -124,6 +131,36 @@ export function programarAtencion(args: {
     ...demanda.fases,
     { minutos: args.preparacionMin, personas: 1 },
   ];
+  const dotacion = Math.max(
+    0,
+    ...fases.filter((f) => f.minutos > 0).map((f) => f.personas),
+  );
+  const seleccion =
+    empleados !== undefined && dotacion > 0 && args.mantenerPersonal !== false
+      ? seleccionarDotacionPersonal({
+          desde: args.desde,
+          personas: dotacion,
+          empleados,
+          obligatorioId: args.obligatorioId,
+          preferidoId: args.preferidoId,
+          reservas: args.reservas,
+          proyectar,
+        })
+      : undefined;
+  if (seleccion === null) return null;
+  // El mismo núcleo atiende todas las fases. Si una fase exige más personas,
+  // se suman los integrantes restantes de la dotación elegida para este paso.
+  const carga = new Map<string, number>();
+  for (const r of args.reservas)
+    for (const id of new Set(r.empleadoIds ?? []))
+      carga.set(id, (carga.get(id) ?? 0) + Math.max(0, r.fin - r.inicio));
+  seleccion?.sort(
+    (a, b) =>
+      Number(b === args.obligatorioId) - Number(a === args.obligatorioId) ||
+      Number(b === args.preferidoId) - Number(a === args.preferidoId) ||
+      (carga.get(a) ?? 0) - (carga.get(b) ?? 0) ||
+      a.localeCompare(b),
+  );
   for (let indice = 0; indice < fases.length; indice++) {
     const fase = fases[indice];
     if (fase.minutos <= 0) continue;
@@ -136,8 +173,18 @@ export function programarAtencion(args: {
               desde: t,
               minutos: fase.minutos,
               personas: fase.personas,
-              empleados,
-              reservas: args.reservas,
+              empleados: seleccion
+                ? empleados.filter((e) =>
+                    seleccion.slice(0, fase.personas).includes(e.id),
+                  )
+                : empleados,
+              obligatorioId: args.obligatorioId,
+              preferidoId: args.preferidoId,
+              preferidosIds:
+                reservas.at(-1)?.fin === t.getTime()
+                  ? reservas.at(-1)?.empleadoIds
+                  : undefined,
+              reservas: [...args.reservas, ...reservas],
               proyectar,
             })
           : undefined;
@@ -218,6 +265,8 @@ export function demandaPendiente(args: {
   calendario: CalendarioEstacion;
   equipo?: EquipoProduccion | null;
   empleados?: PersonaProduccion[];
+  obligatorioId?: string;
+  preferidoId?: string;
   proyectar: Proyectar;
 }): DemandaHumana {
   let pendiente = args.demanda;
@@ -244,6 +293,7 @@ export function demandaPendiente(args: {
       demanda: pendiente,
       reservas: [],
       preparacionMin: 0,
+      mantenerPersonal: false,
     });
     if (!plan) return { ...pendiente, verificada: false };
     const consumido = plan.tramos.reduce(

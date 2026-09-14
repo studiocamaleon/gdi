@@ -104,4 +104,17 @@ describe('cola por máquina', () => {
     expect(html).toContain('Bloquear');
   });
 
+  it('muestra espera y bloqueo separados y conserva el permiso para desbloquear', () => {
+    const esperando = item('espera'); esperando.estadoCola = 'en_espera'; esperando.control.esActual = false; esperando.motivos = ['Espera: Diseño'];
+    const bloqueado = item('bloqueado'); bloqueado.estadoCola = 'bloqueados'; bloqueado.control.paso.estado = 'bloqueado'; bloqueado.control.esActual = false; bloqueado.motivos = ['Máquina averiada'];
+    const datos = { items: [esperando, bloqueado], pages: 1 } as DatosCola;
+    const render = () => renderToStaticMarkup(<TablaCola datos={datos} onAccion={async () => {}} />);
+    const html = render();
+    for (const texto of ['En espera', 'Bloqueado', 'Espera: Diseño', 'Máquina averiada']) expect(html).toContain(texto);
+    expect(html).not.toContain('aria-label="Iniciar');
+    expect(html).not.toContain('Desbloquear');
+    bloqueado.control.canSupervise = true;
+    expect(render()).toContain('Desbloquear');
+  });
+
 });

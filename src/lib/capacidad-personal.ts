@@ -8,17 +8,38 @@ type Proyectar = (
   m: number,
 ) => Ventana[] | null;
 
-/** Reserva personas identificadas; una misma persona nunca aporta dos cupos.
- * Se admiten relevos entre franjas. La dotación requerida debe estar completa
- * en cada tramo de trabajo, también cuando el paso necesita varios operarios. */
-export function programarFasePersonal(args: {
+type ParametrosPersonal = {
   desde: Date;
   minutos: number;
   personas: number;
   empleados: PersonaProduccion[];
+  obligatorioId?: string;
+  preferidoId?: string;
+  preferidosIds?: string[];
   reservas: ReservaHumana[];
   proyectar: Proyectar;
-}): Array<Ventana & { empleadoIds: string[] }> | null {
+};
+
+/** Elige una dotación completa en la primera ventana común, equilibrando carga.
+ * Sólo consulta disponibilidad: no consume ni publica una reserva. */
+export function seleccionarDotacionPersonal(
+  args: Omit<ParametrosPersonal, "minutos">,
+): string[] | null {
+  return (
+    programarPersonal({ ...args, minutos: 480 }, true)?.[0]?.empleadoIds ?? null
+  );
+}
+
+/** Reserva la dotación de una fase. El plan del paso fija sus integrantes;
+ * la reconstrucción histórica puede conservar los relevos ya registrados. */
+export function programarFasePersonal(args: ParametrosPersonal) {
+  return programarPersonal(args);
+}
+
+function programarPersonal(
+  args: ParametrosPersonal,
+  soloSeleccion = false,
+): Array<Ventana & { empleadoIds: string[] }> | null {
   const empleados = [
     ...new Map(
       args.empleados
@@ -29,7 +50,9 @@ export function programarFasePersonal(args: {
   if (
     !Number.isInteger(args.personas) ||
     args.personas < 1 ||
-    empleados.length < args.personas
+    empleados.length < args.personas ||
+    (args.obligatorioId !== undefined &&
+      !empleados.some((e) => e.id === args.obligatorioId))
   )
     return null;
   // Descarta horarios semanales sin ninguna coincidencia de la dotación.
@@ -49,17 +72,27 @@ export function programarFasePersonal(args: {
     );
   });
   if (!coincide) return null;
+  // Minutos-persona ya comprometidos, compartidos entre todas las estaciones.
+  const carga = new Map<string, number>();
+  for (const r of args.reservas)
+    for (const id of new Set(r.empleadoIds ?? []))
+      carga.set(id, (carga.get(id) ?? 0) + Math.max(0, r.fin - r.inicio));
+  // Date y las ventanas usan milisegundos enteros. Redondear una sola vez
+  // hacia arriba evita residuos submilisegundo y nunca acorta la atención.
+  // La demanda cotizada conserva sus minutos originales.
   let t = args.desde.getTime(),
-    restante = args.minutos * 60000;
+    restante = Math.ceil(args.minutos * 60000);
   const limite = t + 366 * 24 * 60 * 60000;
   const resultado: Array<Ventana & { empleadoIds: string[] }> = [];
-  while (restante > 0.001 && t < limite) {
+  while (restante > 0 && t < limite) {
     const ventanas = empleados.flatMap((e) =>
       (
         args.proyectar(
           e.calendario!,
           new Date(t),
-          Math.min(restante / 60000, 480),
+          // Una fase diminuta no debe avanzar milisegundo a milisegundo
+          // hasta que coincidan personas con horarios de entrada diferentes.
+          480,
         ) ?? []
       ).map((v) => ({ ...v, id: e.id })),
     );
@@ -85,7 +118,7 @@ export function programarFasePersonal(args: {
     ]
       .filter((p) => p >= t && p <= hasta)
       .sort((a, b) => a - b);
-    for (let i = 0; i < puntos.length - 1 && restante > 0.001; i++) {
+    for (let i = 0; i < puntos.length - 1 && restante > 0; i++) {
       const inicio = puntos[i],
         fin = puntos[i + 1];
       const ocupados = new Set(
@@ -100,9 +133,36 @@ export function programarFasePersonal(args: {
             (v) => v.id === e.id && v.inicio <= inicio && v.fin >= fin,
           ),
       );
-      if (libres.length < args.personas) continue;
+      if (
+        libres.length < args.personas ||
+        (args.obligatorioId && !libres.some((e) => e.id === args.obligatorioId))
+      )
+        continue;
+      // Equilibrar al tomar el trabajo; no generar relevos por cada frontera
+      // de reservas ajenas si la misma persona puede continuar este paso.
+      const previo = resultado[resultado.length - 1];
+      const continuan = previo?.fin === inicio ? previo.empleadoIds : [];
+      libres.sort(
+        (a, b) =>
+          Number(b.id === args.obligatorioId) -
+            Number(a.id === args.obligatorioId) ||
+          Number(continuan.includes(b.id)) - Number(continuan.includes(a.id)) ||
+          Number(b.id === args.preferidoId) -
+            Number(a.id === args.preferidoId) ||
+          Number(args.preferidosIds?.includes(b.id) ?? false) -
+            Number(args.preferidosIds?.includes(a.id) ?? false) ||
+          (carga.get(a.id) ?? 0) - (carga.get(b.id) ?? 0) ||
+          a.id.localeCompare(b.id),
+      );
       const duracion = Math.min(fin - inicio, restante),
-        empleadoIds = libres.slice(0, args.personas).map((e) => e.id);
+        empleadoIds = libres
+          .slice(0, args.personas)
+          .map((e) => e.id)
+          .sort();
+      if (soloSeleccion)
+        return [{ inicio, fin: inicio + duracion, empleadoIds }];
+      for (const id of empleadoIds)
+        carga.set(id, (carga.get(id) ?? 0) + duracion);
       const ultimo = resultado[resultado.length - 1];
       if (
         ultimo?.fin === inicio &&
@@ -114,5 +174,5 @@ export function programarFasePersonal(args: {
     }
     t = hasta;
   }
-  return restante <= 0.001 ? resultado : null;
+  return restante <= 0 ? resultado : null;
 }

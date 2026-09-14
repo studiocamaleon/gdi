@@ -19,9 +19,9 @@ const authCon = (permisos: string[]): CurrentAuth =>
   }) as CurrentAuth;
 
 function servicioVacio() {
-  return Object.create(
-    OrdenesTrabajoService.prototype,
-  ) as OrdenesTrabajoService;
+  return Object.assign(Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService, {
+    eta: { sincronizarAsignaciones: jest.fn().mockResolvedValue(0) },
+  });
 }
 
 describe('alcance seguro del Tablero de producción', () => {
@@ -218,6 +218,7 @@ describe('alcance seguro del Tablero de producción', () => {
         findFirst: jest.fn().mockResolvedValue({ estaciones: [] }),
       },
       ordenTrabajo: { findMany: jest.fn().mockResolvedValue([orden]) },
+      gateProduccionDocumento: { findMany: jest.fn().mockResolvedValue([]) },
       ordenTrabajoItemPaso: { findMany: jest.fn().mockResolvedValue([]) },
     };
     service.reconciliarTramosVencidos = jest.fn().mockResolvedValue(undefined);

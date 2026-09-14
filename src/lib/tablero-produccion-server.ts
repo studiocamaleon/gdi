@@ -21,7 +21,7 @@ import type { Estacion } from "@/lib/estaciones";
  * taller (los saltan la proyección y la simulación). Si la API no
  * responde, la vista arranca vacía y muestra su estado sin datos.
  */
-export async function cargarDatosTableroProduccion() {
+export async function cargarDatosTableroProduccion({ soloPendientes = false }: { soloPendientes?: boolean } = {}) {
   let items: TableroItemData[] = [];
   let estaciones: Estacion[] = [];
   let duraciones: DuracionFamilia[] = [];
@@ -37,7 +37,7 @@ export async function cargarDatosTableroProduccion() {
   let avisoParcial: string | null = null;
 
   const [tablero, ests, durs, dias, config] = await Promise.allSettled([
-    getTableroProduccion(),
+    getTableroProduccion({ soloPendientes }),
     getEstaciones(),
     getDuracionesFamilias(),
     getDiasNoLaborables(),
@@ -66,6 +66,7 @@ export async function cargarDatosTableroProduccion() {
   }
   return {
     initialItems: items,
+    initialActualizadoEl: errorInicial ? null : new Date().toISOString(),
     initialMeta: tableroMeta,
     initialLoadError: errorInicial,
     initialPartialWarning: avisoParcial,

@@ -1,5 +1,96 @@
 # Tablero de producción — conexión con órdenes reales
 
+## Actualización 2026-09-14: Lista operativa y consulta de terminados
+
+El tablero tiene dos pestañas, **Lista** y **Kanban**. Lista reemplaza Por items
+y conserva su preferencia guardada (`items`). Estaciones tiene su acceso propio
+en Producción. Ambas pestañas comparten clasificación exclusiva: Bloqueados,
+En espera, Con retraso, Vencen hoy, En curso, Pausados y Listos para iniciar; dentro de cada grupo se ordena
+por entrega. Lista usa grupos plegables, columnas alineadas y estados con color,
+con componentes HeroUI y CSS Modules. Se retiraron los estilos globales de las
+filas y los filtros reemplazados.
+Sólo se renderizan secciones con trabajos, también al aplicar filtros. Si no
+queda ninguna, la Lista muestra un único mensaje de ausencia de resultados.
+El estado pinta la celda completa, incluso cuando la fila crece en pantallas
+angostas. En espera usa gris con rayas diagonales; Listo para iniciar usa verde
+con texto blanco y cambia a naranja de Grafo en Con retraso. Bloqueado conserva
+rojo con texto blanco. Son señales visuales: no cambian la clasificación.
+Debajo de En espera se muestra el personal de sus predecesores pendientes,
+resuelto por ID contra los trabajos autorizados antes del filtrado visual.
+Admite varias personas y pasos. Los tercerizados identifican al proveedor.
+Las esperas por requisitos sin pasos pendientes no atribuyen personal ajeno.
+La celda En espera abre un tooltip HeroUI al pasar el cursor o recibir foco con
+el teclado. Cada dependencia ocupa una línea propia con su producto y lote;
+los demás requisitos (materiales, calidad, aprobaciones) mantienen sus líneas
+independientes. Paso / Estación muestra el nombre del paso con mayor tamaño y
+peso en todas las secciones, sin desplegar allí las dependencias.
+
+La cabecera ubica Lista y Kanban justo debajo del título y subtítulo. Las
+métricas se presentan en una franja compacta, sin cards ni filtros por estado
+o prioridad. Se conserva la búsqueda y se ofrecen **Asignadas a mí** y
+**Estación**; el selector de **Personal asignado** requiere permiso de
+supervisión y alcance completo. Las opciones salen de los datos ya autorizados
+del tablero y de estaciones, sin consultar el padrón completo de personal.
+
+Los filtros se combinan sobre el mismo paso y mantienen una fila por trabajo.
+La columna Paso / Estación representa el próximo paso pendiente dentro de la
+estación o del personal elegido, aunque todavía espere dependencias. Prioriza
+un paso en ejecución o listo y avanza al siguiente cuando se completa. Conserva
+la ruta completa para evaluar requisitos y abrir el detalle. Las métricas
+acompañan el resultado filtrado; urgencias y estados pueden superponerse.
+El acceso `?estado=blocked` abre la sección Bloqueados sin aplicar filtros ocultos.
+
+Personal asignado muestra las personas de la asignación automática o manual,
+con respaldo en el tramo abierto o la mesa; cuando no existe, muestra **Sin asignar**.
+
+**Estados operativos (14/09):** «Bloqueado» queda reservado para el estado explícito
+registrado con su motivo. «En espera» se deriva de dependencias o requisitos sin
+cumplir (material, calidad, aprobación documental o estación/máquina habilitada).
+Las esperas tienen su propia sección; no suman al contador de Bloqueados.
+Pausado conserva las acciones y permisos existentes y tiene su grupo cuando no
+prevalece una urgencia de entrega. Las esperas y bloqueos prevalecen sobre las
+secciones por fecha; los demás mantienen Con retraso/Vencen hoy y su estado real
+en la fila. No se agregan estados persistidos ni se modifican transiciones.
+
+La fila usa el mismo paso para nombre, estación y estado. Si hay varias ramas,
+se conserva la alerta de un bloqueo explícito; en las restantes se prioriza una
+ejecución y luego una rama lista sobre requisitos pendientes. Terminar un paso
+permite mostrar el siguiente como Listo para iniciar aunque el trabajo ya haya
+empezado. Los tercerizados pedidos conservan su situación de compra.
+
+Colas distingue `bloqueados` de `en_espera` en respuesta, totales y filtro.
+Las dos vistas comparten una lectura documental por lote de pasos que respeta
+aprobaciones de orden/ítem/paso y la herencia de productos en lotes. Los terminados
+siguen consultándose sólo bajo demanda; no se cargan para calcular estos estados.
+
+- `GET /ordenes-trabajo/tablero?vista=activos`: usado en la carga inicial,
+  actualización y refresco automático del tablero. Filtra los items terminados
+  en la consulta SQL, conservando todos los pasos de cada item activo para su
+  progreso y ruta. Los items sin ruta siguen visibles. Los participantes de
+  nesting no determinan por sí solos si un item sigue activo.
+- Las dependencias a componentes terminados se evalúan con el estado de la
+  relación cargada. En esta proyección se omiten las aristas ya satisfechas hacia
+  pasos externos ausentes; no se modifican las dependencias persistidas ni el
+  motor de planificación. Las dependencias pendientes se conservan.
+- `GET /ordenes-trabajo/tablero/terminados`: consulta independiente, sólo al
+  desplegar **Ver terminados**. Página de 25, máximo 50; búsqueda por OT, cliente
+  o trabajo y rango de entrega (fecha del item, con respaldo en la OT). Ordena por
+  creación de la OT descendente y usa `limit + 1` para indicar si hay otra página,
+  sin contar ni descargar todo el historial. Incluye items terminados de órdenes
+  pendientes, en producción, finalizadas o entregadas. No consulta borradores ni
+  canceladas. No participa del refresco periódico.
+- `GET /ordenes-trabajo/tablero/items/:itemId`: recupera un solo trabajo para
+  abrir su detalle desde un enlace, incluso si ya salió de los activos. Mantiene
+  permiso `produccion.ver`, aislamiento por tenant y las acciones existentes.
+- El GET del tablero sin `vista=activos` conserva el contrato anterior para
+  Estaciones y Planificación.
+
+Cobertura: integración PostgreSQL de filtrado, paginación, permisos, búsqueda,
+fechas y equivalencia de ETA con componentes terminados; pruebas de clasificación,
+operadores y estación de pasos bloqueados en el frontend.
+
+El relevamiento original se conserva a continuación como antecedente.
+
 > Análisis 2026-07-16 (rama `feat/tablero-ordenes-reales`). Vistas:
 > `src/components/produccion/tablero-produccion.tsx` (mock en
 > `src/lib/tablero-produccion-mock.ts`). Datos reales: módulo

@@ -7418,7 +7418,7 @@ export function PropuestaFicha({
                     <StepperOt
                       estado={orden.estado}
                       fechasEstado={orden.fechasEstado}
-                      orientation="vertical"
+                      orientation="horizontal"
                     />
                   </div>
                 ) : null}

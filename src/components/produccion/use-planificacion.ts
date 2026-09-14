@@ -51,8 +51,10 @@ export function usePlanificacion(inicial: DatosPlanificacion) {
       ]);
       if (!montado.current) return;
       const { items, ...initialMeta } = tablero;
+      const consultadoEl = new Date().toISOString();
       setDatos({
         initialItems: items,
+        initialActualizadoEl: consultadoEl,
         initialMeta,
         estaciones,
         duracionesFamilias,
@@ -60,7 +62,7 @@ export function usePlanificacion(inicial: DatosPlanificacion) {
         tiempoEntrePasosMin: config.tiempoEntrePasosMin,
         initialLoadError: null,
         initialPartialWarning: null,
-        consultadoEl: new Date().toISOString(),
+        consultadoEl,
       });
       setError(null);
     } catch {

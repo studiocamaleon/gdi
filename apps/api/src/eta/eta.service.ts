@@ -1,3 +1,5 @@
+import { sincronizarAsignaciones } from './asignacion-automatica';
+import { personalFijoDelPaso } from '../produccion/asignacion-personal';
 import { recuperarDemandasHistoricas } from './demanda-historica';
 import { aplicarOperacionMaquina, leerDemandaHumana, leerModoOperacionMaquina, type ModoOperacionMaquina, type DemandaHumana } from './motor/demanda-humana';
 import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
@@ -52,6 +54,10 @@ export class EtaService {
     private readonly prisma: PrismaService,
     private readonly produccion: ProduccionService,
   ) {}
+
+  async sincronizarAsignaciones(tenantId: string) {
+    return sincronizarAsignaciones(this.prisma, tenantId, db => this.contextoSimulacion(tenantId, db, false));
+  }
 
   // ── Ensamblado de entradas + corrida del motor ─────────────────────────
 
@@ -129,10 +135,12 @@ export class EtaService {
                 demandaHumanaJson: true,
                 estado: true,
                 iniciadoEl: true,
-                tramos: { select: { inicioEl: true, finEl: true } },
+                tramos: { select: { inicioEl: true, finEl: true, usuarioId: true } },
                 planificadoDesde: true,
                 planificadoHasta: true,
                 atencionPlanificadaJson: true,
+                asignacionPersonalJson: true,
+                mesaUsuarioId: true,
                 tipoEjecucion: true,
                 plazoProveedorDias: true,
                 dependenciasEntrantes: {
@@ -169,6 +177,7 @@ export class EtaService {
       ),
       db,
     );
+    const empleadosAsignables = await db.empleado.findMany({ where: { tenantId }, select: { id: true, userId: true } });
     return ordenes.flatMap((orden) =>
       orden.items.map((item) => ({
         id: item.id,
@@ -189,6 +198,7 @@ export class EtaService {
             planificadoDesde: paso.planificadoDesde?.toISOString() ?? null,
             planificadoHasta: paso.planificadoHasta?.toISOString() ?? null,
             atencionPlanificada: paso.atencionPlanificadaJson,
+            personalFijo: personalFijoDelPaso({ ...paso, operadorActualUsuarioId: paso.tramos.find(t => !t.finEl)?.usuarioId }, empleadosAsignables),
             predecesorPasoIds: paso.dependenciasEntrantes.map(
               (dependencia) => dependencia.predecesorPasoId,
             ),

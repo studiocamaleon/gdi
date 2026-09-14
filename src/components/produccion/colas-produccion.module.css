@@ -88,6 +88,7 @@
 .status[data-estado="listos"] .statusChip { color: var(--success); background: var(--success-soft); }
 .status[data-estado="en_curso"] .statusChip { color: var(--accent-soft-foreground); background: var(--accent-soft); }
 .status[data-estado="en_espera"] .statusChip { color: var(--warning); background: var(--warning-soft); }
+.status[data-estado="bloqueados"] .statusChip { color: var(--danger); background: var(--danger-soft); }
 .status[data-estado="pausados"] .statusChip { color: var(--muted-text); background: var(--surface-secondary); }
 .reasons { font-size: 11px; color: var(--muted-text); white-space: normal; }
 .reasons summary { cursor: pointer; text-underline-offset: 3px; }

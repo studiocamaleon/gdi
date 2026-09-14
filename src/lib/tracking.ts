@@ -235,16 +235,14 @@ export function estadoNarrativo(estado: string): string {
 /** Bajada del estado global: no debe prometer un retiro que ya ocurrió. */
 export function resumenEstadoTracking(
   estado: string,
-  progresoPct: number | null,
 ): string {
   if (estado === "entregada") {
     return "Pedido entregado. Gracias por confiar en nosotros.";
   }
   if (estado === "finalizada") {
-    return progresoPct == null ? "Producción finalizada. Ya podés retirarlo." : `${progresoPct}% completado. Ya podés retirarlo.`;
+    return "Ya podés retirarlo.";
   }
-  if (progresoPct == null) return "Avance de producción por confirmar. Te avisaremos cuando esté listo para retirar.";
-  return `${progresoPct}% completado. Te avisaremos ni bien esté listo para retirar.`;
+  return "Te avisaremos ni bien esté listo para retirar.";
 }
 
 export function estadoPill(estado: string): {
@@ -310,13 +308,4 @@ export function haceCuanto(iso: string): string {
   if (h < 24) return `hace ${h} h`;
   const d = Math.round(h / 24);
   return `hace ${d} d`;
-}
-
-/** "45 min" / "2 h 30 m" / "12 h" a partir de minutos estimados. */
-export function duracionTexto(min: number | null): string | null {
-  if (min == null || min <= 0) return null;
-  if (min < 60) return `${Math.round(min)} min`;
-  const horas = Math.floor(min / 60);
-  const resto = Math.round(min % 60);
-  return resto > 0 ? `${horas} h ${resto} m` : `${horas} h`;
 }

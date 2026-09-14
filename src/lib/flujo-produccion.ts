@@ -207,7 +207,7 @@ export function sumarMinutosLaborales(
   zona: string = ZONA_DEFAULT,
 ): Date | null {
   let t = avanzarAVentana(calendario, desde, noLaborables, zona);
-  let restante = minutos;
+  let restante = Math.ceil(minutos * 60000);
   // Antes la guardia contaba días; con jornada cortada hay más de una
   // iteración por día (una por franja).
   let guardia = 0;
@@ -219,9 +219,8 @@ export function sumarMinutosLaborales(
       t = avanzarAVentana(calendario, t, noLaborables, zona);
       continue;
     }
-    const disponibles = (finVentana.getTime() - t.getTime()) / 60000;
-    if (restante <= disponibles)
-      return new Date(t.getTime() + restante * 60000);
+    const disponibles = finVentana.getTime() - t.getTime();
+    if (restante <= disponibles) return new Date(t.getTime() + restante);
     restante -= disponibles;
     t = avanzarAVentana(calendario, finVentana, noLaborables, zona);
   }
@@ -239,22 +238,19 @@ function tramosLaborales(
   zona: string,
 ): Array<{ inicio: number; fin: number }> | null {
   let t = avanzarAVentana(calendario, desde, noLaborables, zona),
-    restante = minutos;
+    restante = Math.ceil(minutos * 60000);
   const tramos: Array<{ inicio: number; fin: number }> = [];
   for (let i = 0; t && i < (HORIZONTE_DIAS + 7) * 6; i++) {
     const cierre = finDeFranjaActual(calendario, t, noLaborables, zona);
     if (!cierre) return null;
-    const consumo = Math.min(
-      restante,
-      (cierre.getTime() - t.getTime()) / 60000,
-    );
+    const consumo = Math.min(restante, cierre.getTime() - t.getTime());
     if (consumo > 0)
       tramos.push({
         inicio: t.getTime(),
-        fin: t.getTime() + Math.round(consumo * 60000),
+        fin: t.getTime() + consumo,
       });
     restante -= consumo;
-    if (restante <= 0.000001) return tramos;
+    if (restante <= 0) return tramos;
     t = avanzarAVentana(calendario, cierre, noLaborables, zona);
   }
   return null;
@@ -763,7 +759,15 @@ export function simularFlujo({
       const enCurso = nodo.paso.estado === "en_curso";
       let preparado = preparados.get(pasoId);
       if (!preparado) {
-        const est = estacionDe(nodo.paso);
+        const base = estacionDe(nodo.paso);
+        const ids = nodo.paso.personalFijo?.empleadoIds;
+        const est =
+          ids && base.empleados !== undefined
+            ? {
+                ...base,
+                empleados: base.empleados.filter((e) => ids.includes(e.id)),
+              }
+            : base;
         const congelada = demandaDePaso(nodo.paso, duracionBase);
         let demanda = recortarDemanda(congelada, duracionBase, duracionBase);
         const ejecucion = nodo.paso.tramosEjecucion?.length
@@ -797,7 +801,11 @@ export function simularFlujo({
               ],
             };
         }
-        preparado = { est, demanda, claveDemanda: JSON.stringify(demanda) };
+        preparado = {
+          est,
+          demanda,
+          claveDemanda: JSON.stringify([demanda, nodo.paso.personalFijo]),
+        };
         preparados.set(pasoId, preparado);
       }
       const { est, demanda } = preparado;
@@ -875,7 +883,7 @@ export function simularFlujo({
         // Con agenda publicada cada paso excluye su propia reserva: no compartir.
         const claveAtencion = agendaHumana.length
           ? null
-          : `${est.key}|${inicio.getTime()}|${JSON.stringify(demanda)}`;
+          : `${est.key}|${inicio.getTime()}|${JSON.stringify([demanda, nodo.paso.personalFijo])}`;
         if (
           claveAtencion !== null &&
           atencionesEquivalentes.has(claveAtencion)
@@ -888,6 +896,12 @@ export function simularFlujo({
             calendario: est.calendario,
             equipo: est.equipo,
             empleados: est.empleados,
+            obligatorioId:
+              nodo.paso.personalFijo?.obligatorioId ??
+              (nodo.paso.iniciadoEl
+                ? nodo.paso.personalFijo?.preferidoId
+                : undefined),
+            preferidoId: nodo.paso.personalFijo?.preferidoId,
             reservas: reservasHumanas,
             preparacionMin: est.preparacionMin,
             proyectar,
@@ -945,7 +959,7 @@ export function simularFlujo({
         itemsSinVentana.add(nodo.item.id);
         resultadoDe(nodo.item).motivoSinEstimar =
           est.empleados !== undefined
-            ? "No hay empleados con horarios coincidentes suficientes para la dotación requerida."
+            ? `No se pudo programar «${nodo.paso.nombre}» con la dotación requerida, los horarios y las reservas disponibles.`
             : est.equipo
               ? "No hay capacidad suficiente del equipo o una ventana común con la estación."
               : "No hay una ventana de producción en el horizonte.";
@@ -1025,7 +1039,11 @@ export function simularFlujo({
         mejor.atencion && paso.estado === "pendiente"
           ? guardarAtencion(
               mejor.atencion,
-              contextoDeAtencion(paso, est!, duracionDePaso(paso, medianas)!),
+              contextoDeAtencion(
+                paso,
+                estacionDe(paso),
+                duracionDePaso(paso, medianas)!,
+              ),
             )
           : undefined,
       reservasHumanas: mejor.atencion?.reservas ?? [],
@@ -1051,8 +1069,12 @@ export function simularFlujo({
   // una referencia imposible. No se inventa fecha: se propaga "sin estimar".
   for (const pasoId of pendientes) {
     const nodo = pasoPorId.get(pasoId);
-    if (nodo && !itemsSinVentana.has(nodo.item.id))
+    if (nodo && !itemsSinVentana.has(nodo.item.id)) {
       resultadoDe(nodo.item).sinEstimar = true;
+      if ((predecesores.get(pasoId) ?? []).some((id) => !programados.has(id)))
+        resultadoDe(nodo.item).motivoSinEstimar ??=
+          "La fecha depende de pasos previos que todavía no pudieron planificarse.";
+    }
   }
   for (const item of items) {
     const resultado = porItem.get(item.id);

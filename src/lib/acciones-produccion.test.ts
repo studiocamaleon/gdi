@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   accionesDisponiblesProduccion,
+  asignacionPermiteEjecutar,
   completarSeriaInstantaneo,
   chipsDeclarar,
   type ControlAccionesProduccion,
@@ -133,4 +134,43 @@ describe("controles compartidos entre Tablero y Colas", () => {
     expect(chipsDeclarar(0.25)).toEqual([1]);
     expect(chipsDeclarar(null)).toEqual([]);
   });
+});
+
+it("habilita a asignados con reparto válido y conserva el control del tramo real ante un conflicto", () => {
+  const paso = {
+    mesaEsMia: false,
+    tramoAbierto: null,
+    asignacionPersonal: {
+      origen: "automatica" as const,
+      personas: [],
+      franjas: [],
+      esMia: true,
+      conflicto: null as string | null,
+    },
+  };
+  expect(asignacionPermiteEjecutar(paso)).toBe(true);
+  expect(
+    asignacionPermiteEjecutar({
+      ...paso,
+      asignacionPersonal: { ...paso.asignacionPersonal, esMia: false },
+    }),
+  ).toBe(false);
+  const conflicto = {
+    ...paso,
+    asignacionPersonal: {
+      ...paso.asignacionPersonal,
+      conflicto: "Sin horario",
+    },
+  };
+  expect(asignacionPermiteEjecutar(conflicto)).toBe(false);
+  expect(
+    asignacionPermiteEjecutar({
+      ...conflicto,
+      tramoAbierto: {
+        inicioEl: "2026-09-14T12:00:00Z",
+        usuarioNombre: "Ana",
+        esMio: true,
+      },
+    }),
+  ).toBe(true);
 });

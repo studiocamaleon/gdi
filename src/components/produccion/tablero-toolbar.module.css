@@ -1,0 +1,163 @@
+.page.page {
+  padding: 20px 24px 24px;
+}
+.page.page .content {
+  padding: 0;
+  max-width: none;
+  width: 100%;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.tab[aria-selected="true"] {
+  color: var(--accent-soft-foreground);
+  border-bottom-color: var(--accent-soft-foreground);
+}
+.tab:focus-visible {
+  outline: 2px solid var(--accent-soft-foreground);
+  outline-offset: -2px;
+}
+.defaultMark {
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.filters {
+  display: grid;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.metricsRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 0;
+}
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.metric dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.metric dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.metric[data-tone="danger"] dd {
+  color: var(--danger);
+}
+.metric[data-tone="brand"] dd {
+  color: var(--accent-soft-foreground);
+}
+.controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.search {
+  flex: 1 1 260px;
+  min-width: 180px;
+}
+.select {
+  flex: 0 1 230px;
+  min-width: 180px;
+}
+.summary {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted-text);
+  white-space: nowrap;
+}
+.kanbanBoard {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(260px, 1fr);
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+.waitReason {
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+@media (max-width: 1199px) {
+  .page.page {
+    padding: 20px;
+  }
+}
+@media (max-width: 639px) {
+  .page.page {
+    padding: 16px;
+  }
+  .search,
+  .select {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px 20px;
+  }
+  .metric dd {
+    margin-left: auto;
+  }
+  .metricsRow,
+  .controls {
+    padding: 12px;
+  }
+}
+
+.assignment {
+  display: grid;
+  gap: 4px;
+  max-height: 144px;
+  overflow-y: auto;
+  padding-block: 8px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.assignmentConflict {
+  color: var(--danger);
+}

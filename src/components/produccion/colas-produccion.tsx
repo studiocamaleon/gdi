@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpRight, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Ban, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
 import { Button, Card, Checkbox, Chip, SearchField, Tabs } from '@heroui/react';
 import { ActionButton } from '@/components/design-system/action-button';
 import { ActionLink } from '@/components/design-system/action-link';
@@ -33,9 +33,10 @@ import s from './colas-produccion.module.css';
 const ESTADOS: Array<{ id: EstadoCola; label: string }> = [
   { id: 'todos', label: 'Todos' }, { id: 'listos', label: 'Listos' }, { id: 'en_curso', label: 'En curso' },
   { id: 'en_espera', label: 'En espera' }, { id: 'pausados', label: 'Pausados' },
+  { id: 'bloqueados', label: 'Bloqueados' },
 ];
-const ESTADO_FILA = { listos: 'Listo', en_curso: 'En curso', en_espera: 'En espera', pausados: 'Pausado' };
-const ICONO_ESTADO = { listos: CircleCheck, en_curso: LoaderCircle, en_espera: Clock3, pausados: CirclePause };
+const ESTADO_FILA = { listos: 'Listo para iniciar', en_curso: 'En curso', en_espera: 'En espera', pausados: 'Pausado', bloqueados: 'Bloqueado' };
+const ICONO_ESTADO = { listos: CircleCheck, en_curso: LoaderCircle, en_espera: Clock3, pausados: CirclePause, bloqueados: Ban };
 
 export function TablaCola({ datos, seleccion = SELECCION_COLA_VACIA, onAlternar, onGrupo, onAccion, onTomarMesa, ocupado = false }: {
   datos: DatosCola; seleccion?: SeleccionCola; ocupado?: boolean; onAccion?: AccionColaHandler; onTomarMesa?: (item: TrabajoCola) => void; onAlternar?: (item: TrabajoCola) => void; onGrupo?: (items: TrabajoCola[]) => void;
@@ -124,6 +125,7 @@ function FilaTrabajo({ item, seleccion, onAlternar, onAccion, onTomarMesa, ocupa
     <td><div className={s.status} data-estado={item.estadoCola}>
       <Chip size="sm" variant="soft" className={s.statusChip}><IconoEstado data-icon="inline-start" />{ESTADO_FILA[item.estadoCola]}</Chip>
       {item.responsable && <span className={s.secondary}>{item.responsable}</span>}
+      {item.asignacionPersonal?.conflicto && <span className={s.secondary} title={item.asignacionPersonal.conflicto}>Revisar asignación · {item.asignacionPersonal.conflicto}</span>}
       {item.motivos.length > 0 && <details className={s.reasons}><summary>Ver motivo{item.motivos.length > 1 ? 's' : ''}</summary>
         <ul>{item.motivos.map((m, i) => <li key={i}>{m}</li>)}</ul>
       </details>}

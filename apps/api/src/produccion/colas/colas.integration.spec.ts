@@ -269,6 +269,25 @@ it('no permite consultar una máquina ni metadatos de otro tenant', async () => 
   expect((await service.maquinas(otro)).maquinas).toEqual([]);
 });
 
+it('filtra y cuenta Bloqueados separado de En espera sin modificar la ejecución al consultar', async () => {
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasoId }, data: { estado: 'bloqueado', motivoBloqueo: 'Rodillo averiado' },
+  });
+  try {
+    const bloqueados = await service.listar(tenantId, maquinaId, { ...new ConsultaColaDto(), estado: 'bloqueados' });
+    expect(bloqueados.items.map((p) => p.id)).toEqual([pasoId]);
+    expect(bloqueados.totales.bloqueados).toBe(1);
+    expect(bloqueados.totales.en_espera).toBe(1);
+    const espera = await service.listar(tenantId, maquinaId, { ...new ConsultaColaDto(), estado: 'en_espera' });
+    expect(espera.items.map((p) => p.id)).toEqual([compartidoId]);
+    const persistido = await db.ordenTrabajoItemPaso.findUniqueOrThrow({ where: { id: pasoId } });
+    expect(persistido.estado).toBe('bloqueado');
+    expect(persistido.motivoBloqueo).toBe('Rodillo averiado');
+  } finally {
+    await db.ordenTrabajoItemPaso.update({ where: { id: pasoId }, data: { estado: 'pendiente', motivoBloqueo: null } });
+  }
+});
+
 it('recupera componentes históricos por su camino exacto, sin confundir hermanos ni reemplazar un snapshot propio', async () => {
   await db.productoCategoriaComercial.create({
     data: { id: categoriaId, codigo: categoriaId, nombre: 'QA colas' },

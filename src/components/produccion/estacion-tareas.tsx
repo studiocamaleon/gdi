@@ -72,14 +72,15 @@ export function TaskCard({
         : "pending";
   const [dragging, setDragging] = React.useState(false);
   // Reclamada por OTRO usuario (mesaEsMia la pondría en MI columna).
-  const enMesaDe = !inMesa ? task.step.paso.mesaUsuarioNombre : null;
+  const enMesaDe = !inMesa ? task.step.paso.mesaUsuarioNombre || task.step.paso.asignacionPersonal?.personas.map(p => p.nombre).join(" · ") : null;
+  const puedeMover = canManage && !task.step.paso.asignacionPersonal?.personas.length;
 
   return (
     <Card
       className={cx(
         `sta-task status-${statusCls} ${task.overdue ? "overdue" : ""} ${task.urgent ? "urgent" : ""} ${inMesa ? "in-mesa" : ""} ${dragging ? "dragging" : ""}`,
       )}
-      draggable={canManage}
+      draggable={puedeMover}
       onDragStart={(event) => {
         event.dataTransfer.setData("text/paso-id", taskId(task));
         event.dataTransfer.effectAllowed = "move";
@@ -88,7 +89,7 @@ export function TaskCard({
       onDragEnd={() => setDragging(false)}
     >
       <div className={cx("sta-task-row1")}>
-        {canManage ? (
+        {puedeMover ? (
           <span className={cx("grip")} title="Arrastrá para mover">
             <GripVerticalIcon />
           </span>
@@ -105,7 +106,7 @@ export function TaskCard({
         {enMesaDe ? (
           <span
             className={cx("task-mesa-de")}
-            title="Otro usuario la tiene en su mesa"
+            title="Personal asignado a este paso"
           >
             <UserIcon />
             {enMesaDe}
@@ -152,7 +153,7 @@ export function TaskCard({
           </span>
         </div>
         <div className={cx("actions")}>
-          {canManage ? (
+          {puedeMover ? (
             <ActionButton
               type="button"
               variant="outline"
@@ -165,7 +166,7 @@ export function TaskCard({
                 </>
               ) : (
                 <>
-                  Mover a mi mesa
+                  Asignarme
                   <ArrowRightIcon />
                 </>
               )}
@@ -250,14 +251,15 @@ export function StationDetail({
   const etapa = station?.etapa ? etapaDeEstacion(station.etapa) : null;
   const estacionConfig = estaciones.find((entry) => entry.id === stationKey);
 
-  // "Mi mesa" es PERSISTENTE por usuario (paso.mesaEsMia, backend):
+  // "Asignadas a mí" es PERSISTENTE por usuario (paso.mesaEsMia, backend):
   // reclamar acá lo ve todo el taller, y sobrevive recargas y sesiones.
-  const mesaTasks = tasks.filter((task) => task.step.paso.mesaEsMia);
-  const sharedTasks = tasks.filter((task) => !task.step.paso.mesaEsMia);
+  const esAsignadaAMi = (task: StationTask) => task.step.paso.mesaEsMia || task.step.paso.asignacionPersonal?.esMia || task.step.paso.tramoAbierto?.esMio;
+  const mesaTasks = tasks.filter(esAsignadaAMi);
+  const sharedTasks = tasks.filter((task) => !esAsignadaAMi(task));
 
   const toggleMesa = (id: string) => {
     const task = tasks.find((entry) => taskId(entry) === id);
-    if (task) onMesa(id, !task.step.paso.mesaEsMia);
+    if (task && !task.step.paso.asignacionPersonal?.personas.length) onMesa(id, !task.step.paso.mesaEsMia);
   };
 
   const permitirSoltar =
@@ -274,7 +276,7 @@ export function StationDetail({
     setDragOver(null);
     const pasoId = event.dataTransfer.getData("text/paso-id");
     const task = tasks.find((entry) => taskId(entry) === pasoId);
-    if (!task) return;
+    if (!task || task.step.paso.asignacionPersonal?.personas.length) return;
     const en = zona === "mesa";
     if (task.step.paso.mesaEsMia !== en) onMesa(pasoId, en);
   };
@@ -346,7 +348,7 @@ export function StationDetail({
           </div>
         </div>
         <div className={cx(`kpi ${mesaTasks.length > 0 ? "ok" : "warn"}`)}>
-          <div className={cx("k")}>Mi mesa de trabajo</div>
+          <div className={cx("k")}>Asignadas a mí</div>
           <div className={cx("v")}>{mesaTasks.length}</div>
         </div>
         <div className={cx("kpi cool")}>
@@ -394,7 +396,7 @@ export function StationDetail({
         {[
           { k: "todos", l: "Todos" },
           { k: "pendientes", l: "Pendientes" },
-          { k: "mesa", l: "Mi mesa" },
+          { k: "mesa", l: "Asignadas a mí" },
           { k: "urgentes", l: "Solo urgentes" },
         ].map((entry) => (
           <ActionButton
@@ -413,7 +415,7 @@ export function StationDetail({
         <div className={cx("sta-col mesa-col")}>
           <div className={cx("sta-col-head")}>
             <span className={cx("dot mesa")} />
-            <span className={cx("ttl")}>Mi mesa de trabajo</span>
+            <span className={cx("ttl")}>Asignadas a mí</span>
             <span className={cx("ct")}>
               <strong>{mesaTasks.length}</strong> pasos
             </span>
@@ -434,14 +436,10 @@ export function StationDetail({
                   <SquareDashedIcon />
                 </div>
                 <div className={cx("ttl")}>
-                  {canManage
-                    ? "Arrastrá tareas acá para trabajar en ellas"
-                    : "No hay tareas en tu mesa"}
+                  No tenés tareas asignadas
                 </div>
                 <div className={cx("sub")}>
-                  {canManage
-                    ? "Las tareas pasan a tu mesa cuando las tomás de la fila compartida."
-                    : "Esta vista es de sólo lectura."}
+                  La planificación asigna tareas según el personal disponible y sus horarios.
                 </div>
               </div>
             ) : null}
@@ -479,7 +477,7 @@ export function StationDetail({
             {visibleShared.length === 0 ? (
               <div className={cx("sta-shared-empty")}>
                 {filter === "mesa"
-                  ? "Solo se muestran las tareas de tu mesa."
+                  ? "Solo se muestran las tareas asignadas a vos."
                   : "No quedan tareas pendientes que coincidan con el filtro."}
               </div>
             ) : null}

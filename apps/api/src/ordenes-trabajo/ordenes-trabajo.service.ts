@@ -1,3 +1,7 @@
+import { leerAsignacionPersonal, proyectarAsignacionPersonal, personalFijoDelPaso } from '../produccion/asignacion-personal';
+import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
+import { itemTableroInclude, itemActivoTablero, itemTerminadoTablero } from './tablero-consultas';
+import { TableroTerminadosQueryDto } from './dto/tablero-query.dto';
 import { exigirCanalVenta } from './canales-venta';
 import { sumaTramosMin } from './tiempos-ejecucion';
 export { sumaTramosMin } from './tiempos-ejecucion';
@@ -922,7 +926,13 @@ export class OrdenesTrabajoService {
    * finalización fallen por la telemetría. Se `await`ea (no fire-and-forget)
    * para que la promesa/cierre ya estén escritos cuando la acción responde.
    */
+  private async actualizarAsignaciones(tenantId: string) {
+    try { await this.eta.sincronizarAsignaciones(tenantId); }
+    catch (error) { this.logger.error('No se pudo actualizar el reparto de producción; se reintentará automáticamente.', error); }
+  }
+
   private async capturarEtaEmision(auth: CurrentAuth, ordenId: string) {
+    await this.actualizarAsignaciones(auth.tenantId);
     try {
       await this.eta.capturarEmision(auth, ordenId);
     } catch (error) {
@@ -5823,7 +5833,7 @@ export class OrdenesTrabajoService {
   }
 
   /** Items activos con sus pasos, personalizados por alcance efectivo. */
-  async tablero(auth: CurrentAuth) {
+  async tablero(auth: CurrentAuth, soloPendientes = false) {
     await this.reconciliarTramosVencidos(auth.tenantId);
     await this.backfillPasosTablero(auth);
     const alcance = alcanceTableroProduccionDe(auth);
@@ -5853,74 +5863,15 @@ export class OrdenesTrabajoService {
       where: {
         tenantId: auth.tenantId,
         estado: { in: ESTADOS_TABLERO },
+        ...(soloPendientes ? { items: { some: itemActivoTablero } } : {}),
       },
       include: {
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
-          where: { contieneLotesEntrega: false },
+          where: soloPendientes ? itemActivoTablero : { contieneLotesEntrega: false },
           orderBy: { ordenIndice: 'asc' as const },
-          include: {
-            // El tablero necesita conservar la jerarquía del BOM: sin el
-            // padre cargado los componentes se proyectaban como productos
-            // independientes y se perdía el contexto de la OT compuesta.
-            parentItem: { select: { id: true, nombre: true } },
-            loteEntrega: { select: loteTableroSelect },
-            // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
-            // renombrar el producto se refleja en el tablero. Null en OT manuales.
-            cotizacionItem: {
-              select: {
-                jobContextJson: true,
-                producto: { select: { nombre: true } },
-              },
-            },
-            // Sólo el conteo de archivos LISTO: el tablero muestra un clip
-            // con el número, no la lista. Traer las filas para contarlas
-            // sería N+1 disfrazado.
-            _count: {
-              select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
-            },
-            pasos: {
-              orderBy: { indice: 'asc' as const },
-              include: {
-                mesaUsuario: { select: { nombreCompleto: true, email: true } },
-                dependenciasEntrantes: {
-                  where: { obligatoria: true },
-                  select: dependenciaTableroSelect,
-                },
-                dependenciasSalientes: {
-                  where: { obligatoria: true },
-                  select: { sucesorPasoId: true },
-                },
-                gatesOperativos: {
-                  orderBy: { tipo: 'asc' as const },
-                  select: {
-                    id: true,
-                    tipo: true,
-                    estado: true,
-                    detalle: true,
-                    resueltoEl: true,
-                    resueltoPorNombre: true,
-                  },
-                },
-                tramos: {
-                  // Todos los tramos del paso (son pocos): la proyección
-                  // deriva el abierto, el último cierre y el acumulado.
-                  orderBy: {
-                    finEl: { sort: 'desc' as const, nulls: 'first' as const },
-                  },
-                  select: {
-                    usuarioId: true,
-                    usuarioNombre: true,
-                    inicioEl: true,
-                    finEl: true,
-                    motivoFin: true,
-                    motivoDetalle: true,
-                  },
-                },
-              },
-            },
-          },
+          include: itemTableroInclude,
         },
       },
       orderBy: [
@@ -5961,6 +5912,17 @@ export class OrdenesTrabajoService {
         )
         .map((item) => item),
     );
+    await this.proyectarAprobacionesTablero(auth.tenantId, items);
+    if (soloPendientes) {
+      const idsPresentes = new Set(items.flatMap((i) => i.pasos.map((p) => p.id)));
+      const completadosExternos = new Set(ordenes.flatMap((o) => o.items.flatMap((i) =>
+        i.pasos.flatMap((p) => p.dependenciasEntrantes.filter((d) =>
+          d.predecesor.estado === 'hecho' && !idsPresentes.has(d.predecesorPasoId),
+        ).map((d) => d.predecesorPasoId)),
+      )));
+      for (const item of items) for (const paso of item.pasos)
+        paso.predecesorPasoIds = paso.predecesorPasoIds.filter((id) => !completadosExternos.has(id));
+    }
     return {
       items,
       alcance,
@@ -5968,6 +5930,64 @@ export class OrdenesTrabajoService {
       estacionIdsEjecutables,
       vendedorSinVinculo: false,
     };
+  }
+
+  /** Historial bajo demanda: pagina ítems en la BD, sin cargar el resto de la OT. */
+  async tableroTerminados(auth: CurrentAuth, query: TableroTerminadosQueryDto) {
+    if (query.desde && query.hasta && query.desde > query.hasta)
+      throw new BadRequestException('La fecha desde debe ser anterior o igual a la fecha hasta.');
+    const filtros: Prisma.OrdenTrabajoItemWhereInput[] = [itemTerminadoTablero];
+    const q = query.q?.trim();
+    if (q) filtros.push({ OR: [
+      { nombre: { contains: q, mode: 'insensitive' } },
+      { codigo: { contains: q, mode: 'insensitive' } },
+      { orden: { numero: { contains: q, mode: 'insensitive' } } },
+      { orden: { cliente: { nombre: { contains: q, mode: 'insensitive' } } } },
+      { cotizacionItem: { producto: { nombre: { contains: q, mode: 'insensitive' } } } },
+    ] });
+    if (query.desde || query.hasta) {
+      const fecha = {
+        ...(query.desde ? { gte: new Date(`${query.desde}T00:00:00.000Z`) } : {}),
+        ...(query.hasta ? { lte: new Date(`${query.hasta}T00:00:00.000Z`) } : {}),
+      };
+      filtros.push({ OR: [
+        { fechaEntrega: fecha },
+        { fechaEntrega: null, orden: { fechaEntrega: fecha } },
+      ] });
+    }
+    const page = query.page ?? 1, limit = query.limit ?? 25;
+    const filas = await this.prisma.ordenTrabajoItem.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        orden: { estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] } },
+        AND: filtros,
+      },
+      orderBy: [{ orden: { createdAt: 'desc' } }, { ordenIndice: 'asc' }, { id: 'asc' }],
+      skip: (page - 1) * limit,
+      take: limit + 1,
+      include: { ...itemTableroInclude, orden: { include: {
+        cliente: { select: { nombre: true } },
+        vendedor: { select: { nombreCompleto: true } },
+      } } },
+    });
+    const pagina = filas.slice(0, limit);
+    const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, pagina);
+    return {
+      items: pagina.map((item) => this.toTableroItem(item.orden, item, auth.userId, tecnologias)),
+      page, limit, hasMore: filas.length > limit,
+    };
+  }
+
+  /** Acceso explícito desde una fila o un enlace; nunca precarga el historial. */
+  async consultarItemTablero(auth: CurrentAuth, itemId: string) {
+    const existe = await this.prisma.ordenTrabajoItem.findFirst({
+      where: { id: itemId, tenantId: auth.tenantId, contieneLotesEntrega: false,
+        orden: { estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] } },
+      },
+      select: { id: true },
+    });
+    if (!existe) throw new NotFoundException('No se encontró el trabajo.');
+    return this.tableroItemActualizado(auth, itemId);
   }
 
   /**
@@ -6069,21 +6089,21 @@ export class OrdenesTrabajoService {
       auth.tenantId,
       orden?.items ?? [],
     );
-    return {
-      items: (orden?.items ?? []).map((item) =>
-        this.toTableroItem(
-          orden!,
-          item,
-          auth.userId,
-          tecnologias,
-          new Map(
-            (orden?.items ?? []).flatMap((fila) =>
-              fila.pasos.map((paso) => [paso.id, paso.estado] as const),
-            ),
+    const items = (orden?.items ?? []).map((item) =>
+      this.toTableroItem(
+        orden!,
+        item,
+        auth.userId,
+        tecnologias,
+        new Map(
+          (orden?.items ?? []).flatMap((fila) =>
+            fila.pasos.map((paso) => [paso.id, paso.estado] as const),
           ),
         ),
       ),
-    };
+    );
+    await this.proyectarAprobacionesTablero(auth.tenantId, items);
+    return { items };
   }
 
   /**
@@ -6186,7 +6206,9 @@ export class OrdenesTrabajoService {
         id: true,
         itemId: true,
         estado: true,
+        updatedAt: true,
         mesaUsuarioId: true,
+        asignacionPersonalJson: true,
         familiaCodigo: true,
         maquinaId: true,
       },
@@ -6196,6 +6218,12 @@ export class OrdenesTrabajoService {
     }
     if (en && !auth.permisos?.has('produccion.supervisar')) {
       await this.validarEjecucionEnEstacion(auth, paso);
+    }
+    const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
+    if (en && asignacion?.personas.length && !auth.permisos?.has('produccion.supervisar')) {
+      const empleado = await this.prisma.empleado.findFirst({ where: { tenantId: auth.tenantId, userId: auth.userId, activo: true }, select: { id: true } });
+      if (!empleado || !asignacion.personas.some(p => p.empleadoId === empleado.id))
+        throw new ConflictException('Este paso ya tiene personal asignado. Pedí al supervisor que revise la asignación.');
     }
     if (en && paso.estado === 'hecho') {
       throw new BadRequestException(
@@ -6220,6 +6248,7 @@ export class OrdenesTrabajoService {
         id: paso.id,
         tenantId: auth.tenantId,
         mesaUsuarioId: en ? null : auth.userId,
+        updatedAt: paso.updatedAt,
       },
       data: { mesaUsuarioId: en ? auth.userId : null },
     });
@@ -6228,6 +6257,7 @@ export class OrdenesTrabajoService {
         'La asignación cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
       );
     }
+    await this.actualizarAsignaciones(auth.tenantId);
     return this.tableroItemActualizado(auth, paso.itemId);
   }
 
@@ -6398,6 +6428,7 @@ export class OrdenesTrabajoService {
       { timeout: 15_000 },
     );
 
+    await this.actualizarAsignaciones(auth.tenantId);
     // Efectos fuera de la transacción, una vez por OT y sólo tras confirmar.
     const porOrden = new Map(resultados.map((r) => [r.ordenId, r]));
     for (const r of porOrden.values()) {
@@ -6439,6 +6470,7 @@ export class OrdenesTrabajoService {
           motivoBloqueo: true,
           modoRegistro: true,
           mesaUsuarioId: true,
+          asignacionPersonalJson: true,
           iniciadoEl: true,
           iniciadoPorId: true,
           duracionEstimadaMin: true,
@@ -6469,7 +6501,7 @@ export class OrdenesTrabajoService {
       }),
       tx.empleado.findFirst({
         where: { tenantId: auth.tenantId, userId: auth.userId },
-        select: { nombreCompleto: true },
+        select: { id: true, nombreCompleto: true },
       }),
     ]);
     if (!paso) {
@@ -6490,6 +6522,8 @@ export class OrdenesTrabajoService {
       );
     }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
+    const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
+    const asignado = !!actor && !asignacion?.conflicto && asignacion?.personas.some(p => p.empleadoId === actor.id);
     if (
       (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
       !supervisa
@@ -6502,12 +6536,13 @@ export class OrdenesTrabajoService {
       await this.validarEjecucionEnEstacion(auth, paso, tx);
       if (
         paso.mesaUsuarioId !== auth.userId &&
+        !asignado &&
         !paso.tramos.some(
           (tramo) => tramo.usuarioId === auth.userId && !tramo.finEl,
         )
       ) {
         throw new ForbiddenException(
-          'Este paso no está en tu mesa de trabajo.',
+          'Este paso no está asignado a vos. Actualizá el tablero o consultá al supervisor.',
         );
       }
     }
@@ -6721,7 +6756,7 @@ export class OrdenesTrabajoService {
             ...(paso.iniciadoPorId == null
               ? { iniciadoPorId: auth.userId, iniciadoPorNombre: usuarioNombre }
               : {}),
-            mesaUsuarioId: auth.userId,
+            mesaUsuarioId: asignacion ? paso.mesaUsuarioId : auth.userId,
           };
         case 'pausar':
           return { estado: 'pausado' };
@@ -7089,6 +7124,7 @@ export class OrdenesTrabajoService {
       tecnologias,
       estadosOrden,
     );
+    await this.proyectarAprobacionesTablero(auth.tenantId, [proyectado]);
     if (alcanceTableroProduccionDe(auth) !== 'operario') return proyectado;
     return {
       ...proyectado,
@@ -7397,6 +7433,18 @@ export class OrdenesTrabajoService {
     );
   }
 
+  private async proyectarAprobacionesTablero(
+    tenantId: string,
+    items: Array<ReturnType<OrdenesTrabajoService['toTableroItem']>>,
+  ) {
+    const referencias = items.flatMap((item) => item.pasos
+      .filter((paso) => paso.estado !== 'hecho')
+      .map((paso) => ({ id: paso.id, ordenId: item.ordenId, itemId: item.id, item })));
+    const aprobaciones = await leerAprobacionesPendientes(this.prisma, tenantId, referencias);
+    for (const item of items) for (const paso of item.pasos)
+      paso.aprobacionesPendientes = aprobaciones.get(paso.id) ?? [];
+  }
+
   private toTableroItem(
     orden: {
       id: string;
@@ -7462,6 +7510,7 @@ export class OrdenesTrabajoService {
         planificadoDesde?: Date | null;
         planificadoHasta?: Date | null;
         atencionPlanificadaJson?: Prisma.JsonValue;
+        asignacionPersonalJson?: Prisma.JsonValue;
         completadoEl: Date | null;
         modoRegistro: string;
         tiempoRealMin: Prisma.Decimal | null;
@@ -7565,9 +7614,11 @@ export class OrdenesTrabajoService {
         predecesorPasoIds: (paso.dependenciasEntrantes ?? []).map(
           (dependencia) => dependencia.predecesorPasoId,
         ),
+        aprobacionesPendientes: [] as string[],
         predecesoresSatisfechos: (paso.dependenciasEntrantes ?? []).every(
           (dependencia) =>
-            estadoPasosOrden.get(dependencia.predecesorPasoId) === 'hecho',
+            (estadoPasosOrden.get(dependencia.predecesorPasoId) ??
+              dependencia.predecesor?.estado) === 'hecho',
         ),
         sucesorPasoIds: (paso.dependenciasSalientes ?? []).map(
           (dependencia) => dependencia.sucesorPasoId,
@@ -7667,6 +7718,8 @@ export class OrdenesTrabajoService {
                 paso.tramos[0].motivoDetalle,
               )
             : null,
+        personalFijo: personalFijoDelPaso({ ...paso, operadorActualUsuarioId: paso.tramos.find(t => !t.finEl)?.usuarioId }, (leerAsignacionPersonal(paso.asignacionPersonalJson)?.personas ?? []).map(p => ({ id: p.empleadoId, userId: p.usuarioId }))),
+        asignacionPersonal: proyectarAsignacionPersonal(paso.asignacionPersonalJson, viewerUserId),
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario
           ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email

@@ -134,6 +134,35 @@ describe("agenda aceptada con esperas entre fases", () => {
     ).toBeNull();
   });
 
+  it("invalida la agenda personal anterior a la política de dotación estable", () => {
+    const e = escenario();
+    for (const est of e.estaciones) {
+      est.planificacionPorEmpleados = true;
+      est.empleados = [
+        {
+          id: "ana",
+          nombreCompleto: "Ana",
+          sector: "Taller",
+          activo: true,
+          calendario: est.calendario,
+        },
+      ];
+    }
+    const p = simularFlujo(e).traza[0].atencionPlanificada!;
+    expect(leerAtencionPlanificada(p, p.contexto, p.inicio, p.fin)).toEqual(p);
+    const anterior = JSON.parse(p.contexto);
+    expect(anterior.politicaPersonal).toBe("misma-dotacion-por-paso-v1");
+    delete anterior.politicaPersonal;
+    expect(
+      leerAtencionPlanificada(
+        { ...p, contexto: JSON.stringify(anterior) },
+        p.contexto,
+        p.inicio,
+        p.fin,
+      ),
+    ).toBeNull();
+  });
+
   it("el orden de claves de JSONB no invalida una configuración equivalente", () => {
     const e = escenario(),
       est = e.estaciones[0];

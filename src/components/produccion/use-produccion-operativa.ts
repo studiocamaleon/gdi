@@ -23,6 +23,8 @@ type GateHandler = (
   estado: "CUMPLIDO" | "PENDIENTE",
 ) => Promise<void>;
 export type DatosProduccionOperativa = {
+  soloPendientes?: boolean;
+  initialActualizadoEl?: string | null;
   initialItems: TableroItemData[];
   initialMeta: {
     alcance: AlcanceTableroProduccion;
@@ -34,6 +36,8 @@ export type DatosProduccionOperativa = {
 };
 /** Control único para Tablero y Estaciones: permisos, refresco vivo y mutaciones. */
 export function useProduccionOperativa({
+  soloPendientes = false,
+  initialActualizadoEl,
   initialItems,
   initialMeta,
   initialLoadError = null,
@@ -48,7 +52,7 @@ export function useProduccionOperativa({
   const [syncError, setSyncError] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [actualizadoEl, setActualizadoEl] = React.useState<Date | null>(
-    initialLoadError ? null : new Date(),
+    initialLoadError || !initialActualizadoEl ? null : new Date(initialActualizadoEl),
   );
   const permisoEjecutar = usePuede("produccion.ejecutar");
   const permisoSupervisar = usePuede("produccion.supervisar");
@@ -85,7 +89,7 @@ export function useProduccionOperativa({
       return;
     if (forzar) setRefreshing(true);
     try {
-      const respuesta = await getTableroProduccion();
+      const respuesta = await getTableroProduccion({ soloPendientes });
       if (
         !montadoRef.current ||
         mutacionesRef.current > 0 ||
@@ -116,7 +120,7 @@ export function useProduccionOperativa({
     } finally {
       if (montadoRef.current && forzar) setRefreshing(false);
     }
-  }, []);
+  }, [soloPendientes]);
 
   useCambiosSistema(
     (cambio) => {
@@ -186,7 +190,7 @@ export function useProduccionOperativa({
             entry.id === actualizado.id ? actualizado : entry,
           ),
         );
-        const { items: refrescados } = await getTableroProduccion();
+        const { items: refrescados } = await getTableroProduccion({ soloPendientes });
         setItems(refrescados);
         ultimoSnapshotRef.current = JSON.stringify(refrescados);
       } catch (err) {
@@ -199,7 +203,7 @@ export function useProduccionOperativa({
         setBusy(false);
       }
     },
-    [canManage],
+    [canManage, soloPendientes],
   );
 
   const handleGate = React.useCallback<GateHandler>(
@@ -210,7 +214,7 @@ export function useProduccionOperativa({
       mutacionesRef.current += 1;
       try {
         await resolverGatePasoProduccion(paso.id, { tipo, estado });
-        const respuesta = await getTableroProduccion();
+        const respuesta = await getTableroProduccion({ soloPendientes });
         setItems(respuesta.items);
         ultimoSnapshotRef.current = JSON.stringify(respuesta.items);
       } catch (err) {
@@ -224,7 +228,7 @@ export function useProduccionOperativa({
         setBusy(false);
       }
     },
-    [permisoSupervisar],
+    [permisoSupervisar, soloPendientes],
   );
 
   /**

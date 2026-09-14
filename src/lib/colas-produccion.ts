@@ -20,12 +20,13 @@ export type ResumenColas = {
   maquinas: Array<MaquinaCola & { pendientes: number; enCurso: number }>;
   sinMaquina: number;
 };
-export type EstadoCola = 'todos' | 'listos' | 'en_curso' | 'pausados' | 'en_espera';
+export type EstadoCola = 'todos' | 'listos' | 'en_curso' | 'pausados' | 'en_espera' | 'bloqueados';
 export type TrabajoCola = {
   id: string; itemId: string; ordenId: string; ordenNumero: string; nombre: string;
   producto: string; componenteDe: string | null; cliente: string;
   lote: { id: string; nombre: string; cantidad: number; unidad: string; productoNombre: string; esProductoDelLote: boolean } | null;
   cantidad: number; unidad: string; fechaEntrega: string | null;
+  asignacionPersonal?: ReturnType<typeof import("../../apps/api/src/produccion/asignacion-personal").proyectarAsignacionPersonal>;
   duracionEstimadaMin: number | null; responsable: string | null; archivosCount: number;
   control: ControlAccionesProduccion & { puedeTomarMesa: boolean };
   estadoCola: Exclude<EstadoCola, 'todos'>; motivos: string[]; configuracion: ConfiguracionCola;

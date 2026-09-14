@@ -216,8 +216,26 @@ export async function quitarOrdenItem(
 }
 
 /** Dataset autorizado del Tablero: items activos visibles para el perfil. */
-export async function getTableroProduccion(): Promise<TableroProduccionData> {
-  return apiRequest<TableroProduccionData>("/ordenes-trabajo/tablero");
+export async function getTableroProduccion({ soloPendientes = false }: { soloPendientes?: boolean } = {}): Promise<TableroProduccionData> {
+  return apiRequest<TableroProduccionData>(`/ordenes-trabajo/tablero${soloPendientes ? "?vista=activos" : ""}`);
+}
+
+export type PaginaTerminadosTablero = {
+  items: TableroItemData[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
+};
+export async function getTerminadosTablero(query: {
+  page: number; q?: string; desde?: string; hasta?: string;
+}): Promise<PaginaTerminadosTablero> {
+  const params = new URLSearchParams({ page: String(query.page), limit: "25" });
+  for (const key of ["q", "desde", "hasta"] as const)
+    if (query[key]) params.set(key, query[key]);
+  return apiRequest(`/ordenes-trabajo/tablero/terminados?${params}`);
+}
+export async function getItemTablero(itemId: string): Promise<TableroItemData> {
+  return apiRequest(`/ordenes-trabajo/tablero/items/${encodeURIComponent(itemId)}`);
 }
 
 /** Pasos materializados de UNA orden (tab Producción del detalle de OT). */

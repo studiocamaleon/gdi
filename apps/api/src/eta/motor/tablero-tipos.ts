@@ -29,6 +29,7 @@ export type TableroPasoData = {
   planificadoDesde?: string | null;
   planificadoHasta?: string | null;
   atencionPlanificada?: unknown;
+  personalFijo?: { empleadoIds?: string[]; obligatorioId?: string; preferidoId?: string };
   id: string;
   indice: number;
   /** Null en OTs históricas; en órdenes nuevas habilita precedencia explícita. */

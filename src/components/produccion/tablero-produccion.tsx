@@ -1,7 +1,17 @@
 "use client";
+import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
+import { filtrarTrabajos, metricasTrabajos, type FiltrosTrabajo } from "@/lib/tablero-lista";
+import { TableroFiltros } from "./tablero-filtros";
+import listPage from "@/components/design-system/list-page.module.css";
+import { ActionButton } from "@/components/design-system/action-button";
+import theme from "@/components/design-system/theme.module.css";
+import toolbar from "./tablero-toolbar.module.css";
+import { agruparTrabajos, type GrupoTableroKey } from "@/lib/tablero-lista";
+import { TableroLista } from "./tablero-lista";
+import { TableroTerminados } from "./tablero-terminados";
 import { modoTableroGuardado, type ModoTablero } from "@/lib/tablero-modos";
 import { useProduccionOperativa } from "./use-produccion-operativa";
-import { buildItemView, type ItemView, type StepView } from "@/lib/produccion-item-view";
+import { buildItemView, ESTADO_TRABAJO_LABELS, type ItemView, type StepView } from "@/lib/produccion-item-view";
 
 import { calcularProgreso } from "@/lib/progreso-produccion";
 import { ProgresoValor } from "./progreso-produccion";
@@ -12,7 +22,6 @@ import {
   BanIcon,
   BookOpenIcon,
   CheckIcon,
-  ChevronRightIcon,
   CircleDotIcon,
   ClockIcon,
   FactoryIcon,
@@ -25,7 +34,6 @@ import {
   PrinterIcon,
   RefreshCwIcon,
   ScissorsIcon,
-  SearchIcon,
   ShieldCheckIcon,
   TruckIcon,
   WrenchIcon,
@@ -33,11 +41,9 @@ import {
 } from "lucide-react";
 
 import {
-  bucketKanbanProduccion,
   etiquetaDuracion,
   etiquetaMomento,
   etiquetaPasoKanban,
-  esItemEnCursoOperativo,
   resolverEstacionDePaso,
   pasoReabrible,
   textoEntregaRelativa,
@@ -51,6 +57,7 @@ import {
 import { PasoAccionesProduccion } from "./paso-acciones";
 import {
   getOrdenTrabajo,
+  getItemTablero,
 } from "@/lib/ordenes-trabajo-api";
 import type {
   OrdenTrabajoDetalle,
@@ -61,12 +68,9 @@ import {
 } from "@/lib/estaciones";
 import type { DiaNoLaborable, DuracionFamilia } from "@/lib/estaciones-api";
 import {
-  etiquetaEta,
   simularFlujo,
   type ResultadoSimulacion,
-  type SimulacionItem,
 } from "@/lib/flujo-produccion";
-import { claveFechaEnZona } from "@/lib/zona";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { SimulacionView } from "@/components/produccion/simulacion-view";
 import { formatBytes, urlDeArchivo, type Archivo } from "@/lib/archivos";
@@ -88,20 +92,13 @@ import planificacionStyles from "./planificacion-page.module.css";
 
 type IconComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type Mode = ModoTablero;
-type StatusFilter = "all" | "in-progress" | "blocked" | "delayed" | "due-today";
-type PriorityFilter = "all" | TableroPrioridad;
-type KanbanBucketKey =
-  | "not-started"
-  | "blocked"
-  | "today"
-  | "delayed"
-  | "active";
+type KanbanBucketKey = GrupoTableroKey;
 
 const DEFAULT_BOARD_MODE: Mode = "items";
 /** Refresco en vivo del dataset (mismo ritmo que el tracking público). */
 const BOARD_MODE_STORAGE_KEY = "grafoprint:produccion:tablero-default-mode:v1";
 const BOARD_MODE_LABELS: Record<Mode, string> = {
-  items: "Por items",
+  items: "Lista",
   kanban: "Kanban",
 };
 
@@ -109,7 +106,7 @@ function readStoredBoardMode(): Mode {
   if (typeof window === "undefined") return DEFAULT_BOARD_MODE;
   try {
     const saved = window.localStorage.getItem(BOARD_MODE_STORAGE_KEY);
-    // Las preferencias retiradas (estación/simulación) vuelven a Por items.
+    // Las preferencias retiradas (estación/simulación) vuelven a Lista.
     return modoTableroGuardado(saved);
   } catch {
     return DEFAULT_BOARD_MODE;
@@ -244,8 +241,6 @@ function ElapsedMin({ desdeIso }: { desdeIso: string }) {
   return <>{etiquetaDuracion(min)}</>;
 }
 
-// ── Ruta compacta (strip de pasos) ───────────────────────────────────────
-
 function routeStatusIcon(step: StepView, fallback?: React.ReactNode) {
   const IconCmp = getStepIcon(step.iconKey);
   if (step.status === "done") return <CheckIcon />;
@@ -253,282 +248,6 @@ function routeStatusIcon(step: StepView, fallback?: React.ReactNode) {
   if (step.status === "paused") return <PauseIcon />;
   if (step.status === "pending" && fallback) return fallback;
   return <IconCmp />;
-}
-
-function RouteStrip({
-  steps,
-  compact = false,
-}: {
-  steps: StepView[];
-  compact?: boolean;
-}) {
-  if (steps.length === 0) {
-    return (
-      <div className={`route-strip ${compact ? "compact" : ""}`}>
-        <div className="route-step pending" title="Item sin ruta de producción">
-          <span className="ri-dot">
-            <BanIcon />
-          </span>
-          <span className="ri-label">Sin ruta</span>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className={`route-strip ${compact ? "compact" : ""}`}>
-      {steps.map((step, index) => {
-        // Visual: la frontera pendiente luce como "current" (anillo), aunque
-        // semánticamente siga pendiente (el sheet la muestra como estimada).
-        const visual =
-          step.esActivo && step.status === "pending" ? "current" : step.status;
-        const cls =
-          `route-step ${visual}` +
-          (step.status === "done" ||
-          (index > 0 && steps[index - 1]?.status === "done")
-            ? " link-done"
-            : "");
-        return (
-          <div
-            key={step.paso.id}
-            className={cls}
-            title={`${step.paso.nombre} · ${step.tec}`}
-          >
-            <span className="ri-dot">{routeStatusIcon(step)}</span>
-            <span className="ri-label">{step.paso.nombre}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Vista Por items ──────────────────────────────────────────────────────
-
-/**
- * "fin ≈ mar 22" bajo la entrega (Fase 2b): la simulación de flujo contra
- * las colas reales. ROJO + "no llega" si la ETA supera la fecha de entrega
- * — la señal del vendedor ANTES de que el retraso exista. "~" = corrió con
- * supuestos (estación sin calendario o bloqueo asumido como destrabado).
- */
-function EtaLine({
-  item,
-  eta,
-}: {
-  item: ItemView;
-  eta: SimulacionItem | undefined;
-}) {
-  const { zonaHoraria } = useConfigRegional();
-  if (!eta || item.finished) return null;
-  if (eta.sinEstimar)
-    return <span className="eta-line none">fin sin estimar</span>;
-  if (!eta.finEstimado) return null;
-  const fin = eta.finEstimado;
-  const finClave = claveFechaEnZona(fin, zonaHoraria);
-  const late = item.data.fechaEntrega
-    ? finClave > item.data.fechaEntrega.slice(0, 10)
-    : false;
-  const aprox = eta.parcial || eta.asumeDesbloqueo;
-  const motivo = [
-    eta.parcial ? "estación sin calendario en la ruta" : null,
-    eta.asumeDesbloqueo ? "asume desbloqueo inmediato" : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return (
-    <span
-      className={`eta-line ${late ? "late" : ""}`}
-      title={motivo || undefined}
-    >
-      fin {aprox ? "~" : "≈"} {etiquetaEta(fin, new Date(), zonaHoraria)}
-      {late ? " · no llega" : ""}
-    </span>
-  );
-}
-
-// Memo: misma razón que KanbanCard — ver el comentario de la ventana.
-const ItemRow = React.memo(function ItemRow({
-  item,
-  eta,
-  onOpen,
-}: {
-  item: ItemView;
-  eta: SimulacionItem | undefined;
-  onOpen: (id: string) => void;
-}) {
-  const cssRow =
-    `tab-row priority-${item.priority}` +
-    (item.blocked ? " blocked" : "") +
-    (item.delayed && !item.blocked ? " delayed" : "");
-
-  return (
-    <button type="button" className={cssRow} onClick={() => onOpen(item.id)}>
-      <div className="tab-row-left">
-        <div className="tab-row-codes">
-          <span className="item-code">{item.code}</span>
-          <span className="ot-badge" title="Orden de trabajo origen">
-            {item.otCode}
-          </span>
-          {item.data.loteEntrega ? <EtiquetaLote item={item.data} /> : item.data.componenteDe ? (
-            <span
-              className="ot-badge"
-              title={`${item.data.loteEntregaId ? "Producción por lote" : "Componente fabricado"} de ${item.data.componenteDe.nombre}`}
-            >
-              Componente
-            </span>
-          ) : null}
-          {item.priority !== "normal" ? (
-            <span className={`prio-pill prio-${item.priority}`}>
-              {priorityLabel(item.priority)}
-            </span>
-          ) : null}
-        </div>
-        <div className="tab-row-product">{item.product}</div>
-        <ContextoLote item={item.data} />
-        {/* Sólo el cliente: el detalle del producto vive en el sheet. */}
-        <div className="tab-row-spec">
-          <span className="cust">{item.customer}</span>
-        </div>
-      </div>
-
-      <div className="tab-row-route">
-        <RouteStrip steps={item.steps} />
-        <div
-          className={`tab-status-line ${item.blocked ? "blocked" : item.delayed ? "delayed" : ""}`}
-        >
-          <span
-            className={`dot ${item.blocked ? "dot-block" : item.delayed ? "dot-warn" : "dot-ok"}`}
-          />
-          <span>{item.statusLine}</span>
-        </div>
-      </div>
-
-      <div className="tab-row-right">
-        <div
-          className={`tab-due ${item.delayed && !item.blocked ? "delayed" : ""}`}
-        >
-          <span className="due-label">{item.dueLabel}</span>
-          <span className="due-in">
-            {textoEntregaRelativa(item.dueDays, item.dueIn)}
-          </span>
-          <EtaLine item={item} eta={eta} />
-        </div>
-        <div
-          className="tab-assigned"
-          title={`Estación actual: ${item.station}`}
-        >
-          <span className="av">
-            {item.stationIcon ? (
-              React.createElement(getStepIcon(item.stationIcon))
-            ) : (
-              <FactoryIcon />
-            )}
-          </span>
-          <div>
-            <div className="role">Estación actual</div>
-            <div className="nm">{item.station}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="tab-row-cta">
-        <ChevronRightIcon />
-      </div>
-    </button>
-  );
-});
-
-function FiltersBar({
-  filters,
-  setFilters,
-  counts,
-}: {
-  filters: { status: StatusFilter; priority: PriorityFilter; query: string };
-  setFilters: React.Dispatch<
-    React.SetStateAction<{
-      status: StatusFilter;
-      priority: PriorityFilter;
-      query: string;
-    }>
-  >;
-  counts: {
-    all: number;
-    shown: number;
-    inProgress: number;
-    blocked: number;
-    delayed: number;
-    today: number;
-  };
-}) {
-  return (
-    <div className="tab-filters">
-      <div className="search">
-        <SearchIcon />
-        <input
-          placeholder="Buscar por item, OT, cliente, producto..."
-          value={filters.query}
-          onChange={(event) =>
-            setFilters((current) => ({ ...current, query: event.target.value }))
-          }
-        />
-        <span className="kbd">/</span>
-      </div>
-
-      <div className="seg-filter">
-        {[
-          { k: "all", l: "Todos", c: counts.all },
-          { k: "in-progress", l: "En curso", c: counts.inProgress },
-          { k: "blocked", l: "Bloqueados", c: counts.blocked },
-          { k: "delayed", l: "Con retraso", c: counts.delayed },
-          { k: "due-today", l: "Vencen hoy", c: counts.today },
-        ].map((status) => (
-          <button
-            key={status.k}
-            type="button"
-            className={filters.status === status.k ? "on" : ""}
-            aria-pressed={filters.status === status.k}
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                status: status.k as StatusFilter,
-              }))
-            }
-          >
-            {status.l}
-            <span className="ct">{status.c}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="seg-prio">
-        <span className="lbl">Prioridad</span>
-        {[
-          { k: "all", l: "Todas" },
-          { k: "urgent", l: "Urgente" },
-          { k: "high", l: "Alta" },
-          { k: "normal", l: "Normal" },
-        ].map((priority) => (
-          <button
-            key={priority.k}
-            type="button"
-            className={filters.priority === priority.k ? "on" : ""}
-            aria-pressed={filters.priority === priority.k}
-            onClick={() =>
-              setFilters((current) => ({
-                ...current,
-                priority: priority.k as PriorityFilter,
-              }))
-            }
-          >
-            {priority.l}
-          </button>
-        ))}
-      </div>
-
-      <div className="tab-filter-summary">
-        <strong>{counts.shown}</strong> de <strong>{counts.all}</strong> items
-      </div>
-    </div>
-  );
 }
 
 // ── Sheet de detalle: ruta + materiales + actividad reales ───────────────
@@ -659,6 +378,7 @@ function DetailRuta({
   onAccion: AccionHandler;
   onGate: GateHandler;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   if (item.sinRuta) {
     return (
       <div className="detail-route-empty">
@@ -678,7 +398,7 @@ function DetailRuta({
           (canManage &&
             estacion != null &&
             estacionIdsEjecutables != null &&
-            estacionIdsEjecutables.includes(estacion.id));
+            estacionIdsEjecutables.includes(estacion.id) && asignacionPermiteEjecutar(paso));
         const dur = etiquetaDuracion(paso.duracionEstimadaMin);
         // El paso ACTIVO (la frontera de la secuencia) se resalta con borde
         // para ubicar de un vistazo dónde está parado el trabajo.
@@ -738,6 +458,16 @@ function DetailRuta({
                   </span>
                 ) : null}
               </div>
+
+              {paso.asignacionPersonal && <div className={toolbar.assignment}>
+                <span>Personal asignado · {paso.asignacionPersonal.personas.map(p => p.nombre).join(" · ") || "Sin asignar"}</span>
+                {paso.asignacionPersonal.conflicto && <span role="status" className={toolbar.assignmentConflict}>{paso.asignacionPersonal.conflicto}</span>}
+                {paso.asignacionPersonal.franjas.length > 0 && <span>Atención prevista · incluye preparación y tiempo entre pasos</span>}
+                {paso.asignacionPersonal.franjas.map((franja, n) => <span key={n}>
+                  {new Date(franja.inicio).toLocaleString("es-AR", { timeZone: zonaHoraria, dateStyle: "short", timeStyle: "short" })} – {new Date(franja.fin).toLocaleTimeString("es-AR", { timeZone: zonaHoraria, hour: "2-digit", minute: "2-digit" })}
+                  {" · "}{franja.empleadoIds.map(id => paso.asignacionPersonal?.personas.find(p => p.empleadoId === id)?.nombre).filter(Boolean).join(" · ")}
+                </span>)}
+              </div>}
 
               {paso.operacionesIncorporacionSnapshotJson?.length ? (
                 <div className={operationStyles.compoundStep}>
@@ -1179,11 +909,12 @@ export function ItemDetailSheet({
           >
             <span className="dot" />
             <div className="body">
-              <div className="ttl">{item.dependencias.length && item.statusLine === item.blockedReason ? "En espera de otros trabajos" : item.statusLine}</div>
+              <div className="ttl">{item.dependencias.length && item.state === "waiting" ? "En espera de otros trabajos" : item.statusLine}</div>
               {item.blocked && item.blockedReason && item.statusLine !== item.blockedReason ? (
                 <div className="sub">{item.blockedReason}</div>
               ) : null}
-              {!item.blocked && currentStep ? (
+              {item.waitingReason && item.dependencias.length ? <div className="sub">{item.waitingReason}</div> : null}
+              {!item.blocked && item.state !== "waiting" && currentStep ? (
                 <div className="sub">
                   {item.currentSteps.length > 1
                     ? `${item.currentSteps.length} ramas disponibles · `
@@ -1352,18 +1083,9 @@ export function ItemDetailSheet({
 
 // ── Kanban ───────────────────────────────────────────────────────────────
 
-function getKanbanBucket(item: ItemView): KanbanBucketKey | null {
-  if (item.blocked) return "blocked";
-  return bucketKanbanProduccion({
-    iniciado: item.started,
-    terminado: item.finished,
-    atrasado: item.delayed,
-    diasEntrega: item.dueDays,
-  });
-}
-
 function kanbanStepIcon(item: ItemView, step: StepView | undefined) {
   if (item.blocked) return <BanIcon />;
+  if (item.state === "waiting") return <ClockIcon />;
   if (step?.paso.estado === "pausado") return <PauseIcon />;
   const IconCmp = step ? getStepIcon(step.iconKey) : LayoutDashboardIcon;
   return <IconCmp />;
@@ -1382,9 +1104,7 @@ const KanbanCard = React.memo(function KanbanCard({
   // Si el DAG espera una dependencia externa no hay una frontera ejecutable,
   // pero la card igualmente debe nombrar el próximo paso, no decir solamente
   // "En espera" ni repetir una explicación de estado.
-  const step =
-    item.currentStep ??
-    item.steps.find((candidate) => candidate.paso.estado !== "hecho");
+  const step = item.visibleStep;
   const pasoPausado = step?.paso.estado === "pausado";
 
   return (
@@ -1424,7 +1144,8 @@ const KanbanCard = React.memo(function KanbanCard({
         </span>
         <div>
           <div className="kan-step-label">
-            {etiquetaPasoKanban(step?.paso.estado)}
+            {item.state === "waiting" || item.state === "ready" || item.state === "blocked"
+              ? `${ESTADO_TRABAJO_LABELS[item.state]}:` : etiquetaPasoKanban(step?.paso.estado)}
           </div>
           <div className="tec">
             {step?.paso.nombre ??
@@ -1439,6 +1160,7 @@ const KanbanCard = React.memo(function KanbanCard({
           {item.blocked && item.blockedReason ? (
             <div className="kan-blocked-reason">{item.blockedReason}</div>
           ) : null}
+          {item.waitingReason ? <div className={toolbar.waitReason}>{item.waitingReason}</div> : null}
         </div>
       </div>
       <div className="kan-progress" aria-label={calcularProgreso(item.data.pasos).explicacion}>
@@ -1477,7 +1199,7 @@ function KanbanColumn({
     column.items.length,
   );
   return (
-    <section className={`kan-col kan-${column.key}`}>
+    <section className="kan-col">
       <div className="kan-col-head">
         <div>
           <h2>{column.title}</h2>
@@ -1512,43 +1234,10 @@ function KanbanView({
   items: ItemView[];
   onOpen: (id: string) => void;
 }) {
-  const columns: Array<{
-    key: KanbanBucketKey;
-    title: string;
-    description: string;
-  }> = [
-    {
-      key: "not-started",
-      title: "No iniciados",
-      description: "Sin pasos ejecutados",
-    },
-    {
-      key: "blocked",
-      title: "Bloqueados",
-      description: "Esperan dependencias o intervención",
-    },
-    { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
-    { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
-    { key: "active", title: "En curso", description: "Avanzando sin retraso" },
-  ];
-  // Dentro de cada columna, de la entrega más próxima a la más lejana (los
-  // vencidos van primero por ser lo más urgente); sin fecha, al final. Mismo
-  // criterio que la vista "Por items".
-  const porEntrega = (a: ItemView, b: ItemView) => {
-    if (a.dueDays === null && b.dueDays === null) return 0;
-    if (a.dueDays === null) return 1;
-    if (b.dueDays === null) return -1;
-    return a.dueDays - b.dueDays;
-  };
-  const grouped = columns.map((column) => ({
-    ...column,
-    items: items
-      .filter((item) => getKanbanBucket(item) === column.key)
-      .sort(porEntrega),
-  }));
+  const grouped = agruparTrabajos(items);
 
   return (
-    <div className="kanban-board" aria-label="Kanban de producción">
+    <div className={toolbar.kanbanBoard} aria-label="Kanban de producción">
       {grouped.map((column) => (
         <KanbanColumn key={column.key} column={column} onOpen={onOpen} />
       ))}
@@ -1556,49 +1245,10 @@ function KanbanView({
   );
 }
 
-/** Lista "Por items" con ventana progresiva (DOM acotado con miles). */
-function ItemsList({
-  items,
-  sim,
-  onOpen,
-}: {
-  items: ItemView[];
-  sim: ResultadoSimulacion;
-  onOpen: (id: string) => void;
-}) {
-  const { limite, sentinelRef, expandir, hayMas } = useVentanaProgresiva(
-    items.length,
-  );
-  return (
-    <div className="tab-board">
-      {items.slice(0, limite).map((item) => (
-        <ItemRow
-          key={item.id}
-          item={item}
-          eta={sim.porItem.get(item.id)}
-          onOpen={onOpen}
-        />
-      ))}
-      {items.length === 0 ? (
-        <div className="empty-results">
-          No hay items que coincidan con los filtros.
-        </div>
-      ) : null}
-      {hayMas ? (
-        <VentanaSentinel
-          mostrando={limite}
-          total={items.length}
-          expandir={expandir}
-          sentinelRef={sentinelRef}
-        />
-      ) : null}
-    </div>
-  );
-}
-
 // ── Vista principal ──────────────────────────────────────────────────────
 
 export function TableroProduccion({
+  initialActualizadoEl,
   initialItems,
   initialMeta,
   initialLoadError = null,
@@ -1609,6 +1259,7 @@ export function TableroProduccion({
   tiempoEntrePasosMin = 0,
   modoPlanificacion = false,
 }: {
+  initialActualizadoEl?: string | null;
   initialItems: TableroItemData[];
   initialMeta: {
     alcance: AlcanceTableroProduccion;
@@ -1627,7 +1278,7 @@ export function TableroProduccion({
   modoPlanificacion?: boolean;
 }) {
   const { zonaHoraria } = useConfigRegional();
-  const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, permisoSupervisar, canManage, refrescar, handleAccion, handleGate } = useProduccionOperativa({ initialItems, initialMeta, initialLoadError });
+  const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, permisoSupervisar, canManage, refrescar, handleAccion, handleGate } = useProduccionOperativa({ initialActualizadoEl, initialItems, initialMeta, initialLoadError, soloPendientes: !modoPlanificacion });
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [defaultMode, setDefaultMode] =
     React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -1637,11 +1288,20 @@ export function TableroProduccion({
     y: number;
   } | null>(null);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [filters, setFilters] = React.useState<{
-    status: StatusFilter;
-    priority: PriorityFilter;
-    query: string;
-  }>({ status: "all", priority: "all", query: "" });
+  const [historicos, setHistoricos] = React.useState<TableroItemData[]>([]);
+  const [revisionHistorico, setRevisionHistorico] = React.useState(0);
+  const [itemConsultado, setItemConsultado] = React.useState<TableroItemData | null>(null);
+  const [errorConsulta, setErrorConsulta] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!selectedId || itemConsultado?.id === selectedId || items.some(i => i.id === selectedId) || historicos.some(i => i.id === selectedId)) return;
+    let vigente = true;
+    setErrorConsulta(null);
+    getItemTablero(selectedId).then(item => { if (vigente) setItemConsultado(item); })
+      .catch(err => { if (vigente) setErrorConsulta(err instanceof Error ? err.message : "No se pudo abrir el trabajo."); });
+    return () => { vigente = false; };
+  }, [selectedId, items, historicos, itemConsultado]);
+  const [filters, setFilters] = React.useState<FiltrosTrabajo>({ query: "", asignadasAMi: false, estacionId: "", empleadoId: "" });
+  const puedeFiltrarPersonal = permisoSupervisar && meta.alcance === "completo";
   const searchParams = useSearchParams();
   React.useEffect(() => {
     if (modoPlanificacion) return;
@@ -1661,10 +1321,9 @@ export function TableroProduccion({
   React.useEffect(() => {
     const estado = searchParams.get("estado");
     if (estado === "blocked" && !modoPlanificacion) {
-      // El acceso desde el panel abre Ítems filtrados por bloqueo
-      // sin modificar la vista predeterminada del usuario.
+      // El acceso del panel enfoca la sección, sin aplicar un filtro oculto.
       setMode("items");
-      setFilters((actual) => ({ ...actual, status: "blocked" }));
+
     }
   }, [searchParams, modoPlanificacion]);
 
@@ -1690,8 +1349,8 @@ export function TableroProduccion({
   }, [tabMenu]);
 
   const views = React.useMemo(
-    () => items.map((item) => buildItemView(item, estaciones, zonaHoraria)),
-    [items, estaciones, zonaHoraria],
+    () => items.map((item) => buildItemView(item, estaciones, zonaHoraria, actualizadoEl ?? new Date())),
+    [items, estaciones, zonaHoraria, actualizadoEl],
   );
 
   /** familiaCodigo → mediana histórica en minutos (fallback de la cola). */
@@ -1722,6 +1381,7 @@ export function TableroProduccion({
         noLaborables,
         tiempoEntrePasosMin,
         zona: zonaHoraria,
+        ahora: actualizadoEl ?? new Date(),
       }),
     [
       items,
@@ -1730,6 +1390,7 @@ export function TableroProduccion({
       noLaborables,
       tiempoEntrePasosMin,
       zonaHoraria,
+      actualizadoEl,
     ],
   );
 
@@ -1759,78 +1420,47 @@ export function TableroProduccion({
     setTabMenu(null);
   };
 
-  const filtered = React.useMemo(() => {
-    return views.filter((item) => {
-      if (
-        filters.status === "in-progress" &&
-        !esItemEnCursoOperativo({
-          iniciado: item.started,
-          terminado: item.finished,
-          bloqueado: item.blocked,
-          atrasado: item.delayed,
-        })
-      )
-        return false;
-      if (filters.status === "blocked" && !item.blocked) return false;
-      if (filters.status === "delayed" && (!item.delayed || item.blocked))
-        return false;
-      if (filters.status === "due-today" && item.dueDays !== 0) return false;
-      if (filters.priority !== "all" && item.priority !== filters.priority)
-        return false;
-      if (filters.query) {
-        const query = filters.query.toLowerCase();
-        const haystack =
-          `${item.code} ${item.otCode} ${item.customer} ${item.product} ${item.spec} ${item.data.loteEntrega?.nombre ?? ""} ${item.data.loteEntrega?.productoNombre ?? ""}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
-      return true;
-    });
-  }, [views, filters]);
-
-  const counts = {
-    all: views.length,
-    shown: filtered.length,
-    inProgress: views.filter((item) =>
-      esItemEnCursoOperativo({
-        iniciado: item.started,
-        terminado: item.finished,
-        bloqueado: item.blocked,
-        atrasado: item.delayed,
-      }),
-    ).length,
-    blocked: views.filter((item) => item.blocked).length,
-    delayed: views.filter((item) => item.delayed && !item.blocked).length,
-    today: views.filter((item) => item.dueDays === 0).length,
-  };
-  const selectedItem = selectedId
-    ? views.find((item) => item.id === selectedId)
-    : undefined;
+  const filtered = React.useMemo(() => filtrarTrabajos(
+    views, estaciones, { ...filters, empleadoId: puedeFiltrarPersonal ? filters.empleadoId : "" },
+    zonaHoraria, actualizadoEl ?? new Date(),
+  ), [views, estaciones, filters, puedeFiltrarPersonal, zonaHoraria, actualizadoEl]);
+  const counts = metricasTrabajos(filtered);
+  const empleados = React.useMemo(() => {
+    const personas = new Map(estaciones.flatMap(e => e.empleados).map(e => [e.id, { id: e.id, nombre: e.nombreCompleto }]));
+    for (const item of items) for (const paso of item.pasos) for (const p of paso.asignacionPersonal?.personas ?? [])
+      personas.set(p.empleadoId, { id: p.empleadoId, nombre: p.nombre });
+    return [...personas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  }, [estaciones, items]);
+  const estacionesFiltro = React.useMemo(() => estaciones.filter(e => e.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, "es")), [estaciones]);
+  const seccionInicial = searchParams.get("estado") === "blocked" ? "blocked" : undefined;
+  const historicosViews = React.useMemo(() => historicos.map(item => buildItemView(item, estaciones, zonaHoraria)), [historicos, estaciones, zonaHoraria]);
+  const consultadoView = React.useMemo(() => itemConsultado ? buildItemView(itemConsultado, estaciones, zonaHoraria) : undefined, [itemConsultado, estaciones, zonaHoraria]);
+  const selectedItem = selectedId ? views.find(item => item.id === selectedId) ?? historicosViews.find(item => item.id === selectedId) ?? (consultadoView?.id === selectedId ? consultadoView : undefined) : undefined;
 
   return (
-    <div className={`tablero-produccion${modoPlanificacion ? ` ${planificacionStyles.root}` : ""}`}>
-      <div className={`tab-page${modoPlanificacion ? ` ${planificacionStyles.page}` : ""}`}>
-        <div className="page-head">
-          <div className="title-block">
+    <div className={`tablero-produccion${modoPlanificacion ? ` ${planificacionStyles.root}` : ` ${toolbar.page}`}`}>
+      <div className={`tab-page${modoPlanificacion ? ` ${planificacionStyles.page}` : ` ${toolbar.content}`}`}>
+        <div data-ui={modoPlanificacion ? undefined : "heroui"} className={modoPlanificacion ? "page-head" : `${theme.theme} ${listPage.header}`}>
+          <div className={modoPlanificacion ? "title-block" : undefined}>
             <h1>{modoPlanificacion ? "Planificación" : "Tablero de producción en tiempo real"}</h1>
-            <div className="sub">
+            <div className={modoPlanificacion ? "sub" : listPage.subtitle}>
               {modoPlanificacion
                 ? "Calendario de producción, carga de estaciones y dependencias por lote."
                 : "Items de las órdenes emitidas, con cliente y ruta real de pasos."}
               {actualizadoEl
-                ? ` Actualizado a las ${actualizadoEl.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
+                ? ` Actualizado a las ${actualizadoEl.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zonaHoraria })}`
                 : " Todavía no se pudo actualizar."}
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            loading={refreshing}
-            loadingText="Actualizando"
-            onClick={() => void refrescar(true)}
-          >
-            <RefreshCwIcon data-icon="inline-start" />
-            Actualizar
-          </Button>
+          {modoPlanificacion ? (
+            <Button type="button" variant="outline" loading={refreshing} loadingText="Actualizando" onClick={() => void refrescar(true)}>
+              <RefreshCwIcon data-icon="inline-start" />Actualizar
+            </Button>
+          ) : (
+            <ActionButton variant="outline" isPending={refreshing} onPress={() => void refrescar(true)}>
+              <RefreshCwIcon />{refreshing ? "Actualizando" : "Actualizar"}
+            </ActionButton>
+          )}
         </div>
 
         {initialPartialWarning ? (
@@ -1858,63 +1488,6 @@ export function TableroProduccion({
           </Alert>
         ) : null}
 
-        {!modoPlanificacion ? <div className="d-kpi-row">
-          <div className="d-kpi">
-            <div className="d-kpi-head">
-              <span className="d-kpi-lbl">Items en producción</span>
-            </div>
-            <div className="d-kpi-val">
-              <span className="num">{views.length}</span>
-            </div>
-            <div className="d-kpi-foot">
-              <span className="d-kpi-sub">de órdenes emitidas</span>
-            </div>
-          </div>
-          <div className="d-kpi">
-            <div className="d-kpi-head">
-              <span className="d-kpi-lbl">En curso · OK</span>
-            </div>
-            <div className="d-kpi-val">
-              <span className="num ok">{counts.inProgress}</span>
-            </div>
-            <div className="d-kpi-foot">
-              <span className="d-kpi-sub">avanzando sin retraso</span>
-            </div>
-          </div>
-          <div className="d-kpi">
-            <div className="d-kpi-head">
-              <span className="d-kpi-lbl">Con retraso</span>
-            </div>
-            <div className="d-kpi-val">
-              <span className="num signal">{counts.delayed}</span>
-            </div>
-            <div className="d-kpi-foot">
-              <span className="d-delta tone-signal">entrega vencida</span>
-            </div>
-          </div>
-          <div className="d-kpi">
-            <div className="d-kpi-head">
-              <span className="d-kpi-lbl">Bloqueados</span>
-            </div>
-            <div className="d-kpi-val">
-              <span className="num">{counts.blocked}</span>
-            </div>
-            <div className="d-kpi-foot">
-              <span className="d-kpi-sub">requieren intervención</span>
-            </div>
-          </div>
-          <div className="d-kpi">
-            <div className="d-kpi-head">
-              <span className="d-kpi-lbl">Vencen hoy</span>
-            </div>
-            <div className="d-kpi-val">
-              <span className="num">{counts.today}</span>
-            </div>
-            <div className="d-kpi-foot">
-              <span className="d-kpi-sub">prioridad de despacho</span>
-            </div>
-          </div>
-        </div> : null}
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>No se pudo completar la acción</AlertTitle>
@@ -1923,7 +1496,8 @@ export function TableroProduccion({
         ) : null}
 
         {!modoPlanificacion ? <div
-          className="dash-tabs"
+          data-ui="heroui"
+          className={`${theme.theme} ${toolbar.tabs}`}
           role="tablist"
           aria-label="Vistas del tablero de producción"
         >
@@ -1935,7 +1509,7 @@ export function TableroProduccion({
               id={`tablero-tab-${entry.mode}`}
               aria-controls="tablero-panel-vista"
               tabIndex={mode === entry.mode ? 0 : -1}
-              className={`dash-tab ${mode === entry.mode ? "on" : ""}`}
+              className={toolbar.tab}
               aria-selected={mode === entry.mode}
               onClick={() => setMode(entry.mode)}
               onKeyDown={(event) => {
@@ -1970,7 +1544,7 @@ export function TableroProduccion({
                 <span className="count">{entry.count}</span>
               ) : null}
               {defaultMode === entry.mode ? (
-                <span className="default-mark">Pred.</span>
+                <span className={toolbar.defaultMark}>Pred.</span>
               ) : null}
             </button>
           ))}
@@ -2028,7 +1602,7 @@ export function TableroProduccion({
               Tu usuario vendedor no está vinculado a un empleado. Vinculalo
               desde Configuración para ver solamente tus órdenes.
             </div>
-          ) : views.length === 0 ? (
+          ) : modoPlanificacion && views.length === 0 ? (
             <div className="empty-results">
               {meta.alcance === "operario" ? (
                 "No tenés tareas reclamadas en tu mesa de trabajo."
@@ -2053,33 +1627,17 @@ export function TableroProduccion({
             />
           ) : (
             <>
-              {mode === "items" ? (
-                <>
-                  <FiltersBar
-                    filters={filters}
-                    setFilters={setFilters}
-                    counts={counts}
-                  />
-                  <ItemsList
-                    items={filtered}
-                    sim={sim}
-                    onOpen={setSelectedId}
-                  />
-                </>
-              ) : null}
-              {mode === "kanban" ? (
-                <>
-                  <FiltersBar
-                    filters={filters}
-                    setFilters={setFilters}
-                    counts={counts}
-                  />
-                  <KanbanView items={filtered} onOpen={setSelectedId} />
-                </>
-              ) : null}
+              <TableroFiltros filters={filters} setFilters={setFilters} counts={counts} total={views.length}
+                estaciones={estacionesFiltro} empleados={empleados} puedeFiltrarPersonal={puedeFiltrarPersonal} />
+              {mode === "items"
+                ? <TableroLista items={filtered} trabajosContexto={views} estaciones={estaciones} sim={sim} zona={zonaHoraria} onOpen={setSelectedId} seccionInicial={seccionInicial} contextoFiltros={JSON.stringify(filters)} />
+                : <KanbanView items={filtered} onOpen={setSelectedId} />}
+
             </>
           )}
         </div>
+        {!modoPlanificacion && <TableroTerminados estaciones={estaciones} zona={zonaHoraria} revision={revisionHistorico} onItems={setHistoricos} onOpen={setSelectedId} />}
+        {errorConsulta && <Alert variant="destructive"><AlertDescription>{errorConsulta}</AlertDescription></Alert>}
       </div>
 
       <ItemDetailSheet
@@ -2090,7 +1648,11 @@ export function TableroProduccion({
         estaciones={estaciones}
         estacionIdsEjecutables={meta.estacionIdsEjecutables}
         alcance={meta.alcance}
-        onAccion={handleAccion}
+        onAccion={async (...args) => {
+          await handleAccion(...args);
+          setRevisionHistorico(n => n + 1);
+          if (selectedId) void getItemTablero(selectedId).then(setItemConsultado).catch(() => setErrorConsulta("El cambio se guardó, pero no se pudo actualizar el detalle."));
+        }}
         onGate={handleGate}
         onClose={() => setSelectedId(null)}
       />

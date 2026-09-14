@@ -497,7 +497,7 @@ it('recalcula los pasos de una misma OT y dispara los efectos de cierre una sola
   expect(avisar).toHaveBeenCalledTimes(1);
 });
 
-it('no toma silenciosamente un trabajo que el operario no tiene en su mesa', async () => {
+it('no ejecuta silenciosamente un trabajo que el operario no tiene asignado', async () => {
   const trabajos = [await crearTrabajo(), await crearTrabajo()];
   await db.ordenTrabajoItemPaso.update({
     where: { id: trabajos[1].pasoId },
@@ -508,6 +508,6 @@ it('no toma silenciosamente un trabajo que el operario no tiene en su mesa', asy
       { ...auth, permisos: new Set(['produccion.ejecutar']) },
       trabajos.map(completar),
     ),
-  ).rejects.toThrow(/mesa de trabajo/);
+  ).rejects.toThrow(/no está asignado/);
   await verificarSinCambios(trabajos);
 });

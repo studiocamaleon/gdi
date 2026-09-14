@@ -1,9 +1,10 @@
+import { leerAsignacionPersonal, proyectarAsignacionPersonal } from '../asignacion-personal';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { sumaTramosMin } from '../../ordenes-trabajo/tiempos-ejecucion';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { gateDocumentoEstaCumplido } from '../../desarrollo-documental/desarrollo-documental.service';
+import { leerAprobacionesPendientes } from '../aprobaciones-pendientes';
 import { fronterasEjecutablesDAG } from '../../ordenes-trabajo/fronteras-ejecutables';
 import {
   contextoLoteTablero,
@@ -43,6 +44,7 @@ const pasoSelect = {
   modoRegistro: true,
   tipoEjecucion: true,
   mesaUsuarioId: true,
+  asignacionPersonalJson: true,
   tramos: {
     select: {
       inicioEl: true,
@@ -147,8 +149,10 @@ export function disponibilidadCola(
     return { estadoCola: 'en_curso' as const, motivos };
   if (paso.estado === 'pausado')
     return { estadoCola: 'pausados' as const, motivos };
-  if (paso.estado === 'bloqueado' && !motivos.length)
-    motivos.push('Trabajo bloqueado. Revisá su detalle.');
+  if (paso.estado === 'bloqueado') {
+    if (!paso.motivoBloqueo) motivos.unshift('Trabajo bloqueado. Revisá su detalle.');
+    return { estadoCola: 'bloqueados' as const, motivos };
+  }
   return {
     estadoCola:
       paso.estado === 'pendiente' && frontera && !motivos.length
@@ -238,52 +242,13 @@ export class ColasProduccionService {
         { id: 'asc' },
       ],
     });
-    const ordenIds = [...new Set(pasos.map((p) => p.ordenId))];
-    const [gates, padres] = ordenIds.length
-      ? await Promise.all([
-          db.gateProduccionDocumento.findMany({
-            where: { tenantId, ordenId: { in: ordenIds }, activo: true },
-            select: {
-              ordenId: true,
-              ordenItemId: true,
-              pasoId: true,
-              alcance: true,
-              nombre: true,
-              tipoAprobacion: true,
-              archivoMaestro: {
-                select: {
-                  revisionLiberada: {
-                    select: {
-                      solicitudes: {
-                        where: { estado: 'APROBADA' },
-                        select: { tipo: true },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          }),
-          db.ordenTrabajoItem.findMany({
-            where: { tenantId, ordenId: { in: ordenIds } },
-            select: { id: true, parentItemId: true },
-          }),
-        ])
-      : [[], []];
-    const padresPorId = new Map(padres.map((p) => [p.id, p.parentItemId]));
-    const gatesPorOrden = new Map<string, typeof gates>();
-    for (const gate of gates)
-      if (!gateDocumentoEstaCumplido(gate)) {
-        const grupo = gatesPorOrden.get(gate.ordenId) ?? [];
-        grupo.push(gate);
-        gatesPorOrden.set(gate.ordenId, grupo);
-      }
+    const aprobaciones = await leerAprobacionesPendientes(db, tenantId, pasos);
     const supervisa = auth?.permisos?.has('produccion.supervisar') ?? false;
     const empleado =
       auth?.permisos?.has('produccion.ejecutar') && !supervisa
         ? await db.empleado.findFirst({
             where: { tenantId, userId: auth.userId, activo: true },
-            select: { estaciones: { select: { estacionId: true } } },
+            select: { id: true, estaciones: { select: { estacionId: true } } },
           })
         : null;
     const gestiona =
@@ -297,33 +262,18 @@ export class ColasProduccionService {
       maquina.activo && maquina.estacion?.activo === true;
     const filas = pasos
       .map((p) => {
-        // Los lotes heredan aprobaciones del producto original, igual que el comando de ejecución.
-        const ambitos = new Set([p.itemId]);
-        if (p.item.loteEntregaId) {
-          let padre = p.item.parentItemId;
-          while (padre && !ambitos.has(padre)) {
-            ambitos.add(padre);
-            padre = padresPorId.get(padre) ?? null;
-          }
-        }
-        const documentos = (gatesPorOrden.get(p.ordenId) ?? []).filter(
-          (g) =>
-            g.alcance === 'ORDEN' ||
-            (g.alcance === 'PASO' && g.pasoId === p.id) ||
-            (g.alcance === 'ITEM' &&
-              g.ordenItemId &&
-              ambitos.has(g.ordenItemId)),
-        );
         const lote = contextoLoteTablero(p.item);
         const disponibilidad = disponibilidadCola(
           p,
-          documentos.map((g) => g.nombre),
+          aprobaciones.get(p.id) ?? [],
           recursoDisponible,
         );
         const abierto = p.tramos.find((t) => !t.finEl);
+        const asignacion = leerAsignacionPersonal(p.asignacionPersonalJson);
+        const asignado = !!empleado && !asignacion?.conflicto && asignacion?.personas.some(p => p.empleadoId === empleado.id);
         const tieneMesa = Boolean(
           auth &&
-          (p.mesaUsuarioId === auth.userId ||
+          (asignado || p.mesaUsuarioId === auth.userId ||
             abierto?.usuarioId === auth.userId),
         );
         const requiereMesa = !supervisa && !tieneMesa;
@@ -351,11 +301,12 @@ export class ColasProduccionService {
             p.duracionEstimadaMin === null
               ? null
               : Number(p.duracionEstimadaMin),
+          asignacionPersonal: proyectarAsignacionPersonal(p.asignacionPersonalJson, auth?.userId ?? ""),
           responsable:
             p.iniciadoPorNombre ??
             p.mesaUsuario?.nombreCompleto ??
             p.mesaUsuario?.email ??
-            null,
+            (asignacion?.personas.map(p => p.nombre).join(" · ") || null),
           archivosCount: p.item._count.archivos,
           ...disponibilidad,
           control: {
@@ -386,7 +337,7 @@ export class ColasProduccionService {
             canManage: gestiona && !requiereMesa,
             canSupervise: supervisa,
             puedeTomarMesa:
-              gestiona && requiereMesa && !p.mesaUsuarioId && !abierto,
+              gestiona && requiereMesa && !p.mesaUsuarioId && !abierto && !asignacion?.personas.length,
           },
         };
       })
@@ -418,6 +369,7 @@ export class ColasProduccionService {
       en_curso: 0,
       pausados: 0,
       en_espera: 0,
+      bloqueados: 0,
     };
     for (const f of filas) totales[f.estadoCola]++;
     const q = (consulta.q ?? '').trim().toLocaleLowerCase('es');

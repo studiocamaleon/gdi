@@ -8,6 +8,7 @@ import {
   esItemEnCursoOperativo,
   etiquetaPasoKanban,
   itemBloqueado,
+  itemEsperandoDependencias,
   itemIniciado,
   lineaEstado,
   resolverEstacionDePaso,
@@ -152,7 +153,8 @@ describe("clasificación operativa del tablero", () => {
     expect(lineaEstado(item)).toBe(
       "Esperando componentes o pasos anteriores",
     );
-    expect(itemBloqueado(item)).toBe(true);
+    expect(itemBloqueado(item)).toBe(false);
+    expect(itemEsperandoDependencias(item)).toBe(true);
   });
 
   it("presenta un nodo tercerizado como compra y no como trabajo por iniciar", () => {

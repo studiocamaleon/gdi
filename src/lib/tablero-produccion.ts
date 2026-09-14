@@ -49,6 +49,7 @@ export type TableroPasoData = {
   planificadoDesde?: string | null;
   planificadoHasta?: string | null;
   atencionPlanificada?: unknown;
+  personalFijo?: { empleadoIds?: string[]; obligatorioId?: string; preferidoId?: string };
   id: string;
   indice: number;
   /** Null en OTs históricas: esas conservan la semántica lineal por índice. */
@@ -65,6 +66,8 @@ export type TableroPasoData = {
   }[];
   /** Evaluado por API contra todos los ítems de la OT (incluye componentes). */
   predecesoresSatisfechos?: boolean;
+  /** Aprobaciones documentales pendientes aplicables a este paso. */
+  aprobacionesPendientes?: string[];
   sucesorPasoIds?: string[];
   gatesOperativos?: Array<{
     id: string;
@@ -139,6 +142,7 @@ export type TableroPasoData = {
   tiempoAcumuladoMin: number;
   /** El paso está en MI mesa de trabajo (reclamo persistente por usuario). */
   mesaEsMia: boolean;
+  asignacionPersonal?: ReturnType<typeof import("../../apps/api/src/produccion/asignacion-personal").proyectarAsignacionPersonal>;
   /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
   mesaUsuarioNombre: string | null;
   /** === Tercerización (F2) ===: 'interno' (tablero) | 'tercerizado' (Compras). */
@@ -435,7 +439,7 @@ export function itemTerminado(item: TableroItemData): boolean {
 /**
  * El item todavía tiene trabajo pendiente, pero ninguna frontera de su DAG
  * está habilitada. En una OT compuesta esto significa que espera componentes
- * u otros pasos de la orden; operativamente está bloqueado, no completado.
+ * u otros pasos de la orden; está en espera, no bloqueado ni completado.
  */
 export function itemEsperandoDependencias(item: TableroItemData): boolean {
   return (
@@ -446,10 +450,7 @@ export function itemEsperandoDependencias(item: TableroItemData): boolean {
 }
 
 export function itemBloqueado(item: TableroItemData): boolean {
-  return (
-    item.pasos.some((paso) => paso.estado === "bloqueado") ||
-    itemEsperandoDependencias(item)
-  );
+  return item.pasos.some((paso) => paso.estado === "bloqueado");
 }
 
 export function itemIniciado(item: TableroItemData): boolean {
@@ -540,9 +541,8 @@ export function itemConRetraso(item: TableroItemData, ahora = new Date(), zona =
   return dias !== null && dias < 0 && !itemTerminado(item);
 }
 
-export function lineaEstado(item: TableroItemData): string {
+export function lineaEstado(item: TableroItemData, actual = pasoActual(item)): string {
   if (item.sinRuta) return "Sin ruta de producción cargada";
-  const actual = pasoActual(item);
   if (!actual) {
     // En un workflow DAG puede no haber una frontera ejecutable aunque todavía
     // queden pasos pendientes: sucede cuando el producto padre espera que

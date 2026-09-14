@@ -30,6 +30,7 @@ export function contextoAtencion(args: {
     ordenar({
       ...(args.empleados !== undefined
         ? {
+            politicaPersonal: 'misma-dotacion-por-paso-v1',
             empleados: [...args.empleados].sort((a, b) =>
               a.id.localeCompare(b.id),
             ),
