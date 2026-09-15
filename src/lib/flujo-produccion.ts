@@ -397,7 +397,12 @@ export function simularFlujo({
 
   const estacionDe = (paso: TableroPasoData): EstacionSim => {
     const resuelta = resolverEstacionDePaso(estaciones, paso);
-    return (resuelta && registros.get(resuelta.id)) || sinEstacion;
+    const base = (resuelta && registros.get(resuelta.id)) || sinEstacion;
+    const ids = paso.personalFijo?.empleadoIds;
+    // La agenda aceptada y la proyección deben reservar el mismo personal fijo.
+    return ids && base.empleados !== undefined
+      ? { ...base, empleados: base.empleados.filter((e) => ids.includes(e.id)) }
+      : base;
   };
 
   // La unidad del scheduler deja de ser "el próximo índice de un item" y pasa
@@ -759,15 +764,7 @@ export function simularFlujo({
       const enCurso = nodo.paso.estado === "en_curso";
       let preparado = preparados.get(pasoId);
       if (!preparado) {
-        const base = estacionDe(nodo.paso);
-        const ids = nodo.paso.personalFijo?.empleadoIds;
-        const est =
-          ids && base.empleados !== undefined
-            ? {
-                ...base,
-                empleados: base.empleados.filter((e) => ids.includes(e.id)),
-              }
-            : base;
+        const est = estacionDe(nodo.paso);
         const congelada = demandaDePaso(nodo.paso, duracionBase);
         let demanda = recortarDemanda(congelada, duracionBase, duracionBase);
         const ejecucion = nodo.paso.tramosEjecucion?.length

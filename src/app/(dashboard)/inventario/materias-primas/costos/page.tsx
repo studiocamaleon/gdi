@@ -17,9 +17,5 @@ export default function CostosMaterialesPage() {
 async function CostosMaterialesPageContent() {
   const materiasPrimas = await getMateriasPrimas();
 
-  return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <CostosMaterialesEditor initialMateriasPrimas={materiasPrimas} />
-    </section>
-  );
+  return <CostosMaterialesEditor initialMateriasPrimas={materiasPrimas} />;
 }

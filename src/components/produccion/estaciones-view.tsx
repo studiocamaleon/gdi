@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { CalendarDays, Plus, RefreshCw } from "lucide-react";
 import { useDesignScope } from "@/components/design-system/appearance";
 import { ActionButton } from "@/components/design-system/action-button";
@@ -13,7 +12,6 @@ import {
   useProduccionOperativa,
   type DatosProduccionOperativa,
 } from "./use-produccion-operativa";
-import { ItemDetailSheet } from "./tablero-produccion";
 import { EstacionesOperativas } from "./estaciones-operativas";
 import {
   StationForm,
@@ -42,7 +40,6 @@ import {
 } from "@/lib/estaciones-api";
 import s from "./estaciones-operativas.module.css";
 import f from "./estacion-form.module.css";
-import workspaceTheme from "@/components/ui/workspace-theme.module.css";
 
 export type EstacionesViewProps = DatosProduccionOperativa & {
   estaciones: Estacion[];
@@ -59,7 +56,7 @@ export type EstacionesViewProps = DatosProduccionOperativa & {
 export function EstacionesView(props: EstacionesViewProps) {
   const scope = useDesignScope();
   const puedeConfigurar = usePuede("produccion.configurar");
-  const operacion = useProduccionOperativa(props);
+  const operacion = useProduccionOperativa({ ...props, soloPendientes: true });
   const { zonaHoraria } = useConfigRegional();
   const [estaciones, setEstaciones] = useState(props.estaciones);
   const [familias, setFamilias] = useState(props.initialFamilias);
@@ -72,7 +69,6 @@ export function EstacionesView(props: EstacionesViewProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [configRefreshing, setConfigRefreshing] = useState(false);
   const puedeEditar = puedeConfigurar && props.configuracionDisponible;
 
@@ -224,7 +220,7 @@ export function EstacionesView(props: EstacionesViewProps) {
           <p className={s.eyebrow}>Producción</p>
           <h1>Estaciones</h1>
           <p className={layout.subtitle}>
-            Tareas, empleados y configuración del taller en un solo lugar.
+            Carga de trabajo, personal asignado y configuración del taller.
           </p>
         </div>
         <div className={s.headerActions}>
@@ -306,31 +302,8 @@ export function EstacionesView(props: EstacionesViewProps) {
         medianas={medianas}
         noLaborables={noLaborables}
         llegadasHoyMin={llegadasHoyMin}
-        canManage={operacion.canManage}
-        estacionIdsEjecutables={operacion.meta.estacionIdsEjecutables}
-        onMesa={operacion.handleMesa}
-        onOpen={setSelectedId}
         onConfigure={puedeEditar ? abrirEditor : undefined}
       />
-      {/* El detalle compartido conserva su propio tema mientras se migra su contenido. */}
-      {selectedId &&
-        createPortal(
-          <div className={`tablero-produccion ${workspaceTheme.theme}`}>
-            <ItemDetailSheet
-              item={views.find((v) => v.id === selectedId)}
-              busy={operacion.busy}
-              canManage={operacion.canManage}
-              canSupervise={operacion.permisoSupervisar}
-              estaciones={estaciones}
-              estacionIdsEjecutables={operacion.meta.estacionIdsEjecutables}
-              alcance={operacion.meta.alcance}
-              onAccion={operacion.handleAccion}
-              onGate={operacion.handleGate}
-              onClose={() => setSelectedId(null)}
-            />
-          </div>,
-          document.body,
-        )}
       {sheet && puedeEditar && (
         <StationForm
           key={sheet === "new" ? "new" : sheet.id}

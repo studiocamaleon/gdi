@@ -1,5 +1,6 @@
 'use client';
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from 'react';
 import { ArrowUpRight, Ban, ChevronLeft, ChevronRight, CircleCheck, CirclePause, Clock3, Factory, Layers, Scan, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
 import { Button, Card, Checkbox, Chip, SearchField, Tabs } from '@heroui/react';
@@ -275,7 +276,7 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
       <div className={s.title}><span className={s.eyebrow}>Producción</span><h1>Colas de trabajo</h1></div>
       <div className={s.actions}>
         <ActionLink variant="outline" href="/produccion/planificacion">Planificación<ArrowUpRight size={15} aria-hidden /></ActionLink>
-        <ActionButton variant="outline" onPress={() => void refrescar()} isDisabled={refrescando}><RefreshCw data-icon="inline-start" className={refrescando ? 'animate-spin' : undefined} />Actualizar</ActionButton>
+        <ActionButton variant="outline" onPress={() => void refrescar()} isDisabled={refrescando}>{refrescando ? <GdiSpinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}Actualizar</ActionButton>
       </div>
     </header>
     {error && <Alert className={workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}

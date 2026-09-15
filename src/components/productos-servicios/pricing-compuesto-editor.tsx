@@ -4,7 +4,7 @@ import * as React from "react";
 import { CircleAlertIcon, InfoIcon, Layers3Icon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "./producto-ui";
 import {
   Card,
   CardAction,
@@ -12,14 +12,14 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "./producto-ui";
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { HumanSelect } from "@/components/ui/human-select";
+import { HumanSelect } from "./producto-ui";
 import {
   Table,
   TableBody,
@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "./producto-ui";
 import type { ProductoDetalle } from "@/lib/productos-servicios";
 import type {
   ModoPricingComponente,

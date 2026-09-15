@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { type CurrentUser, type TenantSummary } from "@/lib/auth";
+import { GrafoprintIsologo as LogoNodes } from "@/components/brand/grafoprint-isologo";
 import { NavLink } from "@/components/navigation/nav-link";
 import {
   hasChildren,
@@ -214,46 +215,6 @@ const Ico = {
     </svg>
   ),
 } satisfies Record<string, IconComponent>;
-
-const LogoNodes = ({ size = 22 }: { size?: number }) => (
-  <svg
-    viewBox="0 0 24 24"
-    width={size}
-    height={size}
-    fill="none"
-    aria-hidden="true"
-  >
-    <path
-      d="M5.5 6.5 L18 6.5"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    />
-    <path
-      d="M5.5 6.5 L12 17.5"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    />
-    <path
-      d="M18 6.5 L12 17.5"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    />
-    <path
-      d="M18 6.5 L18 14.5"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-      opacity="0.55"
-    />
-    <circle cx="5.5" cy="6.5" r="2.2" fill="currentColor" />
-    <circle cx="18" cy="6.5" r="2.2" fill="currentColor" />
-    <circle cx="12" cy="17.5" r="2.2" fill="currentColor" />
-    <circle cx="18" cy="14.5" r="1.4" fill="currentColor" opacity="0.55" />
-  </svg>
-);
 
 function Brand({ collapsed = false }: { collapsed?: boolean }) {
   return (

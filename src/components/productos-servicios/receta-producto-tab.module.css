@@ -3087,3 +3087,245 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Superficie de la ficha; el editor de rutas conserva su propio contexto. */
+:global([data-producto-ficha]) .recipeProjection {
+  border: 0;
+  background: var(--surface);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .bomToolbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomToolbarCopy > span {
+  color: var(--accent-soft-foreground);
+}
+:global([data-producto-ficha]) .bomToolbarCopy > strong {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .status {
+  border: 1px solid var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .status::before {
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .status[data-state="draft"] {
+  border-color: var(--border);
+  color: var(--muted-text);
+  background: var(--warning-soft);
+}
+:global([data-producto-ficha]) .status[data-state="draft"]::before {
+  background: var(--warning-soft);
+}
+:global([data-producto-ficha]) .status[data-state="published"] {
+  border-color: var(--border);
+  color: var(--muted-text);
+  background: var(--success-soft);
+}
+:global([data-producto-ficha]) .status[data-state="published"]::before {
+  background: var(--success-soft);
+}
+:global([data-producto-ficha]) .statusIcon {
+  border: 1px solid var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomIntro {
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomIntro span, :global([data-producto-ficha]) .bomTreeGuide > span {
+  color: var(--accent-soft-foreground);
+}
+:global([data-producto-ficha]) .bomIntro h4 {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .bomIntro p {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomViewSwitch {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomViewSwitch button {
+  border: 0;
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomViewSwitch button[data-active="true"] {
+  color: var(--muted-text);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .bomLoading, :global([data-producto-ficha]) .bomError {
+  border: 1px solid var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomError strong {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomTreePanel, :global([data-producto-ficha]) .bomConsolidated {
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+}
+:global([data-producto-ficha]) .bomTreeGuide p {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomNode {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .bomNode[data-root="true"] {
+  border-color: var(--border);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .bomNodeHeader {
+  border: 0;
+  color: inherit;
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNode[data-root="true"] > .bomNodeHeader {
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNodeHeader:hover {
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomChevron {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomNodeIcon, :global([data-producto-ficha]) .bomMaterialIcon {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNode[data-root="true"] > .bomNodeHeader .bomNodeIcon {
+  border-color: var(--border);
+  color: var(--accent-soft-foreground);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNodeIdentity > span {
+  color: var(--accent-soft-foreground);
+}
+:global([data-producto-ficha]) .bomNodeIdentity strong {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .bomNodeIdentity small {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomNodeStats span, :global([data-producto-ficha]) .bomNodeStats b {
+  border: 1px solid var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNodeStats span {
+  border-color: var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNodeBody {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomMaterialRow {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomMaterialIcon {
+  color: var(--accent-soft-foreground);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomMaterialRow strong {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .bomMaterialRow small, :global([data-producto-ficha]) .bomMaterialRule {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomNoDirectMaterial {
+  border: 1px dashed var(--border);
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomChildren::before {
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomChildren > .bomNode::before {
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomNodeContract {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomNodeContract span::before {
+  color: var(--accent-soft-foreground);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows details {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows summary strong {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows summary small {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows summary > b {
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows summary > svg {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows details > div {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows details > div > div {
+  border-bottom: 1px solid var(--border);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows details > div > div:last-child {
+  border-bottom: 0;
+}
+:global([data-producto-ficha]) .bomConsolidatedRows details > div strong {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .bomConsolidatedRows details > div span {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .audit {
+  border-top: 1px solid var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .history {
+  border-top: 1px solid var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .history > div {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .history strong {
+  color: var(--foreground);
+}
+:global([data-producto-ficha]) .history time {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .history > div[data-state="publicada"] {
+  border-color: var(--border);
+  color: var(--muted-text);
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .emptyRecipe {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .emptyRecipe > svg {
+  color: var(--muted-text);
+}
+:global([data-producto-ficha]) .emptyRecipe strong {
+  color: var(--foreground);
+}

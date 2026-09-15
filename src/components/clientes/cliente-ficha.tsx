@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircleIcon,
@@ -35,7 +34,7 @@ import {
   latamCountries,
   requiereCuit,
 } from "@/lib/clientes";
-import { Badge } from "@/components/ui/badge";
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Empty,
@@ -44,30 +43,25 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  Chip,
+  Input,
+  Label as FieldLabel,
+  Description as FieldDescription,
+  Tabs,
+} from "@heroui/react";
+import { Field, FieldGroup } from "@/components/ui/field";
+
+import { SelectField } from "@/components/design-system/select-field";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import styles from "./clientes.module.css";
 import { toast } from "sonner";
 
 type ClienteFichaProps = {
@@ -294,6 +288,7 @@ function createEmptyDireccion(countryCode: string): ClienteDireccion {
 }
 
 export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
+  const scope = useDesignScope();
   const puedeAjustarPuntos = usePuede("crm.configurar_fidelizacion");
   const router = useRouter();
   const { fechaHora } = useFecha();
@@ -603,34 +598,34 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
   return (
     <form
-      className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6 [&>*]:shrink-0"
+      {...scope}
+      className={`${theme.theme} ${listPage.page} ${styles.ficha}`}
       onSubmit={handleSave}
       noValidate
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-3">
-          <Link
+      <div className={`${listPage.header} ${styles.fichaHeader}`}>
+        <div className="flex min-w-0 flex-col gap-3">
+          <ActionLink
             href="/crm/clientes"
             onNavigate={confirmNavigation}
-            className={buttonVariants({
-              variant: "sidebar",
-              size: "sm",
-              className: "w-fit",
-            })}
+            variant="ghost"
+            className={styles.backLink}
           >
             <ArrowLeftIcon data-icon="inline-start" />
             Volver a clientes
-          </Link>
+          </ActionLink>
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {mode === "create" ? "Nuevo cliente" : "Ficha de cliente"}
               </h1>
               {!cliente.activo && mode !== "create" ? (
-                <Badge variant="outline">Inhabilitado</Badge>
+                <Chip size="sm" variant="soft">
+                  Inhabilitado
+                </Chip>
               ) : null}
             </div>
-            <p className="max-w-3xl text-sm text-muted-foreground">
+            <p className={listPage.subtitle}>
               Consolidá los datos principales del cliente, sus contactos y sus
               direcciones operativas en una sola vista de trabajo.
             </p>
@@ -646,30 +641,30 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
 
         <div className="flex flex-wrap items-center gap-2">
           {mode !== "create" ? (
-            <Link
+            <ActionLink
               href={`/comercial/campanas?clienteId=${cliente.id}`}
               onNavigate={confirmNavigation}
-              className={buttonVariants({ variant: "outline" })}
+              variant="outline"
             >
               <FolderIcon data-icon="inline-start" />
               Campañas
-            </Link>
+            </ActionLink>
           ) : null}
           {mode !== "create" ? (
-            <Link
+            <ActionLink
               href={`/crm/clientes/${cliente.id}/cuenta-corriente`}
               onNavigate={confirmNavigation}
-              className={buttonVariants({ variant: "outline" })}
+              variant="outline"
             >
               <ReceiptTextIcon data-icon="inline-start" />
               Cuenta corriente
-            </Link>
+            </ActionLink>
           ) : null}
           {!readOnly ? (
             <Button
-              variant="brand"
+              variant="primary"
               type="submit"
-              disabled={isSaving || !isDirty}
+              isDisabled={isSaving || !isDirty}
             >
               {isSaving ? (
                 <GdiSpinner data-icon="inline-start" />
@@ -694,8 +689,8 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
       ) : null}
 
       <Tabs
-        value={mode === "create" ? "ficha" : activeSection}
-        onValueChange={(value) => {
+        selectedKey={mode === "create" ? "ficha" : activeSection}
+        onSelectionChange={(value) => {
           if (
             value === "ficha" ||
             value === "fidelizacion" ||
@@ -704,421 +699,407 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
             setActiveSection(value);
           }
         }}
-        className="flex min-h-0 flex-col gap-6"
+        className={styles.tabsRoot}
       >
         {mode !== "create" ? (
-          <TabsList variant="line" className="w-full justify-start">
-            <TabsTrigger value="ficha" className="flex-none px-4">
-              <UserRoundIcon />
-              Ficha de cliente
-            </TabsTrigger>
-            <TabsTrigger value="fidelizacion" className="flex-none px-4">
-              <StarIcon />
-              Fidelización
-            </TabsTrigger>
-            <TabsTrigger value="historial" className="flex-none px-4">
-              <HistoryIcon />
-              Historial
-            </TabsTrigger>
-          </TabsList>
-        ) : null}
+          <NavigationTabList
+            label="Secciones del cliente"
+            items={[
+              {
+                id: "ficha",
+                label: "Ficha de cliente",
+                icon: <UserRoundIcon />,
+              },
+              { id: "fidelizacion", label: "Fidelización", icon: <StarIcon /> },
+              { id: "historial", label: "Historial", icon: <HistoryIcon /> },
+            ]}
+          />
+        ) : (
+          <Tabs.List aria-label="Nuevo cliente" className="hidden">
+            <Tabs.Tab id="ficha">Ficha de cliente</Tabs.Tab>
+          </Tabs.List>
+        )}
 
-        <TabsContent value="ficha" keepMounted className="m-0">
-          <fieldset
-            disabled={readOnly}
-            className="flex flex-col gap-6 [&>*]:shrink-0"
-          >
-            <Card className="rounded-2xl border-border/70 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold tracking-tight">
+        <Tabs.Panel id="ficha" shouldForceMount className={styles.tabPanel}>
+          <fieldset disabled={readOnly} className={styles.sections}>
+            <Card className={styles.sectionCard}>
+              <Card.Header className={styles.sectionHeader}>
+                <Card.Title className={styles.sectionTitle}>
                   Datos generales
-                </CardTitle>
-                <CardDescription>
+                </Card.Title>
+                <Card.Description>
                   Definí la información base del cliente y el teléfono principal
                   en formato compatible con WhatsApp.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <FieldGroup className="grid lg:grid-cols-2">
-                  <Field data-invalid={Boolean(fieldErrors.nombre)}>
-                    <FieldLabel htmlFor="cliente-nombre">
-                      Nombre del cliente
-                    </FieldLabel>
-                    <Input
-                      id="cliente-nombre"
-                      aria-invalid={Boolean(fieldErrors.nombre)}
-                      value={datosGenerales.nombre}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          nombre: event.target.value,
-                        }))
-                      }
-                      placeholder="Ej. Cafe del Centro"
-                    />
-                    {fieldErrors.nombre ? (
-                      <FieldDescription>{fieldErrors.nombre}</FieldDescription>
-                    ) : null}
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="cliente-razon-social">
-                      Razón social
-                    </FieldLabel>
-                    <Input
-                      id="cliente-razon-social"
-                      value={datosGenerales.razonSocial}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          razonSocial: event.target.value,
-                        }))
-                      }
-                      placeholder="Ej. Cafe del Centro SRL"
-                    />
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="cliente-condicion-fiscal">
-                      Condición fiscal
-                    </FieldLabel>
-                    <Select
-                      items={condicionFiscalItems}
-                      value={datosGenerales.condicionFiscal}
-                      onValueChange={(value) => {
-                        if (!value) {
-                          return;
-                        }
-
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          condicionFiscal: value as CondicionFiscal,
-                        }));
-                      }}
-                    >
-                      <SelectTrigger
-                        id="cliente-condicion-fiscal"
-                        className="w-full"
-                      >
-                        <SelectValue placeholder="Seleccioná la condición" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {condicionFiscalItems.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>
-                      Define la letra del comprobante al facturarle.
-                    </FieldDescription>
-                  </Field>
-
-                  <Field data-invalid={Boolean(fieldErrors.cuit)}>
-                    <FieldLabel htmlFor="cliente-cuit">
-                      CUIT{" "}
-                      {requiereCuit(datosGenerales.condicionFiscal)
-                        ? ""
-                        : "(opcional)"}
-                    </FieldLabel>
-                    <Input
-                      id="cliente-cuit"
-                      aria-invalid={Boolean(fieldErrors.cuit)}
-                      inputMode="numeric"
-                      value={datosGenerales.cuit}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          cuit: event.target.value,
-                        }))
-                      }
-                      placeholder="30-71234567-8"
-                    />
-                    <FieldDescription>
-                      {fieldErrors.cuit ??
-                        (requiereCuit(datosGenerales.condicionFiscal)
-                          ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
-                          : "Con o sin guiones. Se valida el dígito verificador.")}
-                    </FieldDescription>
-                  </Field>
-
-                  {/* El DNI va aparte del CUIT y no es lo mismo: ARCA los declara
-                con tipos distintos (96 vs 80). Lo llena solo el alta por
-                escaneo del documento en el mostrador. */}
-                  <Field data-invalid={Boolean(fieldErrors.documentoNumero)}>
-                    <FieldLabel htmlFor="cliente-documento">
-                      DNI (opcional)
-                    </FieldLabel>
-                    <Input
-                      id="cliente-documento"
-                      aria-invalid={Boolean(fieldErrors.documentoNumero)}
-                      inputMode="numeric"
-                      value={datosGenerales.documentoNumero}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          documentoNumero: event.target.value.replace(
-                            /\D/g,
-                            "",
-                          ),
-                        }))
-                      }
-                      placeholder="12345678"
-                    />
-                    <FieldDescription>
-                      {fieldErrors.documentoNumero ??
-                        "Sirve para identificar al cliente en la factura sin CUIT."}
-                    </FieldDescription>
-                  </Field>
-
-                  <Field
-                    data-invalid={Boolean(fieldErrors.plazoCuentaCorrienteDias)}
-                  >
-                    <FieldLabel htmlFor="cliente-condicion-pago">
-                      Plazo de cuenta corriente (días)
-                    </FieldLabel>
-                    <Input
-                      id="cliente-condicion-pago"
-                      inputMode="numeric"
-                      aria-invalid={Boolean(
-                        fieldErrors.plazoCuentaCorrienteDias,
-                      )}
-                      value={datosGenerales.plazoCuentaCorrienteDias}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          plazoCuentaCorrienteDias: event.target.value.replace(
-                            /\D/g,
-                            "",
-                          ),
-                        }))
-                      }
-                      placeholder="Venta común"
-                    />
-                    <FieldDescription>
-                      {fieldErrors.plazoCuentaCorrienteDias ??
-                        "Vacío = vence al finalizar la orden. Ej. 30 = cuenta corriente a 30 días."}
-                    </FieldDescription>
-                  </Field>
-
-                  <Field
-                    data-disabled={
-                      datosGenerales.plazoCuentaCorrienteDias.trim() === ""
-                    }
-                    data-invalid={Boolean(fieldErrors.limiteCredito)}
-                  >
-                    <FieldLabel htmlFor="cliente-limite-credito">
-                      Límite de crédito (opcional)
-                    </FieldLabel>
-                    <Input
-                      id="cliente-limite-credito"
-                      disabled={
-                        datosGenerales.plazoCuentaCorrienteDias.trim() === ""
-                      }
-                      inputMode="decimal"
-                      aria-invalid={Boolean(fieldErrors.limiteCredito)}
-                      value={datosGenerales.limiteCredito}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          limiteCredito: event.target.value.replace(",", "."),
-                        }))
-                      }
-                      placeholder="Sin límite"
-                    />
-                    <FieldDescription>
-                      {fieldErrors.limiteCredito ??
-                        (datosGenerales.plazoCuentaCorrienteDias.trim() === ""
-                          ? "Se habilita al configurar un plazo de cuenta corriente."
-                          : "Tope de deuda. Vacío = cuenta corriente sin límite.")}
-                    </FieldDescription>
-                  </Field>
-
-                  <Field data-invalid={Boolean(fieldErrors.email)}>
-                    <FieldLabel htmlFor="cliente-email">
-                      Correo electrónico principal (opcional)
-                    </FieldLabel>
-                    <Input
-                      id="cliente-email"
-                      type="email"
-                      aria-invalid={Boolean(fieldErrors.email)}
-                      value={datosGenerales.email}
-                      onChange={(event) =>
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          email: event.target.value,
-                        }))
-                      }
-                      placeholder="contacto@empresa.com"
-                    />
-                    {fieldErrors.email ? (
-                      <FieldDescription>{fieldErrors.email}</FieldDescription>
-                    ) : null}
-                  </Field>
-
-                  <Field>
-                    <FieldLabel htmlFor="cliente-pais">País</FieldLabel>
-                    <Select
-                      items={countryItems}
-                      value={datosGenerales.pais}
-                      onValueChange={(value) => {
-                        if (!value) {
-                          return;
-                        }
-
-                        setDatosGenerales((current) => ({
-                          ...current,
-                          pais: value,
-                        }));
-                      }}
-                    >
-                      <SelectTrigger id="cliente-pais" className="w-full">
-                        <SelectValue placeholder="Seleccioná un país" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {countryItems.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <FieldGroup className="grid md:grid-cols-[180px_1fr] lg:col-span-2">
-                    <Field>
-                      <FieldLabel htmlFor="telefono-codigo">
-                        Código de país
-                      </FieldLabel>
-                      <Select
-                        items={phoneCodeItems}
-                        value={datosGenerales.telefonoCodigo}
-                        onValueChange={(value) => {
-                          if (!value) {
-                            return;
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className={styles.sectionBody}>
+                <div className={styles.dataSections}>
+                  <section>
+                    <div className={styles.groupHeading}>
+                      <h3>Identificación</h3>
+                      <p>Nombre comercial y ubicación del cliente.</p>
+                    </div>
+                    <div className={styles.formGrid}>
+                      <Field data-invalid={Boolean(fieldErrors.nombre)}>
+                        <FieldLabel htmlFor="cliente-nombre">
+                          Nombre del cliente
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-nombre"
+                          aria-invalid={Boolean(fieldErrors.nombre)}
+                          value={datosGenerales.nombre}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              nombre: event.target.value,
+                            }))
                           }
+                          placeholder="Ej. Cafe del Centro"
+                        />
+                        {fieldErrors.nombre ? (
+                          <FieldDescription>
+                            {fieldErrors.nombre}
+                          </FieldDescription>
+                        ) : null}
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="cliente-razon-social">
+                          Razón social
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-razon-social"
+                          value={datosGenerales.razonSocial}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              razonSocial: event.target.value,
+                            }))
+                          }
+                          placeholder="Ej. Cafe del Centro SRL"
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="cliente-pais">País</FieldLabel>
+                        <SelectField
+                          options={countryItems}
+                          value={datosGenerales.pais}
+                          onChange={(value) => {
+                            if (!value) {
+                              return;
+                            }
 
-                          setDatosGenerales((current) => ({
-                            ...current,
-                            telefonoCodigo: value,
-                          }));
-                        }}
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              pais: value,
+                            }));
+                          }}
+                          id="cliente-pais"
+                          aria-label="País"
+                          disabled={readOnly}
+                        />
+                      </Field>
+                    </div>
+                  </section>
+                  <section>
+                    <div className={styles.groupHeading}>
+                      <h3>Facturación y cuenta corriente</h3>
+                      <p>Información fiscal y condiciones de pago.</p>
+                    </div>
+                    <div className={styles.formGrid}>
+                      <Field>
+                        <FieldLabel htmlFor="cliente-condicion-fiscal">
+                          Condición fiscal
+                        </FieldLabel>
+                        <SelectField
+                          options={condicionFiscalItems}
+                          value={datosGenerales.condicionFiscal}
+                          onChange={(value) => {
+                            if (!value) {
+                              return;
+                            }
+
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              condicionFiscal: value as CondicionFiscal,
+                            }));
+                          }}
+                          id="cliente-condicion-fiscal"
+                          aria-label="Condición fiscal"
+                          disabled={readOnly}
+                        />
+                        <FieldDescription>
+                          Define la letra del comprobante al facturarle.
+                        </FieldDescription>
+                      </Field>
+                      <Field data-invalid={Boolean(fieldErrors.cuit)}>
+                        <FieldLabel htmlFor="cliente-cuit">
+                          CUIT{" "}
+                          {requiereCuit(datosGenerales.condicionFiscal)
+                            ? ""
+                            : "(opcional)"}
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-cuit"
+                          aria-invalid={Boolean(fieldErrors.cuit)}
+                          inputMode="numeric"
+                          value={datosGenerales.cuit}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              cuit: event.target.value,
+                            }))
+                          }
+                          placeholder="30-71234567-8"
+                        />
+                        <FieldDescription>
+                          {fieldErrors.cuit ??
+                            (requiereCuit(datosGenerales.condicionFiscal)
+                              ? "Un Responsable Inscripto necesita CUIT para recibir Factura A."
+                              : "Con o sin guiones. Se valida el dígito verificador.")}
+                        </FieldDescription>
+                      </Field>
+                      <Field
+                        data-invalid={Boolean(fieldErrors.documentoNumero)}
                       >
-                        <SelectTrigger id="telefono-codigo" className="w-full">
-                          <SelectValue placeholder="Código" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {phoneCodeItems.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-
-                    <Field data-invalid={Boolean(fieldErrors.telefonoNumero)}>
-                      <FieldLabel htmlFor="telefono-numero">
-                        Teléfono principal (opcional)
-                      </FieldLabel>
-                      <Input
-                        id="telefono-numero"
-                        inputMode="tel"
-                        aria-invalid={Boolean(fieldErrors.telefonoNumero)}
-                        value={datosGenerales.telefonoNumero}
-                        onChange={(event) =>
-                          setDatosGenerales((current) => ({
-                            ...current,
-                            telefonoNumero: event.target.value,
-                          }))
+                        <FieldLabel htmlFor="cliente-documento">
+                          DNI (opcional)
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-documento"
+                          aria-invalid={Boolean(fieldErrors.documentoNumero)}
+                          inputMode="numeric"
+                          value={datosGenerales.documentoNumero}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              documentoNumero: event.target.value.replace(
+                                /\D/g,
+                                "",
+                              ),
+                            }))
+                          }
+                          placeholder="12345678"
+                        />
+                        <FieldDescription>
+                          {fieldErrors.documentoNumero ??
+                            "Sirve para identificar al cliente en la factura sin CUIT."}
+                        </FieldDescription>
+                      </Field>
+                      <Field
+                        data-invalid={Boolean(
+                          fieldErrors.plazoCuentaCorrienteDias,
+                        )}
+                      >
+                        <FieldLabel htmlFor="cliente-condicion-pago">
+                          Plazo de cuenta corriente (días)
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-condicion-pago"
+                          inputMode="numeric"
+                          aria-invalid={Boolean(
+                            fieldErrors.plazoCuentaCorrienteDias,
+                          )}
+                          value={datosGenerales.plazoCuentaCorrienteDias}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              plazoCuentaCorrienteDias:
+                                event.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder="Venta común"
+                        />
+                        <FieldDescription>
+                          {fieldErrors.plazoCuentaCorrienteDias ??
+                            "Vacío = vence al finalizar la orden. Ej. 30 = cuenta corriente a 30 días."}
+                        </FieldDescription>
+                      </Field>
+                      <Field
+                        data-disabled={
+                          datosGenerales.plazoCuentaCorrienteDias.trim() === ""
                         }
-                        placeholder="Número sin código de país"
-                      />
-                      <FieldDescription>
-                        {fieldErrors.telefonoNumero ??
-                          `Se guardará como: ${telefonoWhatsapp || "Sin definir"}`}
-                      </FieldDescription>
-                    </Field>
-                  </FieldGroup>
-
-                  <Field className="lg:col-span-2">
-                    <FieldLabel htmlFor="cliente-whatsapp-consentimiento">
-                      Consentimiento para WhatsApp
-                    </FieldLabel>
-                    <Select
-                      items={whatsappConsentItems}
-                      value={
-                        aceptaWhatsapp === null
-                          ? "sin_definir"
-                          : aceptaWhatsapp
-                            ? "si"
-                            : "no"
-                      }
-                      onValueChange={(value) =>
-                        setAceptaWhatsapp(
-                          value === "sin_definir" ? null : value === "si",
-                        )
-                      }
-                    >
-                      <SelectTrigger
-                        id="cliente-whatsapp-consentimiento"
-                        className="w-full"
+                        data-invalid={Boolean(fieldErrors.limiteCredito)}
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {whatsappConsentItems.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <FieldDescription>
-                      Sin consentimiento explícito solo se permiten avisos
-                      transaccionales; si dice que no, no se envía ningún
-                      mensaje.
-                    </FieldDescription>
-                  </Field>
-                </FieldGroup>
-              </CardContent>
+                        <FieldLabel htmlFor="cliente-limite-credito">
+                          Límite de crédito (opcional)
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-limite-credito"
+                          disabled={
+                            datosGenerales.plazoCuentaCorrienteDias.trim() ===
+                            ""
+                          }
+                          inputMode="decimal"
+                          aria-invalid={Boolean(fieldErrors.limiteCredito)}
+                          value={datosGenerales.limiteCredito}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              limiteCredito: event.target.value.replace(
+                                ",",
+                                ".",
+                              ),
+                            }))
+                          }
+                          placeholder="Sin límite"
+                        />
+                        <FieldDescription>
+                          {fieldErrors.limiteCredito ??
+                            (datosGenerales.plazoCuentaCorrienteDias.trim() ===
+                            ""
+                              ? "Se habilita al configurar un plazo de cuenta corriente."
+                              : "Tope de deuda. Vacío = cuenta corriente sin límite.")}
+                        </FieldDescription>
+                      </Field>
+                    </div>
+                  </section>
+                  <section>
+                    <div className={styles.groupHeading}>
+                      <h3>Contacto principal</h3>
+                      <p>Canales de contacto y preferencias de comunicación.</p>
+                    </div>
+                    <div className={styles.formGrid}>
+                      <Field data-invalid={Boolean(fieldErrors.email)}>
+                        <FieldLabel htmlFor="cliente-email">
+                          Correo electrónico principal (opcional)
+                        </FieldLabel>
+                        <Input
+                          className={focus.singleBorder}
+                          id="cliente-email"
+                          type="email"
+                          aria-invalid={Boolean(fieldErrors.email)}
+                          value={datosGenerales.email}
+                          onChange={(event) =>
+                            setDatosGenerales((current) => ({
+                              ...current,
+                              email: event.target.value,
+                            }))
+                          }
+                          placeholder="contacto@empresa.com"
+                        />
+                        {fieldErrors.email ? (
+                          <FieldDescription>
+                            {fieldErrors.email}
+                          </FieldDescription>
+                        ) : null}
+                      </Field>
+                      <FieldGroup className={styles.phoneGrid}>
+                        <Field>
+                          <FieldLabel htmlFor="telefono-codigo">
+                            Código de país
+                          </FieldLabel>
+                          <SelectField
+                            options={phoneCodeItems}
+                            value={datosGenerales.telefonoCodigo}
+                            onChange={(value) => {
+                              if (!value) {
+                                return;
+                              }
+
+                              setDatosGenerales((current) => ({
+                                ...current,
+                                telefonoCodigo: value,
+                              }));
+                            }}
+                            id="telefono-codigo"
+                            aria-label="Código de país"
+                            disabled={readOnly}
+                          />
+                        </Field>
+
+                        <Field
+                          data-invalid={Boolean(fieldErrors.telefonoNumero)}
+                        >
+                          <FieldLabel htmlFor="telefono-numero">
+                            Teléfono principal (opcional)
+                          </FieldLabel>
+                          <Input
+                            className={focus.singleBorder}
+                            id="telefono-numero"
+                            inputMode="tel"
+                            aria-invalid={Boolean(fieldErrors.telefonoNumero)}
+                            value={datosGenerales.telefonoNumero}
+                            onChange={(event) =>
+                              setDatosGenerales((current) => ({
+                                ...current,
+                                telefonoNumero: event.target.value,
+                              }))
+                            }
+                            placeholder="Número sin código de país"
+                          />
+                          <FieldDescription>
+                            {fieldErrors.telefonoNumero ??
+                              `Se guardará como: ${telefonoWhatsapp || "Sin definir"}`}
+                          </FieldDescription>
+                        </Field>
+                      </FieldGroup>
+                      <Field className={styles.wideField}>
+                        <FieldLabel htmlFor="cliente-whatsapp-consentimiento">
+                          Consentimiento para WhatsApp
+                        </FieldLabel>
+                        <SelectField
+                          options={whatsappConsentItems}
+                          value={
+                            aceptaWhatsapp === null
+                              ? "sin_definir"
+                              : aceptaWhatsapp
+                                ? "si"
+                                : "no"
+                          }
+                          onChange={(value) =>
+                            setAceptaWhatsapp(
+                              value === "sin_definir" ? null : value === "si",
+                            )
+                          }
+                          id="cliente-whatsapp-consentimiento"
+                          aria-label="Consentimiento para WhatsApp"
+                          disabled={readOnly}
+                        />
+                        <FieldDescription>
+                          Sin consentimiento explícito solo se permiten avisos
+                          transaccionales; si dice que no, no se envía ningún
+                          mensaje.
+                        </FieldDescription>
+                      </Field>
+                    </div>
+                  </section>
+                </div>
+              </Card.Content>
             </Card>
 
-            <Card className="rounded-2xl border-border/70 shadow-sm">
-              <CardHeader className="gap-4">
+            <Card className={styles.sectionCard}>
+              <Card.Header className={styles.sectionHeader}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <CardTitle className="text-lg font-bold tracking-tight">
+                    <Card.Title className={styles.sectionTitle}>
                       Contactos
-                    </CardTitle>
-                    <CardDescription>
+                    </Card.Title>
+                    <Card.Description>
                       Podés registrar uno o más contactos y definir cuál será el
                       principal para la relación comercial.
-                    </CardDescription>
+                    </Card.Description>
                   </div>
                   {!readOnly ? (
                     <Button
+                      isDisabled={readOnly}
                       type="button"
-                      variant="brand"
+                      variant="primary"
                       className="w-full sm:w-auto"
-                      onClick={addContacto}
+                      onPress={addContacto}
                     >
                       <UserRoundPlusIcon data-icon="inline-start" />
                       Agregar contacto
                     </Button>
                   ) : null}
                 </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
+              </Card.Header>
+              <Card.Content className={styles.sectionBody}>
                 {contactos.length === 0 ? (
                   <Empty className="min-h-48">
                     <EmptyHeader>
@@ -1135,55 +1116,58 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                   </Empty>
                 ) : (
                   <Tabs
-                    value={activeContactoId}
-                    onValueChange={(value) => {
+                    selectedKey={activeContactoId}
+                    onSelectionChange={(value) => {
                       if (value) {
-                        setActiveContactoId(value);
+                        setActiveContactoId(String(value));
                       }
                     }}
                   >
-                    <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-                      {contactos.map((contacto, index) => (
-                        <TabsTrigger
-                          key={contacto.id}
-                          value={contacto.id}
-                          className="flex-none rounded-lg px-3 py-1.5"
-                        >
-                          {contacto.nombre || `Contacto ${index + 1}`}
-                          {contacto.principal ? (
-                            <StarIcon className="fill-current text-primary" />
-                          ) : null}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
+                    <NavigationTabList
+                      label="Contactos del cliente"
+                      items={contactos.map((contacto, index) => ({
+                        id: contacto.id,
+                        label: contacto.nombre || `Contacto ${index + 1}`,
+                        icon: contacto.principal ? (
+                          <StarIcon className={styles.primaryStar} />
+                        ) : (
+                          <UserRoundIcon />
+                        ),
+                      }))}
+                    />
 
                     {contactos.map((contacto, index) => (
-                      <TabsContent key={contacto.id} value={contacto.id}>
+                      <Tabs.Panel key={contacto.id} id={contacto.id}>
                         {activeContactoId === contacto.id ? (
-                          <Card className="rounded-xl border-border/70 shadow-none">
-                            <CardHeader className="gap-4 border-b border-border/70">
+                          <Card className={styles.resourceCard}>
+                            <Card.Header className={styles.sectionHeader}>
                               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                 <div className="flex items-center gap-2">
-                                  <CardTitle className="text-base">
+                                  <Card.Title className={styles.sectionTitle}>
                                     {contacto.nombre || `Contacto ${index + 1}`}
-                                  </CardTitle>
+                                  </Card.Title>
                                   {contacto.principal ? (
-                                    <Badge variant="secondary">
+                                    <Chip
+                                      size="sm"
+                                      color="accent"
+                                      variant="soft"
+                                    >
                                       <StarIcon
                                         data-icon="inline-start"
-                                        className="fill-current text-primary"
+                                        className={styles.primaryStar}
                                       />
                                       Principal
-                                    </Badge>
+                                    </Chip>
                                   ) : null}
                                 </div>
                                 <div className="flex flex-col gap-2 sm:flex-row">
                                   {!contacto.principal ? (
                                     <Button
+                                      isDisabled={readOnly}
                                       type="button"
-                                      variant="sidebar"
+                                      variant="outline"
                                       size="sm"
-                                      onClick={() =>
+                                      onPress={() =>
                                         setPrimaryContacto(contacto.id)
                                       }
                                     >
@@ -1191,19 +1175,20 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     </Button>
                                   ) : null}
                                   <Button
+                                    isDisabled={readOnly}
                                     type="button"
-                                    variant="destructive"
+                                    variant="danger-soft"
                                     size="sm"
-                                    onClick={() => removeContacto(contacto.id)}
+                                    onPress={() => removeContacto(contacto.id)}
                                   >
                                     <Trash2Icon data-icon="inline-start" />
                                     Quitar
                                   </Button>
                                 </div>
                               </div>
-                            </CardHeader>
-                            <CardContent>
-                              <FieldGroup className="grid lg:grid-cols-2">
+                            </Card.Header>
+                            <Card.Content className={styles.sectionBody}>
+                              <FieldGroup className={styles.formGrid}>
                                 <Field>
                                   <FieldLabel
                                     htmlFor={`contacto-nombre-${contacto.id}`}
@@ -1211,6 +1196,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Nombre completo
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`contacto-nombre-${contacto.id}`}
                                     value={contacto.nombre}
                                     onChange={(event) =>
@@ -1231,6 +1217,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Cargo o area
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`contacto-cargo-${contacto.id}`}
                                     value={contacto.cargo}
                                     onChange={(event) =>
@@ -1251,6 +1238,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Correo electrónico
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`contacto-email-${contacto.id}`}
                                     type="email"
                                     value={contacto.email}
@@ -1265,17 +1253,17 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   />
                                 </Field>
 
-                                <FieldGroup className="grid md:grid-cols-[180px_1fr]">
+                                <FieldGroup className={styles.phoneGrid}>
                                   <Field>
                                     <FieldLabel
                                       htmlFor={`contacto-codigo-${contacto.id}`}
                                     >
                                       Código de país
                                     </FieldLabel>
-                                    <Select
-                                      items={phoneCodeItems}
+                                    <SelectField
+                                      options={phoneCodeItems}
                                       value={contacto.telefonoCodigo}
-                                      onValueChange={(value) => {
+                                      onChange={(value) => {
                                         if (!value) {
                                           return;
                                         }
@@ -1286,26 +1274,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                           value,
                                         );
                                       }}
-                                    >
-                                      <SelectTrigger
-                                        id={`contacto-codigo-${contacto.id}`}
-                                        className="w-full"
-                                      >
-                                        <SelectValue placeholder="Código" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectGroup>
-                                          {phoneCodeItems.map((item) => (
-                                            <SelectItem
-                                              key={item.value}
-                                              value={item.value}
-                                            >
-                                              {item.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectGroup>
-                                      </SelectContent>
-                                    </Select>
+                                      id={`contacto-codigo-${contacto.id}`}
+                                      aria-label="Código de país"
+                                      disabled={readOnly}
+                                    />
                                   </Field>
 
                                   <Field>
@@ -1315,6 +1287,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                       Teléfono
                                     </FieldLabel>
                                     <Input
+                                      className={focus.singleBorder}
                                       id={`contacto-telefono-${contacto.id}`}
                                       inputMode="tel"
                                       value={contacto.telefonoNumero}
@@ -1337,42 +1310,43 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   </Field>
                                 </FieldGroup>
                               </FieldGroup>
-                            </CardContent>
+                            </Card.Content>
                           </Card>
                         ) : null}
-                      </TabsContent>
+                      </Tabs.Panel>
                     ))}
                   </Tabs>
                 )}
-              </CardContent>
+              </Card.Content>
             </Card>
 
-            <Card className="rounded-2xl border-border/70 shadow-sm">
-              <CardHeader className="gap-4">
+            <Card className={styles.sectionCard}>
+              <Card.Header className={styles.sectionHeader}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <CardTitle className="text-lg font-bold tracking-tight">
+                    <Card.Title className={styles.sectionTitle}>
                       Direcciones
-                    </CardTitle>
-                    <CardDescription>
+                    </Card.Title>
+                    <Card.Description>
                       Registrá múltiples direcciones y marcá una como principal
                       para uso operativo.
-                    </CardDescription>
+                    </Card.Description>
                   </div>
                   {!readOnly ? (
                     <Button
+                      isDisabled={readOnly}
                       type="button"
-                      variant="brand"
+                      variant="primary"
                       className="w-full sm:w-auto"
-                      onClick={addDireccion}
+                      onPress={addDireccion}
                     >
                       <PlusIcon data-icon="inline-start" />
                       Agregar dirección
                     </Button>
                   ) : null}
                 </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
+              </Card.Header>
+              <Card.Content className={styles.sectionBody}>
                 {direcciones.length === 0 ? (
                   <Empty className="min-h-48">
                     <EmptyHeader>
@@ -1388,64 +1362,68 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                   </Empty>
                 ) : (
                   <Tabs
-                    value={activeDireccionId}
-                    onValueChange={(value) => {
+                    selectedKey={activeDireccionId}
+                    onSelectionChange={(value) => {
                       if (value) {
-                        setActiveDireccionId(value);
+                        setActiveDireccionId(String(value));
                       }
                     }}
                   >
-                    <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-                      {direcciones.map((direccion, index) => (
-                        <TabsTrigger
-                          key={direccion.id}
-                          value={direccion.id}
-                          className="flex-none rounded-lg px-3 py-1.5"
-                        >
-                          {direccion.descripcion || `Dirección ${index + 1}`}
-                          {direccion.principal ? (
-                            <StarIcon className="fill-current text-primary" />
-                          ) : null}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
+                    <NavigationTabList
+                      label="Direcciones del cliente"
+                      items={direcciones.map((direccion, index) => ({
+                        id: direccion.id,
+                        label:
+                          direccion.descripcion || `Dirección ${index + 1}`,
+                        icon: direccion.principal ? (
+                          <StarIcon className={styles.primaryStar} />
+                        ) : (
+                          <MapPinHouseIcon />
+                        ),
+                      }))}
+                    />
 
                     {direcciones.map((direccion, index) => (
-                      <TabsContent key={direccion.id} value={direccion.id}>
+                      <Tabs.Panel key={direccion.id} id={direccion.id}>
                         {activeDireccionId === direccion.id ? (
-                          <Card className="rounded-xl border-border/70 shadow-none">
-                            <CardHeader className="gap-4 border-b border-border/70">
+                          <Card className={styles.resourceCard}>
+                            <Card.Header className={styles.sectionHeader}>
                               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <CardTitle className="text-base">
+                                  <Card.Title className={styles.sectionTitle}>
                                     {direccion.descripcion ||
                                       `Dirección ${index + 1}`}
-                                  </CardTitle>
+                                  </Card.Title>
                                   {direccion.principal ? (
-                                    <Badge variant="secondary">
+                                    <Chip
+                                      size="sm"
+                                      color="accent"
+                                      variant="soft"
+                                    >
                                       <StarIcon
                                         data-icon="inline-start"
-                                        className="fill-current text-primary"
+                                        className={styles.primaryStar}
                                       />
                                       Principal
-                                    </Badge>
+                                    </Chip>
                                   ) : null}
-                                  <Badge variant="outline">
+                                  <Chip size="sm" variant="soft">
                                     <MapPinHouseIcon data-icon="inline-start" />
                                     {
                                       addressTypeItems.find(
                                         (item) => item.value === direccion.tipo,
                                       )?.label
                                     }
-                                  </Badge>
+                                  </Chip>
                                 </div>
                                 <div className="flex flex-col gap-2 sm:flex-row">
                                   {!direccion.principal ? (
                                     <Button
+                                      isDisabled={readOnly}
                                       type="button"
-                                      variant="sidebar"
+                                      variant="outline"
                                       size="sm"
-                                      onClick={() =>
+                                      onPress={() =>
                                         setPrimaryDireccion(direccion.id)
                                       }
                                     >
@@ -1453,10 +1431,11 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     </Button>
                                   ) : null}
                                   <Button
+                                    isDisabled={readOnly}
                                     type="button"
-                                    variant="destructive"
+                                    variant="danger-soft"
                                     size="sm"
-                                    onClick={() =>
+                                    onPress={() =>
                                       removeDireccion(direccion.id)
                                     }
                                   >
@@ -1465,9 +1444,9 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   </Button>
                                 </div>
                               </div>
-                            </CardHeader>
-                            <CardContent>
-                              <FieldGroup className="grid lg:grid-cols-2">
+                            </Card.Header>
+                            <Card.Content className={styles.sectionBody}>
+                              <FieldGroup className={styles.formGrid}>
                                 <Field>
                                   <FieldLabel
                                     htmlFor={`direccion-descripcion-${direccion.id}`}
@@ -1475,6 +1454,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Descripcion
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`direccion-descripcion-${direccion.id}`}
                                     value={direccion.descripcion}
                                     onChange={(event) =>
@@ -1494,10 +1474,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   >
                                     Tipo
                                   </FieldLabel>
-                                  <Select
-                                    items={addressTypeItems}
+                                  <SelectField
+                                    options={addressTypeItems}
                                     value={direccion.tipo}
-                                    onValueChange={(value) => {
+                                    onChange={(value) => {
                                       if (!value) {
                                         return;
                                       }
@@ -1508,26 +1488,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                         value,
                                       );
                                     }}
-                                  >
-                                    <SelectTrigger
-                                      id={`direccion-tipo-${direccion.id}`}
-                                      className="w-full"
-                                    >
-                                      <SelectValue placeholder="Seleccioná un tipo" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectGroup>
-                                        {addressTypeItems.map((item) => (
-                                          <SelectItem
-                                            key={item.value}
-                                            value={item.value}
-                                          >
-                                            {item.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectGroup>
-                                    </SelectContent>
-                                  </Select>
+                                    id={`direccion-tipo-${direccion.id}`}
+                                    aria-label="Tipo"
+                                    disabled={readOnly}
+                                  />
                                 </Field>
 
                                 <Field>
@@ -1536,10 +1500,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   >
                                     País
                                   </FieldLabel>
-                                  <Select
-                                    items={countryItems}
+                                  <SelectField
+                                    options={countryItems}
                                     value={direccion.pais}
-                                    onValueChange={(value) => {
+                                    onChange={(value) => {
                                       if (!value) {
                                         return;
                                       }
@@ -1550,26 +1514,10 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                         value,
                                       );
                                     }}
-                                  >
-                                    <SelectTrigger
-                                      id={`direccion-pais-${direccion.id}`}
-                                      className="w-full"
-                                    >
-                                      <SelectValue placeholder="Seleccioná un país" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectGroup>
-                                        {countryItems.map((item) => (
-                                          <SelectItem
-                                            key={item.value}
-                                            value={item.value}
-                                          >
-                                            {item.label}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectGroup>
-                                    </SelectContent>
-                                  </Select>
+                                    id={`direccion-pais-${direccion.id}`}
+                                    aria-label="País"
+                                    disabled={readOnly}
+                                  />
                                 </Field>
 
                                 <Field>
@@ -1579,6 +1527,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Código postal
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`direccion-cp-${direccion.id}`}
                                     value={direccion.codigoPostal}
                                     onChange={(event) =>
@@ -1599,6 +1548,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Dirección
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`direccion-calle-${direccion.id}`}
                                     value={direccion.direccion}
                                     onChange={(event) =>
@@ -1619,6 +1569,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                     Número
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`direccion-numero-${direccion.id}`}
                                     value={direccion.numero}
                                     onChange={(event) =>
@@ -1632,13 +1583,14 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   />
                                 </Field>
 
-                                <Field className="lg:col-span-2">
+                                <Field className={styles.wideField}>
                                   <FieldLabel
                                     htmlFor={`direccion-ciudad-${direccion.id}`}
                                   >
                                     Ciudad
                                   </FieldLabel>
                                   <Input
+                                    className={focus.singleBorder}
                                     id={`direccion-ciudad-${direccion.id}`}
                                     value={direccion.ciudad}
                                     onChange={(event) =>
@@ -1652,39 +1604,39 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                                   />
                                 </Field>
                               </FieldGroup>
-                            </CardContent>
+                            </Card.Content>
                           </Card>
                         ) : null}
-                      </TabsContent>
+                      </Tabs.Panel>
                     ))}
                   </Tabs>
                 )}
-              </CardContent>
+              </Card.Content>
             </Card>
           </fieldset>
-        </TabsContent>
+        </Tabs.Panel>
 
         {mode !== "create" ? (
-          <TabsContent value="fidelizacion" className="m-0">
+          <Tabs.Panel id="fidelizacion" className={styles.tabPanel}>
             <ClienteFidelizacionCard
               clienteId={cliente.id}
               puedeAjustar={puedeAjustarPuntos}
             />
-          </TabsContent>
+          </Tabs.Panel>
         ) : null}
 
         {mode !== "create" ? (
-          <TabsContent value="historial" className="m-0">
-            <Card className="rounded-2xl border-border/70 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold tracking-tight">
+          <Tabs.Panel id="historial" className={styles.tabPanel}>
+            <Card className={styles.sectionCard}>
+              <Card.Header className={styles.sectionHeader}>
+                <Card.Title className={styles.sectionTitle}>
                   Actividad de la ficha
-                </CardTitle>
-                <CardDescription>
+                </Card.Title>
+                <Card.Description>
                   Últimos cambios registrados con fecha y responsable.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </Card.Description>
+              </Card.Header>
+              <Card.Content className={styles.sectionBody}>
                 {cliente.eventos.length === 0 ? (
                   <Empty className="min-h-32">
                     <EmptyHeader>
@@ -1695,7 +1647,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                     </EmptyHeader>
                   </Empty>
                 ) : (
-                  <ul className="flex flex-col gap-3">
+                  <ul className={styles.historyList}>
                     {cliente.eventos.map((evento) => (
                       <li
                         key={evento.id}
@@ -1718,9 +1670,9 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                     ))}
                   </ul>
                 )}
-              </CardContent>
+              </Card.Content>
             </Card>
-          </TabsContent>
+          </Tabs.Panel>
         ) : null}
       </Tabs>
     </form>

@@ -109,14 +109,6 @@
   cursor: wait;
   opacity: 0.65;
 }
-.spinning {
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 .error {
   display: flex;

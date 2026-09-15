@@ -48,6 +48,13 @@ export type TableroPasoData = {
   /** Inicio aceptado del lote; la proyección no lo adelanta automáticamente. */
   planificadoDesde?: string | null;
   planificadoHasta?: string | null;
+  /** Referencia de cumplimiento; no restringe las reservas del motor. */
+  planReferencia?: {
+    inicio: string;
+    fin: string;
+    fijadoEl: string;
+    origen: "automatico" | "plan_aceptado";
+  } | null;
   atencionPlanificada?: unknown;
   personalFijo?: { empleadoIds?: string[]; obligatorioId?: string; preferidoId?: string };
   id: string;

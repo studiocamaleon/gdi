@@ -1,63 +1,56 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { EyeIcon, EyeOffIcon, LogInIcon } from "lucide-react";
-
+import {
+  ArrowRight,
+  ArrowUpRight,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Info,
+} from "lucide-react";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { Field, FieldGroup } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { login } from "@/lib/auth";
 import { setSessionToken } from "@/lib/session";
+import shared from "@/components/registro/registro-premium.module.css";
+import s from "./login-premium.module.css";
 
-const wait = (milliseconds: number) =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
-  });
-
-/**
- * Por qué la persona terminó acá sin pedirlo.
- *
- * `/salir` y el proxy mandan al login cuando la sesión ya no sirve. Sin
- * este cartel, aparecer de golpe en la pantalla de login se lee como que el
- * sistema se cayó — que es exactamente lo que pasó la primera vez.
- */
-const MOTIVOS: Record<string, string> = {
-  sesion:
-    "Tu sesión se cerró por inactividad. Volvé a entrar y seguís donde estabas.",
-};
+/** /salir y el proxy explican por qué se vuelve al acceso sin pedirlo. */
+const AVISO_SESION =
+  "Tu sesión se cerró por inactividad. Volvé a entrar y seguís donde estabas.";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const motivo = MOTIVOS[searchParams.get("motivo") ?? ""] ?? null;
+  const motivo = searchParams.get("motivo") === "sesion" ? AVISO_SESION : null;
   const registroToken = searchParams.get("registro");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [isPasswordVisible, setIsPasswordVisible] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
-
-  React.useEffect(() => {
-    return () => {
-      document.querySelector(".gp-login")?.classList.remove("ingressing");
-    };
-  }, []);
+  const submitting = React.useRef(false);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSubmitting) return;
-
+    if (submitting.current) return;
+    submitting.current = true;
     setErrorMessage(null);
     setIsSubmitting(true);
 
     try {
       const response = await login(email.trim(), password);
-
-      if (response.accessToken) {
-        await setSessionToken(response.accessToken);
-      }
-
-      await wait(220);
-      document.querySelector(".gp-login")?.classList.add("ingressing");
-      await wait(2730);
+      if (response.accessToken) await setSessionToken(response.accessToken);
       router.replace(
         registroToken
           ? `/registro/verificar?token=${encodeURIComponent(registroToken)}`
@@ -65,96 +58,134 @@ export function LoginForm() {
       );
       router.refresh();
     } catch (error) {
-      document.querySelector(".gp-login")?.classList.remove("ingressing");
       setErrorMessage(
-        error instanceof Error ? error.message : "No se pudo iniciar sesion.",
+        error instanceof Error ? error.message : "No se pudo iniciar sesión.",
       );
+      submitting.current = false;
       setIsSubmitting(false);
     }
   };
 
   return (
-      <form className="login-form" onSubmit={handleSubmit}>
-        <div className="eyebrow">Acceso privado</div>
-        <h1>Iniciar sesión</h1>
-        <p className="lead">
-          Accedé con tu correo corporativo y la clave asociada a tu usuario. El sistema te redirige a tu entorno activo al validar la sesión.
+    <form
+      className={s.form}
+      onSubmit={handleSubmit}
+      aria-labelledby="login-titulo"
+      aria-busy={isSubmitting}
+    >
+      <div className={s.intro}>
+        <span className={shared.formEyebrow}>TU ESPACIO DE TRABAJO</span>
+        <h1 id="login-titulo">
+          Iniciar sesión<span>.</span>
+        </h1>
+        <p>
+          Qué bueno tenerte de vuelta.
+          <br />
+          Entrá y seguí donde lo dejaste.
         </p>
-        <hr />
-
-        {/* Se esconde apenas hay un error de credenciales: dos carteles
-            juntos compiten y el que importa es el del intento actual. */}
-        {motivo && !errorMessage ? (
-          <p className="login-aviso" role="status">
-            {motivo}
+      </div>
+      {!errorMessage && (motivo || registroToken) ? (
+        <div className={s.notice} role="status">
+          <Info size={17} aria-hidden="true" />
+          <p>
+            {motivo ??
+              "Ingresá con tu cuenta actual para continuar con el registro de tu empresa."}
           </p>
-        ) : null}
-
-        <div className="field">
-          <label htmlFor="login-email">Correo</label>
-          <input
+        </div>
+      ) : null}
+      <FieldGroup className={s.fields}>
+        <Field className={shared.field}>
+          <label htmlFor="login-email">Correo de trabajo</label>
+          <Input
+            className={shared.input}
             id="login-email"
+            name="email"
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="usuario@empresa.com"
-            autoComplete="email"
+            placeholder="vos@tuempresa.com"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
             aria-invalid={Boolean(errorMessage)}
+            aria-describedby={errorMessage ? "login-error" : undefined}
             disabled={isSubmitting}
           />
-        </div>
-
-        <div className="field">
-          <label htmlFor="login-password">
-            Clave
-            <span className="link">¿Olvidaste tu clave?</span>
-          </label>
-          <div className="input-wrap">
-            <input
+        </Field>
+        <Field className={shared.field}>
+          <label htmlFor="login-password">Contraseña</label>
+          <InputGroup className={shared.passwordControl}>
+            <InputGroupInput
               id="login-password"
+              name="password"
               type={isPasswordVisible ? "text" : "password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Ingresa tu clave"
+              placeholder="Tu contraseña"
               autoComplete="current-password"
+              required
               aria-invalid={Boolean(errorMessage)}
+              aria-describedby={errorMessage ? "login-error" : undefined}
               disabled={isSubmitting}
             />
-            <button
-              type="button"
-              className="eye"
-              onClick={() => setIsPasswordVisible((current) => !current)}
-              aria-label={isPasswordVisible ? "Ocultar clave" : "Mostrar clave"}
-              disabled={isSubmitting}
-            >
-              {isPasswordVisible ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-            </button>
-          </div>
-          {/* Nadie recibe una invitación por correo: el acceso se entrega con
-              una clave que dicta quien administra. Ver usuarios.service.crear */}
-          <span className="help">Si todavía no tenés clave, pedísela a quien administra el sistema.</span>
-        </div>
-
-        {errorMessage ? <p className="login-error">{errorMessage}</p> : null}
-
-        <button
-          type="submit"
-          className={isSubmitting ? "submit loading" : "submit"}
-          disabled={isSubmitting}
-        >
-          <span className="spin" aria-hidden="true" />
-          <LogInIcon className="ingress-arrow" size={16} />
-          <span className="btn-label">{isSubmitting ? "Ingresando" : "Ingresar"}</span>
-        </button>
-
-        <div className="footnote">
-          <div className="sep" />
-          Acceso administrado por invitación y asignación de empresa.
-          <br />
-          <a className="link" href="/backoffice">
-            ¿Sos del equipo de Grafo? Acceso del backoffice
-          </a>
-        </div>
-      </form>
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-sm"
+                type="button"
+                onClick={() => setIsPasswordVisible((current) => !current)}
+                aria-label={
+                  isPasswordVisible
+                    ? "Ocultar contraseña"
+                    : "Mostrar contraseña"
+                }
+                aria-pressed={isPasswordVisible}
+                disabled={isSubmitting}
+              >
+                {isPasswordVisible ? <EyeOff /> : <Eye />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        </Field>
+      </FieldGroup>
+      <details className={s.help}>
+        <summary>
+          ¿Olvidaste tu contraseña? <ChevronDown size={13} aria-hidden="true" />
+        </summary>
+        <p>
+          Si todavía no tenés contraseña o necesitás restablecerla, pedísela a
+          quien administra tu empresa en Grafo.
+        </p>
+      </details>
+      {errorMessage ? (
+        <p className={s.error} id="login-error" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+      <button
+        type="submit"
+        className={[shared.submit, s.submit].join(" ")}
+        disabled={isSubmitting}
+        aria-busy={isSubmitting}
+      >
+        <span aria-live="polite">
+          {isSubmitting ? "Ingresando a tu espacio…" : "Iniciar sesión"}
+        </span>
+        {isSubmitting ? (
+          <GdiSpinner />
+        ) : (
+          <ArrowRight size={18} aria-hidden="true" />
+        )}
+      </button>
+      <div className={s.join}>
+        <span>¿Tu empresa todavía no está en Grafo?</span>
+        <Link href="/registro">
+          Creá tu espacio <ArrowUpRight size={14} />
+        </Link>
+      </div>
+      <a className={s.backoffice} href="/backoffice">
+        Acceso del equipo de Grafo <ArrowUpRight size={12} />
+      </a>
+    </form>
   );
 }

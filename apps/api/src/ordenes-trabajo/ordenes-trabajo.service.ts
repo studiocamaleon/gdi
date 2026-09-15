@@ -1,3 +1,4 @@
+import { proyectarPlanReferencia } from '../produccion/plan-referencia-paso';
 import { leerAsignacionPersonal, proyectarAsignacionPersonal, personalFijoDelPaso } from '../produccion/asignacion-personal';
 import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
 import { itemTableroInclude, itemActivoTablero, itemTerminadoTablero } from './tablero-consultas';
@@ -6209,6 +6210,7 @@ export class OrdenesTrabajoService {
         updatedAt: true,
         mesaUsuarioId: true,
         asignacionPersonalJson: true,
+        asignacionManualJson: true,
         familiaCodigo: true,
         maquinaId: true,
       },
@@ -6219,6 +6221,8 @@ export class OrdenesTrabajoService {
     if (en && !auth.permisos?.has('produccion.supervisar')) {
       await this.validarEjecucionEnEstacion(auth, paso);
     }
+    if (paso.asignacionManualJson)
+      throw new ConflictException('Este paso tiene una asignación del supervisor. Usá Reasignar personal para revisar el cambio.');
     const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
     if (en && asignacion?.personas.length && !auth.permisos?.has('produccion.supervisar')) {
       const empleado = await this.prisma.empleado.findFirst({ where: { tenantId: auth.tenantId, userId: auth.userId, activo: true }, select: { id: true } });
@@ -7511,6 +7515,8 @@ export class OrdenesTrabajoService {
         planificadoHasta?: Date | null;
         atencionPlanificadaJson?: Prisma.JsonValue;
         asignacionPersonalJson?: Prisma.JsonValue;
+        asignacionManualJson?: Prisma.JsonValue;
+        planReferenciaJson?: Prisma.JsonValue;
         completadoEl: Date | null;
         modoRegistro: string;
         tiempoRealMin: Prisma.Decimal | null;
@@ -7607,6 +7613,7 @@ export class OrdenesTrabajoService {
         esTerminal: paso.esTerminal,
         planificadoDesde: paso.planificadoDesde?.toISOString() ?? null,
         planificadoHasta: paso.planificadoHasta?.toISOString() ?? null,
+        planReferencia: proyectarPlanReferencia(paso.planReferenciaJson),
         atencionPlanificada: paso.atencionPlanificadaJson,
         dependenciasPendientes: esperasTablero(
           paso.dependenciasEntrantes ?? [],

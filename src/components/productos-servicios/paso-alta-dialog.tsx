@@ -11,16 +11,17 @@ import {
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Chip,
+  Input,
+  Modal,
+  SearchField,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "@heroui/react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import focus from "@/components/design-system/field-focus.module.css";
+import { ActionButton as Button } from "@/components/design-system/action-button";
 import {
   Empty,
   EmptyDescription,
@@ -36,18 +37,10 @@ import {
   FieldLegend,
   FieldSet,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group";
 import { Spinner } from "@/components/ui/spinner";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
 import type { PasoTenant, PlantillaPaso } from "@/lib/productos-servicios";
 import { crearPasoTenant } from "@/lib/productos-servicios-api";
-import { cn } from "@/lib/utils";
 import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
 import styles from "./paso-alta-dialog.module.css";
 
@@ -113,23 +106,18 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent
-        className={cn("gp-modal", styles.dialog)}
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader className={styles.header}>
-          <DialogTitle>Nuevo nodo propio</DialogTitle>
-          <DialogDescription>
-            Creá un nodo para tu empresa y definí cómo se usa en tus flujos de
-            producción.
-          </DialogDescription>
-        </DialogHeader>
-
-        <FieldGroup className={styles.body}>
+    <FormDialog
+      isOpen={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Nuevo nodo propio"
+      description="Creá un nodo para tu empresa y definí cómo se usa en tus flujos de producción."
+    >
+      <Modal.Body className={styles.body}>
+        <FieldGroup className={styles.fields}>
           <Field>
             <FieldLabel htmlFor="paso-alta-nombre">Nombre del nodo</FieldLabel>
             <Input
+              className={focus.singleBorder}
               id="paso-alta-nombre"
               value={nombre}
               autoFocus
@@ -147,19 +135,20 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
             <FieldLegend variant="label" id="paso-alta-tipo">
               Tipo de nodo
             </FieldLegend>
-            <ToggleGroup
-              value={[tipoPaso]}
-              onValueChange={(values) => {
-                const next = values[0];
+            <ToggleButtonGroup
+              selectionMode="single"
+              disallowEmptySelection
+              selectedKeys={new Set([tipoPaso])}
+              onSelectionChange={(values) => {
+                const next = [...values][0];
                 if (next === "SIMPLE" || next === "COMPUESTO")
                   setTipoPaso(next);
               }}
-              spacing={2}
-              variant="outline"
+              isDetached
               aria-labelledby="paso-alta-tipo"
               className={styles.typeOptions}
             >
-              <ToggleGroupItem value="SIMPLE" className={styles.typeOption}>
+              <ToggleButton id="SIMPLE" className={styles.typeOption}>
                 <span className={styles.typeIcon} aria-hidden="true">
                   <WorkflowIcon />
                 </span>
@@ -170,8 +159,8 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
                 <span className={styles.typeCheck} aria-hidden="true">
                   <CheckIcon />
                 </span>
-              </ToggleGroupItem>
-              <ToggleGroupItem value="COMPUESTO" className={styles.typeOption}>
+              </ToggleButton>
+              <ToggleButton id="COMPUESTO" className={styles.typeOption}>
                 <span className={styles.typeIcon} aria-hidden="true">
                   <BoxesIcon />
                 </span>
@@ -182,8 +171,8 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
                 <span className={styles.typeCheck} aria-hidden="true">
                   <CheckIcon />
                 </span>
-              </ToggleGroupItem>
-            </ToggleGroup>
+              </ToggleButton>
+            </ToggleButtonGroup>
           </FieldSet>
 
           {tipoPaso === "SIMPLE" ? (
@@ -200,19 +189,23 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
               <FieldDescription id="paso-alta-plantilla-ayuda">
                 Elegí la base del nodo. Después podrás adaptarla a tu taller.
               </FieldDescription>
-              <InputGroup className={styles.search}>
-                <InputGroupAddon>
-                  <SearchIcon aria-hidden="true" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  id="paso-alta-busqueda"
-                  type="search"
-                  placeholder="Buscar por nombre, categoría o descripción"
-                  aria-describedby="paso-alta-plantilla-ayuda"
-                  value={busqueda}
-                  onChange={(event) => setBusqueda(event.target.value)}
-                />
-              </InputGroup>
+              <SearchField
+                aria-label="Buscar plantilla"
+                value={busqueda}
+                onChange={setBusqueda}
+              >
+                <SearchField.Group className={focus.singleBorder}>
+                  <SearchField.SearchIcon>
+                    <SearchIcon />
+                  </SearchField.SearchIcon>
+                  <SearchField.Input
+                    id="paso-alta-busqueda"
+                    placeholder="Buscar por nombre, categoría o descripción"
+                    aria-describedby="paso-alta-plantilla-ayuda"
+                  />
+                  <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+                </SearchField.Group>
+              </SearchField>
               <div
                 className={styles.templateList}
                 role="group"
@@ -250,15 +243,16 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
                           <span className={styles.templateName}>
                             {item.nombre}
                           </span>
-                          <Badge
-                            variant="secondary"
+                          <Chip
+                            size="sm"
+                            variant="soft"
                             className={styles.category}
                           >
                             {
                               getLabel(categoriaFamiliaLabels, item.categoria)
                                 .label
                             }
-                          </Badge>
+                          </Chip>
                         </span>
                         {item.descripcion ? (
                           <span className={styles.templateDescription}>
@@ -282,20 +276,19 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
             </Alert>
           )}
         </FieldGroup>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={creando}>
-            Cancelar
-          </Button>
-          <Button onClick={crear} disabled={!puedeGuardar}>
-            {creando ? <Spinner aria-label="Creando nodo" /> : null}
-            {creando ? "Creando…" : "Crear y configurar"}
-            {!creando ? (
-              <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
-            ) : null}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </Modal.Body>
+      <Modal.Footer className={styles.footer}>
+        <Button variant="outline" onClick={onClose} isDisabled={creando}>
+          Cancelar
+        </Button>
+        <Button onClick={crear} isDisabled={!puedeGuardar}>
+          {creando ? <Spinner aria-label="Creando nodo" /> : null}
+          {creando ? "Creando…" : "Crear y configurar"}
+          {!creando ? (
+            <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+          ) : null}
+        </Button>
+      </Modal.Footer>
+    </FormDialog>
   );
 }

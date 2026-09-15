@@ -126,8 +126,9 @@ Si no existe una franja realizable, se conserva el personal fijado y se publica
 un conflicto; no se lo reemplaza silenciosamente por alguien de otra estación.
 
 Lista muestra el personal del paso visible, varias personas cuando corresponde,
-origen automático/manual, ejecutor real por separado y conflictos. El detalle
-muestra las franjas en la zona del taller. El filtro «Asignadas a mí» incluye
+origen automático/manual, ejecutor real por separado y conflictos. Las tarjetas
+del detalle muestran el personal asignado, sin desplegar las franjas de atención
+prevista. Las reservas siguen vigentes para la planificación. El filtro «Asignadas a mí» incluye
 asignaciones automáticas y reclamos anteriores. Colas y tareas de Estaciones
 consumen el mismo reparto. La API revalida permisos y empleado/estación al actuar;
 no confía en los indicadores de autorización del navegador.
@@ -157,3 +158,73 @@ que todavía no pudo planificarse.
 La migración `20260914090000_asignacion_personal_automatica` agrega sólo el campo
 derivado. Las estaciones anteriores sin planificación por personal mantienen su
 operación; no se infieren nombres a partir de la cantidad de personas del equipo.
+
+
+## Fechas y cumplimiento por paso · 14/09/2026
+
+La Lista reemplaza Entrega por **Previsto | Real | Cumplimiento**, después de
+Estado. Los encabezados tienen tooltip HeroUI accesible por teclado. La entrega
+comercial sigue en el detalle y en el tooltip de la identidad de la OT.
+
+- **Previsto:** fin de referencia del paso visible. Se guarda en
+  `OrdenTrabajoItemPaso.planReferenciaJson`, sin reservar recursos ni completar
+  `planificadoHasta` artificialmente. La reconciliación fija la primera
+  proyección disponible y no la mueve al recalcular. Si ya había inicio y fin
+  aceptados, usa esas fechas. La emisión de lotes F6 congela el fin de su traza
+  aceptada; una reprogramación aceptada guarda la referencia anterior en el
+  historial del JSON. La API de Lista sólo expone la referencia vigente.
+- **Real:** fin estimado del paso (`sim.traza`, identificado por `pasoId`) mientras
+  sigue pendiente, rotulado «Estimado». Al completarse toma `completadoEl`,
+  rotulado «Finalizado». No usa el fin del producto ni la última reserva de
+  personal, que puede incluir la separación entre pasos.
+- **Cumplimiento:** En horario / Adelantado / Demorado, con diferencia en días,
+  horas y minutos calendario, a la misma precisión de minuto de las horas
+  visibles. Hasta completar es «Proyectado»; después es «Real». La falta de
+  referencia o de estimación muestra «Sin datos», nunca un cumplimiento ficticio.
+
+«Con retraso» y «Vencen hoy» usan el fin previsto del paso, con hora y zona de la
+empresa. Un paso vencido hoy ya entra en Con retraso. Esperas y bloqueos
+conservan prioridad de agrupación. Filtrar por estación/persona cambia también
+la referencia temporal al paso mostrado. La ordenación dentro de cada sección
+usa esa fecha y hora. Los terminados siguen consultándose sólo a demanda; su
+fila muestra el último paso completado, sin reconstruir fechas históricas.
+
+Para pasos existentes sin referencia se empieza a medir desde la primera
+proyección guardada tras este cambio. Las propuestas históricas que sólo tenían
+inicio siguen siendo válidas: su primera corrida completa fija la referencia.
+No se deduce un atraso pasado desde la entrega comercial ni desde las franjas de
+personal. La migración `20260914180000_referencia_cumplimiento_paso` sólo añade el
+campo JSON opcional; no reescribe las agendas ni registros reales.
+
+## Asignación revisada por supervisión · 14/09/2026
+
+Lista ofrece Asignar/Reasignar en Personal asignado a quienes tienen
+`produccion.supervisar`. La habilitación es por estación: se elige entre su
+personal activo, con horario configurado, sin exigir un usuario vinculado para
+planificar capacidad. Registrar ejecución conserva sus permisos actuales.
+Se admiten pasos internos pendientes o bloqueados que nunca se iniciaron. No
+se reasignan tercerizados, participantes de nesting ni pasos con tramos previos.
+
+La selección exige la dotación máxima requerida por las fases y preparación,
+con las mismas personas durante el paso. Revisar corre el motor antes/después
+contra una misma foto de todo el taller, sin escrituras. Muestra fechas,
+cumplimiento total, diferencia causada por el cambio, otros pasos que cambian
+de horario o personal y finalización de trabajos (con margen de entrega).
+Si no encuentra una ventana o deja sin plan pasos previamente estimables no
+permite confirmar. Las demoras realizables se informan; no se prohíben.
+
+La confirmación vuelve a leer permisos, estado, estación, horarios y contexto;
+recalcula el impacto visible a minuto y exige que coincida con la propuesta
+firmada, limitada al actor/paso/tenant y vigente durante dos minutos. Un cambio
+concurrente exige revisar nuevamente. La transacción serializable guarda la
+selección explícita en `asignacionManualJson`, publica el reparto derivado y
+registra un EventoSistema con actor, antes/después y motivo opcional. Dos
+confirmaciones de la misma revisión no duplican la decisión ni el evento.
+La fecha Previsto, la agenda aceptada, costos, demanda y tramos no cambian.
+
+El motor del navegador y de API respetan el personal fijo también al interpretar
+reservas de agendas aceptadas: liberar a Ana para asignar a Bruno no sigue
+reservando a Ana. Los recálculos conservan la elección manual. Si deja de tener
+cobertura se expone el conflicto; no se sustituye silenciosamente al personal.
+Los reclamos antiguos de Mi mesa no pueden sobreescribir una selección revisada.
+Migración: `20260914210000_asignacion_manual_personal` (columna JSON nullable).

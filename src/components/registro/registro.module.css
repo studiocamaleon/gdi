@@ -227,7 +227,6 @@
 .verifyButton:focus-visible { outline: none; box-shadow: 0 0 0 4px rgba(20, 20, 26, .12); }
 .verifyButton:disabled { cursor: wait; opacity: .76; transform: none; }
 .verifyButton svg { width: 17px; height: 17px; }
-.verifySpinner { animation: verifySpin .8s linear infinite; }
 .verifyTrust { margin-top: 17px; display: flex; align-items: center; justify-content: center; gap: 22px; color: var(--reg-muted-2); font-size: 11.5px; }
 .verifyTrust span { display: inline-flex; align-items: center; gap: 6px; }
 .verifyTrust svg { width: 14px; height: 14px; }
@@ -279,7 +278,8 @@
 .provisionStatus { width: 16px; height: 16px; flex: 0 0 auto; display: grid; place-items: center; border: 1px dashed var(--reg-border-strong); border-radius: 50%; color: transparent; transition: border .3s, color .3s, background .3s; }
 .provisionStatus svg { width: 9px; height: 9px; stroke-width: 3.4; }
 .provisionLog li.provisionLogActive { color: var(--reg-ink); font-weight: 500; }
-.provisionLogActive .provisionStatus { border: 1.5px solid var(--reg-orange); border-right-color: transparent; animation: verifySpin .7s linear infinite; }
+.provisionLogActive .provisionStatus { border: 0; color: var(--reg-orange); }
+.provisionLogActive .provisionStatus svg { width: 16px; height: 16px; }
 .provisionLog li.provisionLogDone { color: var(--reg-ink-2); }
 .provisionLogDone .provisionStatus { border-style: solid; border-color: var(--reg-ok); color: #fff; background: var(--reg-ok); }
 
@@ -308,7 +308,6 @@
 .welcomeButton:hover:not(:disabled) { background: #000; transform: translateY(-1px); box-shadow: 0 18px 34px -18px rgba(20, 20, 26, .75); }
 .welcomeButton:disabled { cursor: wait; opacity: .76; }
 .welcomeButton svg { width: 17px; height: 17px; }
-.welcomeSpinner { animation: verifySpin .8s linear infinite; }
 .welcomeTrust { margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--reg-muted-2); font-size: 11.5px; line-height: 1.4; text-align: center; }
 .welcomeTrust svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .welcomeError { margin-top: 16px; padding: 11px 13px; border: 1px solid #f2b8ad; border-radius: 10px; color: #a52e1a; background: #fff3f0; font-size: 12.5px; }
@@ -328,7 +327,6 @@
 .welcomeTip { margin-top: 19px; padding: 12px 13px; display: flex; align-items: flex-start; gap: 9px; border: 1px dashed var(--reg-border-strong); border-radius: 11px; color: var(--reg-muted); background: var(--reg-surface-3); font-size: 11.5px; line-height: 1.45; }
 .welcomeTip svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 1px; color: var(--reg-orange-ink); }
 
-@keyframes verifySpin { to { transform: rotate(360deg); } }
 @keyframes provisionRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes provisionWire { to { stroke-dashoffset: -30; } }
 @keyframes provisionHubIn { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1); } }
@@ -389,5 +387,5 @@
 @media (prefers-reduced-motion: reduce) {
   .provisionLayout, .provisionHub, .provisionNodeCheck { animation: none; }
   .provisionNodeActive::after, .provisionWireActive, .provisionKick i, .provisionTrack i, .provisionLogActive .provisionStatus { animation: none; }
-  .welcomeCard, .welcomeSpinner { animation: none; }
+  .welcomeCard { animation: none; }
 }

@@ -1,5 +1,10 @@
 "use client";
+import { Badge, Button, HumanSelect, Input, Switch, LabelConTooltip, SelectBuscable, NativeButton, NativeInput, useNodosVisual } from "./nodos-ui";
 
+import nodeStyles from "./nodos-editor.module.css";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
 import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import consumoStyles from "./config-pasos-consumo.module.css";
 import * as React from "react";
@@ -31,19 +36,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  ensureSelectedOption,
-  HumanSelect,
-  optionFromLabel,
-  optionsFromLabels,
-  type HumanSelectOption,
-} from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+
+
+import { ensureSelectedOption, optionFromLabel, optionsFromLabels, type HumanSelectOption } from "@/components/ui/human-select";
+
+
 import { Label } from "@/components/ui/label";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+
 import {
   Sheet,
   SheetContent,
@@ -51,10 +50,10 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "./nodos-sheet";
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { PasoTercerizadoPanel } from "@/components/productos-servicios/paso-tercerizado-panel";
-import { SelectBuscable } from "@/components/ui/select-buscable";
+
 import maq from "@/components/productos-servicios/en-que-maquina.module.css";
 import trab from "@/components/productos-servicios/el-trabajo.module.css";
 import {
@@ -1380,7 +1379,7 @@ function DecimalDraftInput({
   }, [externalText, focused]);
 
   return (
-    <input
+    <NativeInput
       {...props}
       inputMode="decimal"
       value={draft}
@@ -1900,14 +1899,14 @@ function MaterialSearchSelect({
                         muestra su detalle (variante + medidas) abajo; repetirlo
                         en el encabezado era ruido (feedback del usuario). */}
                     {onDeselect ? (
-                      <button
+                      <NativeButton
                         type="button"
                         className="btn"
                         style={{ fontSize: 12, flexShrink: 0 }}
                         onClick={() => onDeselect(item.id)}
                       >
                         Quitar
-                      </button>
+                      </NativeButton>
                     ) : null}
                   </div>
                   <div
@@ -1932,7 +1931,7 @@ function MaterialSearchSelect({
     <div className="space-y-2">
       <div className="ps-search">
         <SearchIcon className="size-[15px]" />
-        <input
+        <NativeInput
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={placeholder}
@@ -1959,7 +1958,7 @@ function MaterialSearchSelect({
               .join(" · ");
             const specs = materialRowSpecChips(item);
             return (
-              <button
+              <NativeButton
                 key={item.id}
                 type="button"
                 className="ps-mat"
@@ -2017,7 +2016,7 @@ function MaterialSearchSelect({
                     </>
                   )}
                 </span>
-              </button>
+              </NativeButton>
             );
           })
         )}
@@ -2282,7 +2281,7 @@ function ColorThicknessVariantSelector({
             ).length;
             const active = selectedColor === color;
             return (
-              <button
+              <NativeButton
                 key={color}
                 type="button"
                 aria-pressed={active}
@@ -2295,7 +2294,7 @@ function ColorThicknessVariantSelector({
               >
                 {color}
                 <span className="ml-1 text-[10px] opacity-70">{count}</span>
-              </button>
+              </NativeButton>
             );
           })}
         </div>
@@ -2311,7 +2310,7 @@ function ColorThicknessVariantSelector({
             );
             const esDefault = candidate.defaultVarianteId === variante.id;
             return (
-              <button
+              <NativeButton
                 key={variante.id}
                 type="button"
                 aria-pressed={checked}
@@ -2355,7 +2354,7 @@ function ColorThicknessVariantSelector({
                     Predeterminada
                   </span>
                 ) : null}
-              </button>
+              </NativeButton>
             );
           })}
         </div>
@@ -2780,7 +2779,7 @@ function PanelManualEditorSheet({
                     (current) => current.sourcePieceId === item.sourcePieceId,
                   );
                   return (
-                    <button
+                    <NativeButton
                       key={item.sourcePieceId}
                       type="button"
                       className={`rounded-md border px-3 py-2 text-left text-xs ${
@@ -2796,7 +2795,7 @@ function PanelManualEditorSheet({
                       <span className="text-muted-foreground">
                         {item.pieceWidthMm} × {item.pieceHeightMm} mm
                       </span>
-                    </button>
+                    </NativeButton>
                   );
                 })}
               </div>
@@ -4804,13 +4803,15 @@ export function ConfigPasosEditorView({
     const next = pasosUnificados[Math.min(pasosUnificados.length - 1, i + 1)];
     if (next) setActivePasoId(next);
   };
+  const designScope = useDesignScope();
   const configurandoNodoDelModelo = Boolean(
     modoFocoNodo || (modeloProductivo && !modeloProductivo.active),
   );
 
   return (
     <div
-      className={`${embedded ? "pasos-editor-root" : "pasos-editor-root flex flex-1 flex-col"} ${configuracionBase ? visual.nodeEditor : ""} ${configuracionBase || configurandoNodoDelModelo ? visual.operationalEditor : ""}`}
+      {...(configuracionBase ? designScope : {})}
+      className={`${embedded ? "pasos-editor-root" : "pasos-editor-root flex flex-1 flex-col"} ${configuracionBase ? `${theme.theme} ${nodeStyles.editor}` : ""} ${!configuracionBase && configurandoNodoDelModelo ? visual.operationalEditor : ""}`}
     >
       <div
         className={`editor-shell ${modeloProductivo?.active ? "modelo-hoja-ruta-activa" : configurandoNodoDelModelo ? "modelo-configuracion-nodo-activa" : ""}`}
@@ -4888,7 +4889,7 @@ export function ConfigPasosEditorView({
           </div>
           <div className="pasos">
             {modeloProductivo ? (
-              <button
+              <NativeButton
                 type="button"
                 className={`modelo-vista-flujo ${modeloProductivo.active && modeloProductivo.nodoSeleccionado === "ruta" ? "active" : ""}`}
                 onClick={() => modeloProductivo.onOpen("ruta")}
@@ -4905,7 +4906,7 @@ export function ConfigPasosEditorView({
                   </span>
                 </span>
                 <span className="status">Ruta</span>
-              </button>
+              </NativeButton>
             ) : null}
             {pasosUnificados.map((pasoId) => {
               const extra = pasosExtras.find((item) => item.id === pasoId);
@@ -4927,7 +4928,7 @@ export function ConfigPasosEditorView({
                   familiaExtra?.nombre ||
                   extra.familiaCodigo;
                 return (
-                  <button
+                  <NativeButton
                     type="button"
                     key={extra.id}
                     draggable={!guardandoOrden}
@@ -4996,7 +4997,7 @@ export function ConfigPasosEditorView({
                       </span>
                     </span>
                     <span className="status">{etapa ? "Nodo compuesto" : "Nodo simple"}</span>
-                  </button>
+                  </NativeButton>
                 );
               }
 
@@ -5021,7 +5022,7 @@ export function ConfigPasosEditorView({
                   pendientesDePaso(summary.cfg, summary.familia),
                 ) !== "faltan";
               return (
-                <button
+                <NativeButton
                   type="button"
                   key={paso.id}
                   draggable={!guardandoOrden && !configuracionBase}
@@ -5157,7 +5158,7 @@ export function ConfigPasosEditorView({
                       : null}
                   </span>
                   <span className="status">{etapa ? "Nodo compuesto" : "Nodo simple"}</span>
-                </button>
+                </NativeButton>
               );
             })}
           </div>
@@ -5168,7 +5169,7 @@ export function ConfigPasosEditorView({
                   {modeloProductivo.componentes.map((componente) => {
                     const nodoClave = `componente:${componente.codigo}`;
                     return (
-                      <button
+                      <NativeButton
                         type="button"
                         className={`modelo-nodo-componente ${modeloProductivo.active && modeloProductivo.nodoSeleccionado === nodoClave ? "active" : ""}`}
                         key={componente.codigo}
@@ -5186,7 +5187,7 @@ export function ConfigPasosEditorView({
                           </span>
                         </span>
                         <span className="status">Componente</span>
-                      </button>
+                      </NativeButton>
                     );
                   })}
                 </>
@@ -5200,21 +5201,21 @@ export function ConfigPasosEditorView({
           ) : null}
           {!configuracionBase ? (
             <div className="pasos-extras-side modelo-add-nodos">
-              <button
+              <NativeButton
                 type="button"
                 className={`pe-add-btn ${editingExtra === "new" ? "active" : ""}`}
                 onClick={() => setEditingExtra("new")}
               >
                 <PlusIcon /> Paso
-              </button>
+              </NativeButton>
               {modeloProductivo?.estructura === "COMPUESTO" ? (
-                <button
+                <NativeButton
                   type="button"
                   className="pe-add-btn"
                   onClick={() => modeloProductivo.onOpen("nuevo-componente")}
                 >
                   <BoxesIcon /> Componente
-                </button>
+                </NativeButton>
               ) : null}
             </div>
           ) : null}
@@ -5566,13 +5567,13 @@ export function ConfigPasosEditorView({
                       <React.Fragment key={paso.id}>
                         {modeloProductivo ? (
                           <header className="modelo-config-step-header">
-                            <button
+                            <NativeButton
                               type="button"
                               onClick={() => modeloProductivo.onOpen("ruta")}
                               aria-label="Volver a la ruta de producción"
                             >
                               <ArrowLeftIcon />
-                            </button>
+                            </NativeButton>
                             <span className="modelo-config-step-icon">
                               <GitCommitHorizontalIcon />
                             </span>
@@ -5788,7 +5789,7 @@ export function ConfigPasosEditorView({
                                       <label>Cuándo se ejecuta</label>
                                       <div className="segmented">
                                         {opcionesActivacion.map((option) => (
-                                          <button
+                                          <NativeButton
                                             key={option.value}
                                             type="button"
                                             className={
@@ -5807,7 +5808,7 @@ export function ConfigPasosEditorView({
                                             option.value === "NO_EJECUTAR"
                                               ? "No usar por defecto"
                                               : option.label}
-                                          </button>
+                                          </NativeButton>
                                         ))}
                                       </div>
                                       <span className="help">
@@ -5828,7 +5829,7 @@ export function ConfigPasosEditorView({
                                                     multiplicador,
                                                   );
                                                 return (
-                                                  <button
+                                                  <NativeButton
                                                     key={multiplicador}
                                                     type="button"
                                                     className={`tag mono ${activo ? "active" : "muted dashed"}`}
@@ -5845,7 +5846,7 @@ export function ConfigPasosEditorView({
                                                     }
                                                   >
                                                     {multiplicador}
-                                                  </button>
+                                                  </NativeButton>
                                                 );
                                               },
                                             )
@@ -6813,12 +6814,12 @@ export function ConfigPasosEditorView({
                                         {!requiereMateriales ? (
                                           <p className="material-empty">
                                             Este paso no requiere materiales.{" "}
-                                            <button
+                                            <NativeButton
                                               type="button"
                                               className="slot-link"
                                             >
                                               Agregar slot
-                                            </button>
+                                            </NativeButton>
                                           </p>
                                         ) : (
                                           <>
@@ -7009,7 +7010,7 @@ export function ConfigPasosEditorView({
                                                           familia,
                                                         )}
                                                       </span>
-                                                      <button
+                                                      <NativeButton
                                                         type="button"
                                                         className="ps-x"
                                                         title="Quitar slot"
@@ -7021,7 +7022,7 @@ export function ConfigPasosEditorView({
                                                         }
                                                       >
                                                         <XIcon className="size-3.5" />
-                                                      </button>
+                                                      </NativeButton>
                                                     </div>
                                                     <div className="ps-slot-body space-y-4">
                                                       {esSlotAdicional ? (
@@ -7446,7 +7447,7 @@ export function ConfigPasosEditorView({
                                   <section
                                     className={`section-block ${advancedOpen ? "open" : "closed"}`}
                                   >
-                                    <button
+                                    <NativeButton
                                       type="button"
                                       className="sb-head"
                                       onClick={() =>
@@ -7465,7 +7466,7 @@ export function ConfigPasosEditorView({
                                         Overrides y notas internas
                                       </span>
                                       <span className="chev">›</span>
-                                    </button>
+                                    </NativeButton>
                                     {advancedOpen && (
                                       <div className="sb-body space-y-4">
                                         <p className="text-muted-foreground text-xs">
@@ -7757,22 +7758,22 @@ export function ConfigPasosEditorView({
                         <div className="paso-config-savebar">
                           {!configuracionBase && !configurandoNodoDelModelo ? (
                             <>
-                              <button
+                              <NativeButton
                                 className="btn"
                                 type="button"
                                 onClick={goPrev}
                                 disabled={idx === 0}
                               >
                                 <ArrowLeftIcon className="size-4" />
-                              </button>
-                              <button
+                              </NativeButton>
+                              <NativeButton
                                 className="btn"
                                 type="button"
                                 onClick={goNext}
                                 disabled={idx === pasosUnificados.length - 1}
                               >
                                 Siguiente →
-                              </button>
+                              </NativeButton>
                             </>
                           ) : null}
                           <div className={consumoStyles["paso-config-save-state"]}>
@@ -7788,7 +7789,7 @@ export function ConfigPasosEditorView({
                             <div className={consumoStyles["paso-config-save-actions"]}>
                               {pendientesVisualesPasoActual > 0 ? (
                                 <>
-                                  <button
+                                  <NativeButton
                                     className="btn"
                                     type="button"
                                     onClick={() =>
@@ -7810,8 +7811,8 @@ export function ConfigPasosEditorView({
                                       : pasoTieneCambios
                                         ? "Guardar borrador"
                                         : "Borrador guardado"}
-                                  </button>
-                                  <button
+                                  </NativeButton>
+                                  <NativeButton
                                     className="btn btn-primary"
                                     type="button"
                                     disabled
@@ -7819,10 +7820,10 @@ export function ConfigPasosEditorView({
                                   >
                                     <CheckIcon className="size-4" />
                                     Guardar paso
-                                  </button>
+                                  </NativeButton>
                                 </>
                               ) : (
-                                <button
+                                <NativeButton
                                   className="btn btn-primary"
                                   type="button"
                                   onClick={() => guardarPaso(paso.id)}
@@ -7840,7 +7841,7 @@ export function ConfigPasosEditorView({
                                     : pasoTieneCambios
                                       ? "Guardar paso"
                                       : "Paso guardado"}
-                                </button>
+                                </NativeButton>
                               )}
                             </div>
                           </div>
@@ -7987,7 +7988,7 @@ function EscalonesChips({
           }}
         >
           {s}%
-          <button
+          <NativeButton
             type="button"
             aria-label={`Quitar ${s}%`}
             onClick={(e) => {
@@ -8011,10 +8012,10 @@ function EscalonesChips({
             }}
           >
             ×
-          </button>
+          </NativeButton>
         </span>
       ))}
-      <input
+      <NativeInput
         ref={inputRef}
         value={draft}
         inputMode="numeric"
@@ -8251,7 +8252,7 @@ function AcomodadoDetalladoEditor({
               <div className={trab.frow} style={{ marginBottom: 13 }}>
                 <span className={trab.frowlb}>Demasía por lado</span>
                 <span className={trab.ctl} style={{ width: 104 }}>
-                  <input
+                  <NativeInput
                     className={trab.num}
                     inputMode="decimal"
                     value={String(resolvedPieceBleed)}
@@ -8318,7 +8319,7 @@ function AcomodadoDetalladoEditor({
                     <span className={trab.fl}>
                       <span className={trab.k}>Ancho del pliego</span>
                       <span className={trab.ctl}>
-                        <input
+                        <NativeInput
                           className={trab.num}
                           inputMode="decimal"
                           disabled={!pliegoImpresionEsPersonalizado}
@@ -8339,7 +8340,7 @@ function AcomodadoDetalladoEditor({
                     <span className={trab.fl}>
                       <span className={trab.k}>Alto del pliego</span>
                       <span className={trab.ctl}>
-                        <input
+                        <NativeInput
                           className={trab.num}
                           inputMode="decimal"
                           disabled={!pliegoImpresionEsPersonalizado}
@@ -8386,7 +8387,7 @@ function AcomodadoDetalladoEditor({
                         <span className={trab.candTitle}>
                           Candidatos activos
                         </span>
-                        <button
+                        <NativeButton
                           type="button"
                           className={trab.addcand}
                           onClick={() =>
@@ -8405,7 +8406,7 @@ function AcomodadoDetalladoEditor({
                             <path d="M12 5v14M5 12h14" />
                           </svg>
                           Agregar candidato
-                        </button>
+                        </NativeButton>
                       </div>
                       {pliegoCandidatos.length === 0 ? (
                         <div className={trab.candEmpty}>
@@ -8454,7 +8455,7 @@ function AcomodadoDetalladoEditor({
                                   <span className={trab.fl}>
                                     <span className={trab.k}>Nombre</span>
                                     <span className={trab.ctl}>
-                                      <input
+                                      <NativeInput
                                         value={String(candidato.nombre ?? "")}
                                         onChange={(e) =>
                                           updateNestingPliegoCandidato(
@@ -8540,7 +8541,7 @@ function AcomodadoDetalladoEditor({
                                   <span className={trab.fl}>
                                     <span className={trab.k}>Ancho</span>
                                     <span className={trab.ctl}>
-                                      <input
+                                      <NativeInput
                                         className={trab.num}
                                         inputMode="decimal"
                                         value={String(candidato.anchoMm ?? "")}
@@ -8564,7 +8565,7 @@ function AcomodadoDetalladoEditor({
                                   <span className={trab.fl}>
                                     <span className={trab.k}>Alto</span>
                                     <span className={trab.ctl}>
-                                      <input
+                                      <NativeInput
                                         className={trab.num}
                                         inputMode="decimal"
                                         value={String(candidato.altoMm ?? "")}
@@ -8585,7 +8586,7 @@ function AcomodadoDetalladoEditor({
                                       <span className={trab.u}>mm</span>
                                     </span>
                                   </span>
-                                  <button
+                                  <NativeButton
                                     type="button"
                                     className={trab.del}
                                     title="Quitar candidato"
@@ -8597,7 +8598,7 @@ function AcomodadoDetalladoEditor({
                                     }
                                   >
                                     <Trash2Icon className="h-4 w-4" />
-                                  </button>
+                                  </NativeButton>
                                 </div>
                                 {pliegoPorCandidato && (
                                   <div className={trab.cmp}>
@@ -8622,7 +8623,7 @@ function AcomodadoDetalladoEditor({
                                           derivado del material del paso.
                                         </span>
                                       )}
-                                      <button
+                                      <NativeButton
                                         type="button"
                                         className={trab.cmpBtn}
                                         onClick={() =>
@@ -8637,9 +8638,9 @@ function AcomodadoDetalladoEditor({
                                         {candidatoMpVarianteId
                                           ? "Cambiar"
                                           : "Elegir"}
-                                      </button>
+                                      </NativeButton>
                                       {candidatoMpVarianteId && (
-                                        <button
+                                        <NativeButton
                                           type="button"
                                           className={`${trab.cmpBtn} ${trab.cmpBtnDel}`}
                                           onClick={() => {
@@ -8661,7 +8662,7 @@ function AcomodadoDetalladoEditor({
                                           }}
                                         >
                                           Quitar
-                                        </button>
+                                        </NativeButton>
                                       )}
                                     </div>
                                     {mpPickerCandidatoAbierto ===
@@ -8781,7 +8782,7 @@ function AcomodadoDetalladoEditor({
                   </p>
                 </div>
               )}
-              <button
+              <NativeButton
                 type="button"
                 className={trab.sw2}
                 aria-pressed={nestingConfig.allowRotation !== false}
@@ -8800,11 +8801,11 @@ function AcomodadoDetalladoEditor({
                     impresión.
                   </span>
                 </span>
-              </button>
+              </NativeButton>
 
               {mostrarPanelizado && (
                 <>
-                  <button
+                  <NativeButton
                     type="button"
                     className={trab.sw2}
                     aria-pressed={panelizadoConfig.enabled === true}
@@ -8830,7 +8831,7 @@ function AcomodadoDetalladoEditor({
                         en paneles que después se empalman.
                       </span>
                     </span>
-                  </button>
+                  </NativeButton>
                   {panelizadoConfig.enabled === true && (
                     <div className={trab.subtog}>
                       <div className={trab.prow2}>
@@ -8904,7 +8905,7 @@ function AcomodadoDetalladoEditor({
                           </span>
                         </span>
                         <span className={trab.ctl}>
-                          <input
+                          <NativeInput
                             className={trab.num}
                             inputMode="decimal"
                             value={String(resolvedPanelOverlap)}
@@ -8930,7 +8931,7 @@ function AcomodadoDetalladoEditor({
                         <span className={trab.ctl}>
                           {/* Se edita en cm y se guarda en mm. La regla
                                                       "<30 cm se trata como 0" se aplica al blur. */}
-                          <input
+                          <NativeInput
                             className={trab.num}
                             inputMode="decimal"
                             placeholder="ancho imprimible"
@@ -9112,7 +9113,7 @@ function AcomodadoDetalladoEditor({
                       {marginOverride ? (
                         <span className={trab.inhrow}>
                           <span>Sobrescribís el margen de la máquina.</span>
-                          <button
+                          <NativeButton
                             type="button"
                             className={trab.lnk}
                             onClick={() =>
@@ -9125,7 +9126,7 @@ function AcomodadoDetalladoEditor({
                             }
                           >
                             Volver al heredado
-                          </button>
+                          </NativeButton>
                         </span>
                       ) : null}
                     </span>
@@ -9564,7 +9565,7 @@ function CandidatosSlotDetalladoEditor({
                   variante,
                 );
                 return (
-                  <button
+                  <NativeButton
                     key={variante.id}
                     type="button"
                     onClick={() => {
@@ -9621,7 +9622,7 @@ function CandidatosSlotDetalladoEditor({
                       }}
                     />
                     {option.label}
-                  </button>
+                  </NativeButton>
                 );
               })}
             </div>
@@ -11185,7 +11186,7 @@ function TiempoComercialDetalladoEditor({
   };
   const minutos = (valor: unknown, campo: string, ancho = 112) => (
     <div style={{ ...CAJA_EJE, width: ancho }}>
-      <input
+      <NativeInput
         value={readOptionalNumber(valor) ?? ""}
         inputMode="numeric"
         onChange={(e) =>
@@ -11490,7 +11491,7 @@ function TiempoFijoValorEditor({
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <div style={{ ...CAJA_EJE, width: 132 }}>
-        <input
+        <NativeInput
           value={valorMostrado}
           inputMode="decimal"
           placeholder={
@@ -11756,7 +11757,7 @@ function ModoColorDetalladoEditor({
                       ? modoColorPerfilDefault
                       : safeNextAllowed[0];
                     return (
-                      <button
+                      <NativeButton
                         key={option.value}
                         type="button"
                         className={selected ? "on" : ""}
@@ -11777,7 +11778,7 @@ function ModoColorDetalladoEditor({
                         title={option.code}
                       >
                         {option.label}
-                      </button>
+                      </NativeButton>
                     );
                   })}
                 </div>
@@ -11946,7 +11947,7 @@ function CandidatasDetalladoEditor({
                         {machineTechnologyLabel(maquina)}
                       </span>
                       {selected && !isPreferida ? (
-                        <button
+                        <NativeButton
                           type="button"
                           className={maq.pref}
                           onClick={(event) => {
@@ -11966,9 +11967,9 @@ function CandidatasDetalladoEditor({
                             <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.6 9.7l5.8-.8L12 3.6Z" />
                           </svg>
                           Preferir
-                        </button>
+                        </NativeButton>
                       ) : null}
-                      <button
+                      <NativeButton
                         type="button"
                         className={maq.quitar}
                         onClick={() =>
@@ -11978,7 +11979,7 @@ function CandidatasDetalladoEditor({
                         title="Quitar del paso"
                       >
                         <XIcon size={14} />
-                      </button>
+                      </NativeButton>
                     </div>
 
                     {selected ? (
@@ -12048,7 +12049,7 @@ function CandidatasDetalladoEditor({
                                     option.value,
                                   );
                                   return (
-                                    <button
+                                    <NativeButton
                                       key={option.value}
                                       type="button"
                                       className={maq.mchip}
@@ -12079,7 +12080,7 @@ function CandidatasDetalladoEditor({
                                         <span className={maq.none} />
                                       )}
                                       {option.label}
-                                    </button>
+                                    </NativeButton>
                                   );
                                 })}
                               </span>
@@ -12536,14 +12537,14 @@ function EjeGuiado({
               <path d="m6 9 6 6 6-6" />
             </svg>
           ) : (
-            <button
+            <NativeButton
               type="button"
               className="btn"
               style={{ fontSize: 12, whiteSpace: "nowrap" }}
               onClick={() => setColapsado(!colapsado)}
             >
               {abierto ? "Listo" : "Cambiar"}
-            </button>
+            </NativeButton>
           )}
         </div>
       </div>
@@ -12605,6 +12606,7 @@ function EjeGuiado({
                   arriba: el eje tiene ancho de sobra y apilar título, ayuda y
                   controles hacía la card el doble de alta de lo necesario. */}
               <div
+                className={nodeStyles.groupRow}
                 style={
                   grupo.titulo && grupo.encabezado !== "arriba"
                     ? {
@@ -12645,6 +12647,7 @@ function EjeGuiado({
                   </div>
                 ) : null}
                 <div
+                  className={nodeStyles.groupFields}
                   style={{
                     display: "grid",
                     gridTemplateColumns:
@@ -12825,14 +12828,14 @@ function OpcionGuiadaFila({
             </div>
           ) : null}
         </div>
-        <button
+        <NativeButton
           type="button"
           className="btn"
           style={{ fontSize: 12, whiteSpace: "nowrap" }}
           onClick={() => setAbierta(!abierta)}
         >
           {abierta ? "Listo" : "Cambiar"}
-        </button>
+        </NativeButton>
       </div>
       {abierta ? (
         <>
@@ -12881,6 +12884,7 @@ function ControlGuiado({
   /** "eje" = adentro de una card de eje: controles compactos y alineados. */
   variante?: "eje";
 }) {
+  const nodoVisual = useNodosVisual();
   const control = opcion.control;
   const enEje = variante === "eje";
 
@@ -12905,7 +12909,7 @@ function ControlGuiado({
         {control.opciones(ctx).map((op) => {
           const activa = actual === op.value;
           return (
-            <button
+            <NativeButton
               key={op.value}
               type="button"
               onClick={() => onAplicar(control.aplicar(ctx, op.value))}
@@ -12956,7 +12960,7 @@ function ControlGuiado({
                   </span>
                 ) : null}
               </span>
-            </button>
+            </NativeButton>
           );
         })}
       </div>
@@ -12965,6 +12969,7 @@ function ControlGuiado({
 
   if (control.tipo === "pills" && enEje) {
     const actual = control.valor(ctx);
+    if (nodoVisual) return <SegmentedControl aria-label={opcion.pregunta} value={actual} options={control.opciones(ctx).map((op) => ({ value: op.value, label: op.label, icon: null }))} onChange={(value) => onAplicar(control.aplicar(ctx, value))} />;
     return (
       <div
         style={{
@@ -12982,7 +12987,7 @@ function ControlGuiado({
         {control.opciones(ctx).map((op) => {
           const activa = actual === op.value;
           return (
-            <button
+            <NativeButton
               key={op.value}
               type="button"
               title={op.descripcion}
@@ -13000,7 +13005,7 @@ function ControlGuiado({
               }}
             >
               {op.label}
-            </button>
+            </NativeButton>
           );
         })}
       </div>
@@ -13039,15 +13044,15 @@ function ControlGuiado({
             background: "var(--surface, #fff)",
           }}
         >
-          <button
+          <NativeButton
             type="button"
             aria-label="Uno menos"
             style={botonStyle}
             onClick={() => paso(-(control.step ?? 1))}
           >
             −
-          </button>
-          <input
+          </NativeButton>
+          <NativeInput
             value={valor}
             inputMode="numeric"
             onChange={(e) => {
@@ -13069,20 +13074,20 @@ function ControlGuiado({
               background: "transparent",
             }}
           />
-          <button
+          <NativeButton
             type="button"
             aria-label="Uno más"
             style={botonStyle}
             onClick={() => paso(control.step ?? 1)}
           >
             +
-          </button>
+          </NativeButton>
         </div>
       );
     }
     return (
       <div style={{ ...CAJA_EJE, maxWidth: 200 }}>
-        <input
+        <NativeInput
           value={valor}
           inputMode="decimal"
           placeholder={control.placeholder?.(ctx)}
@@ -13324,6 +13329,7 @@ function SeccionesEsquemaPaso({
   setPanelEditorPasoId: React.Dispatch<React.SetStateAction<string | null>>;
   panelMeasures: ReturnType<typeof getProductoPanelMeasures>;
 }) {
+  const nodoVisual = useNodosVisual();
   const notaStyle: React.CSSProperties = {
     fontSize: 12.5,
     color: "var(--muted-text, #6e6e76)",
@@ -13493,12 +13499,18 @@ function SeccionesEsquemaPaso({
           if (id === "activacion-modo") {
             const modo = cfg.modoActivacion ?? "OBLIGATORIO";
             const ofrecidos = modosActivacionOfrecidos(ctx);
+            if (nodoVisual) return <SegmentedControl
+              aria-label="Ejecución de este paso"
+              value={modo}
+              options={ofrecidos.map((m) => ({ value: m, label: configuracionBase && m === "NO_EJECUTAR" ? "No usar por defecto" : (MODO_ACTIVACION_LABELS[m] ?? m), icon: null }))}
+              onChange={(value) => onPatch(pasoActual.id, { modoActivacion: value })}
+            />;
             const normales = ofrecidos.filter((m) => m !== "NO_EJECUTAR");
             const apaga = ofrecidos.includes("NO_EJECUTAR");
             const botonModo = (m: string, apagado = false) => {
               const activo = modo === m;
               return (
-                <button
+                <NativeButton
                   key={m}
                   type="button"
                   onClick={() => onPatch(pasoActual.id, { modoActivacion: m })}
@@ -13521,7 +13533,7 @@ function SeccionesEsquemaPaso({
                   {configuracionBase && m === "NO_EJECUTAR"
                     ? "No usar por defecto"
                     : (MODO_ACTIVACION_LABELS[m] ?? m)}
-                </button>
+                </NativeButton>
               );
             };
             return (
@@ -13625,7 +13637,7 @@ function SeccionesEsquemaPaso({
                     </span>
                   ) : null}
                   {requeridos.length > 0 ? (
-                    <button
+                    <NativeButton
                       type="button"
                       onClick={() =>
                         onPatch(pasoActual.id, { requiereRutaPasoIds: [] })
@@ -13642,14 +13654,14 @@ function SeccionesEsquemaPaso({
                       }}
                     >
                       Ninguno
-                    </button>
+                    </NativeButton>
                   ) : null}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                   {otros.map((p) => {
                     const elegido = requeridos.includes(p.id);
                     return (
-                      <button
+                      <NativeButton
                         key={p.id}
                         type="button"
                         aria-pressed={elegido}
@@ -13695,7 +13707,7 @@ function SeccionesEsquemaPaso({
                           ) : null}
                         </span>
                         {p.nombre}
-                      </button>
+                      </NativeButton>
                     );
                   })}
                 </div>
@@ -14682,7 +14694,7 @@ function AsistenteGuiado({
               const bloq = pend.filter((x) => x.bloqueante).length;
               const completo = bloq === 0;
               return (
-                <button
+                <NativeButton
                   key={paso.id}
                   type="button"
                   className="btn"
@@ -14733,7 +14745,7 @@ function AsistenteGuiado({
                     )}
                   </span>
                   {paso.nombre}
-                </button>
+                </NativeButton>
               );
             })}
           </div>

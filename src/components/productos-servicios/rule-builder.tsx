@@ -1,10 +1,11 @@
 "use client";
+import { Button, HumanSelect, NativeButton, NativeInput } from "./nodos-ui";
 
 import * as React from "react";
 import { AlertCircleIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { HumanSelect, type HumanSelectOption } from "@/components/ui/human-select";
+
+import { type HumanSelectOption } from "@/components/ui/human-select";
 import {
   createEmptyCondition,
   createEmptyRuleGroup,
@@ -201,7 +202,7 @@ export function RuleBuilder({
                   {(["and", "or"] as const).map((c) => {
                     const activo = group.combinator === c;
                     return (
-                      <button
+                      <NativeButton
                         key={c}
                         type="button"
                         onClick={() => updateGroup({ ...group, combinator: c })}
@@ -220,7 +221,7 @@ export function RuleBuilder({
                         }}
                       >
                         {c === "and" ? "Y" : "O"}
-                      </button>
+                      </NativeButton>
                     );
                   })}
                 </div>
@@ -308,7 +309,7 @@ export function RuleBuilder({
                 />
               ) : (
                 <div style={vacia ? CAJA_VACIA : CAJA}>
-                  <input
+                  <NativeInput
                     inputMode="decimal"
                     value={condition.value}
                     onChange={(event) =>
@@ -339,7 +340,7 @@ export function RuleBuilder({
                   ) : null}
                 </div>
               )}
-              <button
+              <NativeButton
                 type="button"
                 title="Quitar condición"
                 disabled={group.conditions.length < 2}
@@ -372,13 +373,13 @@ export function RuleBuilder({
                   <path d="M8 6V4h8v2" />
                   <path d="M19 6l-1 14H6L5 6" />
                 </svg>
-              </button>
+              </NativeButton>
             </div>
           </React.Fragment>
         );
       })}
 
-      <button
+      <NativeButton
         type="button"
         onClick={addCondition}
         style={{
@@ -410,7 +411,7 @@ export function RuleBuilder({
           <path d="M12 5v14M5 12h14" />
         </svg>
         Agregar condición
-      </button>
+      </NativeButton>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { NativeButton as ProductoButton } from "./producto-ui";
 
 import { PiezasBom } from "./pieza-vectorial-resumen";
 
@@ -33,7 +34,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { ConfirmacionDestructiva } from "./producto-ui";
 import {
   Dialog,
   DialogContent,
@@ -2619,22 +2620,22 @@ function RevisionResumen({ revision }: { revision: ProductoRecetaRevision }) {
           </p>
         </div>
         <div className={styles.bomViewSwitch} aria-label="Vista del BOM">
-          <button
+          <ProductoButton
             type="button"
             data-active={vista === "MULTINIVEL"}
             aria-pressed={vista === "MULTINIVEL"}
             onClick={() => setVista("MULTINIVEL")}
           >
             Multinivel
-          </button>
-          <button
+          </ProductoButton>
+          <ProductoButton
             type="button"
             data-active={vista === "CONSOLIDADO"}
             aria-pressed={vista === "CONSOLIDADO"}
             onClick={() => setVista("CONSOLIDADO")}
           >
             Consolidado
-          </button>
+          </ProductoButton>
         </div>
       </section>
 
@@ -3013,7 +3014,7 @@ export function RecetaProductoTab({
                           <Tooltip>
                             <TooltipTrigger
                               render={(props) => (
-                                <button
+                                <ProductoButton
                                   {...props}
                                   type="button"
                                   className={`${styles.secondaryButton} ${styles.iconButton}`}
@@ -3024,7 +3025,7 @@ export function RecetaProductoTab({
                                   onClick={() => draft ? guardar(ruta.id, draft) : router.push(`/productos-servicios/${producto.id}/rutas/${ruta.id}`)}
                                 >
                                   {draft ? <RefreshCwIcon /> : <PencilLineIcon />}
-                                </button>
+                                </ProductoButton>
                               )}
                             />
                             <TooltipContent>
@@ -3032,7 +3033,7 @@ export function RecetaProductoTab({
                             </TooltipContent>
                           </Tooltip>
                           {draft && !projectionOnly ? (
-                            <button
+                            <ProductoButton
                               type="button"
                               className={styles.secondaryButton}
                               disabled={working !== null}
@@ -3044,13 +3045,13 @@ export function RecetaProductoTab({
                             >
                               <PencilLineIcon />
                               Editar modelo
-                            </button>
+                            </ProductoButton>
                           ) : null}
                           {draft ? (
                             <Tooltip>
                               <TooltipTrigger
                                 render={(props) => (
-                                  <button
+                                  <ProductoButton
                                     {...props}
                                     type="button"
                                     className={`${styles.dangerButton} ${styles.iconButton}`}
@@ -3059,7 +3060,7 @@ export function RecetaProductoTab({
                                     onClick={() => setRevisionADescartar(draft)}
                                   >
                                     <Trash2Icon />
-                                  </button>
+                                  </ProductoButton>
                                 )}
                               />
                               <TooltipContent>
@@ -3071,7 +3072,7 @@ export function RecetaProductoTab({
                             <Tooltip>
                               <TooltipTrigger
                                 render={(props) => (
-                                  <button
+                                  <ProductoButton
                                     {...props}
                                     type="button"
                                     className={`${styles.dangerButton} ${styles.iconButton}`}
@@ -3082,7 +3083,7 @@ export function RecetaProductoTab({
                                     }
                                   >
                                     <ArchiveXIcon />
-                                  </button>
+                                  </ProductoButton>
                                 )}
                               />
                               <TooltipContent>
@@ -3091,7 +3092,7 @@ export function RecetaProductoTab({
                             </Tooltip>
                           ) : null}
                           {draft ? (
-                            <button
+                            <ProductoButton
                               type="button"
                               className={styles.primaryButton}
                               disabled={working !== null}
@@ -3099,7 +3100,7 @@ export function RecetaProductoTab({
                             >
                               <RocketIcon />
                               Reintentar actualización
-                            </button>
+                            </ProductoButton>
                           ) : null}
                         </div>
                       ) : null}

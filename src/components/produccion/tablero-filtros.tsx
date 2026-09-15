@@ -22,6 +22,7 @@ import s from "./tablero-toolbar.module.css";
 export function TableroFiltros({
   filters,
   setFilters,
+  onEstacionChange,
   counts,
   total,
   estaciones,
@@ -30,6 +31,7 @@ export function TableroFiltros({
 }: {
   filters: FiltrosTrabajo;
   setFilters: Dispatch<SetStateAction<FiltrosTrabajo>>;
+  onEstacionChange: (estacionId: string) => void;
   counts: ReturnType<typeof metricasTrabajos>;
   total: number;
   estaciones: { id: string; nombre: string }[];
@@ -123,9 +125,7 @@ export function TableroFiltros({
           className={s.select}
           aria-label="Filtrar por estación"
           value={filters.estacionId}
-          onChange={(estacionId) =>
-            setFilters((current) => ({ ...current, estacionId }))
-          }
+          onChange={onEstacionChange}
           options={[
             { value: "", label: "Todas las estaciones" },
             ...estaciones.map((e) => ({ value: e.id, label: e.nombre })),
@@ -151,14 +151,15 @@ export function TableroFiltros({
             isIconOnly
             aria-label="Limpiar filtros"
             title="Limpiar filtros"
-            onPress={() =>
+            onPress={() => {
               setFilters({
                 query: "",
                 asignadasAMi: false,
                 estacionId: "",
                 empleadoId: "",
-              })
-            }
+              });
+              onEstacionChange("");
+            }}
           >
             <XIcon />
           </ActionButton>

@@ -1,21 +1,24 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, SaveIcon, SearchIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  SaveIcon,
+  PackageIcon,
+  DollarSignIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Card, Chip, Input, Label, SearchField, Switch } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SelectField } from "@/components/design-system/select-field";
+import theme from "@/components/design-system/theme.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import layout from "@/components/design-system/list-page.module.css";
+import materialStyles from "./materiales.module.css";
+import s from "./costos-materiales.module.css";
 import {
   Table,
   TableBody,
@@ -42,7 +45,10 @@ interface Props {
   initialMateriasPrimas: MateriaPrima[];
 }
 
-type UnitDraft = { unidadStock: UnidadMateriaPrima; unidadCompra: UnidadMateriaPrima };
+type UnitDraft = {
+  unidadStock: UnidadMateriaPrima;
+  unidadCompra: UnidadMateriaPrima;
+};
 
 const unidadLabel = (value: string) =>
   unidadMateriaPrimaItems.find((item) => item.value === value)?.label ?? value;
@@ -82,9 +88,9 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
   }, [initialMateriasPrimas]);
 
   // Drafts editables (se re-siembran cuando cambia el baseline tras guardar).
-  const [precioDrafts, setPrecioDrafts] = React.useState<Record<string, string>>(
-    {},
-  );
+  const [precioDrafts, setPrecioDrafts] = React.useState<
+    Record<string, string>
+  >({});
   const [unitDrafts, setUnitDrafts] = React.useState<Record<string, UnitDraft>>(
     {},
   );
@@ -133,11 +139,17 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
       const draft = unitDrafts[materia.id];
       const base = baseline.unidades.get(materia.id);
       if (draft && base) {
-        const patch: { id: string; unidadStock?: UnidadMateriaPrima; unidadCompra?: UnidadMateriaPrima } = {
+        const patch: {
+          id: string;
+          unidadStock?: UnidadMateriaPrima;
+          unidadCompra?: UnidadMateriaPrima;
+        } = {
           id: materia.id,
         };
-        if (draft.unidadStock !== base.unidadStock) patch.unidadStock = draft.unidadStock;
-        if (draft.unidadCompra !== base.unidadCompra) patch.unidadCompra = draft.unidadCompra;
+        if (draft.unidadStock !== base.unidadStock)
+          patch.unidadStock = draft.unidadStock;
+        if (draft.unidadCompra !== base.unidadCompra)
+          patch.unidadCompra = draft.unidadCompra;
         if (patch.unidadStock || patch.unidadCompra) materiales.push(patch);
       }
 
@@ -170,7 +182,9 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
       router.refresh();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "No se pudieron guardar los costos.",
+        error instanceof Error
+          ? error.message
+          : "No se pudieron guardar los costos.",
       );
     } finally {
       setSaving(false);
@@ -178,145 +192,157 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/inventario/materias-primas")}
-              >
-                <ArrowLeftIcon className="size-4" />
-                Volver
-              </Button>
-              <CardTitle>Editar costos de materiales</CardTitle>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
-                <span className="text-xs text-muted-foreground">Solo consumibles</span>
-                <Switch checked={soloConsumibles} onCheckedChange={setSoloConsumibles} />
-              </div>
-              <div className="relative">
-                <SearchIcon className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="w-[240px] pl-8"
-                  placeholder="Buscar material, SKU..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <Button onClick={guardar} loading={saving} disabled={totalCambios === 0} loadingText="Guardando...">
-                <SaveIcon className="size-4" />
-                Guardar cambios{totalCambios > 0 ? ` (${totalCambios})` : ""}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Editá precios de referencia por variante y las unidades de consumo y
-            compra por material, todo en una pantalla. Los cambios se guardan
-            juntos al presionar «Guardar cambios».
+    <section data-ui="heroui" className={`${theme.theme} ${layout.page}`}>
+      <Link
+        href="/inventario/materias-primas"
+        className={materialStyles.backLink}
+      >
+        <ArrowLeftIcon size={14} /> Materiales
+      </Link>
+      <header className={layout.header}>
+        <div>
+          <h1>Editar costos de materiales</h1>
+          <p className={layout.subtitle}>
+            Precios de referencia por variante y unidades de consumo y compra
+            por material.
           </p>
-          <Table>
+        </div>
+        <ActionButton
+          onPress={guardar}
+          isPending={saving}
+          isDisabled={saving || totalCambios === 0}
+        >
+          <SaveIcon size={16} />
+          {saving
+            ? "Guardando…"
+            : `Guardar cambios${totalCambios > 0 ? ` (${totalCambios})` : ""}`}
+        </ActionButton>
+      </header>
+      <Card className={layout.results}>
+        <div className={layout.toolbar}>
+          <SearchField
+            aria-label="Buscar materiales y variantes"
+            value={search}
+            onChange={setSearch}
+            className={materialStyles.search}
+          >
+            <SearchField.Group
+              className={`${layout.searchGroup} ${focus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar material, código o SKU…" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={materialStyles.toolbarEnd}>
+            <span className={materialStyles.resultCount}>
+              {materiasFiltradas.length} de {initialMateriasPrimas.length}{" "}
+              materiales
+            </span>
+            <Switch
+              size="sm"
+              isSelected={soloConsumibles}
+              onChange={setSoloConsumibles}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>Solo consumibles</Label>
+              </Switch.Content>
+            </Switch>
+          </div>
+        </div>
+        <p className={s.saveHint}>
+          <DollarSignIcon size={15} aria-hidden />
+          Los cambios se guardan juntos al presionar «Guardar cambios».
+        </p>
+        {materiasFiltradas.length === 0 ? (
+          <div className={layout.empty}>
+            <PackageIcon size={28} aria-hidden />
+            <p>No hay materiales que coincidan con el filtro.</p>
+          </div>
+        ) : (
+          <Table className={`${materialStyles.table} ${s.table}`}>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[38%]">Material / Variante</TableHead>
                 <TableHead>Unidad de consumo</TableHead>
                 <TableHead>Unidad de compra</TableHead>
-                <TableHead className="w-[250px] text-right">Precio de referencia</TableHead>
+                <TableHead className="w-[250px] text-right">
+                  Precio de referencia
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {materiasFiltradas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
-                    No hay materiales que coincidan con el filtro.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                materiasFiltradas.map((materia) => {
-                  const unit = unitDrafts[materia.id];
-                  return (
-                    <React.Fragment key={materia.id}>
-                      <TableRow className="bg-muted/40">
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium">{materia.nombre}</span>
+              {materiasFiltradas.map((materia) => {
+                const unit = unitDrafts[materia.id];
+                return (
+                  <React.Fragment key={materia.id}>
+                    <TableRow className={s.groupRow}>
+                      <TableCell>
+                        <div className={s.materialGroup}>
+                          <PackageIcon size={18} aria-hidden />
+                          <div>
+                            <strong>{materia.nombre}</strong>
                             <span className="text-xs text-muted-foreground">
                               {materia.variantes.length} variante(s)
                               {materia.esConsumible ? " · consumible" : ""}
                             </span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={unit?.unidadStock ?? materia.unidadStock}
-                            onValueChange={(value) =>
-                              setUnitDrafts((prev) => ({
-                                ...prev,
-                                [materia.id]: {
-                                  unidadStock: (value as UnidadMateriaPrima) ?? materia.unidadStock,
-                                  unidadCompra:
-                                    prev[materia.id]?.unidadCompra ?? materia.unidadCompra,
-                                },
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="h-8 w-[150px]">
-                              <SelectValue>
-                                {unidadLabel(unit?.unidadStock ?? materia.unidadStock)}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {unidadMateriaPrimaItems.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={unit?.unidadCompra ?? materia.unidadCompra}
-                            onValueChange={(value) =>
-                              setUnitDrafts((prev) => ({
-                                ...prev,
-                                [materia.id]: {
-                                  unidadStock:
-                                    prev[materia.id]?.unidadStock ?? materia.unidadStock,
-                                  unidadCompra: (value as UnidadMateriaPrima) ?? materia.unidadCompra,
-                                },
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="h-8 w-[150px]">
-                              <SelectValue>
-                                {unidadLabel(unit?.unidadCompra ?? materia.unidadCompra)}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {unidadMateriaPrimaItems.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell />
-                      </TableRow>
-                      {materia.variantes.map((variante) => {
-                        const chips = getVarianteOptionChips(materia, variante, {
-                          maxDimensiones: 6,
-                        });
-                        const nombre = variante.nombreVariante?.trim();
-                        return (
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <SelectField
+                          value={unit?.unidadStock ?? materia.unidadStock}
+                          onChange={(value) =>
+                            setUnitDrafts((prev) => ({
+                              ...prev,
+                              [materia.id]: {
+                                unidadStock:
+                                  (value as UnidadMateriaPrima) ??
+                                  materia.unidadStock,
+                                unidadCompra:
+                                  prev[materia.id]?.unidadCompra ??
+                                  materia.unidadCompra,
+                              },
+                            }))
+                          }
+                          aria-label={`Unidad de consumo de ${materia.nombre}`}
+                          options={unidadMateriaPrimaItems}
+                          className={s.unitSelect}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <SelectField
+                          value={unit?.unidadCompra ?? materia.unidadCompra}
+                          onChange={(value) =>
+                            setUnitDrafts((prev) => ({
+                              ...prev,
+                              [materia.id]: {
+                                unidadStock:
+                                  prev[materia.id]?.unidadStock ??
+                                  materia.unidadStock,
+                                unidadCompra:
+                                  (value as UnidadMateriaPrima) ??
+                                  materia.unidadCompra,
+                              },
+                            }))
+                          }
+                          aria-label={`Unidad de compra de ${materia.nombre}`}
+                          options={unidadMateriaPrimaItems}
+                          className={s.unitSelect}
+                        />
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                    {materia.variantes.map((variante) => {
+                      const chips = getVarianteOptionChips(materia, variante, {
+                        maxDimensiones: 6,
+                      });
+                      const nombre = variante.nombreVariante?.trim();
+                      return (
                         <TableRow key={variante.id}>
-                          <TableCell className="pl-8">
+                          <TableCell className={s.variantName}>
                             <div className="flex flex-col gap-1">
                               {nombre ? (
                                 <span className="text-sm">{nombre}</span>
@@ -328,15 +354,17 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
                               {chips.length > 0 && (
                                 <div className="flex flex-wrap gap-1">
                                   {chips.map((chip) => (
-                                    <span
+                                    <Chip
                                       key={chip.key}
-                                      className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                                      size="sm"
+                                      variant="soft"
+                                      className={s.optionChip}
                                     >
                                       <span className="font-medium text-foreground/70">
                                         {chip.label}:
                                       </span>
                                       {chip.value}
-                                    </span>
+                                    </Chip>
                                   ))}
                                 </div>
                               )}
@@ -353,7 +381,7 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
                               : "— (usa la del material)"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className={s.priceField}>
                               <span className="text-xs text-muted-foreground">
                                 {variante.moneda || "ARS"}
                               </span>
@@ -362,7 +390,8 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
                                 min="0"
                                 step="0.01"
                                 inputMode="decimal"
-                                className="h-8 w-[110px] text-right"
+                                className={s.priceInput}
+                                aria-label={`Precio de referencia de ${materia.nombre}, ${getVarianteDisplayName(materia, variante)}`}
                                 placeholder="—"
                                 value={precioDrafts[variante.id] ?? ""}
                                 onChange={(event) =>
@@ -383,16 +412,15 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
                             </div>
                           </TableCell>
                         </TableRow>
-                        );
-                      })}
-                    </React.Fragment>
-                  );
-                })
-              )}
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
             </TableBody>
           </Table>
-        </CardContent>
+        )}
       </Card>
-    </div>
+    </section>
   );
 }

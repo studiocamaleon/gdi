@@ -4114,6 +4114,11 @@ model OrdenTrabajoItemPaso {
   atencionPlanificadaJson Json?
   /// Reparto operativo del motor por persona y franja. Separado de la agenda F6 y del trabajo real.
   asignacionPersonalJson Json?
+  /// Elección explícita del supervisor; el motor debe conservar estos empleados.
+  asignacionManualJson Json?
+  /// Inicio/fin de referencia para cumplimiento; conserva revisiones aceptadas.
+  /// Independiente de las reservas de la agenda y de la estimación dinámica.
+  planReferenciaJson Json?
   id                                   String                        @id @default(uuid()) @db.Uuid
   tenantId                             String                        @db.Uuid
   ordenId                              String                        @db.Uuid

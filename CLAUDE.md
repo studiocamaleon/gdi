@@ -120,11 +120,16 @@ rediseñar algo, buscar si ya está pensado ahí.
 
 ## Estaciones: superficie única
 
-La operación por estación vive en `/produccion/estaciones`, junto con la
-configuración, empleados y calendario del taller. No reintroducir
-«Por estación» en el Tablero, que conserva Items/Kanban. Consultar requiere
+`/produccion/estaciones` conserva las cards de carga, configuración, personal
+asignado y calendario del taller. «Ver tareas» navega a
+`/produccion/tablero?estacion=<id>&vista=lista`, también para «Sin estación» y
+«Proveedor tercerizado». Lista es la única vista de tareas por estación;
+no reintroducir el detalle antiguo con «Mi mesa». El Tablero conserva
+Lista/Kanban y «Asignadas a mí». Consultar requiere
 `produccion.ver`; editar configuración mantiene `produccion.configurar`, y
 las acciones de tareas respetan el alcance/estaciones habilitadas por API.
+La asignación voluntaria de pasos sin personal y la devolución de la propia
+mesa viven en Personal asignado de Lista. Las asignaciones automáticas se conservan.
 Reutilizar `use-produccion-operativa`, los modelos de presentación y el detalle
 de ítem compartido; no duplicar mutaciones. Formularios nuevos con FormSheet
 HeroUI y CSS local. Registro: `docs/sistema-visual-heroui.md`.

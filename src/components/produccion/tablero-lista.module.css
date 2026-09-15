@@ -51,35 +51,35 @@
 }
 .table {
   width: 100%;
-  min-width: 1060px;
+  min-width: 1260px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 11px;
   text-align: left;
 }
 .colJob {
-  width: 25%;
+  width: 20%;
 }
 .colQuantity {
-  width: 7%;
+  width: 5%;
 }
 .colStep {
-  width: 19%;
+  width: 17%;
 }
 .colOperator {
-  width: 13%;
+  width: 12%;
 }
 .colState {
-  width: 10%;
+  width: 8%;
 }
-.colDelivery {
-  width: 13%;
-}
-.colProgress {
+.colDate {
   width: 9%;
 }
-.colActions {
-  width: 4%;
+.colCompliance {
+  width: 10%;
+}
+.colProgress {
+  width: 10%;
 }
 .table thead {
   color: var(--muted-text);
@@ -97,8 +97,25 @@
   background: var(--surface);
   cursor: pointer;
 }
+.row td[data-field] > * {
+  transition: opacity 120ms ease-out;
+}
+.row td[data-updating="true"] > * { opacity: 0; }
+.row td[data-entering="true"] > * { animation: aparecer 180ms ease-out; }
+@keyframes aparecer {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row td[data-field] > * { animation: none; transition: none; }
+  .row td[data-updating="true"] > * { opacity: 1; }
+}
 .row:hover {
   background: var(--surface-secondary);
+}
+.row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 .row td {
   height: 61px;
@@ -172,6 +189,9 @@
 }
 .operator > span {
   min-width: 0;
+}
+.operator > svg {
+  flex-shrink: 0;
 }
 .operator small {
   display: block;
@@ -258,7 +278,7 @@
   color: var(--success-foreground);
   background: var(--success);
 }
-.group[data-group="delayed"] .stateCell[data-state="ready"] {
+.stateCell[data-state="ready"][data-compliance="demorado"] {
   color: var(--action-primary-foreground);
   background: var(--accent);
 }
@@ -327,10 +347,6 @@
   height: 100%;
   border-radius: inherit;
   background: var(--accent-soft-foreground);
-}
-.row .actions {
-  text-align: center;
-  padding-inline: 4px;
 }
 .emptyState {
   margin: 0;
@@ -432,3 +448,46 @@
     align-items: flex-start;
   }
 }
+
+.explainedHeader > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.explainedHeader svg {
+  flex-shrink: 0;
+}
+.explainedHeader {
+  cursor: help;
+}
+.explainedHeader:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.compliance {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.compliance small {
+  color: var(--muted-text);
+  font-size: 10px;
+  font-weight: 400;
+}
+.compliance[data-tone="danger"] {
+  color: var(--danger);
+}
+.compliance[data-tone="success"] {
+  color: var(--success-soft-foreground);
+}
+.compliance[data-tone="muted"] {
+  color: var(--muted-text);
+}
+.assignmentAction {
+  margin-top: 6px;
+}
+
+.row td.personalEditable { position: relative; padding-right: 44px; }
+.reasignarAction { position: absolute; top: 10px; right: 6px; }

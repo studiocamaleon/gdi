@@ -1,0 +1,355 @@
+.editor.editor {
+  --surface-2: var(--surface-secondary);
+  --surface-1: var(--surface);
+  --hairline: var(--border);
+  --hairline-strong: var(--border);
+  --ink: var(--foreground);
+  --ink-2: var(--muted-text);
+  --fg: var(--foreground);
+  padding: 24px;
+  background: var(--background);
+  color: var(--foreground);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.editor :global(.editor-shell) {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 20px;
+  background: transparent;
+  min-height: 0;
+}
+.editor :global(.editor-side) {
+  width: auto;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-y: auto;
+}
+.editor :global(.side-head) {
+  padding: 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.editor :global(.side-head .route) {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  margin-top: 14px;
+}
+.editor :global(.side-head .route > span:last-child) {
+  font-size: 11px;
+}
+.editor :global(.back-link) {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.editor :global(.side-progress) {
+  padding: 16px;
+  color: var(--muted-text);
+}
+.editor :global(.paso-item) {
+  height: auto;
+  min-height: 70px;
+  white-space: normal;
+  border-radius: 10px;
+  border-color: transparent;
+}
+.editor :global(.paso-item.active) {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  box-shadow: none;
+}
+.editor :global(.paso-item .status) {
+  color: var(--muted-text);
+}
+.editor :global(.editor-main) {
+  min-width: 0;
+  width: auto;
+  padding: 0;
+  background: transparent;
+}
+.editor :global(.config-step-content) {
+  padding: 0;
+}
+.editor :global(.paso-config-workspace) {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.editor :global(.paso-config-intro) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 2px;
+}
+.editor :global(.paso-config-intro > div:first-child > span) {
+  display: block;
+  color: var(--muted-text);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.editor :global(.paso-config-intro h2) {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.3;
+  margin: 0;
+}
+.editor :global(.paso-config-intro p) {
+  font-size: 12px;
+  color: var(--muted-text);
+  margin-top: 6px;
+  line-height: 1.6;
+}
+.editor :global(.paso-config-legend) {
+  display: flex;
+  gap: 12px;
+  color: var(--muted-text);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.editor :global(.paso-config-legend span) {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.editor :global(.paso-config-legend i) {
+  display: block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+.editor :global(.paso-config-legend i[data-tone="ready"]) {
+  background: var(--success);
+}
+.editor :global(.paso-config-flow) {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.editor :global(.eje-guiado.is-fixed) {
+  gap: 0 !important;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.editor :global(.eje-guiado.is-fixed.has-pending) {
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+.editor :global(.eje-guiado.is-fixed .eje-guiado-head) {
+  padding: 18px 20px !important;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.editor :global(.eje-guiado-title) {
+  font-size: 14px;
+  font-weight: 650;
+}
+.editor :global(.eje-guiado-subtitle) {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.editor :global(.eje-guiado-content) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 20px !important;
+  background: var(--surface);
+}
+.editor :global(.eje-guiado-content label) {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-text);
+}
+.editor
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+    [type="hidden"]
+  ),
+.editor select {
+  min-width: 0;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.editor select {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: var(--surface);
+  padding: 0 10px;
+}
+.editor textarea {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--foreground);
+  background: var(--surface);
+  padding: 10px;
+  font-size: 13px;
+}
+.editor :global(.select),
+.editor :global(.autocomplete) {
+  min-width: 0;
+}
+.editor :global(.select) {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: stretch;
+}
+.editor :global(.select__trigger),
+.editor :global(.autocomplete__trigger) {
+  min-height: 36px;
+}
+.editor :global(.select__value),
+.editor :global(.autocomplete__value) {
+  min-width: 0;
+  text-align: left;
+}
+.editor :global(.paso-config-group-head) {
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.editor :global(.paso-config-savebar) {
+  position: sticky;
+  bottom: 0;
+  padding: 16px 0 0;
+  margin-top: 16px;
+  background: var(--background);
+  border: 0;
+  box-shadow: none;
+}
+.editor :global(.paso-config-savebar .button) {
+  box-shadow: none;
+}
+.popover {
+  min-width: 220px;
+  max-width: min(600px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.popover [role="listbox"] {
+  max-height: min(360px, 55vh);
+  overflow: auto;
+}
+@media (max-width: 1200px) {
+  .editor.editor {
+    padding: 20px;
+  }
+  .editor :global(.editor-shell) {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 16px;
+  }
+  .editor :global(.paso-config-intro) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 760px) {
+  .editor.editor {
+    padding: 16px;
+    overflow-y: auto;
+    display: block;
+  }
+  .editor :global(.editor-shell) {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
+  }
+  .editor :global(.editor-side) {
+    flex: none;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .editor :global(.editor-main) {
+    overflow: visible;
+  }
+  .editor :global(.eje-guiado-content),
+  .editor :global(.eje-guiado.is-fixed .eje-guiado-head) {
+    padding: 16px !important;
+  }
+  .editor :global(.eje-guiado-subtitle) {
+    margin-left: 0;
+  }
+  .editor :global(.paso-config-savebar) {
+    bottom: -16px;
+    padding: 12px 0;
+  }
+}
+.sheet {
+  width: min(980px, 100vw);
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  height: 100dvh;
+}
+.sheetHeader {
+  padding: 24px 56px 22px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.sheetDescription {
+  margin-top: 6px;
+  color: var(--muted-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.sheetFooter {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+}
+.sheetClose {
+  position: absolute;
+  top: 18px;
+  right: 16px;
+}
+.sheet > div:not(.sheetHeader):not(.sheetFooter) {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.editor .groupRow,
+.editor .groupFields,
+.editor .groupFields > div {
+  min-width: 0;
+}
+.editor [role="radiogroup"] {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+@media (max-width: 1100px) {
+  .editor .groupRow,
+  .editor .groupFields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Las utilidades del editor anterior usaban muted como fondo. */
+.editor :global(.bg-muted),
+.editor [class~="bg-muted/20"],
+.editor [class~="hover:bg-muted/20"]:hover {
+  background: var(--surface-secondary);
+}
+
+.nativeButton.nativeButton {
+  height: auto;
+  min-height: 32px;
+  white-space: normal;
+}

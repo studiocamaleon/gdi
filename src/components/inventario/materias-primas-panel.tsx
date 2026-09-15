@@ -7,7 +7,6 @@ import {
   DollarSignIcon,
   LibraryIcon,
   PencilIcon,
-  SearchIcon,
   ToggleLeftIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,27 +26,24 @@ import {
   getMateriaPrimaTemplate,
   materiaPrimaTemplatesV1,
 } from "@/lib/materia-prima-templates";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Card,
+  Chip,
+  Input,
+  SearchField,
+  Label,
+  Modal,
+  Switch,
+  TextField,
+} from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { SelectField } from "@/components/design-system/select-field";
+import focus from "@/components/design-system/field-focus.module.css";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import styles from "./materiales.module.css";
 import {
   Table,
   TableBody,
@@ -134,17 +130,26 @@ function normalizarBusqueda(value: string) {
     .toLowerCase();
 }
 
-export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPanelProps) {
+export function MateriasPrimasPanel({
+  initialMateriasPrimas,
+}: MateriasPrimasPanelProps) {
   const router = useRouter();
-  const [materiasPrimas, setMateriasPrimas] = React.useState(initialMateriasPrimas);
+  const [materiasPrimas, setMateriasPrimas] = React.useState(
+    initialMateriasPrimas,
+  );
   const [mostrarOcultas, setMostrarOcultas] = React.useState(false);
   const [busqueda, setBusqueda] = React.useState("");
   const [isSaving, setIsSaving] = React.useState(false);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [nombreNuevo, setNombreNuevo] = React.useState("");
-  const [templateNuevo, setTemplateNuevo] = React.useState(materiaPrimaTemplatesV1[0]?.id ?? "");
+  const [templateNuevo, setTemplateNuevo] = React.useState(
+    materiaPrimaTemplatesV1[0]?.id ?? "",
+  );
   const selectedTemplate = React.useMemo(
-    () => materiaPrimaTemplatesV1.find((template) => template.id === templateNuevo) ?? null,
+    () =>
+      materiaPrimaTemplatesV1.find(
+        (template) => template.id === templateNuevo,
+      ) ?? null,
     [templateNuevo],
   );
   const materiasPrimasVisibles = React.useMemo(() => {
@@ -192,9 +197,11 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
       templateId: template.id,
       unidadStock: template.unidadStock,
       unidadCompra: template.unidadCompra,
-      esConsumible: getMateriaPrimaTemplateAvailability(template.id).esConsumible,
+      esConsumible: getMateriaPrimaTemplateAvailability(template.id)
+        .esConsumible,
       esRepuesto: getMateriaPrimaTemplateAvailability(template.id).esRepuesto,
-      esProductoBase: getMateriaPrimaTemplateAvailability(template.id).esProductoBase,
+      esProductoBase: getMateriaPrimaTemplateAvailability(template.id)
+        .esProductoBase,
       activo: true,
       atributosTecnicos: { ...template.atributosIniciales },
       variantes: [],
@@ -209,7 +216,8 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
       router.push(`/inventario/materias-primas/${created.id}`);
       router.refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo crear.";
+      const message =
+        error instanceof Error ? error.message : "No se pudo crear.";
       toast.error(message);
     } finally {
       setIsSaving(false);
@@ -219,180 +227,214 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
   const toggle = async (item: MateriaPrima) => {
     try {
       const updated = await toggleMateriaPrima(item.id);
-      setMateriasPrimas((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
-      toast.success(updated.activo ? "Materia prima activada." : "Materia prima desactivada.");
+      setMateriasPrimas((prev) =>
+        prev.map((row) => (row.id === updated.id ? updated : row)),
+      );
+      toast.success(
+        updated.activo
+          ? "Materia prima activada."
+          : "Materia prima desactivada.",
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo cambiar estado.";
+      const message =
+        error instanceof Error ? error.message : "No se pudo cambiar estado.";
       toast.error(message);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>Catálogo de materias primas</CardTitle>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-                <Input
-                  value={busqueda}
-                  onChange={(event) => setBusqueda(event.target.value)}
-                  placeholder="Buscar por nombre, código o SKU..."
-                  className="w-64 pl-8"
-                />
-              </div>
-              <div className="flex items-center gap-2 rounded-md border px-3 py-1.5">
-                <span className="text-xs text-muted-foreground">Mostrar ocultas</span>
-                <Switch checked={mostrarOcultas} onCheckedChange={setMostrarOcultas} />
-              </div>
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <CirclePlusIcon className="size-4" />
-                Nueva materia prima
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/inventario/materias-primas/costos")}
-              >
-                <DollarSignIcon className="size-4" />
-                Editar costos
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/inventario/materias-primas/biblioteca")}
-              >
-                <LibraryIcon className="size-4" />
-                Instalar desde biblioteca
-              </Button>
-            </div>
+    <section
+      data-ui="heroui"
+      className={`${theme.theme} ${listPage.page} ${styles.page}`}
+    >
+      <header className={listPage.header}>
+        <div>
+          <h1>Materiales</h1>
+          <p className={listPage.subtitle}>
+            Catálogo de materias primas, variantes y precios de referencia.
+          </p>
+        </div>
+        <div className={styles.headerActions}>
+          <ActionLink
+            variant="outline"
+            href="/inventario/materias-primas/biblioteca"
+          >
+            <LibraryIcon size={16} /> Instalar desde biblioteca
+          </ActionLink>
+          <ActionLink
+            variant="outline"
+            href="/inventario/materias-primas/costos"
+          >
+            <DollarSignIcon size={16} /> Editar costos
+          </ActionLink>
+          <ActionButton onPress={() => setIsCreateOpen(true)}>
+            <CirclePlusIcon size={16} /> Nueva materia prima
+          </ActionButton>
+        </div>
+      </header>
+      <Card className={listPage.results}>
+        <div className={listPage.toolbar}>
+          <SearchField
+            aria-label="Buscar materiales"
+            className={styles.search}
+            value={busqueda}
+            onChange={setBusqueda}
+          >
+            <SearchField.Group
+              className={`${listPage.searchGroup} ${focus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar por nombre, código o SKU…" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={styles.toolbarEnd}>
+            <span className={styles.resultCount}>
+              {materiasPrimasVisibles.length} de {materiasPrimas.length}{" "}
+              materiales
+            </span>
+            <Switch
+              size="sm"
+              isSelected={mostrarOcultas}
+              onChange={setMostrarOcultas}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>Mostrar ocultas</Label>
+              </Switch.Content>
+            </Switch>
           </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
+        </div>
+        <Table className={`${styles.table} ${styles.catalogTable}`}>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Familia</TableHead>
+              <TableHead>Subfamilia</TableHead>
+              <TableHead className="text-right">Variantes</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {materiasPrimasVisibles.length === 0 ? (
               <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Familia</TableHead>
-                <TableHead>Subfamilia</TableHead>
-                <TableHead>Variantes</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="w-[220px] text-right">Acciones</TableHead>
+                <TableCell colSpan={6}>
+                  <div className={listPage.empty}>
+                    <LibraryIcon size={28} aria-hidden />
+                    <p>
+                      {materiasPrimas.length === 0
+                        ? "Todavía no hay materias primas cargadas."
+                        : busqueda.trim()
+                          ? `Sin resultados para "${busqueda.trim()}".`
+                          : "No hay materias primas activas para mostrar."}
+                    </p>
+                  </div>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {materiasPrimasVisibles.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
-                    {materiasPrimas.length === 0
-                      ? "Todavía no hay materias primas cargadas."
-                      : busqueda.trim()
-                        ? `Sin resultados para "${busqueda.trim()}".`
-                        : "No hay materias primas activas para mostrar."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                materiasPrimasVisibles.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span>{item.nombre}</span>
-                        <span className="text-xs text-muted-foreground">
-                          Canónico: {item.canonicalMaterialName ?? "Personalizado por tenant"}
+            ) : (
+              materiasPrimasVisibles.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <div className={styles.materialName}>
+                      <span className={styles.materialIcon}>
+                        <LibraryIcon size={17} aria-hidden />
+                      </span>
+                      <div>
+                        <strong>{item.nombre}</strong>
+                        <span>
+                          Canónico:{" "}
+                          {item.canonicalMaterialName ??
+                            "Personalizado por tenant"}
                         </span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {familiaMateriaPrimaItems.find((familia) => familia.value === item.familia)?.label ??
-                        item.familia}
-                    </TableCell>
-                    <TableCell>{subfamiliaMateriaPrimaLabels[item.subfamilia] ?? item.subfamilia}</TableCell>
-                    <TableCell>{item.variantes.length}</TableCell>
-                    <TableCell>
-                      <Badge variant={item.activo ? "default" : "secondary"}>
-                        {item.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2 whitespace-nowrap">
-                        <Button
-                          variant="sidebar"
-                          size="sm"
-                          className="min-w-[110px] justify-center"
-                          onClick={() => router.push(`/inventario/materias-primas/${item.id}`)}
-                        >
-                          <PencilIcon className="size-4" />
-                          Abrir ficha
-                        </Button>
-                        <Button
-                          variant="sidebar"
-                          size="sm"
-                          className="min-w-[120px] justify-center"
-                          onClick={() => toggle(item)}
-                        >
-                          <ToggleLeftIcon className="size-4" />
-                          {item.activo ? "Desactivar" : "Activar"}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {familiaMateriaPrimaItems.find(
+                      (familia) => familia.value === item.familia,
+                    )?.label ?? item.familia}
+                  </TableCell>
+                  <TableCell>
+                    {subfamiliaMateriaPrimaLabels[item.subfamilia] ??
+                      item.subfamilia}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {item.variantes.length}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="sm"
+                      variant="soft"
+                      color={item.activo ? "success" : "default"}
+                    >
+                      <span className={styles.statusDot} />
+                      {item.activo ? "Activo" : "Inactivo"}
+                    </Chip>
+                  </TableCell>
+                  <TableCell>
+                    <div className={styles.rowActions}>
+                      <ActionLink
+                        variant="outline"
+                        href={`/inventario/materias-primas/${item.id}`}
+                      >
+                        <PencilIcon size={15} /> Abrir ficha
+                      </ActionLink>
+                      <ActionButton
+                        variant="outline"
+                        onPress={() => toggle(item)}
+                      >
+                        <ToggleLeftIcon size={15} />
+                        {item.activo ? "Desactivar" : "Activar"}
+                      </ActionButton>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </Card>
-
-      <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <SheetContent
-          side="top"
-          className="w-[min(780px,95vw)] rounded-xl border p-0 data-[side=top]:inset-x-auto data-[side=top]:left-1/2 data-[side=top]:top-1/2 data-[side=top]:h-auto data-[side=top]:-translate-x-1/2 data-[side=top]:-translate-y-1/2 data-[side=top]:border"
-        >
-          <SheetHeader className="border-b px-4 pb-3 md:px-6">
-            <SheetTitle>Nueva materia prima</SheetTitle>
-            <SheetDescription>
-              Paso 1: elegí nombre y plantilla. Luego se abre la ficha dedicada con tabs.
-            </SheetDescription>
-          </SheetHeader>
-
-          <div className="space-y-4 px-4 py-4 md:px-6">
-            <Field>
-              <FieldLabel>Nombre</FieldLabel>
-              <Input
-                placeholder="Ej: Vinilo adhesivo blanco"
-                value={nombreNuevo}
-                onChange={(event) => setNombreNuevo(event.target.value)}
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel>Plantilla de materia prima</FieldLabel>
-              <Select
-                value={templateNuevo}
-                onValueChange={(value) => setTemplateNuevo(value ?? "")}
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {selectedTemplate?.nombre ?? "Seleccionar plantilla"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {materiaPrimaTemplatesV1.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.nombre} ·{" "}
-                      {familiaMateriaPrimaItems.find(
-                        (familia) => familia.value === template.familia,
-                      )?.label ?? template.familia}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-
-            {templateNuevo ? (
-              <div className="space-y-1 rounded-lg border p-3 text-sm text-muted-foreground">
-                <div className="font-medium text-foreground">
-                  Familia: {selectedTemplate
+      <FormDialog
+        isOpen={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
+        isDismissable={!isSaving}
+        title="Nueva materia prima"
+        description="Elegí un nombre y una plantilla. Después podés completar los datos y las variantes en su ficha."
+      >
+        <Modal.Body className={styles.dialogBody}>
+          <TextField
+            className={styles.field}
+            value={nombreNuevo}
+            onChange={setNombreNuevo}
+            autoFocus
+          >
+            <Label>Nombre</Label>
+            <Input placeholder="Ej: Vinilo adhesivo blanco" />
+          </TextField>
+          <div className={styles.field}>
+            <label htmlFor="material-template">
+              Plantilla de materia prima
+            </label>
+            <SelectField
+              id="material-template"
+              aria-label="Plantilla de materia prima"
+              value={templateNuevo}
+              onChange={(value) => setTemplateNuevo(value ?? "")}
+              options={materiaPrimaTemplatesV1.map((template) => ({
+                value: template.id,
+                label: `${template.nombre} · ${familiaMateriaPrimaItems.find((familia) => familia.value === template.familia)?.label ?? template.familia}`,
+              }))}
+            />
+          </div>
+          {templateNuevo ? (
+            <div className={styles.templateInfo}>
+              <LibraryIcon size={18} aria-hidden />
+              <div>
+                <strong>
+                  Familia:{" "}
+                  {selectedTemplate
                     ? (familiaMateriaPrimaItems.find(
                         (familia) => familia.value === selectedTemplate.familia,
                       )?.label ?? selectedTemplate.familia)
@@ -400,22 +442,29 @@ export function MateriasPrimasPanel({ initialMateriasPrimas }: MateriasPrimasPan
                   {selectedTemplate
                     ? ` · Subfamilia: ${subfamiliaMateriaPrimaLabels[selectedTemplate.subfamilia] ?? selectedTemplate.subfamilia}`
                     : ""}
-                </div>
-                <div>{getMateriaPrimaTemplate(templateNuevo)?.descripcion}</div>
+                </strong>
+                <p>{getMateriaPrimaTemplate(templateNuevo)?.descripcion}</p>
               </div>
-            ) : null}
-          </div>
-
-          <SheetFooter className="flex-row justify-end border-t px-4 py-3 md:px-6">
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isSaving}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreate} loading={isSaving} loadingText="Creando...">
-              Crear y abrir ficha
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-    </div>
+            </div>
+          ) : null}
+        </Modal.Body>
+        <Modal.Footer className={styles.dialogFooter}>
+          <ActionButton
+            variant="outline"
+            onPress={() => setIsCreateOpen(false)}
+            isDisabled={isSaving}
+          >
+            Cancelar
+          </ActionButton>
+          <ActionButton
+            onPress={handleCreate}
+            isDisabled={isSaving}
+            isPending={isSaving}
+          >
+            {isSaving ? "Creando…" : "Crear y abrir ficha"}
+          </ActionButton>
+        </Modal.Footer>
+      </FormDialog>
+    </section>
   );
 }

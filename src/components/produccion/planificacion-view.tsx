@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { resumenOperacionPlan } from "@/lib/planificacion-geometria";
 import { leerModoOperacionMaquina } from "@/lib/demanda-humana";
 
@@ -131,7 +132,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
   };
 
   if (sinSimulacion) return <section className={styles.page} aria-label="Planificación de producción" aria-busy={calculando}>
-    <Alert variant={error ? 'destructive' : 'default'}><RefreshCw className={calculando ? styles.spinning : undefined} />
+    <Alert variant={error ? 'destructive' : 'default'}>{calculando ? <GdiSpinner /> : <RefreshCw />}
       <AlertTitle>{error ? 'No se pudo calcular la planificación' : 'Calculando planificación'}</AlertTitle>
       <AlertDescription>{error ?? 'Estamos ubicando las operaciones y sus dependencias en el calendario.'}</AlertDescription>
     </Alert>
@@ -142,7 +143,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
     <h1 className="sr-only">Planificación de producción</h1>
 
     {error && <Alert variant="destructive"><TriangleAlert /><AlertTitle>No se pudo completar la consulta</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
-    {calculando && <Badge variant="secondary"><RefreshCw className={styles.spinning} />Actualizando fechas</Badge>}
+    {calculando && <Badge variant="secondary"><GdiSpinner />Actualizando fechas</Badge>}
     {(datos.initialPartialWarning || datos.initialMeta.alcance !== "completo") && <Alert><Info /><AlertDescription>{datos.initialPartialWarning ?? "Tu acceso muestra sólo parte del taller. Esta proyección puede omitir carga de otros trabajos y no confirma la capacidad total."}</AlertDescription></Alert>}
 
     {/* El alcance HeroUI termina en los controles: no cambia los tokens del Gantt. */}
@@ -207,7 +208,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
             <ActionButton variant="outline" onPress={() => expandir(false)}>Plegar filas</ActionButton>
           </div>
           {seleccionId && <ActionButton variant="ghost" isIconOnly onPress={() => { setSeleccionId(null); setPanelAbierto(false); setFocoRecorrido(false); }} aria-label="Limpiar selección"><X size={16} /></ActionButton>}
-          <ActionButton variant="outline" isIconOnly onPress={() => void actualizar()} isDisabled={actualizando} aria-label="Actualizar planificación" title={actualizando ? "Actualizando planificación" : "Actualizar planificación"}><RefreshCw size={16} className={actualizando ? styles.spinning : undefined} /></ActionButton>
+          <ActionButton variant="outline" isIconOnly onPress={() => void actualizar()} isDisabled={actualizando} aria-label="Actualizar planificación" title={actualizando ? "Actualizando planificación" : "Actualizar planificación"}>{actualizando ? <GdiSpinner /> : <RefreshCw size={16} />}</ActionButton>
         </div>
       </div>
       <PlanificacionGantt grupos={grupos} entregas={entregas} modo={modo} eje={eje} desde={desde} hasta={hasta} zona={zona} ahora={ahora} zoom={zoom} volverAlInicio={volverAlInicio} abiertos={abiertos} alternar={alternar} seleccionId={seleccionId} relacionadas={relacionadas} mostrarDependencias={mostrarDependencias} seleccionar={seleccionarEnGantt} riesgo={riesgo} />

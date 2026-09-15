@@ -1,3 +1,4 @@
+import { fijarPlanReferencia } from '../produccion/plan-referencia-paso';
 import { aplicarReprogramacion } from './reprogramacion-aplicar';
 import { ConflictException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
@@ -27,7 +28,12 @@ export async function fijarIniciosLotes(
           parentItemId: true,
           componenteCodigo: true,
           pasos: {
-            select: { id: true, nodoClave: true, duracionEstimadaMin: true },
+            select: {
+              id: true,
+              nodoClave: true,
+              duracionEstimadaMin: true,
+              planReferenciaJson: true,
+            },
           },
         },
       },
@@ -117,9 +123,25 @@ export async function fijarIniciosLotes(
         plan?.reprogramacionAplicadaRevisionId === lote.revisionId
       )
         continue;
+      // Algunas propuestas anteriores sólo guardaban el inicio. Se conserva
+      // ese dato y la primera corrida completa fijará el fin de referencia.
+      const finValido =
+        Number.isFinite(new Date(t.fin).getTime()) &&
+        new Date(t.fin).getTime() >= inicio.getTime();
       await tx.ordenTrabajoItemPaso.update({
         where: { id: p.id, tenantId },
-        data: { planificadoDesde: inicio },
+        data: {
+          planificadoDesde: inicio,
+          ...(finValido
+            ? {
+                planReferenciaJson: fijarPlanReferencia(
+                  p.planReferenciaJson,
+                  t,
+                  'plan_aceptado',
+                ) as unknown as Prisma.InputJsonValue,
+              }
+            : {}),
+        },
         select: { id: true },
       });
     }

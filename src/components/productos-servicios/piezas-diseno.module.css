@@ -614,3 +614,11 @@
     margin-left: 23px;
   }
 }
+
+:global([data-producto-ficha]) .editor, .dialog:global([data-producto-dialog]) { --piece-border: var(--border); --piece-accent: var(--accent); color: var(--foreground); border-radius: 12px; }
+:global([data-producto-ficha]) .sectionHead, :global([data-producto-dialog]) .dialogHeader { background: var(--surface); border-color: var(--border); }
+:global([data-producto-ficha]) .sectionIcon { border: 0; background: var(--accent-soft); color: var(--accent-soft-foreground); }
+:global([data-producto-ficha]) .eyebrow, :global([data-producto-dialog]) .eyebrow { color: var(--muted-text); font: 500 11px inherit; letter-spacing: 0; text-transform: none; }
+:global([data-producto-ficha]) .editor .primaryAction, :global([data-producto-dialog]) .primaryAction { color: var(--accent-foreground); background: var(--accent); border-color: var(--accent); box-shadow: none; }
+:global([data-producto-ficha]) .editor .secondaryAction, :global([data-producto-dialog]) .secondaryAction { font-size: 13px; min-height: 32px; border-color: var(--border); color: var(--foreground); }
+.dialog:global([data-producto-dialog]) { z-index: auto; padding: 0; }

@@ -1,3 +1,4 @@
+import { leerPlanReferencia } from '../produccion/plan-referencia-paso';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -183,6 +184,16 @@ it('un borrador prepara los lotes sin enviar trabajo al taller; al emitir reutil
         });
         expect(pasos).toHaveLength(16);
         expect(pasos.every((p) => p.planificadoDesde)).toBe(true);
+        for (const p of pasos) {
+          const referencia = leerPlanReferencia(p.planReferenciaJson);
+          expect(referencia).toMatchObject({
+            inicio: p.planificadoDesde!.toISOString(),
+            origen: 'plan_aceptado',
+          });
+          expect(Date.parse(referencia!.fin)).toBeGreaterThanOrEqual(
+            p.planificadoDesde!.getTime(),
+          );
+        }
         throw rollback;
       },
       { timeout: 60_000 },
@@ -262,6 +273,45 @@ it('retirar una distribución pendiente restaura la ruta y los componentes origi
             where: { productoItemId: f.raiz.id },
           }),
         ).toBe(0);
+        throw rollback;
+      },
+      { timeout: 60000 },
+    ),
+  ).rejects.toBe(rollback);
+});
+
+it('conserva propuestas históricas sin fin sin inventar una referencia ni impedir emitir', async () => {
+  await expect(
+    db.$transaction(
+      async (tx) => {
+        const f = await fixture(tx);
+        const revision = await tx.planEntregaRevision.findUniqueOrThrow({
+          where: { id: f.rev.id },
+        });
+        const resultado = revision.resultadoJson as unknown as {
+          resultado: {
+            alternativas: Array<{ traza: Array<{ fin?: string }> }>;
+          };
+        };
+        resultado.resultado.alternativas.forEach((a) =>
+          a.traza.forEach((t) => {
+            delete t.fin;
+          }),
+        );
+        await tx.planEntregaRevision.update({
+          where: { id: f.rev.id },
+          data: {
+            resultadoJson: resultado as unknown as Prisma.InputJsonValue,
+          },
+        });
+        await service.sincronizarLotesEntrega(tx, f.tenantId, f.raiz.id);
+        const pasos = await tx.ordenTrabajoItemPaso.findMany({
+          where: { ordenId: f.orden.id },
+        });
+        expect(pasos).toHaveLength(16);
+        expect(
+          pasos.every((p) => p.planificadoDesde && !p.planReferenciaJson),
+        ).toBe(true);
         throw rollback;
       },
       { timeout: 60000 },

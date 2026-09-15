@@ -1,8 +1,14 @@
 "use client";
 
-import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
+import { Card, Checkbox, Input } from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { SelectField } from "@/components/design-system/select-field";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 import * as React from "react";
-import { CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import type {
   DefinicionPasoInternoCompuesto,
@@ -37,6 +43,7 @@ function siguienteCodigoOperacion(
 }
 
 export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
+  const scope = useDesignScope();
   const [operaciones, setOperaciones] = React.useState<
     DefinicionPasoInternoCompuesto[]
   >(() =>
@@ -111,24 +118,28 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
   };
 
   return (
-    <main className={styles.page}>
-      <EncabezadoConfiguracion
-        area="nodos"
-        titulo={paso.nombre}
-        descripcion="Nodo compuesto · Sus operaciones internas calculan materiales, recursos y tiempos. En producción se mostrará un único nodo."
-      />
+    <main {...scope} className={`${theme.theme} ${listPage.page}`}>
+      <header className={listPage.header}>
+        <div>
+          <h1>{paso.nombre}</h1>
+          <p className={listPage.subtitle}>
+            Nodo compuesto · Sus operaciones internas calculan materiales,
+            recursos y tiempos. En producción se mostrará un único nodo.
+          </p>
+        </div>
+      </header>
 
-      <section className={styles.panel}>
-        <div className={styles.panelHead}>
+      <Card className={styles.panel}>
+        <Card.Header className={styles.panelHead}>
           <div>
             <strong>Operaciones internas</strong>
             <span>
               Calculan el trabajo sin crear estados separados en producción.
             </span>
           </div>
-          <button
+          <Button
             type="button"
-            className={styles.addButton}
+            variant="outline"
             onClick={() =>
               setOperaciones((current) => [
                 ...current,
@@ -147,8 +158,8 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
           >
             <PlusIcon />
             <span>Agregar operación</span>
-          </button>
-        </div>
+          </Button>
+        </Card.Header>
         {!operaciones.length ? (
           <div className={styles.empty}>
             Agregá la primera operación que formará parte de este nodo
@@ -168,34 +179,35 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                 <span className={styles.index}>
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <label>
+                <div className={styles.field}>
                   <span className={styles.rowLabel}>Familia de cálculo</span>
-                  <select
+                  <SelectField
                     aria-label={`Nodo simple ${index + 1}`}
                     value={operacion.familiaCodigo}
-                    onChange={(event) => {
+                    onChange={(value) => {
                       const familia = familias.find(
-                        (item) => item.codigo === event.target.value,
+                        (item) => item.codigo === value,
                       );
                       cambiar(index, {
-                        familiaCodigo: event.target.value,
+                        familiaCodigo: value,
                         nombre: operacion.nombre || familia?.nombre || "",
                       });
                     }}
-                  >
-                    <option value="">Elegir nodo simple…</option>
-                    {familias.map((familia) => (
-                      <option key={familia.codigo} value={familia.codigo}>
-                        {familia.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
+                    options={[
+                      { value: "", label: "Elegir nodo simple…" },
+                      ...familias.map((familia) => ({
+                        value: familia.codigo,
+                        label: familia.nombre,
+                      })),
+                    ]}
+                  />
+                </div>
+                <div className={styles.field}>
                   <span className={styles.rowLabel}>
                     Nombre de la operación
                   </span>
-                  <input
+                  <Input
+                    className={focus.singleBorder}
                     aria-label={`Nombre de la operación ${index + 1}`}
                     value={operacion.nombre}
                     placeholder="Ej. Tensado de lona"
@@ -203,22 +215,24 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                       cambiar(index, { nombre: event.target.value })
                     }
                   />
-                </label>
-                <button
-                  type="button"
+                </div>
+                <Checkbox
+                  isSelected={operacion.requerida}
+                  onChange={(value) => cambiar(index, { requerida: value })}
+                  aria-label={`Operación ${index + 1} obligatoria`}
                   className={styles.required}
-                  aria-pressed={operacion.requerida}
-                  onClick={() =>
-                    cambiar(index, { requerida: !operacion.requerida })
-                  }
                 >
-                  <span className={styles.check} aria-hidden="true">
-                    {operacion.requerida ? <CheckIcon /> : null}
-                  </span>
-                  <span>Obligatoria</span>
-                </button>
-                <button
+                  <Checkbox.Content>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <span>Obligatoria</span>
+                  </Checkbox.Content>
+                </Checkbox>
+                <Button
                   type="button"
+                  variant="danger-soft"
+                  isIconOnly
                   className={styles.remove}
                   aria-label={`Quitar ${operacion.nombre || "paso"}`}
                   onClick={() =>
@@ -228,20 +242,24 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
                   }
                 >
                   <Trash2Icon />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
         )}
         <footer className={styles.footer}>
-          <button type="button" onClick={() => history.back()}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => history.back()}
+          >
             Volver
-          </button>
-          <button type="button" disabled={guardando} onClick={guardar}>
+          </Button>
+          <Button type="button" isDisabled={guardando} onClick={guardar}>
             {guardando ? "Guardando…" : "Guardar operaciones"}
-          </button>
+          </Button>
         </footer>
-      </section>
+      </Card>
     </main>
   );
 }

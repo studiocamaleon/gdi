@@ -1,15 +1,16 @@
 "use client";
 import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
-import { filtrarTrabajos, metricasTrabajos, type FiltrosTrabajo } from "@/lib/tablero-lista";
+import { filtrarTrabajos, metricasTrabajos, opcionesEstacionesTablero, type FiltrosTrabajo } from "@/lib/tablero-lista";
+import { modoTableroEnUrl, urlTableroEstacion } from "@/lib/tablero-navegacion";
 import { TableroFiltros } from "./tablero-filtros";
-import listPage from "@/components/design-system/list-page.module.css";
-import { ActionButton } from "@/components/design-system/action-button";
 import theme from "@/components/design-system/theme.module.css";
 import toolbar from "./tablero-toolbar.module.css";
 import { agruparTrabajos, type GrupoTableroKey } from "@/lib/tablero-lista";
 import { TableroLista } from "./tablero-lista";
 import { TableroTerminados } from "./tablero-terminados";
 import { modoTableroGuardado, type ModoTablero } from "@/lib/tablero-modos";
+import { TableroMonitor } from "./tablero-monitor";
+import { useRelojProduccion } from "./use-reloj-produccion";
 import { useProduccionOperativa } from "./use-produccion-operativa";
 import { buildItemView, ESTADO_TRABAJO_LABELS, type ItemView, type StepView } from "@/lib/produccion-item-view";
 
@@ -17,7 +18,7 @@ import { calcularProgreso } from "@/lib/progreso-produccion";
 import { ProgresoValor } from "./progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   BanIcon,
   BookOpenIcon,
@@ -378,7 +379,6 @@ function DetailRuta({
   onAccion: AccionHandler;
   onGate: GateHandler;
 }) {
-  const { zonaHoraria } = useConfigRegional();
   if (item.sinRuta) {
     return (
       <div className="detail-route-empty">
@@ -462,11 +462,6 @@ function DetailRuta({
               {paso.asignacionPersonal && <div className={toolbar.assignment}>
                 <span>Personal asignado · {paso.asignacionPersonal.personas.map(p => p.nombre).join(" · ") || "Sin asignar"}</span>
                 {paso.asignacionPersonal.conflicto && <span role="status" className={toolbar.assignmentConflict}>{paso.asignacionPersonal.conflicto}</span>}
-                {paso.asignacionPersonal.franjas.length > 0 && <span>Atención prevista · incluye preparación y tiempo entre pasos</span>}
-                {paso.asignacionPersonal.franjas.map((franja, n) => <span key={n}>
-                  {new Date(franja.inicio).toLocaleString("es-AR", { timeZone: zonaHoraria, dateStyle: "short", timeStyle: "short" })} – {new Date(franja.fin).toLocaleTimeString("es-AR", { timeZone: zonaHoraria, hour: "2-digit", minute: "2-digit" })}
-                  {" · "}{franja.empleadoIds.map(id => paso.asignacionPersonal?.personas.find(p => p.empleadoId === id)?.nombre).filter(Boolean).join(" · ")}
-                </span>)}
               </div>}
 
               {paso.operacionesIncorporacionSnapshotJson?.length ? (
@@ -913,7 +908,6 @@ export function ItemDetailSheet({
               {item.blocked && item.blockedReason && item.statusLine !== item.blockedReason ? (
                 <div className="sub">{item.blockedReason}</div>
               ) : null}
-              {item.waitingReason && item.dependencias.length ? <div className="sub">{item.waitingReason}</div> : null}
               {!item.blocked && item.state !== "waiting" && currentStep ? (
                 <div className="sub">
                   {item.currentSteps.length > 1
@@ -1278,7 +1272,10 @@ export function TableroProduccion({
   modoPlanificacion?: boolean;
 }) {
   const { zonaHoraria } = useConfigRegional();
-  const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, permisoSupervisar, canManage, refrescar, handleAccion, handleGate } = useProduccionOperativa({ initialActualizadoEl, initialItems, initialMeta, initialLoadError, soloPendientes: !modoPlanificacion });
+  const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, conexion, permisoSupervisar, canManage, refrescar, handleAccion, handleGate, handleMesa, handleAsignacionPersonal } = useProduccionOperativa({ initialActualizadoEl, initialItems, initialMeta, initialLoadError, soloPendientes: !modoPlanificacion });
+  const relojTabla = useRelojProduccion(60_000, initialActualizadoEl ? Date.parse(initialActualizadoEl) : null, !modoPlanificacion);
+  const instanteVista = Math.max(actualizadoEl?.getTime() ?? 0, modoPlanificacion ? 0 : relojTabla ?? 0);
+  const ahoraVista = React.useMemo(() => new Date(instanteVista), [instanteVista]);
   const [mode, setMode] = React.useState<Mode>(DEFAULT_BOARD_MODE);
   const [defaultMode, setDefaultMode] =
     React.useState<Mode>(DEFAULT_BOARD_MODE);
@@ -1300,32 +1297,37 @@ export function TableroProduccion({
       .catch(err => { if (vigente) setErrorConsulta(err instanceof Error ? err.message : "No se pudo abrir el trabajo."); });
     return () => { vigente = false; };
   }, [selectedId, items, historicos, itemConsultado]);
-  const [filters, setFilters] = React.useState<FiltrosTrabajo>({ query: "", asignadasAMi: false, estacionId: "", empleadoId: "" });
-  const puedeFiltrarPersonal = permisoSupervisar && meta.alcance === "completo";
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const estacionUrl = searchParams.get("estacion") ?? "";
+  const modoUrl = modoTableroEnUrl(searchParams);
+  const [filters, setFilters] = React.useState<FiltrosTrabajo>({ query: "", asignadasAMi: false, estacionId: estacionUrl, empleadoId: "" });
+  const puedeFiltrarPersonal = permisoSupervisar && meta.alcance === "completo";
   React.useEffect(() => {
     if (modoPlanificacion) return;
     const savedMode = readStoredBoardMode();
     setDefaultMode(savedMode);
-    setMode(savedMode);
-  }, [modoPlanificacion]);
+    setMode(modoUrl ?? savedMode);
+  }, [modoPlanificacion, modoUrl]);
 
-  // Deep-link del widget "En curso": /produccion/tablero?item=<id> abre el
-  // sheet de ese item directo (searchParams cambia de instancia en cada
-  // navegación, así que re-clickear el link vuelve a abrirlo).
   React.useEffect(() => {
-    const itemParam = searchParams.get("item");
+    setFilters((current) => current.estacionId === estacionUrl ? current : { ...current, estacionId: estacionUrl });
+  }, [estacionUrl]);
+
+  const cambiarEstacion = (estacionId: string) => {
+    setFilters((current) => ({ ...current, estacionId }));
+    router.replace(urlTableroEstacion(estacionId, mode, searchParams.toString()), { scroll: false });
+  };
+  const cambiarModo = (nextMode: Mode) => {
+    setMode(nextMode);
+    router.replace(urlTableroEstacion(filters.estacionId, nextMode, searchParams.toString()), { scroll: false });
+  };
+
+  // Abrir el ítem enlazado, sin reabrirlo al cambiar estación o vista en la URL.
+  const itemParam = searchParams.get("item");
+  React.useEffect(() => {
     if (itemParam) setSelectedId(itemParam);
-  }, [searchParams]);
-
-  React.useEffect(() => {
-    const estado = searchParams.get("estado");
-    if (estado === "blocked" && !modoPlanificacion) {
-      // El acceso del panel enfoca la sección, sin aplicar un filtro oculto.
-      setMode("items");
-
-    }
-  }, [searchParams, modoPlanificacion]);
+  }, [itemParam]);
 
   React.useEffect(() => {
     if (!tabMenu) return undefined;
@@ -1349,8 +1351,8 @@ export function TableroProduccion({
   }, [tabMenu]);
 
   const views = React.useMemo(
-    () => items.map((item) => buildItemView(item, estaciones, zonaHoraria, actualizadoEl ?? new Date())),
-    [items, estaciones, zonaHoraria, actualizadoEl],
+    () => items.map((item) => buildItemView(item, estaciones, zonaHoraria, ahoraVista)),
+    [items, estaciones, zonaHoraria, ahoraVista],
   );
 
   /** familiaCodigo → mediana histórica en minutos (fallback de la cola). */
@@ -1381,7 +1383,7 @@ export function TableroProduccion({
         noLaborables,
         tiempoEntrePasosMin,
         zona: zonaHoraria,
-        ahora: actualizadoEl ?? new Date(),
+        ahora: ahoraVista,
       }),
     [
       items,
@@ -1390,7 +1392,7 @@ export function TableroProduccion({
       noLaborables,
       tiempoEntrePasosMin,
       zonaHoraria,
-      actualizadoEl,
+      ahoraVista,
     ],
   );
 
@@ -1416,14 +1418,14 @@ export function TableroProduccion({
   const setDefaultBoardMode = (nextMode: Mode) => {
     writeStoredBoardMode(nextMode);
     setDefaultMode(nextMode);
-    setMode(nextMode);
+    cambiarModo(nextMode);
     setTabMenu(null);
   };
 
   const filtered = React.useMemo(() => filtrarTrabajos(
     views, estaciones, { ...filters, empleadoId: puedeFiltrarPersonal ? filters.empleadoId : "" },
-    zonaHoraria, actualizadoEl ?? new Date(),
-  ), [views, estaciones, filters, puedeFiltrarPersonal, zonaHoraria, actualizadoEl]);
+    zonaHoraria, ahoraVista,
+  ), [views, estaciones, filters, puedeFiltrarPersonal, zonaHoraria, ahoraVista]);
   const counts = metricasTrabajos(filtered);
   const empleados = React.useMemo(() => {
     const personas = new Map(estaciones.flatMap(e => e.empleados).map(e => [e.id, { id: e.id, nombre: e.nombreCompleto }]));
@@ -1431,7 +1433,7 @@ export function TableroProduccion({
       personas.set(p.empleadoId, { id: p.empleadoId, nombre: p.nombre });
     return [...personas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   }, [estaciones, items]);
-  const estacionesFiltro = React.useMemo(() => estaciones.filter(e => e.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, "es")), [estaciones]);
+  const estacionesFiltro = React.useMemo(() => opcionesEstacionesTablero(estaciones, filters.estacionId), [estaciones, filters.estacionId]);
   const seccionInicial = searchParams.get("estado") === "blocked" ? "blocked" : undefined;
   const historicosViews = React.useMemo(() => historicos.map(item => buildItemView(item, estaciones, zonaHoraria)), [historicos, estaciones, zonaHoraria]);
   const consultadoView = React.useMemo(() => itemConsultado ? buildItemView(itemConsultado, estaciones, zonaHoraria) : undefined, [itemConsultado, estaciones, zonaHoraria]);
@@ -1440,28 +1442,23 @@ export function TableroProduccion({
   return (
     <div className={`tablero-produccion${modoPlanificacion ? ` ${planificacionStyles.root}` : ` ${toolbar.page}`}`}>
       <div className={`tab-page${modoPlanificacion ? ` ${planificacionStyles.page}` : ` ${toolbar.content}`}`}>
-        <div data-ui={modoPlanificacion ? undefined : "heroui"} className={modoPlanificacion ? "page-head" : `${theme.theme} ${listPage.header}`}>
-          <div className={modoPlanificacion ? "title-block" : undefined}>
-            <h1>{modoPlanificacion ? "Planificación" : "Tablero de producción en tiempo real"}</h1>
-            <div className={modoPlanificacion ? "sub" : listPage.subtitle}>
-              {modoPlanificacion
-                ? "Calendario de producción, carga de estaciones y dependencias por lote."
-                : "Items de las órdenes emitidas, con cliente y ruta real de pasos."}
-              {actualizadoEl
-                ? ` Actualizado a las ${actualizadoEl.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zonaHoraria })}`
-                : " Todavía no se pudo actualizar."}
+        {modoPlanificacion ? (
+          <div className="page-head">
+            <div className="title-block">
+              <h1>Planificación</h1>
+              <div className="sub">
+                Calendario de producción, carga de estaciones y dependencias por lote.
+                {actualizadoEl ? ` Actualizado a las ${actualizadoEl.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: zonaHoraria })}` : " Todavía no se pudo actualizar."}
+              </div>
             </div>
-          </div>
-          {modoPlanificacion ? (
             <Button type="button" variant="outline" loading={refreshing} loadingText="Actualizando" onClick={() => void refrescar(true)}>
               <RefreshCwIcon data-icon="inline-start" />Actualizar
             </Button>
-          ) : (
-            <ActionButton variant="outline" isPending={refreshing} onPress={() => void refrescar(true)}>
-              <RefreshCwIcon />{refreshing ? "Actualizando" : "Actualizar"}
-            </ActionButton>
-          )}
-        </div>
+          </div>
+        ) : (
+          <TableroMonitor zona={zonaHoraria} actualizadoEl={actualizadoEl} conexion={conexion}
+            error={!!syncError || !!loadError} refreshing={refreshing} onRefresh={() => void refrescar(true)} />
+        )}
 
         {initialPartialWarning ? (
           <Alert>
@@ -1511,7 +1508,7 @@ export function TableroProduccion({
               tabIndex={mode === entry.mode ? 0 : -1}
               className={toolbar.tab}
               aria-selected={mode === entry.mode}
-              onClick={() => setMode(entry.mode)}
+              onClick={() => cambiarModo(entry.mode)}
               onKeyDown={(event) => {
                 if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
                   return;
@@ -1525,7 +1522,7 @@ export function TableroProduccion({
                     (actual + delta + tabEntries.length) % tabEntries.length
                   ];
                 if (!siguiente) return;
-                setMode(siguiente.mode);
+                cambiarModo(siguiente.mode);
                 document
                   .getElementById(`tablero-tab-${siguiente.mode}`)
                   ?.focus();
@@ -1627,10 +1624,10 @@ export function TableroProduccion({
             />
           ) : (
             <>
-              <TableroFiltros filters={filters} setFilters={setFilters} counts={counts} total={views.length}
+              <TableroFiltros filters={filters} setFilters={setFilters} onEstacionChange={cambiarEstacion} counts={counts} total={views.length}
                 estaciones={estacionesFiltro} empleados={empleados} puedeFiltrarPersonal={puedeFiltrarPersonal} />
               {mode === "items"
-                ? <TableroLista items={filtered} trabajosContexto={views} estaciones={estaciones} sim={sim} zona={zonaHoraria} onOpen={setSelectedId} seccionInicial={seccionInicial} contextoFiltros={JSON.stringify(filters)} />
+                ? <TableroLista items={filtered} trabajosContexto={views} estaciones={estaciones} sim={sim} zona={zonaHoraria} onOpen={setSelectedId} seccionInicial={seccionInicial} contextoFiltros={JSON.stringify(filters)} asignacionManual={{ puedeReasignar: permisoSupervisar, onConfirmar: handleAsignacionPersonal, canManage, estacionIdsEjecutables: meta.estacionIdsEjecutables, busy, onMesa: handleMesa }} />
                 : <KanbanView items={filtered} onOpen={setSelectedId} />}
 
             </>

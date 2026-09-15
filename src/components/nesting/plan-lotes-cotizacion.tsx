@@ -1,9 +1,10 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { DesgloseOperacionesCorte } from "@/components/comercial/desglose-operaciones-corte";
 
 import * as React from "react";
-import { ArrowUpRightIcon, Layers3Icon, LoaderCircleIcon } from "lucide-react";
+import { ArrowUpRightIcon, Layers3Icon, } from "lucide-react";
 import theme from "@/components/ui/workspace-theme.module.css";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -107,7 +108,7 @@ export function PlanLotesCotizacion({
           <span className={styles.status} data-ready={vigente} role="status">
             {estado === "calculando" ? (
               <>
-                <LoaderCircleIcon className="animate-spin" /> Calculando…
+                <GdiSpinner className="size-4" /> Calculando…
               </>
             ) : estado === "error" ? (
               "Requiere atención"

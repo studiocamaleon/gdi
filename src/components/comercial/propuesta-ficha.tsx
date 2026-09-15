@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   fechaFinalDistribucion,
   fechaFinalItems,
@@ -4340,7 +4341,7 @@ function EmitOverlay({
                             <path d="M5 13l4 4L19 7" />
                           </svg>
                         ) : state === "run" ? (
-                          <span className="es-spin" />
+                          <GdiSpinner />
                         ) : null}
                       </span>
                       <span className="es-lbl">{lbl}</span>

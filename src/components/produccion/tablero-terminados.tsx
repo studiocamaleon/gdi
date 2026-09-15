@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Input, Spinner, TextField } from "@heroui/react";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { Input, TextField } from "@heroui/react";
 import { ChevronDown, ChevronUp, History, Search } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { useDesignScope } from "@/components/design-system/appearance";
@@ -154,7 +155,7 @@ export function TableroTerminados({
           </form>
           {loading ? (
             <div role="status" className={s.notice}>
-              <Spinner size="sm" /> Consultando terminados…
+              <GdiSpinner /> Consultando terminados…
             </div>
           ) : error ? (
             <div role="alert" className={s.notice}>

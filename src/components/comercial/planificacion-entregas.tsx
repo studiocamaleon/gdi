@@ -1,11 +1,11 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import { ReprogramacionEntregas } from "./reprogramacion-entregas";
 import {
   CalendarRangeIcon,
   Trash2Icon,
-  Loader2Icon,
   RefreshCwIcon,
   CheckIcon,
 } from "lucide-react";
@@ -265,7 +265,7 @@ function EditorPrevio({
   if (!fuente)
     return (
       <div className={s.body} role="status">
-        <Loader2Icon className={s.spin} /> Preparando el producto para
+        <GdiSpinner className={s.loadingIcon} /> Preparando el producto para
         distribuir sus entregas…
       </div>
     );
@@ -605,7 +605,7 @@ export function EditorPlan({
         ) : null}
         {cargando ? (
           <p role="status">
-            <Loader2Icon className={s.spin} /> Cargando distribución…
+            <GdiSpinner className={s.loadingIcon} /> Cargando distribución…
           </p>
         ) : (
           <>
@@ -761,7 +761,7 @@ export function EditorPlan({
             </section>
             {calculando ? (
               <div role="status" className={s.notice}>
-                <Loader2Icon className={s.spin} />
+                <GdiSpinner className={s.loadingIcon} />
                 <div>
                   <strong>
                     {plan?.estado === "SOLICITADA"

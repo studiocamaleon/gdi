@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import {
   CheckCircle2Icon,
@@ -125,7 +126,7 @@ export function RecorridoCortePanel({ itemId, seleccion }: { itemId: string; sel
             disabled={regenerating}
             onClick={regenerate}
           >
-            <RefreshCwIcon className={regenerating ? "animate-spin" : ""} />
+            {regenerating ? <GdiSpinner /> : <RefreshCwIcon />}
             Regenerar
           </Button>
         ) : null}

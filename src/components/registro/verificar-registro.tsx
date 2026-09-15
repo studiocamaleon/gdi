@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,7 +13,6 @@ import {
   CircleDollarSign,
   Clock3,
   KeyRound,
-  LoaderCircle,
   LogIn,
   ShieldCheck,
   TriangleAlert,
@@ -132,7 +132,7 @@ export function VerificarRegistro({ token, estado, autenticado }: { token: strin
           </Link>
         ) : (
           <button className={s.verifyButton} type="button" disabled={cargando} onClick={completar}>
-            {cargando ? <><LoaderCircle className={s.verifySpinner} aria-hidden="true" /> Creando tu espacio…</> : <>Crear mi espacio de trabajo <ArrowRight aria-hidden="true" /></>}
+            {cargando ? <><GdiSpinner  aria-hidden="true" /> Creando tu espacio…</> : <>Crear mi espacio de trabajo <ArrowRight aria-hidden="true" /></>}
           </button>
         )}
 
@@ -200,7 +200,7 @@ function CreandoEspacio({ empresa, plan, fase, listo }: { empresa: string; plan:
             const activa = indice === fase && !listo;
             return (
               <li key={tarea.etiqueta} className={terminada ? s.provisionLogDone : activa ? s.provisionLogActive : ""}>
-                <span className={s.provisionStatus}>{terminada ? <Check /> : null}</span>
+                <span className={s.provisionStatus}>{terminada ? <Check /> : activa ? <GdiSpinner /> : null}</span>
                 {tarea.texto}
               </li>
             );

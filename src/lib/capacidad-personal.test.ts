@@ -542,6 +542,23 @@ describe.each([
       fecha(14, 10),
     );
   });
+  it("reasignar una agenda aceptada libera al personal anterior y reserva al nuevo en todas las estaciones", () => {
+    const estaciones = [personal("diseño"), personal("armado")];
+    const a = manual("a", "diseño");
+    a.pasos[0].personalFijo = { empleadoIds: ["ana"] };
+    const original = correr([a], estaciones).traza[0];
+    a.pasos[0] = { ...a.pasos[0], personalFijo: { empleadoIds: ["bruno"] },
+      planificadoDesde: original.inicio.toISOString(), planificadoHasta: original.fin.toISOString(),
+      atencionPlanificada: original.atencionPlanificada };
+    const b = manual("0", "armado");
+    b.pasos[0].personalFijo = { empleadoIds: ["ana"] };
+    const c = manual("1", "armado");
+    c.pasos[0].personalFijo = { empleadoIds: ["bruno"] };
+    const resultado = correr([b, c, a], estaciones);
+    expect(resultado.traza.find(p => p.pasoId === "a")?.reservasHumanas?.every(r => r.empleadoIds?.includes("bruno"))).toBe(true);
+    expect(resultado.traza.find(p => p.pasoId === "0")?.inicio).toEqual(fecha(14, 9));
+    expect(resultado.traza.find(p => p.pasoId === "1")?.inicio).toEqual(fecha(14, 10));
+  });
   it.each([true, false])(
     "no duplica personas durante la transición de un equipo (personal primero: %s)",
     (personalPrimero) => {

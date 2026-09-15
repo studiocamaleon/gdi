@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -8,7 +9,6 @@ import {
   Building2,
   Check,
   Factory,
-  LoaderCircle,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -57,7 +57,7 @@ export function Bienvenida({ nombre, empresa, plan, diasTrial }: { nombre?: stri
 
         {error ? <div className={s.welcomeError} role="alert">{error}</div> : null}
         <button className={s.welcomeButton} type="button" disabled={cargando} onClick={entrar}>
-          {cargando ? <><LoaderCircle className={s.welcomeSpinner} /> Preparando el panel…</> : <>Entrar al panel de {empresa} <ArrowRight /></>}
+          {cargando ? <><GdiSpinner  /> Preparando el panel…</> : <>Entrar al panel de {empresa} <ArrowRight /></>}
         </button>
         <div className={s.welcomeTrust}><ShieldCheck /> Tu espacio y tus datos están separados de los demás negocios.</div>
       </div>

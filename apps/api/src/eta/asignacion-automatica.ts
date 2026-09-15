@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import {
+  fijarPlanReferencia,
+  leerPlanReferencia,
+} from '../produccion/plan-referencia-paso';
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 import {
@@ -7,6 +11,7 @@ import {
 } from '../produccion/asignacion-personal';
 import { simularFlujo, type PasoProgramado } from './motor/flujo-produccion';
 import { resolverEstacionDePaso } from './motor/tablero-tipos';
+import { leerAsignacionManual } from '../produccion/asignacion-manual';
 
 type Entrada = Parameters<typeof simularFlujo>[0];
 type Persona = { id: string; nombreCompleto: string; userId: string | null };
@@ -15,6 +20,7 @@ type Paso = {
   iniciadoEl: Date | null;
   mesaUsuarioId: string | null;
   asignacionPersonalJson: unknown;
+  asignacionManualJson?: unknown;
 };
 
 export function construirAsignacion(
@@ -24,6 +30,7 @@ export function construirAsignacion(
   motivo?: string,
 ): AsignacionPersonal {
   const anterior = leerAsignacionPersonal(paso.asignacionPersonalJson);
+  const eleccion = leerAsignacionManual(paso.asignacionManualJson);
   const fijo =
     !!paso.iniciadoEl || ['en_curso', 'pausado'].includes(paso.estado);
   const manual = paso.mesaUsuarioId
@@ -40,6 +47,7 @@ export function construirAsignacion(
     ...franjas.flatMap((f) => f.empleadoIds),
     ...(fijo ? (anterior?.personas.map((p) => p.empleadoId) ?? []) : []),
     ...(manual ? [manual.id] : []),
+    ...(eleccion?.empleadoIds ?? []),
   ]);
   const personas = [...ids].sort().flatMap((id) => {
     const e = empleados.find((e) => e.id === id);
@@ -50,15 +58,23 @@ export function construirAsignacion(
         ? [previa]
         : [];
   });
+  const planIds = new Set(franjas.flatMap((f) => f.empleadoIds));
+  const manualSinCobertura =
+    eleccion &&
+    !fijo &&
+    (eleccion.empleadoIds.length !== planIds.size ||
+      eleccion.empleadoIds.some((id) => !planIds.has(id)));
   return {
     version: 1,
-    origen: paso.mesaUsuarioId ? 'manual' : 'automatica',
+    origen: eleccion || paso.mesaUsuarioId ? 'manual' : 'automatica',
     personas,
     franjas,
     conflicto: !plan
       ? (motivo ??
         'No se pudo planificar este paso. Revisá sus dependencias y la disponibilidad de recursos.')
-      : null,
+      : manualSinCobertura
+        ? 'La dotación elegida ya no tiene cobertura en la estación. Revisá su configuración y la asignación.'
+        : null,
   };
 }
 
@@ -83,7 +99,6 @@ export async function sincronizarAsignaciones(
               where: {
                 tenantId,
                 estado: { not: 'hecho' },
-                tipoEjecucion: 'interno',
                 orden: { estado: { in: ['pendiente', 'produccion'] } },
                 item: { contieneLotesEntrega: false },
               },
@@ -93,6 +108,11 @@ export async function sincronizarAsignaciones(
                 iniciadoEl: true,
                 mesaUsuarioId: true,
                 asignacionPersonalJson: true,
+                asignacionManualJson: true,
+                planReferenciaJson: true,
+                planificadoDesde: true,
+                planificadoHasta: true,
+                tipoEjecucion: true,
               },
               orderBy: { id: 'asc' },
             }),
@@ -112,7 +132,13 @@ export async function sincronizarAsignaciones(
                 ),
                 medianas: [...entrada.medianas],
                 noLaborables: [...(entrada.noLaborables ?? [])],
-                pasos: pasos.map(({ asignacionPersonalJson: _, ...p }) => p),
+                pasos: pasos.map(
+                  ({
+                    asignacionPersonalJson: _,
+                    planReferenciaJson: _referencia,
+                    ...p
+                  }) => p,
+                ),
                 empleados,
               }),
             )
@@ -136,24 +162,50 @@ export async function sincronizarAsignaciones(
             const anterior = leerAsignacionPersonal(
               paso.asignacionPersonalJson,
             );
-            // Estaciones anteriores sin personas identificadas conservan su operación.
-            if (!estacion?.planificacionPorEmpleados && !anterior) continue;
-            const asignacion = construirAsignacion(
-              paso,
-              planes.get(paso.id),
-              empleados,
-              !estacion?.activo
-                ? 'La estación asignada ya no está disponible.'
-                : sim.porItem.get(ref.item.id)?.motivoSinEstimar,
+            const plan = planes.get(paso.id);
+            const referenciaAnterior = leerPlanReferencia(
+              paso.planReferenciaJson,
             );
-            if (JSON.stringify(anterior) === JSON.stringify(asignacion))
-              continue;
+            // Guardar el fin de la operación, no el fin de su separación/atención.
+            const aceptado =
+              paso.planificadoDesde && paso.planificadoHasta
+                ? { inicio: paso.planificadoDesde, fin: paso.planificadoHasta }
+                : null;
+            const referencia =
+              referenciaAnterior ??
+              (aceptado || plan
+                ? fijarPlanReferencia(
+                    null,
+                    aceptado ?? plan!,
+                    aceptado ? 'plan_aceptado' : 'automatico',
+                    entrada.ahora,
+                  )
+                : null);
+            const data: Prisma.OrdenTrabajoItemPasoUpdateInput = {};
+            if (referencia && !referenciaAnterior)
+              data.planReferenciaJson =
+                referencia as unknown as Prisma.InputJsonValue;
+            // La referencia también cubre pasos tercerizados o estaciones del modo anterior.
+            if (
+              paso.tipoEjecucion === 'interno' &&
+              (estacion?.planificacionPorEmpleados || anterior)
+            ) {
+              const asignacion = construirAsignacion(
+                paso,
+                plan,
+                empleados,
+                !estacion?.activo
+                  ? 'La estación asignada ya no está disponible.'
+                  : sim.porItem.get(ref.item.id)?.motivoSinEstimar,
+              );
+              if (JSON.stringify(anterior) !== JSON.stringify(asignacion))
+                data.asignacionPersonalJson =
+                  asignacion as unknown as Prisma.InputJsonValue;
+            }
+            if (!Object.keys(data).length) continue;
             await tx.ordenTrabajoItemPaso.update({
-              where: { id: paso.id },
-              data: {
-                asignacionPersonalJson:
-                  asignacion as unknown as Prisma.InputJsonValue,
-              },
+              where: { id: paso.id, tenantId },
+              data,
             });
             cambios++;
           }

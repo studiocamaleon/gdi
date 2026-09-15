@@ -1,3 +1,4 @@
+import { leerPlanReferencia } from '../produccion/plan-referencia-paso';
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,8 +25,10 @@ let pasos: Array<{ id: string; itemId: string }>;
 let users: string[];
 const cal = calendarioDefault();
 const ahora = new Date('2026-09-14T09:00:00-03:00');
+let reloj: Date;
 
 beforeEach(async () => {
+  reloj = ahora;
   tenantId = randomUUID();
   otroTenant = randomUUID();
   users = [randomUUID(), randomUUID(), randomUUID()];
@@ -129,7 +132,7 @@ beforeEach(async () => {
   const contexto = eta.contextoSimulacion.bind(eta);
   jest.spyOn(eta, 'contextoSimulacion').mockImplementation(async (...args) => ({
     ...(await contexto(...args)),
-    ahora,
+    ahora: reloj,
   }));
 });
 afterEach(async () => {
@@ -393,4 +396,82 @@ it('un asignado ejecuta sin mesa y registra al actor real; otro empleado no pued
   expect(paso.tramos).toHaveLength(1);
   expect(paso.tramos[0].usuarioId).toBe(asignado.usuarioId);
   expect(paso.iniciadoPorId).toBe(asignado.usuarioId);
+});
+
+it('fija el fin de la operación sin separación; recalcular mueve la estimación, pero no el previsto', async () => {
+  await db.estacion.update({
+    where: { id: estacionId },
+    data: { tiempoPreparacionMin: 5 },
+  });
+  const primera = await eta.correr(tenantId);
+  const plan = primera.traza.find((p) => p.pasoId === pasos[0].id)!;
+  expect(plan).toBeDefined();
+  await eta.sincronizarAsignaciones(tenantId);
+  const leerReferencia = async () =>
+    leerPlanReferencia(
+      (
+        await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+          where: { id: pasos[0].id },
+        })
+      ).planReferenciaJson,
+    )!;
+  const referencia = await leerReferencia();
+  expect(referencia.fin).toBe(plan.fin.toISOString());
+  expect(referencia.inicio).toBe(plan.inicio.toISOString());
+  reloj = new Date('2026-09-14T11:00:00-03:00');
+  await eta.sincronizarAsignaciones(tenantId);
+  expect(await leerReferencia()).toEqual(referencia);
+  const actual = (await eta.correr(tenantId)).traza.find(
+    (p) => p.pasoId === pasos[0].id,
+  )!;
+  expect(actual.fin.getTime()).toBeGreaterThan(Date.parse(referencia.fin));
+  const row = await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+    where: { id: pasos[0].id },
+  });
+  expect(row.planificadoHasta).toBeNull();
+  expect(row.atencionPlanificadaJson).toBeNull();
+});
+
+it('toma el plan aceptado existente y no fabrica referencia en terminados ni cuando faltan recursos', async () => {
+  const inicio = new Date('2026-09-15T09:00:00-03:00'),
+    fin = new Date('2026-09-15T10:00:00-03:00');
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasos[0].id },
+    data: { planificadoDesde: inicio, planificadoHasta: fin },
+  });
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasos[1].id },
+    data: { estado: 'hecho' },
+  });
+  await db.estacionEmpleado.deleteMany({ where: { estacionId } });
+  await eta.sincronizarAsignaciones(tenantId);
+  const rows = await db.ordenTrabajoItemPaso.findMany({ where: { tenantId } });
+  expect(
+    leerPlanReferencia(
+      rows.find((p) => p.id === pasos[0].id)!.planReferenciaJson,
+    ),
+  ).toMatchObject({
+    inicio: inicio.toISOString(),
+    fin: fin.toISOString(),
+    origen: 'plan_aceptado',
+  });
+  expect(rows.find((p) => p.id === pasos[1].id)!.planReferenciaJson).toBeNull();
+  expect(rows.find((p) => p.id === pasos[2].id)!.planReferenciaJson).toBeNull();
+});
+
+it('también fija referencia para estaciones sin reparto personal y proveedores externos', async () => {
+  await db.estacion.update({
+    where: { id: estacionId },
+    data: { planificacionPorEmpleados: false },
+  });
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasos[2].id },
+    data: { tipoEjecucion: 'tercerizado', plazoProveedorDias: 2 },
+  });
+  await eta.sincronizarAsignaciones(tenantId);
+  const rows = await db.ordenTrabajoItemPaso.findMany({ where: { tenantId } });
+  for (const row of rows) {
+    expect(leerPlanReferencia(row.planReferenciaJson)?.fin).toBeDefined();
+    expect(row.asignacionPersonalJson).toBeNull();
+  }
 });

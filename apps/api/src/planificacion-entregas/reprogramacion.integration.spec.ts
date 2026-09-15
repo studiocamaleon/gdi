@@ -2,6 +2,10 @@ import { bloquearColaEntrega } from './reprogramacion-bloqueo';
 import { PlanificacionEntregasService } from './planificacion.service';
 import { proponerEntregasPiloto } from '../eta/planificacion/prototipo-entregas';
 /* eslint-disable @typescript-eslint/require-await -- Contexto determinista de prueba. */
+import {
+  fijarPlanReferencia,
+  leerPlanReferencia,
+} from '../produccion/plan-referencia-paso';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -168,6 +172,17 @@ it('publica agenda de ambas OT y lotes en una transacción; conserva promesas y 
     db.$transaction(
       async (tx) => {
         const f = await fixture(tx);
+        const anterior = fijarPlanReferencia(
+          null,
+          { inicio: '2026-09-16T11:00:00Z', fin: '2026-09-16T12:00:00Z' },
+          'automatico',
+        );
+        await tx.ordenTrabajoItemPaso.update({
+          where: { id: f.paso.id },
+          data: {
+            planReferenciaJson: anterior as unknown as Prisma.InputJsonValue,
+          },
+        });
         await f.service.sincronizarLotesEntrega(tx, f.tenantId, f.raiz.id);
         const leer = () =>
           tx.ordenTrabajoItemPaso.findMany({
@@ -179,6 +194,17 @@ it('publica agenda de ambas OT y lotes en una transacción; conserva promesas y 
         const pasos = await leer();
         expect(pasos).toHaveLength(17);
         expect(pasos.every((p) => p.planificadoHasta)).toBe(true);
+        for (const p of pasos)
+          expect(leerPlanReferencia(p.planReferenciaJson)).toMatchObject({
+            inicio: p.planificadoDesde!.toISOString(),
+            fin: p.planificadoHasta!.toISOString(),
+            origen: 'plan_aceptado',
+          });
+        expect(
+          leerPlanReferencia(
+            pasos.find((p) => p.id === f.paso.id)!.planReferenciaJson,
+          )?.historial,
+        ).toHaveLength(1);
         expect(
           pasos.find((p) => p.id === f.paso.id)!.atencionPlanificadaJson,
         ).toMatchObject({

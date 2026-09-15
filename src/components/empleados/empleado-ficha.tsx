@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
+  CircleAlertIcon,
   MapPinHouseIcon,
   PercentIcon,
   PlusIcon,
@@ -18,11 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
-import { NavLink } from "@/components/navigation/nav-link";
-import {
-  createEmpleado,
-  updateEmpleado,
-} from "@/lib/empleados-api";
+import { createEmpleado, updateEmpleado } from "@/lib/empleados-api";
 import {
   comisionTypeItems,
   createEmptyComision,
@@ -37,38 +34,25 @@ import {
   TipoDireccion,
   latamCountries,
 } from "@/lib/empleados";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
+  Chip as Badge,
+  Description as FieldDescription,
+  Input,
+  Label as FieldLabel,
+  Switch,
   Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+} from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { SelectField } from "@/components/design-system/select-field";
+import { useDesignScope } from "@/components/design-system/appearance";
+import { Field, FieldGroup } from "@/components/ui/field";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import styles from "./empleados.module.css";
 
 type EmpleadoFichaProps = {
   empleado: EmpleadoDetalle;
@@ -203,6 +187,8 @@ export function EmpleadoFicha({
   canManage,
   canViewCommissions,
 }: EmpleadoFichaProps) {
+  const scope = useDesignScope();
+  const readOnly = !canManage || !empleado.activo;
   const router = useRouter();
   const [isSaving, startSaving] = React.useTransition();
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -317,7 +303,6 @@ export function EmpleadoFicha({
     );
   };
 
-
   const handleToggleComisiones = (checked: boolean) => {
     setComisionesHabilitadas(checked);
 
@@ -380,542 +365,550 @@ export function EmpleadoFicha({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 [&>*]:shrink-0 md:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-3">
-          <NavLink
-            href="/empleados"
-            className={buttonVariants({
-              variant: "sidebar",
-              size: "sm",
-              className: "w-fit",
-            })}
-          >
-            <ArrowLeftIcon data-icon="inline-start" />
-            Volver a empleados
-          </NavLink>
-          <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">
+    <section
+      {...scope}
+      className={`${theme.theme} ${listPage.page} ${styles.ficha}`}
+    >
+      <div className={styles.sections}>
+        <header className={listPage.header}>
+          <div className={styles.fichaTitle}>
+            <ActionLink
+              href="/empleados"
+              variant="ghost"
+              className={styles.backLink}
+            >
+              <ArrowLeftIcon size={16} aria-hidden />
+              Volver a empleados
+            </ActionLink>
+            <h1>
               {mode === "create" ? "Nuevo empleado" : "Ficha de empleado"}
             </h1>
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              Datos personales, laborales, dirección y reglas comerciales en
-              una sola ficha.
+            <p className={listPage.subtitle}>
+              Datos personales, laborales, dirección y reglas comerciales en una
+              sola ficha.
             </p>
-            {errorMessage ? (
-              <p className="text-sm font-medium text-destructive">{errorMessage}</p>
-            ) : null}
           </div>
-        </div>
-
-        {canManage && empleado.activo ? (
-        <Button variant="brand" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? (
-            <GdiSpinner className="size-4" data-icon="inline-start" />
-          ) : (
-            <SaveIcon data-icon="inline-start" />
-          )}
-          {mode === "create" ? "Crear empleado" : "Guardar cambios"}
-        </Button>
+          {canManage && empleado.activo ? (
+            <Button onPress={handleSave} isDisabled={isSaving}>
+              {isSaving ? <GdiSpinner /> : <SaveIcon size={16} aria-hidden />}
+              {mode === "create" ? "Crear empleado" : "Guardar cambios"}
+            </Button>
+          ) : null}
+        </header>
+        {errorMessage && (
+          <Card className={styles.errorBanner} role="alert">
+            <CircleAlertIcon size={20} aria-hidden />
+            <div>
+              <strong>No se pudieron guardar los cambios</strong>
+              <p>{errorMessage}</p>
+            </div>
+          </Card>
+        )}
+        {!empleado.activo ? (
+          <Card className={styles.errorBanner} role="alert">
+            <UserXIcon size={20} aria-hidden />
+            <div>
+              <strong>Empleado dado de baja</strong>
+              <p>
+                El legajo se conserva para el historial, pero ya no aparece en
+                estaciones, usuarios ni nuevas operaciones.
+                {empleado.fechaBaja ? ` Baja: ${empleado.fechaBaja}.` : ""}
+                {empleado.motivoBaja ? ` Motivo: ${empleado.motivoBaja}.` : ""}
+              </p>
+            </div>
+          </Card>
+        ) : !canManage && mode === "edit" ? (
+          <Card className={styles.notice}>
+            <ShieldCheckIcon size={20} aria-hidden />
+            <div>
+              <strong>Ficha en modo lectura</strong>
+              <p>
+                Podés consultar el legajo, pero no tenés permiso para
+                modificarlo.
+              </p>
+            </div>
+          </Card>
         ) : null}
-      </div>
 
-      {!empleado.activo ? (
-        <Alert variant="destructive">
-          <UserXIcon />
-          <AlertTitle>Empleado dado de baja</AlertTitle>
-          <AlertDescription>
-            El legajo se conserva para el historial, pero ya no aparece en
-            estaciones, usuarios ni nuevas operaciones.
-            {empleado.fechaBaja ? ` Baja: ${empleado.fechaBaja}.` : ""}
-            {empleado.motivoBaja ? ` Motivo: ${empleado.motivoBaja}.` : ""}
-          </AlertDescription>
-        </Alert>
-      ) : !canManage && mode === "edit" ? (
-        <Alert>
-          <AlertTitle>Ficha en modo lectura</AlertTitle>
-          <AlertDescription>
-            Podés consultar el legajo, pero no tenés permiso para modificarlo.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      <fieldset
-        disabled={!canManage || !empleado.activo}
-        className="contents [&>*]:shrink-0"
-      >
-
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-bold tracking-tight">
-            Datos principales
-          </CardTitle>
-          <CardDescription>
-            Quién es y cómo ubicarlo. El acceso al sistema se administra
-            aparte, en Configuración → Usuarios.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="grid lg:grid-cols-2">
-            <Field className="lg:col-span-2">
-              <FieldLabel htmlFor="empleado-nombre">Nombre completo</FieldLabel>
-              <Input
-                id="empleado-nombre"
-                required
-                maxLength={160}
-                value={datosPrincipales.nombreCompleto}
-                onChange={(event) =>
-                  setDatosPrincipales((current) => ({
-                    ...current,
-                    nombreCompleto: event.target.value,
-                  }))
-                }
-                placeholder="Ej. Lucia Fernandez"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="empleado-email">
-                Correo electronico principal
-              </FieldLabel>
-              <Input
-                id="empleado-email"
-                type="email"
-                required
-                maxLength={254}
-                value={datosPrincipales.email}
-                onChange={(event) =>
-                  setDatosPrincipales((current) => ({
-                    ...current,
-                    email: event.target.value,
-                  }))
-                }
-                placeholder="empleado@empresa.com"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="empleado-sector">Sector</FieldLabel>
-              <Input
-                id="empleado-sector"
-                required
-                maxLength={120}
-                value={datosPrincipales.sector}
-                onChange={(event) =>
-                  setDatosPrincipales((current) => ({
-                    ...current,
-                    sector: event.target.value,
-                  }))
-                }
-                placeholder="Ventas, produccion, administracion..."
-              />
-            </Field>
-
-            <FieldGroup className="grid md:grid-cols-[180px_1fr] lg:col-span-2">
-              <Field>
-                <FieldLabel htmlFor="empleado-telefono-codigo">
-                  Codigo pais
-                </FieldLabel>
-                <Select
-                  items={phoneCodeItems}
-                  value={datosPrincipales.telefonoCodigo}
-                  onValueChange={(value) => {
-                    if (!value) {
-                      return;
+        <fieldset
+          disabled={!canManage || !empleado.activo}
+          className={styles.sections}
+        >
+          <Card className={styles.sectionCard}>
+            <Card.Header className={styles.sectionHeader}>
+              <Card.Title className={styles.sectionTitle}>
+                Datos principales
+              </Card.Title>
+              <Card.Description>
+                Quién es y cómo ubicarlo. El acceso al sistema se administra
+                aparte, en Configuración → Usuarios.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className={styles.sectionBody}>
+              <FieldGroup className={styles.formGrid}>
+                <Field className={styles.wideField}>
+                  <FieldLabel htmlFor="empleado-nombre">
+                    Nombre completo
+                  </FieldLabel>
+                  <Input
+                    className={focus.singleBorder}
+                    id="empleado-nombre"
+                    required
+                    maxLength={160}
+                    value={datosPrincipales.nombreCompleto}
+                    onChange={(event) =>
+                      setDatosPrincipales((current) => ({
+                        ...current,
+                        nombreCompleto: event.target.value,
+                      }))
                     }
+                    placeholder="Ej. Lucia Fernandez"
+                  />
+                </Field>
 
-                    setDatosPrincipales((current) => ({
-                      ...current,
-                      telefonoCodigo: value,
-                    }));
-                  }}
+                <Field>
+                  <FieldLabel htmlFor="empleado-email">
+                    Correo electronico principal
+                  </FieldLabel>
+                  <Input
+                    className={focus.singleBorder}
+                    id="empleado-email"
+                    type="email"
+                    required
+                    maxLength={254}
+                    value={datosPrincipales.email}
+                    onChange={(event) =>
+                      setDatosPrincipales((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                    placeholder="empleado@empresa.com"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="empleado-sector">Sector</FieldLabel>
+                  <Input
+                    className={focus.singleBorder}
+                    id="empleado-sector"
+                    required
+                    maxLength={120}
+                    value={datosPrincipales.sector}
+                    onChange={(event) =>
+                      setDatosPrincipales((current) => ({
+                        ...current,
+                        sector: event.target.value,
+                      }))
+                    }
+                    placeholder="Ventas, produccion, administracion..."
+                  />
+                </Field>
+
+                <FieldGroup
+                  className={`${styles.phoneGrid} ${styles.wideField}`}
                 >
-                  <SelectTrigger id="empleado-telefono-codigo" className="w-full">
-                    <SelectValue placeholder="Codigo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {phoneCodeItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
+                  <Field>
+                    <FieldLabel htmlFor="empleado-telefono-codigo">
+                      Codigo pais
+                    </FieldLabel>
+                    <SelectField
+                      options={phoneCodeItems}
+                      value={datosPrincipales.telefonoCodigo}
+                      onChange={(value) => {
+                        if (!value) {
+                          return;
+                        }
 
-              <Field>
-                <FieldLabel htmlFor="empleado-telefono">
-                  Telefono principal
-                </FieldLabel>
-                <Input
-                  id="empleado-telefono"
-                  inputMode="tel"
-                  required
-                  maxLength={30}
-                  value={datosPrincipales.telefonoNumero}
-                  onChange={(event) =>
-                    setDatosPrincipales((current) => ({
-                      ...current,
-                      telefonoNumero: event.target.value,
-                    }))
+                        setDatosPrincipales((current) => ({
+                          ...current,
+                          telefonoCodigo: value,
+                        }));
+                      }}
+                      id="empleado-telefono-codigo"
+                      aria-label="Código de país"
+                      disabled={readOnly}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="empleado-telefono">
+                      Telefono principal
+                    </FieldLabel>
+                    <Input
+                      className={focus.singleBorder}
+                      id="empleado-telefono"
+                      inputMode="tel"
+                      required
+                      maxLength={30}
+                      value={datosPrincipales.telefonoNumero}
+                      onChange={(event) =>
+                        setDatosPrincipales((current) => ({
+                          ...current,
+                          telefonoNumero: event.target.value,
+                        }))
+                      }
+                      placeholder="Numero sin codigo pais"
+                    />
+                    <FieldDescription>
+                      Se guardara como: {telefonoWhatsapp || "Sin definir"}
+                    </FieldDescription>
+                  </Field>
+                </FieldGroup>
+              </FieldGroup>
+            </Card.Content>
+          </Card>
+
+          <Card className={styles.sectionCard}>
+            <Card.Header className={styles.sectionHeader}>
+              <Card.Title className={styles.sectionTitle}>
+                Informacion general
+              </Card.Title>
+              <Card.Description>
+                Registra datos laborales y personales relevantes para el legajo.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className={styles.sectionBody}>
+              <FieldGroup className={styles.formGrid}>
+                <Field>
+                  <FieldLabel htmlFor="empleado-ocupacion">
+                    Ocupacion
+                  </FieldLabel>
+                  <Input
+                    className={focus.singleBorder}
+                    id="empleado-ocupacion"
+                    maxLength={160}
+                    value={informacionGeneral.ocupacion}
+                    onChange={(event) =>
+                      setInformacionGeneral((current) => ({
+                        ...current,
+                        ocupacion: event.target.value,
+                      }))
+                    }
+                    placeholder="Ej. Vendedor senior"
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="empleado-sexo">Sexo</FieldLabel>
+                  <SelectField
+                    options={sexoItems}
+                    value={informacionGeneral.sexo}
+                    onChange={(value) => {
+                      setInformacionGeneral((current) => ({
+                        ...current,
+                        sexo: (value as SexoEmpleado | "") || "",
+                      }));
+                    }}
+                    id="empleado-sexo"
+                    aria-label="Sexo"
+                    disabled={readOnly}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="empleado-fecha-ingreso">
+                    Fecha de ingreso
+                  </FieldLabel>
+                  <Input
+                    className={focus.singleBorder}
+                    id="empleado-fecha-ingreso"
+                    type="date"
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={informacionGeneral.fechaIngreso}
+                    onChange={(event) =>
+                      setInformacionGeneral((current) => ({
+                        ...current,
+                        fechaIngreso: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="empleado-fecha-nacimiento">
+                    Fecha de nacimiento
+                  </FieldLabel>
+                  <Input
+                    className={focus.singleBorder}
+                    id="empleado-fecha-nacimiento"
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    value={informacionGeneral.fechaNacimiento}
+                    onChange={(event) =>
+                      setInformacionGeneral((current) => ({
+                        ...current,
+                        fechaNacimiento: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+              </FieldGroup>
+            </Card.Content>
+          </Card>
+
+          <Card className={styles.sectionCard}>
+            <Card.Header className={styles.sectionHeader}>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <Card.Title className={styles.sectionTitle}>
+                    Direcciones
+                  </Card.Title>
+                  <Card.Description>
+                    Registra una o mas direcciones y marca una como principal.
+                  </Card.Description>
+                </div>
+                <Button
+                  isDisabled={readOnly}
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onPress={addDireccion}
+                >
+                  <PlusIcon data-icon="inline-start" />
+                  Agregar direccion
+                </Button>
+              </div>
+            </Card.Header>
+            <Card.Content className={styles.sectionBody}>
+              <Tabs
+                selectedKey={activeDireccionId}
+                onSelectionChange={(value) => {
+                  if (value) {
+                    setActiveDireccionId(String(value));
                   }
-                  placeholder="Numero sin codigo pais"
-                />
-                <FieldDescription>
-                  Se guardara como: {telefonoWhatsapp || "Sin definir"}
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
-
-          </FieldGroup>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-bold tracking-tight">
-            Informacion general
-          </CardTitle>
-          <CardDescription>
-            Registra datos laborales y personales relevantes para el legajo.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FieldGroup className="grid lg:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="empleado-ocupacion">Ocupacion</FieldLabel>
-              <Input
-                id="empleado-ocupacion"
-                maxLength={160}
-                value={informacionGeneral.ocupacion}
-                onChange={(event) =>
-                  setInformacionGeneral((current) => ({
-                    ...current,
-                    ocupacion: event.target.value,
-                  }))
-                }
-                placeholder="Ej. Vendedor senior"
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel htmlFor="empleado-sexo">Sexo</FieldLabel>
-              <Select
-                items={sexoItems}
-                value={informacionGeneral.sexo}
-                onValueChange={(value) => {
-                  setInformacionGeneral((current) => ({
-                    ...current,
-                    sexo: (value as SexoEmpleado | "") || "",
-                  }));
                 }}
               >
-                <SelectTrigger id="empleado-sexo" className="w-full">
-                  <SelectValue placeholder="Selecciona una opcion" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {sexoItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Field>
+                <NavigationTabList
+                  label="Direcciones del empleado"
+                  items={direcciones.map((direccion, index) => ({
+                    id: direccion.id,
+                    label: direccion.descripcion || `Dirección ${index + 1}`,
+                    icon: direccion.principal ? (
+                      <StarIcon className={styles.primaryStar} />
+                    ) : undefined,
+                  }))}
+                />
 
-            <Field>
-              <FieldLabel htmlFor="empleado-fecha-ingreso">
-                Fecha de ingreso
-              </FieldLabel>
-              <Input
-                id="empleado-fecha-ingreso"
-                type="date"
-                required
-                max={new Date().toISOString().slice(0, 10)}
-                value={informacionGeneral.fechaIngreso}
-                onChange={(event) =>
-                  setInformacionGeneral((current) => ({
-                    ...current,
-                    fechaIngreso: event.target.value,
-                  }))
-                }
-              />
-            </Field>
+                {direcciones.map((direccion, index) => (
+                  <Tabs.Panel key={direccion.id} id={direccion.id}>
+                    {activeDireccionId === direccion.id ? (
+                      <Card className={styles.resourceCard}>
+                        <Card.Header className={styles.sectionHeader}>
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Card.Title className={styles.sectionTitle}>
+                                {direccion.descripcion ||
+                                  `Direccion ${index + 1}`}
+                              </Card.Title>
+                              {direccion.principal ? (
+                                <Badge size="sm" variant="secondary">
+                                  <StarIcon
+                                    data-icon="inline-start"
+                                    className={styles.primaryStar}
+                                  />
+                                  Principal
+                                </Badge>
+                              ) : null}
+                              <Badge size="sm" variant="secondary">
+                                <MapPinHouseIcon data-icon="inline-start" />
+                                {
+                                  addressTypeItems.find(
+                                    (item) => item.value === direccion.tipo,
+                                  )?.label
+                                }
+                              </Badge>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              {!direccion.principal ? (
+                                <Button
+                                  isDisabled={readOnly}
+                                  variant="outline"
+                                  size="sm"
+                                  onPress={() =>
+                                    setPrimaryDireccion(direccion.id)
+                                  }
+                                >
+                                  Definir principal
+                                </Button>
+                              ) : null}
+                              <Button
+                                isDisabled={readOnly}
+                                variant="outline"
+                                size="sm"
+                                onPress={() => removeDireccion(direccion.id)}
+                              >
+                                <Trash2Icon data-icon="inline-start" />
+                                Quitar
+                              </Button>
+                            </div>
+                          </div>
+                        </Card.Header>
+                        <Card.Content className={styles.sectionBody}>
+                          <FieldGroup className={styles.formGrid}>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-descripcion-${direccion.id}`}
+                              >
+                                Descripcion
+                              </FieldLabel>
+                              <Input
+                                className={focus.singleBorder}
+                                id={`direccion-descripcion-${direccion.id}`}
+                                value={direccion.descripcion}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "descripcion",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Ej. Domicilio principal"
+                              />
+                            </Field>
 
-            <Field>
-              <FieldLabel htmlFor="empleado-fecha-nacimiento">
-                Fecha de nacimiento
-              </FieldLabel>
-              <Input
-                id="empleado-fecha-nacimiento"
-                type="date"
-                max={new Date().toISOString().slice(0, 10)}
-                value={informacionGeneral.fechaNacimiento}
-                onChange={(event) =>
-                  setInformacionGeneral((current) => ({
-                    ...current,
-                    fechaNacimiento: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-          </FieldGroup>
-        </CardContent>
-      </Card>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-tipo-${direccion.id}`}
+                              >
+                                Tipo
+                              </FieldLabel>
+                              <SelectField
+                                options={addressTypeItems}
+                                value={direccion.tipo}
+                                onChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
 
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold tracking-tight">
-                Direcciones
-              </CardTitle>
-              <CardDescription>
-                Registra una o mas direcciones y marca una como principal.
-              </CardDescription>
-            </div>
-            <Button variant="brand" className="w-full sm:w-auto" onClick={addDireccion}>
-              <PlusIcon data-icon="inline-start" />
-              Agregar direccion
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Tabs
-            value={activeDireccionId}
-            onValueChange={(value) => {
-              if (value) {
-                setActiveDireccionId(value);
-              }
-            }}
-          >
-            <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border border-sidebar-border/20 bg-sidebar/8 p-1">
-              {direcciones.map((direccion, index) => (
-                <TabsTrigger
-                  key={direccion.id}
-                  value={direccion.id}
-                  className="flex-none rounded-lg px-3 py-1.5"
-                >
-                  {direccion.descripcion || `Direccion ${index + 1}`}
-                  {direccion.principal ? (
-                    <StarIcon className="fill-current text-primary" />
-                  ) : null}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "tipo",
+                                    value as TipoDireccion,
+                                  );
+                                }}
+                                id={`direccion-tipo-${direccion.id}`}
+                                aria-label="Tipo de dirección"
+                                disabled={readOnly}
+                              />
+                            </Field>
 
-            {direcciones.map((direccion, index) => (
-              <TabsContent key={direccion.id} value={direccion.id}>
-                {activeDireccionId === direccion.id ? (
-                <Card className="rounded-xl border-border/70 shadow-none">
-                  <CardHeader className="gap-4 border-b border-border/70">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-base">
-                          {direccion.descripcion || `Direccion ${index + 1}`}
-                        </CardTitle>
-                        {direccion.principal ? (
-                          <Badge variant="secondary">
-                            <StarIcon
-                              data-icon="inline-start"
-                              className="fill-current text-primary"
-                            />
-                            Principal
-                          </Badge>
-                        ) : null}
-                        <Badge variant="outline">
-                          <MapPinHouseIcon data-icon="inline-start" />
-                          {
-                            addressTypeItems.find((item) => item.value === direccion.tipo)
-                              ?.label
-                          }
-                        </Badge>
-                      </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        {!direccion.principal ? (
-                          <Button
-                            variant="sidebar"
-                            size="sm"
-                            onClick={() => setPrimaryDireccion(direccion.id)}
-                          >
-                            Definir principal
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="sidebar"
-                          size="sm"
-                          onClick={() => removeDireccion(direccion.id)}
-                        >
-                          <Trash2Icon data-icon="inline-start" />
-                          Quitar
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <FieldGroup className="grid lg:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-descripcion-${direccion.id}`}>
-                          Descripcion
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-descripcion-${direccion.id}`}
-                          value={direccion.descripcion}
-                          onChange={(event) =>
-                            updateDireccion(
-                              direccion.id,
-                              "descripcion",
-                              event.target.value,
-                            )
-                          }
-                          placeholder="Ej. Domicilio principal"
-                        />
-                      </Field>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-pais-${direccion.id}`}
+                              >
+                                Pais
+                              </FieldLabel>
+                              <SelectField
+                                options={countryItems}
+                                value={direccion.pais}
+                                onChange={(value) => {
+                                  if (!value) {
+                                    return;
+                                  }
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-tipo-${direccion.id}`}>
-                          Tipo
-                        </FieldLabel>
-                        <Select
-                          items={addressTypeItems}
-                          value={direccion.tipo}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
+                                  updateDireccion(direccion.id, "pais", value);
+                                }}
+                                id={`direccion-pais-${direccion.id}`}
+                                aria-label="País"
+                                disabled={readOnly}
+                              />
+                            </Field>
 
-                            updateDireccion(
-                              direccion.id,
-                              "tipo",
-                              value as TipoDireccion,
-                            );
-                          }}
-                        >
-                          <SelectTrigger
-                            id={`direccion-tipo-${direccion.id}`}
-                            className="w-full"
-                          >
-                            <SelectValue placeholder="Selecciona un tipo" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {addressTypeItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-cp-${direccion.id}`}
+                              >
+                                Codigo postal
+                              </FieldLabel>
+                              <Input
+                                className={focus.singleBorder}
+                                id={`direccion-cp-${direccion.id}`}
+                                value={direccion.codigoPostal}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "codigoPostal",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Codigo postal"
+                              />
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-pais-${direccion.id}`}>
-                          Pais
-                        </FieldLabel>
-                        <Select
-                          items={countryItems}
-                          value={direccion.pais}
-                          onValueChange={(value) => {
-                            if (!value) {
-                              return;
-                            }
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-calle-${direccion.id}`}
+                              >
+                                Direccion
+                              </FieldLabel>
+                              <Input
+                                className={focus.singleBorder}
+                                id={`direccion-calle-${direccion.id}`}
+                                value={direccion.direccion}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "direccion",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Calle o avenida"
+                              />
+                            </Field>
 
-                            updateDireccion(direccion.id, "pais", value);
-                          }}
-                        >
-                          <SelectTrigger
-                            id={`direccion-pais-${direccion.id}`}
-                            className="w-full"
-                          >
-                            <SelectValue placeholder="Selecciona un pais" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {countryItems.map((item) => (
-                                <SelectItem key={item.value} value={item.value}>
-                                  {item.label}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </Field>
+                            <Field>
+                              <FieldLabel
+                                htmlFor={`direccion-numero-${direccion.id}`}
+                              >
+                                Numero
+                              </FieldLabel>
+                              <Input
+                                className={focus.singleBorder}
+                                id={`direccion-numero-${direccion.id}`}
+                                value={direccion.numero}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "numero",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Numero o piso"
+                              />
+                            </Field>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-cp-${direccion.id}`}>
-                          Codigo postal
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-cp-${direccion.id}`}
-                          value={direccion.codigoPostal}
-                          onChange={(event) =>
-                            updateDireccion(
-                              direccion.id,
-                              "codigoPostal",
-                              event.target.value,
-                            )
-                          }
-                          placeholder="Codigo postal"
-                        />
-                      </Field>
+                            <Field className={styles.wideField}>
+                              <FieldLabel
+                                htmlFor={`direccion-ciudad-${direccion.id}`}
+                              >
+                                Ciudad
+                              </FieldLabel>
+                              <Input
+                                className={focus.singleBorder}
+                                id={`direccion-ciudad-${direccion.id}`}
+                                value={direccion.ciudad}
+                                onChange={(event) =>
+                                  updateDireccion(
+                                    direccion.id,
+                                    "ciudad",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="Ciudad"
+                              />
+                            </Field>
+                          </FieldGroup>
+                        </Card.Content>
+                      </Card>
+                    ) : null}
+                  </Tabs.Panel>
+                ))}
+              </Tabs>
+            </Card.Content>
+          </Card>
 
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-calle-${direccion.id}`}>
-                          Direccion
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-calle-${direccion.id}`}
-                          value={direccion.direccion}
-                          onChange={(event) =>
-                            updateDireccion(direccion.id, "direccion", event.target.value)
-                          }
-                          placeholder="Calle o avenida"
-                        />
-                      </Field>
-
-                      <Field>
-                        <FieldLabel htmlFor={`direccion-numero-${direccion.id}`}>
-                          Numero
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-numero-${direccion.id}`}
-                          value={direccion.numero}
-                          onChange={(event) =>
-                            updateDireccion(direccion.id, "numero", event.target.value)
-                          }
-                          placeholder="Numero o piso"
-                        />
-                      </Field>
-
-                      <Field className="lg:col-span-2">
-                        <FieldLabel htmlFor={`direccion-ciudad-${direccion.id}`}>
-                          Ciudad
-                        </FieldLabel>
-                        <Input
-                          id={`direccion-ciudad-${direccion.id}`}
-                          value={direccion.ciudad}
-                          onChange={(event) =>
-                            updateDireccion(direccion.id, "ciudad", event.target.value)
-                          }
-                          placeholder="Ciudad"
-                        />
-                      </Field>
-                    </FieldGroup>
-                  </CardContent>
-                </Card>
-                ) : null}
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Espejo del acceso, sólo lectura. El alta, el rol y la baja viven en
+          {/* Espejo del acceso, sólo lectura. El alta, el rol y la baja viven en
           Configuración → Usuarios: un usuario NO es un empleado —el contador
           externo entra sin legajo y casi todo el taller tiene legajo y no
           entra—, y tener dos formularios que creaban la misma cuenta terminaba
@@ -923,243 +916,272 @@ export function EmpleadoFicha({
           membresía con el rol viejo del enum y sin `rolId`, así que la persona
           nacía esquivando el editor de roles.
           Ver docs/usuarios-roles-permisos-diseno.md */}
-      {mode === "edit" ? (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader className="gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle className="text-lg font-bold tracking-tight">
-                  Acceso al sistema
-                </CardTitle>
-                <CardDescription>
-                  {empleado?.usuarioSistema ? (
-                    <>
-                      Entra al sistema como{" "}
-                      <b className="text-foreground">{empleado.emailAcceso}</b>.
-                      El rol y la baja se administran en{" "}
-                      <Link
-                        href="/configuracion/usuarios"
-                        className="font-medium underline underline-offset-4"
-                      >
-                        Configuración → Usuarios
-                      </Link>
-                      .
-                    </>
-                  ) : (
-                    <>
-                      Esta persona no entra al sistema. Casi todo el taller está
-                      en esta situación y está bien: el legajo existe para
-                      costear y administrar, no para dar acceso. Si necesita
-                      entrar, se le crea la cuenta en{" "}
-                      <Link
-                        href="/configuracion/usuarios"
-                        className="font-medium underline underline-offset-4"
-                      >
-                        Configuración → Usuarios
-                      </Link>{" "}
-                      y se la vincula a este legajo.
-                    </>
-                  )}
-                </CardDescription>
-              </div>
-              {/* Con router y no con un <Link> envolviendo al Button: un <a>
+          {mode === "edit" ? (
+            <Card className={styles.sectionCard}>
+              <Card.Header className={styles.sectionHeader}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <Card.Title className={styles.sectionTitle}>
+                      Acceso al sistema
+                    </Card.Title>
+                    <Card.Description>
+                      {empleado?.usuarioSistema ? (
+                        <>
+                          Entra al sistema como{" "}
+                          <b className="text-foreground">
+                            {empleado.emailAcceso}
+                          </b>
+                          . El rol y la baja se administran en{" "}
+                          <Link
+                            href="/configuracion/usuarios"
+                            className="font-medium underline underline-offset-4"
+                          >
+                            Configuración → Usuarios
+                          </Link>
+                          .
+                        </>
+                      ) : (
+                        <>
+                          Esta persona no entra al sistema. Casi todo el taller
+                          está en esta situación y está bien: el legajo existe
+                          para costear y administrar, no para dar acceso. Si
+                          necesita entrar, se le crea la cuenta en{" "}
+                          <Link
+                            href="/configuracion/usuarios"
+                            className="font-medium underline underline-offset-4"
+                          >
+                            Configuración → Usuarios
+                          </Link>{" "}
+                          y se la vincula a este legajo.
+                        </>
+                      )}
+                    </Card.Description>
+                  </div>
+                  {/* Con router y no con un <Link> envolviendo al Button: un <a>
                   con un <button> adentro es HTML inválido. */}
-              <Button
-                type="button"
-                variant="sidebar"
-                className="w-full sm:w-auto"
-                onClick={() => router.push("/configuracion/usuarios")}
-              >
-                <ShieldCheckIcon />
-                {empleado?.usuarioSistema ? "Administrar acceso" : "Dar acceso"}
-              </Button>
-            </div>
-          </CardHeader>
-        </Card>
-      ) : null}
+                  <Button
+                    isDisabled={readOnly}
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onPress={() => router.push("/configuracion/usuarios")}
+                  >
+                    <ShieldCheckIcon />
+                    {empleado?.usuarioSistema
+                      ? "Administrar acceso"
+                      : "Dar acceso"}
+                  </Button>
+                </div>
+              </Card.Header>
+            </Card>
+          ) : null}
 
-      {canViewCommissions ? (
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-lg font-bold tracking-tight">
-                Comisiones
-              </CardTitle>
-              <CardDescription>
-                Estimación usada en Reportes → Equipo: el porcentaje se aplica
-                sobre la venta neta emitida y el monto fijo una vez por orden.
-                No reemplaza una liquidación de haberes.
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium leading-none">
-                  Habilitar comisiones
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Activa o desactiva esta seccion
-                </span>
-              </div>
-              <Switch
-                checked={comisionesHabilitadas}
-                onCheckedChange={handleToggleComisiones}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        {comisionesHabilitadas ? (
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex justify-end">
-              <Button variant="brand" size="sm" onClick={addComision}>
-                <PlusIcon data-icon="inline-start" />
-                Agregar comision
-              </Button>
-            </div>
-
-            {comisiones.map((comision, index) => (
-              <Card key={comision.id} className="rounded-xl border-border/70 shadow-none">
-                <CardHeader className="gap-4 border-b border-border/70">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle className="text-base">
-                        Comision {index + 1}
-                      </CardTitle>
-                      <Badge variant="outline">
-                        <PercentIcon data-icon="inline-start" />
-                        {comision.tipo === "porcentaje" ? "Porcentaje" : "Monto fijo"}
-                      </Badge>
-                    </div>
+          {canViewCommissions ? (
+            <Card className={styles.sectionCard}>
+              <Card.Header className={styles.sectionHeader}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <Card.Title className={styles.sectionTitle}>
+                      Comisiones
+                    </Card.Title>
+                    <Card.Description>
+                      Estimación usada en Reportes → Equipo: el porcentaje se
+                      aplica sobre la venta neta emitida y el monto fijo una vez
+                      por orden. No reemplaza una liquidación de haberes.
+                    </Card.Description>
+                  </div>
+                  <Switch
+                    isSelected={comisionesHabilitadas}
+                    onChange={handleToggleComisiones}
+                    isDisabled={readOnly}
+                    className={styles.commissionSwitch}
+                    size="sm"
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      <FieldLabel>Habilitar comisiones</FieldLabel>
+                    </Switch.Content>
+                  </Switch>
+                </div>
+              </Card.Header>
+              {comisionesHabilitadas ? (
+                <Card.Content className={styles.sectionBody}>
+                  <div className="flex justify-end">
                     <Button
-                      variant="sidebar"
+                      isDisabled={readOnly}
+                      variant="outline"
                       size="sm"
-                      onClick={() => removeComision(comision.id)}
+                      onPress={addComision}
                     >
-                      <Trash2Icon data-icon="inline-start" />
-                      Quitar
+                      <PlusIcon data-icon="inline-start" />
+                      Agregar comision
                     </Button>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <FieldGroup className="grid lg:grid-cols-[1.4fr_220px_220px]">
-                    <Field>
-                      <FieldLabel htmlFor={`comision-descripcion-${comision.id}`}>
-                        Descripcion
-                      </FieldLabel>
-                      <Input
-                        id={`comision-descripcion-${comision.id}`}
-                        value={comision.descripcion}
-                        onChange={(event) =>
-                          updateComision(comision.id, "descripcion", event.target.value)
-                        }
-                        placeholder="Ej. 5% de la venta"
-                      />
-                    </Field>
 
-                    <Field>
-                      <FieldLabel htmlFor={`comision-tipo-${comision.id}`}>
-                        Tipo
-                      </FieldLabel>
-                      <Select
-                        items={comisionTypeItems}
-                        value={comision.tipo}
-                        onValueChange={(value) => {
-                          if (!value) {
-                            return;
-                          }
+                  {comisiones.map((comision, index) => (
+                    <Card key={comision.id} className={styles.commissionCard}>
+                      <Card.Header className={styles.sectionHeader}>
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Card.Title className={styles.sectionTitle}>
+                              Comision {index + 1}
+                            </Card.Title>
+                            <Badge size="sm" variant="secondary">
+                              <PercentIcon data-icon="inline-start" />
+                              {comision.tipo === "porcentaje"
+                                ? "Porcentaje"
+                                : "Monto fijo"}
+                            </Badge>
+                          </div>
+                          <Button
+                            isDisabled={readOnly}
+                            variant="outline"
+                            size="sm"
+                            onPress={() => removeComision(comision.id)}
+                          >
+                            <Trash2Icon data-icon="inline-start" />
+                            Quitar
+                          </Button>
+                        </div>
+                      </Card.Header>
+                      <Card.Content className={styles.sectionBody}>
+                        <FieldGroup className={styles.commissionGrid}>
+                          <Field>
+                            <FieldLabel
+                              htmlFor={`comision-descripcion-${comision.id}`}
+                            >
+                              Descripcion
+                            </FieldLabel>
+                            <Input
+                              className={focus.singleBorder}
+                              id={`comision-descripcion-${comision.id}`}
+                              value={comision.descripcion}
+                              onChange={(event) =>
+                                updateComision(
+                                  comision.id,
+                                  "descripcion",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Ej. 5% de la venta"
+                            />
+                          </Field>
 
-                          updateComision(comision.id, "tipo", value as TipoComision);
-                        }}
-                      >
-                        <SelectTrigger
-                          id={`comision-tipo-${comision.id}`}
-                          className="w-full"
-                        >
-                          <SelectValue placeholder="Selecciona un tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {comisionTypeItems.map((item) => (
-                              <SelectItem key={item.value} value={item.value}>
-                                {item.label}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </Field>
+                          <Field>
+                            <FieldLabel
+                              htmlFor={`comision-tipo-${comision.id}`}
+                            >
+                              Tipo
+                            </FieldLabel>
+                            <SelectField
+                              options={comisionTypeItems}
+                              value={comision.tipo}
+                              onChange={(value) => {
+                                if (!value) {
+                                  return;
+                                }
 
-                    <Field>
-                      <FieldLabel htmlFor={`comision-valor-${comision.id}`}>
-                        Valor
-                      </FieldLabel>
-                      <Input
-                        id={`comision-valor-${comision.id}`}
-                        inputMode="decimal"
-                        type="number"
-                        min="0.01"
-                        max={comision.tipo === "porcentaje" ? "100" : "99999999.99"}
-                        step="0.01"
-                        value={comision.valor}
-                        onChange={(event) =>
-                          updateComision(comision.id, "valor", event.target.value)
-                        }
-                        placeholder={comision.tipo === "porcentaje" ? "5" : "10000"}
-                      />
-                    </Field>
-                  </FieldGroup>
-                </CardContent>
-              </Card>
-            ))}
-          </CardContent>
-        ) : null}
-      </Card>
-      ) : null}
+                                updateComision(
+                                  comision.id,
+                                  "tipo",
+                                  value as TipoComision,
+                                );
+                              }}
+                              id={`comision-tipo-${comision.id}`}
+                              aria-label="Tipo de comisión"
+                              disabled={readOnly}
+                            />
+                          </Field>
 
-      </fieldset>
+                          <Field>
+                            <FieldLabel
+                              htmlFor={`comision-valor-${comision.id}`}
+                            >
+                              Valor
+                            </FieldLabel>
+                            <Input
+                              className={focus.singleBorder}
+                              id={`comision-valor-${comision.id}`}
+                              inputMode="decimal"
+                              type="number"
+                              min="0.01"
+                              max={
+                                comision.tipo === "porcentaje"
+                                  ? "100"
+                                  : "99999999.99"
+                              }
+                              step="0.01"
+                              value={comision.valor}
+                              onChange={(event) =>
+                                updateComision(
+                                  comision.id,
+                                  "valor",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder={
+                                comision.tipo === "porcentaje" ? "5" : "10000"
+                              }
+                            />
+                          </Field>
+                        </FieldGroup>
+                      </Card.Content>
+                    </Card>
+                  ))}
+                </Card.Content>
+              ) : null}
+            </Card>
+          ) : null}
+        </fieldset>
 
-      {mode === "edit" && empleado.eventos.length > 0 ? (
-        <Card className="rounded-2xl border-border/70 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold tracking-tight">
-              Historial del legajo
-            </CardTitle>
-            <CardDescription>
-              Últimos cambios de datos y estado, con su responsable.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {empleado.eventos.map((evento) => (
-              <div key={evento.id} className="flex items-start gap-3">
-                <HistoryIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium capitalize">{evento.tipo}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {evento.actorNombre} · {new Date(evento.createdAt).toLocaleString("es-AR")}
-                  </p>
+        {mode === "edit" && empleado.eventos.length > 0 ? (
+          <Card className={styles.sectionCard}>
+            <Card.Header className={styles.sectionHeader}>
+              <Card.Title className={styles.sectionTitle}>
+                Historial del legajo
+              </Card.Title>
+              <Card.Description>
+                Últimos cambios de datos y estado, con su responsable.
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className={styles.sectionBody}>
+              {empleado.eventos.map((evento) => (
+                <div key={evento.id} className={styles.historyItem}>
+                  <HistoryIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium capitalize">
+                      {evento.tipo}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {evento.actorNombre} ·{" "}
+                      {new Date(evento.createdAt).toLocaleString("es-AR")}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
+              ))}
+            </Card.Content>
+          </Card>
+        ) : null}
 
-      {(empleado?.usuarioSistema || comisionesHabilitadas) && (
-        <div className="flex flex-wrap gap-2">
-          {empleado?.usuarioSistema ? (
-            <Badge variant="secondary">
-              <ShieldCheckIcon data-icon="inline-start" />
-              Usuario del sistema habilitado
-            </Badge>
-          ) : null}
-          {comisionesHabilitadas ? (
-            <Badge variant="secondary">
-              <PercentIcon data-icon="inline-start" />
-              Comisiones habilitadas
-            </Badge>
-          ) : null}
-        </div>
-      )}
-    </div>
+        {(empleado?.usuarioSistema || comisionesHabilitadas) && (
+          <div className="flex flex-wrap gap-2">
+            {empleado?.usuarioSistema ? (
+              <Badge size="sm" variant="secondary">
+                <ShieldCheckIcon data-icon="inline-start" />
+                Usuario del sistema habilitado
+              </Badge>
+            ) : null}
+            {comisionesHabilitadas ? (
+              <Badge size="sm" variant="secondary">
+                <PercentIcon data-icon="inline-start" />
+                Comisiones habilitadas
+              </Badge>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

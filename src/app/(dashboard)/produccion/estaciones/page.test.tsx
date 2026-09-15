@@ -40,6 +40,7 @@ describe("acceso a Estaciones", () => {
     );
     const page = await Page();
     expect(page.type).toBe(EstacionesView);
+    expect(cargarDatosTableroProduccion).toHaveBeenCalledWith({ soloPendientes: true });
     expect(page.props.configuracionDisponible).toBe(false);
     expect(getRecursosEstaciones).not.toHaveBeenCalled();
     expect(getFamiliasPasos).not.toHaveBeenCalled();

@@ -1,4 +1,5 @@
 "use client";
+import { useProductoVisual } from "./producto-ui";
 
 /**
  * <TabPrecioCompleto /> — Tab Precio del producto con las 5 secciones
@@ -38,9 +39,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "./producto-ui";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button } from "./producto-ui";
 import {
   Card,
   CardContent,
@@ -48,12 +49,12 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+} from "./producto-ui";
+import { Checkbox } from "./producto-ui";
+import { ConfirmacionDestructiva } from "./producto-ui";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import { HumanSelect } from "@/components/ui/human-select";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import { HumanSelect } from "./producto-ui";
+import { LabelConTooltip } from "./producto-ui";
 import {
   Field,
   FieldContent,
@@ -64,7 +65,7 @@ import {
 } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { Switch } from "@/components/ui/switch";
+import { Switch } from "./producto-ui";
 import {
   Table,
   TableBody,
@@ -73,7 +74,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "./producto-ui";
 import { TabPrecioEditor, type TabPrecioConfig } from "./tab-precio-editor";
 import { PricingSectionHeader } from "./pricing-section-header";
 import pricingStyles from "./pricing-visual.module.css";
@@ -134,6 +135,7 @@ export function TabPrecioCompleto({
   onGuardarPrecio,
   pricingCompuestoSection,
 }: Props) {
+  const productoVisual = useProductoVisual();
   const [impuestosState, setImpuestosState] = React.useState<PricingSaveState>(idleSaveState);
   const [comisionesState, setComisionesState] = React.useState<PricingSaveState>(idleSaveState);
   const [guardandoTodo, setGuardandoTodo] = React.useState(false);
@@ -217,7 +219,7 @@ export function TabPrecioCompleto({
         </>
       )}
       {hasUnifiedSave && (isDirty || isSaving) && (
-        <div className="save-sticky-footer pricing-sticky-footer">
+        <div className={productoVisual ? pricingStyles.saveFooter : "save-sticky-footer pricing-sticky-footer"}>
           <div className={pricingStyles.stickyCopy}>
             <span className={pricingStyles.stickyDot} aria-hidden="true" />
             {isDirty ? "Hay cambios sin guardar en pricing." : "No hay cambios pendientes."}

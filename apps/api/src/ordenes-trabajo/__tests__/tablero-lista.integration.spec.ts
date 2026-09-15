@@ -264,3 +264,32 @@ it('valida límites de consulta y fechas antes de acceder al historial', async (
     'page',
   ]);
 });
+
+it('proyecta la referencia del paso sin descargar su historial y conserva los finales reales', async () => {
+  const referencia = {
+    inicio: '2026-09-14T12:00:00.000Z',
+    fin: '2026-09-14T13:00:00.000Z',
+    fijadoEl: '2026-09-14T11:00:00.000Z',
+    origen: 'automatico',
+  };
+  await db.ordenTrabajoItemPaso.update({
+    where: { id: pasoPendiente },
+    data: {
+      planReferenciaJson: {
+        version: 1,
+        ...referencia,
+        historial: [{ ...referencia, fin: '2026-09-14T12:30:00.000Z' }],
+      },
+    },
+  });
+  const data = await service.tablero(auth, true);
+  const item = data.items.find((i) => i.id === activoId)!;
+  expect(
+    item.pasos.find((p) => p.id === pasoPendiente)!.planReferencia,
+  ).toEqual(referencia);
+  expect(item.pasos.find((p) => p.id === pasoHecho)!.completadoEl).toBe(
+    '2026-09-13T15:00:00.000Z',
+  );
+  expect(item.pasos.find((p) => p.id === pasoHecho)!.planReferencia).toBeNull();
+  expect(JSON.stringify(data)).not.toContain('historial');
+});

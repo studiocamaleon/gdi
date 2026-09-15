@@ -556,6 +556,9 @@ estados vacíos en escritorio y móvil, sin ejecutar ni completar trabajos reale
 
 ## Estaciones: operación y configuración unificadas — 14/09/2026
 
+> Actualización: el listado de tareas descrito en esta primera unificación fue
+> sustituido por Lista filtrada por estación; ver «Tareas de estaciones en Lista» más abajo.
+
 `/produccion/estaciones` reúne la grilla operativa que estaba en «Por estación»,
 sus tareas y «Mi mesa», la creación/configuración de estaciones, los equipos
 compartidos y el calendario del taller. El Tablero conserva «Por items» y
@@ -648,3 +651,459 @@ Se retiran Equipos, su sheet y su CSS local sin consumidores, el selector de
 equipo y Puestos manuales. El calendario operativo y Tiempo entre pasos siguen.
 El motor usa empleados y dotaciones; alcance, transición y pruebas en
 [Horarios personales](produccion-empleados-horarios-2026-09-14.md).
+
+
+## Tareas de estaciones en Lista — 14/09/2026
+
+«Ver tareas» en cada card de Estaciones abre
+`/produccion/tablero?estacion=<id>&vista=lista`. El acceso fuerza Lista sin
+modificar la preferencia guardada de Lista/Kanban. El filtro permanece visible,
+se conserva al recargar y la URL se actualiza al cambiarlo o limpiarlo. También
+se admiten los grupos «Sin estación» y «Proveedor tercerizado». Los enlaces a
+estaciones inactivas o eliminadas mantienen su selección explícita y no
+muestran todos los trabajos por error.
+
+Lista conserva una fila por trabajo y elige su próximo paso dentro del ámbito
+seleccionado: muestra los futuros como En espera y cambia de paso cuando el
+anterior termina. Búsqueda, personal y Asignadas a mí se combinan con estación.
+Las cards conservan sus métricas de pasos actuales y carga en camino. Tanto la
+carga inicial como el refresco de Estaciones consultan sólo trabajos pendientes;
+los terminados se consultan bajo demanda desde el Tablero.
+
+La celda Personal asignado ofrece Asignarme para un paso interno libre y en la
+frontera de su ruta, sólo con permisos y estación habilitada. No reemplaza una
+asignación automática ni una mesa ajena. Devolver libera únicamente la mesa
+propia, incluso después de que la planificación proyecte esa asignación manual.
+Se reutiliza la mutación canónica con actualización optimista, reversión ante
+error y bloqueo de envíos simultáneos. Abrir la tarea mantiene el detalle y las
+acciones compartidas de producción.
+
+Estaciones conserva alta, edición, personal, máquinas, pasos y calendario. Se
+retiraron `estacion-tareas.tsx`, el estado de navegación interna hacia su detalle,
+el portal duplicado del ítem y más de 300 líneas de CSS exclusivas de esa vista.
+No se modificaron contratos, permisos de servidor ni cálculos de planificación.
+
+Verificación: 63 pruebas de navegación, filtros, permisos de asignación,
+presentación y carga de Estaciones; TypeScript, lint focalizado y CSS guard.
+En navegador se comprobó el acceso desde la card, selección y recarga de
+Proveedor tercerizado, el estado vacío de Sin estación, limpieza persistente del
+filtro, apertura del detalle y regreso a Estaciones. El sheet de configuración
+se abrió y canceló conservando recursos, personal y horarios. Sin errores de
+consola; no se ejecutaron tareas ni se guardaron cambios de configuración reales.
+
+
+## Lista: monitor de producción en vivo — 14/09/2026
+
+La cabecera del Tablero usa un monitor compacto con reloj HH:mm:ss, fecha y
+zona horaria del taller, señal de conexión y hora de la última lectura correcta.
+El reloj se actualiza cada segundo en su propio componente y no dispara
+consultas ni vuelve a renderizar toda la tabla. En vivo requiere SSE conectado
+y una lectura reciente; al fallar la lectura o superar 45 segundos sin datos se
+muestra Datos sin actualizar. La conexión de respaldo se identifica como
+Actualización automática. La cabecera de Planificación conserva su presentación.
+
+Los datos siguen el canal compartido de eventos y el respaldo cada 15 segundos.
+El sincronizador evita consultas superpuestas, reúne eventos recibidos durante
+una lectura y descarta respuestas anteriores a una mutación local. Tras una
+acción, al recuperar foco o conexión, y al terminar un arrastre, consulta el
+estado vigente. Las pestañas ocultas suspenden el trabajo. Los terminados siguen
+consultándose únicamente bajo demanda.
+
+La Lista recalcula estimaciones, cumplimiento y agrupación al recibir datos y
+al avanzar cada minuto, con la precisión visible de sus columnas. Previsto
+conserva la referencia persistida; no se desplaza con el reloj. La simulación
+mantiene las reglas y los calendarios existentes. Los avatares con iniciales
+se sustituyen por el mismo icono compacto de persona usado en En espera.
+
+El fondo naranja de Listo para iniciar depende de que Cumplimiento sea Demorado,
+en cualquier sección. Ambas celdas comparten el mismo resultado calculado;
+la sección Con retraso ya no determina ese color.
+
+Al cambiar contenido visible, sólo el contenido de las celdas afectadas
+desaparece en 120 ms y reaparece en 180 ms. Los fondos, bordes y campos iguales
+permanecen estables. Cada columna compara su propia representación; avanzar
+Real no anima Previsto ni Personal asignado, y Estado sólo cambia si varía su
+texto, responsables visibles o color. Las altas, bajas y cambios de sección no
+animan toda la fila. Se conservan claves, foco, grupos plegados y desplazamiento.
+Los filtros se aplican sin esperar la transición. Cambios sólo en segundos o
+reservas que no aparecen en la UI no generan parpadeos. Se respeta
+prefers-reduced-motion. Verificado con 59 pruebas de Lista/tiempos, TypeScript,
+ESLint y CSS guard para el ajuste por celdas.
+
+La revisión en navegador detectó que el interceptor de JSON compartido intentaba
+modificar las cabeceras después de abrir SSE (`ERR_HTTP_HEADERS_SENT`). Ahora
+omite las rutas SSE, que conservan su transporte de eventos. El inicio y los
+latidos usan el cursor real; al reconectar se confirma el canal y se recuperan
+los eventos posteriores sin adelantar ese cursor artificialmente.
+
+Verificación: 97 pruebas frontend y 8 de API, TypeScript, build de API y CSS
+guard. En Chrome se comprobó el reloj avanzando, la actualización de fechas y
+de la hora de sincronización, el estado En vivo y los iconos compactos de
+personal. No se ejecutaron pasos ni se modificaron órdenes reales para validar.
+
+### Asignar y reasignar desde Lista · 14/09/2026
+
+La celda Personal asignado incorpora un icono compacto de persona/edición para
+supervisión, sin aumentar la altura de la fila. Abre `AsignacionPersonalSheet`
+con `FormSheet`, botones, inputs y selección de HeroUI bajo el tema de Grafo,
+incluido el portal y la cobertura del sidebar. El listado de personal y el de
+impactos tienen altura limitada. Seleccionar no guarda: primero se revisa el
+impacto y después se confirma; cambiar la dotación invalida la revisión.
+La animación sigue limitada a las celdas cuyo contenido visible cambió.
+
+Verificado visualmente en Chrome con una simulación de Corte láser, sin
+confirmar cambios sobre las órdenes reales. Confirmaciones, permisos, capacidad,
+concurrencia, auditoría y persistencia se verifican con datos aislados de test.
+
+### Inventario · Materiales y ficha · 14/09/2026
+
+El catálogo y la ficha de materia prima usan el tema de Grafo y el ancho y los
+márgenes de `list-page.module.css`. Encabezado, buscador, estados, acciones y
+tablas se presentan con el mismo patrón de las vistas comerciales. La creación
+se abre con `FormDialog`, con el portal tematizado y el fondo sobre el sidebar.
+
+La ficha conserva sus cinco pestañas y usa `NavigationTabList`, inputs,
+selectores, switches y tooltips HeroUI. Variantes, precios e inventario conservan
+el desplazamiento horizontal de las tablas; el formulario y las métricas se
+adaptan a pantallas pequeñas. Los atributos con varias máquinas o plantillas
+usan `MaterialMultiSelect`; las opciones simples usan `SelectField`.
+
+Se mantienen los cálculos, conversiones, validaciones, payloads, consultas y
+acciones existentes. `MoneyInput` conserva la máscara monetaria compartida con
+presentación local. Los estilos viven en `materiales.module.css`; no se agregan
+globales ni se retiran selectores compartidos que todavía tienen consumidores.
+
+Verificado en Chrome: catálogo, búsqueda y vacío, modal, navegación entre fichas,
+cinco pestañas, precios, stock y selección de formato con sus dimensiones. Se
+revisaron anchos de 1920, 1024 y 390 px sin guardar cambios sobre los materiales.
+TypeScript, cuatro pruebas de plantillas/unidades y CSS guard pasan. ESLint sin
+errores; conserva las tres advertencias de dependencias de hooks preexistentes.
+
+### Inventario · Biblioteca y edición de costos · 14/09/2026
+
+La Biblioteca de Materiales usa el mismo ancho, márgenes, encabezado y tema de
+Grafo. Buscador, selectores de familia/categoría, filtros de instalación, tarjetas
+y estados utilizan HeroUI y las primitivas compartidas. Se retiran los controles
+decorativos que no tenían acción y los estilos locales reemplazados.
+
+El asistente de instalación utiliza `FormSheet`, con cobertura del sidebar,
+foco y cierre compartidos. Sus cuatro pasos usan `NavigationTabList`; nombre,
+alias y variantes usan inputs, botones y checkboxes HeroUI. La revisión conserva
+el detalle de las variantes elegidas y limita el alto de su listado. Se mantienen
+los modos de completar el material existente o instalar una copia, las variantes
+ya instaladas y el payload original de instalación.
+
+Editar Costos conserva los borradores, filtros, unidades, cálculo de diferencias
+y guardado conjunto. Se actualizan encabezado, buscador, switch, selectores,
+precios y agrupación de la tabla. En anchos pequeños la tabla se desplaza
+horizontalmente; el mensaje sin resultados queda fuera de ese desplazamiento.
+Los estilos quedan en módulos locales, sin agregar reglas a `globals.css`.
+
+Verificado en Chrome: búsqueda de la biblioteca, apertura y cierre del sheet,
+selección de variantes y revisión; precios y unidades en borrador, contador de
+cambios, búsqueda y filtro de consumibles. Se revisaron diseños de escritorio,
+1024 y 390 px. No se instalaron materiales ni se guardaron precios reales.
+TypeScript, ESLint de los archivos modificados, las cuatro pruebas de
+plantillas/unidades y CSS guard pasan.
+
+### Indicador de navegación · 14/09/2026
+
+La carga entre vistas reemplaza la tarjeta, el spinner y la barra por el
+isologo de Grafoprint centrado sobre un velo suave. `GrafoprintIsologo` comparte
+la geometría original de nodos con el sidebar, cuya apariencia permanece igual.
+`NavigationLoading` anima un pulso de escala, halos tenues y acentos naranjas
+en los nodos, usando los tokens del tema y CSS local. El aviso accesible dice
+«Cargando vista…»; `prefers-reduced-motion` muestra el logo estático.
+
+Se conservan los tiempos de aparición y cierre del proveedor de navegación.
+Vista previa persistente sólo en desarrollo: `/dev/diseno/carga`. Verificado en
+escritorio y móvil, y en una navegación real de Tablero a Planificación: aparece
+durante la espera y se retira al llegar. TypeScript, ESLint y CSS guard pasan.
+
+### Indicadores de carga unificados · 14/09/2026
+
+`ModulePageSkeleton` reemplaza «Cargando módulo», «Cargando detalle» y sus bloques
+grises por `GrafoprintLoadingIndicator`, compartido con la navegación. Reportes
+también utiliza este fallback. Durante una navegación pendiente se oculta el
+indicador interior para que no se superponga con el aviso global.
+
+`GdiSpinner` y `Spinner` conservan sus interfaces y ahora muestran el mismo
+isologo pulsante en formato compacto. Se reemplazan los spinners circulares y
+los iconos de actualización que giraban en los controles del sistema. El formato
+compacto hereda el color del botón; la carga de página conserva los halos y los
+acentos naranjas. Las condiciones, consultas y acciones siguen siendo las mismas.
+Los estilos de giro sin consumidores se retiran de los módulos y de `globals.css`.
+
+Verificado el fallback real del Tablero, una navegación a Planificación con un
+solo indicador y su desaparición al finalizar, además de los botones primario y
+secundario y el diseño a 390 px. TypeScript y CSS guard pasan; ESLint sin errores,
+con dos advertencias preexistentes en productos y diseño vectorial.
+
+### CRM · Clientes y ficha · 14/09/2026
+
+Clientes utiliza el ancho y los márgenes de `list-page.module.css`, con el fondo
+compartido del sidebar. Cabecera, buscador, selector de inhabilitados, selección,
+menú de acciones, estados y paginación utilizan HeroUI y las primitivas de Grafo.
+Los enlaces conservan la navegación a la ficha; importar, exportar, habilitar y
+eliminar mantienen sus callbacks y permisos. La confirmación de eliminación usa
+`FormDialog` y conserva el aviso y la confirmación explícita antes de ejecutar.
+
+El alta y la ficha comparten los nuevos controles. Datos generales se ordena en
+Identificación, Facturación y cuenta corriente, y Contacto principal. Contactos y
+Direcciones conservan sus pestañas, selección del principal, eliminación local
+y Deshacer. `SelectField` mantiene los valores originales y respeta el modo de
+consulta. Los enlaces siguen comprobando si hay cambios sin guardar.
+
+Ficha, Fidelización e Historial utilizan `NavigationTabList`. El panel de ficha
+se conserva montado, pero se oculta mediante `data-inert` cuando está inactivo.
+Fidelización y su modal de ajuste comparten el tema y la cobertura completa del
+sidebar, sin modificar cálculos, movimientos ni autorización para ajustar puntos.
+
+Los estilos específicos viven en `clientes.module.css`; los estilos de dropdown
+y menu-item del proveedor se importan dentro de la capa aislada de HeroUI. No se
+añaden reglas a `globals.css`: esta superficie no tenía selectores exclusivos
+que pudieran retirarse, y los componentes anteriores siguen teniendo consumidores.
+
+Verificado en Chrome a 1920, 1024 y 390 px: búsqueda, selección, menú y cancelación
+de eliminación; ficha, pestañas, modal de fidelización, alta en borrador,
+contactos, direcciones, selectores, plazo/límite de crédito y foco de validación.
+No se guardaron clientes ni se alteraron puntos reales. TypeScript, ESLint, las
+cinco pruebas existentes de importación y aislamiento CSS, y CSS guard pasan.
+
+### CRM · Cupones
+
+Cupones adopta el ancho, los márgenes y el fondo de `list-page.module.css`,
+con métricas `ListMetric`, buscador HeroUI, `SelectField` para estados y acciones
+de Grafo. Se conserva la composición del cupón: cuerpo, talón con QR, muescas
+circulares, línea punteada, importe, alcance, vigencia y contador de usos.
+El troquel mantiene su máscara, radios y ancho del talón, también en móvil.
+
+Alta, edición, historial, QR y confirmación de eliminación usan `FormDialog`.
+Los portales reciben el tema aislado y el fondo cubre también el sidebar.
+El alcance utiliza `Autocomplete` con los mismos grupos y búsqueda por palabras
+sin acentos; se conservan los catálogos, validaciones, permisos, callbacks y
+payloads. Los botones de guardar y eliminar se deshabilitan mientras se procesa
+su acción. El QR conserva el código plano y la descarga PNG.
+
+Los estilos quedan en `cupones-view.module.css`, eliminando los selectores
+locales reemplazados de cabecera, métricas y modales. No se agregan globales
+ni se eliminan estilos compartidos que siguen teniendo consumidores.
+
+Verificado en Chrome a 1920, 1024 y 390 px: listado, formularios, búsqueda de
+alcance agrupada, edición con código protegido, historial, QR y cancelación de
+eliminación. No se guardaron, pausaron ni eliminaron cupones. TypeScript,
+ESLint, CSS guard y las cinco pruebas existentes de cupones y aislamiento
+de estilos pasan.
+
+### CRM · Fidelización
+
+La vista general utiliza el ancho, fondo y márgenes de `list-page.module.css`,
+con indicadores `ListMetric`, tarjetas HeroUI, estados `Chip`, campos `Input`
+y `Switch` para la acumulación. La configuración sigue dentro de la pantalla;
+Reglas del programa y Economía de puntos comparten una tarjeta adaptable.
+El aviso de equivalencia protegida permanece visible también en móvil.
+La tabla conserva los movimientos, fechas, tipos y puntos, con el mismo código
+de color positivo/negativo y desplazamiento horizontal acotado a la tabla.
+
+Se mantienen los formatos, los cálculos, el permiso `crm.configurar_fidelizacion`,
+los campos protegidos por `conversionBloqueada` y el payload de guardado.
+Los estilos locales anteriores se reemplazan en `fidelizacion-view.module.css`;
+no se agregan globales y no había selectores globales exclusivos para retirar.
+
+Verificado en Chrome a 1920, 1024 y 390 px: distribución, estados de acumulación,
+edición del porcentaje, resumen y bloqueo de la equivalencia. Se restauró el
+borrador sin guardar cambios ni alterar puntos. TypeScript, ESLint, CSS guard
+y la prueba existente de aislamiento HeroUI pasan.
+
+### Registros · Proveedores
+
+El listado y la ficha utilizan el ancho, fondo y márgenes compartidos de
+`list-page.module.css`. Búsqueda, selección, estados, acciones y confirmación de
+eliminación usan HeroUI con el tema de Grafo; el modal cubre también el sidebar.
+La ficha organiza los datos en identificación, información fiscal y de pago,
+contacto principal, contactos adicionales, direcciones e historial. Los campos
+usan `Input` y `SelectField`, y las pestañas de contactos y direcciones comparten
+`NavigationTabList`.
+
+Se conservan permisos, búsqueda paginada, importación/exportación, validaciones,
+payloads, control de versión al guardar y protección de cambios sin guardar.
+Los estilos están aislados en `proveedores.module.css`; no se agregan globales.
+Los estilos anteriores pertenecen a componentes compartidos con consumidores
+vigentes, por lo que no se retiran de `globals.css`.
+
+Verificado en Chrome en escritorio y a 1024 y 390 px: listado, selección,
+cancelación de eliminación, ficha, alta en borrador, contactos, direcciones,
+selectores y validación del nombre obligatorio. No se guardaron, inhabilitaron
+ni eliminaron proveedores. TypeScript, ESLint, CSS guard y las cinco pruebas
+existentes de importación y aislamiento CSS pasan.
+
+### Registros · Empleados
+
+Listado y ficha adoptan el ancho, fondo y márgenes de `list-page.module.css`.
+El listado utiliza búsqueda HeroUI, selección con estado parcial, avatares de
+Grafo, estados `Chip` y acciones compartidas. La confirmación de baja usa
+`FormDialog` y su transparencia cubre también el sidebar.
+
+La ficha usa tarjetas, campos y selectores HeroUI para datos personales y
+laborales, `NavigationTabList` para direcciones y un editor adaptable para
+comisiones. Acceso al sistema mantiene su carácter informativo y la navegación
+a Configuración → Usuarios. Se conservan los permisos de consulta de comisiones,
+las restricciones de edición de legajos dados de baja, los controladores,
+validaciones, límites de campos y payloads originales.
+
+Los estilos viven en `empleados.module.css`; no había selectores globales
+exclusivos de esta superficie para retirar. Los campos de texto no aplican
+su geometría a los inputs internos de los interruptores.
+
+Verificado en Chrome en escritorio y a 1024 y 390 px: listado, búsqueda,
+selección, cancelación de baja, ficha, direcciones, activación de comisiones,
+selector de tipo y validación del alta vacía. Sólo se editaron borradores;
+no se guardaron legajos, accesos ni comisiones. TypeScript, ESLint, CSS guard
+y las tres pruebas existentes de importación y aislamiento HeroUI pasan.
+
+### Costos · Centros de costo
+
+El listado adopta el ancho, fondo y márgenes de `list-page.module.css`, con
+búsqueda y período HeroUI, acciones compartidas y una tabla con importes
+alineados. En móvil la tabla desplaza sus columnas horizontalmente sin que
+las acciones fijas tapen el nombre del centro.
+
+La ficha utiliza `Drawer`, tarjetas, campos y selectores HeroUI. Conserva sus
+pestañas de datos generales, gastos, ajustes e historial, con encabezado y
+pie fijos. Las planillas de gastos generales, empleados y activos fijos tienen
+encabezados, filas y subtotales propios; los importes calculados se distinguen
+de los campos editables. Las confirmaciones de eliminación y cambios sin
+guardar usan `FormDialog` y cubren también el sidebar.
+
+Se mantienen cálculos de dedicación, cargas, depreciación, valor hora y
+prorrateo, permisos, períodos, historial, publicación y payloads de guardado.
+Los estilos quedan aislados en `centros-costo.module.css`. Se retiran 564
+líneas y 14 clases globales exclusivas, además de las reglas antiguas de
+esta ficha en el módulo de configuración; se conservan los selectores que
+todavía utilizan Maquinaria y Gastos fijos.
+
+Verificado en Chrome a 1920, 1024 y 390 px: listado, búsqueda y totales
+filtrados, ficha, categorías, ajustes, historial, validación del alta vacía,
+recálculo de un gasto en borrador y confirmaciones. Se descartó el borrador;
+no se guardaron, publicaron, inactivaron ni eliminaron centros. TypeScript,
+ESLint, CSS guard y las dos pruebas existentes de período y aislamiento
+HeroUI pasan. La consola del navegador no presenta errores ni advertencias.
+
+### Costos · Maquinaria
+
+El listado utiliza el ancho, fondo y márgenes compartidos, con búsqueda,
+filtros, estados y acciones HeroUI. La ficha conserva sus pestañas Descripción,
+Ajustes e Historial, con encabezado y pie fijos, tarjetas y campos adaptables.
+Se actualizan los editores de perfiles, tintas, repuestos, herramientas y
+operación de máquina, junto con el alta y las confirmaciones. Los modales
+cubren también el sidebar y permiten desplazar su contenido sin perder las
+acciones. El buscador de materiales usa ComboBox con búsqueda y selección
+acumulativa; su CSS de HeroUI se importa dentro del scope existente.
+
+Se conservan permisos, valores, validaciones, cálculos, filtros paginados,
+payloads y protección de cambios sin guardar. Los estilos específicos quedan
+en `maquinaria.module.css` y los módulos de los editores; se retiran 1.032
+líneas y 36 clases globales exclusivas de Maquinaria, además de sus reglas
+anteriores en el módulo de configuración. Se mantienen los estilos que aún
+usan Gastos fijos y el selector de corte utilizado en Productos.
+
+Verificado en Chrome a 1920, 1024 y 390 px: listado, filtros, ficha, alta en
+borrador, edición de tintas, perfiles de corte, búsqueda de materiales,
+interruptores, validación de campos y descarte de cambios. No se guardaron
+ni desactivaron máquinas. TypeScript, ESLint, CSS guard y las 18 pruebas
+existentes de tóner, tecnologías, operación y aislamiento CSS pasan.
+
+### Costos · Nodos de producción
+
+El listado de Nodos comparte ancho, fondo y márgenes con las otras vistas
+migradas. Usa pestañas detalladas, tarjetas, búsqueda, filtro de categoría,
+estados y acciones HeroUI. El alta y la confirmación de eliminación usan
+FormDialog con portal que cubre también el sidebar. Se conservan las plantillas,
+los permisos y las reglas de alta, activación y eliminación.
+
+Las fichas simples usan los controles Grafo para campos, selectores, opciones,
+interruptores, ayudas y acciones. `NodosVisualProvider` activa esa presentación
+sólo desde la ficha de Nodos: el editor compartido y sus campos conservan sus
+primitivas anteriores cuando se abren desde Productos. Los nodos compuestos
+ordenan sus operaciones internas en filas adaptables con los mismos campos,
+obligatoriedad y acciones. No cambian los cálculos, validaciones ni payloads.
+
+Los estilos quedan en los módulos de Nodos y se retiran las reglas exclusivas
+`nodeEditor` del módulo de configuración y los estilos locales obsoletos del
+listado/alta. La familia global `pasos-editor-root` se conserva porque sigue
+siendo utilizada por el editor de Productos; no se agregan estilos globales.
+
+Verificado en Chrome a 1920 y 390 px: listado y pestañas, alta simple/compuesta,
+búsqueda y selección de plantilla, ficha simple, operaciones de un compuesto,
+centros productivos, buscador de máquinas y tiempos extra. Los borradores de
+prueba se descartaron sin guardar datos. La carga final no presenta errores
+ni advertencias en consola. TypeScript, CSS guard, ESLint de las superficies
+nuevas y 49 pruebas existentes del editor, reglas y aislamiento CSS pasan.
+El lint del editor compartido conserva un error previo de memoización en
+`paso-tercerizado-panel.tsx`, confirmado contra su versión anterior; no se
+modificó ese cálculo para resolver una migración de presentación.
+
+### Costos · Flujos de producción
+
+El listado, la creación y la ficha utilizan el ancho, fondo y márgenes
+compartidos con las otras vistas Grafo. Búsqueda, filtro de estado, vista previa
+del recorrido, acciones, campos y estado activo usan HeroUI. El editor visual
+conserva sus columnas, secuencias, paralelismos, zoom y arrastre; incorpora
+controles Grafo, tarjetas más compactas y colores del tema. El área del diagrama
+mantiene su desplazamiento horizontal en pantallas pequeñas.
+
+Los modales de incorporación y nombre de nodo, duplicación, migración de
+versiones y eliminación usan FormDialog con el mismo fondo que cubre el sidebar.
+La eliminación mantiene la confirmación escrita del nombre. Se conservan las
+consultas, permisos, payloads, cálculos de cambios y versionado; los 42 auxiliares
+y controladores sin JSX conservan sus cuerpos frente a la versión anterior.
+
+Se retiran 119 líneas y seis clases globales exclusivas de la ficha y su
+historial, junto con las reglas de Flujos del módulo antiguo de configuración.
+Los estilos propios quedan en `flujos.module.css`, `ruta-form-view.module.css`
+y `ruta-workflow-editor.module.css`.
+
+Verificado en Chrome a 1920 y 390 px: listado, búsqueda, estados, alta, ficha,
+incorporación y movimiento de nodos, cambio de nombre, aviso de nueva versión
+y confirmaciones de copia/eliminación. Los borradores se descartaron sin guardar
+datos. La copia sin nombre y la eliminación sin confirmación permanecen
+deshabilitadas. La carga final no presenta errores ni advertencias en consola.
+TypeScript, ESLint de los tres componentes, CSS guard y las 19 pruebas existentes
+de disposición productiva, ocurrencias de componentes y aislamiento CSS pasan.
+
+### Costos · Catálogo de productos: listado, categorías y alta
+
+El alcance aprobado incluye el listado, el explorador de categorías y
+subcategorías y el alta; la ficha de productos existentes queda para otra etapa.
+Se aplica el ancho completo, fondo y márgenes de `list-page`, con indicadores
+`ListMetric`, navegación por tipo, búsqueda y selectores HeroUI. Las tarjetas
+conservan sus imágenes y el recorrido categoría → subcategoría → productos.
+La duplicación usa `FormDialog`, cubre el sidebar y mantiene la validación del
+nombre y el guardado como borrador.
+
+El modo creación del wizard usa `producto-alta-ui.tsx` y `producto-alta.module.css`
+para sus tarjetas, controles y ayudas. El modo edición conserva las primitivas
+y estilos anteriores. Las medidas tienen campos adaptables, unidades visibles
+y acciones agrupadas. Se conservan los valores, conversiones, consultas,
+permisos y payloads: los 33 auxiliares y controladores sin JSX mantienen sus
+cuerpos respecto de la versión anterior.
+
+Se sustituye el módulo CSS del listado; no se añaden reglas globales. Las reglas
+compartidas de modales y del wizard siguen teniendo consumidores en edición.
+Verificado en Chrome a 1920 y 390 px: filtros, búsqueda, categorías,
+subcategorías, duplicación sin nombre, alta, geometría 3D, medidas múltiples,
+selección de predeterminada, eliminación local y producto sin medidas.
+Los borradores de prueba se descartaron sin guardar productos. Pasan TypeScript,
+ESLint de los componentes modificados, CSS guard y ocho pruebas existentes de
+selectores, consultas del catálogo y aislamiento CSS.
+
+
+### Ficha de producto
+
+La ficha usa el ancho y fondo de los listados de Grafo, navegación HeroUI con enlaces y tarjetas y controles para Identidad, Comercial, Producción, Herramientas y Precio. El menú de rutas, los formularios de creación y renombrado, el estado de publicación y las confirmaciones mantienen sus acciones con superficies HeroUI y portales tematizados que cubren también el sidebar.
+
+`producto-ui.tsx` activa los adaptadores únicamente dentro de `ProductoVisualProvider`. Los componentes de precio, archivos vectoriales y recetas que se comparten con otros editores conservan su presentación fuera de ese contexto. `ProductoEdicion` propaga el modo de solo lectura a los controles HeroUI, incluidos selectores y diálogos. La composición BOM conserva su árbol y el diagrama productivo su disposición y navegación.
+
+Los estilos quedan en módulos CSS. Se quitaron del módulo de la ficha las reglas antiguas sin consumidores y las dependencias de clases globales para los formularios principales; las clases compartidas por otros editores permanecen. No hay cambios de API, fórmulas, reglas de precio ni publicación.
+
+Verificación: TypeScript, ESLint, CSS Guard y pruebas existentes de geometrías, pricing compuesto, SelectField y aislamiento HeroUI. Se revisaron Identidad y Producción con datos reales y los diálogos de rutas; Precio y el modo de solo lectura también se comprobaron con una muestra temporal, luego retirada. La comprobación completa con datos reales quedó limitada por la pérdida de conexión de la API con PostgreSQL local durante la revisión.

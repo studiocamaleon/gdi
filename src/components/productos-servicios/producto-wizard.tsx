@@ -40,22 +40,32 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
+  AltaVisualProvider,
+  useAltaVisual,
+  Badge,
+  Button,
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+  CardDescription,
+  CardContent,
+  HumanSelect,
+  Input,
+  Label,
+  LabelConTooltip,
+  MedidaInput,
+  StepButton,
+  Textarea,
+} from "./producto-alta-ui";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import altaStyles from "./producto-alta.module.css";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import { optionFromLabel } from "@/components/ui/human-select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
 import {
   precioConfigKey,
@@ -175,6 +185,7 @@ function MedidasPredefinidasWizard({
   es3D: boolean;
   onChange: (medidas: MedidaPredefinidaProducto[]) => void;
 }) {
+  const alta = useAltaVisual();
   const esMedidaFija = modo === "FIJA";
   const medidaDefault =
     medidas.find((medida) => medida.esDefault) ?? medidas[0] ?? null;
@@ -229,11 +240,17 @@ function MedidasPredefinidasWizard({
         {medidasVisibles.map((medida, index) => (
           <div
             key={medida.id}
-            className={`grid items-center gap-2 ${
-              es3D
-                ? "grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto_auto]"
-                : "grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto]"
-            }`}
+            className={
+              alta
+                ? altaStyles.measureRow
+                : `grid items-center gap-2 ${
+                    es3D
+                      ? "grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto_auto]"
+                      : "grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto]"
+                  }`
+            }
+            data-geometry={es3D ? "3D" : "2D"}
+            data-fixed={esMedidaFija || undefined}
           >
             <Input
               value={medida.nombre}
@@ -243,7 +260,7 @@ function MedidasPredefinidasWizard({
               placeholder={medidaLabel({ ...medida, nombre: "" })}
               aria-label={`Nombre de medida ${index + 1}`}
             />
-            <Input
+            <MedidaInput
               type="number"
               min="0"
               value={medida.anchoMm ? medida.anchoMm / 10 : ""}
@@ -253,9 +270,10 @@ function MedidasPredefinidasWizard({
                 })
               }
               placeholder="Ancho cm"
+              label="Ancho (cm)"
               aria-label={`Ancho de medida ${index + 1}`}
             />
-            <Input
+            <MedidaInput
               type="number"
               min="0"
               value={medida.altoMm ? medida.altoMm / 10 : ""}
@@ -265,10 +283,11 @@ function MedidasPredefinidasWizard({
                 })
               }
               placeholder="Alto cm"
+              label="Alto (cm)"
               aria-label={`Alto de medida ${index + 1}`}
             />
             {es3D && (
-              <Input
+              <MedidaInput
                 type="number"
                 min="0"
                 value={medida.profundidadMm ? medida.profundidadMm / 10 : ""}
@@ -278,17 +297,19 @@ function MedidasPredefinidasWizard({
                   })
                 }
                 placeholder="Profundidad cm"
+                label="Profundidad (cm)"
                 aria-label={`Profundidad de medida ${index + 1}`}
               />
             )}
             {!esMedidaFija ? (
-              <>
+              <div className={alta ? altaStyles.measureActions : "contents"}>
                 <Button
                   type="button"
                   variant={medida.esDefault ? "default" : "outline"}
                   size="icon"
                   onClick={() => setDefault(medida.id)}
                   aria-pressed={medida.esDefault}
+                  aria-label={`Medida ${index + 1} predeterminada`}
                   title={
                     medida.esDefault
                       ? "Medida predeterminada"
@@ -307,10 +328,11 @@ function MedidasPredefinidasWizard({
                   onClick={() => removeMedida(medida.id)}
                   disabled={medidas.length <= 1}
                   title="Eliminar medida"
+                  aria-label={`Eliminar medida ${index + 1}`}
                 >
                   <Trash2Icon className="size-4" />
                 </Button>
-              </>
+              </div>
             ) : (
               <span className="col-span-2" />
             )}
@@ -388,11 +410,22 @@ function validarPrecio(precioConfig: TabPrecioConfig | null): ValidacionStep {
 
 // ─── Wizard principal ──────────────────────────────────────────────
 
-export function ProductoWizard({
+export function ProductoWizard(props: Props) {
+  return (
+    <AltaVisualProvider enabled={props.modo === "crear"}>
+      <ProductoWizardContent {...props} />
+    </AltaVisualProvider>
+  );
+}
+
+function ProductoWizardContent({
   modo,
   productoExistente,
   rutasDisponibles = [],
 }: Props) {
+  const alta = useAltaVisual();
+  const scope = useDesignScope();
+  const visual = alta ? altaStyles : styles;
   const router = useRouter();
   const searchParams = useSearchParams();
   const stepFromUrl = searchParams.get("step") as StepId | null;
@@ -665,8 +698,13 @@ export function ProductoWizard({
   };
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
+    <main
+      {...(alta ? scope : {})}
+      className={
+        alta ? `${theme.theme} ${listPage.page} ${visual.page}` : visual.page
+      }
+    >
+      <header className={visual.header}>
         <div>
           <Link
             href={
@@ -674,12 +712,14 @@ export function ProductoWizard({
                 ? `/productos-servicios/${productoExistente.id}`
                 : "/productos-servicios"
             }
-            className={styles.back}
+            className={visual.back}
           >
             <ArrowLeftIcon className="mr-1 size-4" />
             {productoExistente ? "Salir del wizard" : "Volver al catálogo"}
           </Link>
-          <span className={styles.eyebrow}>Catálogo de productos</span>
+          {!alta && (
+            <span className={visual.eyebrow}>Catálogo de productos</span>
+          )}
           <h1>
             {modo === "crear"
               ? "Nuevo producto"
@@ -696,19 +736,19 @@ export function ProductoWizard({
         )}
       </header>
 
-      <div className={styles.workspace}>
+      <div className={visual.workspace}>
         {/* Sidebar de progreso */}
-        <aside className={styles.sidebar}>
-          <Card className={styles.progressCard}>
-            <CardHeader className={styles.progressHeader}>
+        <aside className={visual.sidebar}>
+          <Card className={visual.progressCard}>
+            <CardHeader className={visual.progressHeader}>
               <CardTitle>Progreso</CardTitle>
               <CardDescription>
                 {modo === "crear"
-                  ? "Empezá creando el producto en el step 1."
+                  ? "Completá los datos iniciales para crear un borrador."
                   : "Tocá un step para saltar."}
               </CardDescription>
             </CardHeader>
-            <CardContent className={styles.progressBody}>
+            <CardContent className={visual.progressBody}>
               {STEPS.map((step, idx) => {
                 const val = validaciones[step.id];
                 const Icon = step.icon;
@@ -716,24 +756,24 @@ export function ProductoWizard({
                 const ok = val.errores.length === 0;
                 const disponible = modo === "editar" || step.id === "identidad";
                 return (
-                  <button
+                  <StepButton
                     key={step.id}
                     onClick={() => disponible && irAStep(step.id)}
                     disabled={!disponible}
-                    className={styles.stepButton}
+                    className={visual.stepButton}
                     data-active={isActive || undefined}
                     data-complete={ok || undefined}
                     data-disabled={!disponible || undefined}
                   >
-                    <div className={styles.stepRow}>
+                    <div className={visual.stepRow}>
                       <div
-                        className={styles.stepNumber}
+                        className={visual.stepNumber}
                         data-complete={ok || undefined}
                         data-error={val.errores.length > 0 || undefined}
                       >
                         {ok ? <CheckIcon className="size-3" /> : idx + 1}
                       </div>
-                      <div className={styles.stepText}>
+                      <div className={visual.stepText}>
                         <div>
                           <Icon />
                           {step.nombre}
@@ -757,7 +797,7 @@ export function ProductoWizard({
                         </Badge>
                       )}
                     </div>
-                  </button>
+                  </StepButton>
                 );
               })}
             </CardContent>
@@ -765,7 +805,7 @@ export function ProductoWizard({
         </aside>
 
         {/* Contenido del step */}
-        <div className={styles.content}>
+        <div className={visual.content}>
           {stepActivo === "identidad" && (
             <StepIdentidad
               modo={modo}
@@ -822,7 +862,7 @@ export function ProductoWizard({
 
           {/* Bloqueo si modo crear y producto no existe pero el step requiere producto */}
           {stepActivo !== "identidad" && !productoExistente && (
-            <Card className={styles.blockedCard}>
+            <Card className={visual.blockedCard}>
               <CardContent className="pt-6 text-center text-sm text-muted-foreground">
                 Necesitás crear primero el producto en el step
                 &quot;Identidad&quot;.
@@ -831,7 +871,7 @@ export function ProductoWizard({
           )}
 
           {/* Navegación inferior */}
-          <footer className={styles.navigation}>
+          <footer className={visual.navigation}>
             <Button
               variant="outline"
               onClick={() => stepAnterior && irAStep(stepAnterior.id)}
@@ -851,7 +891,7 @@ export function ProductoWizard({
                   Guardar borrador
                 </Button>
                 <Button
-                  className={styles.primaryAction}
+                  className={alta ? undefined : styles.primaryAction}
                   onClick={() => guardarIdentidad(true)}
                   disabled={guardandoStep || valIdentidad.errores.length > 0}
                 >
@@ -865,7 +905,7 @@ export function ProductoWizard({
               </div>
             ) : (
               <Button
-                className={styles.primaryAction}
+                className={alta ? undefined : styles.primaryAction}
                 onClick={() => stepSiguiente && irAStep(stepSiguiente.id)}
                 disabled={!stepSiguiente}
               >
@@ -907,6 +947,8 @@ interface StepIdentidadProps {
 }
 
 function StepIdentidad(props: StepIdentidadProps) {
+  const alta = useAltaVisual();
+  const visual = alta ? altaStyles : styles;
   const subcategoriaOptions = props.catalogoComercial.flatMap((categoria) =>
     categoria.subcategorias.map((subcategoria) => ({
       value: subcategoria.codigo,
@@ -915,8 +957,12 @@ function StepIdentidad(props: StepIdentidadProps) {
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card className={styles.identityCard}>
+    <div
+      className={
+        alta ? altaStyles.identityGrid : "grid grid-cols-1 gap-4 lg:grid-cols-2"
+      }
+    >
+      <Card className={alta ? undefined : styles.identityCard}>
         <CardHeader>
           <CardTitle>Identidad</CardTitle>
           <CardDescription>
@@ -939,7 +985,7 @@ function StepIdentidad(props: StepIdentidadProps) {
               }
             />
             {!props.nombre.trim() && (
-              <p id="nombre-error" className={styles.fieldError}>
+              <p id="nombre-error" className={visual.fieldError}>
                 Ingresá el nombre del producto.
               </p>
             )}
@@ -989,7 +1035,7 @@ function StepIdentidad(props: StepIdentidadProps) {
         </CardContent>
       </Card>
 
-      <Card className={styles.commercialCard}>
+      <Card className={alta ? undefined : styles.commercialCard}>
         <CardHeader>
           <CardTitle>Comercial y medidas</CardTitle>
           <CardDescription>
@@ -1053,17 +1099,33 @@ function StepIdentidad(props: StepIdentidadProps) {
           {!props.sinMedida && (
             <div className="space-y-2">
               <Label>Geometría del producto</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div
+                className={
+                  alta ? altaStyles.geometry : "grid grid-cols-2 gap-2"
+                }
+              >
                 <Button
                   type="button"
-                  variant={props.geometria === "2D" ? "default" : "outline"}
+                  variant={
+                    props.geometria === "2D"
+                      ? alta
+                        ? "secondary"
+                        : "default"
+                      : "outline"
+                  }
                   onClick={() => props.setGeometria("2D")}
                 >
                   2D · Ancho y alto
                 </Button>
                 <Button
                   type="button"
-                  variant={props.geometria === "3D" ? "default" : "outline"}
+                  variant={
+                    props.geometria === "3D"
+                      ? alta
+                        ? "secondary"
+                        : "default"
+                      : "outline"
+                  }
                   onClick={() => props.setGeometria("3D")}
                 >
                   3D · Ancho, alto y profundidad

@@ -1,3 +1,5 @@
+import { leerAsignacionManual } from './asignacion-manual';
+
 /** Datos de planificación, nunca prueba de asistencia o de trabajo realizado. */
 export type AsignacionPersonal = {
   version: 1;
@@ -81,17 +83,29 @@ export function personalFijoDelPaso(
     estado: string;
     iniciadoEl?: unknown;
     asignacionPersonalJson?: unknown;
+    asignacionManualJson?: unknown;
     mesaUsuarioId?: string | null;
     operadorActualUsuarioId?: string | null;
   },
   empleados: Array<{ id: string; userId: string | null }>,
 ): PersonalFijo | undefined {
   const a = leerAsignacionPersonal(paso.asignacionPersonalJson);
+  const manual = leerAsignacionManual(paso.asignacionManualJson);
   const iniciado =
     !!paso.iniciadoEl || ['en_curso', 'pausado'].includes(paso.estado);
   const preferidoId = empleados.find(
     (e) => e.userId && e.userId === paso.operadorActualUsuarioId,
   )?.id;
+  if (manual)
+    return {
+      empleadoIds: [
+        ...new Set([
+          ...manual.empleadoIds,
+          ...(iniciado && preferidoId ? [preferidoId] : []),
+        ]),
+      ],
+      preferidoId,
+    };
   const obligatorioId = paso.mesaUsuarioId
     ? (empleados.find((e) => e.userId === paso.mesaUsuarioId)?.id ??
       '@sin-empleado')

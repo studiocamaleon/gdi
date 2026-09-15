@@ -7,22 +7,26 @@ import { useDesignScope } from "@/components/design-system/appearance";
 import {
   ChevronDown,
   ChevronRight,
-  Eye,
   Factory,
   Layers,
   UserRound,
   TriangleAlert,
   Clock3,
   Truck,
+  Info,
+  UserRoundPlus,
+  UserRoundPen,
+  Undo2,
 } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import theme from "@/components/design-system/theme.module.css";
 import {
   agruparTrabajos,
   operadoresDelTrabajo,
   estacionDelPasoVisible,
   responsablesDeEspera,
+  accionAsignacionManual,
+  puedeReasignarPersonal,
 } from "@/lib/tablero-lista";
 import type { TableroPasoData } from "@/lib/tablero-produccion";
 import type { Estacion } from "@/lib/estaciones";
@@ -33,79 +37,169 @@ import {
 import { calcularProgreso } from "@/lib/progreso-produccion";
 import { ProgresoValor } from "./progreso-produccion";
 import {
-  etiquetaEta,
   type ResultadoSimulacion,
-  type SimulacionItem,
+  type PasoProgramado,
 } from "@/lib/flujo-produccion";
-import { claveFechaEnZona } from "@/lib/zona";
+import {
+  cumplimientoPaso,
+  finActualPaso,
+  finPrevistoPaso,
+} from "@/lib/tiempos-paso";
 import s from "./tablero-lista.module.css";
+import { revisionCeldasEnVivo, type CampoLista, type CambiosCeldas } from "@/lib/tablero-lista-en-vivo";
+import { AsignacionPersonalSheet } from "./asignacion-personal-sheet";
+import { useTransicionLista } from "./use-transicion-lista";
 
-function Entrega({
-  item,
-  eta,
+type AsignacionManual = {
+  puedeReasignar: boolean;
+  onConfirmar: (pasoId: string, token: string, motivo?: string) => Promise<void>;
+  onReasignar?: (pasoId: string) => void;
+  canManage: boolean;
+  estacionIdsEjecutables: string[] | null;
+  busy: boolean;
+  onMesa: (pasoId: string, en: boolean) => Promise<void>;
+};
+
+type AtributosCampo = (campo: CampoLista) => {
+  "data-field": CampoLista;
+  "data-updating": true | undefined;
+  "data-entering": true | undefined;
+};
+
+const EXPLICACION_TIEMPOS: Record<string, string> = {
+  Previsto:
+    "Fecha y hora en que este paso debería terminar según el plan de referencia. Se conserva al recalcular y cambia al aceptar una reprogramación.",
+  Real: "Mientras el paso esté pendiente, muestra su finalización estimada con la situación actual del taller. Al completarse, muestra la fecha y hora registradas de finalización real.",
+  Cumplimiento:
+    "Diferencia entre la finalización prevista y la actual, en tiempo calendario y con precisión de un minuto. Mientras el paso esté pendiente es una proyección; al completarse es el resultado real.",
+};
+
+function FechaPaso({
+  fecha,
   zona,
+  nota,
+  title,
+}: {
+  fecha: Date | null;
+  zona: string;
+  nota?: string;
+  title?: string;
+}) {
+  if (!fecha) return <span className={s.secondary}>{nota ?? "Sin fecha"}</span>;
+  return (
+    <time dateTime={fecha.toISOString()} className={s.delivery} title={title}>
+      <span>
+        {fecha.toLocaleDateString("es-AR", {
+          timeZone: zona,
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })}
+      </span>
+      <strong>
+        {fecha.toLocaleTimeString("es-AR", {
+          timeZone: zona,
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        })}
+      </strong>
+      {nota && <span className={s.secondary}>{nota}</span>}
+    </time>
+  );
+}
+
+function TiemposPaso({
+  item,
+  plan,
+  zona,
+  resultado,
+  atributosCampo,
 }: {
   item: ItemView;
-  eta?: SimulacionItem;
+  plan?: PasoProgramado;
   zona: string;
+  resultado: ReturnType<typeof cumplimientoPaso>;
+  atributosCampo: AtributosCampo;
 }) {
-  const fecha = item.data.fechaEntrega;
-  const fechaLabel = fecha
-    ? fecha.slice(0, 10).split("-").reverse().join("/")
-    : "Sin fecha";
-  const noLlega =
-    !!eta?.finEstimado &&
-    !!fecha &&
-    claveFechaEnZona(eta.finEstimado, zona) > fecha.slice(0, 10);
+  const paso = item.visibleStep?.paso;
+  const previsto = finPrevistoPaso(paso);
+  const actual = finActualPaso(paso, plan?.fin);
+  const terminado = paso?.estado === "hecho";
+  const noLlega = resultado.tipo === "demorado";
   return (
-    <div className={s.delivery}>
-      <span>{fechaLabel}</span>
-      {!item.finished && item.dueDays != null && (
-        <span
-          className={s.secondary}
-          data-tone={
-            item.delayed ? "danger" : item.dueDays === 0 ? "brand" : undefined
-          }
-        >
-          {item.delayed
-            ? `${Math.abs(item.dueDays)} d de atraso`
-            : item.dueDays === 0
-              ? "Vence hoy"
-              : item.dueIn}
-        </span>
-      )}
-      {!item.finished && eta && (
-        <span
-          className={s.secondary}
-          data-tone={noLlega ? "danger" : undefined}
+    <>
+      <td {...atributosCampo("previsto")}>
+        <FechaPaso
+          fecha={previsto}
+          zona={zona}
+          nota={previsto ? undefined : "Sin referencia"}
           title={
-            eta.motivoSinEstimar ??
-            (eta.asumeDesbloqueo
-              ? "La estimación supone resolver el bloqueo."
-              : undefined)
+            paso?.planReferencia
+              ? `Referencia fijada el ${new Date(paso.planReferencia.fijadoEl).toLocaleString("es-AR", { timeZone: zona })}`
+              : undefined
+          }
+        />
+      </td>
+      <td {...atributosCampo("real")}>
+        <FechaPaso
+          fecha={actual}
+          zona={zona}
+          nota={
+            terminado
+              ? actual
+                ? "Finalizado"
+                : "Sin registro"
+              : actual
+                ? "Estimado"
+                : "Sin estimación"
+          }
+          title={
+            !terminado && (plan?.parcial || item.blocked)
+              ? "Estimación sujeta a resolver bloqueos y completar la configuración de recursos."
+              : undefined
+          }
+        />
+      </td>
+      <td {...atributosCampo("cumplimiento")}>
+        <div
+          className={s.compliance}
+          data-tone={
+            noLlega
+              ? "danger"
+              : resultado.tipo === "sin-datos"
+                ? "muted"
+                : "success"
           }
         >
-          {eta.finEstimado
-            ? `Fin ≈ ${etiquetaEta(eta.finEstimado, new Date(), zona)}${noLlega ? " · no llega" : ""}${eta.parcial || eta.asumeDesbloqueo ? " *" : ""}`
-            : "Fin sin estimar"}
-        </span>
-      )}
-    </div>
+          <span>{resultado.texto}</span>
+          {resultado.minutos != null && (
+            <small>{terminado ? "Real" : "Proyectado"}</small>
+          )}
+        </div>
+      </td>
+    </>
   );
 }
 
 function EstadoTrabajo({
   item,
   esperas,
+  cumplimiento,
+  atributosCampo,
 }: {
   item: ItemView;
   esperas: ReturnType<typeof responsablesDeEspera>;
+  cumplimiento: ReturnType<typeof cumplimientoPaso>["tipo"];
+  atributosCampo: AtributosCampo;
 }) {
   const scope = useDesignScope();
   const celda = (
     <td
+      {...atributosCampo("estado")}
       className={s.stateCell}
       data-state={item.state}
+      data-compliance={cumplimiento}
       tabIndex={item.waitingReasons.length ? 0 : undefined}
     >
       <span className={s.state}>
@@ -158,32 +252,63 @@ function EstadoTrabajo({
 
 function FilaTrabajo({
   item,
-  eta,
+  plan,
   zona,
   estaciones,
   onOpen,
   pasosPorId,
+  asignacionManual,
+  saliendo,
+  entrando,
 }: {
   item: ItemView;
-  eta?: SimulacionItem;
+  plan?: PasoProgramado;
   zona: string;
   estaciones: Estacion[];
   onOpen: (id: string) => void;
   pasosPorId: ReadonlyMap<string, TableroPasoData>;
+  asignacionManual?: AsignacionManual;
+  saliendo?: ReadonlySet<CampoLista>;
+  entrando?: ReadonlySet<CampoLista>;
 }) {
   const step = item.visibleStep;
+  const cumplimiento = cumplimientoPaso(
+    finPrevistoPaso(step?.paso),
+    finActualPaso(step?.paso, plan?.fin),
+  );
   const operadores = operadoresDelTrabajo(item);
   const progreso = calcularProgreso(item.data.pasos);
   const lote = item.data.loteEntrega;
   const esperas = responsablesDeEspera(item, pasosPorId);
+  const puedeReasignar = puedeReasignarPersonal(item, estaciones, !!asignacionManual?.puedeReasignar);
+  const accionManual = asignacionManual && !asignacionManual.puedeReasignar
+    ? accionAsignacionManual(item, estaciones, asignacionManual.canManage, asignacionManual.estacionIdsEjecutables)
+    : null;
+  const atributosCampo: AtributosCampo = (campo) => ({
+    "data-field": campo,
+    "data-updating": saliendo?.has(campo) || undefined,
+    "data-entering": entrando?.has(campo) || undefined,
+  });
   return (
-    <tr className={s.row} onClick={() => onOpen(item.id)}>
-      <td>
+    <tr
+      className={s.row}
+      tabIndex={0}
+      onClick={() => onOpen(item.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && event.target === event.currentTarget) {
+          onOpen(item.id);
+        }
+      }}
+    >
+      <td {...atributosCampo("trabajo")}>
         <div className={s.job}>
           <span className={s.product} title={item.product}>
             {item.product}
           </span>
-          <span className={s.code} title={`${item.otCode} · ${item.customer}`}>
+          <span
+            className={s.code}
+            title={`${item.otCode} · ${item.customer}${item.data.fechaEntrega ? ` · Entrega comercial: ${item.data.fechaEntrega.slice(0, 10).split("-").reverse().join("/")}` : ""}`}
+          >
             {item.code} · {item.customer}
           </span>
           {(lote || item.data.componenteDe) && (
@@ -196,8 +321,8 @@ function FilaTrabajo({
           )}
         </div>
       </td>
-      <td className={s.quantity}>{item.qtyLabel}</td>
-      <td>
+      <td className={s.quantity} {...atributosCampo("cantidad")}><span>{item.qtyLabel}</span></td>
+      <td {...atributosCampo("paso")}>
         <div className={s.step}>
           <span className={s.stepName} title={step?.paso.nombre}>
             {step?.paso.nombre ??
@@ -229,17 +354,10 @@ function FilaTrabajo({
           )}
         </div>
       </td>
-      <td>
+      <td {...atributosCampo("personal")} className={puedeReasignar ? s.personalEditable : undefined}>
         {operadores.length ? (
           <div className={s.operator}>
-            <IdentityAvatar
-              name={operadores[0]}
-              initials={operadores[0]
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((p) => p[0])
-                .join("")}
-            />
+            <UserRound size={12} aria-hidden="true" />
             <span title={operadores.join(" · ")}>
               {operadores[0]}
               {operadores.length > 1 && (
@@ -276,12 +394,31 @@ function FilaTrabajo({
             <TriangleAlert size={12} /> Revisar asignación
           </span>
         )}
+        {puedeReasignar && step && <div className={s.reasignarAction} onClick={event => event.stopPropagation()}>
+          <ActionButton variant="ghost" isIconOnly isDisabled={asignacionManual?.busy}
+            title={operadores.length ? "Reasignar personal" : "Asignar personal"}
+            aria-label={`${operadores.length ? "Reasignar" : "Asignar"} personal: ${step.paso.nombre}`}
+            onPress={() => asignacionManual?.onReasignar?.(step.paso.id)}>
+            {operadores.length ? <UserRoundPen /> : <UserRoundPlus />}
+          </ActionButton>
+        </div>}
+        {accionManual && asignacionManual && step && (
+          <div className={s.assignmentAction} onClick={(event) => event.stopPropagation()}>
+            <ActionButton
+              variant="outline"
+              isDisabled={asignacionManual.busy}
+              aria-label={`${accionManual === "asignarme" ? "Asignarme" : "Devolver"}: ${step.paso.nombre}`}
+              onPress={() => void asignacionManual.onMesa(step.paso.id, accionManual === "asignarme")}
+            >
+              {accionManual === "asignarme" ? <UserRoundPlus /> : <Undo2 />}
+              {accionManual === "asignarme" ? "Asignarme" : "Devolver"}
+            </ActionButton>
+          </div>
+        )}
       </td>
-      <EstadoTrabajo item={item} esperas={esperas} />
-      <td>
-        <Entrega item={item} eta={eta} zona={zona} />
-      </td>
-      <td>
+      <EstadoTrabajo item={item} esperas={esperas} cumplimiento={cumplimiento.tipo} atributosCampo={atributosCampo} />
+      <TiemposPaso item={item} plan={plan} zona={zona} resultado={cumplimiento} atributosCampo={atributosCampo} />
+      <td {...atributosCampo("avance")}>
         <div className={s.progress} aria-label={progreso.explicacion}>
           <span className={s.track} aria-hidden>
             <span style={{ width: `${item.progressPct}%` }} />
@@ -289,21 +426,12 @@ function FilaTrabajo({
           <ProgresoValor progreso={progreso} />
         </div>
       </td>
-      <td className={s.actions}>
-        <ActionButton
-          variant="outline"
-          isIconOnly
-          aria-label={`Ver detalle de ${item.code}`}
-          onPress={() => onOpen(item.id)}
-        >
-          <Eye size={15} />
-        </ActionButton>
-      </td>
     </tr>
   );
 }
 
 function Columnas() {
+  const scope = useDesignScope();
   return (
     <>
       <colgroup>
@@ -312,9 +440,10 @@ function Columnas() {
         <col className={s.colStep} />
         <col className={s.colOperator} />
         <col className={s.colState} />
-        <col className={s.colDelivery} />
+        <col className={s.colDate} />
+        <col className={s.colDate} />
+        <col className={s.colCompliance} />
         <col className={s.colProgress} />
-        <col className={s.colActions} />
       </colgroup>
       <thead>
         <tr>
@@ -324,14 +453,34 @@ function Columnas() {
             "Paso / Estación",
             "Personal asignado",
             "Estado",
-            "Entrega",
+            "Previsto",
+            "Real",
+            "Cumplimiento",
             "Avance",
-            "",
-          ].map((t, i) => (
-            <th scope="col" key={i}>
-              {t || <span className="sr-only">Acciones</span>}
-            </th>
-          ))}
+          ].map((t) =>
+            EXPLICACION_TIEMPOS[t] ? (
+              <Tooltip key={t} delay={300}>
+                <Focusable>
+                  <th scope="col" tabIndex={0} className={s.explainedHeader}>
+                    <span>
+                      {t}
+                      <Info size={11} aria-hidden="true" />
+                    </span>
+                  </th>
+                </Focusable>
+                <Tooltip.Content
+                  {...scope}
+                  className={`${theme.theme} ${s.waitTooltip}`}
+                >
+                  {EXPLICACION_TIEMPOS[t]}
+                </Tooltip.Content>
+              </Tooltip>
+            ) : (
+              <th scope="col" key={t}>
+                {t}
+              </th>
+            ),
+          )}
         </tr>
       </thead>
     </>
@@ -346,6 +495,9 @@ function Grupo({
   onOpen,
   inicialmenteAbierto,
   pasosPorId,
+  asignacionManual,
+  saliendo,
+  entrando,
 }: {
   grupo: { key: string; title: string; items: ItemView[] };
   sim?: ResultadoSimulacion;
@@ -354,11 +506,18 @@ function Grupo({
   onOpen: (id: string) => void;
   inicialmenteAbierto?: boolean;
   pasosPorId: ReadonlyMap<string, TableroPasoData>;
+  asignacionManual?: AsignacionManual;
+  saliendo: CambiosCeldas;
+  entrando: CambiosCeldas;
 }) {
   const [abierto, setAbierto] = useState(
     inicialmenteAbierto ?? grupo.items.length > 0,
   );
   const [limite, setLimite] = useState(30);
+  const planes = useMemo(
+    () => new Map(sim?.traza.map((p) => [p.pasoId, p]) ?? []),
+    [sim],
+  );
   return (
     <section
       className={s.group}
@@ -392,17 +551,24 @@ function Grupo({
                 <FilaTrabajo
                   key={item.id}
                   item={item}
-                  eta={sim?.porItem.get(item.id)}
+                  plan={
+                    item.visibleStep
+                      ? planes.get(item.visibleStep.paso.id)
+                      : undefined
+                  }
                   zona={zona}
                   estaciones={estaciones}
                   onOpen={onOpen}
                   pasosPorId={pasosPorId}
+                  asignacionManual={asignacionManual}
+                  saliendo={saliendo.get(item.id)}
+                  entrando={entrando.get(item.id)}
                 />
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={8} className={s.groupFooter}>
+                <td colSpan={9} className={s.groupFooter}>
                   {limite < grupo.items.length ? (
                     <ActionButton
                       variant="ghost"
@@ -436,6 +602,7 @@ export function TableroLista({
   terminados = false,
   seccionInicial,
   contextoFiltros = "",
+  asignacionManual,
 }: {
   items: ItemView[];
   trabajosContexto?: ItemView[];
@@ -446,17 +613,22 @@ export function TableroLista({
   terminados?: boolean;
   seccionInicial?: string;
   contextoFiltros?: string;
+  asignacionManual?: AsignacionManual;
 }) {
+  const [pasoAsignacion, setPasoAsignacion] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const pasosPorId = useMemo(
-    () =>
-      new Map(
-        trabajosContexto.flatMap((item) =>
-          item.data.pasos.map((paso) => [paso.id, paso] as const),
-        ),
-      ),
-    [trabajosContexto],
-  );
+  const entrada = useMemo(() => {
+    const pasosPorId = new Map(trabajosContexto.flatMap((item) => item.data.pasos.map((paso) => [paso.id, paso] as const)));
+    const planes = new Map(sim?.traza.map((p) => [p.pasoId, p]) ?? []);
+    const versiones = new Map(items.map((item) => [item.id, revisionCeldasEnVivo(
+      item, estaciones, planes.get(item.visibleStep?.paso.id ?? ""), responsablesDeEspera(item, pasosPorId),
+      !terminados && asignacionManual && !asignacionManual.puedeReasignar
+        ? accionAsignacionManual(item, estaciones, asignacionManual.canManage, asignacionManual.estacionIdsEjecutables) : null,
+      !terminados && puedeReasignarPersonal(item, estaciones, !!asignacionManual?.puedeReasignar),
+    )]));
+    return { items, estaciones, sim, pasosPorId, versiones, contexto: `${contextoFiltros}:${terminados}:${zona}` };
+  }, [items, estaciones, sim, trabajosContexto, contextoFiltros, terminados, zona, asignacionManual]);
+  const { datos, saliendo, entrando } = useTransicionLista(entrada);
   useEffect(() => {
     if (seccionInicial === "blocked")
       root.current
@@ -465,8 +637,8 @@ export function TableroLista({
   }, [seccionInicial]);
   const grupos = (
     terminados
-      ? [{ key: "done", title: "Terminados", items }]
-      : agruparTrabajos(items)
+      ? [{ key: "done", title: "Terminados", items: datos.items }]
+      : agruparTrabajos(datos.items)
   ).filter((grupo) => grupo.items.length > 0);
   return (
     <div ref={root} data-ui="heroui" className={`${theme.theme} ${s.root}`}>
@@ -480,13 +652,17 @@ export function TableroLista({
           key={`${contextoFiltros}:${grupo.key}`}
           grupo={grupo}
           inicialmenteAbierto={grupo.key === seccionInicial ? true : undefined}
-          sim={sim}
+          sim={datos.sim}
           zona={zona}
-          estaciones={estaciones}
+          estaciones={datos.estaciones}
           onOpen={onOpen}
-          pasosPorId={pasosPorId}
+          pasosPorId={datos.pasosPorId}
+          saliendo={saliendo}
+          entrando={entrando}
+          asignacionManual={terminados || !asignacionManual ? undefined : { ...asignacionManual, onReasignar: setPasoAsignacion }}
         />
       ))}
+      {pasoAsignacion && asignacionManual?.puedeReasignar && <AsignacionPersonalSheet key={pasoAsignacion} pasoId={pasoAsignacion} onClose={() => setPasoAsignacion(null)} onConfirmar={asignacionManual.onConfirmar} />}
     </div>
   );
 }

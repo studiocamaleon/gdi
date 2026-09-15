@@ -183,6 +183,10 @@ export async function crearFixtureLotesF6(
                   .map((p) => ({
                     pasoId: `${i}-${p.rutaPasoId}`,
                     inicio: `2026-09-${15 + i}T12:00:00.000Z`,
+                    fin: new Date(
+                      Date.parse(`2026-09-${15 + i}T12:00:00.000Z`) +
+                        p.tiempo!.totalMin * 60000,
+                    ).toISOString(),
                   })),
               ),
               entregas: [0, 1, 2, 3].map((i) => ({

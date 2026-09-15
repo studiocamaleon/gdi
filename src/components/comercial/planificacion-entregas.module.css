@@ -335,20 +335,9 @@
   height: 14px;
   color: #c43d0b;
 }
-.spin {
+.loadingIcon {
   width: 16px;
   height: 16px;
-  animation: girar 1s linear infinite;
-}
-@keyframes girar {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spin {
-    animation: none;
-  }
 }
 @media (max-width: 640px) {
   .body {

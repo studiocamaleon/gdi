@@ -145,10 +145,6 @@ export function buildStationsModel(items: ItemView[], estaciones: Estacion[]) {
   return { stations, tareas, entrantes };
 }
 
-export function taskId(task: StationTask) {
-  return task.step.paso.id;
-}
-
 /**
  * Duración estimada del paso para la cola: la propia del snapshot, o la
  * mediana histórica de su familia (D6 del doc de capacidad). null = sin

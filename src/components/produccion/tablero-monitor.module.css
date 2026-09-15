@@ -1,0 +1,101 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px 24px;
+  padding-bottom: 16px;
+  color: var(--foreground);
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent-soft-foreground);
+}
+.icon svg { width: 22px; height: 22px; }
+.eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 5px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted-text);
+}
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: .04em;
+}
+.connection[data-tone="success"] { color: var(--success-soft-foreground); }
+.connection[data-tone="warning"] { color: var(--warning-soft-foreground); }
+.signal {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.header h1 {
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -.03em;
+}
+.header p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.telemetry {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.clock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 22px;
+  border-right: 1px solid var(--border);
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.clockLabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--muted-text);
+}
+.clock time {
+  font-size: 29px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -.04em;
+}
+.date { font-size: 10px; color: var(--muted-text); }
+.sync { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.sync > span { color: var(--muted-text); font-size: 9px; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .header { gap: 14px; }
+  .telemetry { width: 100%; justify-content: space-between; }
+  .clock { border: 0; padding: 0; }
+  .icon { display: none; }
+  .header h1 { font-size: 21px; }
+}

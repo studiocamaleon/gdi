@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import Image from "next/image";
 import {
@@ -219,10 +220,7 @@ export function PlantillaInstalacionPanel({ itemId, seleccion }: { itemId: strin
             disabled={loading}
             onClick={apply}
           >
-            <RefreshCwIcon
-              data-icon="inline-start"
-              className={loading ? "animate-spin" : undefined}
-            />
+            {loading ? <GdiSpinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
             Actualizar paneles
           </Button>
         </div>

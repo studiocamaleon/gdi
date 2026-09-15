@@ -140,6 +140,7 @@ export class EtaService {
                 planificadoHasta: true,
                 atencionPlanificadaJson: true,
                 asignacionPersonalJson: true,
+                asignacionManualJson: true,
                 mesaUsuarioId: true,
                 tipoEjecucion: true,
                 plazoProveedorDias: true,

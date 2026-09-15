@@ -1,6 +1,8 @@
 "use client";
+
+import { confirmarAsignacionPersonal } from "@/lib/asignacion-personal-api";
 import * as React from "react";
-import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
+import { useCambiosSistema, useNotificaciones } from "@/components/notificaciones/notificaciones-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   debeRefrescarTablero,
@@ -15,6 +17,7 @@ import {
   mesaPasoProduccion,
   resolverGatePasoProduccion,
 } from "@/lib/ordenes-trabajo-api";
+import { crearSincronizadorTablero } from "@/lib/sincronizacion-tablero";
 import type { ItemView } from "@/lib/produccion-item-view";
 const POLL_TABLERO_MS = 15000;
 type GateHandler = (
@@ -54,6 +57,7 @@ export function useProduccionOperativa({
   const [actualizadoEl, setActualizadoEl] = React.useState<Date | null>(
     initialLoadError || !initialActualizadoEl ? null : new Date(initialActualizadoEl),
   );
+  const { estado: conexion } = useNotificaciones();
   const permisoEjecutar = usePuede("produccion.ejecutar");
   const permisoSupervisar = usePuede("produccion.supervisar");
   const canManage =
@@ -78,24 +82,14 @@ export function useProduccionOperativa({
     };
   }, []);
 
-  const refrescar = React.useCallback(async (forzar = false) => {
-    if (
-      !debeRefrescarTablero({
-        pestanaOculta: !forzar && document.hidden,
-        mutacionesEnCurso: mutacionesRef.current,
-        arrastreActivo: dragActivoRef.current,
-      })
-    )
-      return;
-    if (forzar) setRefreshing(true);
-    try {
-      const respuesta = await getTableroProduccion({ soloPendientes });
-      if (
-        !montadoRef.current ||
-        mutacionesRef.current > 0 ||
-        dragActivoRef.current
-      )
-        return;
+  const sincronizador = React.useMemo(() => crearSincronizadorTablero({
+    puedeActualizar: (forzar) => montadoRef.current && debeRefrescarTablero({
+      pestanaOculta: !forzar && document.hidden,
+      mutacionesEnCurso: mutacionesRef.current,
+      arrastreActivo: dragActivoRef.current,
+    }),
+    consultar: () => getTableroProduccion({ soloPendientes }),
+    aplicar: (respuesta) => {
       const snapshot = JSON.stringify(respuesta.items);
       if (snapshot !== ultimoSnapshotRef.current) {
         ultimoSnapshotRef.current = snapshot;
@@ -110,17 +104,22 @@ export function useProduccionOperativa({
       setLoadError(null);
       setSyncError(null);
       setActualizadoEl(new Date());
-    } catch (err) {
-      if (!montadoRef.current) return;
-      setSyncError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo actualizar el tablero. Se conservan los últimos datos.",
-      );
+    },
+    fallo: (err) => setSyncError(err instanceof Error ? err.message : "No se pudo actualizar el tablero. Se conservan los últimos datos."),
+  }), [soloPendientes]);
+
+  const refrescar = React.useCallback(async (forzar = false) => {
+    if (forzar) setRefreshing(true);
+    try {
+      await sincronizador.actualizar(forzar);
     } finally {
       if (montadoRef.current && forzar) setRefreshing(false);
     }
-  }, [soloPendientes]);
+  }, [sincronizador]);
+
+  React.useEffect(() => {
+    if (conexion === "en_vivo") void refrescar();
+  }, [conexion, refrescar]);
 
   useCambiosSistema(
     (cambio) => {
@@ -141,6 +140,7 @@ export function useProduccionOperativa({
     };
     const onDragEnd = () => {
       dragActivoRef.current = false;
+      void refrescar();
     };
     document.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
@@ -178,6 +178,7 @@ export function useProduccionOperativa({
       setBusy(true);
       setError(null);
       mutacionesRef.current += 1;
+      sincronizador.invalidar();
       try {
         const actualizado = await accionPasoProduccion(
           item.data.ordenId,
@@ -190,9 +191,6 @@ export function useProduccionOperativa({
             entry.id === actualizado.id ? actualizado : entry,
           ),
         );
-        const { items: refrescados } = await getTableroProduccion({ soloPendientes });
-        setItems(refrescados);
-        ultimoSnapshotRef.current = JSON.stringify(refrescados);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "No se pudo ejecutar la acción.",
@@ -200,10 +198,11 @@ export function useProduccionOperativa({
         throw err;
       } finally {
         mutacionesRef.current -= 1;
-        setBusy(false);
+        await refrescar();
+        if (montadoRef.current) setBusy(false);
       }
     },
-    [canManage, soloPendientes],
+    [canManage, sincronizador, refrescar],
   );
 
   const handleGate = React.useCallback<GateHandler>(
@@ -212,11 +211,9 @@ export function useProduccionOperativa({
       setBusy(true);
       setError(null);
       mutacionesRef.current += 1;
+      sincronizador.invalidar();
       try {
         await resolverGatePasoProduccion(paso.id, { tipo, estado });
-        const respuesta = await getTableroProduccion({ soloPendientes });
-        setItems(respuesta.items);
-        ultimoSnapshotRef.current = JSON.stringify(respuesta.items);
       } catch (err) {
         setError(
           err instanceof Error
@@ -225,22 +222,26 @@ export function useProduccionOperativa({
         );
       } finally {
         mutacionesRef.current -= 1;
-        setBusy(false);
+        await refrescar();
+        if (montadoRef.current) setBusy(false);
       }
     },
-    [permisoSupervisar, soloPendientes],
+    [permisoSupervisar, sincronizador, refrescar],
   );
 
   /**
    * Tomar/soltar un paso de MI mesa (persistente por usuario). Optimista:
-   * la card se mueve al soltar; el server confirma con el item
-   * re-proyectado (trae el nombre real del dueño) o se revierte.
+   * el servidor confirma con el item re-proyectado (trae el nombre real
+   * del dueño) o se revierte.
    */
   const handleMesa = React.useCallback(
     async (pasoId: string, en: boolean) => {
-      if (!canManage) return;
+      if (!canManage || mutacionesRef.current > 0) return;
       const previo = items;
       mutacionesRef.current += 1;
+      sincronizador.invalidar();
+      setBusy(true);
+      setError(null);
       setItems((current) =>
         current.map((item) => ({
           ...item,
@@ -267,10 +268,27 @@ export function useProduccionOperativa({
         );
       } finally {
         mutacionesRef.current -= 1;
+        await refrescar();
+        if (montadoRef.current) setBusy(false);
       }
     },
-    [canManage, items],
+    [canManage, items, sincronizador, refrescar],
   );
+
+  const handleAsignacionPersonal = React.useCallback(async (pasoId: string, token: string, motivo?: string) => {
+    if (!permisoSupervisar) throw new Error("Necesitás permiso de supervisión.");
+    if (mutacionesRef.current > 0) throw new Error("Esperá a que termine la operación en curso.");
+    mutacionesRef.current += 1;
+    sincronizador.invalidar();
+    setBusy(true);
+    try {
+      await confirmarAsignacionPersonal(pasoId, token, motivo);
+    } finally {
+      mutacionesRef.current -= 1;
+      await refrescar(true);
+      if (montadoRef.current) setBusy(false);
+    }
+  }, [permisoSupervisar, sincronizador, refrescar]);
 
   return {
     items,
@@ -280,6 +298,7 @@ export function useProduccionOperativa({
     loadError,
     syncError,
     refreshing,
+    conexion,
     actualizadoEl,
     permisoSupervisar,
     canManage,
@@ -287,5 +306,6 @@ export function useProduccionOperativa({
     handleAccion,
     handleGate,
     handleMesa,
+    handleAsignacionPersonal,
   };
 }

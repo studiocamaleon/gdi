@@ -1,0 +1,418 @@
+.page {
+  color: var(--foreground);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.search {
+  width: min(420px, 100%);
+}
+.period {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.period input {
+  width: 180px;
+  height: 36px;
+  font-size: 13px;
+}
+.tableScroll {
+  min-width: 0;
+  overflow-x: auto;
+  border-radius: 0 0 9px 9px;
+}
+.table,
+.historyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table {
+  min-width: 1190px;
+}
+.table th,
+.historyTable th {
+  padding: 12px 16px;
+  color: var(--muted-text);
+  background: var(--surface-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.table td,
+.historyTable td {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--foreground);
+  line-height: 1.5;
+}
+.table tbody tr:hover {
+  background: var(--background);
+}
+.table .number,
+.historyTable .number,
+.row .number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.table .number {
+  white-space: nowrap;
+}
+.table .muted {
+  color: var(--muted-text);
+}
+.strong,
+.name {
+  font-weight: 600;
+}
+.name {
+  min-width: 180px;
+}
+.table .sticky {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+}
+.table th.sticky {
+  background: var(--surface-secondary);
+}
+.table .sticky .actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+.totals {
+  background: var(--surface-secondary);
+  font-weight: 600;
+}
+.table .totals .sticky {
+  background: var(--surface-secondary);
+}
+.table .balance td {
+  color: var(--muted-text);
+  background: var(--background);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.empty {
+  padding: 28px 16px;
+  color: var(--muted-text);
+  text-align: center;
+  font-size: 13px;
+}
+.table .empty {
+  text-align: center;
+}
+.inactive {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.inactive h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.inactive p {
+  margin: 5px 0 16px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.inactiveList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.inactiveItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.sheet {
+  width: min(1080px, 100vw);
+  overflow: hidden;
+}
+.tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.tabList {
+  flex: none;
+  padding: 0 24px;
+}
+.body,
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.body {
+  background: var(--background);
+}
+.panel {
+  padding: 0;
+  outline-offset: -2px;
+}
+.body > *,
+.panel > * {
+  flex-shrink: 0;
+}
+.section,
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: none;
+  overflow: hidden;
+}
+.sectionHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.sectionHeader h3,
+.summary h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.sectionHeader p {
+  margin: 5px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.rows {
+  overflow-x: auto;
+}
+.row {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.row + .row {
+  border-top: 1px solid var(--border);
+}
+.row[data-section="gasto_general"] {
+  grid-template-columns:
+    minmax(200px, 2fr) minmax(180px, 1.4fr) minmax(120px, 1fr)
+    32px;
+  min-width: 640px;
+}
+.row[data-section="empleado"] {
+  grid-template-columns: 1.5fr 1.2fr 0.9fr 1.2fr 0.7fr 1.2fr 32px;
+  min-width: 980px;
+}
+.row[data-section="activo_fijo"] {
+  grid-template-columns: 2fr 0.9fr 1.2fr 1.2fr 1.2fr 32px;
+  min-width: 850px;
+}
+.rowHeader {
+  color: var(--muted-text);
+  background: var(--surface-secondary);
+  font-size: 11px;
+}
+.sheet input {
+  min-width: 0;
+  width: 100%;
+  height: 36px;
+  font-size: 13px;
+}
+.row input {
+  font-size: 12px;
+}
+.dedication,
+.dedicationField {
+  min-width: 0;
+}
+.dedicationField {
+  position: relative;
+}
+.dedicationField input {
+  padding-right: 27px;
+}
+.unit {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.row .calculated {
+  background: var(--surface-secondary);
+  color: var(--foreground);
+  opacity: 1;
+  font-weight: 600;
+  border-color: transparent;
+}
+.sectionFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.subtotal {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+  padding: 20px;
+}
+.identity label,
+.field,
+.typeField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.typeField {
+  grid-column: 1 / -1;
+}
+.help {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.summary {
+  padding: 18px 20px;
+  gap: 16px;
+}
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.summaryGrid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.label {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.summary strong {
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.summary .highlight {
+  color: var(--accent-soft-foreground);
+}
+.loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px;
+}
+.historyScroll {
+  overflow-x: auto;
+}
+.historyTable {
+  min-width: 900px;
+}
+.historyTable td {
+  font-size: 12px;
+}
+.footer {
+  justify-content: flex-end;
+}
+.confirmBody {
+  padding: 18px 24px;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+.confirmBody p {
+  margin: 0;
+  line-height: 1.6;
+}
+.confirmBody p + p {
+  margin-top: 6px;
+}
+.confirmFooter {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px;
+  margin: 0;
+}
+@container list-page (max-width: 650px) {
+  .search {
+    width: 100%;
+  }
+  .period {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+@media (max-width: 639px) {
+  .actions {
+    width: 100%;
+  }
+  .table .actions {
+    width: auto;
+  }
+  .table .sticky {
+    position: static;
+  }
+  .inactive {
+    padding: 16px;
+  }
+  .tabList {
+    padding: 0 16px;
+  }
+  .identity {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+  .summary {
+    padding: 16px;
+  }
+  .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sectionHeader {
+    padding: 16px;
+  }
+  .confirmBody,
+  .confirmFooter {
+    padding: 16px;
+  }
+}

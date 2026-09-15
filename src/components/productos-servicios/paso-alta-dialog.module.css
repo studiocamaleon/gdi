@@ -1,313 +1,201 @@
-.dialog:global(.gp-modal)[data-slot="dialog-content"] {
-  width: min(660px, calc(100vw - 32px));
-  max-width: 660px;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+.body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  min-height: 0;
 }
-
-.dialog > .header::before {
-  content: "GRAFOPRINT · PRODUCCIÓN";
-}
-
-.dialog > .body[data-slot="field-group"] {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+.fields {
   gap: 22px;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--gp-modal-border) transparent;
 }
-
-.body > * {
-  flex-shrink: 0;
+.body input {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
 }
-
-.body [data-slot="input"],
-.search[data-slot="input-group"] {
-  height: 40px;
+.body [data-slot="field-description"] {
+  color: var(--muted-text);
+  font-size: 12px;
 }
-
 .typeField {
   min-width: 0;
-  gap: 0;
+  gap: 8px;
 }
-
-.typeField > legend {
-  margin-bottom: 9px;
-  color: #55514c;
-  font-size: 11.5px;
-  font-weight: 680;
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
-}
-
 .typeOptions {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
   gap: 10px;
 }
-
 .typeOptions .typeOption {
+  width: 100%;
   position: relative;
   height: auto;
-  min-height: 98px;
+  min-height: 90px;
   min-width: 0;
   align-items: flex-start;
   justify-content: flex-start;
-  gap: 10px;
-  padding: 16px 28px 16px 14px;
-  border: 1px solid var(--gp-modal-border);
-  border-radius: 12px;
-  color: var(--gp-modal-ink);
-  background: #fff;
+  padding: 14px 24px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--foreground);
+  background: var(--surface);
   text-align: left;
   white-space: normal;
-  transition:
-    background-color 150ms,
-    border-color 150ms;
+  gap: 8px;
 }
-
-.typeOptions .typeOption:hover,
-.templateList .template:hover {
-  border-color: #f5b290;
-  background: #fffaf6;
+.typeOption[data-selected="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
-
-.typeOptions .typeOption[aria-pressed="true"] {
-  border-color: var(--gp-modal-orange);
-  background: #fff3eb;
-  box-shadow: 0 0 0 1px var(--gp-modal-orange) inset;
-}
-
-.typeOptions .typeOption:focus-visible,
-.templateList .template:focus-visible {
-  outline: 2px solid var(--gp-modal-orange);
-  outline-offset: 2px;
-}
-
 .typeIcon {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
   place-items: center;
   border-radius: 8px;
-  color: #77716a;
-  background: #f5f2ee;
+  color: var(--muted-text);
+  background: var(--surface-secondary);
 }
-
-.typeOption[aria-pressed="true"] .typeIcon {
-  color: #ce4714;
-  background: #ffe2d0;
+.typeIcon svg {
+  width: 16px;
+  height: 16px;
 }
-
+.typeOption[data-selected="true"] .typeIcon {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}
 .typeCopy {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 5px;
 }
-
 .typeCopy strong {
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.4;
-}
-
-.typeCopy > span {
-  color: #726d67;
   font-size: 12px;
-  font-weight: 400;
-  line-height: 1.5;
+  font-weight: 600;
 }
-
+.typeCopy > span {
+  font-size: 11px;
+  color: var(--muted-text);
+  line-height: 1.45;
+}
 .typeCheck {
   position: absolute;
-  top: 12px;
-  right: 10px;
-  color: #ce4714;
-  visibility: hidden;
+  top: 10px;
+  right: 8px;
+  opacity: 0;
+  color: var(--accent-soft-foreground);
 }
-
-.typeOption[aria-pressed="true"] .typeCheck {
-  visibility: visible;
+.typeCheck svg {
+  width: 13px;
+  height: 13px;
 }
-
-.templatesField {
-  display: grid;
-  min-height: 0;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  padding-top: 20px;
-  border-top: 1px solid var(--gp-modal-border);
+.typeOption[data-selected="true"] .typeCheck {
+  opacity: 1;
 }
-
 .catalogHeading {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.count {
-  flex-shrink: 0;
-  color: #8b857e;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.search[data-slot="input-group"] {
-  margin-top: 3px;
-  border-color: var(--gp-modal-border);
-  border-radius: 10px;
-  background: #fff;
-}
-
-.search[data-slot="input-group"]:focus-within {
-  border-color: var(--gp-modal-orange);
-  box-shadow: 0 0 0 3px rgb(255 106 43 / 9%);
-}
-
-.search [data-slot="input-group-addon"] {
-  padding-left: 12px;
-  color: #8b857e;
-}
-
-.templateList {
-  display: flex;
-  min-height: 0;
-  max-height: 288px;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 3px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--gp-modal-border) transparent;
 }
-
-.templateList .template {
-  width: 100%;
-  height: auto;
-  flex-shrink: 0;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 13px 14px;
-  border: 1px solid var(--gp-modal-border);
+.count {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.templatesField {
+  min-height: 0;
+}
+.templateList {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  color: var(--gp-modal-ink);
-  background: #fff;
+}
+.templateList .template {
+  display: flex;
+  width: 100%;
+  min-height: 64px;
+  height: auto;
+  gap: 10px;
+  justify-content: flex-start;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
   text-align: left;
   white-space: normal;
+  background: var(--surface);
 }
-
+.templateList .template + .template {
+  border-top: 1px solid var(--border);
+}
 .templateList .template[aria-pressed="true"] {
-  border-color: var(--gp-modal-orange);
-  background: #fff3eb;
+  background: var(--accent-soft);
 }
-
 .selectionMark {
   display: grid;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  margin-top: 2px;
   place-items: center;
-  border: 1px solid #d8d1c9;
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: #fff;
 }
-
+.selectionMark svg {
+  width: 11px;
+  height: 11px;
+}
 .template[aria-pressed="true"] .selectionMark {
-  border-color: var(--gp-modal-orange);
-  color: #fff;
-  background: var(--gp-modal-orange);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
 }
-
 .templateCopy {
-  display: flex;
+  flex: 1;
   min-width: 0;
-  flex-direction: column;
-  gap: 5px;
 }
-
 .templateHeading {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 5px 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
-
 .templateName {
   font-size: 13px;
   font-weight: 600;
-  line-height: 1.5;
 }
-
-.templateHeading .category {
-  height: auto;
-  border: 1px solid #eee9e3;
-  border-radius: 5px;
-  color: #726d67;
-  background: #f7f5f2;
+.category {
   font-size: 10px;
-  font-weight: 500;
-  white-space: normal;
 }
-
 .templateDescription {
-  color: #726d67;
+  display: block;
+  margin-top: 4px;
   font-size: 12px;
-  font-weight: 400;
+  color: var(--muted-text);
   line-height: 1.5;
 }
-
 .empty {
-  min-height: 180px;
+  padding: 20px;
 }
-
-.compoundInfo[data-slot="alert"] {
-  gap: 6px 12px;
-  padding: 18px;
-  border-color: #f4d9c8;
-  border-radius: 12px;
-  color: #b9481c;
-  background: #fff5ed;
-}
-
-.compoundInfo [data-slot="alert-title"] {
-  color: var(--gp-modal-ink);
+.compoundInfo {
+  background: var(--surface-secondary);
   font-size: 13px;
-  font-weight: 600;
 }
-
-.compoundInfo [data-slot="alert-description"] {
-  color: #726d67;
-  font-size: 12px;
-  line-height: 1.6;
+.footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
 }
-
-@media (max-width: 480px) {
+@media (max-width: 540px) {
+  .body,
+  .footer {
+    padding: 16px;
+  }
   .typeOptions {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 1fr;
   }
-
   .typeOptions .typeOption {
-    min-height: 0;
-    padding: 12px 32px 12px 12px;
-  }
-
-  .templateHeading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 480px), (max-height: 650px) {
-  .dialog > .body[data-slot="field-group"],
-  .templatesField {
-    display: flex;
+    width: 100%;
+    min-height: 72px;
   }
 }

@@ -1,5 +1,18 @@
 "use client";
 
+import {
+  ProductoVisualProvider,
+  ProductoEdicion,
+  NativeButton,
+  ChoiceButton,
+  Textarea,
+  MedidaInput,
+} from "./producto-ui";
+import { Tabs as HeroTabs, Dropdown, Separator } from "@heroui/react";
+import { RouterProvider } from "react-aria-components";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import listStyles from "@/components/design-system/list-page.module.css";
 import { PiezasArchivosProducto } from "./piezas-archivos-producto";
 import * as React from "react";
 import Link from "next/link";
@@ -29,11 +42,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "./producto-ui";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { Badge } from "./producto-ui";
+import { Button } from "./producto-ui";
+import { ConfirmacionDestructiva } from "./producto-ui";
 import {
   Dialog,
   DialogContent,
@@ -41,27 +54,20 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "./producto-ui";
+
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { HumanSelect } from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HumanSelect } from "./producto-ui";
+import { Input } from "./producto-ui";
+import { Switch } from "./producto-ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./producto-ui";
 import { NestingsGuardadosProducto } from "./nestings-guardados-producto";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { ToggleGroup, ToggleGroupItem } from "./producto-ui";
 import { TabPrecioCompleto } from "@/components/productos-servicios/tab-precio-completo";
 import { PricingCompuestoEditor } from "@/components/productos-servicios/pricing-compuesto-editor";
 import {
@@ -249,8 +255,9 @@ function MedidasPredefinidasEditor({
     );
   };
   return (
-    <div className="field">
+    <div className={[styles.field].join(" ")}>
       <div
+        className={styles.measureHeading}
         style={{
           display: "flex",
           alignItems: "center",
@@ -263,7 +270,7 @@ function MedidasPredefinidasEditor({
         </label>
         {!esMedidaFija && (
           <div style={{ display: "flex", gap: 4 }}>
-            <button
+            <NativeButton
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() =>
@@ -272,8 +279,8 @@ function MedidasPredefinidasEditor({
             >
               <PlusIcon />
               Agregar medida
-            </button>
-            <button
+            </NativeButton>
+            <NativeButton
               type="button"
               className="btn btn-ghost btn-sm"
               onClick={() =>
@@ -284,7 +291,7 @@ function MedidasPredefinidasEditor({
             >
               <PlusIcon />
               Plancha completa
-            </button>
+            </NativeButton>
           </div>
         )}
       </div>
@@ -292,16 +299,10 @@ function MedidasPredefinidasEditor({
         {medidasVisibles.map((medida, index) => (
           <div
             key={medida.id}
-            style={{
-              display: "grid",
-              gridTemplateColumns: es3D
-                ? "1.25fr 0.7fr 0.7fr 0.7fr auto auto"
-                : "1.4fr 0.8fr 0.8fr auto auto",
-              gap: 8,
-              alignItems: "center",
-            }}
+            className={styles.measureRow}
+            data-depth={es3D || undefined}
           >
-            <input
+            <Input
               type="text"
               value={medida.nombre}
               onChange={(event) =>
@@ -314,7 +315,7 @@ function MedidasPredefinidasEditor({
               // La plancha no declara dims: pieza = área útil del pliego,
               // resuelta al cotizar (papel activo − márgenes de la máquina).
               <span
-                className="help"
+                className={[styles.help].join(" ")}
                 style={{ gridColumn: "span 2", margin: 0 }}
                 title="Se recalcula sola si cambia el papel o la máquina del paso de impresión"
               >
@@ -322,7 +323,8 @@ function MedidasPredefinidasEditor({
               </span>
             ) : (
               <>
-                <input
+                <MedidaInput
+                  label="Ancho (cm)"
                   type="number"
                   min="0"
                   value={medida.anchoMm ? medida.anchoMm / 10 : ""}
@@ -334,7 +336,8 @@ function MedidasPredefinidasEditor({
                   placeholder="Ancho cm"
                   aria-label={`Ancho de medida ${index + 1}`}
                 />
-                <input
+                <MedidaInput
+                  label="Alto (cm)"
                   type="number"
                   min="0"
                   value={medida.altoMm ? medida.altoMm / 10 : ""}
@@ -347,7 +350,8 @@ function MedidasPredefinidasEditor({
                   aria-label={`Alto de medida ${index + 1}`}
                 />
                 {es3D && (
-                  <input
+                  <MedidaInput
+                    label="Profundidad (cm)"
                     type="number"
                     min="0"
                     value={
@@ -366,7 +370,7 @@ function MedidasPredefinidasEditor({
             )}
             {!esMedidaFija ? (
               <>
-                <button
+                <ChoiceButton
                   type="button"
                   className={`icon-action medida-default-btn ${medida.esDefault ? "on" : ""}`}
                   onClick={() => setDefault(medida.id)}
@@ -381,8 +385,8 @@ function MedidasPredefinidasEditor({
                     size={13}
                     fill={medida.esDefault ? "currentColor" : "none"}
                   />
-                </button>
-                <button
+                </ChoiceButton>
+                <NativeButton
                   type="button"
                   className="icon-action danger"
                   onClick={() => removeMedida(medida.id)}
@@ -390,7 +394,7 @@ function MedidasPredefinidasEditor({
                   title="Eliminar medida"
                 >
                   <Trash2Icon size={13} />
-                </button>
+                </NativeButton>
               </>
             ) : (
               <span style={{ gridColumn: "span 2" }} />
@@ -398,7 +402,7 @@ function MedidasPredefinidasEditor({
           </div>
         ))}
       </div>
-      <span className="help">
+      <span className={[styles.help].join(" ")}>
         {esMedidaFija
           ? "Esta medida se aplicará automáticamente; el comercial no tendrá que elegirla ni ingresarla."
           : "La medida con estrella aparecerá seleccionada inicialmente al cotizar."}
@@ -530,9 +534,7 @@ export function ProductoWorkspace({
     [producto, recetas, estadoPublicacion],
   );
 
-  const irATab = (tab: ProductoWorkspaceTab) => {
-    router.push(tabHref(tab));
-  };
+  const scope = useDesignScope();
 
   const tabHref = (tab: ProductoWorkspaceTab) => {
     const params = new URLSearchParams();
@@ -551,118 +553,136 @@ export function ProductoWorkspace({
   };
 
   return (
-    <main className={styles.page}>
-      <div className={styles.shell}>
-        <Link href="/productos-servicios" className={styles.back}>
-          <ArrowLeftIcon className="size-4" />
-          Volver al catálogo
-        </Link>
-        <header className={styles.header}>
-          <span className={styles.headerIcon} aria-hidden="true">
-            <TagIcon />
-          </span>
-          <div className={styles.headerBody}>
-            <span className={styles.eyebrow}>Ficha de producto</span>
-            <div className={styles.titleRow}>
-              <h1>{producto.nombre}</h1>
-              <span
-                className={styles.productStatus}
-                data-active={producto.activo || undefined}
-              >
-                <span />
-                {producto.activo ? "Publicado" : "Borrador"}
-              </span>
-            </div>
-            {producto.descripcion ? (
-              <p className={styles.description}>{producto.descripcion}</p>
-            ) : (
-              <p className={styles.description}>
-                Configurá su identidad, producción y precio antes de publicarlo.
-              </p>
-            )}
-          </div>
-          <ProductoValidacionPanel
-            productoId={producto.id}
-            variante="compacta"
-          />
-        </header>
-        {!canManage ? (
-          <Alert className="mb-4">
-            <CircleAlertIcon />
-            <AlertTitle>Modo de solo lectura</AlertTitle>
-            <AlertDescription>
-              Podés consultar toda la configuración, pero necesitás el permiso
-              de gestión de costos para modificarla.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => irATab(value as ProductoWorkspaceTab)}
-        >
-          <nav className={styles.tabs} aria-label="Secciones del producto">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <Link
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  className={styles.tab}
-                  data-active={activeTab === tab.id || undefined}
-                  href={tabHref(tab.id)}
+    <ProductoVisualProvider>
+      <main
+        data-producto-ficha
+        {...scope}
+        className={`${theme.theme} ${listStyles.page} ${styles.page}`}
+      >
+        <div className={styles.shell}>
+          <Link href="/productos-servicios" className={styles.back}>
+            <ArrowLeftIcon className="size-4" />
+            Volver al catálogo
+          </Link>
+          <header className={styles.header}>
+            <span className={styles.headerIcon} aria-hidden="true">
+              <TagIcon />
+            </span>
+            <div className={styles.headerBody}>
+              <span className={styles.eyebrow}>Ficha de producto</span>
+              <div className={styles.titleRow}>
+                <h1>{producto.nombre}</h1>
+                <span
+                  className={styles.productStatus}
+                  data-active={producto.activo || undefined}
                 >
-                  <span className={styles.tabIcon}>
-                    <Icon className="size-4" />
-                  </span>
-                  <span className={styles.tabLabel}>{tab.label}</span>
-                  <EstadoBadge {...validaciones[tab.id]} />
-                </Link>
-              );
-            })}
-          </nav>
+                  <span />
+                  {producto.activo ? "Publicado" : "Borrador"}
+                </span>
+              </div>
+              {producto.descripcion ? (
+                <p className={styles.description}>{producto.descripcion}</p>
+              ) : (
+                <p className={styles.description}>
+                  Configurá su identidad, producción y precio antes de
+                  publicarlo.
+                </p>
+              )}
+            </div>
+            <ProductoValidacionPanel
+              productoId={producto.id}
+              variante="compacta"
+            />
+          </header>
+          {!canManage ? (
+            <Alert className="mb-4">
+              <CircleAlertIcon />
+              <AlertTitle>Modo de solo lectura</AlertTitle>
+              <AlertDescription>
+                Podés consultar toda la configuración, pero necesitás el permiso
+                de gestión de costos para modificarla.
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-          <TabsContent value={activeTab}>
-            <fieldset disabled={!canManage} className="contents">
-              {activeTab === "identidad" && (
-                <IdentidadTab producto={producto} seccion="identidad" />
-              )}
-              {activeTab === "comercial" && (
-                <>
-                  <NestingsGuardadosProducto productoId={producto.id} rutaAlternativaId={producto.rutasAlternativas.find(r => r.esPreferida)?.id ?? producto.rutasAlternativas[0]?.id} />
-                  <IdentidadTab producto={producto} seccion="comercial" />
-                </>
-              )}
-              {activeTab === "produccion" && (
-                <ProduccionTab
-                  producto={producto}
-                  vista={produccionVista}
-                  rutaAltId={rutaAltId}
-                  rutasDisponibles={rutasDisponibles}
-                  catalogoFamilias={catalogoFamilias}
-                  recetas={recetas}
-                  estadoPublicacion={estadoPublicacion}
-                  canManage={canManage}
-                />
-              )}
-              {activeTab === "cargos" && (
-                <CargosTab
-                  producto={producto}
-                  catalogoCargos={catalogoCargos}
-                />
-              )}
-              {activeTab === "herramientas" && (
-                <HerramientasTab producto={producto} />
-              )}
-              {activeTab === "pricing" && (
-                <PricingTab producto={producto} recetas={recetas} />
-              )}
-            </fieldset>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </main>
+          <RouterProvider navigate={(href) => router.push(href)}>
+            <HeroTabs
+              selectedKey={activeTab}
+              variant="secondary"
+              className={styles.workspace}
+            >
+              <HeroTabs.List
+                className={styles.tabs}
+                aria-label="Secciones del producto"
+              >
+                {TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <HeroTabs.Tab
+                      key={tab.id}
+                      id={tab.id}
+                      className={styles.tab}
+                      data-active={activeTab === tab.id || undefined}
+                      href={tabHref(tab.id)}
+                    >
+                      <span className={styles.tabIcon}>
+                        <Icon className="size-4" />
+                      </span>
+                      <span className={styles.tabLabel}>{tab.label}</span>
+                      <EstadoBadge {...validaciones[tab.id]} />
+                    </HeroTabs.Tab>
+                  );
+                })}
+              </HeroTabs.List>
+
+              <HeroTabs.Panel id={activeTab} className={styles.tabContent}>
+                <ProductoEdicion disabled={!canManage}>
+                  {activeTab === "identidad" && (
+                    <IdentidadTab producto={producto} seccion="identidad" />
+                  )}
+                  {activeTab === "comercial" && (
+                    <>
+                      <NestingsGuardadosProducto
+                        productoId={producto.id}
+                        rutaAlternativaId={
+                          producto.rutasAlternativas.find((r) => r.esPreferida)
+                            ?.id ?? producto.rutasAlternativas[0]?.id
+                        }
+                      />
+                      <IdentidadTab producto={producto} seccion="comercial" />
+                    </>
+                  )}
+                  {activeTab === "produccion" && (
+                    <ProduccionTab
+                      producto={producto}
+                      vista={produccionVista}
+                      rutaAltId={rutaAltId}
+                      rutasDisponibles={rutasDisponibles}
+                      catalogoFamilias={catalogoFamilias}
+                      recetas={recetas}
+                      estadoPublicacion={estadoPublicacion}
+                      canManage={canManage}
+                    />
+                  )}
+                  {activeTab === "cargos" && (
+                    <CargosTab
+                      producto={producto}
+                      catalogoCargos={catalogoCargos}
+                    />
+                  )}
+                  {activeTab === "herramientas" && (
+                    <HerramientasTab producto={producto} />
+                  )}
+                  {activeTab === "pricing" && (
+                    <PricingTab producto={producto} recetas={recetas} />
+                  )}
+                </ProductoEdicion>
+              </HeroTabs.Panel>
+            </HeroTabs>
+          </RouterProvider>
+        </div>
+      </main>
+    </ProductoVisualProvider>
   );
 }
 
@@ -998,43 +1018,48 @@ function IdentidadTab({
   };
 
   return (
-    <div className="wiz-cols">
+    <div className={[styles.formGrid].join(" ")}>
       {seccion === "identidad" ? (
-        <div className="wiz-section" style={{ gridColumn: "1 / -1" }}>
-          <div className="wiz-section-head">
-            <div className="body">
+        <Card
+          className={[styles.section].join(" ")}
+          style={{ gridColumn: "1 / -1" }}
+        >
+          <div className={[styles.sectionHead].join(" ")}>
+            <div className={[styles.sectionCopy].join(" ")}>
               <h2>Identidad</h2>
-              <div className="helptext">
+              <div className={[styles.help].join(" ")}>
                 Cómo se llama y se reconoce el producto en el catálogo.
               </div>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div className="field">
+            <div className={[styles.field].join(" ")}>
               <label>
-                Nombre <span className="req">*</span>
+                Nombre <span className={[styles.required].join(" ")}>*</span>
               </label>
-              <input
+              <Input
+                aria-label="Nombre del producto"
                 type="text"
                 value={nombre}
                 onChange={(event) => setNombre(event.target.value)}
               />
             </div>
-            <div className="field">
+            <div className={[styles.field].join(" ")}>
               <label>Descripción</label>
-              <textarea
+              <Textarea
+                aria-label="Descripción del producto"
                 value={descripcion}
                 onChange={(event) => setDescripcion(event.target.value)}
               />
             </div>
-            <div className="field">
+            <div className={[styles.field].join(" ")}>
               <label>Estructura del producto</label>
               <div
                 className={styles.structureChoiceGrid}
                 role="radiogroup"
                 aria-label="Estructura del producto"
               >
-                <button
+                <NativeButton
                   type="button"
                   role="radio"
                   aria-checked={estructuraProducto === "SIMPLE"}
@@ -1051,8 +1076,8 @@ function IdentidadTab({
                   <span className={styles.structureChoiceMark}>
                     {estructuraProducto === "SIMPLE" ? <CheckIcon /> : null}
                   </span>
-                </button>
-                <button
+                </NativeButton>
+                <NativeButton
                   type="button"
                   role="radio"
                   aria-checked={estructuraProducto === "COMPUESTO"}
@@ -1071,13 +1096,14 @@ function IdentidadTab({
                   <span className={styles.structureChoiceMark}>
                     {estructuraProducto === "COMPUESTO" ? <CheckIcon /> : null}
                   </span>
-                </button>
+                </NativeButton>
               </div>
             </div>
             <div className={styles.classificationGrid}>
-              <div className="field">
+              <div className={[styles.field].join(" ")}>
                 <label>Categoría comercial</label>
                 <HumanSelect
+                  placeholder="Elegir categoría"
                   value={categoriaSeleccionada?.codigo ?? ""}
                   onValueChange={(value) => {
                     const categoria = catalogoComercial.find(
@@ -1093,9 +1119,10 @@ function IdentidadTab({
                   options={categoriaOptions}
                 />
               </div>
-              <div className="field">
+              <div className={[styles.field].join(" ")}>
                 <label>Subcategoría</label>
                 <HumanSelect
+                  placeholder="Elegir subcategoría"
                   value={subcategoriaComercialCodigo}
                   onValueChange={(value) =>
                     setSubcategoriaComercialCodigo(
@@ -1118,66 +1145,69 @@ function IdentidadTab({
               }}
             >
               <div style={{ fontWeight: 500, fontSize: 13 }}>Publicado</div>
-              <button
-                type="button"
-                className={`toggle ${activo ? "on" : ""}`}
-                onClick={() => setActivo((current) => !current)}
-                aria-pressed={activo}
-              >
-                <span className="switch" />
-              </button>
+              <Switch
+                aria-label="Publicado"
+                checked={activo}
+                onCheckedChange={() => setActivo((current) => !current)}
+              />
             </div>
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {seccion === "comercial" ? (
         <>
-          <div className="wiz-section col-span-full">
-            <div className="wiz-section-head">
-              <div className="body">
+          <Card className={[styles.section, "col-span-full"].join(" ")}>
+            <div className={[styles.sectionHead].join(" ")}>
+              <div className={[styles.sectionCopy].join(" ")}>
                 <h2>Comercial y medidas</h2>
-                <div className="helptext">
+                <div className={[styles.help].join(" ")}>
                   Definí cómo se vende el producto y qué datos deberá completar
                   el comercial al cotizarlo.
                 </div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div className="field">
+              <div className={[styles.field].join(" ")}>
                 <label>Unidad de venta</label>
-                <div className="segmented" style={{ width: "100%" }}>
-                  <button
+                <div
+                  className={[styles.segmented].join(" ")}
+                  style={{ width: "100%" }}
+                >
+                  <ChoiceButton
                     type="button"
                     className={unidadComercial === "unidad" ? "on" : ""}
                     onClick={() => setUnidadComercial("unidad")}
                     style={{ flex: 1 }}
                   >
                     Por unidad
-                  </button>
-                  <button
+                  </ChoiceButton>
+                  <ChoiceButton
                     type="button"
                     className={unidadComercial === "m2" ? "on" : ""}
                     onClick={() => setUnidadComercial("m2")}
                     style={{ flex: 1 }}
                   >
                     Por m²
-                  </button>
-                  <button
+                  </ChoiceButton>
+                  <ChoiceButton
                     type="button"
                     className={unidadComercial === "metro_lineal" ? "on" : ""}
                     onClick={() => setUnidadComercial("metro_lineal")}
                     style={{ flex: 1 }}
                   >
                     Por metro lineal
-                  </button>
+                  </ChoiceButton>
                 </div>
               </div>
               {unidadComercial === "unidad" && (
-                <div className="field">
+                <div className={[styles.field].join(" ")}>
                   <label>¿El producto se define por medidas?</label>
-                  <div className="segmented" style={{ width: "100%" }}>
-                    <button
+                  <div
+                    className={[styles.segmented].join(" ")}
+                    style={{ width: "100%" }}
+                  >
+                    <ChoiceButton
                       type="button"
                       className={!sinMedida ? "on" : ""}
                       onClick={() => {
@@ -1189,53 +1219,59 @@ function IdentidadTab({
                       style={{ flex: 1 }}
                     >
                       Sí, utiliza medidas
-                    </button>
-                    <button
+                    </ChoiceButton>
+                    <ChoiceButton
                       type="button"
                       className={sinMedida ? "on" : ""}
                       onClick={() => setSinMedida(true)}
                       style={{ flex: 1 }}
                     >
                       No utiliza medidas
-                    </button>
+                    </ChoiceButton>
                   </div>
-                  <div className="helptext">
+                  <div className={[styles.help].join(" ")}>
                     Elegí «No utiliza medidas» cuando la cantidad de unidades
                     sea suficiente para cotizar el producto.
                   </div>
                 </div>
               )}
               {!sinMedida && (
-                <div className="field">
+                <div className={[styles.field].join(" ")}>
                   <label>Geometría del producto</label>
-                  <div className="segmented" style={{ width: "100%" }}>
-                    <button
+                  <div
+                    className={[styles.segmented].join(" ")}
+                    style={{ width: "100%" }}
+                  >
+                    <ChoiceButton
                       type="button"
                       className={geometria === "2D" ? "on" : ""}
                       onClick={() => setGeometria("2D")}
                       style={{ flex: 1 }}
                     >
                       2D · Ancho y alto
-                    </button>
-                    <button
+                    </ChoiceButton>
+                    <ChoiceButton
                       type="button"
                       className={geometria === "3D" ? "on" : ""}
                       onClick={() => setGeometria("3D")}
                       style={{ flex: 1 }}
                     >
                       3D · Ancho, alto y profundidad
-                    </button>
+                    </ChoiceButton>
                   </div>
-                  <div className="helptext">
+                  <div className={[styles.help].join(" ")}>
                     El sheet solicitará exactamente estas dimensiones cuando el
                     comercial deba definir una medida.
                   </div>
                 </div>
               )}
               {(estructuraProducto === "COMPUESTO" || !sinMedida) && (
-                <div className="field">
+                <div className={[styles.field].join(" ")}>
                   <label>Forma que puede recibir el producto</label>
-                  <div className="segmented" style={{ width: "100%" }}>
+                  <div
+                    className={[styles.segmented].join(" ")}
+                    style={{ width: "100%" }}
+                  >
                     {(
                       [
                         ["RECTANGULAR", "Rectangular"],
@@ -1243,7 +1279,7 @@ function IdentidadTab({
                         ["AMBAS", "Ambas"],
                       ] as Array<[ModoGeometriaComercial, string]>
                     ).map(([modo, label]) => (
-                      <button
+                      <ChoiceButton
                         type="button"
                         className={
                           geometriasComerciales.modo === modo ? "on" : ""
@@ -1266,17 +1302,25 @@ function IdentidadTab({
                         key={modo}
                       >
                         {label}
-                      </button>
+                      </ChoiceButton>
                     ))}
                   </div>
-                  <div className="helptext">
+                  <div className={[styles.help].join(" ")}>
                     La forma pertenece al producto; la ruta define después qué
                     máquina y qué motor pueden fabricarla.
                   </div>
                   {geometriasComerciales.modo !== "RECTANGULAR" ? (
                     <div className={styles.geometrySources}>
-                      <PiezasArchivosProducto productoId={producto.id} fuentes={geometriasComerciales.fuentes}
-                        onChange={(fuentes) => setGeometriasComercialesEstado(actual => ({ ...actual, fuentes }))} />
+                      <PiezasArchivosProducto
+                        productoId={producto.id}
+                        fuentes={geometriasComerciales.fuentes}
+                        onChange={(fuentes) =>
+                          setGeometriasComercialesEstado((actual) => ({
+                            ...actual,
+                            fuentes,
+                          }))
+                        }
+                      />
                       <label className={styles.geometryRequired}>
                         <Switch
                           checked={
@@ -1296,10 +1340,13 @@ function IdentidadTab({
                 </div>
               )}
               {!sinMedida && (
-                <div className="field">
+                <div className={[styles.field].join(" ")}>
                   <label>¿Cómo se define la medida?</label>
-                  <div className="segmented" style={{ width: "100%" }}>
-                    <button
+                  <div
+                    className={[styles.segmented].join(" ")}
+                    style={{ width: "100%" }}
+                  >
+                    <ChoiceButton
                       type="button"
                       className={modoMedidas === "FIJA" ? "on" : ""}
                       onClick={() => {
@@ -1311,31 +1358,31 @@ function IdentidadTab({
                       style={{ flex: 1 }}
                     >
                       Medida fija
-                    </button>
-                    <button
+                    </ChoiceButton>
+                    <ChoiceButton
                       type="button"
                       className={modoMedidas === "LIBRE" ? "on" : ""}
                       onClick={() => setModoMedidas("LIBRE")}
                       style={{ flex: 1 }}
                     >
                       Medida libre
-                    </button>
-                    <button
+                    </ChoiceButton>
+                    <ChoiceButton
                       type="button"
                       className={modoMedidas === "COMERCIAL_ELIGE" ? "on" : ""}
                       onClick={() => setModoMedidas("COMERCIAL_ELIGE")}
                       style={{ flex: 1 }}
                     >
                       Medidas predefinidas
-                    </button>
-                    <button
+                    </ChoiceButton>
+                    <ChoiceButton
                       type="button"
                       className={modoMedidas === "MIXTA" ? "on" : ""}
                       onClick={() => setModoMedidas("MIXTA")}
                       style={{ flex: 1 }}
                     >
                       Predefinida o personalizada
-                    </button>
+                    </ChoiceButton>
                   </div>
                 </div>
               )}
@@ -1347,18 +1394,21 @@ function IdentidadTab({
                   onChange={setMedidas}
                 />
               )}
-              <div className="field">
+              <div className={[styles.field].join(" ")}>
                 <label>Mínimo comercial</label>
-                <div className="segmented" style={{ width: "100%" }}>
-                  <button
+                <div
+                  className={[styles.segmented].join(" ")}
+                  style={{ width: "100%" }}
+                >
+                  <ChoiceButton
                     type="button"
                     className={minimoComercialPolitica === "NONE" ? "on" : ""}
                     onClick={() => setMinimoComercialPolitica("NONE")}
                     style={{ flex: 1 }}
                   >
                     Sin mínimo
-                  </button>
-                  <button
+                  </ChoiceButton>
+                  <ChoiceButton
                     type="button"
                     className={
                       minimoComercialPolitica === "ADVERTIR_FACTURAR_MINIMO"
@@ -1371,8 +1421,8 @@ function IdentidadTab({
                     style={{ flex: 1 }}
                   >
                     Advertir
-                  </button>
-                  <button
+                  </ChoiceButton>
+                  <ChoiceButton
                     type="button"
                     className={
                       minimoComercialPolitica === "BLOQUEAR" ? "on" : ""
@@ -1381,19 +1431,22 @@ function IdentidadTab({
                     style={{ flex: 1 }}
                   >
                     Bloquear
-                  </button>
+                  </ChoiceButton>
                 </div>
-                <span className="help">
+                <span className={[styles.help].join(" ")}>
                   Advertir cobra el mínimo solo en precio; la producción
                   conserva la cantidad real.
                 </span>
               </div>
               {minimoComercialPolitica !== "NONE" && (
                 <>
-                  <div className="field">
+                  <div className={[styles.field].join(" ")}>
                     <label>Base del mínimo</label>
-                    <div className="segmented" style={{ width: "100%" }}>
-                      <button
+                    <div
+                      className={[styles.segmented].join(" ")}
+                      style={{ width: "100%" }}
+                    >
+                      <ChoiceButton
                         type="button"
                         className={
                           minimoComercialBase === "cantidad_comercial"
@@ -1406,8 +1459,8 @@ function IdentidadTab({
                         style={{ flex: 1 }}
                       >
                         Cantidad comercial
-                      </button>
-                      <button
+                      </ChoiceButton>
+                      <ChoiceButton
                         type="button"
                         className={
                           minimoComercialBase === "pliegos_impresos" ? "on" : ""
@@ -1418,17 +1471,17 @@ function IdentidadTab({
                         style={{ flex: 1 }}
                       >
                         Pliegos impresos
-                      </button>
+                      </ChoiceButton>
                     </div>
-                    <span className="help">
+                    <span className={[styles.help].join(" ")}>
                       Pliegos impresos se calcula después del nesting de
                       impresión por hoja.
                     </span>
                   </div>
-                  <div className="field">
+                  <div className={[styles.field].join(" ")}>
                     <label>Cantidad mínima</label>
-                    <div className="input-with-unit">
-                      <input
+                    <div className={[styles.inputUnit].join(" ")}>
+                      <Input
                         type="number"
                         min="0"
                         step="0.0001"
@@ -1450,18 +1503,18 @@ function IdentidadTab({
                 </>
               )}
             </div>
-          </div>
+          </Card>
         </>
       ) : null}
 
       {(dirty || guardando) && (
-        <div className="save-sticky-footer">
-          <div className="pricing-sticky-footer-copy">
+        <div className={[styles.saveFooter].join(" ")}>
+          <div className={[styles.saveCopy].join(" ")}>
             {seccion === "identidad"
               ? "Hay cambios sin guardar en identidad."
               : "Hay cambios sin guardar en la configuración comercial."}
           </div>
-          <button
+          <NativeButton
             type="button"
             className="btn btn-primary"
             onClick={guardar}
@@ -1469,7 +1522,7 @@ function IdentidadTab({
           >
             <SaveIcon className="mr-2 size-4" />
             {guardando ? "Guardando..." : "Guardar cambios"}
-          </button>
+          </NativeButton>
         </div>
       )}
     </div>
@@ -1616,14 +1669,15 @@ function ProduccionTab({
                   <GitBranchIcon data-icon="inline-start" />
                   Estado y dependencias
                 </Button>
-                <button
+                <Button
+                  variant="outline"
                   type="button"
                   className={styles.productionEditRoute}
                   onClick={() => abrirEditorRuta("ruta")}
                 >
                   <CogIcon />
                   Editar ruta
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
@@ -1823,8 +1877,6 @@ function ProduccionTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-
     </div>
   );
 }
@@ -1843,6 +1895,7 @@ function RutasTab({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const scope = useDesignScope();
   const [agregando, setAgregando] = React.useState(false);
   const [nuevaViaOpen, setNuevaViaOpen] = React.useState(false);
   const [modoNuevaVia, setModoNuevaVia] = React.useState<
@@ -2036,76 +2089,85 @@ function RutasTab({
               </div>
             </div>
             <div className={styles.productionRoutesSelectorActions}>
-              <button
+              <Button
+                variant="default"
                 className={styles.productionAddRoute}
                 type="button"
                 onClick={abrirNuevaVia}
               >
                 <PlusIcon />
                 Ruta de producción
-              </button>
+              </Button>
               {rutaSeleccionada ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger
+                <Dropdown>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
                     className={styles.productionRouteMenuTrigger}
                     aria-label={`Acciones de ${rutaSeleccionada.nombre}`}
                   >
                     <MoreHorizontalIcon />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className={styles.productionRouteMenu}
+                  </Button>
+
+                  <Dropdown.Popover
+                    {...scope}
+                    className={`${theme.theme} ${styles.productionRouteMenu}`}
+                    placement="bottom end"
                   >
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          iniciarEdicionNombre(
-                            rutaSeleccionada.id,
-                            rutaSeleccionada.nombre,
-                          )
-                        }
-                      >
-                        <Edit3Icon />
-                        Renombrar ruta
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={duplicandoRutaId === rutaSeleccionada.id}
-                        onClick={() =>
-                          duplicarRuta(
-                            rutaSeleccionada.id,
-                            rutaSeleccionada.nombre,
-                          )
-                        }
-                      >
-                        <CopyIcon />
-                        Duplicar ruta
-                      </DropdownMenuItem>
-                      {!rutaSeleccionada.esPreferida ? (
-                        <DropdownMenuItem
-                          onClick={() => marcarPreferida(rutaSeleccionada.id)}
+                    <Dropdown.Menu aria-label="Acciones de la ruta">
+                      <Dropdown.Section>
+                        <Dropdown.Item
+                          onAction={() =>
+                            iniciarEdicionNombre(
+                              rutaSeleccionada.id,
+                              rutaSeleccionada.nombre,
+                            )
+                          }
                         >
-                          <StarIcon />
-                          Marcar como preferida
-                        </DropdownMenuItem>
-                      ) : null}
-                    </DropdownMenuGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() =>
-                          quitarRuta(
-                            rutaSeleccionada.id,
-                            rutaSeleccionada.nombre,
-                          )
-                        }
-                      >
-                        <Trash2Icon />
-                        Quitar del producto
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                          <Edit3Icon />
+                          Renombrar ruta
+                        </Dropdown.Item>
+                        <Dropdown.Item
+                          isDisabled={duplicandoRutaId === rutaSeleccionada.id}
+                          onAction={() =>
+                            duplicarRuta(
+                              rutaSeleccionada.id,
+                              rutaSeleccionada.nombre,
+                            )
+                          }
+                        >
+                          <CopyIcon />
+                          Duplicar ruta
+                        </Dropdown.Item>
+                        {!rutaSeleccionada.esPreferida ? (
+                          <Dropdown.Item
+                            onAction={() =>
+                              marcarPreferida(rutaSeleccionada.id)
+                            }
+                          >
+                            <StarIcon />
+                            Marcar como preferida
+                          </Dropdown.Item>
+                        ) : null}
+                      </Dropdown.Section>
+                      <Separator />
+                      <Dropdown.Section>
+                        <Dropdown.Item
+                          variant="danger"
+                          onAction={() =>
+                            quitarRuta(
+                              rutaSeleccionada.id,
+                              rutaSeleccionada.nombre,
+                            )
+                          }
+                        >
+                          <Trash2Icon />
+                          Quitar del producto
+                        </Dropdown.Item>
+                      </Dropdown.Section>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
               ) : null}
             </div>
           </div>
@@ -2464,17 +2526,17 @@ function CargosTab({
   };
 
   return (
-    <div className="wiz-section">
-      <div className="wiz-section-head">
-        <div className="body">
+    <Card className={[styles.section].join(" ")}>
+      <div className={[styles.sectionHead].join(" ")}>
+        <div className={[styles.sectionCopy].join(" ")}>
           <h2>Cargos globales del producto (legado)</h2>
-          <div className="helptext">
+          <div className={[styles.help].join(" ")}>
             Compatibilidad con configuraciones anteriores. Los costos nuevos se
             asocian dentro del paso correspondiente; los gastos generales se
             agregan en la orden.
           </div>
         </div>
-        <button
+        <NativeButton
           className="btn btn-primary"
           type="button"
           onClick={asociar}
@@ -2482,19 +2544,21 @@ function CargosTab({
         >
           <PlusIcon className="size-4" />
           {guardando ? "Asociando..." : "Asociar cargo"}
-        </button>
+        </NativeButton>
       </div>
 
       {producto.cargosDirectosCotizacion.length === 0 ? (
-        <div className="section-empty">
-          <div className="ttl">Sin cargos asociados</div>
-          <div className="sub">
+        <div className={[styles.empty].join(" ")}>
+          <div className={[styles.itemTitle].join(" ")}>
+            Sin cargos asociados
+          </div>
+          <div className={[styles.help].join(" ")}>
             Este producto no tiene cargos directos a nivel cotización. Asociá
             uno del catálogo si necesitás ofrecer extras al comercial.
           </div>
         </div>
       ) : (
-        <div className="cargo-grid">
+        <div className={[styles.cargoGrid].join(" ")}>
           {producto.cargosDirectosCotizacion.map((cargo) => {
             const calc = getLabel(
               modoCalculoCargoLabels,
@@ -2505,16 +2569,20 @@ function CargosTab({
               cargo.modoActivacion,
             );
             return (
-              <div className="cargo-card" key={cargo.id}>
-                <div className="cargo-card-main">
-                  <div className="ttl">{cargo.cargoDirectoCatalogo.nombre}</div>
+              <Card className={[styles.cargoCard].join(" ")} key={cargo.id}>
+                <div className={[styles.cargoMain].join(" ")}>
+                  <div className={[styles.itemTitle].join(" ")}>
+                    {cargo.cargoDirectoCatalogo.nombre}
+                  </div>
                   {cargo.cargoDirectoCatalogo.descripcion ? (
-                    <div className="desc">
+                    <div className={[styles.help].join(" ")}>
                       {cargo.cargoDirectoCatalogo.descripcion}
                     </div>
                   ) : null}
-                  <div className="chips">
-                    <span className="tag muted">{calc.label}</span>
+                  <div className={[styles.chips].join(" ")}>
+                    <span className={[styles.tag, styles.muted].join(" ")}>
+                      {calc.label}
+                    </span>
                     <span
                       className={
                         cargo.modoActivacion === "OBLIGATORIO"
@@ -2522,12 +2590,12 @@ function CargosTab({
                           : "tag muted"
                       }
                     >
-                      <span className="d" />
+                      <span className={[styles.dot].join(" ")} />
                       {activacion.label}
                     </span>
                   </div>
                 </div>
-                <button
+                <NativeButton
                   className="icon-btn"
                   type="button"
                   title="Quitar cargo"
@@ -2536,19 +2604,23 @@ function CargosTab({
                   }
                 >
                   <Trash2Icon className="size-4" />
-                </button>
-              </div>
+                </NativeButton>
+              </Card>
             );
           })}
         </div>
       )}
 
-      <div className="inline-add-panel">
-        <div className="inline-add-title">Asociar cargo del catálogo</div>
+      <div className={[styles.addPanel].join(" ")}>
+        <div className={[styles.addTitle].join(" ")}>
+          Asociar cargo del catálogo
+        </div>
         {disponibles.length === 0 ? (
-          <div className="section-empty small">
-            <div className="ttl">No hay cargos disponibles</div>
-            <div className="sub">
+          <div className={[styles.empty, styles.small].join(" ")}>
+            <div className={[styles.itemTitle].join(" ")}>
+              No hay cargos disponibles
+            </div>
+            <div className={[styles.help].join(" ")}>
               Todos los cargos activos ya están asociados o todavía no hay
               cargos creados en el catálogo.
             </div>
@@ -2557,8 +2629,8 @@ function CargosTab({
             </Link>
           </div>
         ) : (
-          <div className="inline-add-grid">
-            <div className="field">
+          <div className={[styles.addGrid].join(" ")}>
+            <div className={[styles.field].join(" ")}>
               <label>Cargo del catálogo</label>
               <HumanSelect
                 value={cargoSeleccionado}
@@ -2578,13 +2650,16 @@ function CargosTab({
                 placeholder="Elegí cargo..."
               />
             </div>
-            <div className="field">
+            <div className={[styles.field].join(" ")}>
               <label>¿Cuándo se aplica?</label>
-              <div className="segmented" style={{ width: "100%" }}>
+              <div
+                className={[styles.segmented].join(" ")}
+                style={{ width: "100%" }}
+              >
                 {MODOS_CARGO.map((modo) => {
                   const label = getLabel(modoActivacionLabels, modo);
                   return (
-                    <button
+                    <ChoiceButton
                       key={modo}
                       type="button"
                       className={modoActivacion === modo ? "on" : ""}
@@ -2593,11 +2668,11 @@ function CargosTab({
                       title={label.descripcion}
                     >
                       {label.label}
-                    </button>
+                    </ChoiceButton>
                   );
                 })}
               </div>
-              <span className="help">
+              <span className={[styles.help].join(" ")}>
                 {getLabel(modoActivacionLabels, modoActivacion).descripcion}
               </span>
             </div>
@@ -2627,7 +2702,7 @@ function CargosTab({
           setCargoAQuitar(null);
         }}
       />
-    </div>
+    </Card>
   );
 }
 
@@ -2661,14 +2736,11 @@ function HerramientaToggle({
           {descripcion}
         </div>
       </div>
-      <button
-        type="button"
-        className={`toggle ${enabled ? "on" : ""}`}
-        onClick={onToggle}
-        aria-pressed={enabled}
-      >
-        <span className="switch" />
-      </button>
+      <Switch
+        aria-label={titulo}
+        checked={enabled}
+        onCheckedChange={onToggle}
+      />
     </div>
   );
 }
@@ -2718,12 +2790,12 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
   };
 
   return (
-    <div className="wiz-cols">
-      <div className="wiz-section">
-        <div className="wiz-section-head">
-          <div className="body">
+    <div className={[styles.formGrid].join(" ")}>
+      <Card className={[styles.section].join(" ")}>
+        <div className={[styles.sectionHead].join(" ")}>
+          <div className={[styles.sectionCopy].join(" ")}>
             <h2>Herramientas del producto</h2>
-            <div className="helptext">
+            <div className={[styles.help].join(" ")}>
               Funciones opcionales que se habilitan al cotizar este producto.
               Iremos sumando más con el tiempo.
             </div>
@@ -2743,13 +2815,13 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
             onToggle={() => setEditorSello((current) => !current)}
           />
         </div>
-      </div>
+      </Card>
       {(dirty || guardando) && (
-        <div className="save-sticky-footer">
-          <div className="pricing-sticky-footer-copy">
+        <div className={[styles.saveFooter].join(" ")}>
+          <div className={[styles.saveCopy].join(" ")}>
             Hay cambios sin guardar en herramientas.
           </div>
-          <button
+          <NativeButton
             type="button"
             className="btn btn-primary"
             onClick={guardar}
@@ -2757,7 +2829,7 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
           >
             <SaveIcon className="mr-2 size-4" />
             {guardando ? "Guardando..." : "Guardar cambios"}
-          </button>
+          </NativeButton>
         </div>
       )}
     </div>
@@ -2893,7 +2965,9 @@ function PricingTab({
 
 function SectionMissing({ title }: { title: string }) {
   return (
-    <Card className="wiz-section border-amber-200 bg-amber-50">
+    <Card
+      className={[styles.section, "border-amber-200", "bg-amber-50"].join(" ")}
+    >
       <CardContent className="flex items-center gap-2 pt-6 text-sm text-amber-800">
         <CircleAlertIcon className="size-4" />
         {title}

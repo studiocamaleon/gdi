@@ -20,7 +20,8 @@ import {
   type TableroPrioridad,
 } from "@/lib/tablero-produccion";
 import type { Estacion } from "@/lib/estaciones";
-import { ZONA_DEFAULT } from "@/lib/zona";
+import { ZONA_DEFAULT, claveFechaEnZona } from "@/lib/zona";
+import { finPrevistoPaso } from "./tiempos-paso";
 export type StepStatus = "done" | "current" | "paused" | "pending" | "blocked";
 export type EstadoTrabajo =
   | "done"
@@ -69,6 +70,10 @@ export type ItemView = {
   dueIn: string;
   dueDays: number | null;
   delayed: boolean;
+  /** Vencimiento operativo del paso visible; separado de la entrega comercial. */
+  stepPlannedEnd: string | null;
+  stepDueDays: number | null;
+  stepDelayed: boolean;
   blocked: boolean;
   blockedReason: string | null;
   waitingReason: string | null;
@@ -181,7 +186,18 @@ export function buildItemView(
   const currentSteps = steps.filter((step) => step.esActivo);
   const blocked = !!bloqueadoPaso;
   const proximo = actual ?? candidatos.find((paso) => paso.estado !== "hecho");
-  const visibleStep = steps.find((step) => step.paso.id === proximo?.id);
+  // En terminados se informa el último paso completado, usando su fecha real.
+  const ultimoCompletado = itemTerminado(item)
+    ? [...candidatos].sort(
+        (a, b) =>
+          (Date.parse(b.completadoEl ?? "") || 0) -
+            (Date.parse(a.completadoEl ?? "") || 0) || b.indice - a.indice,
+      )[0]
+    : undefined;
+  const visibleStep = steps.find(
+    (step) => step.paso.id === (proximo ?? ultimoCompletado)?.id,
+  );
+  const finPrevisto = finPrevistoPaso(visibleStep?.paso);
   const dependencias = proximo?.dependenciasPendientes ?? [];
   const motivos = proximo
     ? motivosEspera(item, proximo, estaciones)
@@ -243,6 +259,14 @@ export function buildItemView(
     dueIn: etiquetaRestante(item.fechaEntrega, ahora, zona),
     dueDays: diasHastaEntrega(item.fechaEntrega, ahora, zona),
     delayed: itemConRetraso(item, ahora, zona),
+    stepPlannedEnd: finPrevisto?.toISOString() ?? null,
+    stepDueDays: finPrevisto
+      ? diasHastaEntrega(claveFechaEnZona(finPrevisto, zona), ahora, zona)
+      : null,
+    stepDelayed:
+      !itemTerminado(item) &&
+      !!finPrevisto &&
+      finPrevisto.getTime() < ahora.getTime(),
     blocked,
     blockedReason: blocked
       ? bloqueadoPaso?.motivoBloqueo ||

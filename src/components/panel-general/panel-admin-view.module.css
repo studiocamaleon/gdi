@@ -582,19 +582,6 @@
   color: var(--danger);
   font-size: 12px;
 }
-.spinning {
-  animation: girar 0.8s linear infinite;
-}
-@keyframes girar {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .spinning {
-    animation: none;
-  }
-}
 @container (max-width: 1250px) {
   .focus {
     align-items: stretch;

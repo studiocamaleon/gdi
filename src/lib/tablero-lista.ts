@@ -1,6 +1,9 @@
 import type { Estacion } from "./estaciones";
 import {
   resolverEstacionDePaso,
+  pasoActivo,
+  SIN_ESTACION_KEY,
+  TERCERIZADOS_KEY,
   textoDependenciaTablero,
   type TableroPasoData,
 } from "./tablero-produccion";
@@ -12,6 +15,28 @@ export type FiltrosTrabajo = {
   estacionId: string;
   empleadoId: string;
 };
+
+export function opcionesEstacionesTablero(estaciones: Estacion[], seleccionada: string) {
+  const opciones = estaciones
+    .filter((e) => e.activo || e.id === seleccionada)
+    .map((e) => ({ id: e.id, nombre: `${e.nombre}${e.activo ? "" : " · Inactiva"}` }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  opciones.push(
+    { id: SIN_ESTACION_KEY, nombre: "Sin estación" },
+    { id: TERCERIZADOS_KEY, nombre: "Proveedor tercerizado" },
+  );
+  if (seleccionada && !opciones.some((e) => e.id === seleccionada))
+    opciones.push({ id: seleccionada, nombre: "Estación no disponible" });
+  return opciones;
+}
+
+function perteneceAEstacion(paso: TableroPasoData, estacionId: string, estaciones: Estacion[]) {
+  if (!estacionId) return true;
+  const key = paso.tipoEjecucion === "tercerizado"
+    ? TERCERIZADOS_KEY
+    : resolverEstacionDePaso(estaciones, paso)?.id ?? SIN_ESTACION_KEY;
+  return key === estacionId;
+}
 
 /** Una fila por trabajo, centrada en el próximo paso del ámbito elegido. */
 export function filtrarTrabajos(
@@ -36,10 +61,7 @@ export function filtrarTrabajos(
     if (!acotado) return [item];
     const incluyePaso = (paso: ItemView["data"]["pasos"][number]) =>
       paso.estado !== "hecho" &&
-      (!filtros.estacionId ||
-        (paso.tipoEjecucion !== "tercerizado" &&
-          resolverEstacionDePaso(estaciones, paso)?.id ===
-            filtros.estacionId)) &&
+      perteneceAEstacion(paso, filtros.estacionId, estaciones) &&
       (!filtros.empleadoId ||
         !!paso.asignacionPersonal?.personas.some(
           (p) => p.empleadoId === filtros.empleadoId,
@@ -63,8 +85,8 @@ export function metricasTrabajos(items: ItemView[]) {
     waiting: items.filter((i) => i.state === "waiting").length,
     paused: items.filter((i) => i.state === "paused").length,
     blocked: items.filter((i) => i.blocked).length,
-    delayed: items.filter((i) => i.delayed && !i.blocked).length,
-    today: items.filter((i) => i.dueDays === 0).length,
+    delayed: items.filter((i) => i.stepDelayed && !i.blocked).length,
+    today: items.filter((i) => i.stepDueDays === 0).length,
   };
 }
 
@@ -79,8 +101,16 @@ export const GRUPOS_TABLERO = [
     title: "En espera",
     description: "Dependencias o requisitos pendientes",
   },
-  { key: "delayed", title: "Con retraso", description: "Entrega vencida" },
-  { key: "today", title: "Vencen hoy", description: "Prioridad de despacho" },
+  {
+    key: "delayed",
+    title: "Con retraso",
+    description: "Fin previsto del paso vencido",
+  },
+  {
+    key: "today",
+    title: "Vencen hoy",
+    description: "Pasos con fin previsto para hoy",
+  },
   { key: "active", title: "En curso", description: "Trabajos en ejecución" },
   {
     key: "paused",
@@ -98,8 +128,8 @@ export type GrupoTableroKey = (typeof GRUPOS_TABLERO)[number]["key"];
 export function grupoDelTrabajo(item: ItemView): GrupoTableroKey | null {
   if (item.finished) return null;
   if (item.state === "blocked" || item.state === "waiting") return item.state;
-  if (item.delayed) return "delayed";
-  if (item.dueDays === 0) return "today";
+  if (item.stepDelayed) return "delayed";
+  if (item.stepDueDays === 0) return "today";
   if (item.state === "paused") return "paused";
   return item.state === "active" ? "active" : "not-started";
 }
@@ -117,7 +147,8 @@ export function agruparTrabajos(items: ItemView[]) {
       .get(grupo.key)!
       .sort(
         (a, b) =>
-          (a.dueDays ?? Infinity) - (b.dueDays ?? Infinity) ||
+          (a.stepPlannedEnd ? Date.parse(a.stepPlannedEnd) : Infinity) -
+            (b.stepPlannedEnd ? Date.parse(b.stepPlannedEnd) : Infinity) ||
           a.code.localeCompare(b.code),
       ),
   }));
@@ -200,6 +231,32 @@ export function trabajoAsignadoAMi(item: ItemView): boolean {
       paso.tramoAbierto?.esMio
     )
   );
+}
+
+/** Traslada la asignación voluntaria a Lista; el servidor revalida al guardar. */
+export function accionAsignacionManual(
+  item: ItemView,
+  estaciones: Estacion[],
+  canManage: boolean,
+  estacionIdsEjecutables: string[] | null,
+): "asignarme" | "devolver" | null {
+  const paso = item.visibleStep?.paso;
+  if (!canManage || item.finished || !paso || paso.estado === "hecho" || paso.tipoEjecucion === "tercerizado") return null;
+  // Una asignación tomada a mano sigue pudiendo devolverse después de proyectarla.
+  if (paso.mesaEsMia) return "devolver";
+  if (paso.mesaUsuarioNombre || paso.asignacionPersonal?.personas.length || !pasoActivo(item.data, paso)) return null;
+  const estacion = resolverEstacionDePaso(estaciones, paso);
+  return estacionIdsEjecutables === null || (estacion && estacionIdsEjecutables.includes(estacion.id))
+    ? "asignarme" : null;
+}
+
+/** La API vuelve a comprobar permisos, dotación y ejecución al revisar y guardar. */
+export function puedeReasignarPersonal(item: ItemView, estaciones: Estacion[], supervisor: boolean) {
+  const paso = item.visibleStep?.paso;
+  if (!supervisor || item.finished || !paso || !["pendiente", "bloqueado"].includes(paso.estado)
+    || paso.iniciadoEl || paso.tramosEjecucion?.length || paso.tipoEjecucion !== "interno") return false;
+  const estacion = resolverEstacionDePaso(estaciones, paso);
+  return !!estacion?.activo && !!estacion.planificacionPorEmpleados;
 }
 
 /** La estación pertenece al paso mostrado, incluso si espera una dependencia. */

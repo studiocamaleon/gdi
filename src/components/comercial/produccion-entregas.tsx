@@ -1,6 +1,7 @@
 "use client";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
-import { Loader2Icon, RefreshCwIcon, ExpandIcon } from "lucide-react";
+import { RefreshCwIcon, ExpandIcon } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 import type { PropuestaItem } from "@/lib/propuestas";
 import {
@@ -92,7 +93,7 @@ export function ProduccionEntregas({
       </div>
     ) : detalle?.id !== id ? (
       <div className={styles.status} role="status">
-        <Loader2Icon className="animate-spin" /> Cargando el plan del lote…
+        <GdiSpinner className="size-4" /> Cargando el plan del lote…
       </div>
     ) : (
       render(

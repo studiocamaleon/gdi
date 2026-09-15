@@ -12,7 +12,8 @@ import {
   PlusIcon,
   PowerIcon,
   ScanLineIcon,
-  SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   TagIcon,
   TicketPercentIcon,
   TimerIcon,
@@ -24,37 +25,34 @@ import {
   useConfigRegional,
   useFecha,
 } from "@/components/navigation/config-regional-provider";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Autocomplete,
+  Card,
+  Chip,
+  Description as FieldDescription,
+  Input,
+  Label as FieldLabel,
+  ListBox,
+  Modal,
+  SearchField,
+  TextArea as Textarea,
+} from "@heroui/react";
+import { Header } from "react-aria-components/Header";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { SelectField } from "@/components/design-system/select-field";
+import { useDesignScope } from "@/components/design-system/appearance";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { Field, FieldError, FieldGroup } from "@/components/ui/field";
 import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { HumanSelect } from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
-import { SelectBuscable } from "@/components/ui/select-buscable";
-import { TablePagination } from "@/components/ui/table-pagination";
-import { Textarea } from "@/components/ui/textarea";
+  agruparOpciones,
+  normalizarBusqueda,
+} from "@/components/ui/select-buscable";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 import { listClientes } from "@/lib/clientes-api";
 import {
   actualizarCupon,
@@ -311,130 +309,125 @@ export function CuponesView({
     }
   };
 
+  const scope = useDesignScope();
   const metricas = listado.metricas;
   return (
-    <section className={s.wrap}>
+    <section {...scope} className={`${theme.theme} ${listPage.page} ${s.wrap}`}>
       <div className={s.inner}>
-        <header className={s.encabezado}>
-          <div className={s.tituloGrupo}>
-            <span className={s.iconoModulo} aria-hidden="true">
-              <TicketPercentIcon />
-            </span>
-            <div>
-              <span className={s.eyebrow}>Promociones medibles</span>
-              <h1>Cupones</h1>
-              <p>
-                Reglas de descuento con vigencia, alcance, reservas e historial
-                trazable.
-              </p>
-            </div>
+        <header className={listPage.header}>
+          <div>
+            <h1>Cupones</h1>
+            <p className={listPage.subtitle}>
+              Reglas de descuento con vigencia, alcance, reservas e historial
+              trazable.
+            </p>
           </div>
           {puedeEditar ? (
-            <Button
-              className={s.accionPrincipal}
-              onClick={() => setEditor("nuevo")}
-            >
-              <PlusIcon data-icon="inline-start" />
+            <Button onPress={() => setEditor("nuevo")}>
+              <PlusIcon size={16} aria-hidden />
               Nuevo cupón
             </Button>
           ) : null}
         </header>
 
         <div className={s.metricas} aria-label="Resumen de cupones">
-          <Metrica
+          <ListMetric
             label="Vigentes"
-            valor={metricas.vigentes}
-            Icon={CircleCheckBigIcon}
-            principal
+            value={metricas.vigentes}
+            icon={CircleCheckBigIcon}
+            tone="brand"
+            hint="Disponibles para aplicar"
           />
-          <Metrica
+          <ListMetric
             label="Por vencer"
-            valor={metricas.porVencer}
-            Icon={TimerIcon}
+            value={metricas.porVencer}
+            icon={TimerIcon}
+            hint="Próximos a finalizar"
           />
-          <Metrica
+          <ListMetric
             label="Agotados"
-            valor={metricas.agotados}
-            Icon={CircleOffIcon}
+            value={metricas.agotados}
+            icon={CircleOffIcon}
+            hint="Sin usos disponibles"
           />
-          <Metrica
+          <ListMetric
             label="Usos este mes"
-            valor={metricas.redencionesMes}
-            Icon={ScanLineIcon}
+            value={metricas.redencionesMes}
+            icon={ScanLineIcon}
+            hint="Canjes registrados"
           />
-          <Metrica
+          <ListMetric
             label="Descontado este mes"
-            valor={formatearMoneda(metricas.descontadoMes, moneda)}
-            Icon={BadgeDollarSignIcon}
+            value={formatearMoneda(metricas.descontadoMes, moneda)}
+            icon={BadgeDollarSignIcon}
+            hint="Descuentos aplicados"
           />
         </div>
 
-        <div className={s.filtros}>
-          <span className={s.filtrosLabel}>Explorar cupones</span>
-          <label className={s.buscar}>
-            <span className="sr-only">Buscar cupones</span>
-            <SearchIcon aria-hidden="true" />
-            <Input
-              value={busqueda}
-              onChange={(event) => setBusqueda(event.target.value)}
-              placeholder="Buscar código, descripción o alcance…"
-            />
-          </label>
-          <HumanSelect
+        <Card className={s.filtros}>
+          <SearchField
+            aria-label="Buscar cupones"
+            value={busqueda}
+            onChange={setBusqueda}
+            className={s.buscar}
+          >
+            <SearchField.Group
+              className={`${listPage.searchGroup} ${focus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar código, descripción o alcance…" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <SelectField
+            aria-label="Estado de los cupones"
             value={estado}
-            onValueChange={setEstado}
-            placeholder="Todos los estados"
+            onChange={setEstado}
             options={[
+              { value: "", label: "Todos los estados" },
               { value: "VIGENTE", label: "Vigentes" },
               { value: "PROGRAMADO", label: "Programados" },
               { value: "PAUSADO", label: "En pausa" },
               { value: "VENCIDO", label: "Vencidos" },
               { value: "AGOTADO", label: "Sin usos" },
             ]}
-            triggerClassName={s.estadoFiltro}
+            className={s.estadoFiltro}
           />
           {estado ? (
-            <Button variant="ghost" onClick={() => setEstado("")}>
+            <Button variant="ghost" onPress={() => setEstado("")}>
               Limpiar estado
             </Button>
           ) : null}
-          <span className={s.resultados}>
+          <span className={s.resultados} role="status">
             {listado.total} {listado.total === 1 ? "cupón" : "cupones"}
           </span>
-        </div>
+        </Card>
 
         {error ? (
-          <Empty className={s.errorCarga} role="alert">
-            <EmptyHeader>
-              <EmptyTitle>No pudimos cargar los cupones</EmptyTitle>
-              <EmptyDescription>{error}</EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button variant="outline" onClick={() => void recargar()}>
-                Reintentar
-              </Button>
-            </EmptyContent>
-          </Empty>
+          <Card className={`${listPage.empty} ${s.vacio}`} role="alert">
+            <TicketPercentIcon size={24} aria-hidden />
+            <strong>No pudimos cargar los cupones</strong>
+            <p>{error}</p>
+            <Button variant="outline" onPress={() => void recargar()}>
+              Reintentar
+            </Button>
+          </Card>
         ) : listado.items.length === 0 ? (
-          <Empty className={s.vacio}>
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <TicketPercentIcon />
-              </EmptyMedia>
-              <EmptyTitle>
-                {busqueda || estado
-                  ? "No hay coincidencias"
-                  : "Sin cupones todavía"}
-              </EmptyTitle>
-              <EmptyDescription>
-                {busqueda || estado
-                  ? "Probá con otra búsqueda o limpiá los filtros."
-                  : puedeEditar
-                    ? "Creá el primero para una campaña, un cliente frecuente o un sorteo."
-                    : "Cuando un supervisor cree cupones, van a aparecer acá."}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+          <Card className={`${listPage.empty} ${s.vacio}`}>
+            <TicketPercentIcon size={28} aria-hidden />
+            <strong>
+              {busqueda || estado
+                ? "No hay coincidencias"
+                : "Sin cupones todavía"}
+            </strong>
+            <p>
+              {busqueda || estado
+                ? "Probá con otra búsqueda o limpiá los filtros."
+                : puedeEditar
+                  ? "Creá el primero para una campaña, un cliente frecuente o un sorteo."
+                  : "Cuando un supervisor cree cupones, van a aparecer acá."}
+            </p>
+          </Card>
         ) : (
           <>
             <div className={s.grid} aria-busy={cargando}>
@@ -514,7 +507,7 @@ export function CuponesView({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => void abrirHistorial(cupon)}
+                            onPress={() => void abrirHistorial(cupon)}
                           >
                             <HistoryIcon data-icon="inline-start" />
                             Historial
@@ -523,8 +516,8 @@ export function CuponesView({
                             <span className={s.acts}>
                               <Button
                                 variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setEditor(cupon)}
+                                isIconOnly
+                                onPress={() => setEditor(cupon)}
                                 aria-label={`Editar ${cupon.codigo}`}
                               >
                                 <Edit3Icon />
@@ -533,8 +526,8 @@ export function CuponesView({
                               cupon.estado !== "AGOTADO" ? (
                                 <Button
                                   variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => void toggleActivo(cupon)}
+                                  isIconOnly
+                                  onPress={() => void toggleActivo(cupon)}
                                   aria-label={
                                     cupon.activo ? "Pausar" : "Reactivar"
                                   }
@@ -543,9 +536,9 @@ export function CuponesView({
                                 </Button>
                               ) : null}
                               <Button
-                                variant="destructive"
-                                size="icon-sm"
-                                onClick={() => setAEliminar(cupon)}
+                                variant="danger-soft"
+                                isIconOnly
+                                onPress={() => setAEliminar(cupon)}
                                 aria-label={`Eliminar ${cupon.codigo}`}
                               >
                                 <Trash2Icon />
@@ -590,7 +583,7 @@ export function CuponesView({
                 );
               })}
             </div>
-            <TablePagination
+            <CuponesPagination
               total={listado.total}
               page={page}
               pageSize={PAGE_SIZE}
@@ -620,19 +613,12 @@ export function CuponesView({
           />
         ) : null}
 
-        <ConfirmacionDestructiva
+        <EliminarCuponDialog
           open={aEliminar != null}
           onOpenChange={(open) => {
             if (!open) setAEliminar(null);
           }}
-          titulo="Eliminar cupón"
-          descripcion="El código deja de existir. Los cupones con cualquier historial no pueden eliminarse."
-          impacto={[
-            "Si ya se usó o reservó, pausalo para conservar la trazabilidad.",
-          ]}
-          nombreItem={aEliminar?.codigo}
-          requiereTipear={false}
-          accionLabel="Eliminar cupón"
+          codigo={aEliminar?.codigo}
           onConfirmar={async () => {
             if (!aEliminar) return;
             await eliminarCupon(aEliminar.id);
@@ -642,18 +628,13 @@ export function CuponesView({
           }}
         />
 
-        <Dialog open={qr != null} onOpenChange={(open) => !open && setQr(null)}>
-          <DialogContent
-            className="gp-modal gp-modal-compact"
-            overlayClassName="gp-modal-overlay"
-          >
-            <DialogHeader>
-              <DialogTitle>QR del cupón {qr?.codigo}</DialogTitle>
-              <DialogDescription>
-                El lector escribe el código plano; el QR puede imprimirse sin
-                conexión.
-              </DialogDescription>
-            </DialogHeader>
+        <FormDialog
+          isOpen={qr != null}
+          onOpenChange={(open) => !open && setQr(null)}
+          title={`QR del cupón ${qr?.codigo ?? ""}`}
+          description="El lector escribe el código plano; el QR puede imprimirse sin conexión."
+        >
+          <Modal.Body className={s.modalBody}>
             {qr ? (
               <div className={s.qrBox}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -661,23 +642,25 @@ export function CuponesView({
                 <span className={s.codigoGrande}>{qr.codigo}</span>
               </div>
             ) : null}
-            <DialogFooter>
-              {qr ? (
-                <a
-                  href={qr.dataUrl}
-                  download={`cupon-${qr.codigo}.png`}
-                  className={buttonVariants({ variant: "outline" })}
-                >
-                  Descargar PNG
-                </a>
-              ) : null}
-              <Button onClick={() => setQr(null)}>Listo</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </Modal.Body>
+          <Modal.Footer className={s.modalFooter}>
+            {qr ? (
+              <ActionLink
+                href={qr.dataUrl}
+                download={`cupon-${qr.codigo}.png`}
+                variant="outline"
+              >
+                Descargar PNG
+              </ActionLink>
+            ) : null}
+            <Button onPress={() => setQr(null)}>Listo</Button>
+          </Modal.Footer>
+        </FormDialog>
 
-        <Dialog
-          open={historialId != null}
+        <FormDialog
+          isOpen={historialId != null}
+          title={`Historial de ${historial?.cupon.codigo ?? "cupón"}`}
+          description="Cambios administrativos, reservas, consumos y liberaciones."
           onOpenChange={(open) => {
             if (!open) {
               setHistorialId(null);
@@ -685,20 +668,15 @@ export function CuponesView({
             }
           }}
         >
-          <DialogContent
-            className={`${s.historialModal} gp-modal gp-modal-wide`}
-            overlayClassName="gp-modal-overlay"
-          >
-            <DialogHeader>
-              <DialogTitle>
-                Historial de {historial?.cupon.codigo ?? "cupón"}
-              </DialogTitle>
-              <DialogDescription>
-                Cambios administrativos, reservas, consumos y liberaciones.
-              </DialogDescription>
-            </DialogHeader>
+          <Modal.Body className={s.modalBody}>
             {historialCargando ? (
-              <p className={s.muted}>Cargando historial…</p>
+              <div
+                className={s.cargandoHistorial}
+                role="status"
+                aria-label="Cargando historial"
+              >
+                <GdiSpinner size={32} />
+              </div>
             ) : historialError ? (
               <p className={s.errorTexto} role="alert">
                 {historialError}
@@ -715,15 +693,18 @@ export function CuponesView({
                     <ul className={s.timeline}>
                       {historial.redenciones.map((redencion) => (
                         <li key={redencion.id}>
-                          <Badge
-                            variant={
+                          <Chip
+                            size="sm"
+                            variant="soft"
+                            color={
                               redencion.estado === "LIBERADA"
-                                ? "secondary"
-                                : "outline"
+                                ? "default"
+                                : "success"
                             }
+                            className={s.historialEstado}
                           >
                             {redencion.estado.toLocaleLowerCase("es-AR")}
-                          </Badge>
+                          </Chip>
                           <strong>
                             {formatearMoneda(redencion.montoAplicado, moneda)}
                           </strong>
@@ -756,34 +737,219 @@ export function CuponesView({
                 </section>
               </div>
             ) : null}
-          </DialogContent>
-        </Dialog>
+          </Modal.Body>
+        </FormDialog>
       </div>
     </section>
   );
 }
 
-function Metrica({
+/** Conserva la búsqueda por palabras y los grupos del selector anterior. */
+function CuponAlcanceSelector({
+  id,
   label,
-  valor,
-  Icon,
-  principal = false,
+  value,
+  onChange,
+  opciones,
+  disabled,
+  placeholder,
 }: {
+  id: string;
   label: string;
-  valor: React.ReactNode;
-  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  principal?: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  opciones: OpcionAlcance[];
+  disabled: boolean;
+  placeholder: string;
 }) {
+  const scope = useDesignScope();
+  const grupos = agruparOpciones(
+    opciones.map((opcion) => ({
+      value: opcion.ref,
+      label: opcion.nombre,
+      grupo: opcion.grupo,
+    })),
+  );
   return (
-    <article className={`${s.metrica} ${principal ? s.metricaPrincipal : ""}`}>
-      <span className={s.metricaIcono} aria-hidden="true">
-        <Icon />
+    <Autocomplete
+      aria-label={label}
+      value={value || null}
+      onChange={(key) => {
+        if (key != null) onChange(String(key));
+      }}
+      isDisabled={disabled}
+      placeholder={placeholder}
+      allowsEmptyCollection
+      fullWidth
+    >
+      <Autocomplete.Trigger
+        id={id}
+        aria-label={label}
+        className={`${focus.singleBorder} ${s.alcanceTrigger}`}
+      >
+        <Autocomplete.Value>
+          {({ isPlaceholder, defaultChildren }) =>
+            isPlaceholder
+              ? defaultChildren
+              : opciones.find((opcion) => opcion.ref === value)?.nombre
+          }
+        </Autocomplete.Value>
+        <Autocomplete.Indicator />
+      </Autocomplete.Trigger>
+      <Autocomplete.Popover {...scope} className={theme.theme}>
+        <Autocomplete.Filter
+          filter={(text, query) =>
+            normalizarBusqueda(query)
+              .split(/\s+/)
+              .every((term) => normalizarBusqueda(text).includes(term))
+          }
+        >
+          {opciones.length >= 7 && (
+            <SearchField
+              aria-label={`Buscar ${label.toLocaleLowerCase("es-AR")}`}
+              className={s.alcanceBuscar}
+            >
+              <SearchField.Group className={focus.singleBorder}>
+                <SearchField.SearchIcon />
+                <SearchField.Input placeholder="Buscar…" />
+                <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+              </SearchField.Group>
+            </SearchField>
+          )}
+          <ListBox
+            renderEmptyState={() => (
+              <p className={s.alcanceVacio}>Nada coincide con la búsqueda.</p>
+            )}
+          >
+            {grupos.map((grupo, index) => (
+              <ListBox.Section
+                key={grupo.titulo ?? index}
+                aria-label={grupo.titulo ?? label}
+              >
+                {grupo.titulo && (
+                  <Header className={s.alcanceGrupo}>{grupo.titulo}</Header>
+                )}
+                {grupo.opciones.map((opcion) => (
+                  <ListBox.Item
+                    key={opcion.value}
+                    id={opcion.value}
+                    textValue={`${opcion.label} ${opcion.grupo ?? ""}`}
+                  >
+                    {opcion.label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox.Section>
+            ))}
+          </ListBox>
+        </Autocomplete.Filter>
+      </Autocomplete.Popover>
+    </Autocomplete>
+  );
+}
+
+function CuponesPagination({
+  total,
+  page,
+  pageSize,
+  onPageChange,
+}: {
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const pages = Math.ceil(total / pageSize);
+  if (pages <= 1) return null;
+  return (
+    <nav className={listPage.pager} aria-label="Páginas de cupones">
+      <span>
+        {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} de{" "}
+        {total}
       </span>
-      <div>
-        <span>{label}</span>
-        <strong>{valor}</strong>
+      <div className={s.pagerActions}>
+        <Button
+          variant="outline"
+          isIconOnly
+          isDisabled={page <= 1}
+          onPress={() => onPageChange(page - 1)}
+          aria-label="Página anterior"
+        >
+          <ChevronLeftIcon size={16} />
+        </Button>
+        <span>
+          {page} / {pages}
+        </span>
+        <Button
+          variant="outline"
+          isIconOnly
+          isDisabled={page >= pages}
+          onPress={() => onPageChange(page + 1)}
+          aria-label="Página siguiente"
+        >
+          <ChevronRightIcon size={16} />
+        </Button>
       </div>
-    </article>
+    </nav>
+  );
+}
+
+function EliminarCuponDialog({
+  open,
+  onOpenChange,
+  codigo,
+  onConfirmar,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  codigo?: string;
+  onConfirmar: () => Promise<void>;
+}) {
+  const [ejecutando, setEjecutando] = React.useState(false);
+  return (
+    <FormDialog
+      isOpen={open}
+      onOpenChange={onOpenChange}
+      isDismissable={!ejecutando}
+      title={`Eliminar cupón${codigo ? ` ${codigo}` : ""}`}
+      description="El código deja de existir. Los cupones con cualquier historial no pueden eliminarse."
+    >
+      <Modal.Body className={s.modalBody}>
+        <p className={s.avisoEliminar}>
+          Si ya se usó o reservó, pausalo para conservar la trazabilidad.
+        </p>
+      </Modal.Body>
+      <Modal.Footer className={s.modalFooter}>
+        <Button
+          variant="outline"
+          isDisabled={ejecutando}
+          onPress={() => onOpenChange(false)}
+        >
+          Cancelar
+        </Button>
+        <Button
+          variant="danger"
+          isDisabled={ejecutando}
+          onPress={async () => {
+            if (ejecutando) return;
+            setEjecutando(true);
+            try {
+              await onConfirmar();
+            } catch (cause) {
+              toast.error(
+                cause instanceof Error
+                  ? cause.message
+                  : "No se pudo eliminar el cupón.",
+              );
+            } finally {
+              setEjecutando(false);
+            }
+          }}
+        >
+          {ejecutando ? "Eliminando…" : "Eliminar cupón"}
+        </Button>
+      </Modal.Footer>
+    </FormDialog>
   );
 }
 
@@ -932,26 +1098,19 @@ function CuponModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className={`${s.editorModal} gp-modal gp-modal-wide`}
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader>
-          <DialogTitle>
-            {editando ? `Editar ${codigo}` : "Nuevo cupón"}
-          </DialogTitle>
-          <DialogDescription>
-            La API valida el alcance y calcula la distribución final del
-            descuento.
-          </DialogDescription>
-        </DialogHeader>
-
+    <FormDialog
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title={editando ? `Editar ${codigo}` : "Nuevo cupón"}
+      description="Configurá el descuento, a quién aplica y su vigencia."
+    >
+      <Modal.Body className={s.modalBody}>
         <FieldGroup className={s.formulario}>
           <div className={s.grid2}>
             <Field data-disabled={editando || undefined}>
               <FieldLabel htmlFor={`${prefijo}-codigo`}>Código</FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id={`${prefijo}-codigo`}
                 autoFocus={!editando}
                 value={codigo}
@@ -970,12 +1129,11 @@ function CuponModal({
             </Field>
             <Field>
               <FieldLabel htmlFor={`${prefijo}-tipo`}>Tipo</FieldLabel>
-              <HumanSelect
+              <SelectField
                 id={`${prefijo}-tipo`}
+                aria-label="Tipo de descuento"
                 value={tipo}
-                onValueChange={(value) =>
-                  setTipo(value as "PORCENTAJE" | "MONTO")
-                }
+                onChange={(value) => setTipo(value as "PORCENTAJE" | "MONTO")}
                 options={[
                   { value: "PORCENTAJE", label: "Porcentaje (%)" },
                   { value: "MONTO", label: "Monto fijo" },
@@ -990,6 +1148,7 @@ function CuponModal({
                 {tipo === "PORCENTAJE" ? "Porcentaje" : "Monto neto"}
               </FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id={`${prefijo}-valor`}
                 type="number"
                 min="0.01"
@@ -1002,6 +1161,7 @@ function CuponModal({
             <Field>
               <FieldLabel htmlFor={`${prefijo}-usos`}>Usos máximos</FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id={`${prefijo}-usos`}
                 type="number"
                 min="1"
@@ -1019,12 +1179,11 @@ function CuponModal({
           <div className={s.grid2}>
             <Field>
               <FieldLabel htmlFor={`${prefijo}-alcance`}>Alcance</FieldLabel>
-              <HumanSelect
+              <SelectField
                 id={`${prefijo}-alcance`}
+                aria-label="Alcance"
                 value={alcanceTipo}
-                onValueChange={(value) =>
-                  setAlcanceTipo(value as CuponAlcanceTipo)
-                }
+                onChange={(value) => setAlcanceTipo(value as CuponAlcanceTipo)}
                 options={Object.entries(ALCANCE_LABEL).map(
                   ([value, label]) => ({ value, label }),
                 )}
@@ -1035,20 +1194,16 @@ function CuponModal({
                 <FieldLabel htmlFor={`${prefijo}-referencia`}>
                   {ALCANCE_LABEL[alcanceTipo]}
                 </FieldLabel>
-                <SelectBuscable
+                <CuponAlcanceSelector
+                  id={`${prefijo}-referencia`}
+                  label={ALCANCE_LABEL[alcanceTipo]}
                   value={alcanceRef}
                   onChange={setAlcanceRef}
-                  opciones={opciones.map((opcion) => ({
-                    value: opcion.ref,
-                    label: opcion.nombre,
-                    grupo: opcion.grupo ?? null,
-                  }))}
+                  opciones={opciones}
                   disabled={cargandoOpciones || Boolean(errorOpciones)}
                   placeholder={
                     cargandoOpciones ? "Cargando…" : "Elegí una opción"
                   }
-                  placeholderBusqueda="Buscar…"
-                  vacio="Nada coincide con la búsqueda."
                 />
                 {errorOpciones ? (
                   <FieldError>{errorOpciones}</FieldError>
@@ -1063,6 +1218,7 @@ function CuponModal({
                 Vigente desde
               </FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id={`${prefijo}-desde`}
                 type="date"
                 value={vigenciaDesde}
@@ -1074,6 +1230,7 @@ function CuponModal({
                 Vigente hasta
               </FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id={`${prefijo}-hasta`}
                 type="date"
                 min={vigenciaDesde || undefined}
@@ -1091,6 +1248,7 @@ function CuponModal({
               Compra mínima neta
             </FieldLabel>
             <Input
+              className={focus.singleBorder}
               id={`${prefijo}-minimo`}
               type="number"
               min="0"
@@ -1106,6 +1264,7 @@ function CuponModal({
               Descripción
             </FieldLabel>
             <Textarea
+              className={focus.singleBorder}
               id={`${prefijo}-descripcion`}
               rows={2}
               maxLength={300}
@@ -1124,20 +1283,20 @@ function CuponModal({
             </span>
           </div>
         </FieldGroup>
+      </Modal.Body>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button disabled={guardando} onClick={() => void guardar()}>
-            {guardando
-              ? "Guardando…"
-              : editando
-                ? "Guardar cambios"
-                : "Crear cupón"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Modal.Footer className={s.modalFooter}>
+        <Button variant="outline" onPress={onClose}>
+          Cancelar
+        </Button>
+        <Button isDisabled={guardando} onPress={() => void guardar()}>
+          {guardando
+            ? "Guardando…"
+            : editando
+              ? "Guardar cambios"
+              : "Crear cupón"}
+        </Button>
+      </Modal.Footer>
+    </FormDialog>
   );
 }

@@ -1,3 +1,4 @@
+import { fijarPlanReferencia } from '../produccion/plan-referencia-paso';
 import { ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { EtaService } from '../eta/eta.service';
@@ -112,6 +113,14 @@ export async function aplicarReprogramacion(
     throw new ConflictException(
       'No se pudieron vincular todas las operaciones de la agenda.',
     );
+  const referencias = new Map(
+    (
+      await tx.ordenTrabajoItemPaso.findMany({
+        where: { tenantId, id: { in: agenda.map((t) => t.pasoId) } },
+        select: { id: true, planReferenciaJson: true },
+      })
+    ).map((p) => [p.id, p.planReferenciaJson]),
+  );
   // Actualización condicional: no reprograma pasos ejecutados ni de otra empresa.
   for (const t of agenda) {
     const c = await tx.ordenTrabajoItemPaso.updateMany({
@@ -119,6 +128,11 @@ export async function aplicarReprogramacion(
       data: {
         planificadoDesde: new Date(t.inicio),
         planificadoHasta: new Date(t.fin),
+        planReferenciaJson: fijarPlanReferencia(
+          referencias.get(t.pasoId),
+          t,
+          'plan_aceptado',
+        ) as unknown as Prisma.InputJsonValue,
         atencionPlanificadaJson: t.atencionPlanificada
           ? (JSON.parse(
               JSON.stringify(t.atencionPlanificada),

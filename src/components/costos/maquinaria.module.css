@@ -1,0 +1,563 @@
+.search {
+  width: min(560px, 100%);
+}
+.actions,
+.maq-acciones,
+.maq-perfiles-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.actions {
+  justify-content: flex-end;
+}
+.maq-filtros {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-top: 1px solid var(--border);
+  background: var(--background);
+}
+.maq-filtros-grupo {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.tableScroll,
+.maq-perfiles-scroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+.maq-tabla,
+.maq-perfiles-tabla,
+.maq-tintas-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font-size: 13px;
+}
+.maq-tabla {
+  min-width: 1050px;
+}
+.maq-tabla th,
+.maq-perfiles-tabla th,
+.maq-tintas-tabla th {
+  padding: 12px 14px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.maq-tabla td,
+.maq-perfiles-tabla td,
+.maq-tintas-tabla td {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+  line-height: 1.5;
+}
+.maq-tabla tbody tr:hover {
+  background: var(--background);
+}
+.maq-tabla td:first-child {
+  min-width: 200px;
+}
+.maq-tabla :global(.name) {
+  display: inline-block;
+  margin-bottom: 3px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.maq-tabla :global(.sticky-right) {
+  position: sticky;
+  right: 0;
+  background: var(--surface);
+}
+.maq-tabla th:global(.sticky-right) {
+  background: var(--surface-secondary);
+}
+.maq-tabla :global(.text-right),
+.maq-perfiles-tabla :global(.num) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.maq-tabla .maq-vacio {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--muted-text);
+}
+.maq-vacio > div {
+  margin-bottom: 10px;
+}
+.maq-tabla .maq-inactiva {
+  color: var(--muted-text);
+}
+.maq-tipo {
+  white-space: nowrap;
+}
+.maq-punto {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+.ficha.ficha {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.maq-ficha-top {
+  flex: none;
+  padding: 20px 24px 0;
+}
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.breadcrumb button {
+  cursor: pointer;
+}
+.breadcrumb button:hover {
+  color: var(--accent-soft-foreground);
+}
+.maq-ficha-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px 24px;
+}
+.maq-ficha-cuerpo > * {
+  flex-shrink: 0;
+}
+.ficha fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ficha input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.modal input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]) {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  font-size: 13px;
+}
+.ficha textarea {
+  min-height: 100px;
+  width: 100%;
+  font-size: 13px;
+}
+.ficha input[type="number"],
+.modal input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+.ficha :global([data-slot="label"]),
+.ficha :global([data-slot="field-label"]),
+.modal :global([data-slot="field-label"]),
+.modal :global([data-slot="label"]) {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.ficha :global([data-slot="field-description"]),
+.modal :global([data-slot="field-description"]) {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.maq-ficha-pie {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.card,
+.technicalCard {
+  gap: 0;
+  padding: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: none;
+  color: var(--foreground);
+}
+.card > :global(.card__header),
+.technicalCard > :global(.card__header) {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  gap: 5px;
+}
+.card :global(.card__title),
+.technicalCard :global(.card__title) {
+  font-size: 15px;
+  font-weight: 600;
+}
+.card :global(.card__description),
+.technicalCard :global(.card__description) {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.card > :global(.card__content),
+.technicalCard > :global(.card__content) {
+  padding: 20px;
+}
+.identityGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.identityDescription {
+  grid-column: 1 / -1;
+}
+.history {
+  padding: 20px;
+  gap: 24px;
+}
+.history dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.history dt {
+  font-size: 12px;
+  color: var(--muted-text);
+  margin-bottom: 5px;
+}
+.history dd {
+  font-size: 13px;
+  font-weight: 500;
+}
+.history ol li {
+  flex-wrap: wrap;
+}
+.modalContainer,
+.wideModal {
+  width: 100%;
+  max-width: none;
+  padding: 16px;
+}
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.modalHeader {
+  padding: 22px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.modalHeader h2 {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  padding-right: 28px;
+}
+.modalHeader p {
+  margin-top: 6px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
+  gap: 20px;
+}
+.modalFooter {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.maq-perfiles,
+.maq-desgaste {
+  min-width: 0;
+}
+.maq-perfiles-vacio,
+.maq-tintas-vacio,
+.maq-tintas-cargando {
+  margin: 0 0 16px;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+.maq-perfiles-tabla {
+  min-width: 100%;
+  width: max-content;
+}
+.maq-perfiles-tabla th,
+.maq-perfiles-tabla td {
+  padding: 12px 10px;
+}
+.maq-perfiles-tabla :global(.campo-nombre),
+.maq-perfiles-tabla :global(.nombre) {
+  min-width: 180px;
+}
+.maq-perfiles-tabla :global(.num) {
+  min-width: 110px;
+}
+.maq-perfiles-tabla td > div {
+  min-width: 90px;
+}
+.maq-perfiles-tabla :global(.unidad) {
+  font-size: 10px;
+  font-weight: 400;
+}
+.maq-perfiles-tabla :global(.req) {
+  color: var(--danger);
+}
+.maq-perfiles-tabla :global(.na) {
+  color: var(--muted-text);
+}
+.maq-perfiles-tabla input {
+  min-width: 100px;
+}
+.maq-perfiles-tabla :global(.num) input {
+  text-align: right;
+}
+.maq-perfiles-acciones {
+  justify-content: flex-end;
+}
+.maq-btn,
+.maq-perfiles-agregar {
+  margin-top: 16px;
+}
+.maq-perfiles-tinta-btn {
+  position: relative;
+}
+.maq-perfiles-tinta-btn :global(.punto) {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted-text);
+}
+.maq-perfiles-tinta-btn:global(.ok) :global(.punto) {
+  background: var(--success);
+}
+.maq-desgaste-costo,
+.maq-desgaste-total {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.maq-desgaste-total {
+  margin-top: 16px;
+  font-size: 13px;
+  text-align: right;
+}
+.maq-colores {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.maq-color-pill {
+  flex-shrink: 0;
+}
+.maq-color-pila {
+  display: inline-flex;
+  align-items: center;
+  padding-left: 3px;
+}
+.maq-color-punto {
+  width: 11px;
+  height: 11px;
+  margin-left: -3px;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+}
+.maq-color-etiqueta {
+  font-size: 12px;
+}
+.maq-seg,
+.maq-seg-mini {
+  display: inline-flex;
+  gap: 4px;
+}
+.maq-tintas-tabla {
+  min-width: 700px;
+}
+.maq-tintas-tabla td:last-child {
+  width: 40px;
+}
+.maq-tintas-tabla td:nth-last-child(2) {
+  min-width: 260px;
+}
+.maq-tintas-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.maq-tintas-color :global(.sw) {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+.maq-tintas-quitar {
+  flex-shrink: 0;
+}
+.maq-tintas-nota {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.materialPopover {
+  width: var(--trigger-width);
+  max-height: min(340px, 60vh);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.materialPopover [role="listbox"] {
+  max-height: min(320px, 50vh);
+  overflow: auto;
+}
+.materialPopover :global(.list-box-item__text) {
+  min-width: 0;
+}
+@media (min-width: 1200px) {
+  .identityGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .technicalCard {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .technicalCard > :global(.card__header) {
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    align-content: start;
+  }
+}
+@media (max-width: 767px) {
+  .maq-filtros-grupo {
+    grid-template-columns: 1fr;
+  }
+  .maq-filtros {
+    align-items: flex-start;
+  }
+  .search {
+    width: 100%;
+  }
+  .identityGrid {
+    grid-template-columns: 1fr;
+  }
+  .maq-ficha-top {
+    padding: 20px 16px 0;
+  }
+  .maq-ficha-cuerpo {
+    padding: 16px;
+  }
+  .maq-ficha-pie {
+    padding: 16px;
+  }
+  .card > :global(.card__header),
+  .technicalCard > :global(.card__header),
+  .card > :global(.card__content),
+  .technicalCard > :global(.card__content) {
+    padding: 16px;
+  }
+  .modalHeader,
+  .modalBody,
+  .modalFooter {
+    padding: 16px;
+  }
+  .history dl {
+    grid-template-columns: 1fr;
+  }
+  .maq-tabla :global(.sticky-right) {
+    position: static;
+  }
+}
+
+.modalWideDialog {
+  max-width: 1000px;
+}
+.modalClose {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  left: auto;
+}
+
+.maq-ficha-cuerpo > [role="tabpanel"] {
+  padding: 0;
+}
+.ficha [data-slot="field"] > [role="radiogroup"] {
+  width: fit-content;
+}
+.ficha
+  input:disabled:not([type="checkbox"]):not([type="radio"]):not(
+    [type="hidden"]
+  ) {
+  opacity: 1;
+  color: var(--muted-text);
+  background: var(--surface-secondary);
+}
+.maq-tintas-tabla {
+  table-layout: fixed;
+}
+.maq-tintas-tabla th:first-child {
+  width: 100px;
+}
+.maq-tintas-tabla th:last-child {
+  width: 52px;
+}
+.maq-tintas-tabla th:nth-last-child(2) {
+  width: 42%;
+}
+
+.modal :global(.select__value),
+.ficha :global(.select__value) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { MessageEvent, NotFoundException } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { EventosSistemaService } from './eventos-sistema.service';
@@ -13,6 +13,78 @@ const auth: CurrentAuth = {
 };
 
 describe('EventosSistemaService', () => {
+  describe('canal en vivo', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    function preparar() {
+      const prisma = {
+        eventoSistema: {
+          findFirst: jest.fn().mockResolvedValue({ id: 40n }),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        notificacionInterna: { count: jest.fn().mockResolvedValue(2) },
+      };
+      return { prisma, service: new EventosSistemaService(prisma as never) };
+    }
+
+    it('conserva el cursor real en el inicio y los latidos, y libera los timers al salir', async () => {
+      const { service } = preparar();
+      const eventos: MessageEvent[] = [];
+      const suscripcion = service
+        .stream(auth)
+        .subscribe((evento) => eventos.push(evento));
+      try {
+        await jest.advanceTimersByTimeAsync(15_000);
+        expect(eventos).toEqual([
+          expect.objectContaining({
+            type: 'ready',
+            id: '40',
+            data: { ultimoId: '40', noLeidas: 2 },
+          }),
+          expect.objectContaining({ type: 'heartbeat', id: '40' }),
+        ]);
+        expect(suscripcion.closed).toBe(false);
+      } finally {
+        suscripcion.unsubscribe();
+      }
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('confirma la reconexión y reproduce los eventos posteriores al cursor recibido', async () => {
+      const { prisma, service } = preparar();
+      prisma.eventoSistema.findMany.mockResolvedValueOnce([
+        {
+          id: 41n,
+          tipo: 'produccion.paso_completar',
+          topicos: ['tablero-produccion'],
+          createdAt: new Date('2026-09-14T19:00:00Z'),
+        },
+      ]);
+      const eventos: MessageEvent[] = [];
+      const suscripcion = service
+        .stream(auth, '40')
+        .subscribe((evento) => eventos.push(evento));
+      try {
+        await jest.advanceTimersByTimeAsync(15_000);
+        expect(prisma.eventoSistema.findFirst).not.toHaveBeenCalled();
+        expect(prisma.eventoSistema.findMany).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            where: { tenantId: auth.tenantId, id: { gt: 40n } },
+          }),
+        );
+        expect(eventos.map((evento) => [evento.type, evento.id])).toEqual([
+          ['ready', '40'],
+          ['cambio', '41'],
+          ['heartbeat', '41'],
+        ]);
+      } finally {
+        suscripcion.unsubscribe();
+      }
+    });
+  });
+
   it('deduplica la audiencia, excluye al actor y valida membresía activa del tenant', async () => {
     const create = jest.fn().mockResolvedValue({ id: 9n });
     const prisma = {

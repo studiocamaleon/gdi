@@ -1,5 +1,9 @@
+.page {
+  composes: canvas from "../design-system/theme.module.css";
+}
 .page.page {
   padding: 20px 24px 24px;
+  background: var(--canvas-background);
 }
 .page.page .content {
   padding: 0;

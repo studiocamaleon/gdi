@@ -524,3 +524,30 @@
     flex-direction: column;
   }
 }
+
+:global([data-producto-ficha]) .section { border-radius: 12px; background: var(--surface); box-shadow: none; }
+:global([data-producto-ficha]) .section::before { display: none; }
+:global([data-producto-ficha]) .sectionHeader { display: grid; grid-template-columns: minmax(0,1fr) auto; padding: 18px 20px; }
+:global([data-producto-ficha]) .sectionMark { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-soft-foreground); box-shadow: none; }
+:global([data-producto-ficha]) .eyebrow { font-family: inherit; letter-spacing: 0; text-transform: none; color: var(--muted-text); }
+:global([data-producto-ficha]) .sectionTitle { font-size: 15px; font-weight: 650; }
+:global([data-producto-ficha]) .sectionContent { padding: 20px; }
+:global([data-producto-ficha]) .methodSelector, :global([data-producto-ficha]) .methodFields { border-radius: 10px; background: var(--surface-secondary); }
+:global([data-producto-ficha]) .methodSelector { background: var(--surface); }
+:global([data-producto-ficha]) .segmented button { min-height: 52px; height: auto; padding: 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); color: var(--foreground); text-align: left; }
+:global([data-producto-ficha]) .segmented button[data-selected] { border-color: var(--accent); color: var(--accent-soft-foreground); background: var(--accent-soft); box-shadow: none; }
+:global([data-producto-ficha]) .tierCard, :global([data-producto-ficha]) .componentCard, :global([data-producto-ficha]) .specialEditor { border-radius: 10px; background: var(--surface); box-shadow: none; }
+:global([data-producto-ficha]) .componentHeader, :global([data-producto-ficha]) .tierHeader, :global([data-producto-ficha]) .specialEditorHeader { padding: 16px; background: var(--surface-secondary); }
+:global([data-producto-ficha]) .componentContent, :global([data-producto-ficha]) .tierContent, :global([data-producto-ficha]) .specialEditorContent { padding: 16px; }
+:global([data-producto-ficha]) .preview { border-radius: 10px; background: var(--surface); box-shadow: none; }
+:global([data-producto-ficha]) .previewHeader { background: var(--surface-secondary); }
+@media(max-width: 640px) {
+  :global([data-producto-ficha]) .sectionHeader { grid-template-columns: 1fr; padding: 16px; }
+  :global([data-producto-ficha]) .sectionAction { justify-self: start; }
+  :global([data-producto-ficha]) .sectionContent { padding: 16px; }
+  :global([data-producto-ficha]) .methodShell { grid-template-columns: 1fr; }
+}
+
+:global([data-producto-ficha]) .segmented { padding: 0; border: 0; background: transparent; box-shadow: none; }
+:global([data-producto-ficha]) .segmented button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; }
+.saveFooter { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 -4px 16px color-mix(in srgb, var(--foreground) 4%, transparent); }

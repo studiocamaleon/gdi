@@ -1,0 +1,361 @@
+.page {
+  color: var(--foreground);
+}
+.headerActions,
+.toolbarEnd,
+.rowActions,
+.metadata {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.headerActions {
+  justify-content: flex-end;
+}
+.toolbarEnd {
+  gap: 20px;
+}
+.toolbarEnd label {
+  font-size: 12px;
+}
+.search {
+  width: min(100%, 380px);
+}
+.resultCount,
+.metadata,
+.unsaved {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.metadata {
+  margin-top: 12px;
+}
+.metadata > span:first-child {
+  margin-right: 4px;
+}
+.unsaved {
+  color: var(--warning);
+}
+.statusDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.table {
+  width: 100%;
+  font-size: 13px;
+}
+.table thead {
+  background: var(--surface-secondary);
+}
+.table th {
+  height: 40px;
+  padding: 10px 16px;
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+.table td {
+  padding: 14px 16px;
+  color: var(--foreground);
+  vertical-align: middle;
+  white-space: normal;
+  line-height: 1.5;
+}
+.table tr {
+  border-color: var(--border);
+}
+.table tbody tr:hover {
+  background: var(--background);
+}
+.table tr:has(td[colspan]):hover {
+  background: transparent;
+}
+.catalogTable {
+  min-width: 980px;
+}
+.catalogTable th:first-child {
+  width: 32%;
+}
+.materialName {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.materialName > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.materialName strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.materialName > div > span {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.materialIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}
+.rowActions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.rowActions > * {
+  min-width: 112px;
+}
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  padding: 22px 24px;
+  overflow-y: auto;
+}
+.dialogFooter {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.field > label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.field input {
+  width: 100%;
+  height: 36px;
+  font-size: 13px;
+}
+.templateInfo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.templateInfo > svg {
+  flex-shrink: 0;
+  color: var(--accent-soft-foreground);
+  margin-top: 2px;
+}
+.templateInfo strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--foreground);
+  font-weight: 500;
+}
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.backLink:hover {
+  color: var(--accent-soft-foreground);
+}
+.tabsRoot {
+  width: 100%;
+  gap: 18px;
+  min-width: 0;
+}
+.tabsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tabsBar > :first-child {
+  min-width: 0;
+  flex: 1;
+  border-bottom: 0;
+}
+.activeToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.tabPanel {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.formFields {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.formFields [data-slot="field"] {
+  gap: 8px;
+}
+.formFields [data-slot="field-label"] {
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.switchBox {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+}
+.ficha input:not([type="hidden"]):not([type="checkbox"]),
+.ficha textarea {
+  min-width: 0;
+  width: 100%;
+  font-size: 13px;
+}
+.ficha input:not([type="hidden"]):not([type="checkbox"]) {
+  height: 36px;
+}
+.ficha textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.ficha :global(.arc-money-in) {
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-background);
+  color: var(--field-foreground);
+  box-shadow: var(--field-shadow);
+}
+.ficha :global(.arc-money-in):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.tableFrame {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.tableFrame .table {
+  min-width: 720px;
+}
+.tableFrame td:has(input),
+.tableFrame td:has([aria-haspopup="listbox"]) {
+  min-width: 160px;
+}
+.tableFrame td:has(input[inputmode="decimal"]) {
+  min-width: 180px;
+}
+.stockMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.multiSelect {
+  min-width: 170px;
+  font-size: 13px;
+}
+.multiSelect > button {
+  width: 100%;
+  min-height: 36px;
+  height: auto;
+  font-size: 13px;
+}
+.multiPopover {
+  width: min(360px, calc(100vw - 32px));
+  max-height: 300px;
+  overflow-y: auto;
+}
+.warning {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--warning) 25%, var(--border));
+  border-radius: 9px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13px;
+}
+.historyEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 180px;
+  color: var(--muted-text);
+  font-size: 13px;
+  text-align: center;
+}
+@media (max-width: 1000px) {
+  .tabsBar {
+    flex-wrap: wrap;
+  }
+  .activeToggle {
+    padding-left: 0;
+  }
+}
+@media (max-width: 639px) {
+  .tabsBar > :first-child {
+    flex-basis: 100%;
+  }
+  .activeToggle {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .headerActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .headerActions > * {
+    flex-grow: 1;
+    justify-content: center;
+  }
+  .search {
+    width: 100%;
+  }
+  .toolbarEnd {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .dialogBody,
+  .tabPanel {
+    padding: 18px 16px;
+  }
+  .dialogFooter {
+    padding: 14px 16px;
+  }
+  .formGrid,
+  .stockMetrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

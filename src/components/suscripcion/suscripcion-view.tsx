@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -767,7 +768,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
       {confirmando ? (
         <div className="sub-alert info">
-          <span className="sub-spin" aria-hidden="true" />
+          <GdiSpinner />
           Confirmando el pago con Paddle… no cierres esta página.
         </div>
       ) : null}

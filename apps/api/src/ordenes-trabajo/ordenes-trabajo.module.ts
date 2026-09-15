@@ -1,3 +1,5 @@
+import { AsignacionPersonalController } from './asignacion-personal.controller';
+import { AsignacionPersonalService } from './asignacion-personal.service';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { AdministracionModule } from '../administracion/administracion.module';
@@ -23,8 +25,8 @@ import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-
     RecorridosVectorialesModule,
     DesarrolloDocumentalModule,
   ],
-  controllers: [OrdenesTrabajoController, AccionesColaController],
-  providers: [OrdenesTrabajoService, EntregaService],
+  controllers: [AsignacionPersonalController, OrdenesTrabajoController, AccionesColaController],
+  providers: [OrdenesTrabajoService, EntregaService, AsignacionPersonalService],
   // Presupuestos convierte en OT reusando el create canónico.
   exports: [OrdenesTrabajoService],
 })

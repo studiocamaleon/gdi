@@ -1,3 +1,7 @@
+"use client";
+import styles from "../maquinaria.module.css";
+import { SelectField } from "@/components/design-system/select-field";
+import { useMaquinariaPuedeEditar } from "./maquinaria-edicion";
 import { PerfilesCorteEditor } from "./perfiles-corte-editor";
 import corteStyles from "./procesamiento-corte.module.css";
 /**
@@ -17,18 +21,15 @@ import {
   type MaquinariaTemplateField,
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  SelectBuscable,
-  type OpcionSelect,
-} from "@/components/ui/select-buscable";
+import { Modal } from "@heroui/react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Chip, ComboBox, Input, ListBox } from "@heroui/react";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+
+import { type OpcionSelect } from "@/components/ui/select-buscable";
 
 import { PerfilTintasModal } from "./consumibles-editor";
 import materialStyles from "./materiales-perfil-picker.module.css";
@@ -81,6 +82,9 @@ export function MaterialesPerfilPicker({
   opcionesLegadas?: MaquinariaTemplateField["options"];
   soloRigidos?: boolean;
 }) {
+  const scope = useDesignScope();
+  const puedeEditar = useMaquinariaPuedeEditar();
+  const [busquedaMaterial, setBusquedaMaterial] = React.useState("");
   const seleccionados = Array.isArray(value)
     ? value.map(String)
     : typeof value === "string" && value
@@ -118,19 +122,58 @@ export function MaterialesPerfilPicker({
 
   return (
     <div className={materialStyles.field}>
-      <SelectBuscable
-        value=""
-        opciones={opciones}
-        onChange={(id) => id && onChange([...seleccionados, id])}
-        placeholder={loading ? "Cargando materiales…" : "Buscar material…"}
-        placeholderBusqueda="Escribí un material y presioná Enter…"
-        vacio="No hay materiales activos que coincidan."
-        disabled={loading || opciones.length === 0}
-        ariaLabel="Agregar material de inventario al perfil"
-        minimoParaBuscar={0}
-      />
+      <ComboBox
+        aria-label="Agregar material de inventario al perfil"
+        selectedKey={null}
+        inputValue={busquedaMaterial}
+        onInputChange={setBusquedaMaterial}
+        isDisabled={!puedeEditar || loading || opciones.length === 0}
+        menuTrigger="focus"
+        fullWidth
+        onSelectionChange={(id) => {
+          if (id) {
+            onChange([...seleccionados, String(id)]);
+            setBusquedaMaterial("");
+          }
+        }}
+      >
+        <ComboBox.InputGroup>
+          <Input
+            className={focus.singleBorder}
+            placeholder={loading ? "Cargando materiales…" : "Buscar material…"}
+          />
+          <ComboBox.Trigger />
+        </ComboBox.InputGroup>
+        <ComboBox.Popover
+          {...scope}
+          className={`${theme.theme} ${styles.materialPopover}`}
+        >
+          <ListBox
+            renderEmptyState={() => "No hay materiales activos que coincidan."}
+          >
+            {opciones.map((opcion) => (
+              <ListBox.Item
+                key={opcion.value}
+                id={opcion.value}
+                textValue={opcion.label}
+              >
+                <div className="min-w-0">
+                  <div>{opcion.label}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {opcion.grupo} · {opcion.detalle}
+                  </p>
+                </div>
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </ComboBox.Popover>
+      </ComboBox>
       {seleccionados.length > 0 ? (
-        <ul className={materialStyles.selection} aria-label="Materiales seleccionados">
+        <ul
+          className={materialStyles.selection}
+          aria-label="Materiales seleccionados"
+        >
           {seleccionados.map((id) => {
             const material = porId.get(id);
             const legado = opcionesLegadas?.find(
@@ -139,12 +182,13 @@ export function MaterialesPerfilPicker({
             const label = material?.nombre ?? legado?.label ?? id;
             return (
               <li key={id} className={materialStyles.item}>
-                <Badge variant="outline" className={materialStyles.chip}>
+                <Chip size="sm" variant="soft" className={materialStyles.chip}>
                   <span className={materialStyles.name}>{label}</span>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-xs"
+                    size="sm"
+                    isIconOnly
                     className={materialStyles.remove}
                     aria-label={`Quitar ${label}`}
                     title={`Quitar ${label}${material && !material.activo ? " (inactivo)" : ""}`}
@@ -152,7 +196,7 @@ export function MaterialesPerfilPicker({
                   >
                     <XIcon aria-hidden />
                   </Button>
-                </Badge>
+                </Chip>
               </li>
             );
           })}
@@ -290,13 +334,15 @@ export function PerfilesOperativosEditor({
     );
   }
   return (
-    <div className="maq-perfiles">
+    <div className={`${styles["maq-perfiles"]}`}>
       {perfiles.length === 0 ? (
-        <p className="maq-perfiles-vacio">Sin perfiles. Agregá al menos uno.</p>
+        <p className={`${styles["maq-perfiles-vacio"]}`}>
+          Sin perfiles. Agregá al menos uno.
+        </p>
       ) : (
-        <div className="maq-perfiles-scroll">
+        <div className={`${styles["maq-perfiles-scroll"]}`}>
           <table
-            className={`maq-perfiles-tabla ${form.plantilla === "impresora_laser" ? "laser" : ""}`}
+            className={`${styles["maq-perfiles-tabla"]} ${form.plantilla === "impresora_laser" ? "laser" : ""}`}
           >
             <thead>
               <tr>
@@ -342,29 +388,29 @@ export function PerfilesOperativosEditor({
                   <tr key={perfil.uiKey}>
                     {conColumnaTipo ? (
                       <td className="tipo">
-                        <select
+                        <SelectField
                           value={perfil.tipoPerfil}
                           aria-label={`Tipo del perfil ${perfil.nombre || idx + 1}`}
-                          onChange={(e) => {
+                          onChange={(value) => {
                             const next = normalizePerfilTypeForTemplate(
                               cleanPerfilDetailsForType(
                                 setPerfilFieldValue(
                                   perfil,
                                   "tipoPerfil",
-                                  e.target.value || getDefaultProfileType(form),
+                                  value || getDefaultProfileType(form),
                                 ),
                               ),
                               form,
                             );
                             updatePerfil(perfil.uiKey, next);
                           }}
-                        >
-                          {allowedProfileTypeItems.map((item) => (
-                            <option key={item.value} value={item.value}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
+                          options={[
+                            ...(allowedProfileTypeItems.map((item) => ({
+                              value: item.value,
+                              label: item.label,
+                            })) ?? []),
+                          ]}
+                        />
                       </td>
                     ) : null}
                     {visibleFields.map((field) => {
@@ -463,35 +509,31 @@ export function PerfilesOperativosEditor({
                         {perfil.tipoPerfil === "corte" ? (
                           <span className="na">—</span>
                         ) : (
-                          <Tooltip>
-                            <TooltipTrigger
-                              render={(props) => (
-                                <Button
-                                  {...props}
-                                  type="button"
-                                  variant="outline"
-                                  size="icon-sm"
-                                  className={`maq-perfiles-tinta-btn ${cantidadTintas > 0 ? "ok" : ""}`}
-                                  aria-label={`Configurar tintas de ${perfil.nombre || `perfil ${idx + 1}`}`}
-                                  onClick={() => setTintasDeUiKey(perfil.uiKey)}
-                                >
-                                  <Settings2Icon aria-hidden />
-                                  <span className="punto" aria-hidden />
-                                </Button>
-                              )}
-                            />
-                            <TooltipContent>
-                              {cantidadTintas > 0
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            isIconOnly
+                            className={`${styles["maq-perfiles-tinta-btn"]} ${cantidadTintas > 0 ? "ok" : ""}`}
+                            aria-label={`Configurar tintas de ${perfil.nombre || `perfil ${idx + 1}`}`}
+                            title={
+                              cantidadTintas > 0
                                 ? `Configurar tintas · ${cantidadTintas} vinculada${cantidadTintas === 1 ? "" : "s"}`
-                                : "Configurar tintas"}
-                            </TooltipContent>
-                          </Tooltip>
+                                : "Configurar tintas"
+                            }
+                            onPress={() => setTintasDeUiKey(perfil.uiKey)}
+                          >
+                            <Settings2Icon aria-hidden />
+                            <span className="punto" aria-hidden />
+                          </Button>
                         )}
                       </td>
                     ) : null}
                     <td className="acciones">
-                      <span className="maq-perfiles-acciones">
-                        <button
+                      <span className={`${styles["maq-perfiles-acciones"]}`}>
+                        <Button
+                          variant="ghost"
+                          isIconOnly
                           type="button"
                           className="dup"
                           title="Duplicar perfil"
@@ -499,8 +541,10 @@ export function PerfilesOperativosEditor({
                           onClick={() => onDuplicar(perfil.uiKey)}
                         >
                           <CopyIcon />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          isIconOnly
                           type="button"
                           className="del"
                           title="Eliminar perfil"
@@ -508,7 +552,7 @@ export function PerfilesOperativosEditor({
                           onClick={() => setPerfilAEliminar(perfil)}
                         >
                           <XIcon />
-                        </button>
+                        </Button>
                       </span>
                     </td>
                   </tr>
@@ -519,14 +563,15 @@ export function PerfilesOperativosEditor({
         </div>
       )}
 
-      <button
+      <Button
+        variant="outline"
         type="button"
-        className="maq-btn maq-perfiles-agregar"
+        className={`${styles["maq-btn"]} ${styles["maq-perfiles-agregar"]}`}
         onClick={onAgregar}
       >
         <PlusIcon />
         Agregar perfil
-      </button>
+      </Button>
 
       {perfilTintas ? (
         <PerfilTintasModal
@@ -539,22 +584,30 @@ export function PerfilesOperativosEditor({
         />
       ) : null}
 
-      <ConfirmacionDestructiva
-        open={perfilAEliminar !== null}
+      <FormDialog
+        isOpen={perfilAEliminar !== null}
         onOpenChange={(open) => {
           if (!open) setPerfilAEliminar(null);
         }}
-        titulo="Eliminar perfil operativo"
-        descripcion={`¿Eliminar "${perfilAEliminar?.nombre || "este perfil"}"? También se quitarán sus consumibles vinculados al guardar.`}
-        nombreItem={perfilAEliminar?.nombre}
-        requiereTipear={false}
-        accionLabel="Eliminar perfil"
-        onConfirmar={() => {
-          if (!perfilAEliminar) return;
-          onEliminar(perfilAEliminar.uiKey);
-          setPerfilAEliminar(null);
-        }}
-      />
+        title="Eliminar perfil operativo"
+        description={`¿Eliminar "${perfilAEliminar?.nombre || "este perfil"}"? También se quitarán sus consumibles vinculados al guardar.`}
+      >
+        <Modal.Footer className={styles.modalFooter}>
+          <Button variant="outline" onPress={() => setPerfilAEliminar(null)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onPress={() => {
+              if (!perfilAEliminar) return;
+              onEliminar(perfilAEliminar.uiKey);
+              setPerfilAEliminar(null);
+            }}
+          >
+            Eliminar perfil
+          </Button>
+        </Modal.Footer>
+      </FormDialog>
     </div>
   );
 }

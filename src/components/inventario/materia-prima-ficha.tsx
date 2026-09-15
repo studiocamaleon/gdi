@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
-  ChevronDownIcon,
+  LayersIcon,
+  DollarSignIcon,
+  FileTextIcon,
   CirclePlusIcon,
   HistoryIcon,
   InfoIcon,
@@ -48,24 +50,24 @@ import {
 } from "@/lib/unidades";
 import { convertFlexibleRollUnitPrice } from "@/lib/unidades-derivadas";
 import type { ProveedorOpcion } from "@/lib/proveedores";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Chip,
+  Input,
+  Switch,
+  Tabs,
+  TextArea as Textarea,
+  Tooltip,
+} from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { SelectField } from "@/components/design-system/select-field";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { useDesignScope } from "@/components/design-system/appearance";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { MaterialMultiSelect } from "./material-multi-select";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import styles from "./materiales.module.css";
 import {
   Table,
   TableBody,
@@ -74,13 +76,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { formatearMoneda, numeroMoneda, type Moneda } from "@/lib/moneda";
 import { MoneyInput } from "@/components/ui/money-input";
 import {
@@ -712,6 +707,7 @@ export function MateriaPrimaFicha({
   maquinas,
 }: MateriaPrimaFichaProps) {
   const { moneda } = useConfigRegional();
+  const scope = useDesignScope();
   const { fechaNumerica, hora } = useFecha();
   const formatFechaCorta = (value: string) =>
     `${fechaNumerica(value)} ${hora(value)}`;
@@ -750,15 +746,6 @@ export function MateriaPrimaFicha({
     form.subfamilia,
   );
   const unidadStockLabel = getLabel(unidadMateriaPrimaItems, form.unidadStock);
-  const unidadCompraLabel = getLabel(
-    unidadMateriaPrimaItems,
-    form.unidadCompra,
-  );
-  const proveedorLabelById = React.useMemo(
-    () =>
-      new Map(proveedores.map((proveedor) => [proveedor.id, proveedor.nombre])),
-    [proveedores],
-  );
   const maquinaLabelById = React.useMemo(
     () => new Map(maquinas.map((maquina) => [maquina.id, maquina.nombre])),
     [maquinas],
@@ -1134,1159 +1121,995 @@ export function MateriaPrimaFicha({
   };
 
   return (
-    <section className="flex-1 min-h-0 space-y-6 overflow-y-auto p-4 md:p-6">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <Link
-                href="/inventario/materias-primas"
-                className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeftIcon className="size-4" />
-                Volver al catálogo
-              </Link>
-              <CardTitle className="text-2xl">
-                {form.nombre || "Materia prima"}
-              </CardTitle>
-              <div className="text-xs text-muted-foreground">
-                Canónico:{" "}
-                {materiaPrima.canonicalMaterialName ??
-                  "Personalizado por tenant"}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={save}
-                loading={isSaving}
-                loadingText="Guardando..."
-                disabled={!hasChanges}
-              >
-                <SaveIcon className="size-4" />
-                Guardar cambios
-              </Button>
-            </div>
+    <section
+      data-ui="heroui"
+      className={`${theme.theme} ${listPage.page} ${styles.page} ${styles.ficha}`}
+    >
+      <Link href="/inventario/materias-primas" className={styles.backLink}>
+        <ArrowLeftIcon size={14} /> Materiales
+      </Link>
+      <header className={listPage.header}>
+        <div>
+          <h1>{form.nombre || "Materia prima"}</h1>
+          <p className={listPage.subtitle}>
+            Canónico:{" "}
+            {materiaPrima.canonicalMaterialName ?? "Personalizado por tenant"}
+          </p>
+          <div className={styles.metadata}>
+            <span>{form.codigo}</span>
+            <Chip size="sm" variant="soft">
+              {familiaLabel}
+            </Chip>
+            <Chip size="sm" variant="soft">
+              {subfamiliaLabel}
+            </Chip>
           </div>
-        </CardHeader>
-      </Card>
-
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
+        </div>
+        <div className={styles.headerActions}>
+          {hasChanges && (
+            <span className={styles.unsaved}>Cambios sin guardar</span>
+          )}
+          <ActionButton
+            onPress={save}
+            isPending={isSaving}
+            isDisabled={!hasChanges || isSaving}
           >
-            <div className="flex items-center justify-between gap-3 border-b px-3 py-2 md:px-4">
-              <TabsList
-                variant="line"
-                className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-none border-0 bg-transparent p-0"
-              >
-                <TabsTrigger
-                  className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                  value="datos-base"
-                >
-                  Datos generales
-                </TabsTrigger>
-                <TabsTrigger
-                  className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                  value="opciones-variantes"
-                >
-                  Variantes
-                </TabsTrigger>
-                <TabsTrigger
-                  className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                  value="precios"
-                >
-                  Precios
-                </TabsTrigger>
-                <TabsTrigger
-                  className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                  value="inventario"
-                >
-                  Inventario
-                </TabsTrigger>
-                <TabsTrigger
-                  className="shrink-0 cursor-pointer rounded-none px-4 py-3 text-sm font-medium transition-colors hover:text-foreground data-active:text-foreground after:!bottom-[1px] after:!h-1 after:!bg-primary after:opacity-0 hover:after:!opacity-70 data-active:after:!opacity-100"
-                  value="historial"
-                >
-                  Historial
-                </TabsTrigger>
-              </TabsList>
-              <div className="flex items-center gap-2 rounded-lg border px-3 py-2">
-                <span className="text-xs text-muted-foreground">Estado</span>
-                <Switch
-                  checked={form.activo}
-                  onCheckedChange={(checked) =>
-                    setForm((prev) => ({ ...prev, activo: checked }))
+            <SaveIcon size={16} />
+            {isSaving ? "Guardando…" : "Guardar cambios"}
+          </ActionButton>
+        </div>
+      </header>
+      <Tabs
+        selectedKey={activeTab}
+        onSelectionChange={(key) => setActiveTab(String(key))}
+        className={styles.tabsRoot}
+      >
+        <div className={styles.tabsBar}>
+          <NavigationTabList
+            label="Ficha del material"
+            items={[
+              {
+                id: "datos-base",
+                label: "Datos generales",
+                icon: <FileTextIcon size={16} />,
+              },
+              {
+                id: "opciones-variantes",
+                label: "Variantes",
+                icon: <LayersIcon size={16} />,
+                count: form.variantes.length,
+              },
+              {
+                id: "precios",
+                label: "Precios",
+                icon: <DollarSignIcon size={16} />,
+              },
+              {
+                id: "inventario",
+                label: "Inventario",
+                icon: <PackageIcon size={16} />,
+              },
+              {
+                id: "historial",
+                label: "Historial",
+                icon: <HistoryIcon size={16} />,
+              },
+            ]}
+          />
+          <div className={styles.activeToggle}>
+            <span>{form.activo ? "Material activo" : "Material inactivo"}</span>
+            <Switch
+              size="sm"
+              aria-label="Material activo"
+              isSelected={form.activo}
+              onChange={(checked) =>
+                setForm((prev) => ({ ...prev, activo: checked }))
+              }
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
+            </Switch>
+          </div>
+        </div>
+
+        <Tabs.Panel id="datos-base" className={styles.tabPanel}>
+          <FieldGroup className={styles.formFields}>
+            <div className={styles.formGrid}>
+              <Field>
+                <FieldLabel htmlFor="material-codigo">Código</FieldLabel>
+                <Input
+                  id="material-codigo"
+                  value={form.codigo}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      codigo: event.target.value,
+                    }))
                   }
                 />
-              </div>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="material-nombre">Nombre</FieldLabel>
+                <Input
+                  id="material-nombre"
+                  value={form.nombre}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      nombre: event.target.value,
+                    }))
+                  }
+                />
+              </Field>
             </div>
 
-            <TabsContent value="datos-base" className="m-0 p-4 md:p-6">
-              <FieldGroup className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Código</FieldLabel>
-                    <Input
-                      value={form.codigo}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          codigo: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel>Nombre</FieldLabel>
-                    <Input
-                      value={form.nombre}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          nombre: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                </div>
+            <Field>
+              <FieldLabel htmlFor="material-descripcion">
+                Descripción
+              </FieldLabel>
+              <Textarea
+                id="material-descripcion"
+                value={form.descripcion}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    descripcion: event.target.value,
+                  }))
+                }
+              />
+            </Field>
 
-                <Field>
-                  <FieldLabel>Descripción</FieldLabel>
-                  <Textarea
-                    value={form.descripcion}
-                    onChange={(event) =>
+            <div className={styles.formGrid}>
+              <Field>
+                <FieldLabel>Familia</FieldLabel>
+                <SelectField
+                  value={form.familia}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      familia: value as FamiliaMateriaPrima,
+                    }))
+                  }
+                  aria-label="Familia"
+                  options={familiaMateriaPrimaItems}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel>Subfamilia</FieldLabel>
+                <SelectField
+                  value={form.subfamilia}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      subfamilia: value as SubfamiliaMateriaPrima,
+                    }))
+                  }
+                  aria-label="Subfamilia"
+                  options={subfamiliaMateriaPrimaItems}
+                />
+              </Field>
+            </div>
+
+            <div className={styles.formGrid}>
+              <Field>
+                <FieldLabel>Unidad de uso</FieldLabel>
+                <SelectField
+                  value={form.unidadStock}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      unidadStock: value as UnidadMateriaPrima,
+                    }))
+                  }
+                  aria-label="Unidad de uso"
+                  options={unidadMateriaPrimaItems}
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Unidad de compra</FieldLabel>
+                <SelectField
+                  value={form.unidadCompra}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      unidadCompra: value as UnidadMateriaPrima,
+                    }))
+                  }
+                  aria-label="Unidad de compra"
+                  options={unidadMateriaPrimaItems}
+                />
+              </Field>
+            </div>
+
+            <div className={styles.formGrid}>
+              <Field>
+                <FieldLabel>Disponible como consumible</FieldLabel>
+                <div className={styles.switchBox}>
+                  <Switch
+                    size="sm"
+                    aria-label="Disponible como consumible"
+                    isSelected={form.esConsumible}
+                    isDisabled={templateAvailability.lockEsConsumible}
+                    onChange={(checked) =>
                       setForm((prev) => ({
                         ...prev,
-                        descripcion: event.target.value,
+                        esConsumible: checked,
                       }))
                     }
-                  />
-                </Field>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Familia</FieldLabel>
-                    <Select
-                      value={form.familia}
-                      onValueChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          familia: value as FamiliaMateriaPrima,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>{familiaLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {familiaMateriaPrimaItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-
-                  <Field>
-                    <FieldLabel>Subfamilia</FieldLabel>
-                    <Select
-                      value={form.subfamilia}
-                      onValueChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          subfamilia: value as SubfamiliaMateriaPrima,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>{subfamiliaLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subfamiliaMateriaPrimaItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Content>
+                  </Switch>
                 </div>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Unidad de uso</FieldLabel>
-                    <Select
-                      value={form.unidadStock}
-                      onValueChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          unidadStock: value as UnidadMateriaPrima,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>{unidadStockLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {unidadMateriaPrimaItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Unidad de compra</FieldLabel>
-                    <Select
-                      value={form.unidadCompra}
-                      onValueChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          unidadCompra: value as UnidadMateriaPrima,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>{unidadCompraLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {unidadMateriaPrimaItems.map((item) => (
-                          <SelectItem key={item.value} value={item.value}>
-                            {item.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
+              </Field>
+              <Field>
+                <FieldLabel>Disponible como repuesto</FieldLabel>
+                <div className={styles.switchBox}>
+                  <Switch
+                    size="sm"
+                    aria-label="Disponible como repuesto"
+                    isSelected={form.esRepuesto}
+                    isDisabled={templateAvailability.lockEsRepuesto}
+                    onChange={(checked) =>
+                      setForm((prev) => ({ ...prev, esRepuesto: checked }))
+                    }
+                  >
+                    <Switch.Content>
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch.Content>
+                  </Switch>
                 </div>
+              </Field>
+            </div>
+          </FieldGroup>
+        </Tabs.Panel>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field>
-                    <FieldLabel>Disponible como consumible</FieldLabel>
-                    <div className="flex h-10 items-center justify-end rounded-md border px-3">
-                      <Switch
-                        checked={form.esConsumible}
-                        disabled={templateAvailability.lockEsConsumible}
-                        onCheckedChange={(checked) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            esConsumible: checked,
-                          }))
-                        }
-                      />
-                    </div>
-                  </Field>
-                  <Field>
-                    <FieldLabel>Disponible como repuesto</FieldLabel>
-                    <div className="flex h-10 items-center justify-end rounded-md border px-3">
-                      <Switch
-                        checked={form.esRepuesto}
-                        disabled={templateAvailability.lockEsRepuesto}
-                        onCheckedChange={(checked) =>
-                          setForm((prev) => ({ ...prev, esRepuesto: checked }))
-                        }
-                      />
-                    </div>
-                  </Field>
-                </div>
-              </FieldGroup>
-            </TabsContent>
-
-            <TabsContent value="opciones-variantes" className="m-0 p-4 md:p-6">
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold">
-                  {form.nombre || "Variantes"}
-                </h4>
-                {showLaserWearRecommendation ? (
-                  <div className="rounded-md border border-amber-300/70 bg-amber-50 p-3 text-sm">
-                    <div className="flex items-start gap-2">
-                      <InfoIcon className="mt-0.5 size-4 text-amber-700" />
-                      <div className="space-y-1 text-amber-900">
-                        <p className="font-medium">
-                          Recomendación para impresión láser
-                        </p>
-                        <p>
-                          En repuestos de unidad de imagen
-                          {hasLaserImageUnitComponents
-                            ? " (tambor OPC, unidad reveladora, unidad de carga y cuchilla de limpieza)"
-                            : ""}{" "}
-                          la vida útil real puede caer hasta un 50% respecto del
-                          rendimiento estimado por el fabricante cuando se
-                          trabaja con papeles de alto gramaje.
-                        </p>
-                        <p>
-                          Sugerencia: si el fabricante declara 100.000 copias,
-                          evaluar cargar 50.000 como referencia base para costeo
-                          conservador.
-                        </p>
-                      </div>
-                    </div>
+        <Tabs.Panel id="opciones-variantes" className={styles.tabPanel}>
+          <div className="flex flex-col gap-4">
+            <h4 className="text-sm font-semibold">
+              {form.nombre || "Variantes"}
+            </h4>
+            {showLaserWearRecommendation ? (
+              <div className={styles.warning}>
+                <div className="flex items-start gap-2">
+                  <InfoIcon className="mt-0.5 size-4 shrink-0" />
+                  <div className="flex flex-col gap-1">
+                    <p className="font-medium">
+                      Recomendación para impresión láser
+                    </p>
+                    <p>
+                      En repuestos de unidad de imagen
+                      {hasLaserImageUnitComponents
+                        ? " (tambor OPC, unidad reveladora, unidad de carga y cuchilla de limpieza)"
+                        : ""}{" "}
+                      la vida útil real puede caer hasta un 50% respecto del
+                      rendimiento estimado por el fabricante cuando se trabaja
+                      con papeles de alto gramaje.
+                    </p>
+                    <p>
+                      Sugerencia: si el fabricante declara 100.000 copias,
+                      evaluar cargar 50.000 como referencia base para costeo
+                      conservador.
+                    </p>
                   </div>
-                ) : null}
+                </div>
+              </div>
+            ) : null}
 
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {varianteColumns.map((key) => (
-                          <TableHead key={key}>
-                            {(() => {
-                              const field = templateFieldByKey.get(key);
-                              const conversion = displayUnitFactor(field);
-                              const unit = conversion
-                                ? { symbol: conversion.symbol }
-                                : getUnitDefinition(
-                                    field?.unit as unknown as Parameters<
-                                      typeof getUnitDefinition
-                                    >[0],
-                                  );
-                              const label =
-                                field?.label ?? formatFieldLabel(key);
-                              const tooltipText =
-                                key === "vidaUtilReferencia"
-                                  ? "Vida útil esperada del repuesto en la unidad seleccionada."
-                                  : key === "cantidadPorRecambio"
-                                    ? "Cantidad de unidades que se reemplazan en cada cambio."
-                                    : "";
-                              return (
-                                <div className="inline-flex items-center gap-1">
-                                  <span>
-                                    {unit ? `${label} (${unit.symbol})` : label}
-                                  </span>
-                                  {tooltipText ? (
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <InfoIcon className="size-3.5 text-muted-foreground" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        {tooltipText}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : null}
-                                </div>
+            <div className={styles.tableFrame}>
+              <Table className={styles.table}>
+                <TableHeader>
+                  <TableRow>
+                    {varianteColumns.map((key) => (
+                      <TableHead key={key}>
+                        {(() => {
+                          const field = templateFieldByKey.get(key);
+                          const conversion = displayUnitFactor(field);
+                          const unit = conversion
+                            ? { symbol: conversion.symbol }
+                            : getUnitDefinition(
+                                field?.unit as unknown as Parameters<
+                                  typeof getUnitDefinition
+                                >[0],
                               );
-                            })()}
-                          </TableHead>
-                        ))}
-                        <TableHead>Activa</TableHead>
-                        <TableHead className="text-right">Acción</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {form.variantes.map((variante) => (
-                        <TableRow key={variante.id}>
-                          {varianteColumns.map((key) => (
-                            <TableCell key={`${variante.id}-${key}`}>
-                              {SHEET_LIKE_TEMPLATE_IDS.has(
-                                template?.id ?? "",
-                              ) && key === "formatoComercial" ? (
-                                (() => {
-                                  const currentValue = getVarianteAtributo(
-                                    variante,
-                                    key,
-                                  );
-                                  const currentPreset =
-                                    findFormatoHojaPreset(variante);
-                                  const isPreset = Boolean(currentPreset);
-                                  const isCustomMode =
-                                    customFormatoModeByVariante[variante.id] ===
-                                    true;
+                          const label = field?.label ?? formatFieldLabel(key);
+                          const tooltipText =
+                            key === "vidaUtilReferencia"
+                              ? "Vida útil esperada del repuesto en la unidad seleccionada."
+                              : key === "cantidadPorRecambio"
+                                ? "Cantidad de unidades que se reemplazan en cada cambio."
+                                : "";
+                          return (
+                            <div className="inline-flex items-center gap-1">
+                              <span>
+                                {unit ? `${label} (${unit.symbol})` : label}
+                              </span>
+                              {tooltipText ? (
+                                <Tooltip>
+                                  <ActionButton
+                                    variant="ghost"
+                                    isIconOnly
+                                    aria-label="Más información"
+                                  >
+                                    <InfoIcon className="size-3.5 text-muted-foreground" />
+                                  </ActionButton>
+                                  <Tooltip.Content
+                                    {...scope}
+                                    className={theme.theme}
+                                  >
+                                    {tooltipText}
+                                  </Tooltip.Content>
+                                </Tooltip>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
+                      </TableHead>
+                    ))}
+                    <TableHead>Activa</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {form.variantes.map((variante) => (
+                    <TableRow key={variante.id}>
+                      {varianteColumns.map((key) => (
+                        <TableCell key={`${variante.id}-${key}`}>
+                          {SHEET_LIKE_TEMPLATE_IDS.has(template?.id ?? "") &&
+                          key === "formatoComercial" ? (
+                            (() => {
+                              const currentValue = getVarianteAtributo(
+                                variante,
+                                key,
+                              );
+                              const currentPreset =
+                                findFormatoHojaPreset(variante);
+                              const isPreset = Boolean(currentPreset);
+                              const isCustomMode =
+                                customFormatoModeByVariante[variante.id] ===
+                                true;
 
-                                  if (isCustomMode) {
-                                    return (
-                                      <div className="flex items-center gap-2">
-                                        <Input
-                                          placeholder="Nombre personalizado"
-                                          value={currentValue}
-                                          onChange={(event) =>
-                                            setVarianteAtributo(
-                                              variante.id,
-                                              key,
-                                              event.target.value,
-                                            )
-                                          }
-                                        />
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() =>
-                                            setCustomFormatoModeByVariante(
-                                              (prev) => ({
-                                                ...prev,
-                                                [variante.id]: false,
-                                              }),
-                                            )
-                                          }
-                                        >
-                                          Lista
-                                        </Button>
-                                      </div>
-                                    );
-                                  }
-
-                                  return (
-                                    <Select
-                                      value={currentPreset?.id ?? "__none__"}
-                                      onValueChange={(value) => {
-                                        const next = value ?? "__none__";
-                                        if (next === "__custom__") {
-                                          setCustomFormatoModeByVariante(
-                                            (prev) => ({
-                                              ...prev,
-                                              [variante.id]: true,
-                                            }),
-                                          );
-                                          if (isPreset) {
-                                            setVarianteAtributo(
-                                              variante.id,
-                                              key,
-                                              "",
-                                            );
-                                          }
-                                          return;
-                                        }
-                                        if (next === "__none__") {
-                                          return;
-                                        }
+                              if (isCustomMode) {
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      aria-label="Formato comercial personalizado"
+                                      placeholder="Nombre personalizado"
+                                      value={currentValue}
+                                      onChange={(event) =>
+                                        setVarianteAtributo(
+                                          variante.id,
+                                          key,
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <ActionButton
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onPress={() =>
                                         setCustomFormatoModeByVariante(
                                           (prev) => ({
                                             ...prev,
                                             [variante.id]: false,
                                           }),
-                                        );
-                                        setFormatoHojaPreset(variante.id, next);
-                                      }}
-                                    >
-                                      <SelectTrigger>
-                                        <SelectValue>
-                                          {currentPreset?.nombre ??
-                                            "Seleccionar formato"}
-                                        </SelectValue>
-                                      </SelectTrigger>
-                                      <SelectContent
-                                        align="end"
-                                        className="!w-auto min-w-[220px]"
-                                      >
-                                        <SelectItem value="__none__">
-                                          <span className="ml-auto w-full text-right">
-                                            Seleccionar formato
-                                          </span>
-                                        </SelectItem>
-                                        {SUSTRATO_HOJA_FORMATOS_PRESET.map(
-                                          (formato) => (
-                                            <SelectItem
-                                              key={formato.id}
-                                              value={formato.id}
-                                            >
-                                              <span className="ml-auto w-full text-right">
-                                                {formato.nombre} (
-                                                {formato.ancho} x {formato.alto}{" "}
-                                                cm)
-                                              </span>
-                                            </SelectItem>
-                                          ),
-                                        )}
-                                        <SelectItem value="__custom__">
-                                          <span className="ml-auto w-full text-right">
-                                            Personalizado
-                                          </span>
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  );
-                                })()
-                              ) : key === "maquinasCompatibles" ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-sm">
-                                    <span>
-                                      {(() => {
-                                        const count = getVarianteAtributoLista(
-                                          variante,
-                                          key,
-                                        ).length;
-                                        return count > 0
-                                          ? `${count} maquina${count > 1 ? "s" : ""} seleccionada${count > 1 ? "s" : ""}`
-                                          : "Seleccionar maquinas";
-                                      })()}
-                                    </span>
-                                    <ChevronDownIcon className="size-4 text-muted-foreground" />
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent className="w-[360px]">
-                                    {maquinas.map((maquina) => {
-                                      const selectedValues =
-                                        getVarianteAtributoLista(variante, key);
-                                      const isChecked = selectedValues.includes(
-                                        maquina.id,
-                                      );
-                                      return (
-                                        <DropdownMenuCheckboxItem
-                                          key={`${key}-${maquina.id}`}
-                                          checked={isChecked}
-                                          onCheckedChange={(checked) => {
-                                            const nextValues = checked
-                                              ? [...selectedValues, maquina.id]
-                                              : selectedValues.filter(
-                                                  (item) => item !== maquina.id,
-                                                );
-                                            setVarianteAtributoLista(
-                                              variante.id,
-                                              key,
-                                              nextValues,
-                                            );
-                                          }}
-                                        >
-                                          {maquina.nombre}
-                                        </DropdownMenuCheckboxItem>
-                                      );
-                                    })}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              ) : templateFieldByKey.get(key)?.options
-                                  ?.length ? (
-                                key === "plantillasCompatibles" ? (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger className="flex h-9 w-full items-center justify-between rounded-md border px-3 text-left text-sm">
-                                      <span>
-                                        {(() => {
-                                          const count =
-                                            getVarianteAtributoLista(
-                                              variante,
-                                              key,
-                                            ).length;
-                                          return count > 0
-                                            ? `${count} plantilla${count > 1 ? "s" : ""} seleccionada${count > 1 ? "s" : ""}`
-                                            : "Seleccionar plantillas";
-                                        })()}
-                                      </span>
-                                      <ChevronDownIcon className="size-4 text-muted-foreground" />
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="scrollbar-visible max-h-[260px] w-[320px] overflow-y-scroll">
-                                      {(
-                                        templateFieldByKey.get(key)?.options ??
-                                        []
-                                      ).map((option) => {
-                                        const selectedValues =
-                                          getVarianteAtributoLista(
-                                            variante,
-                                            key,
-                                          );
-                                        const isChecked =
-                                          selectedValues.includes(option);
-                                        return (
-                                          <DropdownMenuCheckboxItem
-                                            key={`${key}-${option}`}
-                                            checked={isChecked}
-                                            onCheckedChange={(checked) => {
-                                              const nextValues = checked
-                                                ? [...selectedValues, option]
-                                                : selectedValues.filter(
-                                                    (item) => item !== option,
-                                                  );
-                                              setVarianteAtributoLista(
-                                                variante.id,
-                                                key,
-                                                nextValues,
-                                              );
-                                              if (
-                                                key === "plantillasCompatibles"
-                                              ) {
-                                                const currentTipo =
-                                                  getVarianteAtributo(
-                                                    variante,
-                                                    "tipoComponenteDesgaste",
-                                                  )
-                                                    .trim()
-                                                    .toLowerCase();
-                                                if (currentTipo.length === 0) {
-                                                  return;
-                                                }
-                                                const availableTipos =
-                                                  getReplacementComponentOptionsForTemplates(
-                                                    nextValues,
-                                                  );
-                                                if (
-                                                  !availableTipos.some(
-                                                    (item) =>
-                                                      item === currentTipo,
-                                                  )
-                                                ) {
-                                                  setVarianteAtributo(
-                                                    variante.id,
-                                                    "tipoComponenteDesgaste",
-                                                    "",
-                                                  );
-                                                }
-                                              }
-                                            }}
-                                          >
-                                            {getTemplateOptionLabel(
-                                              key,
-                                              option,
-                                            )}
-                                          </DropdownMenuCheckboxItem>
-                                        );
-                                      })}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                ) : (
-                                  (() => {
-                                    const dynamicOptions =
-                                      key === "tipoComponenteDesgaste"
-                                        ? getReplacementComponentOptionsForTemplates(
-                                            getVarianteAtributoLista(
-                                              variante,
-                                              "plantillasCompatibles",
-                                            ),
-                                          )
-                                        : (templateFieldByKey.get(key)
-                                            ?.options ?? []);
-                                    return (
-                                      <Select
-                                        value={
-                                          getVarianteAtributo(variante, key) ||
-                                          "__none__"
-                                        }
-                                        onValueChange={(value) =>
-                                          setVarianteAtributo(
-                                            variante.id,
-                                            key,
-                                            value === "__none__"
-                                              ? ""
-                                              : (value ?? ""),
-                                          )
-                                        }
-                                      >
-                                        <SelectTrigger>
-                                          {(() => {
-                                            const currentValue =
-                                              getVarianteAtributo(
-                                                variante,
-                                                key,
-                                              );
-                                            const currentLabel = currentValue
-                                              ? getTemplateOptionLabel(
-                                                  key,
-                                                  currentValue,
-                                                )
-                                              : "Seleccionar";
-                                            return (
-                                              <SelectValue>
-                                                {currentLabel}
-                                              </SelectValue>
-                                            );
-                                          })()}
-                                        </SelectTrigger>
-                                        <SelectContent
-                                          className={
-                                            key === "tipoComponenteDesgaste"
-                                              ? "min-w-[360px]"
-                                              : undefined
-                                          }
-                                        >
-                                          <SelectItem value="__none__">
-                                            Seleccionar
-                                          </SelectItem>
-                                          {dynamicOptions.map((option) => (
-                                            <SelectItem
-                                              key={`${key}-${option}`}
-                                              value={option}
-                                            >
-                                              {getTemplateOptionLabel(
-                                                key,
-                                                option,
-                                              )}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    );
-                                  })()
-                                )
-                              ) : (
-                                (() => {
-                                  const conversion = displayUnitFactor(
-                                    templateFieldByKey.get(key),
-                                  );
-                                  const raw = getVarianteAtributo(
-                                    variante,
-                                    key,
-                                  );
-                                  const shown =
-                                    conversion &&
-                                    raw.trim() !== "" &&
-                                    Number.isFinite(Number(raw))
-                                      ? String(Number(raw) * conversion.factor)
-                                      : raw;
-                                  return (
-                                    <Input
-                                      type="text"
-                                      inputMode={
-                                        templateFieldByKey.get(key)?.type ===
-                                        "number"
-                                          ? "decimal"
-                                          : undefined
+                                        )
                                       }
-                                      value={shown}
-                                      disabled={isSustratoHojaDimensionLocked(
-                                        variante,
-                                        key,
-                                      )}
-                                      onChange={(event) => {
-                                        const texto = event.target.value;
-                                        const numero = Number(
-                                          texto.replace(",", "."),
-                                        );
-                                        // Con unidad de display, lo tipeado se convierte a la
-                                        // canónica al guardar (cm → mm); texto no numérico pasa
-                                        // crudo para no comerse el tipeo.
+                                    >
+                                      Lista
+                                    </ActionButton>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <SelectField
+                                  value={currentPreset?.id ?? "__none__"}
+                                  onChange={(value) => {
+                                    const next = value ?? "__none__";
+                                    if (next === "__custom__") {
+                                      setCustomFormatoModeByVariante(
+                                        (prev) => ({
+                                          ...prev,
+                                          [variante.id]: true,
+                                        }),
+                                      );
+                                      if (isPreset) {
                                         setVarianteAtributo(
                                           variante.id,
                                           key,
-                                          conversion &&
-                                            texto.trim() !== "" &&
-                                            Number.isFinite(numero)
-                                            ? String(numero / conversion.factor)
-                                            : texto,
+                                          "",
                                         );
-                                      }}
-                                    />
-                                  );
-                                })()
-                              )}
-                            </TableCell>
-                          ))}
-                          <TableCell>
-                            <Switch
-                              checked={variante.activo}
-                              onCheckedChange={(checked) =>
-                                setVariante(variante.id, { activo: checked })
+                                      }
+                                      return;
+                                    }
+                                    if (next === "__none__") {
+                                      return;
+                                    }
+                                    setCustomFormatoModeByVariante((prev) => ({
+                                      ...prev,
+                                      [variante.id]: false,
+                                    }));
+                                    setFormatoHojaPreset(variante.id, next);
+                                  }}
+                                  aria-label="Formato comercial"
+                                  options={[
+                                    {
+                                      value: "__none__",
+                                      label: "Seleccionar formato",
+                                    },
+                                    ...SUSTRATO_HOJA_FORMATOS_PRESET.map(
+                                      (formato) => ({
+                                        value: formato.id,
+                                        label: `${formato.nombre} (${formato.ancho} x ${formato.alto} cm)`,
+                                      }),
+                                    ),
+                                    {
+                                      value: "__custom__",
+                                      label: "Personalizado",
+                                    },
+                                  ]}
+                                />
+                              );
+                            })()
+                          ) : key === "maquinasCompatibles" ? (
+                            <MaterialMultiSelect
+                              label="Máquinas compatibles"
+                              placeholder="Seleccionar máquinas"
+                              values={getVarianteAtributoLista(variante, key)}
+                              options={maquinas.map((maquina) => ({
+                                value: maquina.id,
+                                label: maquina.nombre,
+                              }))}
+                              onChange={(nextValues) =>
+                                setVarianteAtributoLista(
+                                  variante.id,
+                                  key,
+                                  nextValues,
+                                )
                               }
                             />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeVariante(variante.id)}
-                            >
-                              <TrashIcon className="size-4" />
-                              Quitar
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="sidebar"
-                    size="sm"
-                    onClick={addVariante}
-                  >
-                    <CirclePlusIcon className="size-4" />
-                    Agregar variante
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="precios" className="m-0 p-4 md:p-6">
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  El precio de referencia se define por variante y por unidad de
-                  uso ({unidadStockLabel}).
-                </p>
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Opciones</TableHead>
-                        <TableHead>Precio costo</TableHead>
-                        <TableHead>Proveedor</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {variantesPrecio.length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={4}
-                            className="text-muted-foreground"
-                          >
-                            Cargá dimensiones en Variantes para definir precios.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        variantesPrecio.map((variante) => (
-                          <TableRow key={variante.id}>
-                            <TableCell>
-                              {form.nombre || "Materia prima"}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap gap-1">
-                                {varianteColumns.map((key) => (
-                                  <span
-                                    key={`${variante.id}-opt-${key}`}
-                                    className="rounded border px-2 py-0.5 text-xs"
-                                  >
-                                    {templateFieldByKey.get(key)?.label ??
-                                      formatFieldLabel(key)}
-                                    :{" "}
-                                    {(() => {
-                                      const rawValue = getVarianteAtributo(
-                                        variante,
-                                        key,
-                                      );
-                                      if (key === "plantillasCompatibles") {
-                                        const values = getVarianteAtributoLista(
-                                          variante,
-                                          key,
-                                        );
-                                        return values.length > 0
-                                          ? values
-                                              .map((value) =>
-                                                getTemplateOptionLabel(
-                                                  key,
-                                                  value,
-                                                ),
-                                              )
-                                              .join(", ")
-                                          : "-";
-                                      }
-                                      if (key === "maquinasCompatibles") {
-                                        const values = getVarianteAtributoLista(
-                                          variante,
-                                          key,
-                                        );
-                                        return values.length > 0
-                                          ? values
-                                              .map(
-                                                (value) =>
-                                                  maquinaLabelById.get(value) ??
-                                                  value,
-                                              )
-                                              .join(", ")
-                                          : "-";
-                                      }
-                                      return rawValue
-                                        ? getTemplateOptionLabel(key, rawValue)
-                                        : "-";
-                                    })()}
-                                  </span>
-                                ))}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {(() => {
-                                const { unidadStock, unidadCompra } =
-                                  resolveVarianteUnits(
-                                    variante,
-                                    form.unidadStock,
-                                    form.unidadCompra,
+                          ) : templateFieldByKey.get(key)?.options?.length ? (
+                            key === "plantillasCompatibles" ? (
+                              <MaterialMultiSelect
+                                label="Plantillas compatibles"
+                                placeholder="Seleccionar plantillas"
+                                values={getVarianteAtributoLista(variante, key)}
+                                options={(
+                                  templateFieldByKey.get(key)?.options ?? []
+                                ).map((option) => ({
+                                  value: option,
+                                  label: getTemplateOptionLabel(key, option),
+                                }))}
+                                onChange={(nextValues) => {
+                                  setVarianteAtributoLista(
+                                    variante.id,
+                                    key,
+                                    nextValues,
                                   );
-                                const unidadCompraLabelVariante = getLabel(
-                                  unidadMateriaPrimaItems,
-                                  unidadCompra,
-                                );
-                                const unidadStockLabelVariante = getLabel(
-                                  unidadMateriaPrimaItems,
-                                  unidadStock,
-                                );
-                                const precioReferencia =
-                                  variante.precioReferencia ?? null;
-                                const canConvert =
-                                  typeof precioReferencia === "number" &&
-                                  Number.isFinite(precioReferencia) &&
-                                  precioReferencia > 0;
-                                const precioPorStock = canConvert
-                                  ? areUnitsCompatible(
-                                      unidadCompra,
-                                      unidadStock,
+                                  if (key === "plantillasCompatibles") {
+                                    const currentTipo = getVarianteAtributo(
+                                      variante,
+                                      "tipoComponenteDesgaste",
                                     )
-                                    ? convertUnitPrice(
-                                        precioReferencia as number,
-                                        unidadCompra,
-                                        unidadStock,
+                                      .trim()
+                                      .toLowerCase();
+                                    if (currentTipo.length === 0) {
+                                      return;
+                                    }
+                                    const availableTipos =
+                                      getReplacementComponentOptionsForTemplates(
+                                        nextValues,
+                                      );
+                                    if (
+                                      !availableTipos.some(
+                                        (item) => item === currentTipo,
                                       )
-                                    : convertFlexibleRollUnitPrice({
-                                        pricePerFromUnit:
-                                          precioReferencia as number,
-                                        from: unidadCompra,
-                                        to: unidadStock,
-                                        subfamilia: form.subfamilia,
-                                        attributes: parseJsonField(
-                                          variante.atributosVarianteTexto,
-                                          {},
+                                    ) {
+                                      setVarianteAtributo(
+                                        variante.id,
+                                        "tipoComponenteDesgaste",
+                                        "",
+                                      );
+                                    }
+                                  }
+                                }}
+                              />
+                            ) : (
+                              (() => {
+                                const dynamicOptions =
+                                  key === "tipoComponenteDesgaste"
+                                    ? getReplacementComponentOptionsForTemplates(
+                                        getVarianteAtributoLista(
+                                          variante,
+                                          "plantillasCompatibles",
                                         ),
-                                      })
-                                  : null;
-
+                                      )
+                                    : (templateFieldByKey.get(key)?.options ??
+                                      []);
                                 return (
-                                  <div className="space-y-1">
-                                    <div className="relative max-w-[260px]">
-                                      <MoneyInput
-                                        inputClassName="pr-20"
-                                        value={
-                                          variante.precioReferenciaTexto ??
-                                          (variante.precioReferencia != null
-                                            ? numeroMoneda(
-                                                variante.precioReferencia,
-                                                moneda,
-                                              )
-                                            : "")
-                                        }
-                                        moneda={moneda}
-                                        ariaLabel="Precio de costo por unidad de compra"
-                                        onValueChange={(texto, numero) =>
-                                          setVariante(variante.id, {
-                                            precioReferenciaTexto: texto,
-                                            precioReferencia:
-                                              numero ?? undefined,
-                                          })
-                                        }
-                                      />
-                                      <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
-                                        {unidadCompraLabelVariante}
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                      Precio cargado:{" "}
-                                      {typeof precioReferencia === "number" &&
-                                      Number.isFinite(precioReferencia)
-                                        ? formatCurrencyUnit(
-                                            precioReferencia,
-                                            unidadCompraLabelVariante,
+                                  <SelectField
+                                    value={
+                                      getVarianteAtributo(variante, key) ||
+                                      "__none__"
+                                    }
+                                    onChange={(value) =>
+                                      setVarianteAtributo(
+                                        variante.id,
+                                        key,
+                                        value === "__none__"
+                                          ? ""
+                                          : (value ?? ""),
+                                      )
+                                    }
+                                    aria-label={
+                                      templateFieldByKey.get(key)?.label ??
+                                      formatFieldLabel(key)
+                                    }
+                                    options={[
+                                      {
+                                        value: "__none__",
+                                        label: "Seleccionar",
+                                      },
+                                      ...dynamicOptions.map((option) => ({
+                                        value: option,
+                                        label: getTemplateOptionLabel(
+                                          key,
+                                          option,
+                                        ),
+                                      })),
+                                    ]}
+                                  />
+                                );
+                              })()
+                            )
+                          ) : (
+                            (() => {
+                              const conversion = displayUnitFactor(
+                                templateFieldByKey.get(key),
+                              );
+                              const raw = getVarianteAtributo(variante, key);
+                              const shown =
+                                conversion &&
+                                raw.trim() !== "" &&
+                                Number.isFinite(Number(raw))
+                                  ? String(Number(raw) * conversion.factor)
+                                  : raw;
+                              return (
+                                <Input
+                                  aria-label={
+                                    templateFieldByKey.get(key)?.label ??
+                                    formatFieldLabel(key)
+                                  }
+                                  type="text"
+                                  inputMode={
+                                    templateFieldByKey.get(key)?.type ===
+                                    "number"
+                                      ? "decimal"
+                                      : undefined
+                                  }
+                                  value={shown}
+                                  disabled={isSustratoHojaDimensionLocked(
+                                    variante,
+                                    key,
+                                  )}
+                                  onChange={(event) => {
+                                    const texto = event.target.value;
+                                    const numero = Number(
+                                      texto.replace(",", "."),
+                                    );
+                                    // Con unidad de display, lo tipeado se convierte a la
+                                    // canónica al guardar (cm → mm); texto no numérico pasa
+                                    // crudo para no comerse el tipeo.
+                                    setVarianteAtributo(
+                                      variante.id,
+                                      key,
+                                      conversion &&
+                                        texto.trim() !== "" &&
+                                        Number.isFinite(numero)
+                                        ? String(numero / conversion.factor)
+                                        : texto,
+                                    );
+                                  }}
+                                />
+                              );
+                            })()
+                          )}
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <Switch
+                          size="sm"
+                          aria-label="Variante activa"
+                          isSelected={variante.activo}
+                          onChange={(checked) =>
+                            setVariante(variante.id, { activo: checked })
+                          }
+                        >
+                          <Switch.Content>
+                            <Switch.Control>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                          </Switch.Content>
+                        </Switch>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <ActionButton
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onPress={() => removeVariante(variante.id)}
+                        >
+                          <TrashIcon className="size-4" />
+                          Quitar
+                        </ActionButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex justify-end">
+              <ActionButton
+                type="button"
+                variant="outline"
+                size="sm"
+                onPress={addVariante}
+              >
+                <CirclePlusIcon className="size-4" />
+                Agregar variante
+              </ActionButton>
+            </div>
+          </div>
+        </Tabs.Panel>
+
+        <Tabs.Panel id="precios" className={styles.tabPanel}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              El precio de referencia se define por variante y por unidad de uso
+              ({unidadStockLabel}).
+            </p>
+            <div className={styles.tableFrame}>
+              <Table className={styles.table}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Opciones</TableHead>
+                    <TableHead>Precio costo</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {variantesPrecio.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-muted-foreground">
+                        Cargá dimensiones en Variantes para definir precios.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    variantesPrecio.map((variante) => (
+                      <TableRow key={variante.id}>
+                        <TableCell>{form.nombre || "Materia prima"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {varianteColumns.map((key) => (
+                              <span
+                                key={`${variante.id}-opt-${key}`}
+                                className="rounded border px-2 py-0.5 text-xs"
+                              >
+                                {templateFieldByKey.get(key)?.label ??
+                                  formatFieldLabel(key)}
+                                :{" "}
+                                {(() => {
+                                  const rawValue = getVarianteAtributo(
+                                    variante,
+                                    key,
+                                  );
+                                  if (key === "plantillasCompatibles") {
+                                    const values = getVarianteAtributoLista(
+                                      variante,
+                                      key,
+                                    );
+                                    return values.length > 0
+                                      ? values
+                                          .map((value) =>
+                                            getTemplateOptionLabel(key, value),
+                                          )
+                                          .join(", ")
+                                      : "-";
+                                  }
+                                  if (key === "maquinasCompatibles") {
+                                    const values = getVarianteAtributoLista(
+                                      variante,
+                                      key,
+                                    );
+                                    return values.length > 0
+                                      ? values
+                                          .map(
+                                            (value) =>
+                                              maquinaLabelById.get(value) ??
+                                              value,
+                                          )
+                                          .join(", ")
+                                      : "-";
+                                  }
+                                  return rawValue
+                                    ? getTemplateOptionLabel(key, rawValue)
+                                    : "-";
+                                })()}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const { unidadStock, unidadCompra } =
+                              resolveVarianteUnits(
+                                variante,
+                                form.unidadStock,
+                                form.unidadCompra,
+                              );
+                            const unidadCompraLabelVariante = getLabel(
+                              unidadMateriaPrimaItems,
+                              unidadCompra,
+                            );
+                            const unidadStockLabelVariante = getLabel(
+                              unidadMateriaPrimaItems,
+                              unidadStock,
+                            );
+                            const precioReferencia =
+                              variante.precioReferencia ?? null;
+                            const canConvert =
+                              typeof precioReferencia === "number" &&
+                              Number.isFinite(precioReferencia) &&
+                              precioReferencia > 0;
+                            const precioPorStock = canConvert
+                              ? areUnitsCompatible(unidadCompra, unidadStock)
+                                ? convertUnitPrice(
+                                    precioReferencia as number,
+                                    unidadCompra,
+                                    unidadStock,
+                                  )
+                                : convertFlexibleRollUnitPrice({
+                                    pricePerFromUnit:
+                                      precioReferencia as number,
+                                    from: unidadCompra,
+                                    to: unidadStock,
+                                    subfamilia: form.subfamilia,
+                                    attributes: parseJsonField(
+                                      variante.atributosVarianteTexto,
+                                      {},
+                                    ),
+                                  })
+                              : null;
+
+                            return (
+                              <div className="flex flex-col gap-1">
+                                <div className="relative max-w-[260px]">
+                                  <MoneyInput
+                                    inputClassName="pr-20"
+                                    value={
+                                      variante.precioReferenciaTexto ??
+                                      (variante.precioReferencia != null
+                                        ? numeroMoneda(
+                                            variante.precioReferencia,
                                             moneda,
                                           )
-                                        : `Sin definir por ${unidadCompraLabelVariante}`}
-                                    </p>
-                                    {precioPorStock !== null &&
-                                    unidadCompra !== unidadStock ? (
-                                      <p className="text-xs text-muted-foreground">
-                                        Valor interno normalizado:{" "}
-                                        {formatCurrencyUnit(
-                                          precioPorStock,
-                                          unidadStockLabelVariante,
-                                          moneda,
-                                        )}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                );
-                              })()}
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={
-                                  variante.proveedorReferenciaId ?? "__none__"
-                                }
-                                onValueChange={(value) => {
-                                  const nextValue = value ?? "__none__";
-                                  setVariante(variante.id, {
-                                    proveedorReferenciaId:
-                                      nextValue === "__none__"
-                                        ? undefined
-                                        : nextValue,
-                                  });
-                                }}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue>
-                                    {variante.proveedorReferenciaId
-                                      ? (proveedorLabelById.get(
-                                          variante.proveedorReferenciaId,
-                                        ) ?? "Sin proveedor")
-                                      : "Sin proveedor"}
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">
-                                    Sin proveedor
-                                  </SelectItem>
-                                  {proveedores.map((proveedor) => (
-                                    <SelectItem
-                                      key={proveedor.id}
-                                      value={proveedor.id}
-                                    >
-                                      {proveedor.nombre}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="inventario" className="m-0 p-4 md:p-6">
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Stock total</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-2xl font-semibold">
-                      {number2Formatter.format(
-                        inventarioResumen.reduce(
-                          (acc, item) => acc + item.stockTotal,
-                          0,
-                        ),
-                      )}
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Valor stock</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-2xl font-semibold">
-                      {formatearMoneda(
-                        inventarioResumen.reduce(
-                          (acc, item) => acc + item.valorStock,
-                          0,
-                        ),
-                        moneda,
-                        { decimales: 2 },
-                      )}
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">
-                        Variantes con stock
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-2xl font-semibold">
-                      {
-                        inventarioResumen.filter((item) => item.stockTotal > 0)
-                          .length
-                      }
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Variante</TableHead>
-                        <TableHead className="text-right">
-                          Stock total
-                        </TableHead>
-                        <TableHead className="text-right">
-                          Costo promedio
-                        </TableHead>
-                        <TableHead className="text-right">
-                          Valor stock
-                        </TableHead>
-                        <TableHead className="text-right">Almacenes</TableHead>
-                        <TableHead>Último movimiento</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {inventarioLoading ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={7}
-                            className="text-muted-foreground"
-                          >
-                            Cargando inventario...
-                          </TableCell>
-                        </TableRow>
-                      ) : inventarioResumen.length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={7}
-                            className="text-muted-foreground"
-                          >
-                            Esta materia prima no tiene variantes definidas para
-                            inventario.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        inventarioResumen.map((item) => (
-                          <TableRow key={item.varianteId}>
-                            <TableCell>{item.varianteLabel}</TableCell>
-                            <TableCell className="text-right">
-                              {number2Formatter.format(item.stockTotal)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatearMoneda(item.costoPromedio, moneda, {
-                                decimales: 2,
-                              })}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatearMoneda(item.valorStock, moneda, {
-                                decimales: 2,
-                              })}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {item.almacenesConStock}
-                            </TableCell>
-                            <TableCell>
-                              {item.ultimoMovimiento
-                                ? `${getMovimientoTipoLabel(item.ultimoMovimiento.tipo)} · ${formatFechaCorta(
-                                    item.ultimoMovimiento.createdAt,
-                                  )}`
-                                : "Sin movimientos"}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    router.push("/inventario/centro-stock")
-                                  }
-                                >
-                                  <PackageIcon className="size-4" />
-                                  Centro stock
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    router.push("/inventario/movimientos")
-                                  }
-                                >
-                                  <HistoryIcon className="size-4" />
-                                  Historial
-                                </Button>
+                                        : "")
+                                    }
+                                    moneda={moneda}
+                                    ariaLabel="Precio de costo por unidad de compra"
+                                    onValueChange={(texto, numero) =>
+                                      setVariante(variante.id, {
+                                        precioReferenciaTexto: texto,
+                                        precioReferencia: numero ?? undefined,
+                                      })
+                                    }
+                                  />
+                                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
+                                    {unidadCompraLabelVariante}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Precio cargado:{" "}
+                                  {typeof precioReferencia === "number" &&
+                                  Number.isFinite(precioReferencia)
+                                    ? formatCurrencyUnit(
+                                        precioReferencia,
+                                        unidadCompraLabelVariante,
+                                        moneda,
+                                      )
+                                    : `Sin definir por ${unidadCompraLabelVariante}`}
+                                </p>
+                                {precioPorStock !== null &&
+                                unidadCompra !== unidadStock ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    Valor interno normalizado:{" "}
+                                    {formatCurrencyUnit(
+                                      precioPorStock,
+                                      unidadStockLabelVariante,
+                                      moneda,
+                                    )}
+                                  </p>
+                                ) : null}
                               </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </TabsContent>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <SelectField
+                            value={variante.proveedorReferenciaId ?? "__none__"}
+                            onChange={(value) => {
+                              const nextValue = value ?? "__none__";
+                              setVariante(variante.id, {
+                                proveedorReferenciaId:
+                                  nextValue === "__none__"
+                                    ? undefined
+                                    : nextValue,
+                              });
+                            }}
+                            aria-label="Proveedor de referencia"
+                            options={[
+                              { value: "__none__", label: "Sin proveedor" },
+                              ...proveedores.map((proveedor) => ({
+                                value: proveedor.id,
+                                label: proveedor.nombre,
+                              })),
+                            ]}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </Tabs.Panel>
 
-            <TabsContent value="historial" className="m-0 p-4 md:p-6">
-              <p className="text-sm text-muted-foreground">
-                Este tab queda reservado para auditoría de cambios de plantilla,
-                datos técnicos y precios.
-              </p>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+        <Tabs.Panel id="inventario" className={styles.tabPanel}>
+          <div className="flex flex-col gap-4">
+            <div className={styles.stockMetrics}>
+              <ListMetric
+                label="Stock total"
+                value={number2Formatter.format(
+                  inventarioResumen.reduce(
+                    (acc, item) => acc + item.stockTotal,
+                    0,
+                  ),
+                )}
+                hint="Existencias de todas las variantes"
+                icon={PackageIcon}
+              />
+              <ListMetric
+                label="Valor stock"
+                value={formatearMoneda(
+                  inventarioResumen.reduce(
+                    (acc, item) => acc + item.valorStock,
+                    0,
+                  ),
+                  moneda,
+                  { decimales: 2 },
+                )}
+                hint="Valor del inventario actual"
+                icon={DollarSignIcon}
+              />
+              <ListMetric
+                label="Variantes con stock"
+                value={
+                  inventarioResumen.filter((item) => item.stockTotal > 0).length
+                }
+                hint="Variantes con existencias disponibles"
+                icon={LayersIcon}
+              />
+            </div>
+
+            <div className={styles.tableFrame}>
+              <Table className={styles.table}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variante</TableHead>
+                    <TableHead className="text-right">Stock total</TableHead>
+                    <TableHead className="text-right">Costo promedio</TableHead>
+                    <TableHead className="text-right">Valor stock</TableHead>
+                    <TableHead className="text-right">Almacenes</TableHead>
+                    <TableHead>Último movimiento</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inventarioLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-muted-foreground">
+                        Cargando inventario...
+                      </TableCell>
+                    </TableRow>
+                  ) : inventarioResumen.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-muted-foreground">
+                        Esta materia prima no tiene variantes definidas para
+                        inventario.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    inventarioResumen.map((item) => (
+                      <TableRow key={item.varianteId}>
+                        <TableCell>{item.varianteLabel}</TableCell>
+                        <TableCell className="text-right">
+                          {number2Formatter.format(item.stockTotal)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatearMoneda(item.costoPromedio, moneda, {
+                            decimales: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatearMoneda(item.valorStock, moneda, {
+                            decimales: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.almacenesConStock}
+                        </TableCell>
+                        <TableCell>
+                          {item.ultimoMovimiento
+                            ? `${getMovimientoTipoLabel(item.ultimoMovimiento.tipo)} · ${formatFechaCorta(
+                                item.ultimoMovimiento.createdAt,
+                              )}`
+                            : "Sin movimientos"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <ActionButton
+                              variant="outline"
+                              size="sm"
+                              onPress={() =>
+                                router.push("/inventario/centro-stock")
+                              }
+                            >
+                              <PackageIcon className="size-4" />
+                              Centro stock
+                            </ActionButton>
+                            <ActionButton
+                              variant="outline"
+                              size="sm"
+                              onPress={() =>
+                                router.push("/inventario/movimientos")
+                              }
+                            >
+                              <HistoryIcon className="size-4" />
+                              Historial
+                            </ActionButton>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </Tabs.Panel>
+
+        <Tabs.Panel id="historial" className={styles.tabPanel}>
+          <p className={styles.historyEmpty}>
+            <HistoryIcon size={28} aria-hidden />
+            Este tab queda reservado para auditoría de cambios de plantilla,
+            datos técnicos y precios.
+          </p>
+        </Tabs.Panel>
+      </Tabs>
     </section>
   );
 }

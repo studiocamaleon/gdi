@@ -22,7 +22,8 @@ import { ActionButton } from "@/components/design-system/action-button";
 import { ListMetric } from "@/components/design-system/list-metric";
 import { SelectField } from "@/components/design-system/select-field";
 import { StationIcon } from "./estaciones-iconos";
-import { StationDetail } from "./estacion-tareas";
+import { ActionLink } from "@/components/design-system/action-link";
+import { urlTableroEstacion } from "@/lib/tablero-navegacion";
 import {
   buildStationsModel,
   computeStationStats,
@@ -50,7 +51,6 @@ export function StationCard({
   noLaborables,
   hoyMin,
   config,
-  onSelect,
   onConfigure,
 }: {
   station: StationInfo;
@@ -58,7 +58,6 @@ export function StationCard({
   noLaborables: Set<string>;
   hoyMin: number;
   config?: Estacion;
-  onSelect: (id: string) => void;
   onConfigure?: (id: string) => void;
 }) {
   const dias =
@@ -289,14 +288,14 @@ export function StationCard({
         </p>
       )}
       <div className={s.cardFooter}>
-        <ActionButton
+        <ActionLink
           variant="outline"
-          onPress={() => onSelect(station.key)}
+          href={urlTableroEstacion(station.key)}
           aria-label={`Ver tareas de ${station.nm}`}
         >
           Ver tareas
           <ArrowRight />
-        </ActionButton>
+        </ActionLink>
       </div>
     </Card>
   );
@@ -308,10 +307,6 @@ export function EstacionesOperativas({
   medianas,
   noLaborables,
   llegadasHoyMin,
-  canManage,
-  estacionIdsEjecutables,
-  onMesa,
-  onOpen,
   onConfigure,
 }: {
   items: ItemView[];
@@ -319,13 +314,8 @@ export function EstacionesOperativas({
   medianas: Map<string, number>;
   noLaborables: Set<string>;
   llegadasHoyMin: Map<string, number>;
-  canManage: boolean;
-  estacionIdsEjecutables: string[] | null;
-  onMesa: (pasoId: string, en: boolean) => void;
-  onOpen: (id: string) => void;
   onConfigure?: (id: string) => void;
 }) {
-  const [stationKey, setStationKey] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [etapa, setEtapa] = useState("all");
   const [estado, setEstado] = useState("activas");
@@ -396,29 +386,6 @@ export function EstacionesOperativas({
       rows: visible.filter((v) => v.station.sinEstacion),
     },
   ].filter((g) => g.rows.length);
-  if (
-    stationKey &&
-    (stations.some((e) => e.key === stationKey) ||
-      estaciones.some((e) => e.id === stationKey))
-  )
-    return (
-      <StationDetail
-        items={items}
-        estaciones={estaciones}
-        medianas={medianas}
-        noLaborables={noLaborables}
-        stationKey={stationKey}
-        canManage={
-          canManage &&
-          (estacionIdsEjecutables === null ||
-            estacionIdsEjecutables.includes(stationKey))
-        }
-        onMesa={onMesa}
-        onBack={() => setStationKey(null)}
-        onOpen={onOpen}
-        onConfigure={onConfigure}
-      />
-    );
   return (
     <>
       <div className={s.metrics}>
@@ -517,7 +484,6 @@ export function EstacionesOperativas({
                 noLaborables={noLaborables}
                 hoyMin={llegadasHoyMin.get(station.key) ?? 0}
                 config={estaciones.find((e) => e.id === station.key)}
-                onSelect={setStationKey}
                 onConfigure={onConfigure}
               />
             ))}

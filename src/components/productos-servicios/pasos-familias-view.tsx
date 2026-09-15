@@ -11,26 +11,23 @@
  * con el modelo de instancias — la forma no se escribe, se hereda.
  */
 
-import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
-import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
-import Link from "next/link";
+import { PlusIcon, SearchIcon, WorkflowIcon, BoxesIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card, Chip, Modal, SearchField, Tabs } from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { SelectField } from "@/components/design-system/select-field";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { useDesignScope } from "@/components/design-system/appearance";
 import { normalizarBusqueda } from "@/components/ui/select-buscable";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { EstadoVacio } from "@/components/ui/estado-vacio";
+import { GrafoprintLoadingIndicator } from "@/components/brand/grafoprint-loading";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
 import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
 import type {
@@ -54,6 +51,7 @@ export function PasosFamiliasView({
 }: {
   puedeGestionar: boolean;
 }) {
+  const scope = useDesignScope();
   const router = useRouter();
   const [pasos, setPasos] = React.useState<PasoTenant[]>([]);
   const [plantillas, setPlantillas] = React.useState<PlantillaPaso[]>([]);
@@ -61,6 +59,7 @@ export function PasosFamiliasView({
   const [cargando, setCargando] = React.useState(true);
   const [altaAbierta, setAltaAbierta] = React.useState(false);
   const [aEliminar, setAEliminar] = React.useState<PasoTenant | null>(null);
+  const [eliminando, setEliminando] = React.useState(false);
   const [errorCarga, setErrorCarga] = React.useState(false);
   const [busquedaCatalogo, setBusquedaCatalogo] = React.useState("");
   const [categoriaCatalogo, setCategoriaCatalogo] = React.useState("todas");
@@ -157,290 +156,295 @@ export function PasosFamiliasView({
   };
 
   return (
-    <div className={`content ${visual.page}`}>
-      <EncabezadoConfiguracion
-        area="nodos"
-        titulo="Nodos de producción"
-        descripcion="Definí las operaciones del taller y cómo se calculan sus tiempos, materiales y recursos."
-        acciones={
-          puedeGestionar && pasos.length > 0 ? (
-            <Button onClick={() => setAltaAbierta(true)}>+ Nuevo nodo</Button>
-          ) : null
+    <main {...scope} className={`${theme.theme} ${listPage.page}`}>
+      <header className={listPage.header}>
+        <div>
+          <h1>Nodos de producción</h1>
+          <p className={listPage.subtitle}>
+            Definí las operaciones del taller y cómo se calculan sus tiempos,
+            materiales y recursos.
+          </p>
+        </div>
+        {puedeGestionar && pasos.length > 0 ? (
+          <Button onPress={() => setAltaAbierta(true)}>
+            <PlusIcon />
+            Nuevo nodo
+          </Button>
+        ) : null}
+      </header>
+      <Tabs
+        selectedKey={tipoVisible}
+        onSelectionChange={(key) =>
+          setTipoVisible(key as "SIMPLE" | "COMPUESTO")
         }
-      />
-
-      <nav className={s.tipoNav} aria-label="Tipo de nodo">
-        <button
-          type="button"
-          data-active={tipoVisible === "SIMPLE"}
-          aria-pressed={tipoVisible === "SIMPLE"}
-          onClick={() => setTipoVisible("SIMPLE")}
-        >
-          <strong>Nodos simples</strong>
-          <span>Operaciones reales con tiempo, materiales y recursos</span>
-        </button>
-        <button
-          type="button"
-          data-active={tipoVisible === "COMPUESTO"}
-          aria-pressed={tipoVisible === "COMPUESTO"}
-          onClick={() => setTipoVisible("COMPUESTO")}
-        >
-          <strong>Nodos compuestos</strong>
-          <span>Agrupan nodos simples en una operación de producción</span>
-        </button>
-      </nav>
-
-      <div className={s.wrap}>
-        <section className={s.seccion}>
-          <div className={s.seccionHead}>
-            <div>
-              <div className={s.seccionTitulo}>
-                {tipoVisible === "COMPUESTO"
-                  ? "Tus nodos compuestos"
-                  : "Tus nodos simples"}
-              </div>
-              <div className={s.seccionSub}>
-                {tipoVisible === "COMPUESTO"
-                  ? "Agrupan nodos simples y se configuran en el contexto de cada producto."
-                  : "Creados por tu empresa a partir de una plantilla del catálogo: heredan cómo se calculan y agregan la configuración base de tu taller."}
-              </div>
-            </div>
-          </div>
-
-          {cargando ? (
-            <div className={s.catalogoGrid}>Cargando…</div>
-          ) : errorCarga ? (
-            <EstadoVacio
-              variant="compacto"
-              titulo="No pudimos cargar tus nodos"
-              descripcion="Revisá la conexión y volvé a intentar."
-              cta={{
-                label: "Reintentar",
-                onClick: () => window.location.reload(),
-              }}
-            />
-          ) : pasosVisibles.length === 0 ? (
-            <EstadoVacio
-              variant="compacto"
-              titulo={
-                tipoVisible === "COMPUESTO"
-                  ? "Todavía no creaste nodos compuestos"
-                  : "Todavía no creaste nodos simples"
-              }
-              cta={
-                puedeGestionar
-                  ? {
-                      label: "Crear el primero",
-                      onClick: () => setAltaAbierta(true),
-                    }
-                  : undefined
-              }
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="tbl min-w-[760px]">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Parte de</th>
-                    <th>Categoría</th>
-                    <th>Estación</th>
-                    <th>Estado</th>
-                    <th className="right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pasosVisibles.map((paso) => (
-                    <tr
-                      key={paso.id}
-                      className={paso.activo ? undefined : s.inactiva}
-                    >
-                      <td>
-                        <div className="name">{paso.nombre}</div>
-                        {paso.descripcion ? (
-                          <div className="desc">{paso.descripcion}</div>
-                        ) : null}
-                        {paso.tipoPaso === "COMPUESTO" ? (
-                          <span className="tag warm">
-                            Nodo compuesto · {paso.pasosInternos?.length ?? 0}{" "}
-                            nodos internos
-                          </span>
-                        ) : null}
-                      </td>
-                      <td>
-                        {paso.heredaFicha === false ? (
-                          <span className="tag warm">
-                            Plantilla inexistente
-                          </span>
-                        ) : (
-                          <span className={s.formaChip}>
-                            {paso.tipoPaso === "COMPUESTO"
-                              ? "Subflujo reutilizable"
-                              : (paso.plantillaNombre ?? paso.plantillaCodigo)}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {paso.categoria
-                          ? getLabel(categoriaFamiliaLabels, paso.categoria)
-                              .label
-                          : "—"}
-                      </td>
-                      <td>
-                        {paso.estacion ? (
-                          <>
-                            {paso.estacion.nombre}
-                            {paso.estacionHeredada ? (
-                              <span className="desc"> (de la plantilla)</span>
-                            ) : null}
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td>
-                        <span className="tag">
-                          {paso.activo ? "Activo" : "Inhabilitado"}
-                        </span>
-                      </td>
-                      <td className="right">
-                        {puedeGestionar ? (
-                          <Link
-                            href={`/productos-servicios/pasos/${paso.id}`}
-                            className={buttonVariants({
-                              variant: "outline",
-                              size: "sm",
-                            })}
-                          >
-                            Configurar
-                          </Link>
-                        ) : null}
-                        {puedeGestionar ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleActivo(paso)}
-                          >
-                            {paso.activo ? "Inhabilitar" : "Reactivar"}
-                          </Button>
-                        ) : null}
-                        {puedeGestionar ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setAEliminar(paso)}
-                          >
-                            Eliminar
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {tipoVisible === "SIMPLE" ? (
-          <section className={s.seccion}>
-            <div className={s.seccionHead}>
+      >
+        <NavigationTabList
+          label="Tipo de nodo"
+          items={[
+            {
+              id: "SIMPLE",
+              label: "Nodos simples",
+              icon: <WorkflowIcon />,
+              description:
+                "Operaciones reales con tiempo, materiales y recursos",
+            },
+            {
+              id: "COMPUESTO",
+              label: "Nodos compuestos",
+              icon: <BoxesIcon />,
+              description:
+                "Agrupan nodos simples en una operación de producción",
+            },
+          ]}
+          variant="detailed"
+        />
+        <Tabs.Panel id={tipoVisible} className={s.wrap}>
+          <Card className={s.seccion}>
+            <Card.Header className={s.seccionHead}>
               <div>
-                <div className={s.seccionTitulo}>Catálogo del sistema</div>
+                <div className={s.seccionTitulo}>
+                  {tipoVisible === "COMPUESTO"
+                    ? "Tus nodos compuestos"
+                    : "Tus nodos simples"}
+                </div>
                 <div className={s.seccionSub}>
-                  Los {sistema.length} tipos de nodo que trae Grafoprint. Su
-                  definición técnica se actualiza automáticamente; podés
-                  configurar cómo los usa tu empresa.
+                  {tipoVisible === "COMPUESTO"
+                    ? "Agrupan nodos simples y se configuran en el contexto de cada producto."
+                    : "Creados por tu empresa a partir de una plantilla del catálogo: heredan cómo se calculan y agregan la configuración base de tu taller."}
                 </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
-              <Input
-                type="search"
-                value={busquedaCatalogo}
-                onChange={(event) => setBusquedaCatalogo(event.target.value)}
-                placeholder="Buscar un tipo de nodo"
-                aria-label="Buscar en el catálogo de nodos"
-                className="sm:max-w-sm"
-              />
-              <Select
-                value={categoriaCatalogo}
-                onValueChange={(value) =>
-                  setCategoriaCatalogo(value ?? "todas")
-                }
-              >
-                <SelectTrigger className="w-full sm:w-64">
-                  <SelectValue>
-                    {categoriaCatalogo === "todas"
-                      ? "Todas las categorías"
-                      : getLabel(categoriaFamiliaLabels, categoriaCatalogo)
-                          .label}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="todas">Todas las categorías</SelectItem>
-                    {categoriasSistema.map((categoria) => (
-                      <SelectItem key={categoria} value={categoria}>
-                        {getLabel(categoriaFamiliaLabels, categoria).label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="tbl min-w-[760px]">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Descripción</th>
-                    <th>Categoría</th>
-                    <th className="right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sistemaFiltrado.map((f) => (
-                    <tr key={f.codigo}>
-                      <td>
-                        <div className="name">{f.nombre}</div>
-                      </td>
-                      <td>
-                        <div className="desc">
-                          {descripcionPasoParaUsuario(f.descripcion)}
-                        </div>
-                      </td>
-                      <td>
-                        {getLabel(categoriaFamiliaLabels, f.categoria).label}
-                      </td>
-                      <td className="right">
-                        {puedeGestionar ? (
-                          <Link
-                            href={`/productos-servicios/pasos/${f.codigo}`}
-                            className={buttonVariants({
-                              variant: f.configBase ? "outline" : "ghost",
-                              size: "sm",
-                            })}
-                          >
-                            {f.configBase
-                              ? "Editar configuración"
-                              : "Configurar"}
-                          </Link>
-                        ) : null}
-                      </td>
+            </Card.Header>
+
+            {cargando ? (
+              <div className={s.empty}>
+                <GrafoprintLoadingIndicator />
+              </div>
+            ) : errorCarga ? (
+              <div className={s.empty}>
+                <h3>No pudimos cargar tus nodos</h3>
+                <p>Revisá la conexión y volvé a intentar.</p>
+                <Button onPress={() => window.location.reload()}>
+                  Reintentar
+                </Button>
+              </div>
+            ) : pasosVisibles.length === 0 ? (
+              <div className={s.empty}>
+                <h3>
+                  {tipoVisible === "COMPUESTO"
+                    ? "Todavía no creaste nodos compuestos"
+                    : "Todavía no creaste nodos simples"}
+                </h3>
+                {puedeGestionar ? (
+                  <Button onPress={() => setAltaAbierta(true)}>
+                    <PlusIcon />
+                    Crear el primero
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className={s.table}>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Parte de</th>
+                      <th>Categoría</th>
+                      <th>Estación</th>
+                      <th>Estado</th>
+                      <th className={s.actionsCell}>Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {!cargando && sistemaFiltrado.length === 0 ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">
-                No hay tipos de nodo que coincidan con esos filtros.
-              </p>
-            ) : null}
-          </section>
-        ) : null}
-      </div>
+                  </thead>
+                  <tbody>
+                    {pasosVisibles.map((paso) => (
+                      <tr
+                        key={paso.id}
+                        className={paso.activo ? undefined : s.inactiva}
+                      >
+                        <td>
+                          <div className={s.name}>{paso.nombre}</div>
+                          {paso.descripcion ? (
+                            <div className={s.description}>
+                              {paso.descripcion}
+                            </div>
+                          ) : null}
+                          {paso.tipoPaso === "COMPUESTO" ? (
+                            <Chip size="sm" color="warning" variant="soft">
+                              Nodo compuesto · {paso.pasosInternos?.length ?? 0}{" "}
+                              nodos internos
+                            </Chip>
+                          ) : null}
+                        </td>
+                        <td>
+                          {paso.heredaFicha === false ? (
+                            <Chip size="sm" color="warning" variant="soft">
+                              Plantilla inexistente
+                            </Chip>
+                          ) : (
+                            <span className={s.formaChip}>
+                              {paso.tipoPaso === "COMPUESTO"
+                                ? "Subflujo reutilizable"
+                                : (paso.plantillaNombre ??
+                                  paso.plantillaCodigo)}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {paso.categoria
+                            ? getLabel(categoriaFamiliaLabels, paso.categoria)
+                                .label
+                            : "—"}
+                        </td>
+                        <td>
+                          {paso.estacion ? (
+                            <>
+                              {paso.estacion.nombre}
+                              {paso.estacionHeredada ? (
+                                <span className={s.description}>
+                                  {" "}
+                                  (de la plantilla)
+                                </span>
+                              ) : null}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>
+                          <Chip
+                            size="sm"
+                            color={paso.activo ? "success" : "default"}
+                            variant="soft"
+                          >
+                            {paso.activo ? "Activo" : "Inhabilitado"}
+                          </Chip>
+                        </td>
+                        <td className={s.actionsCell}>
+                          {puedeGestionar ? (
+                            <ActionLink
+                              href={`/productos-servicios/pasos/${paso.id}`}
+                              variant={"outline"}
+                            >
+                              Configurar
+                            </ActionLink>
+                          ) : null}
+                          {puedeGestionar ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleActivo(paso)}
+                            >
+                              {paso.activo ? "Inhabilitar" : "Reactivar"}
+                            </Button>
+                          ) : null}
+                          {puedeGestionar ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setAEliminar(paso)}
+                            >
+                              Eliminar
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+
+          {tipoVisible === "SIMPLE" ? (
+            <Card className={s.seccion}>
+              <Card.Header className={s.seccionHead}>
+                <div>
+                  <div className={s.seccionTitulo}>Catálogo del sistema</div>
+                  <div className={s.seccionSub}>
+                    Los {sistema.length} tipos de nodo que trae Grafoprint. Su
+                    definición técnica se actualiza automáticamente; podés
+                    configurar cómo los usa tu empresa.
+                  </div>
+                </div>
+              </Card.Header>
+              <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
+                <SearchField
+                  aria-label="Buscar en el catálogo de nodos"
+                  value={busquedaCatalogo}
+                  onChange={setBusquedaCatalogo}
+                  className={s.search}
+                >
+                  <SearchField.Group className={focus.singleBorder}>
+                    <SearchField.SearchIcon>
+                      <SearchIcon />
+                    </SearchField.SearchIcon>
+                    <SearchField.Input placeholder="Buscar un tipo de nodo" />
+                    <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+                  </SearchField.Group>
+                </SearchField>
+                <SelectField
+                  aria-label="Categoría del catálogo"
+                  value={categoriaCatalogo}
+                  onChange={(value) => setCategoriaCatalogo(value ?? "todas")}
+                  className={s.categoryFilter}
+                  options={[
+                    { value: "todas", label: "Todas las categorías" },
+                    ...categoriasSistema.map((categoria) => ({
+                      value: categoria,
+                      label: getLabel(categoriaFamiliaLabels, categoria).label,
+                    })),
+                  ]}
+                />
+              </div>
+              <div className="overflow-x-auto">
+                <table className={s.table}>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Descripción</th>
+                      <th>Categoría</th>
+                      <th className={s.actionsCell}>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sistemaFiltrado.map((f) => (
+                      <tr key={f.codigo}>
+                        <td>
+                          <div className={s.name}>{f.nombre}</div>
+                        </td>
+                        <td>
+                          <div className={s.description}>
+                            {descripcionPasoParaUsuario(f.descripcion)}
+                          </div>
+                        </td>
+                        <td>
+                          {getLabel(categoriaFamiliaLabels, f.categoria).label}
+                        </td>
+                        <td className={s.actionsCell}>
+                          {puedeGestionar ? (
+                            <ActionLink
+                              href={`/productos-servicios/pasos/${f.codigo}`}
+                              variant={f.configBase ? "outline" : "ghost"}
+                            >
+                              {f.configBase
+                                ? "Editar configuración"
+                                : "Configurar"}
+                            </ActionLink>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!cargando && sistemaFiltrado.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">
+                  No hay tipos de nodo que coincidan con esos filtros.
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
+        </Tabs.Panel>
+      </Tabs>
 
       {puedeGestionar ? (
         <PasoAltaDialog
@@ -454,18 +458,45 @@ export function PasosFamiliasView({
         />
       ) : null}
 
-      <ConfirmacionDestructiva
-        open={aEliminar !== null}
+      <FormDialog
+        isDismissable={!eliminando}
+        isOpen={aEliminar !== null}
         onOpenChange={(open) => {
           if (!open) setAEliminar(null);
         }}
-        titulo="Eliminar nodo"
-        nombreItem={aEliminar?.nombre}
-        requiereTipear={false}
-        descripcion="Sólo se puede eliminar un nodo que ningún flujo ni orden usó jamás. Si tiene historial, el sistema va a ofrecer inhabilitarlo en su lugar."
-        accionLabel="Eliminar"
-        onConfirmar={confirmarEliminar}
-      />
-    </div>
+        title="Eliminar nodo"
+        description="Sólo se puede eliminar un nodo que ningún flujo ni orden usó jamás. Si tiene historial, el sistema va a ofrecer inhabilitarlo en su lugar."
+      >
+        <Modal.Body className={s.dialogBody}>
+          <p>
+            ¿Eliminar <strong>{aEliminar?.nombre}</strong>?
+          </p>
+        </Modal.Body>
+        <Modal.Footer className={s.dialogFooter}>
+          <Button
+            variant="outline"
+            isDisabled={eliminando}
+            onPress={() => setAEliminar(null)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            isDisabled={eliminando}
+            onPress={async () => {
+              if (eliminando) return;
+              setEliminando(true);
+              try {
+                await confirmarEliminar();
+              } finally {
+                setEliminando(false);
+              }
+            }}
+          >
+            {eliminando ? "Eliminando…" : "Eliminar"}
+          </Button>
+        </Modal.Footer>
+      </FormDialog>
+    </main>
   );
 }

@@ -17,9 +17,5 @@ export default function MateriasPrimasPage() {
 async function MateriasPrimasPageContent() {
   const materiasPrimas = await getMateriasPrimas();
 
-  return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <MateriasPrimasPanel initialMateriasPrimas={materiasPrimas} />
-    </section>
-  );
+  return <MateriasPrimasPanel initialMateriasPrimas={materiasPrimas} />;
 }

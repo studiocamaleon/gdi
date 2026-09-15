@@ -32,3 +32,10 @@
   .fila { flex-wrap: wrap; gap: 10px; }
   .cantidad { min-width: 60px; }
 }
+
+:global([data-producto-ficha]) .panel { border-radius: 12px; background: var(--surface); box-shadow: none; margin: 0; }
+:global([data-producto-ficha]) .header { padding: 18px 20px; background: var(--surface); }
+:global([data-producto-ficha]) .icono { width: 36px; height: 36px; border: 0; border-radius: 10px; color: var(--accent-soft-foreground); background: var(--accent-soft); }
+:global([data-producto-ficha]) .eyebrow { font-family: inherit; color: var(--muted-text); letter-spacing: 0; text-transform: none; }
+:global([data-producto-ficha]) .header h2 { font-size: 15px; font-weight: 650; }
+:global([data-producto-ficha]) .contenido { padding: 20px; }

@@ -11,7 +11,7 @@ export default async function EstacionesPage() {
     return <SinPermiso modulo="Estaciones de producción" />;
   const puedeConfigurar = await tienePermiso("produccion.configurar");
   const [datos, familias, recursos] = await Promise.all([
-    cargarDatosTableroProduccion(),
+    cargarDatosTableroProduccion({ soloPendientes: true }),
     puedeConfigurar
       ? getFamiliasPasos()
           .then((value) => ({ ok: true, value }))

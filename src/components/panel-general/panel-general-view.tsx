@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { ProgresoValor } from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
@@ -392,10 +393,7 @@ export function PanelGeneralView({
             onClick={() => void refrescar()}
             disabled={cargando}
           >
-            <RefreshCwIcon
-              size={14}
-              className={cargando ? s.spinning : undefined}
-            />
+            {cargando ? <GdiSpinner /> : <RefreshCwIcon size={14} />}
             Actualizar
           </button>
         </div>

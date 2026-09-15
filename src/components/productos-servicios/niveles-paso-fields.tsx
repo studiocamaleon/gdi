@@ -1,9 +1,10 @@
 "use client";
+import { Input, NativeButton } from "./nodos-ui";
 
 import * as React from "react";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
+
 import {
   type NivelPasoOpcion,
   leerNivelesPaso,
@@ -52,7 +53,7 @@ export function NivelesPasoFields({
           según dónde o con qué dificultad se haga, declaralo como niveles: el
           comercial elige uno al cotizar y no hay que modelar un paso por caso.
         </p>
-        <button
+        <NativeButton
           type="button"
           className="btn btn-outline btn-sm w-fit"
           onClick={() =>
@@ -74,7 +75,7 @@ export function NivelesPasoFields({
         >
           <PlusIcon className="mr-1 size-4" />
           Este paso viene en niveles
-        </button>
+        </NativeButton>
       </div>
     );
   }
@@ -186,7 +187,7 @@ export function NivelesPasoFields({
                   {describir(opcion)}
                 </div>
               </div>
-              <button
+              <NativeButton
                 type="button"
                 className="btn btn-ghost btn-sm text-muted-foreground hover:text-foreground shrink-0"
                 onClick={() =>
@@ -196,9 +197,9 @@ export function NivelesPasoFields({
                 aria-expanded={editando === opcion.codigo}
               >
                 <PencilIcon className="size-3.5" />
-              </button>
+              </NativeButton>
               {opciones.length > 2 ? (
-                <button
+                <NativeButton
                   type="button"
                   className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
                   onClick={() => {
@@ -211,7 +212,7 @@ export function NivelesPasoFields({
                   aria-label={`Quitar ${nombreNivel(opcion)}`}
                 >
                   <Trash2Icon className="size-3.5" />
-                </button>
+                </NativeButton>
               ) : null}
             </div>
 
@@ -299,13 +300,13 @@ export function NivelesPasoFields({
                   <span className="text-muted-foreground text-xs leading-snug">
                     Vacío = usa lo del paso.
                   </span>
-                  <button
+                  <NativeButton
                     type="button"
                     className="btn btn-outline btn-sm shrink-0"
                     onClick={() => setEditando(null)}
                   >
                     Listo
-                  </button>
+                  </NativeButton>
                 </div>
               </div>
             ) : null}
@@ -314,7 +315,7 @@ export function NivelesPasoFields({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
+        <NativeButton
           type="button"
           className="btn btn-outline btn-sm w-fit"
           onClick={() => {
@@ -337,10 +338,10 @@ export function NivelesPasoFields({
         >
           <PlusIcon className="mr-1 size-4" />
           Agregar nivel
-        </button>
+        </NativeButton>
         {/* Destructivo y poco frecuente: al costado del alta y en gris, no
             como un tercer botón rojo suelto debajo de todo. */}
-        <button
+        <NativeButton
           type="button"
           className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
           onClick={() => {
@@ -349,7 +350,7 @@ export function NivelesPasoFields({
           }}
         >
           Quitar los niveles
-        </button>
+        </NativeButton>
       </div>
 
       <span className="text-muted-foreground text-xs">

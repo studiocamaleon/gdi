@@ -4,7 +4,11 @@ import * as React from "react";
 import { CircleAlertIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { NodosVisualProvider } from "./nodos-ui";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
 import { PasoCompuestoConfiguracion } from "@/components/productos-servicios/paso-compuesto-configuracion";
@@ -23,6 +27,7 @@ import type {
 } from "@/lib/productos-servicios";
 
 export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
+  const scope = useDesignScope();
   const [datos, setDatos] = React.useState<{
     producto: ProductoDetalle;
     ruta: RutaAlternativaDetalle;
@@ -221,7 +226,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
 
   if (error) {
     return (
-      <div className="content">
+      <div {...scope} className={`${theme.theme} ${listPage.page}`}>
         <Alert variant="destructive">
           <CircleAlertIcon />
           <AlertTitle>No se pudo abrir la configuración</AlertTitle>
@@ -241,25 +246,27 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
       return <PasoCompuestoConfiguracion paso={pasoCompuesto} />;
     }
     return (
-      <div className="content flex flex-col gap-3">
+      <div {...scope} className={`${theme.theme} ${listPage.page}`}>
         <Skeleton className="h-8 w-72" />
         <Skeleton className="h-[520px] w-full" />
       </div>
     );
   }
   return (
-    <ConfigPasosEditorView
-      producto={datos.producto}
-      rutaAlternativa={datos.ruta}
-      catalogoFamilias={datos.catalogo}
-      lookups={datos.lookups}
-      configuracionBase={{
-        familiaCodigo: pasoId,
-        origen:
-          datos.catalogo.familias.find((item) => item.codigo === pasoId)
-            ?.origen ?? "sistema",
-        volverHref: "/productos-servicios/pasos",
-      }}
-    />
+    <NodosVisualProvider>
+      <ConfigPasosEditorView
+        producto={datos.producto}
+        rutaAlternativa={datos.ruta}
+        catalogoFamilias={datos.catalogo}
+        lookups={datos.lookups}
+        configuracionBase={{
+          familiaCodigo: pasoId,
+          origen:
+            datos.catalogo.familias.find((item) => item.codigo === pasoId)
+              ?.origen ?? "sistema",
+          volverHref: "/productos-servicios/pasos",
+        }}
+      />
+    </NodosVisualProvider>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-
+import styles from "./maquinaria.module.css";
 /**
  * Ficha por máquina — Fase C de la migración de UI de Maquinaria
  * (estilo Holdprint): breadcrumb, tabs Descripción | Ajustes | Historial
@@ -10,18 +10,21 @@
  * la Fase B (useMaquinaEditor + MaquinaEditorIdentidad/Secciones).
  */
 
-import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
-import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon, ArrowRightIcon, CircleAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { Card, Chip, Tabs, Modal } from "@heroui/react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/theme.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import { MaquinariaEdicion } from "./maquina-editor/maquinaria-edicion";
+
 import type { CentroCosto, Planta } from "@/lib/costos";
 import { fechaHora } from "@/lib/fecha";
 import {
@@ -61,6 +64,7 @@ export function MaquinaFicha({
   centrosCosto,
   puedeGestionar,
 }: MaquinaFichaProps) {
+  const scope = useDesignScope();
   const router = useRouter();
   const [tab, setTab] = React.useState<TabFicha>("descripcion");
   const [saving, setSaving] = React.useState(false);
@@ -139,54 +143,45 @@ export function MaquinaFicha({
     // La barra de acciones NO flota sobre el contenido: el área visible
     // termina justo arriba de ella.
     <Tabs
-      value={tab}
-      onValueChange={(value) => setTab(value as TabFicha)}
-      className={`maq-ficha ${visual.machine}`}
+      selectedKey={tab}
+      onSelectionChange={(value) => setTab(value as TabFicha)}
+      {...scope}
+      className={`${theme.theme} ${listPage.page} ${styles.ficha}`}
     >
-      <div className="maq-ficha-top">
-        <EncabezadoConfiguracion
-          area="maquinaria"
-          titulo={nombreGuardado}
-          navegacion={
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={saving}
-              onClick={() => salir("/costos/maquinaria")}
-            >
-              <ArrowLeftIcon data-icon="inline-start" />
-              Volver a maquinaria
-            </Button>
-          }
-          descripcion={
-            <nav className="maq-migas" aria-label="Ubicación">
+      <div className={`${styles["maq-ficha-top"]}`}>
+        <header className={listPage.header}>
+          <div>
+            <nav className={styles.breadcrumb} aria-label="Ubicación">
               <button
                 type="button"
                 onClick={() => salir("/costos/centros-de-costo")}
               >
                 Costos
               </button>
-              <span className="sep">/</span>
+              <span>/</span>
               <button type="button" onClick={() => salir("/costos/maquinaria")}>
                 Maquinaria
               </button>
-              <span className="sep">/</span>
-              <span aria-current="page">{nombreGuardado}</span>
             </nav>
-          }
-        />
-
-        <TabsList variant="line" className="maq-ficha-tabs">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id} className="maq-ficha-tab">
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+            <h1>{nombreGuardado}</h1>
+            <p className={listPage.subtitle}>
+              {getPlantillaMaquinariaLabel(maquina.plantilla)} · Configuración
+              de la máquina
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            isDisabled={saving}
+            onPress={() => salir("/costos/maquinaria")}
+          >
+            <ArrowLeftIcon />
+            Volver a maquinaria
+          </Button>
+        </header>
+        <NavigationTabList label="Ficha de máquina" items={TABS} />
       </div>
 
-      <div className="maq-ficha-cuerpo">
+      <div className={`${styles["maq-ficha-cuerpo"]}`}>
         {tab !== "historial" &&
         maquina.diagnosticoConfiguracion.faltantes.length > 0 ? (
           <Alert>
@@ -221,24 +216,24 @@ export function MaquinaFicha({
           </Alert>
         ) : null}
 
-        <TabsContent value="descripcion">
-          <fieldset disabled={!puedeGestionar} className="flex flex-col gap-4">
+        <Tabs.Panel id="descripcion">
+          <MaquinariaEdicion puedeGestionar={puedeGestionar}>
             <MaquinaEditorIdentidad
               editor={editor}
               plantas={plantas}
               centrosCosto={centrosCosto}
             />
-          </fieldset>
-        </TabsContent>
+          </MaquinariaEdicion>
+        </Tabs.Panel>
 
-        <TabsContent value="ajustes">
-          <fieldset disabled={!puedeGestionar} className="flex flex-col gap-4">
+        <Tabs.Panel id="ajustes">
+          <MaquinariaEdicion puedeGestionar={puedeGestionar}>
             <MaquinaEditorSecciones editor={editor} />
-          </fieldset>
-        </TabsContent>
+          </MaquinariaEdicion>
+        </Tabs.Panel>
 
-        <TabsContent value="historial">
-          <div className="card maq-historial space-y-5">
+        <Tabs.Panel id="historial">
+          <Card className={`${styles.card} ${styles.history}`}>
             <dl>
               <div className="fila">
                 <dt>Alta en el sistema</dt>
@@ -265,9 +260,9 @@ export function MaquinaFicha({
                     <li key={evento.id} className="flex gap-3 py-3 first:pt-0">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className="capitalize">
+                          <Chip size="sm" variant="soft" className="capitalize">
                             {evento.accion}
-                          </Badge>
+                          </Chip>
                           <span className="text-sm font-medium">
                             {evento.actorNombre}
                           </span>
@@ -292,18 +287,18 @@ export function MaquinaFicha({
                 </p>
               )}
             </div>
-          </div>
-        </TabsContent>
+          </Card>
+        </Tabs.Panel>
       </div>
 
       {tab !== "historial" && puedeGestionar ? (
-        <div className="maq-ficha-pie">
+        <div className={`${styles["maq-ficha-pie"]}`}>
           <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
             Cancelar
           </Button>
           <Button
             onClick={() => void handleGuardar()}
-            disabled={saving || !editor.hayCambios}
+            isDisabled={saving || !editor.hayCambios}
             title={
               editor.hayCambios ? undefined : "No hay cambios para guardar"
             }
@@ -314,32 +309,55 @@ export function MaquinaFicha({
       ) : null}
 
       {!puedeGestionar && tab !== "historial" ? (
-        <div className="maq-ficha-pie">
-          <Badge variant="secondary">Sólo lectura</Badge>
+        <div className={`${styles["maq-ficha-pie"]}`}>
+          <Chip size="sm">Sólo lectura</Chip>
           <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
             Volver
           </Button>
         </div>
       ) : null}
 
-      <ConfirmacionSalida
-        open={salidaPendiente !== null}
-        cambios={1}
-        donde="esta máquina"
-        guardando={saving}
-        onGuardarYSalir={async () => {
-          const destino = salidaPendiente;
-          const ok = await handleGuardar();
-          setSalidaPendiente(null);
-          if (ok && destino) router.push(destino);
+      <FormDialog
+        isOpen={salidaPendiente !== null}
+        onOpenChange={(open) => {
+          if (!open) setSalidaPendiente(null);
         }}
-        onDescartarYSalir={() => {
-          const destino = salidaPendiente;
-          setSalidaPendiente(null);
-          if (destino) router.push(destino);
-        }}
-        onSeguirEditando={() => setSalidaPendiente(null)}
-      />
+        isDismissable={!saving}
+        title="Cambios sin guardar"
+        description="Tenés cambios sin guardar en esta máquina. Si salís sin guardar, se descartan."
+      >
+        <Modal.Footer className={styles.modalFooter}>
+          <Button
+            variant="ghost"
+            isDisabled={saving}
+            onPress={() => setSalidaPendiente(null)}
+          >
+            Seguir editando
+          </Button>
+          <Button
+            variant="outline"
+            isDisabled={saving}
+            onPress={() => {
+              const destino = salidaPendiente;
+              setSalidaPendiente(null);
+              if (destino) router.push(destino);
+            }}
+          >
+            Descartar y salir
+          </Button>
+          <Button
+            isDisabled={saving}
+            onPress={async () => {
+              const destino = salidaPendiente;
+              const ok = await handleGuardar();
+              setSalidaPendiente(null);
+              if (ok && destino) router.push(destino);
+            }}
+          >
+            {saving ? "Guardando…" : "Guardar y salir"}
+          </Button>
+        </Modal.Footer>
+      </FormDialog>
     </Tabs>
   );
 }

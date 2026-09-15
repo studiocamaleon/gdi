@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { FileUpIcon, PlusIcon, Trash2Icon, ShapesIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "./producto-ui";
+import { Input } from "./producto-ui";
+import { Checkbox } from "./producto-ui";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Field,
@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from "./producto-ui";
 import {
   Select,
   SelectContent,
@@ -27,7 +27,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "./producto-ui";
 import { subirArchivo } from "@/lib/archivos-api";
 import {
   guardarInterpretacionesProducto,

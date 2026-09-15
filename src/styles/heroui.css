@@ -13,6 +13,7 @@
 @import "@heroui/styles/components/avatar.css" layer(components.heroui);
 @import "@heroui/styles/components/input.css" layer(components.heroui);
 @import "@heroui/styles/components/autocomplete.css" layer(components.heroui);
+@import "@heroui/styles/components/combo-box.css" layer(components.heroui);
 @import "@heroui/styles/components/search-field.css" layer(components.heroui);
 @import "@heroui/styles/components/select.css" layer(components.heroui);
 @import "@heroui/styles/components/list-box.css" layer(components.heroui);
@@ -28,6 +29,8 @@
 @import "@heroui/styles/components/accordion.css" layer(components.heroui);
 @import "@heroui/styles/components/switch.css" layer(components.heroui);
 @import "@heroui/styles/components/slider.css" layer(components.heroui);
+@import "@heroui/styles/components/dropdown.css" layer(components.heroui);
+@import "@heroui/styles/components/menu-item.css" layer(components.heroui);
 
 /* Sólo aliases nuevos; los tokens existentes de Shadcn no se redefinen. */
 @theme inline {

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { revisionCeldasEnVivo, celdasQueCambian } from "./tablero-lista-en-vivo";
 import type { Estacion } from "./estaciones";
 import { buildItemView } from "./produccion-item-view";
 import type { TableroItemData, TableroPasoData } from "./tablero-produccion";
 import {
   agruparTrabajos,
+  accionAsignacionManual,
+  opcionesEstacionesTablero,
   grupoDelTrabajo,
   estacionDelPasoVisible,
   operadoresDelTrabajo,
@@ -46,6 +49,7 @@ function paso(overrides: Partial<TableroPasoData> = {}): TableroPasoData {
     proveedorNombre: null,
     plazoProveedorDias: null,
     estadoCompra: null,
+    planificadoHasta: "2026-09-16T15:00:00Z",
     ...overrides,
   };
 }
@@ -96,14 +100,20 @@ function estacion(overrides: Partial<Estacion> = {}): Estacion {
 }
 
 describe("lista operativa compartida con Kanban", () => {
-  it("cada trabajo aparece una vez, prioriza bloqueos y ordena por entrega", () => {
+  it("cada trabajo aparece una vez, prioriza bloqueos y ordena por fin previsto del paso", () => {
     const grupos = agruparTrabajos([
-      trabajo({ id: "tardio", fechaEntrega: "2026-09-13" }),
-      trabajo({ id: "sin-fecha", fechaEntrega: null }),
+      trabajo({ id: "tardio" }, [
+        paso({ planificadoHasta: "2026-09-13T15:00:00Z" }),
+      ]),
+      trabajo({ id: "sin-fecha", fechaEntrega: null }, [
+        paso({ planificadoHasta: null }),
+      ]),
       trabajo({ id: "bloqueado", fechaEntrega: "2026-09-10" }, [
         paso({ estado: "bloqueado" }),
       ]),
-      trabajo({ id: "hoy", fechaEntrega: "2026-09-14" }),
+      trabajo({ id: "hoy" }, [
+        paso({ planificadoHasta: "2026-09-14T15:00:00Z" }),
+      ]),
       trabajo({ id: "futuro" }),
       trabajo({ id: "curso" }, [paso({ estado: "en_curso" })]),
       trabajo({ id: "terminado", fechaEntrega: "2026-09-01" }, [
@@ -154,9 +164,11 @@ describe("lista operativa compartida con Kanban", () => {
   });
 
   it.each(["2026-09-13", "2026-09-14"])(
-    "mantiene Listo para iniciar dentro de la urgencia de entrega %s",
+    "mantiene Listo para iniciar dentro de la urgencia del paso %s",
     (fechaEntrega) => {
-      const item = trabajo({ fechaEntrega });
+      const item = trabajo({}, [
+        paso({ planificadoHasta: `${fechaEntrega}T15:00:00Z` }),
+      ]);
       expect(item.state).toBe("ready");
       expect(grupoDelTrabajo(item)).toBe(
         fechaEntrega === "2026-09-14" ? "today" : "delayed",
@@ -648,5 +660,223 @@ describe("Filtros de estación y personal", () => {
       blocked: 0,
     });
     expect(filtrar(item, {})).toEqual([item]);
+  });
+});
+
+describe("Fechas operativas del paso visible", () => {
+  it("clasifica por fin del paso aunque la entrega comercial sea en 15 días", () => {
+    const item = trabajo({ fechaEntrega: "2026-09-29" }, [
+      paso({ planificadoHasta: "2026-09-14T13:59:00Z" }),
+    ]);
+    expect(item.delayed).toBe(false);
+    expect(item.stepDelayed).toBe(true);
+    expect(grupoDelTrabajo(item)).toBe("delayed");
+    expect(metricasTrabajos([item]).delayed).toBe(1);
+    const futuro = trabajo({ fechaEntrega: "2026-09-01" });
+    expect(futuro.delayed).toBe(true);
+    expect(grupoDelTrabajo(futuro)).toBe("not-started");
+  });
+  it("distingue una hora vencida de una hora futura del mismo día", () => {
+    const vencido = trabajo({}, [
+      paso({ planificadoHasta: "2026-09-14T13:00:00Z" }),
+    ]);
+    const hoy = trabajo({}, [
+      paso({ planificadoHasta: "2026-09-14T18:00:00Z" }),
+    ]);
+    expect(grupoDelTrabajo(vencido)).toBe("delayed");
+    expect(grupoDelTrabajo(hoy)).toBe("today");
+    expect(
+      agruparTrabajos([hoy, vencido]).flatMap((g) => g.items),
+    ).toHaveLength(2);
+  });
+  it("usa el día de la empresa y no la fecha UTC", () => {
+    const item = trabajo({}, [
+      paso({ planificadoHasta: "2026-09-15T01:00:00Z" }),
+    ]);
+    expect(item.stepDueDays).toBe(0);
+    expect(grupoDelTrabajo(item)).toBe("today");
+  });
+  it("no inventa una referencia con la entrega comercial y conserva las esperas", () => {
+    const sinReferencia = trabajo({ fechaEntrega: "2026-09-01" }, [
+      paso({ planificadoHasta: null }),
+    ]);
+    expect(sinReferencia.stepPlannedEnd).toBeNull();
+    expect(grupoDelTrabajo(sinReferencia)).toBe("not-started");
+    const espera = trabajo({}, [
+      paso({
+        nodoClave: "corte",
+        predecesoresSatisfechos: false,
+        planificadoHasta: "2026-09-13T15:00:00Z",
+      }),
+    ]);
+    expect(espera.stepDelayed).toBe(true);
+    expect(grupoDelTrabajo(espera)).toBe("waiting");
+  });
+  it("al filtrar la estación toma la referencia del paso mostrado y no la del primero", () => {
+    const item = trabajo({}, [
+      paso({
+        id: "diseno",
+        nodoClave: "diseno",
+        predecesorPasoIds: [],
+        planificadoHasta: "2026-09-13T15:00:00Z",
+      }),
+      paso({
+        id: "corte",
+        indice: 1,
+        nodoClave: "corte",
+        predecesorPasoIds: [],
+        familiaCodigo: "corte_manual",
+        planificadoHasta: "2026-09-15T15:00:00Z",
+      }),
+    ]);
+    const [vista] = filtrarTrabajos(
+      [item],
+      [estacion(), estacion({ id: "corte", familias: ["corte_manual"] })],
+      { query: "", estacionId: "corte", empleadoId: "", asignadasAMi: false },
+      zona,
+      ahora,
+    );
+    expect(grupoDelTrabajo(item)).toBe("delayed");
+    expect(vista.visibleStep?.paso.id).toBe("corte");
+    expect(vista.stepPlannedEnd).toBe("2026-09-15T15:00:00.000Z");
+    expect(grupoDelTrabajo(vista)).toBe("not-started");
+  });
+  it("en terminados usa el último cierre real, incluso en rutas con ramas paralelas", () => {
+    const item = trabajo({}, [
+      paso({
+        id: "ultimo",
+        indice: 0,
+        estado: "hecho",
+        completadoEl: "2026-09-14T13:00:00Z",
+      }),
+      paso({
+        id: "primero",
+        indice: 1,
+        estado: "hecho",
+        completadoEl: "2026-09-14T12:00:00Z",
+      }),
+    ]);
+    expect(item.visibleStep?.paso.id).toBe("ultimo");
+    expect(item.stepDelayed).toBe(false);
+    expect(grupoDelTrabajo(item)).toBeNull();
+  });
+});
+
+
+describe("acceso a Lista desde Estaciones", () => {
+  const filtrar = (item: ReturnType<typeof trabajo>, estacionId: string, estaciones = [estacion()]) =>
+    filtrarTrabajos([item], estaciones, { query: "", asignadasAMi: false, empleadoId: "", estacionId }, zona, ahora);
+
+  it("separa tercerizados y pasos sin estación aun cuando coincida su familia", () => {
+    const interno = trabajo({}, [paso()]);
+    const externo = trabajo({}, [paso({ tipoEjecucion: "tercerizado" })]);
+    const sinEstacion = trabajo({}, [paso({ maquinaId: "sin-configurar" })]);
+    expect(filtrar(externo, "proveedor-tercerizado")).toHaveLength(1);
+    expect(filtrar(externo, "preprensa")).toHaveLength(0);
+    expect(filtrar(externo, "sin-estacion")).toHaveLength(0);
+    expect(filtrar(interno, "proveedor-tercerizado")).toHaveLength(0);
+    expect(filtrar(sinEstacion, "sin-estacion")).toHaveLength(1);
+    expect(filtrar(interno, "sin-estacion", [estacion({ activo: false })])).toHaveLength(1);
+  });
+
+  it("muestra carga futura en espera y avanza la misma fila dentro del grupo externo", () => {
+    const primero = paso({ id: "previo" });
+    const externo = paso({ id: "externo", indice: 1, tipoEjecucion: "tercerizado" });
+    const siguiente = paso({ id: "siguiente", indice: 2, tipoEjecucion: "tercerizado" });
+    const antes = filtrar(trabajo({}, [primero, externo, siguiente]), "proveedor-tercerizado");
+    expect(antes).toHaveLength(1);
+    expect(antes[0].visibleStep?.paso.id).toBe("externo");
+    expect(antes[0].state).toBe("waiting");
+    const despues = filtrar(trabajo({}, [{ ...primero, estado: "hecho" }, { ...externo, estado: "hecho" }, siguiente]), "proveedor-tercerizado");
+    expect(despues).toHaveLength(1);
+    expect(despues[0].id).toBe(antes[0].id);
+    expect(despues[0].visibleStep?.paso.id).toBe("siguiente");
+  });
+
+  it("no convierte una estación eliminada o inactiva en Todas las estaciones", () => {
+    expect(filtrar(trabajo(), "eliminada")).toEqual([]);
+    const inactiva = estacion({ activo: false });
+    expect(filtrar(trabajo(), inactiva.id, [inactiva])).toEqual([]);
+    expect(opcionesEstacionesTablero([inactiva], inactiva.id)).toContainEqual({ id: inactiva.id, nombre: "Pre-impresión · Inactiva" });
+    expect(opcionesEstacionesTablero([], "eliminada")).toContainEqual({ id: "eliminada", nombre: "Estación no disponible" });
+  });
+});
+
+describe("asignación voluntaria en Lista", () => {
+  const asignacion = {
+    origen: "automatica" as const,
+    personas: [{ empleadoId: "ana", nombre: "Ana" }],
+    franjas: [], conflicto: null, esMia: false,
+  };
+  it("permite tomar sólo pasos internos libres en estaciones habilitadas", () => {
+    const libre = trabajo();
+    expect(accionAsignacionManual(libre, [estacion()], true, ["preprensa"])).toBe("asignarme");
+    expect(accionAsignacionManual(libre, [estacion()], false, null)).toBeNull();
+    expect(accionAsignacionManual(libre, [estacion()], true, [])).toBeNull();
+    expect(accionAsignacionManual(libre, [], true, [])).toBeNull();
+    expect(accionAsignacionManual(libre, [], true, null)).toBe("asignarme");
+  });
+  it.each([
+    { asignacionPersonal: asignacion },
+    { mesaUsuarioNombre: "Otra persona" },
+    { tipoEjecucion: "tercerizado" as const },
+    { estado: "hecho" as const },
+    { nodoClave: "futuro", predecesoresSatisfechos: false },
+  ])("no reemplaza personal ni toma pasos no disponibles: %j", (datos) => {
+    expect(accionAsignacionManual(trabajo({}, [paso(datos)]), [estacion()], true, null)).toBeNull();
+  });
+  it("permite devolver lo tomado por uno mismo después de proyectar su asignación manual", () => {
+    const propia = trabajo({}, [paso({ mesaEsMia: true, mesaUsuarioNombre: "Ana", asignacionPersonal: { ...asignacion, origen: "manual", esMia: true } })]);
+    expect(accionAsignacionManual(propia, [estacion()], true, [])).toBe("devolver");
+    expect(accionAsignacionManual(propia, [estacion()], false, null)).toBeNull();
+    expect(accionAsignacionManual(trabajo({}, [paso({ asignacionPersonal: { ...asignacion, esMia: true } })]), [estacion()], true, null)).toBeNull();
+  });
+});
+
+
+describe("actualizaciones visibles de la Lista", () => {
+  const version = (item = trabajo(), fecha = "2026-09-14T15:00:00Z") => revisionCeldasEnVivo(item, [estacion()], { fin: new Date(fecha), parcial: false }, []);
+  const campos = (antes: ReturnType<typeof version>, despues: ReturnType<typeof version>) =>
+    [...(celdasQueCambian(new Map([["trabajo", antes]]), new Map([["trabajo", despues]])).get("trabajo") ?? [])];
+
+  it("ignora segundos dentro del minuto mostrado y anima sólo Real y Cumplimiento si avanzó la estimación", () => {
+    expect(campos(version(trabajo(), "2026-09-14T15:00:05Z"), version(trabajo(), "2026-09-14T15:00:55Z"))).toEqual([]);
+    expect(campos(version(), version(trabajo(), "2026-09-14T15:01:00Z"))).toEqual(["real", "cumplimiento"]);
+  });
+  it("incluye Estado únicamente cuando cambia el color de Listo para iniciar por la demora", () => {
+    const item = trabajo({}, [paso({ planificadoHasta: "2026-09-14T15:00:00Z" })]);
+    expect(campos(version(item), version(item, "2026-09-14T15:01:00Z"))).toEqual(["estado", "real", "cumplimiento"]);
+    expect(campos(version(item, "2026-09-14T15:01:00Z"), version(item, "2026-09-14T15:02:00Z"))).toEqual(["real", "cumplimiento"]);
+  });
+  it("aísla los cambios de personal, nombre del paso, cantidad y progreso en sus celdas", () => {
+    const actual = trabajo();
+    expect(campos(version(actual), version(trabajo({}, [paso({ nombre: "Nuevo paso" })])))).toEqual(["paso"]);
+    expect(campos(version(actual), version(trabajo({}, [paso({ mesaEsMia: true, mesaUsuarioNombre: "Ana" })])))).toEqual(["personal"]);
+    expect(campos(version(actual), version({ ...actual, qtyLabel: "2 unidades" }))).toEqual(["cantidad"]);
+    expect(campos(version(actual), version({ ...actual, progressPct: 25 }))).toEqual(["avance"]);
+  });
+  it("un cambio del responsable de una dependencia sólo anima la celda En espera", () => {
+    const item = trabajo();
+    const espera = { pasoId: "previo", detalle: "Corte", texto: "Ana", tercerizado: false };
+    expect(campos(
+      revisionCeldasEnVivo(item, [estacion()], undefined, [espera]),
+      revisionCeldasEnVivo(item, [estacion()], undefined, [{ ...espera, texto: "Luis" }]),
+    )).toEqual(["estado"]);
+  });
+  it("cambiar sólo de sección no hace parpadear campos que siguen iguales", () => {
+    const item = trabajo();
+    expect(campos(version(item), version({ ...item, stepDelayed: !item.stepDelayed, stepDueDays: 0 }))).toEqual([]);
+  });
+  it("mantiene Previsto quieto aunque cambie el contexto de la proyección", () => {
+    const item = trabajo();
+    const antes = revisionCeldasEnVivo(item, [estacion()], { fin: new Date("2026-09-14T15:00:00Z"), parcial: false }, []);
+    const despues = revisionCeldasEnVivo(item, [estacion()], { fin: new Date("2026-09-14T15:00:30Z"), parcial: true }, []);
+    expect(campos(antes, despues)).toEqual([]);
+  });
+  it("no anima altas, bajas ni otras filas al modificar un campo", () => {
+    const base = version();
+    const distinto = { ...base, personal: "otro personal" };
+    const cambios = celdasQueCambian(new Map([["igual", base], ["cambia", base], ["sale", base]]), new Map([["igual", base], ["cambia", distinto], ["nueva", base]]));
+    expect([...cambios].map(([id, celdas]) => [id, [...celdas]])).toEqual([["cambia", ["personal"]]]);
   });
 });

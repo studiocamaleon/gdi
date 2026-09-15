@@ -4,8 +4,8 @@ import * as React from "react";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "./producto-ui";
+import { Button } from "./producto-ui";
 import {
   Card,
   CardAction,
@@ -13,7 +13,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "./producto-ui";
 import {
   Field,
   FieldContent,
@@ -21,10 +21,10 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import { Switch } from "@/components/ui/switch";
+import { HumanSelect, optionFromLabel } from "./producto-ui";
+import { Input } from "./producto-ui";
+import { LabelConTooltip } from "./producto-ui";
+import { Switch } from "./producto-ui";
 import { getLabel, metodoPrecioLabels } from "@/lib/labels-humanos";
 import pricingStyles from "./pricing-visual.module.css";
 

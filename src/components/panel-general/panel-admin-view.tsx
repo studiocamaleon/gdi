@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { useState } from "react";
 import Link from "next/link";
 import { Card, Chip, ListBox, Modal, Select } from "@heroui/react";
@@ -149,10 +150,7 @@ export function PanelAdminView({
             isDisabled={cargando}
             onPress={refrescar}
           >
-            <RefreshCw
-              size={14}
-              className={cargando ? s.spinning : undefined}
-            />
+            {cargando ? <GdiSpinner /> : <RefreshCw size={14} />}
             Actualizar
           </ActionButton>
           {crear && (
