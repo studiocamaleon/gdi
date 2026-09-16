@@ -1,3 +1,4 @@
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
@@ -9,11 +10,11 @@ import { tienePermiso } from "@/lib/permisos-server";
 const ProveedorFicha = dynamicImport(
   () =>
     import("@/components/proveedores/proveedor-ficha").then(
-      (module) => module.ProveedorFicha,
+      (module) => module.ProveedorFicha
     ),
   {
     loading: () => <ModulePageSkeleton variant="detail" />,
-  },
+  }
 );
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,11 @@ async function ProveedorDetallePageContent({
   }
 
   return (
-    <ProveedorFicha proveedor={proveedor} mode={canManage ? "edit" : "view"} />
+    <DesignSystemProvider theme="brand" appearance="light">
+      <ProveedorFicha
+        proveedor={proveedor}
+        mode={canManage ? "edit" : "view"}
+      />
+    </DesignSystemProvider>
   );
 }

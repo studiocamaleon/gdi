@@ -19,6 +19,13 @@ import { OperacionMaquinaEditor } from "./operacion-maquina-editor";
  */
 
 import * as React from "react";
+import {
+  CogIcon,
+  RulerIcon,
+  Settings2Icon,
+  LayersIcon,
+  WrenchIcon,
+} from "lucide-react";
 
 import { Card } from "@heroui/react";
 import { Input } from "@heroui/react";
@@ -78,11 +85,16 @@ export function MaquinaEditorIdentidad({
   return (
     <Card className={styles.card}>
       <Card.Header>
-        <Card.Title className="text-base">Identidad</Card.Title>
+        <Card.Title>
+          <CogIcon aria-hidden="true" /> Identidad del equipo
+        </Card.Title>
+        <Card.Description>
+          Datos de la máquina, ubicación y centro que define su tarifa.
+        </Card.Description>
       </Card.Header>
-      <Card.Content className="space-y-3">
+      <Card.Content className="flex flex-col gap-3">
         <div className={styles.identityGrid}>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="nombre">Nombre *</Label>
             <Input
               className={focus.singleBorder}
@@ -91,7 +103,7 @@ export function MaquinaEditorIdentidad({
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <LabelConTooltip
               label="Tipo"
               required
@@ -105,7 +117,7 @@ export function MaquinaEditorIdentidad({
           </div>
           {/* Fabricante y modelo venían del seed y no tenían dónde editarse:
               aparecían bajo el nombre en la lista como si fueran magia. */}
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="maquina-fabricante">Fabricante</Label>
             <Input
               className={focus.singleBorder}
@@ -117,7 +129,7 @@ export function MaquinaEditorIdentidad({
               }
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="maquina-modelo">Modelo</Label>
             <Input
               className={focus.singleBorder}
@@ -129,7 +141,7 @@ export function MaquinaEditorIdentidad({
               }
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="maquina-serie">Número de serie</Label>
             <Input
               className={focus.singleBorder}
@@ -140,7 +152,7 @@ export function MaquinaEditorIdentidad({
               }
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label>Estado</Label>
             <SelectField
               value={form.estado}
@@ -160,7 +172,7 @@ export function MaquinaEditorIdentidad({
               ]}
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label>Planta</Label>
             <SelectField
               value={form.plantaId}
@@ -183,7 +195,7 @@ export function MaquinaEditorIdentidad({
               ]}
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label>Centro de costo</Label>
             <SelectField
               value={form.centroCostoPrincipalId ?? SIN_CENTRO}
@@ -215,7 +227,7 @@ export function MaquinaEditorIdentidad({
               ]}
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className={styles.tariffField}>
             <LabelConTooltip
               label="Tarifa / hora"
               tooltip="Lo que cuesta una hora de esta máquina según la última planilla publicada de su centro de costo. Se edita en Centros de costo, no acá."
@@ -231,7 +243,7 @@ export function MaquinaEditorIdentidad({
             />
           </div>
           {form.plantilla !== "impresora_gran_formato_por_area" ? (
-            <div className="min-w-0 space-y-1">
+            <div className="flex min-w-0 flex-col gap-2">
               <LabelConTooltip
                 label="Geometría de trabajo"
                 tooltip="Forma del sustrato sobre el que opera la máquina. Pliego = hojas precortadas; Rollo = bobina continua; Plano/Cilindrico/Volumen = piezas tridimensionales."
@@ -256,7 +268,9 @@ export function MaquinaEditorIdentidad({
               />
             </div>
           ) : null}
-          <div className={`min-w-0 space-y-1 ${styles.identityDescription}`}>
+          <div
+            className={`flex min-w-0 flex-col gap-2 ${styles.identityDescription}`}
+          >
             <Label htmlFor="maquina-descripcion">Descripción</Label>
             <Textarea
               className={focus.singleBorder}
@@ -320,7 +334,16 @@ export function MaquinaEditorSecciones({
           }
         >
           <Card.Header>
-            <Card.Title className="text-base">
+            <Card.Title>
+              {sec.id === "perfiles_operativos" ? (
+                <LayersIcon aria-hidden="true" />
+              ) : sec.id === "desgaste_repuestos" ? (
+                <WrenchIcon aria-hidden="true" />
+              ) : sec.id === "capacidades_fisicas" ? (
+                <RulerIcon aria-hidden="true" />
+              ) : (
+                <Settings2Icon aria-hidden="true" />
+              )}
               {sec.id === "perfiles_operativos" &&
               form.parametrosTecnicos?.procesamientoCorte
                 ? "Perfiles por herramienta y material"
@@ -335,7 +358,7 @@ export function MaquinaEditorSecciones({
               </Card.Description>
             ) : null}
           </Card.Header>
-          <Card.Content className="space-y-3">
+          <Card.Content className="flex flex-col gap-3">
             {sec.id === "perfiles_operativos" ? (
               <PerfilesOperativosEditor
                 perfiles={perfiles}
@@ -375,7 +398,7 @@ export function MaquinaEditorSecciones({
                     return (
                       <div
                         key={field.key}
-                        className={`space-y-1 ${fullWidth ? "md:col-span-2" : ""}`}
+                        className={`flex min-w-0 flex-col gap-2 ${fullWidth ? "md:col-span-2" : ""}`}
                       >
                         {descripcion ? (
                           <LabelConTooltip

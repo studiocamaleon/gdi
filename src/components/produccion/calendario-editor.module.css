@@ -12,7 +12,7 @@
 }
 .cal-editor-head > label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .cal-editor-head > div {
   max-width: 320px;
@@ -21,7 +21,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 7px;
   overflow: hidden;
 }
 .cal-row {
@@ -30,7 +30,7 @@
   align-items: start;
   gap: 12px;
   padding: 10px 12px;
-  background: var(--surface);
+  background: var(--canvas-background);
 }
 .cal-row + .cal-row {
   border-top: 1px solid var(--border);
@@ -39,6 +39,9 @@
   background: var(--danger-soft);
 }
 .cal-day {
+  width: 112px;
+  height: 32px;
+  min-height: 32px;
   justify-content: flex-start;
   font-size: 11px;
 }
@@ -62,7 +65,7 @@
   width: 105px;
   height: 32px;
   min-width: 0;
-  font-size: 12px;
+  font: 11px / 1.5 var(--brand-mono);
   padding: 4px 7px;
 }
 .cal-times input:focus {
@@ -99,8 +102,5 @@
   .cal-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
-  }
-  .cal-day {
-    width: 112px;
   }
 }

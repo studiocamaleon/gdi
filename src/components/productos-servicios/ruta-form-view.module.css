@@ -2,12 +2,56 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
   color: var(--muted-text);
   font-size: 12px;
 }
 .backLink:hover {
-  color: var(--foreground);
+  color: var(--accent-soft-foreground);
+}
+.backLink:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+.headerAside {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite);
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 8px;
+}
+.summaryIcon {
+  color: var(--accent);
+}
+.summaryIcon svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.5;
+}
+.summary div > span {
+  display: block;
+  color: var(--brand-muted-on-graphite);
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.summary strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.activeSwitch {
+  font-size: 12px;
 }
 .subtitle {
   display: flex;
@@ -18,21 +62,21 @@
 .editor {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   min-width: 0;
   width: 100%;
 }
 .routeColumns {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 .identityCard.identityCard {
   gap: 0;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
   overflow: hidden;
@@ -49,9 +93,9 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 10px;
-  color: var(--accent-soft-foreground);
-  background: var(--accent-soft);
+  border-radius: 7px;
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite);
 }
 .identityIcon svg {
   width: 18px;
@@ -63,12 +107,15 @@
 .eyebrow {
   display: block;
   color: var(--muted-text);
-  font-size: 11px;
-  margin-bottom: 3px;
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
 }
 .identityCopy h3 {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
 }
 .identityCopy p {
   color: var(--muted-text);
@@ -80,6 +127,9 @@
   padding: 20px;
 }
 .fieldGroup {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: start;
   gap: 18px;
 }
 .fieldGroup label {
@@ -93,7 +143,7 @@
   font-size: 13px;
 }
 .fieldGroup textarea {
-  min-height: 100px;
+  min-height: 72px;
   resize: vertical;
 }
 .required {
@@ -108,7 +158,7 @@
   color: var(--warning);
   background: var(--warning-soft);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: none;
 }
 .versionNotice > div {
@@ -119,7 +169,7 @@
   padding: 0;
   gap: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
   overflow: hidden;
@@ -132,8 +182,12 @@
 }
 .sectionHeader strong,
 .sectionHeader h3 {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.03em;
+}
+.sectionHeader svg {
+  color: var(--accent-soft-foreground);
 }
 .sectionHeader p {
   color: var(--muted-text);
@@ -149,6 +203,10 @@
 }
 .versionRow:last-child {
   border-bottom: 0;
+}
+.versionRow[data-current="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 var(--accent);
 }
 .versionName {
   flex: 1;
@@ -167,7 +225,7 @@
   max-width: none;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 13px;
 }
 .productChoice[data-selected="true"] {
@@ -183,7 +241,7 @@
   bottom: 0;
   z-index: 10;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
 }
 .actionsCopy {
@@ -194,16 +252,18 @@
   line-height: 1.5;
 }
 @media (max-width: 1450px) {
-  .routeColumns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .fieldGroup {
-    display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-    align-items: start;
+  .headerAside {
+    flex-wrap: wrap;
   }
 }
 @media (max-width: 700px) {
+  .headerAside {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .summary {
+    flex: 1;
+  }
   .fieldGroup {
     grid-template-columns: minmax(0, 1fr);
   }

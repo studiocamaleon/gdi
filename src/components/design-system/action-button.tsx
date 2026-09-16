@@ -1,9 +1,8 @@
 "use client";
 
 import { Button, Tooltip, type ButtonProps } from "@heroui/react";
-import theme from "./theme.module.css";
 import styles from "./action-button.module.css";
-import { useDesignScope } from "./appearance";
+import { useDesignScope, useDesignTheme } from "./appearance";
 
 /** Base aprobada C/suave/compacto y tooltip con tema incluso en portales.
  * Conserva variantes, estados, refs y className dinámico de HeroUI.
@@ -18,6 +17,7 @@ export function ActionButton({
   ...props
 }: ButtonProps & { title?: string; tone?: "brand" | "neutral" }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const button = (
     <Button
       {...props}
@@ -42,7 +42,7 @@ export function ActionButton({
   return (
     <Tooltip delay={450}>
       {button}
-      <Tooltip.Content {...scope} className={theme.theme}>
+      <Tooltip.Content {...scope} className={themeClass}>
         {title}
       </Tooltip.Content>
     </Tooltip>

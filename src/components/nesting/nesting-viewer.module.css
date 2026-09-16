@@ -228,3 +228,13 @@
   background: var(--muted);
   font-size: 12px;
 }
+
+.legend { gap: 8px; padding: 16px 0; }
+.legend > .label { flex-basis: 100%; font: 400 9px/1.5 var(--brand-mono, monospace); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+.legendItem { padding: 5px 8px; gap: 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); }
+.swatch { width: 12px; height: 12px; border-radius: 2px; }
+.count { margin-left: 2px; font-family: var(--brand-mono, monospace); }
+.footer { padding-block: 16px; gap: 12px 24px; }
+.footer > span { display: flex; flex-direction: column; gap: 4px; }
+.footer .key { font: 400 10px/1.5 var(--brand-mono, monospace); }
+.footer .valueSmall { font-size: 14px; font-weight: 500; }

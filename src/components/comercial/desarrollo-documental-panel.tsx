@@ -74,14 +74,18 @@ export function DesarrolloDocumentalPanel({
   archivos,
   ordenes,
   canManage,
+  onCambio,
+  onEdicionChange,
 }: {
   campanaId: string;
   initial: DesarrolloDocumental;
   archivos: Archivo[];
   ordenes: Orden[];
   canManage: boolean;
+  onCambio: (next: DesarrolloDocumental) => void;
+  onEdicionChange: (editing: boolean) => void;
 }) {
-  const [data, setData] = React.useState(initial);
+  const data = initial;
   const [maestroOpen, setMaestroOpen] = React.useState(false);
   const [revisionDe, setRevisionDe] = React.useState<ArchivoMaestro | null>(
     null,
@@ -98,18 +102,19 @@ export function DesarrolloDocumentalPanel({
   const [working, setWorking] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (
-      !working &&
-      !maestroOpen &&
-      !revisionDe &&
-      !solicitudDe &&
-      !decisionDe &&
-      !gateOpen
-    ) {
-      setData(initial);
-    }
+    onEdicionChange(
+      Boolean(
+        working ||
+        maestroOpen ||
+        revisionDe ||
+        solicitudDe ||
+        decisionDe ||
+        gateOpen,
+      ),
+    );
+    return () => onEdicionChange(false);
   }, [
-    initial,
+    onEdicionChange,
     working,
     maestroOpen,
     revisionDe,
@@ -118,8 +123,6 @@ export function DesarrolloDocumentalPanel({
     gateOpen,
   ]);
 
-  const actualizar = (next: DesarrolloDocumental) => setData(next);
-
   async function ejecutar(
     key: string,
     action: () => Promise<DesarrolloDocumental>,
@@ -127,7 +130,7 @@ export function DesarrolloDocumentalPanel({
   ) {
     setWorking(key);
     try {
-      actualizar(await action());
+      onCambio(await action());
       toast.success(ok);
       return true;
     } catch (error) {
@@ -155,7 +158,7 @@ export function DesarrolloDocumentalPanel({
           etapa: String(form.get("etapa")) as EtapaDesarrolloDocumento,
           descripcion: String(form.get("descripcion") || "") || undefined,
         }),
-      "Documento controlado creado.",
+      "Grupo de versiones creado.",
     );
     if (ok) setMaestroOpen(false);
   }
@@ -246,7 +249,7 @@ export function DesarrolloDocumentalPanel({
           tipoAprobacion: tipo,
           nombre: `${maestro?.nombre ?? "Documento"} · ${labelTipo(tipo)}`,
         }),
-      "Gate productivo configurado.",
+      "Control de producción configurado.",
     );
     if (ok) setGateOpen(false);
   }
@@ -271,10 +274,11 @@ export function DesarrolloDocumentalPanel({
     <section className={styles.developmentPanel}>
       <div className={styles.developmentHeader}>
         <div>
-          <p className={styles.technicalEyebrow}>CONTROL DOCUMENTAL · FASE 2</p>
-          <h2>Desarrollo y aprobaciones</h2>
+          <p className={styles.technicalEyebrow}>ARTE DE CAMPAÑA</p>
+          <h2>Versiones y aprobaciones</h2>
           <p>
-            La producción usa la revisión liberada, nunca el último adjunto.
+            Agrupá las versiones de cada arte, revisá aprobaciones y elegí cuál
+            liberar para producción.
           </p>
         </div>
         {canManage ? (
@@ -285,34 +289,36 @@ export function DesarrolloDocumentalPanel({
                 size="sm"
                 onPress={() => setGateOpen(true)}
               >
-                <LockKeyholeIcon data-icon="inline-start" /> Configurar gate
+                <LockKeyholeIcon data-icon="inline-start" /> Configurar control
               </ActionButton>
             ) : null}
             <ActionButton size="sm" onPress={() => setMaestroOpen(true)}>
-              <PlusIcon data-icon="inline-start" /> Nuevo documento
+              <PlusIcon data-icon="inline-start" /> Organizar versiones
             </ActionButton>
           </div>
         ) : null}
       </div>
 
-      <div className={styles.developmentStats}>
-        <div>
-          <span>Documentos</span>
-          <strong>{data.maestros.length}</strong>
+      {data.maestros.length > 0 ? (
+        <div className={styles.developmentStats}>
+          <div>
+            <span>Grupos</span>
+            <strong>{data.maestros.length}</strong>
+          </div>
+          <div>
+            <span>Revisiones</span>
+            <strong>{revisiones}</strong>
+          </div>
+          <div data-alert={pendientes > 0}>
+            <span>Pendientes</span>
+            <strong>{pendientes}</strong>
+          </div>
+          <div data-ok={liberados > 0}>
+            <span>Liberados</span>
+            <strong>{liberados}</strong>
+          </div>
         </div>
-        <div>
-          <span>Revisiones</span>
-          <strong>{revisiones}</strong>
-        </div>
-        <div data-alert={pendientes > 0}>
-          <span>Pendientes</span>
-          <strong>{pendientes}</strong>
-        </div>
-        <div data-ok={liberados > 0}>
-          <span>Liberados</span>
-          <strong>{liberados}</strong>
-        </div>
-      </div>
+      ) : null}
 
       {data.maestros.length ? (
         <div className={styles.masterList}>
@@ -348,6 +354,14 @@ export function DesarrolloDocumentalPanel({
                       <ShieldCheckIcon />
                       <span>Liberada</span>
                       <strong>V{maestro.revisionLiberada.numero}</strong>
+                      <a
+                        href={urlDeArchivo(maestro.revisionLiberada.archivo.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Abrir V${maestro.revisionLiberada.numero} liberada de ${maestro.nombre}`}
+                      >
+                        Abrir archivo <DownloadIcon aria-hidden />
+                      </a>
                     </>
                   ) : (
                     <>
@@ -359,188 +373,206 @@ export function DesarrolloDocumentalPanel({
                 </div>
               </header>
 
-              <div className={styles.revisionList}>
-                {maestro.revisiones.length ? (
-                  maestro.revisiones.map((revision) => {
-                    const pendiente = revision.solicitudes.find(
-                      (s) => s.estado === "PENDIENTE",
-                    );
-                    return (
-                      <div
-                        className={styles.revisionRow}
-                        key={revision.id}
-                        data-status={revision.estado}
-                      >
-                        <div className={styles.revisionNumber}>
-                          V{revision.numero}
-                        </div>
-                        <div className={styles.revisionMain}>
-                          <div className={styles.revisionTop}>
-                            <a
-                              href={urlDeArchivo(revision.archivo.id)}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {revision.archivo.nombre} <DownloadIcon />
-                            </a>
-                            <span
-                              className={styles.documentStatus}
-                              data-status={revision.estado}
-                            >
-                              {labelEstado(revision.estado)}
-                            </span>
+              <details
+                className={styles.revisionHistory}
+                open={maestro.revisiones.some((r) =>
+                  r.solicitudes.some((s) => s.estado === "PENDIENTE"),
+                )}
+              >
+                <summary>
+                  Historial y aprobaciones{" "}
+                  <span>
+                    {maestro.revisiones.length}{" "}
+                    {maestro.revisiones.length === 1 ? "versión" : "versiones"}
+                  </span>
+                </summary>
+                <div className={styles.revisionList}>
+                  {maestro.revisiones.length ? (
+                    maestro.revisiones.map((revision) => {
+                      const pendiente = revision.solicitudes.find(
+                        (s) => s.estado === "PENDIENTE",
+                      );
+                      return (
+                        <div
+                          className={styles.revisionRow}
+                          key={revision.id}
+                          data-status={revision.estado}
+                        >
+                          <div className={styles.revisionNumber}>
+                            V{revision.numero}
                           </div>
-                          <div className={styles.revisionMeta}>
-                            {formatBytes(revision.archivo.bytes)} ·{" "}
-                            {revision.autorNombre} · SHA-256{" "}
-                            {revision.hash?.slice(0, 10)}…
-                          </div>
-                          {revision.comentario ? (
-                            <p className={styles.revisionComment}>
-                              {revision.comentario}
-                            </p>
-                          ) : null}
-                          {revision.solicitudes.map((solicitud) => (
-                            <div
-                              className={styles.approvalStrip}
-                              key={solicitud.id}
-                              data-status={solicitud.estado}
-                            >
-                              <ClipboardCheckIcon />
-                              <div>
-                                <strong>
-                                  {labelTipo(solicitud.tipo)} ·{" "}
-                                  {labelEstado(solicitud.estado)}
-                                </strong>
-                                <span>
-                                  {solicitud.comentario ||
-                                    "Sin indicaciones adicionales"}
-                                </span>
-                              </div>
-                              {solicitud.estado === "PENDIENTE" && canManage ? (
-                                <div className={styles.inlineActions}>
-                                  {solicitud.permiteDecisionExterna ? (
-                                    <>
-                                      <ActionButton
-                                        variant="ghost"
-                                        size="sm"
-                                        isPending={
-                                          working === `link-${solicitud.id}`
-                                        }
-                                        onPress={() =>
-                                          void compartir(solicitud.id)
-                                        }
-                                      >
-                                        <CopyIcon data-icon="inline-start" />{" "}
-                                        Link
-                                      </ActionButton>
-                                      <ActionButton
-                                        variant="ghost"
-                                        size="sm"
-                                        isPending={
-                                          working === `revocar-${solicitud.id}`
-                                        }
-                                        onPress={() =>
-                                          void ejecutar(
-                                            `revocar-${solicitud.id}`,
-                                            () =>
-                                              revocarLinkAprobacion(
-                                                solicitud.id,
-                                              ),
-                                            "Link externo revocado.",
-                                          )
-                                        }
-                                      >
-                                        <Link2OffIcon data-icon="inline-start" />{" "}
-                                        Revocar
-                                      </ActionButton>
-                                    </>
-                                  ) : null}
-                                  <ActionButton
-                                    variant="outline"
-                                    size="sm"
-                                    onPress={() =>
-                                      setDecisionDe({
-                                        solicitudId: solicitud.id,
-                                        revision: `V${revision.numero}`,
-                                        decision: "OBSERVAR",
-                                      })
-                                    }
-                                  >
-                                    Observar
-                                  </ActionButton>
-                                  <ActionButton
-                                    variant="outline"
-                                    size="sm"
-                                    onPress={() =>
-                                      setDecisionDe({
-                                        solicitudId: solicitud.id,
-                                        revision: `V${revision.numero}`,
-                                        decision: "RECHAZAR",
-                                      })
-                                    }
-                                  >
-                                    Rechazar
-                                  </ActionButton>
-                                  <ActionButton
-                                    size="sm"
-                                    onPress={() =>
-                                      setDecisionDe({
-                                        solicitudId: solicitud.id,
-                                        revision: `V${revision.numero}`,
-                                        decision: "APROBAR",
-                                      })
-                                    }
-                                  >
-                                    Aprobar
-                                  </ActionButton>
+                          <div className={styles.revisionMain}>
+                            <div className={styles.revisionTop}>
+                              <a
+                                href={urlDeArchivo(revision.archivo.id)}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {revision.archivo.nombre} <DownloadIcon />
+                              </a>
+                              <span
+                                className={styles.documentStatus}
+                                data-status={revision.estado}
+                              >
+                                {labelEstado(revision.estado)}
+                              </span>
+                            </div>
+                            <div className={styles.revisionMeta}>
+                              {formatBytes(revision.archivo.bytes)} ·{" "}
+                              {revision.autorNombre} · SHA-256{" "}
+                              {revision.hash?.slice(0, 10)}…
+                            </div>
+                            {revision.comentario ? (
+                              <p className={styles.revisionComment}>
+                                {revision.comentario}
+                              </p>
+                            ) : null}
+                            {revision.solicitudes.map((solicitud) => (
+                              <div
+                                className={styles.approvalStrip}
+                                key={solicitud.id}
+                                data-status={solicitud.estado}
+                              >
+                                <ClipboardCheckIcon />
+                                <div>
+                                  <strong>
+                                    {labelTipo(solicitud.tipo)} ·{" "}
+                                    {labelEstado(solicitud.estado)}
+                                  </strong>
+                                  <span>
+                                    {solicitud.comentario ||
+                                      "Sin indicaciones adicionales"}
+                                  </span>
                                 </div>
+                                {solicitud.estado === "PENDIENTE" &&
+                                canManage ? (
+                                  <div className={styles.inlineActions}>
+                                    {solicitud.permiteDecisionExterna ? (
+                                      <>
+                                        <ActionButton
+                                          variant="ghost"
+                                          size="sm"
+                                          isPending={
+                                            working === `link-${solicitud.id}`
+                                          }
+                                          onPress={() =>
+                                            void compartir(solicitud.id)
+                                          }
+                                        >
+                                          <CopyIcon data-icon="inline-start" />{" "}
+                                          Link
+                                        </ActionButton>
+                                        <ActionButton
+                                          variant="ghost"
+                                          size="sm"
+                                          isPending={
+                                            working ===
+                                            `revocar-${solicitud.id}`
+                                          }
+                                          onPress={() =>
+                                            void ejecutar(
+                                              `revocar-${solicitud.id}`,
+                                              () =>
+                                                revocarLinkAprobacion(
+                                                  solicitud.id,
+                                                ),
+                                              "Link externo revocado.",
+                                            )
+                                          }
+                                        >
+                                          <Link2OffIcon data-icon="inline-start" />{" "}
+                                          Revocar
+                                        </ActionButton>
+                                      </>
+                                    ) : null}
+                                    <ActionButton
+                                      variant="outline"
+                                      size="sm"
+                                      onPress={() =>
+                                        setDecisionDe({
+                                          solicitudId: solicitud.id,
+                                          revision: `V${revision.numero}`,
+                                          decision: "OBSERVAR",
+                                        })
+                                      }
+                                    >
+                                      Observar
+                                    </ActionButton>
+                                    <ActionButton
+                                      variant="outline"
+                                      size="sm"
+                                      onPress={() =>
+                                        setDecisionDe({
+                                          solicitudId: solicitud.id,
+                                          revision: `V${revision.numero}`,
+                                          decision: "RECHAZAR",
+                                        })
+                                      }
+                                    >
+                                      Rechazar
+                                    </ActionButton>
+                                    <ActionButton
+                                      size="sm"
+                                      onPress={() =>
+                                        setDecisionDe({
+                                          solicitudId: solicitud.id,
+                                          revision: `V${revision.numero}`,
+                                          decision: "APROBAR",
+                                        })
+                                      }
+                                    >
+                                      Aprobar
+                                    </ActionButton>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                          {canManage ? (
+                            <div className={styles.revisionActions}>
+                              {!pendiente &&
+                              revision.estado !== "OBSOLETA" &&
+                              revision.estado !== "APROBADA" ? (
+                                <ActionButton
+                                  variant="outline"
+                                  size="sm"
+                                  onPress={() => setSolicitudDe(revision)}
+                                >
+                                  <ClipboardCheckIcon data-icon="inline-start" />{" "}
+                                  Solicitar
+                                </ActionButton>
+                              ) : null}
+                              {revision.estado === "APROBADA" &&
+                              maestro.revisionLiberada?.id !== revision.id ? (
+                                <ActionButton
+                                  size="sm"
+                                  isPending={
+                                    working === `liberar-${revision.id}`
+                                  }
+                                  onPress={() =>
+                                    void ejecutar(
+                                      `liberar-${revision.id}`,
+                                      () => liberarRevision(revision.id),
+                                      `V${revision.numero} liberada a producción.`,
+                                    )
+                                  }
+                                >
+                                  <FlagIcon data-icon="inline-start" /> Liberar
+                                </ActionButton>
                               ) : null}
                             </div>
-                          ))}
+                          ) : null}
                         </div>
-                        {canManage ? (
-                          <div className={styles.revisionActions}>
-                            {!pendiente &&
-                            revision.estado !== "OBSOLETA" &&
-                            revision.estado !== "APROBADA" ? (
-                              <ActionButton
-                                variant="outline"
-                                size="sm"
-                                onPress={() => setSolicitudDe(revision)}
-                              >
-                                <ClipboardCheckIcon data-icon="inline-start" />{" "}
-                                Solicitar
-                              </ActionButton>
-                            ) : null}
-                            {revision.estado === "APROBADA" &&
-                            maestro.revisionLiberada?.id !== revision.id ? (
-                              <ActionButton
-                                size="sm"
-                                isPending={working === `liberar-${revision.id}`}
-                                onPress={() =>
-                                  void ejecutar(
-                                    `liberar-${revision.id}`,
-                                    () => liberarRevision(revision.id),
-                                    `V${revision.numero} liberada a producción.`,
-                                  )
-                                }
-                              >
-                                <FlagIcon data-icon="inline-start" /> Liberar
-                              </ActionButton>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className={styles.noRevisions}>
-                    Sin revisiones. Vinculá el primer archivo para iniciar el
-                    circuito.
-                  </div>
-                )}
-              </div>
+                      );
+                    })
+                  ) : (
+                    <div className={styles.noRevisions}>
+                      Sin revisiones. Vinculá el primer archivo para iniciar el
+                      circuito.
+                    </div>
+                  )}
+                </div>
+              </details>
 
               <footer className={styles.masterFooter}>
                 <div className={styles.gateSummary}>
@@ -552,7 +584,7 @@ export function DesarrolloDocumentalPanel({
                             `${g.orden.numero}${g.paso ? ` / ${g.paso.nombre}` : ""}`,
                         )
                         .join(" · ")
-                    : "Sin gates productivos configurados"}
+                    : "Sin controles productivos configurados"}
                 </div>
                 {canManage ? (
                   <ActionButton
@@ -567,25 +599,16 @@ export function DesarrolloDocumentalPanel({
             </Card>
           ))}
         </div>
-      ) : (
-        <div className={styles.developmentEmpty}>
-          <FileClockIcon />
-          <h3>Todavía no hay documentos controlados</h3>
-          <p>
-            Creá el primer maestro para separar versiones, decisiones y
-            liberación productiva.
-          </p>
-        </div>
-      )}
+      ) : null}
 
       <CampanaDialog
         isOpen={maestroOpen}
         onOpenChange={setMaestroOpen}
-        title={<>Nuevo documento controlado</>}
+        title={<span className={form.dialogTitle}>Organizar versiones</span>}
         description={
           <>
-            Definí el propósito lógico; cada cambio de contenido será una
-            revisión.
+            Creá un grupo para un arte o plano. Después podrás incorporar sus
+            archivos como revisiones y solicitar aprobaciones.
           </>
         }
       >
@@ -641,7 +664,7 @@ export function DesarrolloDocumentalPanel({
               Cancelar
             </ActionButton>
             <ActionButton type="submit" isPending={working === "maestro"}>
-              Crear documento
+              Crear grupo
             </ActionButton>
           </Modal.Footer>
         </form>
@@ -650,11 +673,11 @@ export function DesarrolloDocumentalPanel({
       <CampanaDialog
         isOpen={Boolean(revisionDe)}
         onOpenChange={(open) => !open && setRevisionDe(null)}
-        title={<>Agregar revisión</>}
+        title={<span className={form.dialogTitle}>Agregar revisión</span>}
         description={
           <>
-            {revisionDe?.nombre}. Elegí un adjunto con SHA-256; su contenido
-            quedará inmutable.
+            {revisionDe?.nombre}. Elegí un adjunto para conservarlo como una
+            nueva versión; su contenido quedará protegido.
           </>
         }
       >
@@ -675,16 +698,18 @@ export function DesarrolloDocumentalPanel({
                       label: "Seleccionar archivo…",
                       disabled: true,
                     },
-                    ...archivos.map((a) => ({
-                      value: a.id,
-                      label: [
-                        a.nombre,
-                        " ",
-                        "·",
-                        " ",
-                        formatBytes(a.bytes),
-                      ].join(""),
-                    })),
+                    ...archivos
+                      .filter((a) => !a.autogeneradoPor)
+                      .map((a) => ({
+                        value: a.id,
+                        label: [
+                          a.nombre,
+                          " ",
+                          "·",
+                          " ",
+                          formatBytes(a.bytes),
+                        ].join(""),
+                      })),
                   ]}
                 />
               </label>
@@ -698,8 +723,9 @@ export function DesarrolloDocumentalPanel({
               </label>
             </div>
             <p className={form.hint}>
-              Los adjuntos anteriores a esta fase pueden no tener hash. Si el
-              sistema lo indica, volvé a subir el archivo desde el tab Archivos.
+              Subí primero el archivo en Adjuntos generales, en esta misma
+              pestaña. Si un archivo antiguo no puede registrarse, volvé a
+              subirlo para verificar su contenido.
             </p>
           </div>
           <Modal.Footer className={form.footer}>
@@ -713,6 +739,7 @@ export function DesarrolloDocumentalPanel({
             <ActionButton
               type="submit"
               isPending={working === `revision-${revisionDe?.id}`}
+              isDisabled={!archivos.some((a) => !a.autogeneradoPor)}
             >
               Registrar revisión
             </ActionButton>
@@ -723,7 +750,11 @@ export function DesarrolloDocumentalPanel({
       <CampanaDialog
         isOpen={Boolean(solicitudDe)}
         onOpenChange={(open) => !open && setSolicitudDe(null)}
-        title={<>Solicitar aprobación de V{solicitudDe?.numero}</>}
+        title={
+          <span className={form.dialogTitle}>
+            Solicitar aprobación de V{solicitudDe?.numero}
+          </span>
+        }
         description={<>Definí quién decide y qué conformidad se necesita.</>}
       >
         <form onSubmit={guardarSolicitud}>
@@ -867,7 +898,11 @@ export function DesarrolloDocumentalPanel({
       <CampanaDialog
         isOpen={gateOpen}
         onOpenChange={setGateOpen}
-        title={<>Configurar gate productivo</>}
+        title={
+          <span className={form.dialogTitle}>
+            Configurar control productivo
+          </span>
+        }
         description={
           <>
             La OT no podrá comenzar hasta que la revisión liberada tenga esta
@@ -894,12 +929,12 @@ export function DesarrolloDocumentalPanel({
                 />
               </label>
               <label>
-                <span className={form.label}>Documento</span>
+                <span className={form.label}>Grupo de archivos</span>
                 <SelectField
                   className={form.select}
                   name="archivoMaestroId"
                   required
-                  aria-label="Documento"
+                  aria-label="Grupo de archivos"
                   options={[
                     ...data.maestros.map((m) => ({
                       value: m.id,
@@ -921,8 +956,8 @@ export function DesarrolloDocumentalPanel({
             <div className={styles.gateWarning}>
               <LockKeyholeIcon />
               <span>
-                El control se evalúa en el backend en cada intento de iniciar
-                producción.
+                La producción quedará bloqueada hasta contar con la aprobación
+                requerida para la versión liberada.
               </span>
             </div>
           </div>
@@ -935,7 +970,7 @@ export function DesarrolloDocumentalPanel({
               Cancelar
             </ActionButton>
             <ActionButton type="submit" isPending={working === "gate"}>
-              Activar gate
+              Activar control
             </ActionButton>
           </Modal.Footer>
         </form>

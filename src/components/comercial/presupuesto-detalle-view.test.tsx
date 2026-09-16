@@ -1,0 +1,162 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+import type { MembershipRole } from "@/lib/auth";
+import type { PresupuestoDetalle } from "@/lib/presupuestos-api";
+import { PresupuestoDetalleView } from "./presupuesto-detalle-view";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
+const item: PresupuestoDetalle["items"][number] = {
+  cotizacionItemId: "item-1",
+  codigo: "CAT-1",
+  nombre: "Producto de prueba",
+  familia: "Impresión",
+  cantidad: 500,
+  cantidadUnidad: "u.",
+  subtotal: 900,
+  impuestos: 189,
+  total: 1089,
+  descuentoMonto: 100,
+  descuentoPct: 10,
+  totalLista: 1210,
+  specs: [{ etiqueta: "Material", valor: "Papel ilustración 300 g" }],
+  adicionales: ["Laminado mate"],
+  conversion: null,
+};
+const inicial: PresupuestoDetalle = {
+  id: "presupuesto-1",
+  numero: "PRES-PRUEBA",
+  estado: "enviado",
+  cliente: { id: "cliente-1", nombre: "Cliente de prueba" },
+  vendedor: null,
+  proyectoCampana: null,
+  canalVenta: "mostrador",
+  fechaEmision: "2026-09-15",
+  fechaValidez: "2026-09-30",
+  fechaEnvio: null,
+  fechaResuelto: null,
+  primeraVistaEl: null,
+  motivoPerdida: null,
+  motivoPerdidaDetalle: null,
+  aprobacionMotivos: [],
+  aprobacionSolicitadaEl: null,
+  aprobacionResueltaPor: null,
+  observaciones: "Entregar embalado",
+  senaSugeridaPct: 50,
+  subtotal: 900,
+  impuestos: 189,
+  total: 1089,
+  cargosDirectos: 0,
+  fechaEntrega: "2026-10-01",
+  publicToken: "token-de-prueba",
+  ordenConvertida: null,
+  ordenConvertidaId: null,
+  ordenesConvertidas: [],
+  descuentoTotal: 100,
+  fidelizacion: {
+    puntosEstimados: 20,
+    canjePuntos: 0,
+    canjeMonto: 0,
+    estado: "pendiente",
+  },
+  items: [item],
+  eventos: [],
+};
+const render = (
+  overrides: Partial<PresupuestoDetalle> = {},
+  rol: MembershipRole = "operador",
+) =>
+  renderToStaticMarkup(
+    <PresupuestoDetalleView inicial={{ ...inicial, ...overrides }} rol={rol} />,
+  );
+const button = (html: string, label: string) =>
+  [...html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].find(([markup]) =>
+    markup.includes(label),
+  )?.[0];
+
+describe("acciones y datos de la ficha de presupuesto", () => {
+  it("mantiene el detalle comercial y los descuentos del snapshot", () => {
+    const html = render();
+    for (const value of [
+      "Producto de prueba",
+      "Papel ilustración 300 g",
+      "Laminado mate",
+      "Entregar embalado",
+      "10%",
+      "50%",
+      "20 puntos",
+    ]) {
+      expect(html).toContain(value);
+    }
+    expect(html).toContain("1.089");
+    expect(html).toContain("/api/backend/presupuestos/presupuesto-1/pdf");
+  });
+
+  it("un enviado permite registrar rechazo y todavía no convertir", () => {
+    const html = render();
+    expect(button(html, "Registrar rechazo")).toBeDefined();
+    expect(button(html, "Convertir en orden")).toBeUndefined();
+    expect(button(html, "Enviar al cliente")).toBeUndefined();
+  });
+
+  it("la aprobación interna sólo ofrece acciones a administrador y supervisor", () => {
+    const pendiente: Partial<PresupuestoDetalle> = {
+      estado: "pendiente_aprobacion",
+      aprobacionMotivos: [
+        { regla: "monto", detalle: "Supera el monto permitido" },
+      ],
+    };
+    const operador = render(pendiente);
+    expect(operador).toContain("Supera el monto permitido");
+    expect(button(operador, "Aprobar y enviar")).toBeUndefined();
+    expect(button(operador, "Devolver")).toBeUndefined();
+    for (const rol of ["administrador", "supervisor"] as const) {
+      const html = render(pendiente, rol);
+      expect(button(html, "Aprobar y enviar")).toBeDefined();
+      expect(button(html, "Devolver")).toBeDefined();
+    }
+  });
+
+  it("habilita convertir sólo con productos pendientes seleccionados", () => {
+    const aprobado = render({ estado: "aprobado" });
+    expect(button(aprobado, "Convertir en orden")).not.toMatch(
+      / disabled(?:[=>\s])/,
+    );
+    const sinPendientes = render({
+      estado: "aprobado",
+      items: [{ ...item, conversion: { id: "ot-1", numero: "OT-1" } }],
+    });
+    expect(button(sinPendientes, "Convertir en orden")).toMatch(
+      / disabled(?:[=>\s])/,
+    );
+  });
+
+  it("conserva enlaces a todas las órdenes convertidas", () => {
+    const html = render({
+      estado: "convertido",
+      ordenesConvertidas: [
+        { id: "ot-1", numero: "OT-1" },
+        { id: "ot-2", numero: "OT-2" },
+      ],
+    });
+    expect(html).toContain('href="/produccion/ordenes/ot-1"');
+    expect(html).toContain('href="/produccion/ordenes/ot-2"');
+    expect(button(html, "Convertir en orden")).toBeUndefined();
+  });
+
+  it("sólo el borrador ofrece enviar al cliente", () => {
+    expect(
+      button(
+        render({ estado: "borrador", publicToken: null }),
+        "Enviar al cliente",
+      ),
+    ).toBeDefined();
+    for (const estado of ["rechazado", "vencido"] as const) {
+      const html = render({ estado });
+      expect(button(html, "Enviar al cliente")).toBeUndefined();
+      expect(button(html, "Convertir en orden")).toBeUndefined();
+    }
+  });
+});

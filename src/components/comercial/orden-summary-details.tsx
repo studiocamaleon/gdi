@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Folder, Pencil, User } from "lucide-react";
-import { Avatar } from "@heroui/react";
+import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import type { ReactNode } from "react";
 import { ActionButton } from "@/components/design-system/action-button";
 import s from "./orden-summary-details.module.css";
@@ -19,16 +19,9 @@ export function OrdenSummaryDetails({
   campana?: string;
   fecha: string;
   vendedor: string;
-  onShowData: () => void;
+  onShowData?: () => void;
   children: ReactNode;
 }) {
-  const initials = vendedor
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((_, i, parts) => i === 0 || i === parts.length - 1)
-    .map((p) => p[0])
-    .join("")
-    .toUpperCase();
   return (
     <>
       <h2 className={s.title}>Resumen de la orden</h2>
@@ -37,7 +30,7 @@ export function OrdenSummaryDetails({
           <User aria-hidden />
           <div>
             <dt>Cliente</dt>
-            <dd>{cliente || "—"}</dd>
+            <dd>{cliente || "Sin cliente asignado"}</dd>
           </div>
         </div>
         {campana && (
@@ -55,14 +48,16 @@ export function OrdenSummaryDetails({
             <dt>Fecha de entrega</dt>
             <dd className={s.date}>
               <span>{fecha}</span>
-              <ActionButton
-                variant="ghost"
-                isIconOnly
-                aria-label="Ver datos de entrega"
-                onPress={onShowData}
-              >
-                <Pencil />
-              </ActionButton>
+              {onShowData ? (
+                <ActionButton
+                  variant="ghost"
+                  isIconOnly
+                  aria-label="Ver datos de entrega"
+                  onPress={onShowData}
+                >
+                  <Pencil />
+                </ActionButton>
+              ) : null}
             </dd>
           </div>
         </div>
@@ -71,9 +66,7 @@ export function OrdenSummaryDetails({
           <div>
             <dt>Vendedor</dt>
             <dd className={s.seller}>
-              <Avatar size="sm" className={s.avatar}>
-                <Avatar.Fallback>{initials}</Avatar.Fallback>
-              </Avatar>
+              <IdentityAvatar name={vendedor} />
               <span>{vendedor}</span>
             </dd>
           </div>

@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { RotateCw, LockKeyhole, Download, RefreshCw } from 'lucide-react';
+import { RotateCw, LockKeyhole, Download, RefreshCw, Scan } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { ActionButton } from '@/components/design-system/action-button';
+import { useDesignScope, useLegacyDesignScope } from '@/components/design-system/appearance';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,6 +30,8 @@ export function DibujoSimulacionRollo({ datos, alternativa, svgRef }: {
 }
 
 export function SimularNestingCola({ maquinaId, pasoIds, onCerrar }: { maquinaId: string; pasoIds: string[]; onCerrar: () => void }) {
+  const scope = useDesignScope();
+  const { className: brandTheme } = useLegacyDesignScope();
   const [datos, setDatos] = React.useState<SimulacionNestingCola | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [ancho, setAncho] = React.useState<number | null>(null);
@@ -59,13 +62,14 @@ export function SimularNestingCola({ maquinaId, pasoIds, onCerrar }: { maquinaId
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <Dialog open onOpenChange={open => { if (!open) onCerrar(); }}>
-    <DialogContent className={cn(theme.theme, s.dialog)}>
+    <DialogContent {...scope} className={cn(brandTheme ?? theme.theme, s.dialog)}>
       <DialogHeader className={s.header}>
-        <DialogTitle className={ui.sectionTitle}>Simular nesting</DialogTitle>
+        <span className={s.eyebrow}><Scan size={13} aria-hidden />Producción · Nesting</span>
+        <DialogTitle className={s.title}>Simular nesting<span className={s.titleDot}>.</span></DialogTitle>
         <DialogDescription>{datos ? `${datos.maquina.nombre} · ${datos.materialNombre} · ${datos.trabajos.length} trabajos · ${datos.piezas.length} piezas / paneles` : `${pasoIds.length} trabajos seleccionados · Acomodo en rollo`}</DialogDescription>
       </DialogHeader>
       <div className={s.body}>
-        {error ? <Alert variant="destructive"><AlertTitle>No se pudo simular</AlertTitle><AlertDescription>{error}<Button variant="outline" size="sm" onClick={() => setRevision(v => v + 1)}><RefreshCw data-icon="inline-start" />Reintentar</Button></AlertDescription></Alert>
+        {error ? <Alert variant="destructive"><AlertTitle>No se pudo simular</AlertTitle><AlertDescription>{error}<ActionButton variant="outline" size="sm" onPress={() => setRevision(v => v + 1)}><RefreshCw size={16} aria-hidden />Reintentar</ActionButton></AlertDescription></Alert>
           : !datos ? <div role="status" className={s.loading}><p>Comparando los anchos del material…</p><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div>
           : <>
             {alternativa && <>
@@ -90,8 +94,8 @@ export function SimularNestingCola({ maquinaId, pasoIds, onCerrar }: { maquinaId
           </>}
       </div>
       <footer className={s.footer}><p>Simulación orientativa. La combinación queda a criterio del impresor. Las OT y la planificación se mantienen.</p><div className={s.actions}>
-        {alternativa && <Button variant="outline" onClick={descargar}><Download data-icon="inline-start" />Descargar dibujo</Button>}
-        <Button onClick={onCerrar}>Cerrar</Button>
+        {alternativa && <ActionButton variant="outline" onPress={descargar}><Download size={16} aria-hidden />Descargar dibujo</ActionButton>}
+        <ActionButton onPress={onCerrar}>Cerrar</ActionButton>
       </div></footer>
     </DialogContent>
   </Dialog>;

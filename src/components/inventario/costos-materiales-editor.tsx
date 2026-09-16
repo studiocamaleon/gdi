@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,13 +9,15 @@ import {
   SaveIcon,
   PackageIcon,
   DollarSignIcon,
+  LayersIcon,
+  SlidersHorizontalIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card, Chip, Input, Label, SearchField, Switch } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
+import { ListMetric } from "@/components/design-system/list-metric";
 import { SelectField } from "@/components/design-system/select-field";
-import theme from "@/components/design-system/theme.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import layout from "@/components/design-system/list-page.module.css";
 import materialStyles from "./materiales.module.css";
@@ -66,6 +69,8 @@ function parsePrecio(value: string): number | null {
 }
 
 export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const router = useRouter();
   const [saving, setSaving] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -192,7 +197,7 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
   };
 
   return (
-    <section data-ui="heroui" className={`${theme.theme} ${layout.page}`}>
+    <section {...scope} data-visual="brand" className={`${themeClass} ${layout.page} ${materialStyles.page}`}>
       <Link
         href="/inventario/materias-primas"
         className={materialStyles.backLink}
@@ -201,7 +206,8 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
       </Link>
       <header className={layout.header}>
         <div>
-          <h1>Editar costos de materiales</h1>
+          <p className={materialStyles.eyebrow}>Inventario · Costos</p>
+          <h1>Editor de costos<span className={materialStyles.titleDot}>.</span></h1>
           <p className={layout.subtitle}>
             Precios de referencia por variante y unidades de consumo y compra
             por material.
@@ -218,6 +224,27 @@ export function CostosMaterialesEditor({ initialMateriasPrimas }: Props) {
             : `Guardar cambios${totalCambios > 0 ? ` (${totalCambios})` : ""}`}
         </ActionButton>
       </header>
+      <div className={materialStyles.metrics}>
+        <ListMetric
+          label="Materiales"
+          value={initialMateriasPrimas.length}
+          hint="Catálogo de tu empresa"
+          icon={PackageIcon}
+        />
+        <ListMetric
+          label="Variantes"
+          value={initialMateriasPrimas.reduce((total, item) => total + item.variantes.length, 0)}
+          hint="Precios de referencia individuales"
+          icon={LayersIcon}
+        />
+        <ListMetric
+          label="Cambios pendientes"
+          value={totalCambios}
+          hint="Se aplican al guardar"
+          icon={SlidersHorizontalIcon}
+          tone={totalCambios > 0 ? "brand" : "neutral"}
+        />
+      </div>
       <Card className={layout.results}>
         <div className={layout.toolbar}>
           <SearchField

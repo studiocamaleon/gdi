@@ -1,9 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { PanelGeneralView, saludoSegunMomento } from "./panel-general-view";
 import type { PanelGeneralData } from "@/lib/panel-general-api";
@@ -11,49 +9,85 @@ import type { PanelGeneralData } from "@/lib/panel-general-api";
 const base: PanelGeneralData = {
   generadoEl: "2026-08-18T15:00:00.000Z",
   fechaLocal: "2026-08-18",
-  vistaActual: "actual",
-  previsualizando: false,
-  vistasDisponibles: [
-    {
-      id: "actual",
-      etiqueta: "Mi vista · Administrador",
-      descripcion: "Tus permisos efectivos",
-    },
-  ],
   kpis: [],
   atencion: [],
   atencionTotal: 0,
-  proximasEntregas: [],
-  proximasEntregasTotal: 0,
-  trabajoPersonal: { tareas: [], total: 0 },
+  entregas: {
+    hoy: { items: [], total: 0 },
+    atrasada: { items: [], total: 0 },
+    proxima: { items: [], total: 0 },
+  },
   taller: null,
-  administracion: null,
-  vendedorSinVinculo: false,
   accionesRapidas: [],
 };
+const render = (data: PanelGeneralData = base) =>
+  renderToStaticMarkup(
+    <PanelGeneralView initialData={data} nombreUsuario="Lucas" />,
+  );
 
-describe("PanelGeneralView", () => {
-  it("aplica HeroUI sólo al panel propio del administrador", () => {
-    const propio = renderToStaticMarkup(<PanelGeneralView initialData={base} nombreUsuario="Lucas" esAdministrador />);
-    expect(propio).toContain('data-panel-vista="administrador"');
-    expect(propio).toContain('data-ui="heroui"');
-    expect(propio).not.toContain("Actividad reciente"); // Sin alcance general en el payload.
-    expect(propio).not.toContain("Agenda");
-    const otroRol = renderToStaticMarkup(<PanelGeneralView initialData={base} nombreUsuario="Lucas" />);
-    expect(otroRol).not.toContain('data-panel-vista="administrador"');
-    const preview = renderToStaticMarkup(<PanelGeneralView initialData={{ ...base, vistaActual: "operario", previsualizando: true }} nombreUsuario="Lucas" esAdministrador />);
-    expect(preview).not.toContain('data-panel-vista="administrador"');
-    expect(preview).toContain("Tus permisos no cambiaron");
+describe("Panel general único", () => {
+  it("usa el diseño de Administrador sin depender del rol y elimina los controles de vista y actualización", () => {
+    const html = render();
+    expect(html).toContain('data-panel-vista="administrador"');
+    expect(html).toContain("Tu operación, de un vistazo");
+    expect(html).toContain("Entregas a priorizar");
+    expect(html).not.toContain("Vista del Panel general");
+    expect(html).not.toContain("Actualizar");
+    expect(html).not.toContain("Estás previsualizando");
+    expect(html).not.toContain("Mi mesa");
+    expect(html).not.toContain("Actividad reciente"); // El resumen empresarial no vino autorizado.
   });
 
-  it("presenta métricas reales y actividad con enlaces, sin confundir ítems con órdenes", () => {
-    const data: PanelGeneralData = { ...base,
-      taller: { itemsActivos: 26, pasosEnCurso: 1, pasosBloqueados: 2, cuelloBotella: null },
-      administrador: { pasosCompletadosHoy: 8, documentacionPendiente: { total: 0, ordenes: [] }, actividad: { siguienteCursor: null, items: [{
-        id: "orden:1", fecha: base.generadoEl, tipo: "orden.emision", titulo: "OT-001 emitida", detalle: "Al taller", actor: "Lucas", href: "/produccion/ordenes/1",
-      }] } },
-    };
-    const html = renderToStaticMarkup(<PanelGeneralView initialData={data} nombreUsuario="Lucas" esAdministrador />);
+  it("no expone acciones o bloques que la API no autorizó", () => {
+    const html = render({
+      ...base,
+      entregas: null,
+      administrador: null,
+      accionesRapidas: [
+        {
+          id: "mi-mesa",
+          etiqueta: "Abrir mi mesa",
+          href: "/produccion/tablero",
+          icono: "produccion",
+        },
+      ],
+    });
+    expect(html).toContain('data-panel-vista="administrador"');
+    expect(html).toContain("Abrir mi mesa");
+    expect(html).not.toContain("Crear orden");
+    expect(html).not.toContain("Ver órdenes");
+    expect(html).not.toContain("Estado de planta");
+    expect(html).not.toContain("Ver toda");
+  });
+
+  it("presenta métricas reales y actividad autorizada sin confundir ítems con órdenes", () => {
+    const html = render({
+      ...base,
+      taller: {
+        itemsActivos: 26,
+        pasosEnCurso: 1,
+        pasosBloqueados: 2,
+        cuelloBotella: null,
+      },
+      administrador: {
+        pasosCompletadosHoy: 8,
+        documentacionPendiente: { total: 0, ordenes: [] },
+        actividad: {
+          siguienteCursor: null,
+          items: [
+            {
+              id: "orden:1",
+              fecha: base.generadoEl,
+              tipo: "orden.emision",
+              titulo: "OT-001 emitida",
+              detalle: "Al taller",
+              actor: "Lucas",
+              href: "/produccion/ordenes/1",
+            },
+          ],
+        },
+      },
+    });
     expect(html).toContain("Ítems activos");
     expect(html).toContain("Pasos completados hoy");
     expect(html).toContain("OT-001 emitida");
@@ -61,26 +95,10 @@ describe("PanelGeneralView", () => {
     expect(html).not.toContain("Órdenes activas");
   });
 
-  it("adapta el saludo a la hora local del tenant", () => {
-    const zona = "America/Argentina/Buenos_Aires";
-
-    expect(saludoSegunMomento("2026-08-18T14:59:00.000Z", zona)).toBe(
-      "Buen día",
-    );
-    expect(saludoSegunMomento("2026-08-18T15:00:00.000Z", zona)).toBe(
-      "Buenas tardes",
-    );
-    expect(saludoSegunMomento("2026-08-18T22:59:00.000Z", zona)).toBe(
-      "Buenas tardes",
-    );
-    expect(saludoSegunMomento("2026-08-18T23:00:00.000Z", zona)).toBe(
-      "Buenas noches",
-    );
-  });
-
-  it("renderiza KPIs, alertas y enlaces administrativos accionables", () => {
-    const data: PanelGeneralData = {
+  it("conserva los indicadores y acciones administrativos en el mismo diseño", () => {
+    const html = render({
       ...base,
+      entregas: null,
       kpis: [
         {
           id: "deuda-vencida",
@@ -104,12 +122,6 @@ describe("PanelGeneralView", () => {
         },
       ],
       atencionTotal: 1,
-      administracion: {
-        cobrosVencidos: 3,
-        porFacturar: 1,
-        pagosVencidos: 2,
-        acreditacionesPendientes: 4,
-      },
       accionesRapidas: [
         {
           id: "egreso",
@@ -118,148 +130,37 @@ describe("PanelGeneralView", () => {
           icono: "egreso",
         },
       ],
-    };
-
-    const html = renderToStaticMarkup(
-      <PanelGeneralView initialData={data} nombreUsuario="Lucía Gómez" />,
-    );
-
-    expect(html).toContain("Buenas tardes, Lucía");
+    });
+    expect(html).toContain('data-panel-vista="administrador"');
     expect(html).toContain("Cobros vencidos");
     expect(html).toContain("Pagos vencidos");
-    expect(html).toContain("Pendientes administrativos");
     expect(html).toContain('href="/administracion/deudores"');
     expect(html).toContain('href="/administracion/cuentas-por-pagar"');
     expect(html).toContain('href="/administracion/egresos?accion=nuevo"');
-    expect(html).not.toContain("Registrar cobro");
-    expect(html.indexOf("Próximas entregas")).toBeLessThan(
-      html.indexOf("Requieren atención"),
-    );
-    expect(html).not.toMatch(/margen|punto de equilibrio|ventas del período/i);
   });
 
-  it("ofrece al administrador las vistas previsualizables", () => {
-    const data: PanelGeneralData = {
-      ...base,
-      vistaActual: "operario",
-      previsualizando: true,
-      vistasDisponibles: [
-        ...base.vistasDisponibles,
-        {
-          id: "jefe_produccion",
-          etiqueta: "Jefe de producción",
-          descripcion: "Taller, entregas y carga",
-        },
-        {
-          id: "vendedor",
-          etiqueta: "Vendedor",
-          descripcion: "Sus presupuestos y órdenes",
-        },
-        {
-          id: "administrativo",
-          etiqueta: "Administrativo",
-          descripcion: "Cobros, facturación y egresos",
-        },
-        {
-          id: "operario",
-          etiqueta: "Operario",
-          descripcion: "Su mesa y bloqueos propios",
-        },
-      ],
-    };
-
-    const html = renderToStaticMarkup(
-      <PanelGeneralView initialData={data} nombreUsuario="Lucas" />,
+  it("adapta el saludo a la hora del tenant", () => {
+    const zona = "America/Argentina/Buenos_Aires";
+    expect(saludoSegunMomento("2026-08-18T14:59:00Z", zona)).toBe("Buen día");
+    expect(saludoSegunMomento("2026-08-18T15:00:00Z", zona)).toBe(
+      "Buenas tardes",
     );
-
-    expect(html).toContain('aria-label="Vista del Panel general"');
-    expect(html).toContain("Jefe de producción");
-    expect(html).toContain("Vendedor");
-    expect(html).toContain("Administrativo");
-    expect(html).toContain("Operario");
-    expect(html).toContain("Tus permisos no cambiaron");
+    expect(saludoSegunMomento("2026-08-18T22:59:00Z", zona)).toBe(
+      "Buenas tardes",
+    );
+    expect(saludoSegunMomento("2026-08-18T23:00:00Z", zona)).toBe(
+      "Buenas noches",
+    );
   });
 
-  it("muestra únicamente la mesa propia en la variante de operario", () => {
-    const data: PanelGeneralData = {
-      ...base,
-      trabajoPersonal: {
-        total: 1,
-        tareas: [
-          {
-            pasoId: "paso-1",
-            ordenId: "ot-1",
-            ordenNumero: "OT-0042",
-            itemNombre: "Banner",
-            pasoNombre: "Impresión",
-            estado: "en_curso",
-            motivoBloqueo: null,
-            activa: true,
-            href: "/produccion/tablero",
-          },
-        ],
-      },
-      accionesRapidas: [
-        {
-          id: "mi-mesa",
-          etiqueta: "Abrir mi mesa",
-          href: "/produccion/tablero",
-          icono: "produccion",
-        },
-      ],
-    };
-
-    const html = renderToStaticMarkup(
-      <PanelGeneralView initialData={data} nombreUsuario="Operario Uno" />,
+  it("conserva los estados de carga y vacío sin reintroducir el botón Actualizar", () => {
+    const carga = renderToStaticMarkup(
+      <PanelGeneralView initialData={null} nombreUsuario="Lucas" />,
     );
-
-    expect(html).toContain("Mi mesa");
-    expect(html).toContain("OT-0042");
-    expect(html).toContain("Impresión");
-    expect(html).toContain("Ahora");
-    expect(html).not.toContain("Estado del taller");
-    expect(html).not.toContain("Pendientes administrativos");
-  });
-
-  it("incluye el estado vacío completo cuando no hay pendientes ni entregas", () => {
-    const html = renderToStaticMarkup(
-      <PanelGeneralView initialData={base} nombreUsuario="" />,
-    );
-
-    expect(html).toContain("Todo bajo control");
-    expect(html).toContain("Tu mesa está libre");
-    expect(html).toContain("Sin entregas próximas");
-    expect(html).toContain("Actualizar");
-  });
-
-  it("identifica como interactivo el resumen de una entrega con varios productos", () => {
-    const data: PanelGeneralData = {
-      ...base,
-      proximasEntregasTotal: 1,
-      proximasEntregas: [
-        {
-          id: "ot-1",
-          numero: "OT-001",
-          cliente: "Cliente",
-          producto: "2 productos",
-          productos: [
-            { id: "item-1", nombre: "Tarjetas", progresoPct: 50 },
-            { id: "item-2", nombre: "Sobres", progresoPct: 100 },
-          ],
-          fechaEntrega: "2026-08-20",
-          progresoPct: 75,
-          riesgo: "proxima",
-          pasoActual: "Corte",
-          estacionActual: "Terminación",
-          href: "/produccion/ordenes/ot-1",
-        },
-      ],
-    };
-
-    const html = renderToStaticMarkup(
-      <PanelGeneralView initialData={data} nombreUsuario="Lucas" />,
-    );
-
-    expect(html).toContain("2 productos. Ver avance de cada producto");
+    expect(carga).toContain("Cargando Panel general");
+    expect(carga).not.toContain("Actualizar");
+    const vacio = render();
+    expect(vacio).toContain("Todo bajo control");
+    expect(vacio).toContain("Sin entregas para hoy");
   });
 });

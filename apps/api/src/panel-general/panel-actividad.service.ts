@@ -48,7 +48,7 @@ export class PanelActividadService {
   async listar(auth: CurrentAuth, cursorRaw?: string, limite = 30) {
     if (!puedeConsultarActividadGeneral(auth)) {
       throw new ForbiddenException(
-        'La actividad general requiere una vista de administrador con alcance general.',
+        'La actividad general requiere rol Administrador y alcance general.',
       );
     }
     let cursor: { fecha: string; id: string } | null = null;

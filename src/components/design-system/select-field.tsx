@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { Select, ListBox } from "@heroui/react";
-import { useDesignScope } from "./appearance";
-import theme from "./theme.module.css";
+import { useDesignScope, useDesignTheme } from "./appearance";
 import focus from "./field-focus.module.css";
 import styles from "./select-field.module.css";
 
@@ -34,6 +33,7 @@ export function SelectField({
   "aria-label": string;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const [localValue, setLocalValue] = useState(
     defaultValue ?? options[0]?.value ?? "",
   );
@@ -63,7 +63,7 @@ export function SelectField({
           <Select.Value />
           <Select.Indicator />
         </Select.Trigger>
-        <Select.Popover {...scope} className={theme.theme}>
+        <Select.Popover {...scope} className={themeClass}>
           <ListBox>
             {options.map((option) => (
               <ListBox.Item

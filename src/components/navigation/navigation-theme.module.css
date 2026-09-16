@@ -1,0 +1,16 @@
+/* Identidad del marco de navegación, tomada de la web de Grafo.
+ * El alcance es local: las pantallas y los portales conservan su propio tema. */
+.theme {
+  --nav-background: #101214;
+  --nav-surface: #1a1d20;
+  --nav-hover: #222629;
+  --nav-foreground: #f3f2ee;
+  --nav-secondary: #d0d2d1;
+  --nav-muted: #a6aaad;
+  --nav-line: #303437;
+  --nav-accent: #ff7546;
+  --nav-accent-soft: #ff754615;
+  --nav-accent-line: #ff754640;
+  --nav-radius: 7px;
+  --nav-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}

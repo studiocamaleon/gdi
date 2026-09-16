@@ -3,7 +3,9 @@ import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
 import { filtrarTrabajos, metricasTrabajos, opcionesEstacionesTablero, type FiltrosTrabajo } from "@/lib/tablero-lista";
 import { modoTableroEnUrl, urlTableroEstacion } from "@/lib/tablero-navegacion";
 import { TableroFiltros } from "./tablero-filtros";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme, useLegacyDesignScope } from "@/components/design-system/appearance";
+import { ActionButton } from "@/components/design-system/action-button";
+import brandStyles from "./tablero-brand.module.css";
 import toolbar from "./tablero-toolbar.module.css";
 import { agruparTrabajos, type GrupoTableroKey } from "@/lib/tablero-lista";
 import { TableroLista } from "./tablero-lista";
@@ -29,6 +31,8 @@ import {
   FileTextIcon,
   LayersIcon,
   LayoutDashboardIcon,
+  ListTreeIcon,
+  Columns3Icon,
   PackageIcon,
   PaintbrushIcon,
   PauseIcon,
@@ -349,11 +353,15 @@ function PasoAcciones({
   canSupervise: boolean;
   onAccion: AccionHandler;
 }) {
+  const brandScope = useLegacyDesignScope();
   const paso = step.paso;
   if (paso.tipoEjecucion === "tercerizado") return canManage ? (
     <div className="ds-terc"><span className="dst-badge">Tercerizado</span><span className="dst-info">{paso.proveedorNombre ? `${paso.proveedorNombre} · ` : ""}{COMPRA_LABELS[paso.estadoCompra ?? "pendiente"] ?? paso.estadoCompra}{paso.plazoProveedorDias != null ? ` · plazo ${paso.plazoProveedorDias} d` : ""}</span><span className="dst-hint">Se gestiona desde la orden</span></div>
   ) : null;
-  return <PasoAccionesProduccion enLinea paso={paso} esActual={step.esActivo} canManage={canManage} canSupervise={canSupervise} reabrible={pasoReabrible(item.data, paso)} busy={busy} onAccion={(accion, opts) => onAccion(item, paso, accion, opts)} />;
+  return <PasoAccionesProduccion enLinea paso={paso} esActual={step.esActivo} canManage={canManage} canSupervise={canSupervise} reabrible={pasoReabrible(item.data, paso)} busy={busy} onAccion={(accion, opts) => onAccion(item, paso, accion, opts)}
+    renderAccion={brandScope.className ? ({ label, disabled, onPress, children }) => (
+      <ActionButton variant="outline" aria-label={label} isDisabled={disabled} onPress={onPress}>{children}</ActionButton>
+    ) : undefined} />;
 }
 
 function DetailRuta({
@@ -852,6 +860,7 @@ export function ItemDetailSheet({
         aria-label={`Detalle ${item.code}${item.data.loteEntrega ? ` · ${item.data.loteEntrega.nombre}` : ""}`}
       >
         <div className="sheet-head item-sheet-head">
+          <div className={brandStyles.sheetHeaderContent}>
           <div className="sheet-title-row">
             <div className="sheet-title-copy">
               <div className="sheet-codes">
@@ -988,6 +997,7 @@ export function ItemDetailSheet({
             </div>
           </div>
 
+          </div>
           <div
             className="sheet-tabs"
             role="tablist"
@@ -1193,7 +1203,7 @@ function KanbanColumn({
     column.items.length,
   );
   return (
-    <section className="kan-col">
+    <section className="kan-col" data-group={column.key}>
       <div className="kan-col-head">
         <div>
           <h2>{column.title}</h2>
@@ -1271,6 +1281,8 @@ export function TableroProduccion({
   /** Acceso dedicado al Gantt; conserva los mismos datos, permisos y refresco. */
   modoPlanificacion?: boolean;
 }) {
+  const designTheme = useDesignTheme();
+  const designScope = useDesignScope();
   const { zonaHoraria } = useConfigRegional();
   const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, conexion, permisoSupervisar, canManage, refrescar, handleAccion, handleGate, handleMesa, handleAsignacionPersonal } = useProduccionOperativa({ initialActualizadoEl, initialItems, initialMeta, initialLoadError, soloPendientes: !modoPlanificacion });
   const relojTabla = useRelojProduccion(60_000, initialActualizadoEl ? Date.parse(initialActualizadoEl) : null, !modoPlanificacion);
@@ -1440,7 +1452,7 @@ export function TableroProduccion({
   const selectedItem = selectedId ? views.find(item => item.id === selectedId) ?? historicosViews.find(item => item.id === selectedId) ?? (consultadoView?.id === selectedId ? consultadoView : undefined) : undefined;
 
   return (
-    <div className={`tablero-produccion${modoPlanificacion ? ` ${planificacionStyles.root}` : ` ${toolbar.page}`}`}>
+    <div {...(!modoPlanificacion ? designScope : {})} className={`tablero-produccion${modoPlanificacion ? ` ${planificacionStyles.root}` : ` ${designTheme} ${toolbar.page} ${brandStyles.board}`}`}>
       <div className={`tab-page${modoPlanificacion ? ` ${planificacionStyles.page}` : ` ${toolbar.content}`}`}>
         {modoPlanificacion ? (
           <div className="page-head">
@@ -1494,7 +1506,7 @@ export function TableroProduccion({
 
         {!modoPlanificacion ? <div
           data-ui="heroui"
-          className={`${theme.theme} ${toolbar.tabs}`}
+          className={toolbar.tabs}
           role="tablist"
           aria-label="Vistas del tablero de producción"
         >
@@ -1536,9 +1548,15 @@ export function TableroProduccion({
                 });
               }}
             >
-              <span>{entry.label}</span>
+              <span className={toolbar.tabIcon} aria-hidden="true">
+                {entry.mode === "items" ? <ListTreeIcon /> : <Columns3Icon />}
+              </span>
+              <span className={toolbar.tabCopy}>
+                <span>{entry.label}</span>
+                <small>{entry.mode === "items" ? "Trabajos y tiempos" : "Flujo por estado"}</small>
+              </span>
               {typeof entry.count === "number" ? (
-                <span className="count">{entry.count}</span>
+                <span className={toolbar.tabCount}>{entry.count}</span>
               ) : null}
               {defaultMode === entry.mode ? (
                 <span className={toolbar.defaultMark}>Pred.</span>

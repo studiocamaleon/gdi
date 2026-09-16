@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { SelectField } from "@/components/design-system/select-field";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import type { FiltrosTrabajo, metricasTrabajos } from "@/lib/tablero-lista";
 import s from "./tablero-toolbar.module.css";
 
@@ -38,6 +38,8 @@ export function TableroFiltros({
   empleados: { id: string; nombre: string }[];
   puedeFiltrarPersonal: boolean;
 }) {
+  const scope = useDesignScope();
+  const designTheme = useDesignTheme();
   const metricas = [
     { label: "Trabajos", value: counts.all, icon: LayersIcon },
     { label: "Listos", value: counts.ready, icon: CheckIcon },
@@ -69,7 +71,7 @@ export function TableroFiltros({
     filters.asignadasAMi ||
     (puedeFiltrarPersonal && filters.empleadoId);
   return (
-    <div data-ui="heroui" className={`${theme.theme} ${s.filters}`}>
+    <div {...scope} className={`${designTheme} ${s.filters}`}>
       <div className={s.metricsRow}>
         <dl
           className={s.metrics}

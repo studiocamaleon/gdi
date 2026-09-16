@@ -4,18 +4,27 @@ import { cn } from "@/lib/utils";
 import styles from "./grafoprint-loading.module.css";
 
 export function GrafoprintAnimatedIsologo({
-  className, accentNodes = false, ...props
+  className,
+  accentNodes = false,
+  ...props
 }: SVGProps<SVGSVGElement> & { size?: number; accentNodes?: boolean }) {
-  return <GrafoprintIsologo {...props} className={cn(styles.mark, accentNodes && styles.accentNodes, className)} />;
+  return (
+    <GrafoprintIsologo
+      {...props}
+      className={cn(styles.mark, accentNodes && styles.accentNodes, className)}
+    />
+  );
 }
 
 export function GrafoprintLoadingIndicator() {
-  return <div role="status" aria-live="polite" className={styles.indicator}>
-    <div className={styles.signal} aria-hidden="true">
-      <span className={styles.halo} />
-      <span className={styles.halo} />
-      <GrafoprintAnimatedIsologo size={120} accentNodes className={styles.largeLogo} />
+  return (
+    <div role="status" aria-live="polite" className={styles.indicator}>
+      <GrafoprintAnimatedIsologo
+        size={56}
+        accentNodes
+        className={styles.pageLogo}
+      />
+      <span className="sr-only">Cargando vista…</span>
     </div>
-    <span className={styles.label}>Cargando vista…</span>
-  </div>;
+  );
 }

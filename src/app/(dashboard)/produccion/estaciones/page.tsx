@@ -3,6 +3,7 @@ import { getFamiliasPasos, getRecursosEstaciones } from "@/lib/estaciones-api";
 import { cargarDatosTableroProduccion } from "@/lib/tablero-produccion-server";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 export const dynamic = "force-dynamic";
 
@@ -24,17 +25,19 @@ export default async function EstacionesPage() {
       : Promise.resolve({ ok: false, value: { empleados: [], maquinas: [] } }),
   ]);
   return (
-    <EstacionesView
-      {...datos}
-      initialFamilias={familias.value}
-      empleados={recursos.value.empleados}
-      maquinas={recursos.value.maquinas}
-      configuracionDisponible={
-        puedeConfigurar &&
-        familias.ok &&
-        recursos.ok &&
-        !datos.initialPartialWarning
-      }
-    />
+    <DesignSystemProvider theme="brand" appearance="light">
+      <EstacionesView
+        {...datos}
+        initialFamilias={familias.value}
+        empleados={recursos.value.empleados}
+        maquinas={recursos.value.maquinas}
+        configuracionDisponible={
+          puedeConfigurar &&
+          familias.ok &&
+          recursos.ok &&
+          !datos.initialPartialWarning
+        }
+      />
+    </DesignSystemProvider>
   );
 }

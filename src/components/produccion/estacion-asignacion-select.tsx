@@ -1,7 +1,6 @@
 "use client";
 import { Autocomplete, SearchField, ListBox } from "@heroui/react";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import focus from "@/components/design-system/field-focus.module.css";
 export type OpcionAsignacion = {
   value: string;
@@ -32,6 +31,7 @@ export function EstacionAsignacionSelect({
   isDisabled?: boolean;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   return (
     <Autocomplete
       aria-label={ariaLabel}
@@ -53,7 +53,7 @@ export function EstacionAsignacionSelect({
         <Autocomplete.Value />
         <Autocomplete.Indicator />
       </Autocomplete.Trigger>
-      <Autocomplete.Popover {...scope} className={theme.theme}>
+      <Autocomplete.Popover {...scope} className={themeClass}>
         <Autocomplete.Filter>
           <SearchField aria-label={placeholderBusqueda} className="px-2 pt-2">
             <SearchField.Group>

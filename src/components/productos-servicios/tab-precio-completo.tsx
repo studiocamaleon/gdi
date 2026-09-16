@@ -26,6 +26,7 @@ import { useProductoVisual } from "./producto-ui";
 import * as React from "react";
 import Link from "next/link";
 import {
+  ArrowUpRightIcon,
   BadgeDollarSignIcon,
   ExternalLinkIcon,
   HandCoinsIcon,
@@ -33,7 +34,6 @@ import {
   PencilIcon,
   PlusIcon,
   ReceiptTextIcon,
-  SaveIcon,
   Trash2Icon,
   UsersRoundIcon,
 } from "lucide-react";
@@ -96,6 +96,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import { getClientes } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
+import { getLabel, metodoPrecioLabels } from "@/lib/labels-humanos";
 
 interface Props {
   /** ID del producto; si es null el producto aún no existe (crear mode no guardado). */
@@ -136,8 +137,10 @@ export function TabPrecioCompleto({
   pricingCompuestoSection,
 }: Props) {
   const productoVisual = useProductoVisual();
-  const [impuestosState, setImpuestosState] = React.useState<PricingSaveState>(idleSaveState);
-  const [comisionesState, setComisionesState] = React.useState<PricingSaveState>(idleSaveState);
+  const [impuestosState, setImpuestosState] =
+    React.useState<PricingSaveState>(idleSaveState);
+  const [comisionesState, setComisionesState] =
+    React.useState<PricingSaveState>(idleSaveState);
   const [guardandoTodo, setGuardandoTodo] = React.useState(false);
 
   const hasUnifiedSave = !!onGuardarPrecio;
@@ -146,18 +149,25 @@ export function TabPrecioCompleto({
     (impuestosState.loaded && impuestosState.dirty) ||
     (comisionesState.loaded && comisionesState.dirty);
   const isSaving =
-    guardandoTodo || guardandoPrecio || impuestosState.saving || comisionesState.saving;
+    guardandoTodo ||
+    guardandoPrecio ||
+    impuestosState.saving ||
+    comisionesState.saving;
 
   const guardarCambios = async () => {
     if (!onGuardarPrecio || !productoId || !isDirty || isSaving) return;
     setGuardandoTodo(true);
     try {
-      if (impuestosState.loaded && impuestosState.dirty) await impuestosState.save();
-      if (comisionesState.loaded && comisionesState.dirty) await comisionesState.save();
+      if (impuestosState.loaded && impuestosState.dirty)
+        await impuestosState.save();
+      if (comisionesState.loaded && comisionesState.dirty)
+        await comisionesState.save();
       if (precioDirty) await onGuardarPrecio();
-      toast.success("Cambios de pricing guardados");
+      toast.success("Cambios de precio guardados");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando cambios");
+      toast.error(
+        err instanceof Error ? err.message : "Error guardando cambios",
+      );
     } finally {
       setGuardandoTodo(false);
     }
@@ -170,7 +180,7 @@ export function TabPrecioCompleto({
         <PricingSectionHeader
           step="01"
           eyebrow="Regla base"
-          title="Método de cálculo"
+          title="Regla de precio"
           description="Define cómo el costo productivo se convierte en precio de venta."
           icon={BadgeDollarSignIcon}
         />
@@ -195,9 +205,12 @@ export function TabPrecioCompleto({
       {productoId == null ? (
         <Alert>
           <InfoIcon />
-          <AlertTitle>Guardá el producto para completar su arquitectura de precio</AlertTitle>
+          <AlertTitle>
+            Guardá el producto para completar su arquitectura de precio
+          </AlertTitle>
           <AlertDescription>
-            Impuestos, comisiones y excepciones por cliente requieren que el producto exista.
+            Impuestos, comisiones y excepciones por cliente requieren que el
+            producto exista.
           </AlertDescription>
         </Alert>
       ) : (
@@ -205,30 +218,44 @@ export function TabPrecioCompleto({
           <div className={pricingStyles.commercialGrid}>
             <SeccionImpuestos
               productoId={productoId}
+              step={pricingCompuestoSection ? "03" : "02"}
               onStateChange={hasUnifiedSave ? setImpuestosState : undefined}
             />
             <SeccionComisiones
               productoId={productoId}
+              step={pricingCompuestoSection ? "03" : "02"}
               onStateChange={hasUnifiedSave ? setComisionesState : undefined}
             />
           </div>
           <PreciosEspecialesClientesCard
             productoId={productoId}
+            step={pricingCompuestoSection ? "04" : "03"}
             unidadComercial={unidadComercial}
           />
         </>
       )}
       {hasUnifiedSave && (isDirty || isSaving) && (
-        <div className={productoVisual ? pricingStyles.saveFooter : "save-sticky-footer pricing-sticky-footer"}>
+        <div
+          className={
+            productoVisual
+              ? pricingStyles.saveFooter
+              : "save-sticky-footer pricing-sticky-footer"
+          }
+        >
           <div className={pricingStyles.stickyCopy}>
             <span className={pricingStyles.stickyDot} aria-hidden="true" />
-            {isDirty ? "Hay cambios sin guardar en pricing." : "No hay cambios pendientes."}
+            {isDirty
+              ? "Hay cambios sin guardar en el precio."
+              : "No hay cambios pendientes."}
           </div>
-          <Button onClick={guardarCambios} disabled={!productoId || !isDirty || isSaving}>
+          <Button
+            onClick={guardarCambios}
+            disabled={!productoId || !isDirty || isSaving}
+          >
             {isSaving ? (
               <Spinner data-icon="inline-start" />
             ) : (
-              <SaveIcon data-icon="inline-start" />
+              <ArrowUpRightIcon data-icon="inline-start" />
             )}
             {isSaving ? "Guardando..." : "Guardar cambios"}
           </Button>
@@ -250,9 +277,11 @@ const CATEGORIA_FISCAL_OPCIONES = [
 
 function SeccionImpuestos({
   productoId,
+  step,
   onStateChange,
 }: {
   productoId: string;
+  step: string;
   onStateChange?: (state: PricingSaveState) => void;
 }) {
   const [catalogo, setCatalogo] = React.useState<ImpuestoCatalogoItem[]>([]);
@@ -300,20 +329,28 @@ function SeccionImpuestos({
       const res = await setCategoriaFiscal(productoId, categoria);
       setOriginal(res.categoriaFiscal);
       setCategoria(res.categoriaFiscal);
-      if (!onStateChange) toast.success("Categoría fiscal del producto actualizada");
+      if (!onStateChange)
+        toast.success("Categoría fiscal del producto actualizada");
     } finally {
       setGuardando(false);
     }
   }, [onStateChange, productoId, categoria]);
 
   React.useEffect(() => {
-    onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
+    onStateChange?.({
+      dirty: !cargando && dirty,
+      loaded: !cargando,
+      saving: guardando,
+      save: guardar,
+    });
   }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
-    <Card className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}>
+    <Card
+      className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}
+    >
       <PricingSectionHeader
-        step="03A"
+        step={step}
         eyebrow="Cargas comerciales"
         title="Impuestos"
         description="Define el tratamiento fiscal del precio final del producto."
@@ -325,20 +362,24 @@ function SeccionImpuestos({
             variant="outline"
             size="sm"
           >
-            <ExternalLinkIcon data-icon="inline-start" />
+            <ArrowUpRightIcon data-icon="inline-start" />
             Catálogo
           </Button>
         }
       />
       <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <div className={pricingStyles.loading} aria-label="Cargando impuestos">
+          <div
+            className={pricingStyles.loading}
+            aria-label="Cargando impuestos"
+          >
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-10 w-4/5" />
           </div>
         ) : (
           <>
             <ToggleGroup
+              aria-label="Tratamiento de IVA del producto"
               multiple={false}
               value={[categoria]}
               onValueChange={(values) => {
@@ -351,10 +392,17 @@ function SeccionImpuestos({
               {CATEGORIA_FISCAL_OPCIONES.map((op) => {
                 return (
                   <ToggleGroupItem key={op.value} value={op.value}>
-                    <span className={pricingStyles.optionName}>{op.nombre}</span>
-                    <span className={pricingStyles.optionDescription}>{op.sub}</span>
+                    <span className={pricingStyles.optionName}>
+                      {op.nombre}
+                    </span>
+                    <span className={pricingStyles.optionDescription}>
+                      {op.sub}
+                    </span>
                     {op.value === "general" && ivaGeneralPct != null && (
-                      <Badge variant="outline" className={pricingStyles.optionBadge}>
+                      <Badge
+                        variant="outline"
+                        className={pricingStyles.optionBadge}
+                      >
                         {ivaGeneralPct.toFixed(2)}%
                       </Badge>
                     )}
@@ -381,7 +429,9 @@ function SeccionImpuestos({
                 <Button
                   onClick={() => {
                     guardar().catch((err) =>
-                      toast.error(err instanceof Error ? err.message : "Error guardando"),
+                      toast.error(
+                        err instanceof Error ? err.message : "Error guardando",
+                      ),
                     );
                   }}
                   disabled={!dirty || guardando}
@@ -405,9 +455,11 @@ function SeccionImpuestos({
 
 function SeccionComisiones({
   productoId,
+  step,
   onStateChange,
 }: {
   productoId: string;
+  step: string;
   onStateChange?: (state: PricingSaveState) => void;
 }) {
   const [catalogo, setCatalogo] = React.useState<ComisionCatalogoItem[]>([]);
@@ -419,7 +471,10 @@ function SeccionComisiones({
   React.useEffect(() => {
     let cancelled = false;
     setCargando(true);
-    Promise.all([getComisionesCatalogo(true), getComisionesAplicadas(productoId)])
+    Promise.all([
+      getComisionesCatalogo(true),
+      getComisionesAplicadas(productoId),
+    ])
       .then(([cat, apli]) => {
         if (cancelled) return;
         setCatalogo(cat);
@@ -478,13 +533,20 @@ function SeccionComisiones({
   }, [onStateChange, productoId, seleccionadas]);
 
   React.useEffect(() => {
-    onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
+    onStateChange?.({
+      dirty: !cargando && dirty,
+      loaded: !cargando,
+      saving: guardando,
+      save: guardar,
+    });
   }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
-    <Card className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}>
+    <Card
+      className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}
+    >
       <PricingSectionHeader
-        step="03B"
+        step={step}
         eyebrow="Cargas comerciales"
         title="Comisiones"
         description="Selecciona las comisiones variables asociadas a la venta."
@@ -496,14 +558,17 @@ function SeccionComisiones({
             variant="outline"
             size="sm"
           >
-            <ExternalLinkIcon data-icon="inline-start" />
+            <ArrowUpRightIcon data-icon="inline-start" />
             Catálogo
           </Button>
         }
       />
       <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <div className={pricingStyles.loading} aria-label="Cargando comisiones">
+          <div
+            className={pricingStyles.loading}
+            aria-label="Cargando comisiones"
+          >
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-10 w-3/4" />
           </div>
@@ -533,6 +598,7 @@ function SeccionComisiones({
                     className={pricingStyles.checkOption}
                   >
                     <Checkbox
+                      aria-label={`Aplicar ${c.nombre}`}
                       id={`comision-${c.id}`}
                       checked={checked}
                       onCheckedChange={() => toggle(c.id)}
@@ -555,8 +621,8 @@ function SeccionComisiones({
               })}
             </FieldGroup>
             <div className={pricingStyles.summaryRow}>
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total seleccionado</span>{" "}
+              <div className={pricingStyles.commissionTotal}>
+                <span>Total seleccionado</span>
                 <span className={pricingStyles.summaryValue}>
                   {totalPct.toFixed(2)}%
                 </span>
@@ -565,7 +631,9 @@ function SeccionComisiones({
                 <Button
                   onClick={() => {
                     guardar().catch((err) =>
-                      toast.error(err instanceof Error ? err.message : "Error guardando"),
+                      toast.error(
+                        err instanceof Error ? err.message : "Error guardando",
+                      ),
                     );
                   }}
                   disabled={!dirty || guardando}
@@ -600,19 +668,23 @@ function SeccionComisiones({
 
 export function PreciosEspecialesClientesCard({
   productoId,
+  step = "04",
   unidadComercial,
   descripcion = "Reemplaza el precio estándar cuando el cliente seleccionado compra este producto. Cada cliente puede tener su propio método de cálculo.",
 }: {
   productoId: string;
+  step?: string;
   unidadComercial?: string;
   descripcion?: string;
 }) {
   const [items, setItems] = React.useState<PrecioEspecialClienteItem[]>([]);
   const [clientes, setClientes] = React.useState<ClienteDetalle[]>([]);
   const [cargando, setCargando] = React.useState(true);
-  const [editando, setEditando] = React.useState<PrecioEspecialClienteItem | null>(null);
+  const [editando, setEditando] =
+    React.useState<PrecioEspecialClienteItem | null>(null);
   const [creandoNuevo, setCreandoNuevo] = React.useState(false);
-  const [aBorrar, setABorrar] = React.useState<PrecioEspecialClienteItem | null>(null);
+  const [aBorrar, setABorrar] =
+    React.useState<PrecioEspecialClienteItem | null>(null);
 
   // Form state (para nuevo o edit)
   const [clienteId, setClienteId] = React.useState("");
@@ -684,7 +756,10 @@ export function PreciosEspecialesClientesCard({
     }
   };
 
-  const togglearActivo = async (item: PrecioEspecialClienteItem, nuevoActivo: boolean) => {
+  const togglearActivo = async (
+    item: PrecioEspecialClienteItem,
+    nuevoActivo: boolean,
+  ) => {
     try {
       await actualizarPrecioEspecialCliente(item.id, { activo: nuevoActivo });
       recargar();
@@ -707,13 +782,17 @@ export function PreciosEspecialesClientesCard({
 
   // Clientes disponibles para nuevo: todos los que no tengan ya un precio
   // especial activo (excepto el que está editando)
-  const clientesUsadosIds = new Set(items.filter((i) => i.id !== editando?.id).map((i) => i.clienteId));
-  const clientesDisponibles = clientes.filter((c) => !clientesUsadosIds.has(c.id));
+  const clientesUsadosIds = new Set(
+    items.filter((i) => i.id !== editando?.id).map((i) => i.clienteId),
+  );
+  const clientesDisponibles = clientes.filter(
+    (c) => !clientesUsadosIds.has(c.id),
+  );
 
   return (
     <Card className={pricingStyles.section}>
       <PricingSectionHeader
-        step="04"
+        step={step}
         eyebrow="Excepciones comerciales"
         title="Precios especiales por cliente"
         description={descripcion}
@@ -725,21 +804,26 @@ export function PreciosEspecialesClientesCard({
             disabled={creandoNuevo || clientesDisponibles.length === 0}
           >
             <PlusIcon data-icon="inline-start" />
-            Agregar
+            Precio especial
           </Button>
         }
       />
       <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <div className={pricingStyles.loading} aria-label="Cargando precios especiales">
+          <div
+            className={pricingStyles.loading}
+            aria-label="Cargando precios especiales"
+          >
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
         ) : items.length === 0 && !creandoNuevo ? (
           <EstadoVacio
             variant="compacto"
+            className={pricingStyles.specialEmpty}
+            icon={<UsersRoundIcon aria-hidden="true" />}
             titulo="Sin precios especiales configurados"
-            descripcion="Por default todos los clientes pagan el precio standard. Si querés cobrar distinto a algún cliente puntual, agregalo acá."
+            descripcion="Todos los clientes usan la regla general. Agregá una excepción cuando necesites acordar un precio distinto."
           />
         ) : items.length > 0 ? (
           <div className={pricingStyles.tableShell}>
@@ -767,7 +851,10 @@ export function PreciosEspecialesClientesCard({
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {cfg.metodoCalculo.replace(/_/g, " ")}
+                          {
+                            getLabel(metodoPrecioLabels, cfg.metodoCalculo)
+                              .label
+                          }
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -810,54 +897,77 @@ export function PreciosEspecialesClientesCard({
                 {editando ? "Editar precio especial" : "Nuevo precio especial"}
               </CardTitle>
               <CardDescription>
-                Esta regla reemplaza la configuración general sólo para el cliente elegido.
+                Esta regla reemplaza la configuración general sólo para el
+                cliente elegido.
               </CardDescription>
             </CardHeader>
             <CardContent className={pricingStyles.specialEditorContent}>
               <FieldGroup>
                 <Field>
-                <LabelConTooltip
-                  label="Cliente"
-                  required
-                  tooltip="El cliente que va a recibir este precio especial cuando se le cotice este producto."
-                />
-                <HumanSelect
-                  value={clienteId}
-                  onValueChange={(v) => setClienteId(v ?? "")}
-                  disabled={!!editando}
-                  options={(editando ? clientes : clientesDisponibles).map((c) => ({
-                    value: c.id,
-                    label: c.nombre,
-                    code: c.razonSocial,
-                    description: [c.email, c.ciudad].filter(Boolean).join(" · ") || undefined,
-                  }))}
-                  placeholder="Elegí un cliente"
-                  contentClassName="max-h-80"
-                />
-                {editando && (
-                  <FieldDescription>
-                    El cliente no se puede cambiar. Si querés cambiarlo, eliminá este y creá otro.
-                  </FieldDescription>
-                )}
+                  <LabelConTooltip
+                    label="Cliente"
+                    required
+                    tooltip="El cliente que va a recibir este precio especial cuando se le cotice este producto."
+                  />
+                  <HumanSelect
+                    value={clienteId}
+                    onValueChange={(v) => setClienteId(v ?? "")}
+                    disabled={!!editando}
+                    options={(editando ? clientes : clientesDisponibles).map(
+                      (c) => ({
+                        value: c.id,
+                        label: c.nombre,
+                        code: c.razonSocial,
+                        description:
+                          [c.email, c.ciudad].filter(Boolean).join(" · ") ||
+                          undefined,
+                      }),
+                    )}
+                    placeholder="Elegí un cliente"
+                    contentClassName="max-h-80"
+                  />
+                  {editando && (
+                    <FieldDescription>
+                      El cliente no se puede cambiar. Si querés cambiarlo,
+                      eliminá este y creá otro.
+                    </FieldDescription>
+                  )}
                 </Field>
 
                 <Field>
                   <FieldTitle>Regla especial</FieldTitle>
-                <TabPrecioEditor
-                  value={config}
-                  onChange={setConfig}
-                  unidadComercial={unidadComercial}
-                />
+                  <TabPrecioEditor
+                    value={config}
+                    onChange={setConfig}
+                    unidadComercial={unidadComercial}
+                  />
                 </Field>
               </FieldGroup>
             </CardContent>
             <CardFooter className={pricingStyles.specialEditorFooter}>
-              <Button variant="outline" size="sm" onClick={cancelar} disabled={guardando}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={cancelar}
+                disabled={guardando}
+              >
                 Cancelar
               </Button>
-              <Button size="sm" onClick={guardar} disabled={guardando || !clienteId}>
-                {guardando ? <Spinner data-icon="inline-start" /> : null}
-                {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
+              <Button
+                size="sm"
+                onClick={guardar}
+                disabled={guardando || !clienteId}
+              >
+                {guardando ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <ArrowUpRightIcon data-icon="inline-start" />
+                )}
+                {guardando
+                  ? "Guardando..."
+                  : editando
+                    ? "Guardar cambios"
+                    : "Crear"}
               </Button>
             </CardFooter>
           </Card>
@@ -871,8 +981,8 @@ export function PreciosEspecialesClientesCard({
         descripcion={
           aBorrar ? (
             <>
-              Vas a eliminar el precio especial de <strong>{aBorrar.cliente.nombre}</strong>{" "}
-              para este producto.
+              Vas a eliminar el precio especial de{" "}
+              <strong>{aBorrar.cliente.nombre}</strong> para este producto.
             </>
           ) : null
         }

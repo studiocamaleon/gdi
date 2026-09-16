@@ -12,8 +12,10 @@ import {
 } from "@heroui/react";
 import { InfoIcon } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import focus from "@/components/design-system/field-focus.module.css";
 import selectField from "@/components/design-system/select-field.module.css";
 import { Button as LegacyButton } from "@/components/ui/button";
@@ -204,6 +206,7 @@ export function LabelConTooltip(
 ) {
   const enabled = useAltaVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   if (!enabled) return <LegacyLabelConTooltip {...props} />;
   return (
     <div className={s.labelHelp}>
@@ -221,7 +224,7 @@ export function LabelConTooltip(
           >
             <InfoIcon />
           </ActionButton>
-          <Tooltip.Content {...scope} className={`${theme.theme} ${s.tooltip}`}>
+          <Tooltip.Content {...scope} className={`${theme} ${s.tooltip}`}>
             <p>{props.tooltip}</p>
             {props.ejemplo && <p>Ejemplo: {props.ejemplo}</p>}
           </Tooltip.Content>
@@ -235,6 +238,7 @@ export function HumanSelect(
 ) {
   const enabled = useAltaVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   if (!enabled) return <LegacyHumanSelect {...props} />;
   const {
     value,
@@ -271,10 +275,7 @@ export function HumanSelect(
         </Select.Value>
         <Select.Indicator />
       </Select.Trigger>
-      <Select.Popover
-        {...scope}
-        className={`${theme.theme} ${s.selectPopover}`}
-      >
+      <Select.Popover {...scope} className={`${theme} ${s.selectPopover}`}>
         <ListBox>
           {available.map((option) => (
             <ListBox.Item

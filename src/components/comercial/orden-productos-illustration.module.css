@@ -1,0 +1,90 @@
+.illustration {
+  display: block;
+  width: 156px;
+  height: 128px;
+  flex: none;
+  margin: -8px 0 12px;
+  overflow: visible;
+}
+.halo {
+  fill: var(--accent-soft);
+  opacity: 0.7;
+}
+.registration,
+.guide {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.guide {
+  stroke-dasharray: 3 4;
+}
+.shadow {
+  fill: var(--brand-graphite);
+  opacity: 0.08;
+}
+.interior,
+.leftFace {
+  fill: var(--brand-graphite);
+}
+.rightFace {
+  fill: var(--brand-graphite-line);
+}
+.boxEdge {
+  fill: none;
+  stroke: var(--brand-muted-on-graphite);
+  stroke-width: 0.7;
+  opacity: 0.4;
+}
+.leftFlap {
+  fill: color-mix(in srgb, var(--accent) 72%, var(--surface));
+}
+.rightFlap,
+.printBlock,
+.dot,
+.smallDot {
+  fill: var(--accent);
+}
+.flapEdge {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 65%, var(--surface));
+  stroke-width: 1;
+}
+.paperEdge {
+  fill: var(--surface-secondary);
+  stroke: var(--border);
+}
+.paper {
+  fill: var(--surface);
+  stroke: var(--border);
+}
+.printLine,
+.printMark {
+  fill: none;
+  stroke: var(--brand-graphite);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.printLine {
+  opacity: 0.4;
+}
+.label {
+  fill: var(--brand-on-graphite);
+}
+.spark {
+  fill: none;
+  stroke: var(--accent-soft-foreground);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.print {
+  animation: float 6s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .print { animation: none; }
+}

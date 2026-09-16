@@ -79,6 +79,9 @@ export function PlanificacionEntregas({
   editable?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!editable) setOpen(false);
+  }, [editable]);
   const [vistaLocal, setVistaLocal] = React.useState<
     ResumenDistribucion | null | undefined
   >(undefined);

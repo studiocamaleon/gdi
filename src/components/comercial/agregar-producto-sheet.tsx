@@ -1,5 +1,11 @@
 "use client";
 
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import brandStyles from "./orden-configurador.module.css";
+import catalogStyles from "./producto-catalogo.module.css";
+import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
+import { ActionButton } from "@/components/design-system/action-button";
+
 import * as React from "react";
 import { obtenerRelacionAspectoSvg } from "@/lib/producto-geometrias";
 import { PiezasHeredadasCotizacion } from "./piezas-heredadas-cotizacion";
@@ -23,9 +29,10 @@ import { PlanLotesCotizacion } from "@/components/nesting/plan-lotes-cotizacion"
 import Link from "next/link";
 import {
   ArrowLeftIcon,
-  ArrowRightIcon,
   BoxesIcon,
-  BriefcaseBusinessIcon,
+  ArrowUpRightIcon,
+  ChevronDownIcon,
+  SlidersHorizontalIcon,
   CheckIcon,
   CircleAlertIcon,
   CalculatorIcon,
@@ -694,18 +701,6 @@ function defaultSlotCandidateId(slot: SlotComercialElige) {
   return undefined;
 }
 
-function familyColor(family: string) {
-  return (
-    {
-      Digital: "v",
-      "Gran formato": "f",
-      Offset: "d",
-      Talonario: "g",
-      Stand: "v",
-    }[family] ?? "g"
-  );
-}
-
 // Resalta en negrita las palabras de la búsqueda dentro del texto.
 function highlightMatch(text: string, tokens: string[]): React.ReactNode {
   if (tokens.length === 0) return text;
@@ -716,16 +711,7 @@ function highlightMatch(text: string, tokens: string[]): React.ReactNode {
   const tokenSet = new Set(tokens);
   return text.split(regex).map((part, index) =>
     part && tokenSet.has(part.toLowerCase()) ? (
-      <span
-        key={index}
-        style={{
-          background: "rgba(255, 106, 43, 0.22)",
-          color: "inherit",
-          borderRadius: "3px",
-          padding: "0 1px",
-          boxShadow: "0 0 0 1px rgba(255, 106, 43, 0.28)",
-        }}
-      >
+      <span key={index} className={catalogStyles.match}      >
         {part}
       </span>
     ) : (
@@ -5045,6 +5031,8 @@ function ApSelectStep({
   loadingProductId,
 }: SelectStepProps) {
   const { moneda } = useConfigRegional();
+  const resultsId = React.useId();
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
   const [activeIndex, setActiveIndex] = React.useState(0);
   const [filtrosAbiertos, setFiltrosAbiertos] = React.useState(false);
   const activeResultRef = React.useRef<HTMLButtonElement | null>(null);
@@ -5083,132 +5071,138 @@ function ApSelectStep({
   React.useEffect(() => {
     activeResultRef.current?.scrollIntoView({
       block: "nearest",
-      behavior: "smooth",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
     });
   }, [activeIndex]);
 
   return (
-    <>
-      <div className="ap-search">
-        <SearchIcon />
-        <input
-          autoFocus
-          placeholder="Buscar por nombre o código..."
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "ArrowDown") {
+    <div className={catalogStyles.catalog}>
+      <div className={catalogStyles.tools}>
+        <div className={catalogStyles.search}>
+          <SearchIcon aria-hidden="true" />
+          <input
+            autoFocus
+            ref={searchRef}
+            role="combobox"
+            aria-label="Buscar producto por nombre o código"
+            aria-autocomplete="list"
+            aria-expanded="true"
+            aria-controls={resultsId}
+            aria-activedescendant={activeProduct ? `${resultsId}-${Math.min(activeIndex, filtered.length - 1)}` : undefined}
+            placeholder="Buscar por nombre o código..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setActiveIndex((current) =>
+                  filtered.length === 0
+                    ? 0
+                    : Math.min(current + 1, filtered.length - 1),
+                );
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setActiveIndex((current) => Math.max(current - 1, 0));
+                return;
+              }
+              if (event.key !== "Enter" || !activeProduct) return;
               event.preventDefault();
-              setActiveIndex((current) =>
-                filtered.length === 0
-                  ? 0
-                  : Math.min(current + 1, filtered.length - 1),
-              );
-              return;
-            }
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              setActiveIndex((current) => Math.max(current - 1, 0));
-              return;
-            }
-            if (event.key !== "Enter" || !activeProduct) return;
-            event.preventDefault();
-            onPick(activeProduct);
-          }}
-        />
-        <span className="kbd">↑↓ Enter</span>
-      </div>
-
-      {/* Filtros por categoría plegados: por defecto sólo se ven los productos;
-          el botón despliega los chips si hace falta afinar. */}
-      <div className="ap-filters">
-        <button
-          type="button"
-          className={`ap-chip ${family !== "Todos" ? "on" : ""}`}
-          onClick={() => setFiltrosAbiertos((v) => !v)}
-          aria-expanded={filtrosAbiertos}
-        >
-          {family === "Todos" ? "Filtrar por categoría" : family}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{
-              marginLeft: 4,
-              transform: filtrosAbiertos ? "rotate(180deg)" : "none",
-              transition: "transform .15s",
+              onPick(activeProduct);
             }}
-            aria-hidden="true"
+          />
+          {query ? (
+            <ActionButton variant="ghost" isIconOnly aria-label="Limpiar búsqueda" onPress={() => { setQuery(""); searchRef.current?.focus(); }}>
+              <XIcon />
+            </ActionButton>
+          ) : <kbd className={catalogStyles.keyHint}>↑↓ <span>Enter</span></kbd>}
+        </div>
+
+        <div className={catalogStyles.filters}>
+          <ActionButton
+            variant={family === "Todos" ? "outline" : "secondary"}
+            className={catalogStyles.filterTrigger}
+            onPress={() => setFiltrosAbiertos((v) => !v)}
+            aria-expanded={filtrosAbiertos}
+            aria-controls={`${resultsId}-families`}
           >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
-        {filtrosAbiertos
-          ? families.map((item) => (
+            <SlidersHorizontalIcon />
+            {family === "Todos" ? "Categorías" : family}
+            <ChevronDownIcon className={filtrosAbiertos ? catalogStyles.chevronOpen : undefined} />
+          </ActionButton>
+          {family !== "Todos" ? (
+            <ActionButton variant="ghost" isIconOnly aria-label="Quitar filtro de categoría" onPress={() => setFamily("Todos")}>
+              <XIcon />
+            </ActionButton>
+          ) : null}
+        </div>
+        {filtrosAbiertos ? (
+          <div id={`${resultsId}-families`} className={catalogStyles.families} role="group" aria-label="Categorías del catálogo">
+            {families.map((item) => (
               <button
                 key={item}
                 type="button"
-                className={`ap-chip ${family === item ? "on" : ""}`}
+                className={catalogStyles.familyChoice}
+                aria-pressed={family === item}
                 onClick={() => {
                   setFamily(item);
                   setFiltrosAbiertos(false);
+                  searchRef.current?.focus();
                 }}
               >
                 {item}
-                {item !== "Todos" ? (
-                  <span className="ct">
-                    {
-                      products.filter((product) => product.family === item)
-                        .length
-                    }
-                  </span>
-                ) : null}
+                <span>{item === "Todos" ? products.length : products.filter((product) => product.family === item).length}</span>
               </button>
-            ))
-          : null}
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="ap-section">
-        <div className="ap-section-head">
-          <span>Catálogo</span>
-          <span className="ap-section-hint">
+      <div className={catalogStyles.results}>
+        <div className={catalogStyles.resultHeading}>
+          <span>{query || family !== "Todos" ? "Resultados" : "Explorá el catálogo"}</span>
+          <span className={catalogStyles.resultCount} role="status" aria-live="polite">
             {filtered.length} producto{filtered.length === 1 ? "" : "s"}
           </span>
         </div>
         <div
-          className="ap-list"
+          id={resultsId}
+          className={catalogStyles.list}
           role="listbox"
           aria-label="Productos del catálogo"
         >
           {filtered.map((product, index) => (
             <button
               key={product.code}
+              id={`${resultsId}-${index}`}
               ref={
                 activeProduct?.code === product.code ? activeResultRef : null
               }
               type="button"
               role="option"
-              className={`ap-prod ${activeProduct?.code === product.code ? "is-keyboard-target" : ""}`}
+              className={catalogStyles.product}
+              aria-busy={loadingProductId === product.id || undefined}
               aria-selected={activeProduct?.code === product.code}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => onPick(product)}
             >
-              <span className="ap-prod-main">
-                <span className="ap-prod-head">
-                  <span
-                    className={`tipo-chip tipo-${familyColor(product.family)}`}
-                  >
-                    <span className="d" />
-                    {product.family}
-                  </span>
+              <span className={catalogStyles.glyph}>
+                <ProductoCatalogoGlyph
+                  subcategoriaCodigo={product.subcategoriaComercialCodigo}
+                  categoriaCodigo={product.categoriaComercialCodigo}
+                  compuesto={product.esCompuesto}
+                  cobro={product.cobro}
+                />
+              </span>
+              <span className={catalogStyles.productMain}>
+                <span className={catalogStyles.productMeta}>
+                  <span className={catalogStyles.family}>{product.family}</span>
                   {product.esCompuesto ? (
                     <span
-                      className="ap-compound-icon"
+                      className={catalogStyles.compound}
                       title="Producto compuesto"
                       aria-label="Producto compuesto"
                     >
@@ -5216,18 +5210,18 @@ function ApSelectStep({
                     </span>
                   ) : null}
                 </span>
-                <span className="ap-prod-name">
+                <span className={catalogStyles.productName}>
                   {highlightMatch(product.name, queryTokens)}
                 </span>
-                <span className="ap-prod-desc">{product.descripcion}</span>
+                <span className={catalogStyles.productDescription} title={product.descripcion}>{product.descripcion}</span>
               </span>
-              <span className="ap-prod-meta">
-                <span className="ap-mode">
+              <span className={catalogStyles.billing}>
+                <span className={catalogStyles.mode}>
                   <ApAtomMode mode={product.cobro} />
                   {product.cobro}
                 </span>
                 {!product.real ? (
-                  <span className="ap-precio">
+                  <span className={catalogStyles.referencePrice}>
                     Referencia{" "}
                     <strong>
                       {formatCurrency(product.precioBase, moneda)}
@@ -5236,23 +5230,25 @@ function ApSelectStep({
                   </span>
                 ) : null}
               </span>
-              <span className="ap-prod-pick">
-                {loadingProductId === product.id ? "..." : <ArrowRightIcon />}
+              <span className={catalogStyles.pick} aria-hidden="true">
+                {loadingProductId === product.id ? "…" : <ArrowUpRightIcon />}
               </span>
             </button>
           ))}
-          {filtered.length === 0 ? (
-            <div className="ap-empty">
-              <div className="ttl">Sin resultados</div>
-              <div className="sub">
-                Probá quitar el filtro <strong>{family}</strong> o ajustar la
-                búsqueda.
-              </div>
-            </div>
-          ) : null}
+
         </div>
+        {filtered.length === 0 ? (
+          <div className={catalogStyles.empty} role="status">
+            <SearchIcon aria-hidden="true" />
+            <h3>No encontramos ese producto<span aria-hidden="true">.</span></h3>
+            <p>Probá con otro nombre, código o categoría.</p>
+            <ActionButton variant="outline" onPress={() => { setQuery(""); setFamily("Todos"); searchRef.current?.focus(); }}>
+              Limpiar filtros
+            </ActionButton>
+          </div>
+        ) : null}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -7503,6 +7499,7 @@ function ApConfigStep({
           <button
             type="button"
             className="ap-qty-btn"
+            aria-label="Disminuir cantidad"
             onClick={() =>
               setCantidad(Math.max(cuentaProductosVectoriales ? 1 : 0, qty - 1))
             }
@@ -7531,6 +7528,7 @@ function ApConfigStep({
           <button
             type="button"
             className="ap-qty-btn"
+            aria-label="Aumentar cantidad"
             onClick={() => setCantidad(qty + 1)}
           >
             <PlusIcon />
@@ -7565,12 +7563,13 @@ function ApConfigStep({
     const gridConProf =
       "minmax(60px, 0.8fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) auto minmax(80px, 1fr) 38px";
     const estiloGrid = mostrarProf
-      ? { gridTemplateColumns: gridConProf }
+      ? { "--product-piece-columns": gridConProf } as React.CSSProperties
       : undefined;
     const inputProf = mostrarProf ? (
       <>
         <span>x</span>
         <label className="ap-input-unit">
+          <span className={brandStyles.pieceCaption}>Profundidad</span>
           <input
             type="text"
             inputMode="decimal"
@@ -7594,7 +7593,7 @@ function ApConfigStep({
         <div className={seC.body}>
           <div className="ap-piezas">
             <div
-              className="ap-pieza-head"
+              className={`ap-pieza-head ${brandStyles.pieceGridHead}`}
               style={estiloGrid}
               aria-hidden="true"
             >
@@ -7618,7 +7617,9 @@ function ApConfigStep({
                   pieza.altoMm !== pieza.origen.altoDetectadoMm);
               return (
                 <React.Fragment key={pieza.uiKey}>
-                  <div className="ap-pieza-row" style={estiloGrid}>
+                  <div className={`ap-pieza-row ${brandStyles.pieceRow}`} style={index === 0 ? estiloGrid : undefined}>
+                    <label className={brandStyles.pieceQuantity}>
+                    <span className={brandStyles.pieceCaption}>Cantidad</span>
                     <input
                       ref={(node) => {
                         piezaFocusRefs.current[pieza.uiKey] = node;
@@ -7633,8 +7634,10 @@ function ApConfigStep({
                       }
                       aria-label="Cantidad de piezas"
                     />
+                    </label>
                     <span>x</span>
                     <label className="ap-input-unit">
+                      <span className={brandStyles.pieceCaption}>Ancho</span>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -7654,6 +7657,7 @@ function ApConfigStep({
                     </label>
                     <span>x</span>
                     <label className="ap-input-unit">
+                      <span className={brandStyles.pieceCaption}>Alto</span>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -7892,6 +7896,8 @@ function ApConfigStep({
     return (
       <>
         <ProductoSheetHeaderConstelacion
+          stage="config"
+          titleId="ap-title"
           name={product.name}
           desc="Configurador de cartelería · el precio lo cotiza el motor en vivo"
           eyebrow={`${product.family} · ${product.cobro}`}
@@ -7966,6 +7972,8 @@ function ApConfigStep({
   return (
     <>
       <ProductoSheetHeaderConstelacion
+        stage="config"
+        titleId="ap-title"
         name={product.name}
         desc={product.descripcion}
         eyebrow={`${product.family} · ${product.cobro}`}
@@ -9603,6 +9611,8 @@ export function AgregarProductoSheet({
   onSaveItem,
   clienteId = null,
 }: AgregarProductoSheetProps) {
+  const designScope = useDesignScope();
+  const designClass = useDesignTheme();
   const { moneda } = useConfigRegional();
   const [step, setStep] = React.useState<"select" | "config">("select");
   const [product, setProduct] = React.useState<CatalogProduct | null>(null);
@@ -10525,7 +10535,7 @@ export function AgregarProductoSheet({
   // Puente de compatibilidad: este configurador aún usa los selectores .ot-v1.
   // Mantener el alcance aquí hasta migrar el sheet, sin devolverlo a toda la OT.
   return (
-    <div className="ot-v1">
+    <div {...designScope} className={`${designClass} ${brandStyles.scope} ot-v1`}>
       <div
         className="sheet-backdrop"
         onClick={briefEditorOpen ? cerrarBrief : close}
@@ -10533,33 +10543,21 @@ export function AgregarProductoSheet({
       <div
         ref={dialogRef}
         data-plan-abierto={planOpen || undefined}
+        data-product-step={step}
         className={`sheet sheet-ap${esCarteleriaFull ? ` ${cartS.sheetFull}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="ap-title"
       >
         {step === "select" ? (
-          <div className="sheet-head ap-head">
-            <div className="body">
-              <div className="ap-eyebrow">
-                <BriefcaseBusinessIcon />
-                Comercial · Nueva orden
-              </div>
-              <h2 id="ap-title">Agregar producto a la OT</h2>
-              <div className="sub">
-                Elegí un producto del catálogo para configurar cantidad, datos
-                reales y opcionales.
-              </div>
-            </div>
-            <button
-              type="button"
-              className="close"
-              onClick={close}
-              aria-label="Cerrar"
-            >
-              <XIcon />
-            </button>
-          </div>
+          <ProductoSheetHeaderConstelacion
+            stage="select"
+            titleId="ap-title"
+            name="Agregar producto"
+            eyebrow="Comercial · Nueva orden"
+            desc="Elegí una pieza del catálogo. Configurá sus medidas, materiales y terminaciones para sumarla a tu orden."
+            onClose={close}
+          />
         ) : null}
 
         <div
@@ -10615,15 +10613,15 @@ export function AgregarProductoSheet({
         <div className="sheet-foot ap-foot">
           {step === "config" && product && totals ? (
             <>
-              <button
-                type="button"
-                className="btn"
-                onClick={back}
-                disabled={briefEditorOpen}
+              <ActionButton
+                variant="outline"
+                className={catalogStyles.backAction}
+                onPress={back}
+                isDisabled={briefEditorOpen}
               >
                 <ArrowLeftIcon />
                 Volver
-              </button>
+              </ActionButton>
               <span className="ap-foot-spacer" />
               <div className="ap-foot-total">
                 <span className="lbl">Total c/ imp.</span>
@@ -10641,11 +10639,11 @@ export function AgregarProductoSheet({
                 </span>
               </div>
               {!isEditing ? (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => addCurrent(true)}
-                  disabled={
+                <ActionButton
+                  variant="outline"
+                  className={catalogStyles.anotherAction}
+                  onPress={() => addCurrent(true)}
+                  isDisabled={
                     briefEditorOpen ||
                     nombresPiezasIncompletos ||
                     (product.real &&
@@ -10657,13 +10655,13 @@ export function AgregarProductoSheet({
                   }
                 >
                   Guardar y agregar otro
-                </button>
+                </ActionButton>
               ) : null}
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => addCurrent(false)}
-                disabled={
+              <ActionButton
+                variant="primary"
+                className={catalogStyles.confirmAction}
+                onPress={() => addCurrent(false)}
+                isDisabled={
                   briefEditorOpen ||
                   nombresPiezasIncompletos ||
                   (product.real &&
@@ -10676,20 +10674,20 @@ export function AgregarProductoSheet({
               >
                 {isEditing ? <CheckIcon /> : <PlusIcon />}
                 {isEditing ? "Guardar cambios" : "Agregar a la OT"}
-              </button>
+              </ActionButton>
             </>
           ) : (
             <>
-              <span className="ap-foot-hint">
-                ¿No está en el catálogo?{" "}
-                <Link href="/productos-servicios/nuevo" className="ap-link">
-                  Crear producto custom →
+              <span className={catalogStyles.customHint}>
+                ¿Necesitás algo diferente?{" "}
+                <Link href="/productos-servicios/nuevo" className={catalogStyles.customLink}>
+                  Crear producto custom <ArrowUpRightIcon aria-hidden="true" />
                 </Link>
               </span>
               <span className="ap-foot-spacer" />
-              <button type="button" className="btn" onClick={close}>
+              <ActionButton variant="outline" onPress={close}>
                 Cancelar
-              </button>
+              </ActionButton>
             </>
           )}
         </div>

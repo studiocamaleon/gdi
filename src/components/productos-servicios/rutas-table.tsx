@@ -7,18 +7,23 @@ import { ActionLink } from "@/components/design-system/action-link";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./flujos.module.css";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRightIcon,
+  ArrowUpRightIcon,
   BookOpenIcon,
   BoxesIcon,
   CircleDotIcon,
+  CircleCheckIcon,
   CopyIcon,
   FactoryIcon,
   GitBranchIcon,
@@ -27,7 +32,6 @@ import {
   Layers3Icon,
   PackageIcon,
   PaintbrushIcon,
-  PlusIcon,
   PrinterIcon,
   RouteIcon,
   ScissorsIcon,
@@ -79,6 +83,7 @@ function RoutePreview({
   familiaLabel: (codigo: string) => string;
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const nodos =
     ruta.workflow?.nodos.slice().sort((a, b) => a.orden - b.orden) ??
     ruta.pasos.map((paso, index) => ({
@@ -101,15 +106,16 @@ function RoutePreview({
         onKeyDown={(event) => event.stopPropagation()}
       >
         <RouteIcon data-icon="inline-start" />
-        {nodos.length} {nodos.length === 1 ? "nodo" : "nodos"} · {topologia}
+        {nodos.length} {nodos.length === 1 ? "nodo" : "nodos"} ·{" "}
+        {topologia === "DAG" ? "Paralelos" : "Lineal"}
       </Button>
       <Tooltip.Content
         {...scope}
         placement="bottom start"
-        className={`${theme.theme} ${styles.preview}`}
+        className={`${theme} ${styles.preview}`}
       >
-        <p className="mb-2 font-medium">Flujo de producción reutilizable</p>
-        <ol className="grid gap-1.5">
+        <p className={styles.previewTitle}>Recorrido de producción</p>
+        <ol className={styles.previewSteps}>
           {nodos.map((nodo, index) => {
             const StepIcon =
               nodo.tipo === "COMPONENTE"
@@ -123,13 +129,19 @@ function RoutePreview({
                 : nodo.nombreVisible?.trim() ||
                   familiaLabel(nodo.familiaCodigo);
             return (
-              <li key={nodo.clave} className="flex min-w-0 items-center gap-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
-                  {index + 1}
+              <li key={nodo.clave}>
+                <span className={styles.previewIndex}>
+                  {String(index + 1).padStart(2, "0")}
                 </span>
                 <StepIcon className="size-3.5 shrink-0 opacity-75" />
                 <span className="min-w-0 truncate">{nombre}</span>
-                <small className="ml-auto opacity-60">{nodo.tipo}</small>
+                <small>
+                  {nodo.tipo === "COMPONENTE"
+                    ? "Componente"
+                    : nodo.tipo === "ETAPA"
+                      ? "Compuesto"
+                      : "Simple"}
+                </small>
               </li>
             );
           })}
@@ -149,6 +161,7 @@ export function RutasTable({
   puedeGestionar: boolean;
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const rutas = initialRutas;
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
@@ -233,22 +246,51 @@ export function RutasTable({
   };
 
   return (
-    <main {...scope} className={`${theme.theme} ${listPage.page}`}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page}`}
+    >
       <header className={listPage.header}>
         <div>
-          <h1>Flujos de producción</h1>
+          <span className={brand.eyebrow}>Costos · Recorridos del taller</span>
+          <h1>
+            Flujos de producción<span className={brand.titleDot}>.</span>
+          </h1>
           <p className={listPage.subtitle}>
-            {rutas.length} flujos reutilizables. Organizá nodos, componentes y
-            secuencias para fabricar tus productos.
+            Organizá nodos, componentes y secuencias para fabricar tus
+            productos.
           </p>
         </div>
         {puedeGestionar && (
           <ActionLink href="/productos-servicios/rutas/nueva">
-            <PlusIcon />
+            <ArrowUpRightIcon />
             Nuevo flujo
           </ActionLink>
         )}
       </header>
+      <section className={brand.metrics} aria-label="Resumen de flujos">
+        <ListMetric
+          label="Flujos"
+          value={rutas.length}
+          hint="Recorridos reutilizables del catálogo"
+          icon={RouteIcon}
+        />
+        <ListMetric
+          label="Activos"
+          value={rutas.filter((ruta) => ruta.activo).length}
+          hint="Disponibles para tus productos"
+          icon={CircleCheckIcon}
+        />
+        <ListMetric
+          label="En uso"
+          value={
+            rutas.filter((ruta) => ruta._count.productosAlternativas > 0).length
+          }
+          hint="Flujos vinculados a productos"
+          icon={GitBranchIcon}
+        />
+      </section>
       <Card className={listPage.results}>
         {rutas.length === 0 ? (
           <div className={listPage.empty}>
@@ -260,7 +302,7 @@ export function RutasTable({
             </p>
             {puedeGestionar && (
               <ActionLink href="/productos-servicios/rutas/nueva">
-                <PlusIcon />
+                <ArrowUpRightIcon />
                 Crear flujo
               </ActionLink>
             )}
@@ -269,12 +311,16 @@ export function RutasTable({
           <>
             <div className={listPage.toolbar}>
               <div className={styles.listTitle}>
-                <strong>Flujos</strong>
+                <span className={styles.directoryIcon} aria-hidden>
+                  <RouteIcon />
+                </span>
+                <strong>Catálogo de flujos</strong>
                 <span>
                   {rutasFiltradas.length} de {rutas.length}
                 </span>
               </div>
               <SegmentedControl
+                tone="graphite"
                 aria-label="Filtrar flujos por estado"
                 value={estadoFiltro}
                 options={[
@@ -303,7 +349,7 @@ export function RutasTable({
               <div className={listPage.empty}>
                 <SearchIcon className="size-6" />
                 <h2>Ningún flujo coincide</h2>
-                <p>Probá con otros términos de búsqueda.</p>
+                <p>Probá con otros términos o cambiá el filtro de estado.</p>
               </div>
             ) : (
               <div className={styles.tableScroll}>
@@ -335,19 +381,28 @@ export function RutasTable({
                         }}
                       >
                         <td>
-                          <div className="flex items-center gap-2">
-                            <span className={styles.name}>{ruta.nombre}</span>
-                            {!ruta.activo && (
-                              <Chip size="sm" variant="soft">
-                                Inactiva
-                              </Chip>
-                            )}
+                          <div className={styles.routeIdentity}>
+                            <span className={styles.routeIcon} aria-hidden>
+                              <RouteIcon />
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className={styles.name}>
+                                  {ruta.nombre}
+                                </span>
+                                {!ruta.activo && (
+                                  <Chip size="sm" variant="soft">
+                                    Inactiva
+                                  </Chip>
+                                )}
+                              </div>
+                              {ruta.descripcion && (
+                                <p className={styles.description}>
+                                  {ruta.descripcion}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          {ruta.descripcion && (
-                            <p className={styles.description}>
-                              {ruta.descripcion}
-                            </p>
-                          )}
                         </td>
                         <td>
                           <RoutePreview
@@ -393,7 +448,7 @@ export function RutasTable({
                                 title="Ver detalle"
                                 onClick={(event) => event.stopPropagation()}
                               >
-                                <ArrowRightIcon />
+                                <ArrowUpRightIcon />
                               </ActionLink>
                             </div>
                           ) : (
@@ -412,6 +467,7 @@ export function RutasTable({
         )}
       </Card>
       <FormDialog
+        className={brand.dialog}
         isOpen={Boolean(rutaADuplicar)}
         isDismissable={!duplicandoId}
         onOpenChange={(open) => {
@@ -459,6 +515,7 @@ export function RutasTable({
               isPending={Boolean(duplicandoId)}
               isDisabled={!nombreCopia.trim() || Boolean(duplicandoId)}
             >
+              <ArrowUpRightIcon />
               Duplicar flujo
             </Button>
           </Modal.Footer>

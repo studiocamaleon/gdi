@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { ReportesShell } from "@/components/panel/reportes-shell";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 /**
  * Puerta del módulo + cromo compartido. El sidebar ya esconde Reportes para
@@ -24,7 +25,9 @@ export default async function ReportesLayout({
   return (
     // `useSearchParams` del shell obliga a un límite de Suspense.
     <Suspense fallback={null}>
-      <ReportesShell>{children}</ReportesShell>
+      <DesignSystemProvider theme="brand" appearance="light">
+        <ReportesShell>{children}</ReportesShell>
+      </DesignSystemProvider>
     </Suspense>
   );
 }

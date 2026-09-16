@@ -1,4 +1,5 @@
 "use client";
+import styles from "../maquinaria.module.css";
 import { useMaquinariaPuedeEditar } from "./maquinaria-edicion";
 import focus from "@/components/design-system/field-focus.module.css";
 import { SelectField } from "@/components/design-system/select-field";
@@ -91,7 +92,8 @@ export function HerramientasCorteEditor({
   const { form, setForm, perfiles } = editor;
   if (!PLANTILLAS_PROCESAMIENTO_CORTE.includes(form.plantilla)) return null;
   const config = form.parametrosTecnicos?.procesamientoCorte as
-    ConfiguracionProcesamientoCorte | undefined;
+    | ConfiguracionProcesamientoCorte
+    | undefined;
   const guardar = (next: ConfiguracionProcesamientoCorte) =>
     setForm((f) => ({
       ...f,
@@ -135,7 +137,7 @@ export function HerramientasCorteEditor({
   };
   return (
     <section
-      className={s.panel}
+      className={`${s.panel} ${styles.cuttingPanel}`}
       aria-label="Herramientas y preparación de corte"
     >
       <div className={s.header}>

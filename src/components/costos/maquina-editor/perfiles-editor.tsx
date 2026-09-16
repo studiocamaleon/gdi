@@ -13,7 +13,13 @@ import corteStyles from "./procesamiento-corte.module.css";
  */
 
 import * as React from "react";
-import { CopyIcon, PlusIcon, Settings2Icon, XIcon } from "lucide-react";
+import {
+  CopyIcon,
+  PlusIcon,
+  Settings2Icon,
+  XIcon,
+  LayersIcon,
+} from "lucide-react";
 
 import {
   tipoPerfilOperativoMaquinaItems,
@@ -22,10 +28,19 @@ import {
 } from "@/lib/maquinaria";
 import type { MateriaPrima } from "@/lib/materias-primas";
 import { Modal } from "@heroui/react";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { Chip, ComboBox, Input, ListBox } from "@heroui/react";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import focus from "@/components/design-system/field-focus.module.css";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 
@@ -83,6 +98,7 @@ export function MaterialesPerfilPicker({
   soloRigidos?: boolean;
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const puedeEditar = useMaquinariaPuedeEditar();
   const [busquedaMaterial, setBusquedaMaterial] = React.useState("");
   const seleccionados = Array.isArray(value)
@@ -146,7 +162,7 @@ export function MaterialesPerfilPicker({
         </ComboBox.InputGroup>
         <ComboBox.Popover
           {...scope}
-          className={`${theme.theme} ${styles.materialPopover}`}
+          className={`${theme} ${styles.materialPopover}`}
         >
           <ListBox
             renderEmptyState={() => "No hay materiales activos que coincidan."}
@@ -336,9 +352,17 @@ export function PerfilesOperativosEditor({
   return (
     <div className={`${styles["maq-perfiles"]}`}>
       {perfiles.length === 0 ? (
-        <p className={`${styles["maq-perfiles-vacio"]}`}>
-          Sin perfiles. Agregá al menos uno.
-        </p>
+        <Empty className={styles.sectionEmpty}>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <LayersIcon />
+            </EmptyMedia>
+            <EmptyTitle>Sin perfiles operativos</EmptyTitle>
+            <EmptyDescription>
+              Agregá al menos uno para definir cómo trabaja la máquina.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className={`${styles["maq-perfiles-scroll"]}`}>
           <table
@@ -589,6 +613,7 @@ export function PerfilesOperativosEditor({
         onOpenChange={(open) => {
           if (!open) setPerfilAEliminar(null);
         }}
+        className={styles.confirmDialog}
         title="Eliminar perfil operativo"
         description={`¿Eliminar "${perfilAEliminar?.nombre || "este perfil"}"? También se quitarán sus consumibles vinculados al guardar.`}
       >

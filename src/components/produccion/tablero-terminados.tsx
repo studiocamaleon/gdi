@@ -5,8 +5,7 @@ import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { Input, TextField } from "@heroui/react";
 import { ChevronDown, ChevronUp, History, Search } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import {
   getTerminadosTablero,
   type PaginaTerminadosTablero,
@@ -31,6 +30,7 @@ export function TableroTerminados({
   onOpen: (id: string) => void;
 }) {
   const scope = useDesignScope();
+  const designTheme = useDesignTheme();
   const [abierto, setAbierto] = useState(false);
   const [consulta, setConsulta] = useState({
     page: 1,
@@ -79,7 +79,7 @@ export function TableroTerminados({
   return (
     <section
       {...scope}
-      className={`${theme.theme} ${s.history}`}
+      className={`${designTheme} ${s.history}`}
       aria-label="Consulta de trabajos terminados"
     >
       <div className={s.historyHeader}>

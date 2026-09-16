@@ -11,9 +11,11 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@heroui/react";
-import { useDesignScope } from "@/components/design-system/appearance";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { ActionLink } from "@/components/design-system/action-link";
-import theme from "@/components/design-system/theme.module.css";
 import * as Alta from "./producto-alta-ui";
 import * as Nodos from "./nodos-ui";
 import * as LegacyCard from "@/components/ui/card";
@@ -168,9 +170,11 @@ export function Checkbox(props: React.ComponentProps<typeof LegacyCheckbox>) {
       onChange={(value) => props.onCheckedChange?.(value, {} as never)}
       className={s.checkbox}
     >
-      <HeroCheckbox.Control>
-        <HeroCheckbox.Indicator />
-      </HeroCheckbox.Control>
+      <HeroCheckbox.Content>
+        <HeroCheckbox.Control>
+          <HeroCheckbox.Indicator />
+        </HeroCheckbox.Control>
+      </HeroCheckbox.Content>
     </HeroCheckbox>
   );
 }
@@ -207,6 +211,7 @@ export function DialogContent(
 ) {
   const enabled = useProductoVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const state = React.useContext(DialogState);
   React.useEffect(() => {
     if (!enabled || !state.open) return;
@@ -229,7 +234,7 @@ export function DialogContent(
   return (
     <Modal.Backdrop
       {...scope}
-      className={theme.theme}
+      className={theme}
       isOpen={state.open}
       onOpenChange={state.onOpenChange}
     >
@@ -478,9 +483,10 @@ export function SelectContent(
 ) {
   const enabled = useProductoVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   if (!enabled) return <LegacySelect.SelectContent {...props} />;
   return (
-    <HeroSelect.Popover {...scope} className={theme.theme}>
+    <HeroSelect.Popover {...scope} className={theme}>
       <ListBox>{props.children}</ListBox>
     </HeroSelect.Popover>
   );

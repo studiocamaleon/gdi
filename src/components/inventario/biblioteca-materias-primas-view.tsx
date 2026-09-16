@@ -1,15 +1,16 @@
 "use client";
 
 import * as React from "react";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import Link from "next/link";
-import { ArrowLeftIcon, LibraryIcon } from "lucide-react";
+import { ArrowLeftIcon, ArrowUpRightIcon, LibraryIcon, PackageCheckIcon, LayersIcon } from "lucide-react";
 import { Card, Checkbox, Chip, Input, SearchField, Tabs } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormSheet } from "@/components/design-system/form-sheet";
+import { ListMetric } from "@/components/design-system/list-metric";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { SelectField } from "@/components/design-system/select-field";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
-import theme from "@/components/design-system/theme.module.css";
 import layout from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import materialStyles from "./materiales.module.css";
@@ -298,7 +299,7 @@ const BIco = {
 };
 
 function MaterialIcon({ kind, size = 28 }: { kind: string; size?: number }) {
-  const inks = { fill: "#14141a", light: "#d4d2cd", line: "#92929b" };
+  const inks = { fill: "var(--brand-graphite)", light: "var(--surface-secondary)", line: "var(--muted-text)" };
   switch (kind) {
     case "foam":
       return (
@@ -996,6 +997,8 @@ function MaterialIcon({ kind, size = 28 }: { kind: string; size?: number }) {
 }
 
 export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const [items, setItems] = React.useState(initialItems);
   const [query, setQuery] = React.useState("");
   const [familyFilter, setFamilyFilter] = React.useState("all");
@@ -1074,8 +1077,8 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
 
   return (
     <section
-      data-ui="heroui"
-      className={`${theme.theme} ${layout.page} ${s.page}`}
+      {...scope} data-visual="brand"
+      className={`${themeClass} ${layout.page} ${materialStyles.page} ${s.page}`}
     >
       <Link
         href="/inventario/materias-primas"
@@ -1085,16 +1088,34 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
       </Link>
       <header className={layout.header}>
         <div>
-          <h1>Biblioteca de materiales</h1>
+          <p className={materialStyles.eyebrow}>Inventario · Biblioteca</p>
+          <h1>Biblioteca de materiales<span className={materialStyles.titleDot}>.</span></h1>
           <p className={layout.subtitle}>
             Instalá materiales comunes con variantes preparadas y adaptá su
             nombre a tu empresa.
           </p>
         </div>
-        <Chip size="sm" variant="soft" color="success">
-          {counts.installed} materiales instalados
-        </Chip>
       </header>
+      <div className={materialStyles.metrics}>
+        <ListMetric
+          label="Materiales disponibles"
+          value={counts.all}
+          hint="Bases listas para tu catálogo"
+          icon={LibraryIcon}
+        />
+        <ListMetric
+          label="Instalados"
+          value={counts.installed}
+          hint="Ya incorporados a tu empresa"
+          icon={PackageCheckIcon}
+        />
+        <ListMetric
+          label="Por descubrir"
+          value={counts["not-installed"]}
+          hint="Materiales todavía sin instalar"
+          icon={LayersIcon}
+        />
+      </div>
       <Card className={s.filtersCard}>
         <div className={s.toolbar}>
           <SearchField
@@ -1138,6 +1159,7 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
         </div>
         <div className={s.filtersBottom}>
           <SegmentedControl
+            tone="graphite"
             aria-label="Estado de instalación"
             value={statusFilter}
             onChange={setStatusFilter}
@@ -1231,7 +1253,7 @@ function MaterialCard({
       )}
       <div className={s.cardHead}>
         <div className={s.cardIcon}>
-          <MaterialIcon kind={item.iconKind} size={32} />
+          <MaterialIcon kind={item.iconKind} size={48} />
         </div>
         <div className={s.cardMeta}>
           <div className={s.cardCanonical}>
@@ -1281,7 +1303,7 @@ function MaterialCard({
         <span className={s.cardCta}>
           Configurar instalación{" "}
           <span className="arr">
-            <BIco.Arrow />
+            <ArrowUpRightIcon size={16} aria-hidden />
           </span>
         </span>
       </div>
@@ -1387,6 +1409,7 @@ function Wizard({
 
   return (
     <FormSheet
+      className={s.installSheet}
       title={`Instalar ${item.nombreCanonico}`}
       description="Configurá cómo se llamará en tu empresa y qué variantes querés tener disponibles para cotizar."
       onClose={onClose}
@@ -1463,6 +1486,8 @@ function Wizard({
       >
         <NavigationTabList
           label="Pasos de instalación"
+          variant="detailed"
+          tone="graphite"
           className={s.wizardNav}
           items={steps.map((item, index) => ({
             id: item.key,
@@ -1524,7 +1549,7 @@ function CanonicalRecap({ item }: { item: MaterialPresetListItem }) {
         <BIco.Library />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="lbl">Nombre canónico SaaS</div>
+        <div className="lbl">Nombre de biblioteca</div>
         <div className="v">{item.nombreCanonico}</div>
         <div className="meta">
           {item.canonicalKey} · {item.templateId}
@@ -1656,7 +1681,7 @@ function StepNombre({
         <div className={s.mapping}>
           <div className="col">
             <div className="k">
-              <BIco.Library /> Canónico SaaS
+              <BIco.Library /> Nombre de biblioteca
             </div>
             <div className="v">{item.nombreCanonico}</div>
             <div className="meta">{item.canonicalKey}</div>
@@ -1678,7 +1703,7 @@ function StepNombre({
           </span>
           <span>
             El sistema conservará <strong>{item.nombreCanonico}</strong> como
-            nombre canónico para reportes cross-tenant y compatibilidad técnica.
+            nombre canónico para reportes y compatibilidad técnica.
           </span>
         </div>
       </div>
@@ -1945,7 +1970,7 @@ function StepPreview({
           <span className="v muted">{familyLine(item)}</span>
         </div>
         <div className={s.previewRow}>
-          <span className="k">Template</span>
+          <span className="k">Plantilla</span>
           <span className="v mono">{item.templateId}</span>
         </div>
       </div>
@@ -2040,7 +2065,7 @@ function StepListo({
           <div className="v">
             {item.templateId.replace("_v1", "").replaceAll("_", " ")}
           </div>
-          <div className="k">Template aplicado</div>
+          <div className="k">Plantilla aplicada</div>
         </div>
         <div className={s.successStat}>
           <div className="v">1</div>

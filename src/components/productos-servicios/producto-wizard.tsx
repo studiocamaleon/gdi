@@ -59,8 +59,10 @@ import {
   StepButton,
   Textarea,
 } from "./producto-alta-ui";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import listPage from "@/components/design-system/list-page.module.css";
 import altaStyles from "./producto-alta.module.css";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
@@ -425,6 +427,7 @@ function ProductoWizardContent({
 }: Props) {
   const alta = useAltaVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const visual = alta ? altaStyles : styles;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -700,8 +703,9 @@ function ProductoWizardContent({
   return (
     <main
       {...(alta ? scope : {})}
+      data-visual={alta ? "brand" : undefined}
       className={
-        alta ? `${theme.theme} ${listPage.page} ${visual.page}` : visual.page
+        alta ? `${theme} ${listPage.page} ${visual.page}` : visual.page
       }
     >
       <header className={visual.header}>
@@ -717,13 +721,12 @@ function ProductoWizardContent({
             <ArrowLeftIcon className="mr-1 size-4" />
             {productoExistente ? "Salir del wizard" : "Volver al catálogo"}
           </Link>
-          {!alta && (
-            <span className={visual.eyebrow}>Catálogo de productos</span>
-          )}
+          <span className={visual.eyebrow}>Costos · Catálogo de productos</span>
           <h1>
             {modo === "crear"
               ? "Nuevo producto"
               : `Editar: ${productoExistente?.nombre}`}
+            {alta && <span className={altaStyles.titleDot}>.</span>}
           </h1>
           <p>
             Construí la ficha comercial y productiva en un recorrido guiado.

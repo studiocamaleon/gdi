@@ -11,13 +11,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 14px 20px;
   color: var(--muted-text);
   font-size: 12px;
   border-bottom: 1px solid var(--border);
 }
 .saveHint svg {
   flex-shrink: 0;
+  color: var(--accent-soft-foreground);
 }
 .table .groupRow td {
   background: var(--background);
@@ -39,7 +40,9 @@
   gap: 4px;
 }
 .materialGroup strong {
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: -.025em;
 }
 .unitSelect {
   width: 175px;
@@ -65,7 +68,8 @@
 .priceInput {
   width: 130px;
   height: 36px;
-  font-size: 13px;
+  font: 13px / 1.5 var(--brand-mono);
+  background: var(--surface);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }

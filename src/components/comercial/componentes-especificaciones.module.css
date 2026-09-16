@@ -2,7 +2,7 @@
   margin-bottom: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--r-2);
+  border-radius: 8px;
   background: var(--card);
 }
 
@@ -39,9 +39,9 @@
   height: 30px;
   flex: 0 0 30px;
   place-items: center;
-  border-radius: 9px;
-  background: var(--muted);
-  color: var(--muted-foreground);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
 }
 
 .icon svg {
@@ -70,7 +70,7 @@
 .card {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--card);
 }
 
@@ -101,10 +101,8 @@
 
 .componentIndex {
   color: var(--muted-foreground);
-  font-family: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: normal;
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  letter-spacing: 0.04em;
 }
 
 .identity {
@@ -119,8 +117,9 @@
   overflow: hidden;
   color: var(--foreground);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+  letter-spacing: -0.015em;
 }
 
 .identity small {
@@ -150,9 +149,8 @@
 
 .spec > span {
   color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: normal;
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  letter-spacing: 0.02em;
   text-transform: none;
 }
 
@@ -309,4 +307,10 @@
   .specGrid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+.card[open] > summary { background: color-mix(in srgb, var(--accent) 4%, var(--card)); }
+.card > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .card > summary > svg { transition: none; }
 }

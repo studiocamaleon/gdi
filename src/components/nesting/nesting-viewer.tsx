@@ -50,6 +50,8 @@ import {
 } from "lucide-react";
 import theme from "@/components/ui/workspace-theme.module.css";
 import v from "./nesting-explorer.module.css";
+import { NESTING_PALETTE as palette } from "./nesting-palette";
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
 export type { ModificacionesOverlay } from "./nesting-canvas";
 
 export interface NestingViewerProps {
@@ -196,6 +198,8 @@ export function NestingViewer({
   archivos,
   modificaciones,
 }: NestingViewerProps) {
+  const designScope = useLegacyDesignScope();
+  const viewerTheme = designScope.className ?? theme.theme;
   const contenedor = React.useRef<HTMLElement>(null);
   const detalleTab = React.useRef<HTMLButtonElement>(null);
   const { result, ...estadoCapas } = useCapasFabricacion(original);
@@ -234,7 +238,7 @@ export function NestingViewer({
   }
   if (!sustrato)
     return (
-      <Empty className={cn(theme.theme, className)}>
+      <Empty className={cn(viewerTheme, className)}>
         <EmptyHeader>
           <EmptyTitle>Sin sustratos para visualizar</EmptyTitle>
         </EmptyHeader>
@@ -259,16 +263,27 @@ export function NestingViewer({
   return (
     <section
       ref={contenedor}
-      className={cn(theme.theme, v.viewer, className)}
+      data-appearance={designScope["data-appearance"]}
+      className={cn(viewerTheme, v.viewer, className)}
       aria-label="Visor de nesting"
     >
       <header className={v.header}>
         <div>
           <h3>{titulo}</h3>
-          <p>
-            {formatNumber(piezasTotales)} piezas ·{" "}
-            {formatNumber(result.aprovechamientoPct, 2)}% de aprovechamiento
-          </p>
+          <p>{formatNumber(piezasTotales)} {piezasTotales === 1 ? "pieza distribuida" : "piezas distribuidas"}</p>
+        </div>
+        <div className={v.utilization}>
+          <span>Aprovechamiento <strong>{formatNumber(result.aprovechamientoPct, 2)}%</strong></span>
+          <div
+            className={v.utilizationTrack}
+            role="meter"
+            aria-label="Aprovechamiento del material"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.max(0, Math.min(100, result.aprovechamientoPct || 0))}
+          >
+            <span style={{ width: `${Math.max(0, Math.min(100, result.aprovechamientoPct || 0))}%` }} />
+          </div>
         </div>
         {result.composicionCompuesta && (
           <Badge variant="secondary">
@@ -353,7 +368,7 @@ export function NestingViewer({
                     <SelectContent
                       container={contenedor}
                       alignItemWithTrigger={false}
-                      className={cn(theme.theme, "max-h-72")}
+                      className={cn(viewerTheme, "max-h-72")}
                     >
                       <SelectGroup>
                         {navegacion.sustratos.map((s) => (
@@ -859,17 +874,17 @@ function NestingLegend({
   return (
     <div className={s.legend}>
       <span className={s.label}>Referencias</span>
-      <LegendChip color="#ffffff" border="#b8d8c2" label="Área útil" dashed />
+      <LegendChip color={palette.usable.fill} border={palette.usable.stroke} label="Área útil" dashed />
       {hasMargins ? (
-        <LegendChip color="#fff4df" border="#e9b978" label="Márgenes" />
+        <LegendChip color={palette.margin.fill} border={palette.margin.stroke} label="Márgenes" />
       ) : null}
       {showCosting ? (
-        <LegendChip color="#fff1c8" border="#e7be58" label="Área costeada" />
+        <LegendChip color={palette.costing.fill} border={palette.costing.stroke} label="Área costeada" />
       ) : null}
       {costingPreview?.wasteAreaMm2 ? (
         <LegendChip
-          color="#fef3ed"
-          border="#f4b9a0"
+          color={palette.waste.fill}
+          border={palette.waste.stroke}
           label="Desperdicio"
           dashed
         />

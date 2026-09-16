@@ -2,8 +2,9 @@
 import { Badge, Button, HumanSelect, Input, Switch, LabelConTooltip, SelectBuscable, NativeButton, NativeInput, useNodosVisual } from "./nodos-ui";
 
 import nodeStyles from "./nodos-editor.module.css";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { MaquinariaPlantillaGlyph } from "@/components/costos/maquinaria-plantilla-glyph";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import { NodoConfiguracionHeader } from "./nodo-configuracion-header";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
 import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import consumoStyles from "./config-pasos-consumo.module.css";
@@ -14,6 +15,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircleIcon,
   ArrowLeftIcon,
+  ArrowUpRightIcon,
   BoxesIcon,
   CheckIcon,
   ClockIcon,
@@ -167,7 +169,7 @@ import {
   NIVELES_COBERTURA,
   NIVEL_COBERTURA_LABELS,
 } from "@/lib/cobertura-toner";
-import { tecnologiaMaquinaItems } from "@/lib/maquinaria";
+import { tecnologiaMaquinaItems, type PlantillaMaquinaria } from "@/lib/maquinaria";
 import {
   getMachineTechnology,
   machineTechnologyLabel,
@@ -436,13 +438,13 @@ type VarianteLookup = MateriaPrimaLookup["variantes"][number];
 type CentroCostoLookup = LookupsConfigPaso["centrosCosto"][number];
 
 function machineOption(
-  maquina: Pick<MaquinaLookup, "id" | "codigo" | "nombre" | "plantilla">,
+  maquina: Pick<MaquinaLookup, "id" | "nombre">,
   badge?: string,
 ): HumanSelectOption {
   return {
     value: maquina.id,
     label: maquina.nombre,
-    code: [maquina.codigo, maquina.plantilla].filter(Boolean).join(" · "),
+    code: null,
     badge,
   };
 }
@@ -4804,23 +4806,37 @@ export function ConfigPasosEditorView({
     if (next) setActivePasoId(next);
   };
   const designScope = useDesignScope();
+  const designTheme = useDesignTheme();
+  const nodosVisual = useNodosVisual();
   const configurandoNodoDelModelo = Boolean(
     modoFocoNodo || (modeloProductivo && !modeloProductivo.active),
+  );
+  const configuracionVisual = Boolean(
+    configuracionBase || (nodosVisual && configurandoNodoDelModelo),
   );
 
   return (
     <div
-      {...(configuracionBase ? designScope : {})}
-      className={`${embedded ? "pasos-editor-root" : "pasos-editor-root flex flex-1 flex-col"} ${configuracionBase ? `${theme.theme} ${nodeStyles.editor}` : ""} ${!configuracionBase && configurandoNodoDelModelo ? visual.operationalEditor : ""}`}
+      {...(configuracionVisual ? designScope : {})}
+      data-node-editor={configuracionVisual || undefined}
+      className={`${embedded ? "pasos-editor-root" : "pasos-editor-root flex flex-1 flex-col"} ${configuracionVisual ? `${designTheme} ${nodeStyles.editor}` : ""} ${configuracionVisual && !configuracionBase ? nodeStyles.routeEditor : ""} ${!configuracionVisual && configurandoNodoDelModelo ? visual.operationalEditor : ""}`}
     >
+      {configuracionBase ? (
+        <NodoConfiguracionHeader
+          nombre={rutaAlternativa.nombre}
+          volverHref={configuracionBase.volverHref}
+          origen={configuracionBase.origen}
+          completo={doneCount === activeStepCount}
+          estado={doneCount === activeStepCount ? "Configuración completa" : "Configuración pendiente"}
+        />
+      ) : null}
       <div
         className={`editor-shell ${modeloProductivo?.active ? "modelo-hoja-ruta-activa" : configurandoNodoDelModelo ? "modelo-configuracion-nodo-activa" : ""}`}
       >
-        <aside className="editor-side">
+        {!configuracionBase ? <aside className="editor-side">
           <div className="side-head">
             <Link
               href={
-                configuracionBase?.volverHref ??
                 `/productos-servicios/${producto.id}?tab=produccion&vista=operaciones&rutaAltId=${rutaAlternativa.id}`
               }
               className="back-link"
@@ -5227,7 +5243,7 @@ export function ConfigPasosEditorView({
               </span>
             </div>
           ) : null}
-        </aside>
+        </aside> : null}
 
         <main
           className={`editor-main ${modeloProductivo?.active ? "modelo-activo" : ""}`}
@@ -5579,7 +5595,12 @@ export function ConfigPasosEditorView({
                             </span>
                             <div className="modelo-config-step-copy">
                               <span>Producción · Paso de producción</span>
-                              <h1>{pasoLabel}</h1>
+                              <h1>
+                                {pasoLabel}
+                                {nodosVisual ? (
+                                  <span className={nodeStyles.titleDot}>.</span>
+                                ) : null}
+                              </h1>
                               <p>
                                 Configurá parámetros, materiales, recursos y
                                 tiempos de esta operación individual.
@@ -5631,8 +5652,8 @@ export function ConfigPasosEditorView({
                             <div className="paso-config-workspace">
                               <div className="paso-config-intro">
                                 <div>
-                                  <span>Configuración operativa</span>
-                                  <h2>Definí cómo se ejecuta este paso</h2>
+                                  <span>{configuracionBase ? "Valores de referencia" : "Configuración operativa"}</span>
+                                  <h2>{configuracionBase ? "Configuración predeterminada" : "Definí cómo se ejecuta este paso"}</h2>
                                   <p>
                                     Completá el recorrido de arriba hacia abajo.
                                     Cada bloque resuelve una decisión concreta
@@ -7755,7 +7776,7 @@ export function ConfigPasosEditorView({
                           botones quedan siempre visibles — sticky al borde
                           inferior de .editor-main (el contenedor con scroll),
                           no un header entero que tape contenido. */}
-                        <div className="paso-config-savebar">
+                        <div className={`paso-config-savebar ${configuracionVisual ? nodeStyles.savebar : ""}`}>
                           {!configuracionBase && !configurandoNodoDelModelo ? (
                             <>
                               <NativeButton
@@ -7802,7 +7823,11 @@ export function ConfigPasosEditorView({
                                     }
                                   >
                                     {pasoTieneCambios ? (
-                                      <SaveIcon className="size-4" />
+                                      configuracionVisual ? (
+                                        <ArrowUpRightIcon data-icon="inline-start" />
+                                      ) : (
+                                        <SaveIcon className="size-4" />
+                                      )
                                     ) : (
                                       <CheckIcon className="size-4" />
                                     )}
@@ -7832,7 +7857,11 @@ export function ConfigPasosEditorView({
                                   }
                                 >
                                   {pasoTieneCambios ? (
-                                    <SaveIcon className="size-4" />
+                                    configuracionVisual ? (
+                                      <ArrowUpRightIcon data-icon="inline-start" />
+                                    ) : (
+                                      <SaveIcon className="size-4" />
+                                    )
                                   ) : (
                                     <CheckIcon className="size-4" />
                                   )}
@@ -8236,7 +8265,7 @@ function AcomodadoDetalladoEditor({
   return (
     <>
       <>
-        <div className={trab.root}>
+        <div className={`${trab.root} ${nodeStyles.workSettings}`}>
           <div className={trab.sec}>
             <h4 className={trab.h4}>Acomodado de las piezas</h4>
             <p className={trab.hint}>
@@ -9072,7 +9101,7 @@ function AcomodadoDetalladoEditor({
                                         padding-top por .sec:first-child y quedaba
                                         pegado a la línea de arriba. Se separa con
                                         un margen (pedido del usuario 2026-08-13). */}
-        <div className={trab.root} style={{ marginTop: 16 }}>
+        <div className={`${trab.root} ${nodeStyles.workSettings}`} style={{ marginTop: 16 }}>
           <div className={`${trab.sec} ${trab.secLast}`}>
             <h4 className={trab.h4}>Márgenes del pliego</h4>
             <p className={trab.hint}>
@@ -9211,7 +9240,7 @@ function AcomodadoDetalladoEditor({
                                         distintas estrategias de rollo, esto pasa a selector.
                                         Ver docs/editor-pasos-preguntas-orden.md §10.5. */}
         {
-          <div className={trab.root}>
+          <div className={`${trab.root} ${nodeStyles.workSettings}`}>
             <div className={trab.pliego}>
               <div className={trab.pliegoHead}>
                 <span className={trab.pliegoT}>Costeo del sustrato</span>
@@ -11802,10 +11831,9 @@ function ModoColorDetalladoEditor({
   );
 }
 
-// ─── Candidatas M-2: LA UI del detallado, extraída como componente ─────
-// (decisión del usuario en la revisión del editor declarativo: el guiado
-// usa exactamente esta UI, no cards propias). La usan el detallado y el
-// asistente; los handlers viven en el editor y se pasan por props.
+// Candidatas M-2: presentación compartida entre el guiado y el detallado.
+// El alcance de Nodos habilita tarjetas de marca también en rutas de producto;
+// los handlers y reglas de selección permanecen en el editor padre.
 
 function CandidatasDetalladoEditor({
   pasoId,
@@ -11849,6 +11877,7 @@ function CandidatasDetalladoEditor({
     perfilId: string | null,
   ) => void;
 }) {
+  const nodoVisual = useNodosVisual();
   const candidatasCfg = cfg.maquinasCandidatas ?? [];
   const candidatasSeleccionadas = new Set(
     candidatasCfg.map((candidata) => candidata.maquinaId),
@@ -11868,7 +11897,6 @@ function CandidatasDetalladoEditor({
       value: m.id,
       label: m.nombre,
       grupo: machineTechnologyLabel(m),
-      detalle: m.codigo,
     }));
 
   return (
@@ -11879,21 +11907,36 @@ function CandidatasDetalladoEditor({
         </p>
       ) : (
         <>
-          <SelectBuscable
-            value=""
-            onChange={(id) => toggleMaquinaCandidata(pasoId, id, true)}
-            opciones={opcionesAgregar}
-            placeholder={
-              opcionesAgregar.length === 0
-                ? "Todas las máquinas compatibles ya están agregadas"
-                : "Agregar máquina…"
-            }
-            placeholderBusqueda="Buscar máquina o tecnología…"
-            vacio="No hay máquinas que coincidan."
-            ariaLabel="Agregar máquina al paso"
-            disabled={opcionesAgregar.length === 0}
-            minimoParaBuscar={0}
-          />
+          <div className={maq.toolbar}>
+            {nodoVisual ? (
+              <div className={maq.summary}>
+                <span className={maq.count}>
+                  {maquinasSeleccionadas.length}
+                </span>
+                <span>
+                  <strong>Máquinas habilitadas</strong>
+                  <span>La preferida se propone por defecto.</span>
+                </span>
+              </div>
+            ) : null}
+            <div className={maq.addMachine}>
+              <SelectBuscable
+                value=""
+                onChange={(id) => toggleMaquinaCandidata(pasoId, id, true)}
+                opciones={opcionesAgregar}
+                placeholder={
+                  opcionesAgregar.length === 0
+                    ? "Todas las máquinas compatibles ya están agregadas"
+                    : "Agregar máquina…"
+                }
+                placeholderBusqueda="Buscar máquina o tecnología…"
+                vacio="No hay máquinas que coincidan."
+                ariaLabel="Agregar máquina al paso"
+                disabled={opcionesAgregar.length === 0}
+                minimoParaBuscar={0}
+              />
+            </div>
+          </div>
           {maquinasSeleccionadas.length === 0 ? (
             <p className={maq.empty}>
               Todavía no agregaste máquinas. Buscá arriba y agregá las que hacen
@@ -11920,9 +11963,25 @@ function CandidatasDetalladoEditor({
                   candidateModoOptions,
                 );
                 return (
-                  <React.Fragment key={maquina.id}>
+                  <div
+                    key={maquina.id}
+                    className={maq.machineCard}
+                    data-preferred={isPreferida}
+                    role="group"
+                    aria-label={maquina.nombre}
+                  >
                     <div className={`${maq.mrow} ${maq.on}`}>
-                      <span className={maq.av}>{chip.ini}</span>
+                      <span className={maq.av}>
+                        {nodoVisual ? (
+                          <MaquinariaPlantillaGlyph
+                            plantilla={
+                              maquina.plantilla.toLowerCase() as PlantillaMaquinaria
+                            }
+                          />
+                        ) : (
+                          chip.ini
+                        )}
+                      </span>
                       <span className={maq.nm}>
                         <span className={maq.a}>
                           <span className={maq.txt}>{maquina.nombre}</span>
@@ -12001,6 +12060,7 @@ function CandidatasDetalladoEditor({
                                 style={{ minWidth: 210 }}
                               >
                                 <select
+                                  aria-label={`Perfil por defecto de ${maquina.nombre}`}
                                   value={cfgCand?.perfilDefaultId ?? ""}
                                   onClick={(event) => event.stopPropagation()}
                                   onChange={(event) =>
@@ -12032,7 +12092,11 @@ function CandidatasDetalladoEditor({
                               <span className={maq.k}>
                                 Modos de color habilitados
                               </span>
-                              <span className={maq.modes}>
+                              <span
+                                className={maq.modes}
+                                role="group"
+                                aria-label={`Modos de color de ${maquina.nombre}`}
+                              >
                                 {candidateModoOptions.map((option) => {
                                   const optionSelected =
                                     candidateAllowed.includes(option.value);
@@ -12111,12 +12175,17 @@ function CandidatasDetalladoEditor({
                               const mapa = cfgCand?.perfilDefaultPorModo ?? {};
                               return (
                                 <div
-                                  style={{
-                                    display: "grid",
-                                    gridTemplateColumns:
-                                      "repeat(auto-fit, minmax(210px, 260px))",
-                                    gap: "10px 12px",
-                                  }}
+                                  className={maq.profiles}
+                                  style={
+                                    nodoVisual
+                                      ? undefined
+                                      : {
+                                          display: "grid",
+                                          gridTemplateColumns:
+                                            "repeat(auto-fit, minmax(210px, 260px))",
+                                          gap: "10px 12px",
+                                        }
+                                  }
                                 >
                                   {modosConPerfil.map((option) => (
                                     <span className={maq.fl} key={option.value}>
@@ -12128,6 +12197,7 @@ function CandidatasDetalladoEditor({
                                         style={{ minWidth: 0 }}
                                       >
                                         <select
+                                          aria-label={`Perfil para ${option.label} de ${maquina.nombre}`}
                                           value={mapa[option.value] ?? ""}
                                           onClick={(event) =>
                                             event.stopPropagation()
@@ -12170,7 +12240,7 @@ function CandidatasDetalladoEditor({
                         ) : null}
                       </div>
                     ) : null}
-                  </React.Fragment>
+                  </div>
                 );
               })}
             </div>
@@ -12213,6 +12283,7 @@ function EncabezadoGrupo({
   return (
     <div
       className="paso-config-group-head"
+      data-resolved={resuelto}
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -12900,11 +12971,18 @@ function ControlGuiado({
     const actual = control.valor(ctx);
     return (
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 8,
-        }}
+        className={nodoVisual ? nodeStyles.materialChoices : undefined}
+        role="group"
+        aria-label={opcion.pregunta}
+        style={
+          nodoVisual
+            ? undefined
+            : {
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: 8,
+              }
+        }
       >
         {control.opciones(ctx).map((op) => {
           const activa = actual === op.value;
@@ -12912,33 +12990,46 @@ function ControlGuiado({
             <NativeButton
               key={op.value}
               type="button"
+              className={nodoVisual ? nodeStyles.materialChoice : undefined}
+              aria-pressed={activa}
               onClick={() => onAplicar(control.aplicar(ctx, op.value))}
-              style={{
-                textAlign: "left",
-                borderRadius: 8,
-                padding: "7px 10px",
-                background: "var(--surface, #fff)",
-                border: activa
-                  ? "1.5px solid var(--fg, #14141a)"
-                  : "1px solid var(--hairline, #e5e2db)",
-                cursor: "pointer",
-                display: "flex",
-                gap: 8,
-                alignItems: "flex-start",
-              }}
+              style={
+                nodoVisual
+                  ? undefined
+                  : {
+                      textAlign: "left",
+                      borderRadius: 8,
+                      padding: "7px 10px",
+                      background: "var(--surface, #fff)",
+                      border: activa
+                        ? "1.5px solid var(--fg, #14141a)"
+                        : "1px solid var(--hairline, #e5e2db)",
+                      cursor: "pointer",
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "flex-start",
+                    }
+              }
             >
               <span
                 aria-hidden
-                style={{
-                  marginTop: 1,
-                  width: 13,
-                  height: 13,
-                  borderRadius: "50%",
-                  flexShrink: 0,
-                  border: activa
-                    ? "4px solid var(--fg, #14141a)"
-                    : "1px solid var(--hairline-strong, #c8c4ba)",
-                }}
+                className={
+                  nodoVisual ? nodeStyles.materialChoiceIndicator : undefined
+                }
+                style={
+                  nodoVisual
+                    ? undefined
+                    : {
+                        marginTop: 1,
+                        width: 13,
+                        height: 13,
+                        borderRadius: "50%",
+                        flexShrink: 0,
+                        border: activa
+                          ? "4px solid var(--fg, #14141a)"
+                          : "1px solid var(--hairline-strong, #c8c4ba)",
+                      }
+                }
               />
               <span style={{ minWidth: 0 }}>
                 <span
@@ -12969,7 +13060,7 @@ function ControlGuiado({
 
   if (control.tipo === "pills" && enEje) {
     const actual = control.valor(ctx);
-    if (nodoVisual) return <SegmentedControl aria-label={opcion.pregunta} value={actual} options={control.opciones(ctx).map((op) => ({ value: op.value, label: op.label, icon: null }))} onChange={(value) => onAplicar(control.aplicar(ctx, value))} />;
+    if (nodoVisual) return <SegmentedControl tone="graphite" aria-label={opcion.pregunta} value={actual} options={control.opciones(ctx).map((op) => ({ value: op.value, label: op.label, icon: null }))} onChange={(value) => onAplicar(control.aplicar(ctx, value))} />;
     return (
       <div
         style={{
@@ -13500,6 +13591,7 @@ function SeccionesEsquemaPaso({
             const modo = cfg.modoActivacion ?? "OBLIGATORIO";
             const ofrecidos = modosActivacionOfrecidos(ctx);
             if (nodoVisual) return <SegmentedControl
+              tone="graphite"
               aria-label="Ejecución de este paso"
               value={modo}
               options={ofrecidos.map((m) => ({ value: m, label: configuracionBase && m === "NO_EJECUTAR" ? "No usar por defecto" : (MODO_ACTIVACION_LABELS[m] ?? m), icon: null }))}
@@ -14133,8 +14225,8 @@ function SeccionesEsquemaPaso({
                 ) : null}
                 {!cfg.tercerizado ? (
                   <EjeGuiado
-                    titulo="Máquina que utiliza"
-                    subtitulo="Marcá las máquinas que pueden hacer este paso y elegí cuál se usa por defecto."
+                    titulo="Máquinas del paso"
+                    subtitulo="Agregá las máquinas que pueden realizar este paso y elegí cuál se propone por defecto."
                     opciones={opcionesDeEje("maquina", ctx)}
                     grupos={GRUPOS_EJE.maquina}
                     fijo

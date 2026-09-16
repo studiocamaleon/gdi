@@ -61,18 +61,6 @@ const carasOptions = [
   option("DOBLE_FAZ", "Doble faz"),
 ];
 
-const modoDobleFazOptions = [
-  option("NO_APLICA", "No aplica"),
-  option("AUTOMATICO", "Automático"),
-  option("MANUAL_DOS_PASADAS", "Manual (dos pasadas)"),
-];
-
-const origenProductividadOptions = [
-  option("FABRICANTE", "Fabricante"),
-  option("ESTIMACION_GRAFOPRINT", "Estimación Grafoprint"),
-  option("CALIBRADO_TALLER", "Calibrado por el taller"),
-];
-
 const tecnologiaGranFormatoOptions = [
   option("LATEX", "Látex"),
   option("SOLVENTE", "Solvente"),
@@ -366,15 +354,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
             "Caras impresas por minuto equivalentes a una página A4. Usá la velocidad A4 publicada por el fabricante.",
         }),
         field({
-          key: "origenProductividad",
-          label: "Origen PPM",
-          scope: "perfil_operativo",
-          kind: "select",
-          options: origenProductividadOptions,
-          description:
-            "Distingue un dato publicado, una estimación inicial de Grafoprint o una calibración del taller.",
-        }),
-        field({
           key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
@@ -401,15 +380,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
           required: true,
           options: carasOptions,
           description: "Discriminante: simple o doble faz.",
-        }),
-        field({
-          key: "modoDobleFaz",
-          label: "Modo doble faz",
-          scope: "perfil_operativo",
-          kind: "select",
-          options: modoDobleFazOptions,
-          description:
-            "Indica si el pliego se gira automáticamente o se reinserta para imprimir la segunda cara.",
         }),
         field({
           key: "colores",

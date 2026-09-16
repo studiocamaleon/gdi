@@ -4,8 +4,8 @@ import { useId, type ReactNode } from "react";
 import { Drawer } from "@heroui/react";
 import { X } from "lucide-react";
 import { ActionButton } from "./action-button";
-import { useDesignScope } from "./appearance";
-import theme from "./theme.module.css";
+import { useDesignScope, useDesignTheme } from "./appearance";
+import { cn } from "@/lib/utils";
 import s from "./form-sheet.module.css";
 
 /** Hoja lateral de formularios: alcance visual y acciones siempre visibles. */
@@ -16,6 +16,7 @@ export function FormSheet({
   footer,
   onClose,
   busy = false,
+  className,
 }: {
   title: ReactNode;
   description: ReactNode;
@@ -23,13 +24,15 @@ export function FormSheet({
   footer?: ReactNode;
   onClose: () => void;
   busy?: boolean;
+  className?: string;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const descriptionId = useId();
   return (
     <Drawer.Backdrop
       {...scope}
-      className={theme.theme}
+      className={themeClass}
       isOpen
       variant="opaque"
       onOpenChange={(open) => {
@@ -39,7 +42,7 @@ export function FormSheet({
       isKeyboardDismissDisabled={busy}
     >
       <Drawer.Content placement="right">
-        <Drawer.Dialog className={s.dialog} aria-describedby={descriptionId}>
+        <Drawer.Dialog className={cn(s.dialog, className)} aria-describedby={descriptionId}>
           <Drawer.Header className={s.header}>
             <div>
               <Drawer.Heading>{title}</Drawer.Heading>

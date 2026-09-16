@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useMemo, useState } from "react";
-import { CalendarDays, Plus, RefreshCw } from "lucide-react";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { CalendarDays, Factory, Plus, RefreshCw } from "lucide-react";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormDialog } from "@/components/design-system/form-dialog";
-import theme from "@/components/design-system/theme.module.css";
+import { cn } from "@/lib/utils";
 import layout from "@/components/design-system/list-page.module.css";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -55,6 +55,7 @@ export type EstacionesViewProps = DatosProduccionOperativa & {
 
 export function EstacionesView(props: EstacionesViewProps) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const puedeConfigurar = usePuede("produccion.configurar");
   const operacion = useProduccionOperativa({ ...props, soloPendientes: true });
   const { zonaHoraria } = useConfigRegional();
@@ -214,11 +215,11 @@ export function EstacionesView(props: EstacionesViewProps) {
       ),
   );
   return (
-    <div {...scope} className={`${theme.theme} ${layout.page} ${s.page}`}>
-      <header className={layout.header}>
+    <div {...scope} data-visual="brand" className={cn(themeClass, layout.page, s.page)}>
+      <header className={cn(layout.header, s.header)}>
         <div>
-          <p className={s.eyebrow}>Producción</p>
-          <h1>Estaciones</h1>
+          <p className={s.eyebrow}><Factory size={12} aria-hidden />Producción · Taller</p>
+          <h1>Estaciones<span className={s.titleDot}>.</span></h1>
           <p className={layout.subtitle}>
             Carga de trabajo, personal asignado y configuración del taller.
           </p>
@@ -229,7 +230,7 @@ export function EstacionesView(props: EstacionesViewProps) {
             isDisabled={operacion.refreshing || configRefreshing}
             onPress={() => void refrescarTodo()}
           >
-            <RefreshCw />
+            <RefreshCw data-icon="inline-start" />
             Actualizar
           </ActionButton>
           {puedeConfigurar && (
@@ -238,7 +239,7 @@ export function EstacionesView(props: EstacionesViewProps) {
                 variant="outline"
                 onPress={() => setCalendarioOpen(true)}
               >
-                <CalendarDays />
+                <CalendarDays data-icon="inline-start" />
                 Calendario del taller
               </ActionButton>
               <ActionButton
@@ -248,7 +249,7 @@ export function EstacionesView(props: EstacionesViewProps) {
                   setSheet("new");
                 }}
               >
-                <Plus />
+                <Plus data-icon="inline-start" />
                 Nueva estación
               </ActionButton>
             </>
@@ -334,6 +335,7 @@ export function EstacionesView(props: EstacionesViewProps) {
         />
       )}
       <FormDialog
+        className={f.dialog}
         isOpen={aEliminar !== null}
         onOpenChange={(open) => {
           if (!open && !saving) setAEliminar(null);

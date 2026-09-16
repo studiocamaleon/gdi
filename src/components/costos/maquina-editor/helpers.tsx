@@ -794,15 +794,6 @@ export function setPerfilFieldValueForTemplate(
   value: unknown,
 ): LocalPerfil {
   const next = setPerfilFieldValue(perfil, key, value);
-  if (form.plantilla === "impresora_laser" && key === "productivityValue") {
-    return {
-      ...next,
-      detalle: {
-        ...(next.detalle ?? {}),
-        origenProductividad: "CALIBRADO_TALLER",
-      },
-    };
-  }
   // El plotter de corte cotiza siempre en m²/h.
   if (form.plantilla === "plotter_de_corte" && key === "productivityValue") {
     return { ...next, productivityUnit: "m2_h" };

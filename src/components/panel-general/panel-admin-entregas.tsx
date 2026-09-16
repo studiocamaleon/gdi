@@ -1,17 +1,12 @@
 "use client";
-import { useMemo } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { Chip, Tooltip } from "@heroui/react";
-import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
-import { WalletCards } from "lucide-react";
+import { Tabs, Tooltip } from "@heroui/react";
+import { ArrowUpRight, Factory } from "lucide-react";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { ActionButton } from "@/components/design-system/action-button";
 import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import theme from "@/components/design-system/brand-theme.module.css";
 import type {
   PanelGeneralData,
   PanelGeneralEntrega,
@@ -32,7 +27,7 @@ function Trabajo({ entrega }: { entrega: PanelGeneralEntrega }) {
         {entrega.producto}
       </ActionButton>
       <Tooltip.Content {...scope} className={theme.theme}>
-        <ul className="grid gap-2 p-1">
+        <ul className={s.productList}>
           {entrega.productos.map((p) => (
             <li key={p.id}>
               {p.nombre} ·{" "}
@@ -81,139 +76,155 @@ function Avance({ entrega: e }: { entrega: PanelGeneralEntrega }) {
   );
 }
 
+type Riesgo = PanelGeneralEntrega["riesgo"];
+const GRUPOS: { id: Riesgo; label: string; vacio: string; detalle: string }[] =
+  [
+    {
+      id: "hoy",
+      label: "Hoy",
+      vacio: "Sin entregas para hoy",
+      detalle: "No hay órdenes con entrega comprometida para hoy.",
+    },
+    {
+      id: "atrasada",
+      label: "Atrasadas",
+      vacio: "Entregas al día",
+      detalle: "No hay órdenes con una fecha de entrega vencida.",
+    },
+    {
+      id: "proxima",
+      label: "Próximas",
+      vacio: "Sin entregas próximas",
+      detalle:
+        "No hay órdenes comprometidas entre mañana y los próximos siete días.",
+    },
+  ];
+
+function ListaEntregas({
+  items,
+  total,
+  vacio,
+  detalle,
+}: {
+  items: PanelGeneralEntrega[];
+  total: number;
+  vacio: string;
+  detalle: string;
+}) {
+  if (!items.length) return <Empty titulo={vacio}>{detalle}</Empty>;
+  return (
+    <>
+      <ul className={s.deliveries}>
+        {items.map((entrega) => {
+          const pct = entrega.progreso
+            ? entrega.progreso.porcentaje
+            : entrega.progresoPct;
+          const etapa =
+            entrega.pasoActual ??
+            (pct == null
+              ? "Sin ruta de producción"
+              : pct === 100
+                ? "Producción completada"
+                : "Sin etapa activa");
+          return (
+            <li key={entrega.id} className={s.delivery}>
+              <div className={s.deliveryWork}>
+                <Link
+                  className={s.orden}
+                  href={entrega.href}
+                  aria-label={`Abrir ${entrega.numero}`}
+                >
+                  {entrega.numero}
+                  <ArrowUpRight size={13} aria-hidden />
+                </Link>
+                <div className={s.workTitle}>
+                  <Trabajo entrega={entrega} />
+                </div>
+                <p className={s.client}>
+                  {entrega.cliente ?? "Sin cliente asignado"}
+                </p>
+              </div>
+              <div className={s.deliveryDate} data-risk={entrega.riesgo}>
+                <span>
+                  {entrega.riesgo === "hoy"
+                    ? "Hoy"
+                    : entrega.riesgo === "atrasada"
+                      ? "Atrasada"
+                      : "Próxima"}
+                </span>
+                <time dateTime={entrega.fechaEntrega}>
+                  {entrega.fechaEntrega
+                    .slice(0, 10)
+                    .split("-")
+                    .reverse()
+                    .join("/")}
+                </time>
+              </div>
+              <div className={s.deliveryStatus}>
+                <span className={s.stage}>
+                  <Factory size={13} aria-hidden />
+                  <span>
+                    {etapa}
+                    {entrega.estacionActual && (
+                      <small> · {entrega.estacionActual}</small>
+                    )}
+                  </span>
+                </span>
+                <Avance entrega={entrega} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p className={s.deliveryFoot}>
+        Mostrando {items.length} de {total} {total === 1 ? "orden" : "órdenes"}.
+      </p>
+    </>
+  );
+}
+
 export function Entregas({
-  data,
+  grupos,
   abrir,
 }: {
-  data: PanelGeneralData;
+  grupos: NonNullable<PanelGeneralData["entregas"]>;
   abrir: (href: string) => void;
 }) {
-  "use no memo";
-  const columnas = useMemo<ColumnDef<PanelGeneralEntrega>[]>(
-    () => [
-      {
-        id: "orden",
-        header: "Orden",
-        cell: ({ row: { original: e } }) => (
-          <>
-            <Link className={s.orden} href={e.href}>
-              {e.numero}
-            </Link>
-            <small>{e.cliente}</small>
-          </>
-        ),
-      },
-      {
-        id: "trabajo",
-        header: "Trabajo",
-        cell: ({ row }) => <Trabajo entrega={row.original} />,
-      },
-      {
-        id: "etapa",
-        header: "Etapa actual",
-        cell: ({ row: { original: e } }) => (
-          <>
-            {e.pasoActual ?? "Lista para retirar"}
-            <small>{e.estacionActual ?? "—"}</small>
-          </>
-        ),
-      },
-      {
-        id: "fecha",
-        header: "Entrega",
-        cell: ({ row }) => (
-          <time dateTime={row.original.fechaEntrega}>
-            {row.original.fechaEntrega
-              .slice(0, 10)
-              .split("-")
-              .reverse()
-              .slice(0, 2)
-              .join("/")}
-          </time>
-        ),
-      },
-      {
-        id: "estado",
-        header: "Estado",
-        cell: ({ row }) => (
-          <Chip
-            size="sm"
-            variant="soft"
-            className={s.riesgo}
-            data-risk={row.original.riesgo}
-          >
-            {row.original.riesgo === "atrasada"
-              ? "Atrasada"
-              : row.original.riesgo === "hoy"
-                ? "Hoy"
-                : "Próxima"}
-          </Chip>
-        ),
-      },
-      {
-        id: "avance",
-        header: "Avance",
-        cell: ({ row }) => <Avance entrega={row.original} />,
-      },
-    ],
-    [],
-  );
-  // eslint-disable-next-line react-hooks/incompatible-library -- Instancia mutable de v8 fuera de React Compiler.
-  const tabla = useReactTable({
-    data: data.proximasEntregas,
-    columns: columnas,
-    getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.id,
-  });
+  const [grupo, setGrupo] = useState<Riesgo>("hoy");
   return (
     <PanelCard
-      titulo="Próximas entregas"
-      descripcion="Atrasadas primero · próximos siete días"
-      icono={WalletCards}
+      titulo="Entregas a priorizar."
+      className={s.deliveryPanel}
+      descripcion="Cada compromiso, a tiempo."
       accion={
         <ActionButton
-          variant="outline"
+          variant="ghost"
           onPress={() => abrir("/produccion/ordenes")}
         >
-          Ver todas
+          Ver órdenes
+          <ArrowUpRight size={14} aria-hidden />
         </ActionButton>
       }
     >
-      {!data.proximasEntregas.length ? (
-        <Empty titulo="Sin entregas próximas">
-          No hay órdenes comprometidas para los próximos siete días.
-        </Empty>
-      ) : (
-        <div className={s.tableWrap}>
-          <table className={s.table} aria-label="Próximas entregas">
-            <thead>
-              {tabla.getHeaderGroups().map((group) => (
-                <tr key={group.id}>
-                  {group.headers.map((h) => (
-                    <th key={h.id} scope="col">
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {tabla.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Tabs
+        selectedKey={grupo}
+        onSelectionChange={(key) => setGrupo(key as Riesgo)}
+        className={s.deliveryTabs}
+      >
+        <NavigationTabList
+          label="Filtrar entregas"
+          items={GRUPOS.map(({ id, label }) => ({
+            id,
+            label,
+            count: grupos[id].total,
+          }))}
+        />
+        {GRUPOS.map(({ id, vacio, detalle }) => (
+          <Tabs.Panel key={id} id={id} className={s.deliveryTab}>
+            <ListaEntregas {...grupos[id]} vacio={vacio} detalle={detalle} />
+          </Tabs.Panel>
+        ))}
+      </Tabs>
     </PanelCard>
   );
 }

@@ -1,7 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { CopyIcon, PlusIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  CalendarDaysIcon,
+  Clock3Icon,
+  CopyIcon,
+  FactoryIcon,
+  HistoryIcon,
+  NetworkIcon,
+  PlusIcon,
+  ReceiptTextIcon,
+  Settings2Icon,
+  UsersRoundIcon,
+  XIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
@@ -35,8 +48,18 @@ import { FormDialog } from "@/components/design-system/form-dialog";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { SelectField } from "@/components/design-system/select-field";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import sheet from "@/components/design-system/form-sheet.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./centros-costo.module.css";
@@ -225,6 +248,7 @@ export function CentroCostoFicha({
   onSaved,
 }: CentroCostoFichaProps) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const descriptionId = React.useId();
   const { moneda, zonaHoraria } = useConfigRegional();
   const fmt = (valor: number) =>
@@ -467,12 +491,23 @@ export function CentroCostoFicha({
   ) => {
     const filas = porSeccion[seccion];
     const subtotal = filas.reduce((acc, fila) => acc + importeDeLinea(fila), 0);
+    const SectionIcon =
+      seccion === "empleado"
+        ? UsersRoundIcon
+        : seccion === "activo_fijo"
+          ? FactoryIcon
+          : ReceiptTextIcon;
 
     return (
       <Card className={styles.section} key={seccion}>
         <header className={styles.sectionHeader}>
-          <h3>{titulo}</h3>
-          <p>{ayuda}</p>
+          <span className={styles.sectionIcon} aria-hidden="true">
+            <SectionIcon />
+          </span>
+          <div>
+            <h3>{titulo}</h3>
+            <p>{ayuda}</p>
+          </div>
         </header>
 
         <div className={styles.rows}>
@@ -702,6 +737,26 @@ export function CentroCostoFicha({
           ))}
         </div>
 
+        {filas.length === 0 && (
+          <Empty className={`${brand.empty} ${styles.sectionEmpty}`}>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SectionIcon />
+              </EmptyMedia>
+              <EmptyTitle>
+                {seccion === "empleado"
+                  ? "Sin empleados en la planilla"
+                  : seccion === "activo_fijo"
+                    ? "Sin activos cargados"
+                    : "Sin gastos generales"}
+              </EmptyTitle>
+              <EmptyDescription>
+                Agregá una línea para incluir este costo en el período.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+
         <footer className={styles.sectionFooter}>
           <Button
             type="button"
@@ -711,15 +766,20 @@ export function CentroCostoFicha({
             <PlusIcon />
             Agregar
           </Button>
-          <span className={styles.subtotal}>= {fmt(subtotal)}</span>
+          <span className={styles.subtotal}>
+            <span>Subtotal</span> {fmt(subtotal)}
+          </span>
         </footer>
       </Card>
     );
   };
 
   const bloqueResumen = (
-    <Card className={styles.summary}>
-      <h3>Resumen</h3>
+    <Card className={styles.summary} aria-label="Resumen del costo del período">
+      <div className={styles.summaryHeading}>
+        <h3>Costo del período</h3>
+        <span>{periodo}</span>
+      </div>
       <div className={styles.summaryGrid}>
         <div>
           <span className={styles.label}>Empleados</span>
@@ -749,7 +809,7 @@ export function CentroCostoFicha({
           <span className={styles.label}>Gasto total</span>
           <strong>{fmt(gastoTotal)}</strong>
         </div>
-        <div>
+        <div className={styles.hourSummary}>
           <span className={styles.label}>Valor de la hora</span>
           <strong className={styles.highlight}>
             {tipoCentro !== "productivo" || valorHora == null
@@ -764,7 +824,13 @@ export function CentroCostoFicha({
   const bloqueIdentidad = (
     <Card className={styles.section}>
       <header className={styles.sectionHeader}>
-        <h3>Identidad del centro</h3>
+        <span className={styles.sectionIcon} aria-hidden="true">
+          <FactoryIcon />
+        </span>
+        <div>
+          <h3>Identidad del centro</h3>
+          <p>El sector y su función dentro de la estructura de costos.</p>
+        </div>
       </header>
       <div className={styles.identity}>
         <label>
@@ -801,7 +867,8 @@ export function CentroCostoFicha({
             options={tipoCentroItems.map((item) => ({
               value: item.value,
               label: getTipoCentroLabel(item.value),
-              icon: null,
+              icon:
+                item.value === "productivo" ? <FactoryIcon /> : <NetworkIcon />,
             }))}
             onChange={(value) => {
               const siguiente = value as TipoCentroCosto | undefined;
@@ -838,8 +905,8 @@ export function CentroCostoFicha({
         <>
           {tab === "datos" ? (
             <>
-              {bloqueIdentidad}
               {bloqueResumen}
+              {bloqueIdentidad}
             </>
           ) : null}
 
@@ -852,15 +919,20 @@ export function CentroCostoFicha({
           {tab === "ajustes" ? (
             <Card className={styles.section}>
               <header className={styles.sectionHeader}>
-                <h3>Ajustes del período</h3>
-                <p>
-                  Las horas productivas se cargan a mano: son las horas que el
-                  sector realmente puede producir en el mes, y son las que
-                  dividen el gasto para dar el valor de la hora. Se suman las de
-                  todos: dos personas que le dedican 6 h por día son 12 h por
-                  día, no 6. Y si acá entran al 75%, estas horas son ese 75% —el
-                  mismo criterio de los dos lados de la cuenta.
-                </p>
+                <span className={styles.sectionIcon} aria-hidden="true">
+                  <Clock3Icon />
+                </span>
+                <div>
+                  <h3>Ajustes del período</h3>
+                  <p>
+                    Las horas productivas se cargan a mano: son las horas que el
+                    sector realmente puede producir en el mes, y son las que
+                    dividen el gasto para dar el valor de la hora. Se suman las
+                    de todos: dos personas que le dedican 6 h por día son 12 h
+                    por día, no 6. Y si acá entran al 75%, estas horas son ese
+                    75% —el mismo criterio de los dos lados de la cuenta.
+                  </p>
+                </div>
               </header>
               <div className={styles.identity}>
                 <label>
@@ -922,16 +994,30 @@ export function CentroCostoFicha({
           {tab === "historial" ? (
             <Card className={styles.section}>
               <header className={styles.sectionHeader}>
-                <h3>Historial de tarifas</h3>
-                <p>
-                  Se muestra el snapshot vigente de cada período y cuándo fue
-                  actualizado. Las órdenes conservan su propio snapshot.
-                </p>
+                <span className={styles.sectionIcon} aria-hidden="true">
+                  <HistoryIcon />
+                </span>
+                <div>
+                  <h3>Historial de tarifas</h3>
+                  <p>
+                    Se muestra el snapshot vigente de cada período y cuándo fue
+                    actualizado. Las órdenes conservan su propio snapshot.
+                  </p>
+                </div>
               </header>
               {tarifas.length === 0 ? (
-                <p className={styles.empty}>
-                  Todavía no se publicó ninguna tarifa.
-                </p>
+                <Empty className={brand.empty}>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <HistoryIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>Sin tarifas publicadas</EmptyTitle>
+                    <EmptyDescription>
+                      Las tarifas de cada período aparecerán acá con su revisión
+                      y responsable.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               ) : (
                 <div className={styles.historyScroll}>
                   <table className={styles.historyTable}>
@@ -988,7 +1074,7 @@ export function CentroCostoFicha({
     <>
       <Drawer.Backdrop
         {...scope}
-        className={theme.theme}
+        className={theme}
         isOpen={open}
         onOpenChange={pedirCierre}
         variant="opaque"
@@ -998,17 +1084,26 @@ export function CentroCostoFicha({
             className={`${sheet.dialog} ${styles.sheet}`}
             aria-describedby={descriptionId}
           >
-            <Drawer.Header className={sheet.header}>
+            <Drawer.Header className={`${sheet.header} ${styles.sheetHeader}`}>
               <div>
+                <p className={styles.eyebrow}>
+                  Costos · {esAlta ? "Nuevo centro" : "Planilla del sector"}
+                </p>
                 <Drawer.Heading>
                   {esAlta
                     ? "Nuevo centro de costo"
                     : (centro?.nombre ?? "Centro de costo")}
+                  <span className={styles.titleDot}>.</span>
                 </Drawer.Heading>
                 <p id={descriptionId}>
-                  {esAlta
-                    ? "Definí el sector y cargá sus gastos para calcular el valor de la hora."
-                    : `${centro?.nombre} · período ${periodo}`}
+                  {esAlta ? (
+                    "Definí el sector y cargá sus gastos para calcular el valor de la hora."
+                  ) : (
+                    <>
+                      <CalendarDaysIcon aria-hidden="true" /> Período {periodo}{" "}
+                      · {getTipoCentroLabel(tipoCentro)}
+                    </>
+                  )}
                 </p>
               </div>
               <Button
@@ -1033,11 +1128,33 @@ export function CentroCostoFicha({
                 <NavigationTabList
                   label="Configuración del centro"
                   className={styles.tabList}
+                  variant="detailed"
+                  tone="graphite"
                   items={[
-                    { id: "datos", label: "Datos generales" },
-                    { id: "gastos", label: "Gastos" },
-                    { id: "ajustes", label: "Ajustes" },
-                    { id: "historial", label: "Historial" },
+                    {
+                      id: "datos",
+                      label: "Datos generales",
+                      description: "Identidad y resumen",
+                      icon: <FactoryIcon />,
+                    },
+                    {
+                      id: "gastos",
+                      label: "Gastos",
+                      description: "Planilla del centro",
+                      icon: <ReceiptTextIcon />,
+                    },
+                    {
+                      id: "ajustes",
+                      label: "Ajustes",
+                      description: "Período y capacidad",
+                      icon: <Settings2Icon />,
+                    },
+                    {
+                      id: "historial",
+                      label: "Historial",
+                      description: "Tarifas publicadas",
+                      icon: <HistoryIcon />,
+                    },
                   ]}
                 />
                 <Drawer.Body className={`${sheet.body} ${styles.body}`}>
@@ -1048,6 +1165,15 @@ export function CentroCostoFicha({
               </Tabs>
             )}
             <Drawer.Footer className={`${sheet.footer} ${styles.footer}`}>
+              <span className={styles.saveStatus} data-dirty={sucio}>
+                {isLoading
+                  ? "Cargando planilla…"
+                  : esAlta
+                    ? "Nuevo centro"
+                    : sucio
+                      ? "Cambios sin guardar"
+                      : "Sin cambios pendientes"}
+              </span>
               {!esAlta && tab === "historial" && tipoCentro === "productivo" ? (
                 <Button
                   variant="outline"
@@ -1080,7 +1206,11 @@ export function CentroCostoFicha({
                     : "No hay cambios para guardar"
                 }
               >
-                {isSaving ? <GdiSpinner className="size-4" /> : null}
+                {isSaving ? (
+                  <GdiSpinner className="size-4" />
+                ) : (
+                  <ArrowUpRightIcon />
+                )}
                 {tipoCentro === "productivo" && esPeriodoEnCurso
                   ? "Guardar y publicar"
                   : tipoCentro === "no_productivo"
@@ -1092,6 +1222,7 @@ export function CentroCostoFicha({
         </Drawer.Content>
       </Drawer.Backdrop>
       <FormDialog
+        className={brand.dialog}
         isOpen={confirmandoSalida}
         onOpenChange={(next) => {
           if (!next && !isSaving) setConfirmandoSalida(false);

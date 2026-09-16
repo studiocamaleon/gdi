@@ -19,11 +19,8 @@ import { abreviarMoneda, abreviarNumero, formatearMoneda } from "@/lib/moneda";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import {
   getPanelMixCategoria,
-  type AlertaPanel,
-  type CeldaEstacionalidadPanel,
   type ClientesPanel,
   type CobranzaPanel,
-  type ComercialPanel,
   type EmbudoPanel,
   type EquipoPanel,
   type MetaPanel,
@@ -32,9 +29,7 @@ import {
   type ProductoPanel,
   type PuntoMixPanel,
   type RangoPanel,
-  type RankingPanel,
   type RentabilidadPanel,
-  type ResumenProduccionKpis,
 } from "@/lib/panel-api";
 
 /* ─── Formato es-AR ─── */
@@ -355,21 +350,6 @@ function BarChart({ data, labels, height = 220, yFormat = (v: number) => String(
   );
 }
 
-function DonutRing({ value, max = 100, size = 132, stroke = 16, label, sub, tone = "ink" }: { value: number; max?: number; size?: number; stroke?: number; label: string; sub?: string; tone?: "ink" | "ok" | "signal" }) {
-  const p = Math.max(0, Math.min(1, value / max));
-  const r = (size - stroke) / 2, c = 2 * Math.PI * r, dash = c * p;
-  const colors = { ink: "var(--ink)", ok: "var(--ok)", signal: "var(--signal)" };
-  return (
-    <div className="d-donut" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(20,20,26,.08)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors[tone]} strokeWidth={stroke} strokeDasharray={`${dash} ${c - dash}`} strokeDashoffset={c / 4} strokeLinecap="round" transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      </svg>
-      <div className="d-donut-mid"><div className="d-donut-val">{label}</div>{sub ? <div className="d-donut-sub">{sub}</div> : null}</div>
-    </div>
-  );
-}
-
 const SEG_COLORS = ["var(--ink)", "#4b4b55", "#6e6e76", "#a8a6a0", "#c8c6c0", "#8aa896", "#b0578f", "#c07a4a", "#3a9ca0", "#d1495b"];
 function StackedRing({ segments, size = 150, stroke = 20, label, sub }: { segments: number[]; size?: number; stroke?: number; label: string; sub?: string }) {
   const total = segments.reduce((a, s) => a + s, 0) || 1;
@@ -466,52 +446,6 @@ function pivotMix(puntos: PuntoMixPanel[], maxSeries = 6): { labels: string[]; n
   };
 }
 
-const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-/** "2026-07" → "jul 26" (sin ambigüedad día/mes). */
-function formatoMesCorto(mes: string): string {
-  const [y, m] = mes.split("-");
-  return `${MESES_CORTOS[Number(m) - 1] ?? m} ${y.slice(2)}`;
-}
-
-/** Heatmap categoría × mes: intensidad = venta de la celda vs. el máximo. */
-function HeatmapEstacionalidad({ celdas }: { celdas: CeldaEstacionalidadPanel[] }) {
-  const { moneda } = useConfigRegional();
-  const meses = [...new Set(celdas.map((c) => c.mes))].sort();
-  const totales = new Map<string, number>();
-  for (const c of celdas) totales.set(c.categoria, (totales.get(c.categoria) ?? 0) + c.monto);
-  const categorias = [...totales.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n]) => n);
-  const valor = new Map(celdas.map((c) => [`${c.categoria}|${c.mes}`, c.monto] as const));
-  const max = Math.max(...celdas.map((c) => c.monto), 1);
-  if (meses.length === 0) return <div className="d-empty" style={{ padding: 30 }}>Sin ventas registradas todavía.</div>;
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <div style={{ display: "grid", gridTemplateColumns: `minmax(90px, 130px) repeat(${meses.length}, minmax(26px, 1fr))`, gap: 3, alignItems: "center" }}>
-        {categorias.map((cat) => (
-          <React.Fragment key={cat}>
-            <div style={{ fontSize: 11.5, color: "var(--ink-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cat}>{cat}</div>
-            {meses.map((mes) => {
-              const m = valor.get(`${cat}|${mes}`) ?? 0;
-              return (
-                <div
-                  key={mes}
-                  title={`${cat} · ${formatoMesCorto(mes)}: ${formatearMoneda(m, moneda, { decimales: 0 })}`}
-                  style={{ height: 22, borderRadius: 3, background: m > 0 ? `rgba(20,20,26,${(0.08 + 0.72 * (m / max)).toFixed(3)})` : "rgba(20,20,26,.03)" }}
-                />
-              );
-            })}
-          </React.Fragment>
-        ))}
-        <div />
-        {meses.map((mes, i) => (
-          <div key={mes} className="mono" style={{ fontSize: 9.5, color: "var(--muted-text)", textAlign: "center" }}>
-            {i % 2 === 0 || meses.length <= 6 ? formatoMesCorto(mes) : ""}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* ─── KPI (verbatim del diseño) ─── */
 export function Kpi({ label, value, currency, sub, delta, deltaUnit = "%", deltaTone = "auto", spark, sparkSignal, hint }: { label: string; value: React.ReactNode; currency?: string; sub?: string; delta?: number | null; deltaUnit?: string; deltaTone?: "auto" | "ok" | "signal" | "muted" | "inverse"; spark?: number[]; sparkSignal?: boolean; hint?: string }) {
   let tone = "muted";
@@ -545,186 +479,6 @@ export function Card({ span, title, sub, action, flush, foot, children }: { span
       <div className={`d-card-body ${flush ? "flush" : ""}`}>{children}</div>
       {foot ? <div className="d-card-foot">{foot}</div> : null}
     </div>
-  );
-}
-
-function InsightsList({ alertas }: { alertas: AlertaPanel[] }) {
-  if (alertas.length === 0) return <div className="d-empty" style={{ padding: 30 }}>Sin alertas activas. Todo en orden.</div>;
-  const cls: Record<string, string> = { critico: "crit", atencion: "warn", info: "ok" };
-  return (
-    <div className="d-alerts">
-      {alertas.map((a) => (
-        <div key={a.id} className={`d-alert ${cls[a.severidad] ?? ""}`}>
-          <span className="pip" />
-          <div className="body"><div className="nm">{a.titulo}</div><div className="sub">{a.detalle}</div></div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function RankList({ rows, cols = "18px 1fr 90px" }: { rows: RankingPanel[]; cols?: string }) {
-  const { moneda } = useConfigRegional();
-  const max = Math.max(...rows.map((r) => r.facturado), 1);
-  if (rows.length === 0) return <div className="d-empty" style={{ padding: 30 }}>Sin datos en el período.</div>;
-  return (
-    <div className="d-rank">
-      {rows.map((r, i) => (
-        <div key={r.id ?? r.nombre} className="d-rank-row" style={{ gridTemplateColumns: cols }}>
-          <span className="ix">{String(i + 1).padStart(2, "0")}</span>
-          <div className="body">
-            <div className="nm">{r.nombre}</div>
-            <div className="sub">{r.ordenes} órden{r.ordenes === 1 ? "" : "es"} · ticket {abreviarMoneda(r.ordenes > 0 ? r.facturado / r.ordenes : 0, moneda)}</div>
-            <div className="bar-cell"><HBar value={r.facturado} max={max} /></div>
-          </div>
-          <span className="val">{abreviarMoneda(r.facturado, moneda)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ═══════════ TAB · Resumen ═══════════ */
-export type ResumenData = {
-  meta: MetaPanel;
-  rentabilidad: RentabilidadPanel;
-  produccion: ResumenProduccionKpis;
-  serie: Array<{ fecha: string; monto: number; costo: number }>;
-  topClientes: RankingPanel[];
-  topProductos: Array<{ nombre: string; ventas: number; margenPct: number; items: number }>;
-  alertas: AlertaPanel[];
-};
-
-export function TabResumen({ d }: { d: ResumenData }) {
-  const { moneda } = useConfigRegional();
-  const r = d.rentabilidad;
-  const labels = d.serie.map((s) => s.fecha.slice(5));
-  const costos = d.serie.map((s) => s.costo);
-  const margenes = d.serie.map((s) => Math.max(0, s.monto - s.costo));
-  const spark = d.serie.map((s) => s.monto);
-  const ytd = d.serie.reduce((a, s) => a + s.monto, 0);
-  return (
-    <>
-      <div className="d-kpi-row">
-        <Kpi label="Ventas" currency={moneda.simbolo} value={abreviarNumero(r.ventas, moneda)} delta={r.ventasDeltaPct} sub="vs período anterior · sin IVA" spark={spark} />
-        <Kpi label="Margen bruto" value={pct(r.margenBrutoPct)} delta={r.margenBrutoDeltaPts} deltaUnit="pts" />
-        <Kpi label="Contribución" value={pct(r.contribucionPct)} delta={r.contribucionDeltaPts} deltaUnit="pts" hint="Ventas menos costos variables (material + tintas)" />
-        <Kpi label="Punto de equilibrio" currency={moneda.simbolo} value={r.puntoEquilibrio != null ? abreviarNumero(r.puntoEquilibrio, moneda) : "—"} sub={r.avancePct != null ? `avance ${pct(r.avancePct)}` : "sin costos fijos"} />
-        <Kpi label="Entregas a tiempo" value={pct(d.produccion.otdPct)} sub="OTD del período" />
-      </div>
-
-      <div className="dash-grid">
-        <Card span={8} title="Ventas, costo y margen" sub={`serie ${d.meta.granularidad} · pesos, sin IVA`}
-          foot={<><span>Total ventas <strong style={{ color: "var(--ink)" }}>{formatearMoneda(ytd, moneda, { decimales: 0 })}</strong></span><span style={{ marginLeft: "auto" }}>Contribución <strong style={{ color: "var(--ok)" }}>{pct(r.contribucionPct)}</strong></span></>}>
-          {d.serie.length >= 2 ? (
-            <>
-              <BarChart labels={labels} data={[costos, margenes]} stacks={["Costo", "Margen"]} mode="stack" colors={["#c8c6c0", "var(--ink)"]} yFormat={(v) => abreviarMoneda(v, moneda)} height={240} />
-              <div className="d-legend" style={{ marginTop: 10 }}>
-                <LegendDot color="var(--ink)" label="Margen bruto" value={abreviarMoneda(r.margenBruto, moneda)} />
-                <LegendDot color="#c8c6c0" label="Costo directo" value={abreviarMoneda(r.costoTotal ?? 0, moneda)} />
-              </div>
-            </>
-          ) : <div className="d-empty" style={{ padding: 40 }}>El período no tiene serie suficiente para graficar.</div>}
-        </Card>
-
-        <Card span={4} title="Punto de equilibrio" sub="cuánto de tu estructura cubriste">
-          {r.puntoEquilibrio != null && r.avancePct != null ? (
-            <div className="d-gauge-row">
-              <DonutRing value={Math.min(100, r.avancePct)} label={pct(r.avancePct)} sub="del equilibrio" tone={r.avancePct < 100 ? "signal" : "ok"} />
-              <div className="meta">
-                <div className="ttl">Necesitás {abreviarMoneda(r.puntoEquilibrio, moneda)}/período</div>
-                <div className="sub">para cubrir tu estructura fija</div>
-                <div className="breakdown">
-                  <div className="row"><span className="d-pip ok" /><span className="nm">Ventas</span><span className="val">{abreviarMoneda(r.ventas, moneda)}</span></div>
-                  <div className="row"><span className="d-pip" /><span className="nm">Costos fijos</span><span className="val">{abreviarMoneda(r.costosFijos ?? 0, moneda)}</span></div>
-                </div>
-              </div>
-            </div>
-          ) : <div className="d-empty" style={{ padding: 30 }}>Cargá los costos fijos de tus centros para ver el punto de equilibrio.</div>}
-        </Card>
-
-        <Card span={6} title="Clientes principales" sub="por ventas · sin IVA" flush><RankList rows={d.topClientes} cols="18px 1fr 90px" /></Card>
-
-        <Card span={6} title="Productos con más ventas" sub="con su margen · sin IVA" flush>
-          <table className="d-tbl">
-            <thead><tr><th>Producto</th><th className="right">Margen</th><th className="right">Ventas</th></tr></thead>
-            <tbody>{d.topProductos.map((p) => (
-              <tr key={p.nombre}><td><div className="nm">{p.nombre}</div></td>
-                <td className="right"><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 60 }}><HBar value={p.margenPct} max={70} tone={p.margenPct >= 50 ? "ok" : p.margenPct >= 40 ? "ink" : "signal"} /></div><span className="mono" style={{ width: 42 }}>{pct(p.margenPct)}</span></div></td>
-                <td className="right mono">{abreviarMoneda(p.ventas, moneda)}</td></tr>
-            ))}</tbody>
-          </table>
-        </Card>
-
-        <Card span={12} title="Alertas activas" sub="requieren acción" flush action={<span className="d-kpi-sub">{d.alertas.length} activa{d.alertas.length === 1 ? "" : "s"}</span>}><InsightsList alertas={d.alertas} /></Card>
-      </div>
-    </>
-  );
-}
-
-/* ═══════════ TAB · Comercial ═══════════ */
-export function TabComercial({ d }: { d: ComercialPanel }) {
-  const { moneda } = useConfigRegional();
-  const k = d.kpis;
-  const labels = d.serie.map((s) => s.fecha.slice(5));
-  const maxCatMix = Math.max(...d.mixCategoria.map((m) => m.monto), 1);
-  return (
-    <>
-      <div className="d-kpi-row">
-        <Kpi label="Ventas" currency={moneda.simbolo} value={abreviarNumero(k.ventas, moneda)} delta={k.ventasDeltaPct} spark={d.serie.map((s) => s.monto)} hint="Totales de venta netos — no incluyen IVA"
-          sub={`${k.ventasDeltaAnualPct != null ? `${k.ventasDeltaAnualPct >= 0 ? "+" : ""}${fmtAR(k.ventasDeltaAnualPct, 1)}% vs año pasado` : "vs período anterior"} · sin IVA`} />
-        <Kpi label="Órdenes" value={fmtAR(k.ordenes)} delta={k.ordenesDeltaPct} />
-        <Kpi label="Ticket promedio" currency={moneda.simbolo} value={abreviarNumero(k.ticketPromedio, moneda)} spark={d.serieTicket.map((t) => t.ticketPromedio)} hint="Promedio por orden, sin IVA" />
-        <Kpi label="Clientes nuevos" value={fmtAR(k.nuevosClientes)} delta={k.nuevosClientes} deltaTone="ok" sub="este período" />
-        <Kpi label="Clientes dormidos" value={fmtAR(k.clientesDormidos)} deltaTone="signal" delta={k.clientesDormidos > 0 ? k.clientesDormidos : undefined} sub="sin comprar" />
-      </div>
-      <div className="dash-grid">
-        <Card span={8} title="Ventas del período" sub={`serie ${d.granularidad} · sin IVA`} foot={<span>Ticket promedio <strong style={{ color: "var(--ink)" }}>{abreviarMoneda(k.ticketPromedio, moneda)}</strong> · {k.itemsPorOrden} items/orden</span>}>
-          {d.serie.length >= 2 ? <AreaChart series={d.serie.map((s) => s.monto)} labels={labels} yFormat={(v) => abreviarMoneda(v, moneda)} height={230} nombres={["Ventas"]} /> : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente.</div>}
-        </Card>
-        <Card span={4} title="Mix por categoría" sub="participación">
-          {d.mixCategoria.map((m) => (
-            <div key={m.nombre} style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>{pct(m.pct)}</span></div>
-              <HBar value={m.monto} max={maxCatMix} />
-            </div>
-          ))}
-        </Card>
-        <Card span={7} title="Evolución del ticket" sub="promedio y mediana por orden"
-          foot={d.serieTicket.length >= 2 ? <span>La <strong style={{ color: "var(--ink)" }}>mediana</strong> (punteada) resiste las órdenes grandes: si se separan, pocas órdenes inflan el promedio.</span> : undefined}>
-          {d.serieTicket.length >= 2 ? (
-            <>
-              <AreaChart series={d.serieTicket.map((t) => t.ticketPromedio)} secondary={d.serieTicket.map((t) => t.ticketMediana)} labels={d.serieTicket.map((t) => t.fecha.slice(5))} yFormat={(v) => abreviarMoneda(v, moneda)} height={210} nombres={["Promedio", "Mediana"]} />
-              <div className="d-legend" style={{ marginTop: 8 }}>
-                <LegendDot color="var(--ink)" label="Promedio" value={abreviarMoneda(k.ticketPromedio, moneda)} />
-                <LegendDot color="var(--muted-text-2)" label="Mediana" />
-              </div>
-            </>
-          ) : <div className="d-empty" style={{ padding: 40 }}>Serie insuficiente para graficar el ticket.</div>}
-        </Card>
-        <Card span={5} title="Estacionalidad por categoría" sub="ventas por mes · últimos 12 meses · sin IVA">
-          <HeatmapEstacionalidad celdas={d.estacionalidad} />
-          <div style={{ fontSize: 11, color: "var(--muted-text)", marginTop: 10 }}>Más oscuro = más venta. El índice estacional llega con 2+ años de historia.</div>
-        </Card>
-        <Card span={6} title="Clientes principales" sub="por ventas · sin IVA" flush><RankList rows={d.rankingClientes} /></Card>
-        <Card span={6} title="Ranking de vendedores" sub="por ventas · sin IVA" flush><RankList rows={d.rankingVendedores} /></Card>
-        <Card span={8} title="Clientes dormidos" sub="recurrentes que dejaron de comprar" flush>
-          {d.dormidos.length === 0 ? <div className="d-empty" style={{ padding: 30 }}>Tus clientes recurrentes siguen activos.</div> : (
-            <table className="d-tbl"><thead><tr><th>Cliente</th><th className="right">Última compra</th><th className="right">Sin comprar</th><th className="right">Historial</th></tr></thead>
-              <tbody>{d.dormidos.map((c) => (<tr key={c.clienteId ?? c.cliente}><td><div className="nm">{c.cliente}</div></td><td className="right mono">{c.ultimaCompra}</td><td className="right mono" style={{ color: "var(--signal)" }}>{c.diasSinComprar} d</td><td className="right mono">{c.historico}</td></tr>))}</tbody>
-            </table>
-          )}
-        </Card>
-        <Card span={4} title="Mix por tecnología">
-          {d.mixTecnologia.map((m) => (
-            <div key={m.nombre} style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}><span>{technologyCodeLabel(m.nombre) || m.nombre}</span><span className="mono" style={{ color: "var(--muted-text)" }}>{pct(m.pct)}</span></div>
-              <HBar value={m.pct} max={100} />
-            </div>
-          ))}
-        </Card>
-      </div>
-    </>
   );
 }
 

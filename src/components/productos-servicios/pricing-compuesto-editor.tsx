@@ -96,7 +96,8 @@ const MODOS: Array<{
   {
     value: "USAR_PRODUCTO_HIJO",
     label: "Del componente",
-    description: "Usa la regla vigente del producto hijo y la congela al guardar.",
+    description:
+      "Usa la regla vigente del producto hijo y la congela al guardar.",
   },
   {
     value: "OVERRIDE",
@@ -175,10 +176,9 @@ export function PricingCompuestoEditor({
       <PricingSectionHeader
         step="02"
         eyebrow="Composición"
-        title="Pricing del producto compuesto"
+        title="Precio del producto compuesto"
         description="Decide qué costos comparten la regla general y cuáles forman un bloque propio."
         icon={Layers3Icon}
-        action={<Badge variant="outline">F4.3</Badge>}
       />
       <CardContent className={pricingStyles.sectionContent}>
         <FieldGroup>
@@ -203,7 +203,10 @@ export function PricingCompuestoEditor({
               ))}
             </ToggleGroup>
             <FieldDescription>
-              {ESTRATEGIAS.find((item) => item.value === estrategia)?.description}
+              {
+                ESTRATEGIAS.find((item) => item.value === estrategia)
+                  ?.description
+              }
             </FieldDescription>
           </Field>
 
@@ -227,7 +230,8 @@ export function PricingCompuestoEditor({
                 }))}
               />
               <FieldDescription>
-                Las políticas pertenecen a cada relación BOM y pueden variar entre rutas.
+                Las políticas pertenecen a cada relación BOM y pueden variar
+                entre rutas.
               </FieldDescription>
             </Field>
           ) : null}
@@ -236,8 +240,8 @@ export function PricingCompuestoEditor({
             <InfoIcon />
             <AlertTitle>Una sola línea comercial</AlertTitle>
             <AlertDescription>
-              Los bloques son internos. Impuestos, comisiones, descuentos y redondeo se
-              aplican una sola vez después de consolidarlos.
+              Los bloques son internos. Impuestos, comisiones, descuentos y
+              redondeo se aplican una sola vez después de consolidarlos.
             </AlertDescription>
           </Alert>
 
@@ -246,8 +250,8 @@ export function PricingCompuestoEditor({
               <CircleAlertIcon />
               <AlertTitle>La ruta todavía no tiene receta</AlertTitle>
               <AlertDescription>
-                Creá o publicá la receta desde Routing para poder asignar políticas a sus
-                componentes.
+                Creá o publicá la receta desde Producción para poder asignar
+                políticas a sus componentes.
               </AlertDescription>
             </Alert>
           ) : estrategia === "GENERAL" ? (
@@ -255,8 +259,8 @@ export function PricingCompuestoEditor({
               <InfoIcon />
               <AlertTitle>Todos los costos usan la regla general</AlertTitle>
               <AlertDescription>
-                Las políticas guardadas en la receta se conservan, pero no se activan mientras
-                esta estrategia esté seleccionada.
+                Las políticas guardadas en la receta se conservan, pero no se
+                activan mientras esta estrategia esté seleccionada.
               </AlertDescription>
             </Alert>
           ) : (
@@ -264,7 +268,9 @@ export function PricingCompuestoEditor({
               {componentes.length === 0 ? (
                 <Alert>
                   <InfoIcon />
-                  <AlertTitle>Esta receta no tiene componentes fabricados</AlertTitle>
+                  <AlertTitle>
+                    Esta receta no tiene componentes fabricados
+                  </AlertTitle>
                   <AlertDescription>
                     El costo propio del padre seguirá usando la regla general.
                   </AlertDescription>
@@ -284,9 +290,10 @@ export function PricingCompuestoEditor({
                     <CardHeader className={pricingStyles.componentHeader}>
                       <CardTitle>{componente.nombre}</CardTitle>
                       <CardDescription>
-                        {componente.cantidad} {componente.unidad} en este producto
+                        {componente.cantidad} {componente.unidad} en este
+                        producto
                       </CardDescription>
-                      <CardAction>
+                      <CardAction className={pricingStyles.componentAction}>
                         <Badge
                           variant={
                             politica.modo === "HEREDAR_PADRE"
@@ -301,8 +308,9 @@ export function PricingCompuestoEditor({
                     <CardContent className={pricingStyles.componentContent}>
                       <FieldGroup>
                         <Field>
-                          <FieldLabel>Regla de pricing</FieldLabel>
+                          <FieldLabel>Regla de precio</FieldLabel>
                           <ToggleGroup
+                            aria-label={`Regla de precio de ${componente.nombre}`}
                             multiple={false}
                             value={[politica.modo]}
                             onValueChange={(values) => {
@@ -311,20 +319,29 @@ export function PricingCompuestoEditor({
                                 | undefined;
                               if (!modo) return;
                               actualizarComponente(index, (current) =>
-                                actualizarPoliticaPricingComponente(current, modo),
+                                actualizarPoliticaPricingComponente(
+                                  current,
+                                  modo,
+                                ),
                               );
                             }}
                             variant="outline"
                             className={`${pricingStyles.segmented} grid w-full grid-cols-1 lg:grid-cols-3`}
                           >
                             {MODOS.map((item) => (
-                              <ToggleGroupItem key={item.value} value={item.value}>
+                              <ToggleGroupItem
+                                key={item.value}
+                                value={item.value}
+                              >
                                 {item.label}
                               </ToggleGroupItem>
                             ))}
                           </ToggleGroup>
                           <FieldDescription>
-                            {MODOS.find((item) => item.value === politica.modo)?.description}
+                            {
+                              MODOS.find((item) => item.value === politica.modo)
+                                ?.description
+                            }
                           </FieldDescription>
                         </Field>
 
@@ -360,11 +377,13 @@ export function PricingCompuestoEditor({
             <Alert>
               <CircleAlertIcon />
               <AlertTitle>
-                {heredados} {heredados === 1 ? "componente hereda" : "componentes heredan"}
+                {heredados}{" "}
+                {heredados === 1 ? "componente hereda" : "componentes heredan"}
               </AlertTitle>
               <AlertDescription>
-                Es válido, pero esos costos seguirán dentro del bloque general. Asignales una
-                regla propia si querés separar todo el producto por componentes.
+                Es válido, pero esos costos seguirán dentro del bloque general.
+                Asignales una regla propia si querés separar todo el producto
+                por componentes.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -372,10 +391,10 @@ export function PricingCompuestoEditor({
           {hayCambiosComponentes ? (
             <Alert>
               <CircleAlertIcon />
-              <AlertTitle>Se actualizará el borrador de Routing</AlertTitle>
+              <AlertTitle>Se actualizará el borrador de producción</AlertTitle>
               <AlertDescription>
-                Después de guardar, publicá la revisión desde Routing para que estas políticas
-                entren en vigencia productiva.
+                Después de guardar, publicá la revisión desde Producción para
+                que estas políticas entren en vigencia productiva.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -383,10 +402,12 @@ export function PricingCompuestoEditor({
           <div className={pricingStyles.preview}>
             <div className={pricingStyles.previewHeader}>
               <div>
-                <h3 className={pricingStyles.previewTitle}>Vista previa de bloques</h3>
+                <h3 className={pricingStyles.previewTitle}>
+                  Vista previa de bloques
+                </h3>
                 <p className={pricingStyles.previewDescription}>
-                  Anticipa qué regla se aplicará; los importes se calculan al cotizar con medidas
-                  y cantidades reales.
+                  Anticipa qué regla se aplicará; los importes se calculan al
+                  cotizar con medidas y cantidades reales.
                 </p>
               </div>
               {revision ? (
@@ -409,7 +430,9 @@ export function PricingCompuestoEditor({
                 </TableHeader>
                 <TableBody>
                   <TableRow>
-                    <TableCell className="font-medium">Costo propio y heredado</TableCell>
+                    <TableCell className="font-medium">
+                      Costo propio y heredado
+                    </TableCell>
                     <TableCell>General del padre</TableCell>
                     <TableCell>{metodoLabel(precioConfig)}</TableCell>
                     <TableCell>
@@ -444,8 +467,12 @@ export function PricingCompuestoEditor({
                             : metodoLabel(regla)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={usaBloqueGeneral ? "secondary" : "outline"}>
-                            {usaBloqueGeneral ? "Incluido en general" : "Bloque propio"}
+                          <Badge
+                            variant={usaBloqueGeneral ? "secondary" : "outline"}
+                          >
+                            {usaBloqueGeneral
+                              ? "Incluido en general"
+                              : "Bloque propio"}
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -456,7 +483,11 @@ export function PricingCompuestoEditor({
             </div>
             {revision ? (
               <p className="border-t px-4 py-3 text-xs text-muted-foreground">
-                Fuente: {recetaSeleccionada?.rutaAlternativa.nombre} · {revision.estado === "BORRADOR" ? "borrador actual" : `versión ${revision.numero} publicada`}.
+                Fuente: {recetaSeleccionada?.rutaAlternativa.nombre} ·{" "}
+                {revision.estado === "BORRADOR"
+                  ? "borrador actual"
+                  : `versión ${revision.numero} publicada`}
+                .
               </p>
             ) : null}
           </div>

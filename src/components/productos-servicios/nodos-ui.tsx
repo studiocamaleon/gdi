@@ -13,8 +13,10 @@ import {
 } from "@heroui/react";
 import { InfoIcon } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import selectField from "@/components/design-system/select-field.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import { Button as LegacyButton } from "@/components/ui/button";
@@ -32,7 +34,8 @@ import {
 } from "@/components/ui/select-buscable";
 import s from "./nodos-editor.module.css";
 
-// El editor se comparte con Productos. Sólo la ficha de Nodos activa HeroUI.
+// Presentación compartida por Nodos y el editor de rutas de producto.
+// Activación explícita por proveedor, independiente de configuracionBase.
 const NodosVisual = React.createContext(false);
 export const useNodosVisual = () => React.useContext(NodosVisual);
 export function NodosVisualProvider({
@@ -181,6 +184,7 @@ export function LabelConTooltip(
 ) {
   const activo = useNodosVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   if (!activo) return <LegacyLabelConTooltip {...props} />;
   return (
     <div className={`flex items-center gap-1.5 ${props.className ?? ""}`}>
@@ -197,10 +201,7 @@ export function LabelConTooltip(
           >
             <InfoIcon />
           </ActionButton>
-          <Tooltip.Content
-            {...scope}
-            className={`${theme.theme} max-w-xs text-xs`}
-          >
+          <Tooltip.Content {...scope} className={`${theme} max-w-xs text-xs`}>
             <p>{props.tooltip}</p>
             {props.ejemplo && <p className="mt-2">Ejemplo: {props.ejemplo}</p>}
           </Tooltip.Content>
@@ -267,6 +268,7 @@ function NodoHumanSelect({
   showCode,
 }: React.ComponentProps<typeof LegacyHumanSelect>) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const available = includeSelectedFallback
     ? ensureSelectedOption(options, value ?? "")
     : options;
@@ -301,7 +303,7 @@ function NodoHumanSelect({
       </Select.Trigger>
       <Select.Popover
         {...scope}
-        className={`${theme.theme} ${s.popover} ${contentClassName ?? ""}`}
+        className={`${theme} ${s.popover} ${contentClassName ?? ""}`}
       >
         <ListBox>
           {available.map((option) => (
@@ -348,6 +350,7 @@ function NodoSelectBuscable({
   onBuscar,
 }: React.ComponentProps<typeof LegacySelectBuscable>) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [query, setQuery] = React.useState("");
   const conBusqueda = opciones.length >= minimoParaBuscar;
   const visible = filtrarOpciones(opciones, conBusqueda ? query : "");
@@ -381,10 +384,7 @@ function NodoSelectBuscable({
         </Autocomplete.Value>
         <Autocomplete.Indicator />
       </Autocomplete.Trigger>
-      <Autocomplete.Popover
-        {...scope}
-        className={`${theme.theme} ${s.popover}`}
-      >
+      <Autocomplete.Popover {...scope} className={`${theme} ${s.popover}`}>
         <Autocomplete.Filter filter={() => true}>
           {conBusqueda && (
             <SearchField

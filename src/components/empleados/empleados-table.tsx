@@ -10,7 +10,12 @@ import {
   DownloadIcon,
   FileSpreadsheetIcon,
   PencilIcon,
-  PlusIcon,
+  ArrowUpRightIcon,
+  BriefcaseBusinessIcon,
+  MailIcon,
+  MapPinIcon,
+  ShieldCheckIcon,
+  UserRoundIcon,
   SearchXIcon,
   UploadIcon,
   UserCheckIcon,
@@ -45,8 +50,18 @@ import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { FormDialog } from "@/components/design-system/form-dialog";
-import { IdentityAvatar } from "@/components/design-system/identity-avatar";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import {
   Table,
   TableBody,
@@ -55,7 +70,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import theme from "@/components/design-system/theme.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./empleados.module.css";
@@ -104,6 +119,7 @@ export function EmpleadosTable({
   canManage,
 }: EmpleadosTableProps) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [response, setResponse] = React.useState(initialResponse);
@@ -258,14 +274,18 @@ export function EmpleadosTable({
   return (
     <section
       {...scope}
-      className={`${theme.theme} ${listPage.page} ${styles.page}`}
+      data-visual="brand"
+      className={`${theme} ${listPage.page} ${styles.page}`}
     >
       <header className={listPage.header}>
         <div>
-          <h1>Empleados</h1>
+          <p className={brand.eyebrow}>Registros · Personas y equipo</p>
+          <h1>
+            Empleados<span className={brand.titleDot}>.</span>
+          </h1>
           <p className={listPage.subtitle}>
-            Legajos activos e históricos. Dar de baja conserva ventas,
-            producción y egresos asociados.
+            El equipo detrás de cada trabajo. Legajos, contacto y datos
+            laborales en un solo lugar.
           </p>
         </div>
         <div className={styles.actions}>
@@ -288,7 +308,7 @@ export function EmpleadosTable({
             </ActionButton>
             <Dropdown.Popover
               {...scope}
-              className={`${theme.theme} ${styles.menu}`}
+              className={`${theme} ${styles.menu}`}
               placement="bottom end"
             >
               <Dropdown.Menu aria-label="Acciones de empleados">
@@ -360,12 +380,52 @@ export function EmpleadosTable({
           </Dropdown>
           {canManage && (
             <ActionLink href="/empleados/nuevo">
-              <PlusIcon /> Nuevo empleado
+              <ArrowUpRightIcon /> Nuevo empleado
             </ActionLink>
           )}
         </div>
       </header>
+      <div className={brand.metrics} aria-label="Resumen del listado">
+        <ListMetric
+          label="Legajos"
+          value={response.total}
+          hint={
+            verInactivos ? "Incluye activos y bajas" : "Activos en el listado"
+          }
+          icon={UsersRoundIcon}
+        />
+        <ListMetric
+          label="Sectores"
+          value={
+            new Set(empleados.map((item) => item.sector).filter(Boolean)).size
+          }
+          hint="En esta página"
+          icon={BriefcaseBusinessIcon}
+        />
+        <ListMetric
+          label="Con acceso"
+          value={empleados.filter((item) => item.usuarioSistema).length}
+          hint="En esta página"
+          icon={ShieldCheckIcon}
+        />
+      </div>
       <Card className={listPage.results}>
+        <Card.Header className={brand.directoryHeader}>
+          <div className={brand.directoryTitle}>
+            <span className={brand.directoryIcon} aria-hidden="true">
+              <UsersRoundIcon />
+            </span>
+            <div>
+              <Card.Title className={brand.directoryHeading}>
+                Directorio del equipo
+              </Card.Title>
+              <Card.Description>
+                Consultá cada legajo y su estado. Las bajas conservan el
+                historial.
+              </Card.Description>
+            </div>
+          </div>
+        </Card.Header>
         <div className={listPage.toolbar}>
           <SearchField
             aria-label="Buscar empleados"
@@ -425,17 +485,23 @@ export function EmpleadosTable({
         )}
         <div aria-busy={isLoading}>
           {empleados.length === 0 ? (
-            <div className={listPage.empty}>
-              <SearchXIcon size={28} />
-              <strong>No encontramos empleados</strong>
-              <p>
-                {search || verInactivos
-                  ? "Probá otra búsqueda o cambiá el filtro de bajas."
-                  : "Creá el primer legajo para asignarlo a ventas o producción."}
-              </p>
-            </div>
+            <Empty className={brand.empty}>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchXIcon />
+                </EmptyMedia>
+                <EmptyTitle>No encontramos empleados</EmptyTitle>
+                <EmptyDescription>
+                  {search || verInactivos
+                    ? "Probá otra búsqueda o cambiá el filtro de bajas."
+                    : "Creá el primer legajo para asignarlo a ventas o producción."}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
-            <Table className={`${styles.table} ${styles.employeesTable}`}>
+            <Table
+              className={`${styles.table} ${brand.table} ${styles.employeesTable}`}
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead className={styles.checkCell}>
@@ -495,24 +561,30 @@ export function EmpleadosTable({
                         href={`/empleados/${empleado.id}`}
                         className={styles.employeeName}
                       >
-                        <span aria-hidden="true">
-                          <IdentityAvatar
-                            name={empleado.nombreCompleto}
-                            initials={empleado.nombreCompleto
-                              .split(/\s+/)
-                              .slice(0, 2)
-                              .map((part) => part[0])
-                              .join("")
-                              .toUpperCase()}
-                          />
+                        <span className={brand.identityIcon} aria-hidden="true">
+                          <UserRoundIcon />
                         </span>
                         <strong>{empleado.nombreCompleto}</strong>
+                        <ArrowUpRightIcon
+                          className={brand.rowArrow}
+                          aria-hidden="true"
+                        />
                       </NavLink>
                     </TableCell>
                     <TableCell>{empleado.sector}</TableCell>
                     <TableCell>{empleado.ocupacion || "-"}</TableCell>
-                    <TableCell>{empleado.email}</TableCell>
-                    <TableCell>{empleado.ciudad || "-"}</TableCell>
+                    <TableCell>
+                      <span className={brand.contactText}>
+                        <MailIcon aria-hidden="true" />
+                        {empleado.email}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={brand.contactText}>
+                        {empleado.ciudad && <MapPinIcon aria-hidden="true" />}
+                        {empleado.ciudad || "—"}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <Chip
                         size="sm"
@@ -572,6 +644,7 @@ export function EmpleadosTable({
         )}
       </Card>
       <FormDialog
+        className={brand.dialog}
         isOpen={confirmandoBaja}
         onOpenChange={(open) => !open && setConfirmandoBaja(false)}
         title="Dar de baja empleados"

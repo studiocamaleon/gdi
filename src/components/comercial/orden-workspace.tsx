@@ -4,6 +4,7 @@ import * as React from "react";
 import { Tabs } from "@heroui/react";
 import { cn } from "@/lib/utils";
 import s from "./orden-workspace.module.css";
+import panels from "./orden-secondary-panels.module.css";
 
 export type OrdenWorkspaceHandle = { mostrarDatos: () => void };
 
@@ -58,7 +59,7 @@ export function OrdenWorkspace({
         <Tabs.Panel
           key={activeSection}
           id={activeSection}
-          className={s.content}
+          className={cn(s.content, panels.scope)}
         >
           {activeSection === "datos" ? (
             <section className={s.dataCard} aria-label="Datos de la orden">

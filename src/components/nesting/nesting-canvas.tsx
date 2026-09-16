@@ -12,23 +12,16 @@ import {
 } from "@/lib/nesting-overlay";
 import { CapasFabricacionPlacement } from "./capas-fabricacion-nesting";
 import s from "./nesting-canvas.module.css";
+import {
+  NESTING_PALETTE as palette,
+  NESTING_PIECE_COLORS as PIECE_COLORS,
+} from "./nesting-palette";
 
 export interface ModificacionesOverlay {
   demasia: DemasiaPorLado;
   /** Posiciones en coordenadas de la medida VISIBLE de la pieza. */
   ojales: PosicionOjalView[];
 }
-
-const PIECE_COLORS = [
-  { fill: "#d9edf0", text: "#263238", stroke: "#6595a0" },
-  { fill: "#ece8de", text: "#2c2c33", stroke: "#cfc9bb" },
-  { fill: "#d9edf0", text: "#263238", stroke: "#9bc7d0" },
-  { fill: "#dff0b3", text: "#263238", stroke: "#a9c76a" },
-  { fill: "#e7d8f5", text: "#2c2c33", stroke: "#b89bdd" },
-  { fill: "#f5c693", text: "#2c2c33", stroke: "#d99a5d" },
-  { fill: "#f3d48a", text: "#2c2c33", stroke: "#d2aa46" },
-  { fill: "#eaa8c9", text: "#2c2c33", stroke: "#c46b9b" },
-];
 
 type PieceStyle = (typeof PIECE_COLORS)[number];
 type Placement = NestingViewerInput["placements"][number];
@@ -305,7 +298,7 @@ function SubstrateView({
     printer?.anchoUtilMm && printer.anchoUtilMm > 0
       ? printer.anchoUtilMm
       : null;
-  const ROLL_WIDTH_PX = printer != null ? 520 : 360;
+  const ROLL_WIDTH_PX = Math.min(maxPx, printer != null ? 640 : 520);
   let scale = isRoll ? ROLL_WIDTH_PX / displayWidthMm : maxPx / longestMm;
   if (isRoll && printerAnchoMm && printerAnchoMm > displayWidthMm) {
     // Máquina mucho más ancha que el material: acotar el canvas escalando
@@ -436,14 +429,15 @@ function SubstrateView({
               height="7"
               patternTransform="rotate(45)"
             >
+              <rect width="7" height="7" fill={palette.margin.fill} />
               <line
                 x1="0"
                 y1="0"
                 x2="0"
                 y2="7"
-                stroke="#8b8277"
+                stroke={palette.margin.stroke}
                 strokeWidth="1"
-                opacity="0.2"
+                opacity="0.45"
               />
             </pattern>
             <clipPath id={printableClipId}>
@@ -493,8 +487,8 @@ function SubstrateView({
               y={substrateRect.y}
               width={substrateRect.width}
               height={substrateRect.height}
-              fill="#fbf6e7"
-              stroke="#d9a85b"
+              fill={palette.paper.fill}
+              stroke={palette.paper.stroke}
               strokeWidth={1.2}
               strokeDasharray={substrate.kind === "roll" ? "4 2" : undefined}
             />
@@ -715,7 +709,7 @@ function PrinterMouth({
         width={26 * f}
         height={2.2 * f}
         rx={f}
-        fill="#0891b2"
+        fill="#dd7955"
         opacity={0.85}
       />
       {/* placa identificatoria */}
@@ -771,7 +765,7 @@ function PrinterMouth({
         cx={panelX + panelW - 6 * f}
         cy={23 * f}
         r={2.2 * f}
-        fill="#0891b2"
+        fill="#dd7955"
       />
       {/* ventilaciones */}
       <g stroke="#c9c5be" strokeWidth={f} strokeLinecap="round">
@@ -858,7 +852,7 @@ function PrintStartMarker({
         y1={substrateRect.y}
         x2={centerX}
         y2={printableTopY}
-        stroke="#0891b2"
+        stroke="#dd7955"
         strokeWidth={1.2}
         strokeDasharray="4 3"
       />
@@ -867,11 +861,11 @@ function PrintStartMarker({
         y1={printableTopY}
         x2={substrateRect.x + substrateRect.width}
         y2={printableTopY}
-        stroke="#0891b2"
+        stroke="#dd7955"
         strokeWidth={1}
         opacity={0.65}
       />
-      <circle cx={centerX} cy={printableTopY} r={3.5} fill="#0891b2" />
+      <circle cx={centerX} cy={printableTopY} r={3.5} fill="#dd7955" />
       {showLabel ? (
         <text
           x={substrateRect.x + substrateRect.width - 5}
@@ -879,7 +873,7 @@ function PrintStartMarker({
           textAnchor="end"
           fontSize={9.5}
           fontFamily="var(--font-mono, monospace)"
-          fill="#0891b2"
+          fill="#dd7955"
         >
           inicio de impresión
         </text>
@@ -908,32 +902,30 @@ function DimensionLabels({
   /** Con la boca de impresora visible, el ancho ya lo dice la ranura. */
   hideWidthLabel?: boolean;
 }) {
+  const topY = padYPx - 8;
+  const leftX = padXPx - 8;
   return (
-    <>
-      {!hideWidthLabel ? (
-        <text
-          x={padXPx + widthPx / 2}
-          y={Math.max(13, padYPx - 12)}
-          textAnchor="middle"
-          fontSize={11}
-          fill="#4b5563"
-          fontFamily="monospace"
-        >
+    <g fill={palette.dimension} fontFamily="monospace" fontSize={10}>
+      <g stroke={palette.dimension} strokeWidth={0.6} fill="none" aria-hidden="true">
+        {!hideWidthLabel && (
+          <path d={`M ${padXPx} ${topY - 3} v 6 M ${padXPx} ${topY} h ${widthPx} M ${padXPx + widthPx} ${topY - 3} v 6`} />
+        )}
+        <path d={`M ${leftX - 3} ${padYPx} h 6 M ${leftX} ${padYPx} v ${heightPx} M ${leftX - 3} ${padYPx + heightPx} h 6`} />
+      </g>
+      {!hideWidthLabel && (
+        <text x={padXPx + widthPx / 2} y={Math.max(11, topY - 6)} textAnchor="middle">
           {formatMm(widthMm)}
         </text>
-      ) : null}
+      )}
       <text
-        x={Math.max(13, padXPx - 14)}
+        x={Math.max(11, leftX - 7)}
         y={padYPx + heightPx / 2}
         textAnchor="middle"
-        fontSize={11}
-        fill="#4b5563"
-        fontFamily="monospace"
-        transform={`rotate(-90, ${Math.max(13, padXPx - 14)}, ${padYPx + heightPx / 2})`}
+        transform={`rotate(-90, ${Math.max(11, leftX - 7)}, ${padYPx + heightPx / 2})`}
       >
         {formatMm(heightMm)}
       </text>
-    </>
+    </g>
   );
 }
 
@@ -1487,7 +1479,7 @@ function PrintableAreaLayer({
       height={rect.height}
       fill="#ffffff"
       fillOpacity={0.18}
-      stroke="#9fd6b1"
+      stroke={palette.usable.stroke}
       strokeWidth={0.9}
       strokeDasharray="4 3"
     />
@@ -1713,9 +1705,9 @@ function CostingOverlay({
             bounds.heightMm,
           ),
         )}
-        fill="#fff1c8"
+        fill={palette.costing.fill}
         fillOpacity={0.62}
-        stroke="#e7be58"
+        stroke={palette.costing.stroke}
         strokeWidth={0.8}
       />
       {costingPreview.wasteAreaMm2 && costingPreview.wasteAreaMm2 > 0 ? (
@@ -1729,9 +1721,9 @@ function CostingOverlay({
               bounds.heightMm,
             ),
           )}
-          fill="#fef3ed"
+          fill={palette.waste.fill}
           fillOpacity={0.3}
-          stroke="#f4b9a0"
+          stroke={palette.waste.stroke}
           strokeWidth={0.5}
           strokeDasharray="3 3"
         />
@@ -1744,9 +1736,9 @@ function CostingRect({ rect }: { rect: ReturnType<typeof mapDisplayRect> }) {
   return (
     <rect
       {...svgRect(rect)}
-      fill="#fff1c8"
+      fill={palette.costing.fill}
       fillOpacity={0.4}
-      stroke="#e7be58"
+      stroke={palette.costing.stroke}
       strokeWidth={0.5}
     />
   );

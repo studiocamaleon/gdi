@@ -295,6 +295,7 @@ export function FeriadosSheet({
 
   return (
     <FormSheet
+      className={f.sheet}
       title="Calendario del taller"
       description="Feriados, cierres y ajustes que alimentan la planificación y las fechas de entrega."
       onClose={onClose}
@@ -305,155 +306,160 @@ export function FeriadosSheet({
       }
     >
       <div className={cx("sheet-body est-form")}>
-        <div className={cx("est-section-head")}>
-          <span className={cx("num")}>01</span>
-          <div>
-            <div className={cx("ttl")}>Margen para prometer</div>
-            <div className={cx("sub")}>
-              Colchón sobre la fecha que el sistema estima en el cotizador.
-            </div>
-          </div>
-        </div>
-        {margen !== null ? (
-          <Stepper
-            label="Días hábiles de margen"
-            value={margen}
-            min={0}
-            step={1}
-            onChange={cambiarMargen}
-            help='Se suman a la ETA cruda al sugerir la fecha prometible ("terminaría ≈ mar 21 · prometé desde jue 23"). 0 = sin margen.'
-          />
-        ) : (
-          <div className={cx("feriados-empty")}>Cargando…</div>
-        )}
-
-        <div className={cx("est-section-head")} style={{ marginTop: 18 }}>
-          <span className={cx("num")}>02</span>
-          <div>
-            <div className={cx("ttl")}>Tiempo entre pasos</div>
-            <div className={cx("sub")}>
-              Lo que cuesta llevar el material a la próxima estación y dejarlo
-              listo. Cada estación puede declarar el suyo; esto es el valor por
-              defecto.
-            </div>
-          </div>
-        </div>
-        {entrePasos !== null ? (
-          <Stepper
-            label="Minutos de traslado"
-            value={entrePasos}
-            min={0}
-            step={5}
-            onChange={cambiarEntrePasos}
-            help="Nadie termina 9:35 y arranca otro paso 9:35. Lo hace el operario, así que ocupa un puesto de la estación destino — pero no su máquina. 0 = sin colchón."
-          />
-        ) : (
-          <div className={cx("feriados-empty")}>Cargando…</div>
-        )}
-
-        <div className={cx("est-section-head")} style={{ marginTop: 18 }}>
-          <span className={cx("num")}>03</span>
-          <div>
-            <div className={cx("ttl")}>Corte de jornada</div>
-            <div className={cx("sub")}>
-              Hora a la que los cronómetros de pasos que quedaron corriendo se
-              cierran solos (el tiempo no sigue sumando de noche ni el fin de
-              semana).
-            </div>
-          </div>
-        </div>
-        {corte !== null ? (
-          <div className={cx("feriados-add")} style={{ maxWidth: 220 }}>
-            <Input
-              className={cx("est-input")}
-              type="time"
-              value={corte}
-              onChange={(event) => cambiarCorte(event.target.value)}
-              aria-label="Hora de corte de jornada"
-            />
-          </div>
-        ) : (
-          <div className={cx("feriados-empty")}>Cargando…</div>
-        )}
-
-        <div className={cx("est-section-head")} style={{ marginTop: 18 }}>
-          <span className={cx("num")}>04</span>
-          <div>
-            <div className={cx("ttl")}>Feriados y cierres</div>
-            <div className={cx("sub")}>
-              Días en que el taller no trabaja: no aportan capacidad en ninguna
-              proyección.
-            </div>
-          </div>
-        </div>
-        <div className={cx("feriados-add")}>
-          <Input
-            ref={fechaRef}
-            className={cx("est-input")}
-            type="date"
-            value={fecha}
-            onClick={() => fechaRef.current?.showPicker?.()}
-            onChange={(event) => setFecha(event.target.value)}
-            aria-label="Fecha no laborable"
-          />
-          <Input
-            aria-label="Motivo del cierre"
-            className={cx("est-input")}
-            placeholder="Motivo (feriado, vacaciones…)"
-            value={descripcion}
-            maxLength={120}
-            onChange={(event) => setDescripcion(event.target.value)}
-          />
-          <ActionButton
-            variant="primary"
-            type="button"
-            isDisabled={!fecha || guardando}
-            onPress={() => void agregar()}
-          >
-            {guardando ? "Agregando…" : "Agregar"}
-          </ActionButton>
-        </div>
-        {error ? (
-          <p className={f.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        {dias === null ? (
-          <div className={cx("feriados-empty")}>Cargando…</div>
-        ) : dias.length === 0 ? (
-          <div className={cx("feriados-empty")}>
-            Sin fechas cargadas: el taller opera según el calendario semanal de
-            cada estación.
-          </div>
-        ) : (
-          <div className={cx("feriados-list")}>
-            {dias.map((dia) => (
-              <div
-                key={dia.id}
-                className={cx(
-                  `feriados-row ${dia.fecha < hoyClave ? "pasado" : ""}`,
-                )}
-              >
-                <span className={cx("fecha")}>
-                  {etiquetaFeriado(dia.fecha)}
-                </span>
-                <span className={cx("motivo")}>
-                  {dia.descripcion || "Sin motivo"}
-                </span>
-                <ActionButton
-                  variant="outline"
-                  type="button"
-                  className={cx("quitar")}
-                  onPress={() => void quitar(dia)}
-                  aria-label={`Quitar ${dia.fecha}`}
-                >
-                  <TrashIcon />
-                </ActionButton>
+        <section className={cx("est-section")}>
+          <div className={cx("est-section-head")}>
+            <span className={cx("num")}>01</span>
+            <div>
+              <div className={cx("ttl")}>Margen para prometer</div>
+              <div className={cx("sub")}>
+                Colchón sobre la fecha que el sistema estima en el cotizador.
               </div>
-            ))}
+            </div>
           </div>
-        )}
+          {margen !== null ? (
+            <Stepper
+              label="Días hábiles de margen"
+              value={margen}
+              min={0}
+              step={1}
+              onChange={cambiarMargen}
+              help='Se suman a la ETA cruda al sugerir la fecha prometible ("terminaría ≈ mar 21 · prometé desde jue 23"). 0 = sin margen.'
+            />
+          ) : (
+            <div className={cx("feriados-empty")}>Cargando…</div>
+          )}
+        </section>
+        <section className={cx("est-section")}>
+          <div className={cx("est-section-head")}>
+            <span className={cx("num")}>02</span>
+            <div>
+              <div className={cx("ttl")}>Tiempo entre pasos</div>
+              <div className={cx("sub")}>
+                Lo que cuesta llevar el material a la próxima estación y dejarlo
+                listo. Cada estación puede declarar el suyo; esto es el valor por
+                defecto.
+              </div>
+            </div>
+          </div>
+          {entrePasos !== null ? (
+            <Stepper
+              label="Minutos de traslado"
+              value={entrePasos}
+              min={0}
+              step={5}
+              onChange={cambiarEntrePasos}
+              help="Nadie termina 9:35 y arranca otro paso 9:35. Lo hace el operario, así que ocupa un puesto de la estación destino — pero no su máquina. 0 = sin colchón."
+            />
+          ) : (
+            <div className={cx("feriados-empty")}>Cargando…</div>
+          )}
+        </section>
+        <section className={cx("est-section")}>
+          <div className={cx("est-section-head")}>
+            <span className={cx("num")}>03</span>
+            <div>
+              <div className={cx("ttl")}>Corte de jornada</div>
+              <div className={cx("sub")}>
+                Hora a la que los cronómetros de pasos que quedaron corriendo se
+                cierran solos (el tiempo no sigue sumando de noche ni el fin de
+                semana).
+              </div>
+            </div>
+          </div>
+          {corte !== null ? (
+            <div className={cx("feriados-add")} style={{ maxWidth: 220 }}>
+              <Input
+                className={cx("est-input")}
+                type="time"
+                value={corte}
+                onChange={(event) => cambiarCorte(event.target.value)}
+                aria-label="Hora de corte de jornada"
+              />
+            </div>
+          ) : (
+            <div className={cx("feriados-empty")}>Cargando…</div>
+          )}
+        </section>
+        <section className={cx("est-section")}>
+          <div className={cx("est-section-head")}>
+            <span className={cx("num")}>04</span>
+            <div>
+              <div className={cx("ttl")}>Feriados y cierres</div>
+              <div className={cx("sub")}>
+                Días en que el taller no trabaja: no aportan capacidad en ninguna
+                proyección.
+              </div>
+            </div>
+          </div>
+          <div className={cx("feriados-add")}>
+            <Input
+              ref={fechaRef}
+              className={cx("est-input")}
+              type="date"
+              value={fecha}
+              onClick={() => fechaRef.current?.showPicker?.()}
+              onChange={(event) => setFecha(event.target.value)}
+              aria-label="Fecha no laborable"
+            />
+            <Input
+              aria-label="Motivo del cierre"
+              className={cx("est-input")}
+              placeholder="Motivo (feriado, vacaciones…)"
+              value={descripcion}
+              maxLength={120}
+              onChange={(event) => setDescripcion(event.target.value)}
+            />
+            <ActionButton
+              variant="primary"
+              type="button"
+              isDisabled={!fecha || guardando}
+              onPress={() => void agregar()}
+            >
+              {guardando ? "Agregando…" : "Agregar"}
+            </ActionButton>
+          </div>
+          {error ? (
+            <p className={f.error} role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {dias === null ? (
+            <div className={cx("feriados-empty")}>Cargando…</div>
+          ) : dias.length === 0 ? (
+            <div className={cx("feriados-empty")}>
+              Sin fechas cargadas: el taller opera según el calendario semanal de
+              cada estación.
+            </div>
+          ) : (
+            <div className={cx("feriados-list")}>
+              {dias.map((dia) => (
+                <div
+                  key={dia.id}
+                  className={cx(
+                    `feriados-row ${dia.fecha < hoyClave ? "pasado" : ""}`,
+                  )}
+                >
+                  <span className={cx("fecha")}>
+                    {etiquetaFeriado(dia.fecha)}
+                  </span>
+                  <span className={cx("motivo")}>
+                    {dia.descripcion || "Sin motivo"}
+                  </span>
+                  <ActionButton
+                    variant="outline"
+                    type="button"
+                    className={cx("quitar")}
+                    onPress={() => void quitar(dia)}
+                    aria-label={`Quitar ${dia.fecha}`}
+                  >
+                    <TrashIcon />
+                  </ActionButton>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </FormSheet>
   );
@@ -611,6 +617,7 @@ export function StationForm({
 
   return (
     <FormSheet
+      className={f.sheet}
       title={initial ? `Configurar ${initial.nombre}` : "Nueva estación"}
       description={`${etapa.nm} · ${etapa.desc}`}
       onClose={onCancel}
@@ -848,7 +855,6 @@ export function StationForm({
               seleccionados={draft.maquinaIds.map((id) => ({
                 id,
                 nombre: nombreMaquina(id),
-                detalle: maquinas.find((maquina) => maquina.id === id)?.codigo,
               }))}
               vacio="Sin máquinas asignadas. Esta estación recibe sólo los pasos sin máquina que elegiste."
               onQuitar={(id) => toggleLista("maquinaIds", id)}

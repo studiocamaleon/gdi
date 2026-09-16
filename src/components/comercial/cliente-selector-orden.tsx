@@ -3,9 +3,8 @@
 import { useMemo } from "react";
 import { Autocomplete, SearchField, ListBox } from "@heroui/react";
 import type { ClienteDetalle } from "@/lib/clientes";
-import theme from "@/components/design-system/theme.module.css";
 import fieldFocus from "@/components/design-system/field-focus.module.css";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 
 type ClienteOpcion = Pick<
   ClienteDetalle,
@@ -32,6 +31,7 @@ export function ClienteLista({
   onOpenChange?: (open: boolean) => void;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const searchText = useMemo(() => {
     const byName = new Map<string, string>();
     for (const option of options) {
@@ -77,7 +77,7 @@ export function ClienteLista({
         </Autocomplete.Value>
         <Autocomplete.Indicator />
       </Autocomplete.Trigger>
-      <Autocomplete.Popover {...scope} className={theme.theme}>
+      <Autocomplete.Popover {...scope} className={themeClass}>
         <Autocomplete.Filter
           onInputChange={onInputChange}
           filter={(text, query) =>

@@ -61,4 +61,4 @@ El modal reutiliza su solicitud si React repite el efecto de apertura; al cerrar
 
 ## UI y mantenimiento
 
-El modal comparte primitivas Shadcn, tema workspace y densidad de tablas con Colas. Su distribución y scroll viven en `simular-nesting-cola.module.css`; no incorpora estilos globales ni recupera los estilos de simuladores retirados. El dibujo es horizontal y proporcional, con encabezado y cierre accesibles mientras se recorre el contenido.
+El modal adopta la marca clara de Grafo junto con Colas (15/09): papel cálido, métricas técnicas, primer indicador grafito y selección naranja. Combina el diálogo y controles Shadcn existentes con `ActionButton` de HeroUI, propagando el tema a sus portales. Su distribución y scroll viven en `simular-nesting-cola.module.css`, sin estilos globales. El dibujo reutiliza `NestingCanvas`: conserva las posiciones, proporciones y desplazamiento del rollo, con encabezado y cierre accesibles mientras se recorre el contenido. La presentación no cambia el cálculo, la recomendación ni la descarga.

@@ -1,9 +1,7 @@
-.page {
-  composes: canvas from "../design-system/theme.module.css";
-}
 .page.page {
-  padding: 20px 24px 24px;
+  padding: 24px 24px 32px;
   background: var(--canvas-background);
+  container: production-board / inline-size;
 }
 .page.page .content {
   padding: 0;
@@ -12,63 +10,88 @@
 }
 .tabs {
   display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
+  gap: 0;
+  margin-bottom: 20px;
+  overflow: hidden;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 8px;
+  background: var(--brand-graphite);
 }
 .tab {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 40px;
-  padding: 8px 14px;
+  gap: 10px;
+  min-height: 58px;
+  min-width: 220px;
+  padding: 11px 16px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-right: 1px solid var(--brand-graphite-line);
+  box-shadow: inset 0 -2px transparent;
   background: transparent;
-  color: var(--muted-text);
+  color: var(--brand-muted-on-graphite);
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
   cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.tab:hover {
+  background: var(--brand-graphite-line);
+  color: var(--brand-on-graphite);
 }
 .tab[aria-selected="true"] {
-  color: var(--accent-soft-foreground);
-  border-bottom-color: var(--accent-soft-foreground);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--brand-graphite));
+  box-shadow: inset 0 -2px var(--accent);
 }
 .tab:focus-visible {
-  outline: 2px solid var(--accent-soft-foreground);
-  outline-offset: -2px;
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
 }
-.defaultMark {
-  font-size: 9px;
-  color: var(--muted-text);
+.tabIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 6px;
 }
+.tab[aria-selected="true"] .tabIcon {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.tabCopy { display: grid; gap: 3px; font-weight: 500; }
+.tabCopy small { font-size: 10px; font-weight: 400; opacity: .8; }
+.tabCount {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 21px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 10px / 1 var(--brand-mono);
+}
+.defaultMark { font: 9px / 1.4 var(--brand-mono); color: var(--brand-muted-on-graphite); }
 .filters {
   display: grid;
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  overflow: hidden;
+  gap: 16px;
+  margin-bottom: 24px;
 }
-.metricsRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-}
+.metricsRow { min-width: 0; }
 .metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 24px;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
   margin: 0;
 }
 .metric {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 15px 14px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
 .metric dt {
   display: flex;
@@ -76,92 +99,62 @@
   gap: 6px;
   color: var(--muted-text);
   font-size: 11px;
+  white-space: nowrap;
 }
 .metric dd {
   margin: 0;
-  font-size: 14px;
-  font-weight: 650;
+  color: var(--foreground);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: -.045em;
   font-variant-numeric: tabular-nums;
 }
-.metric[data-tone="danger"] dd {
-  color: var(--danger);
-}
-.metric[data-tone="brand"] dd {
-  color: var(--accent-soft-foreground);
-}
+.metric:first-child { background: var(--brand-graphite); border-color: var(--brand-graphite); }
+.metric:first-child dt { color: var(--brand-muted-on-graphite); }
+.metric:first-child dd { color: var(--brand-on-graphite); }
+.metric:first-child svg { color: var(--accent); }
+.metric[data-tone="danger"] dd { color: var(--danger); }
+.metric[data-tone="brand"] dd { color: var(--accent-soft-foreground); }
 .controls {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
-.search {
-  flex: 1 1 260px;
-  min-width: 180px;
-}
-.select {
-  flex: 0 1 230px;
-  min-width: 180px;
-}
-.summary {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--muted-text);
-  white-space: nowrap;
-}
+.search { flex: 1 1 260px; min-width: 180px; }
+.select { flex: 0 1 230px; min-width: 180px; }
+.summary { display: block; margin-top: 8px; font: 10px / 1.5 var(--brand-mono); color: var(--muted-text); }
 .kanbanBoard {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 1fr);
-  gap: 12px;
+  grid-auto-columns: minmax(280px, 1fr);
+  gap: 14px;
   align-items: start;
   overflow-x: auto;
   padding-bottom: 12px;
 }
-.waitReason {
-  margin-top: 4px;
-  color: var(--muted-text);
-  font-size: 11px;
+.waitReason { margin-top: 4px; color: var(--muted-text); font-size: 11px; }
+.assignment { display: grid; gap: 4px; max-height: 144px; overflow-y: auto; padding-block: 8px; font-size: 12px; color: var(--muted-text); }
+.assignmentConflict { color: var(--danger); }
+@container production-board (max-width: 1150px) {
+  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .metric { flex-direction: row; align-items: center; justify-content: space-between; }
+  .metric dd { font-size: 24px; }
 }
-@media (max-width: 1199px) {
-  .page.page {
-    padding: 20px;
-  }
+@media (max-width: 1199px) { .page.page { padding: 20px; } }
+@media (max-width: 639px) { .page.page { padding: 16px; } }
+@container production-board (max-width: 600px) {
+  .tab { flex: 1; min-width: 0; padding: 10px; gap: 7px; }
+  .defaultMark { display: none; }
+  .tabCount { margin-left: auto; }
+  .search, .select { flex: 1 1 100%; min-width: 0; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .metric { padding: 12px; }
+  .controls { padding: 12px; }
 }
-@media (max-width: 639px) {
-  .page.page {
-    padding: 16px;
-  }
-  .search,
-  .select {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-  .metrics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
-    gap: 8px 20px;
-  }
-  .metric dd {
-    margin-left: auto;
-  }
-  .metricsRow,
-  .controls {
-    padding: 12px;
-  }
-}
-
-.assignment {
-  display: grid;
-  gap: 4px;
-  max-height: 144px;
-  overflow-y: auto;
-  padding-block: 8px;
-  font-size: 12px;
-  color: var(--muted-text);
-}
-.assignmentConflict {
-  color: var(--danger);
-}
+@media (prefers-reduced-motion: reduce) { .tab { transition: none; } }

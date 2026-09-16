@@ -1,7 +1,7 @@
 "use client";
 import styles from "../maquinaria.module.css";
 import { useId } from "react";
-import { Info } from "lucide-react";
+import { Info, GaugeIcon, UserRoundIcon, CogIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card } from "@heroui/react";
 import {
@@ -26,7 +26,9 @@ export function OperacionMaquinaEditor({
   return (
     <Card className={styles.card}>
       <Card.Header>
-        <Card.Title>Operación de máquina</Card.Title>
+        <Card.Title>
+          <GaugeIcon aria-hidden="true" /> Operación de máquina
+        </Card.Title>
         <Card.Description>
           Definí si el equipo puede atender otro trabajo mientras esta máquina
           está funcionando.
@@ -41,8 +43,12 @@ export function OperacionMaquinaEditor({
               aria-describedby={`${id}-descripcion`}
               value={modo ?? ""}
               options={[
-                { value: "con_operario", label: "Con operario", icon: null },
-                { value: "autonoma", label: "Autónoma", icon: null },
+                {
+                  value: "con_operario",
+                  label: "Con operario",
+                  icon: <UserRoundIcon />,
+                },
+                { value: "autonoma", label: "Autónoma", icon: <CogIcon /> },
               ]}
               onChange={(value) => {
                 const siguiente = leerModoOperacionMaquina(value);
@@ -64,7 +70,7 @@ export function OperacionMaquinaEditor({
                   : "Elegí cómo funciona esta máquina. Mientras esté sin confirmar, la planificación reserva al equipo durante toda la operación y muestra una estimación orientativa."}
             </FieldDescription>
           </Field>
-          <Alert>
+          <Alert className={styles.configurationAlert}>
             <Info />
             <AlertTitle>Se aplica al trabajo pendiente</AlertTitle>
             <AlertDescription>

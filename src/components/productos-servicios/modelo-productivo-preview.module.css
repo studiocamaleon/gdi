@@ -406,3 +406,77 @@
     width: 220px;
   }
 }
+
+/* La ficha comparte el lenguaje del editor de flujos sin alterar su cámara. */
+:global([data-producto-ficha]) .preview {
+  border-radius: 8px;
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .toolbar {
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .zoomControls {
+  border-radius: 6px;
+  background: var(--canvas-background);
+}
+:global([data-producto-ficha]) .viewport {
+  background-color: var(--canvas-background);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--foreground) 14%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: var(--preview-grid-size, 28px) var(--preview-grid-size, 28px);
+  background-position: var(--preview-grid-x, 0) var(--preview-grid-y, 0);
+}
+:global([data-producto-ficha]) .column {
+  align-self: center;
+  padding: 42px 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+:global([data-producto-ficha]) .column[data-parallel="true"] {
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .column > header {
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 32px;
+  padding: 8px 10px;
+  border-radius: 7px 7px 0 0;
+  background: var(--brand-graphite);
+}
+:global([data-producto-ficha]) .column > header > span {
+  color: var(--brand-muted-on-graphite);
+  font-size: 9px;
+  font-weight: 500;
+}
+:global([data-producto-ficha]) .column > header small {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--brand-graphite));
+  border-radius: 4px;
+}
+:global([data-producto-ficha]) .node {
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .node:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .nodeIcon {
+  border-radius: 5px;
+  background: var(--canvas-background);
+}
+:global([data-producto-ficha]) .topology {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  border-color: var(--border);
+}
+:global([data-producto-ficha]) .empty {
+  background: var(--canvas-background);
+  border-radius: 8px;
+}

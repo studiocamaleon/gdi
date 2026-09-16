@@ -28,6 +28,22 @@ No repetir hexadecimales en vistas. Las excepciones de geometría van en un CSS
 Module pequeño, con un propósito concreto. Preferir clases semánticas como
 `bg-surface`, `text-muted-foreground` y `border-border`.
 
+## Identidad de Grafo · Panel general único (15/09)
+
+El rediseño aprobado del Panel general adopta la identidad de la web mediante
+`design-system/brand-theme.module.css`, que compone el tema base. Papel cálido
+`#f3f2ee`, superficie `#fbfaf7`, grafito `#101214`, naranja `#ff7546`, Geist y
+Geist Mono. El primario de esta superficie usa texto grafito y radio de 7 px;
+se resuelve con tokens de `ActionButton`, sin duplicar la primitiva.
+
+Aplicar este tema explícitamente al Panel general de todos los roles y sus
+propios portales. Las otras pantallas del sistema mantienen su tema anterior.
+Se retiraron las variantes del Panel por rol, el selector y el botón Actualizar;
+las consultas conservan los permisos efectivos y el refresco automático. La geometría del panel
+vive en su CSS Module: resumen grafito unificado, pestañas T2 con grupos reales
+de entrega, alertas/estado de planta y actividad a ancho completo. Detalle y
+validación en [Panel general · Administrador](panel-general-administrador.md).
+
 ## Responsabilidades
 
 | Capa | Responsabilidad y ubicación del piloto |
@@ -246,21 +262,53 @@ productos. No cambia las reglas comerciales.
   vuelven a validar esa condición al incorporar productos, incluso si una
   cotización termina después de salir de edición. En una orden nueva se
   conservan los atajos; C requiere que el módulo de copiado esté activo.
-- El sidebar compartido conserva su diseño original en todas las rutas, incluida
-  Crear orden: marca, ancho de 262 px, buscador, grupos, iconos y permisos de
-  `navPara`. Sólo comparte el fondo claro de Crear propuesta (`#f8f9fc`),
-  definido una vez en `theme.module.css` mediante `--canvas-background`.
-  El pie del menú es transparente para mantener ese mismo fondo.
-- `DashboardTopbar` adopta la cabecera de la imagen sólo en la ficha OT y Crear
-  orden. El buscador superior abre una búsqueda de **secciones** (también con ⌘/Ctrl K),
-  no un buscador remoto de registros. Perfil y notificaciones usan sus flujos
-  actuales; el cambio de apariencia es local a la sesión del piloto.
+- El sidebar compartido conserva el ancho de 262 px (66 px colapsado), buscador,
+  grupos, rutas y permisos de `navPara`. El pedido del 15/09 de alinearlo con la
+  web reemplaza su presentación anterior: ver «Identidad del sidebar» debajo.
+- Corrección aprobada el 15/09/2026: `DashboardTopbar` usa en todas las rutas
+  la barra original de Tablero de producción (52 px, colapso de menú,
+  notificaciones y cierre de sesión). Se retiró la variante del piloto que
+  aparecía en Panel general, Crear orden y ficha OT, junto con su búsqueda y
+  cambio de apariencia locales. Perfil, empresa y búsqueda conservan sus
+  accesos en el sidebar. El ajuste posterior del 15/09 aplica a la barra el
+  fondo claro `--canvas-background` de `brand-theme.module.css`, con apariencia
+  clara explícita, texto e iconos oscuros y hover suave. El sidebar sigue grafito.
+  Cerrar sesión usa un botón secundario compacto con borde, flecha diagonal de Grafo y
+  acento cálido; conserva la acción existente y muestra su estado de carga.
+  Se mantiene la regla de ocultarla al imprimir facturas.
 
 Adaptaciones funcionales: “Desde un presupuesto” abre el listado
 existente, donde se selecciona y convierte un presupuesto. Guardar y emitir
 conservan sus condiciones de habilitación. Los detalles técnicos y sheets
 operativos siguen funcionando; H1/H2 permanecen como muestras pendientes de
 selección. No se agregaron estilos a `globals.css`.
+
+### Identidad del sidebar · 15/09/2026
+
+Primer paso pedido por el usuario para alinear la app con la web comercial.
+`GrafoprintBrand` reproduce sus tres nodos, proporciones, Geist y punto naranja;
+la variante de carga anterior mantiene su animación independiente.
+`navigation-theme.module.css` concentra grafito `#101214`, papel `#f3f2ee`,
+naranja `#ff7546`, superficies, separadores y radio de 7 px de la navegación.
+El alcance de estos tokens es exclusivamente el sidebar: no modifica el tema
+de los formularios, páginas HeroUI, perfil ni centro de notificaciones.
+
+El menú usa secciones en Geist Mono, botones compactos, submenús con una guía
+vertical, selección cálida y foco de teclado naranja. El grupo de la ruta
+actual conserva su señal al colapsar. El plan y los días siguen proviniendo de
+la suscripción real; se mantienen el perfil, el cambio de empresa, los permisos
+y los alias del buscador. En móvil hay cierre explícito y controles más amplios;
+el listado desplaza su contenido y mantiene disponibles sus accesos inferiores.
+Las transiciones respetan la preferencia de movimiento reducido.
+
+Verificado en Chrome a 1920 y 390 px: selección, búsqueda por nombre y alias de
+configuración, vacío, Escape, colapso y apertura de grupos, perfil y notificaciones,
+cierre móvil explícito y al navegar. La barra y el sidebar comparten el mismo
+fondo; el perfil y las notificaciones conservan su superficie clara. TypeScript,
+lint focalizado, las 12 pruebas de navegación/permisos y `css:guard` pasan.
+La advertencia de hidratación del texto relativo «Actualizado ahora»/«hace 16 s»
+observada durante esta revisión se corrigió en el posterior rediseño del Panel
+del 15/09: el reloj inicial parte de la fecha de generación del servidor.
 
 ## Catálogo y validación
 
@@ -330,17 +378,19 @@ con consulta “vinilo” en el sheet; en `/dev`, filtro y ordenamiento con tota
 completo conservado, expansión del detalle y tema oscuro a 390 px sin desborde
 horizontal de la página. No se guardaron ni emitieron órdenes para estas pruebas.
 
-## Panel general · Administrador · 13/09/2026
+## Panel general · Administrador · 13/09, actualizado el 15/09/2026
 
-Segunda superficie migrada: sólo la vista propia del Administrador. Reutiliza el
-marco de OT y los botones C/S2, suma Card de HeroUI con importación scoped y conserva
-el sidebar original. Indicadores con iconos, Focus hoy, entregas con TanStack y
-columnas de taller/actividad. Sin Agenda en esta fase.
+Segunda superficie migrada, ahora con el diseño de Administrador para todos los
+roles. La revisión del 15/09 usa el tema de marca y el marco global de Grafo. Sustituye
+Focus hoy por accesos compactos y la tabla de entregas por filas con pestañas
+Hoy/Atrasadas/Próximas. La columna derecha reúne atención y estado de planta;
+la actividad pasa al ancho inferior. Sin Agenda en esta fase.
 
 La composición vive en `panel-general/panel-admin-*`; los datos se obtienen en
-servidor y la actividad pagina mediante un hook independiente. Los demás roles y
-previsualizaciones mantienen su vista. Se retiraron 30 líneas globales sin
-consumidores; las familias compartidas con Reportes/Producción permanecen.
+servidor y la actividad pagina mediante un hook independiente. Se retiraron las
+vistas por rol y su CSS Module, el selector y el botón de refresco manual. Los
+permisos y alcances de datos siguen vigentes. La retirada anterior de 30 líneas
+globales se conserva; las familias compartidas con Reportes/Producción permanecen.
 Ver [alcance, fuentes y contrato de actividad](panel-general-administrador.md).
 
 ## Listado de Órdenes de trabajo · 13/09/2026
@@ -822,16 +872,39 @@ durante la espera y se retira al llegar. TypeScript, ESLint y CSS guard pasan.
 
 ### Indicadores de carga unificados · 14/09/2026
 
-`ModulePageSkeleton` reemplaza «Cargando módulo», «Cargando detalle» y sus bloques
-grises por `GrafoprintLoadingIndicator`, compartido con la navegación. Reportes
-también utiliza este fallback. Durante una navegación pendiente se oculta el
-indicador interior para que no se superponga con el aviso global.
+Actualización 15/09: `ModulePageSkeleton` y `NavigationLoading` usan el tema de
+marca claro, con el mismo `--canvas-background` (#f3f2ee) de las vistas migradas.
+El fallback deja de mostrar el fondo frío anterior al completar la carga.
+Se conservan el retardo de aparición y la transparencia del aviso global.
+
+El indicador de página se reduce de 120 a 56 px y elimina el texto visible,
+halos, resplandor y zoom. Usa el isologo de tres nodos de la web, con conexiones
+quietas y un pulso naranja secuencial de 2,4 segundos. El texto permanece oculto
+visualmente para lectores de pantalla. Con movimiento reducido, el símbolo es
+estático y conserva un nodo naranja. Los indicadores de botones mantienen sus
+16 px y heredan el color del control. La geometría compartida también alinea el
+símbolo de acceso/registro con el de la web.
+
+`ModulePageSkeleton` reemplaza los bloques grises y registra su montaje en
+`NavigationFeedbackProvider`. El proveedor mantiene un único indicador fijo en
+el centro de la ventana hasta que finalizan tanto la navegación como todos los
+fallbacks de módulo. Cambiar la URL no implica que los datos ya estén listos.
+El registro se hace antes de pintar, con limpieza al desmontarse: evita que el
+aviso global sea reemplazado por otro logo centrado dentro del contenido. Esto
+también cubre acceso directo y fallbacks simultáneos. Reportes utiliza el mismo
+fallback; fuera del proveedor, el laboratorio conserva su indicador local.
+
+Verificación 15/09: cuatro pruebas de coordinación de estados y una transición
+controlada en navegador con Suspense real. El cambio de URL durante la espera
+mantiene un solo logo de 56 px en la misma posición; tampoco se desplaza al
+cambiar el ancho del menú, y desaparece cuando el módulo termina. TypeScript y
+ESLint focalizado pasan.
 
 `GdiSpinner` y `Spinner` conservan sus interfaces y ahora muestran el mismo
 isologo pulsante en formato compacto. Se reemplazan los spinners circulares y
 los iconos de actualización que giraban en los controles del sistema. El formato
-compacto hereda el color del botón; la carga de página conserva los halos y los
-acentos naranjas. Las condiciones, consultas y acciones siguen siendo las mismas.
+compacto hereda el color del botón; la carga de página usa el acento naranja en
+los nodos. Las condiciones, consultas y acciones siguen siendo las mismas.
 Los estilos de giro sin consumidores se retiran de los módulos y de `globals.css`.
 
 Verificado el fallback real del Tablero, una navegación a Planificación con un
@@ -1107,3 +1180,943 @@ La ficha usa el ancho y fondo de los listados de Grafo, navegación HeroUI con e
 Los estilos quedan en módulos CSS. Se quitaron del módulo de la ficha las reglas antiguas sin consumidores y las dependencias de clases globales para los formularios principales; las clases compartidas por otros editores permanecen. No hay cambios de API, fórmulas, reglas de precio ni publicación.
 
 Verificación: TypeScript, ESLint, CSS Guard y pruebas existentes de geometrías, pricing compuesto, SelectField y aislamiento HeroUI. Se revisaron Identidad y Producción con datos reales y los diálogos de rutas; Precio y el modo de solo lectura también se comprobaron con una muestra temporal, luego retirada. La comprobación completa con datos reales quedó limitada por la pérdida de conexión de la API con PostgreSQL local durante la revisión.
+
+
+## Crear orden · Identidad de marca clara · 15/09/2026
+
+La dirección final mantiene el sidebar oscuro y usa superficies claras en el
+módulo, incluido su resumen. `PropuestaFicha` activa `DesignSystemProvider`
+con `theme="brand" appearance="light"`. El tema de marca existente sigue siendo
+la fuente de colores; `brand-workspace-theme.module.css` adapta sus tokens a los
+controles anteriores que conviven con HeroUI. Los portales resuelven la variante
+desde el contexto; sin esa selección explícita conservan el tema previo.
+
+Se actualizan cabecera, Datos, resumen financiero, tabla y detalle de productos,
+catálogo y configuradores, copiado, cargos/descuento/cupón, Pagos, Costos y vacíos.
+El título usa peso 500 y punto naranja; las estimaciones se distinguen de la fecha
+editable; los avatares comparten iniciales. La tabla distribuye sus datos en fichas
+cuando hay menos de 850 px de contenido, conservando ordenamiento, semántica,
+importes y acciones. No se modifican cálculos, permisos, endpoints ni persistencia.
+
+Validación: 79 pruebas de cálculos, entregas, acciones y contexto de tema;
+TypeScript, ESLint focal y CSS guard. Revisión visual a 1920, 1366 y 390 px con
+catálogo real y un producto incorporado sólo a memoria; formularios financieros
+y copiado inspeccionados sin guardar ni emitir operaciones. Las geometrías
+especializadas se conservan y no se probaron todas sus combinaciones.
+Ver `docs/crear-orden-rediseno-plan.md`.
+
+Comprobación adicional: selector compartido (`SelectField`) e aislamiento de CSS HeroUI aprobados. Cartel Backlight conserva el error de medidas incompletas y bloquea su incorporación hasta completar los datos.
+
+
+### Refinamiento de Crear orden
+
+La barra de secciones utiliza la variante óptica `tone="graphite"` de
+`NavigationTabList`; el resto del módulo permanece claro. Iconos, contadores,
+selección naranja y foco son legibles sobre el grafito de marca. Las acciones
+de Productos usan primario naranja y secundario de contorno, con tamaños
+adaptados al móvil. El estado vacío incorpora una ilustración SVG propia de
+paquete abierto, con movimiento reducido respetado. Sin nuevas dependencias
+ni cambios en los flujos de negocio.
+
+### Sheet Agregar producto · catálogo y configuración
+
+El catálogo de OT usa `producto-catalogo.module.css`, ilustraciones SVG semánticas
+por forma de cobro y cabecera de marca clara con pasos Producto/Configuración.
+Búsqueda, categorías y acciones de pie comparten `ActionButton`; se preservan
+las condiciones para agregar, agregar otro y editar. Los controles de familias
+mantienen su lógica, con tokens optativos para selección y espaciado en
+`orden-configurador.module.css`. En móvil las medidas se disponen con rótulos
+propios y la cabecera deja de ser fija. Sin cambios en `globals.css` ni en el tema
+por defecto de otros módulos o Centro de copiado. Detalle y verificación en
+`docs/crear-orden-rediseno-plan.md`, sección 13.
+
+Las ilustraciones del catálogo se asignan por **códigos comerciales estables**
+mediante `producto-catalogo-ilustracion.ts`: 39 símbolos, cobertura de las 48
+subcategorías y alternativa automática para categorías nuevas. Producto a
+medida conserva una imagen neutra según estructura/cobro; compuesto mantiene
+su indicador aunque use la imagen de una familia específica. No asociar estas
+imágenes a coincidencias del nombre, a IDs individuales ni a reglas de precio.
+
+### Detalle de un ítem de OT
+
+`NavigationTabList variant="inset"` incorpora una navegación secundaria clara con
+selección grafito e icono naranja; respeta foco, teclado y movimiento reducido.
+Se utiliza con HeroUI Tabs en `OrdenProductoDetalle`, sin cambiar la barra
+principal `tone="graphite"`. La fila reutiliza las ilustraciones comerciales.
+
+Los módulos locales del detalle, costos, componentes y brief aplican papel,
+monoespaciada y acentos de marca. Los visores técnicos conservan su contenido y
+semántica. Los diálogos ampliados y el editor de paneles usan
+`useLegacyDesignScope`; el ampliado neutraliza también `translate`, además de
+`transform`, para permanecer dentro del viewport con Tailwind 4.
+
+Verificación visual de producto simple y compuesto, escritorio y 390 px,
+acciones de edición/descuento, navegación por teclado y vistas ampliadas.
+75 pruebas aprobadas; TypeScript, ESLint y CSS guard sin errores. Más detalle
+en la sección 15 de `docs/crear-orden-rediseno-plan.md`.
+
+### OT creada: paneles y visor técnico
+
+La OT persistida activa `orden-issued.module.css` además del workspace claro.
+`OrdenSectionHeading` unifica los títulos de los paneles operativos. Cobros,
+comprobantes, archivos, costos, producción e historial conservan funciones y
+permisos; los ajustes legacy están limitados al scope de esa ficha.
+
+`NavigationTabList` adapta más de seis pestañas: iconos sobre el nombre en
+notebook y grilla de tres columnas en móvil. No cambia la navegación de creación.
+`DocumentosLiberadosOtTab` usa tokens claros de marca y estados semánticos.
+
+Nesting usa `useLegacyDesignScope` en el visor y sus selectores, con fallback al
+tema anterior fuera de la marca. `nesting-palette.ts` comparte colores explícitos
+entre SVG y leyenda, para preservar exportaciones autocontenidas. Las cotas y
+el tamaño visual no modifican la geometría ni las cantidades del resultado.
+
+Validación y límites de QA en la sección 16 de `docs/crear-orden-rediseno-plan.md`.
+
+### Listado de órdenes · marca clara
+
+`OrdenesTrabajoView` activa `DesignSystemProvider appearance="light" theme="brand"`.
+Reutiliza `ListMetric` y `list-page.module.css`: la nueva geometría de cabecera e
+indicadores es optativa mediante `data-visual="brand"`, sin cambiar la apariencia
+de Presupuestos o Campañas. Los colores provienen de los tokens de marca; no se
+agregan reglas a `globals.css`.
+
+La búsqueda y el contador de resultados quedan en una franja clara; los estados
+usan grafito, iconos, contadores y selección naranja. Los filtros aplicados se
+resumen debajo y pueden limpiarse juntos. La tabla es HTML semántico con
+encabezados y enlaces nativos por número de OT. Conserva las siete columnas,
+con desplazamiento horizontal acotado en pantallas pequeñas. Tabla es la única
+presentación: se retiraron la vista Tarjetas, su selector y sus estilos exclusivos
+por decisión del usuario.
+
+Se mantienen consultas, indicadores globales, exportación CSV, permisos,
+paginación y cálculos existentes. El estado sin coincidencias permite limpiar
+filtros; un error de carga conserva su mensaje y acción de reintento. El contexto
+de marca también llega al tooltip de avance, accesible por teclado.
+
+QA del rediseño inicial: 1920, 1366 y 390 px; búsqueda de OT 0060 dentro de
+Pendiente; limpieza de búsqueda; apertura de la OT 60 y regreso; Producción
+(2 órdenes), Entregada (sin resultados) y Atrasadas (7). CSV verificado con las
+2 órdenes de Producción y sus 8 columnas. Sin cambios en datos de órdenes.
+9 pruebas de tema/avance aprobadas; TypeScript, ESLint focal y CSS guard sin
+errores. La muestra disponible tiene 16 órdenes y una sola página: no se
+simularon datos para probar una segunda página ni fallos del servidor.
+
+### Presupuestos · listado y detalle de marca (15/09/2026)
+
+El listado y la ficha dedicada activan `DesignSystemProvider` con
+`appearance="light" theme="brand"`, también en sus portales. El listado reutiliza
+`ListMetric` y la variante de marca de `list-page.module.css`. Búsqueda y contador
+quedan sobre papel; los ocho estados se muestran en grafito, con iconos y
+contadores. Los filtros vacíos se distinguen de un catálogo sin presupuestos y
+pueden limpiarse. La tabla conserva siete columnas y agrega enlaces nativos en
+el número para teclado y apertura en otra pestaña. No hay vista de tarjetas.
+
+La ficha usa exclusivamente su CSS Module: cabecera con estado y señal de visto,
+ciclo comercial, cinco campos de contexto y la acción disponible según el estado.
+`NavigationTabList` con tono grafito y HeroUI Tabs maneja Productos, Conversión e
+Historial, incluidos teclado y paneles accesibles. Cuando hay hasta tres pestañas,
+la variante detallada mantiene esas columnas en notebook para evitar una celda
+vacía. Las navegaciones con más secciones mantienen su distribución anterior.
+
+Productos conserva cantidades, especificaciones, adicionales, descuentos y
+valores del snapshot en bloques claros. Su ilustración reutiliza el fallback de
+`ProductoCatalogoGlyph` según unidad; este snapshot no incluye la clasificación
+comercial necesaria para elegir una subcategoría específica. El resumen financiero
+permanece al costado al recorrer los paneles; en móvil pasa debajo. Se conservan
+observaciones, fidelización, seña sugerida e importes del backend. La conversión
+usa Checkbox de HeroUI y mantiene disponibilidad por aprobación y por ítem ya
+convertido. Historial presenta los eventos reales en una lista cronológica.
+
+Rechazo y devolución usan `FormDialog`, `TextArea`, `SelectField` y `ActionButton`;
+los motivos, valores enviados y condiciones por rol no cambian. Configuración
+conserva sus campos y reglas en un Drawer claro de marca, con cuerpo desplazable
+y pie fijo. Los enlaces al PDF y a la vista pública desactivan la precarga para
+que no se soliciten antes de una acción explícita del usuario.
+
+QA: listado y ficha a 1920, 1366 y 390 px, búsqueda de PRES-2026-0005, filtro sin
+resultados y limpieza, apertura desde tabla, tres pestañas, teclado, importes,
+configuración y formulario de rechazo/selector (cerrados sin guardar). Durante
+la revisión PRES-2026-0005 pasó a figurar como visto; se desactivó la precarga del
+nuevo enlace público. Conserva el estado Enviado, sus 500 unidades y el total
+$49.945. No se enviaron, aprobaron, rechazaron ni convirtieron presupuestos.
+
+13 pruebas aprobadas: permisos de aprobación, acciones por estado, conversión
+sin pendientes, referencias a varias OT, snapshot/descuentos, tema y formatos.
+TypeScript, ESLint focal y CSS guard aprobados. La muestra real tiene un solo
+presupuesto enviado; el resto de los estados se verificó con pruebas de render,
+sin crear datos reales ni probar una segunda página. La página pública y el PDF
+conservan su diseño. No se modificó `globals.css` ni el contrato de la API.
+
+## Campañas · identidad de marca clara · 15/09/2026
+
+El listado y la ficha adoptan `DesignSystemProvider appearance="light"
+theme="brand"`, igual que Órdenes y Presupuestos. El alcance incluye los
+formularios de alta, edición, hitos, equipo, vínculos y Desarrollo documental;
+el sidebar conserva su tema independiente. No se modificó `globals.css`.
+
+- Listado: título con punto naranja, encabezados monoespaciados, indicadores
+  compartidos, tabla con enlaces y estados legibles, filtros y contador de
+  resultados. Los filtros siguen aplicándose con Enter o Aplicar; se conserva
+  el límite y la consulta existentes.
+- Ficha: encabezado y acciones separados del ciclo de estado, cuatro importes
+  comerciales y seis pestañas grafito: Resumen, Órdenes, Presupuestos, Archivos,
+  Desarrollo y Actividad. Resumen es la entrada inicial y reúne avance, hitos
+  y observaciones. Actividad conserva los últimos veinte eventos y su orden.
+- Coordinación mantiene responsable, fechas y equipo en una columna lateral;
+  ahora presenta también la función de cada integrante. Materiales y
+  rentabilidad conservan sus mensajes de disponibilidad y los datos de la API.
+- Desarrollo mantiene revisiones, aprobaciones, liberación y requisitos de
+  producción. Sus tarjetas, estadísticas y formularios comparten la nueva
+  identidad. Se quitó la referencia interna «Fase 2» del encabezado.
+- El uploader conserva sus funciones y se adapta mediante selectores locales
+  de `campanas.module.css`, sin cambiar otros consumidores. No se eliminaron
+  estilos compartidos de archivos ni de progreso.
+- En notebook los cuatro indicadores siguen en una fila; en móvil pasan a dos
+  columnas. Las seis pestañas se distribuyen en dos columnas en anchos pequeños.
+  Las tablas desplazan sólo su propio contenedor y los modales conservan pie fijo.
+
+Verificación realizada en CAM-2026-0001, con dos archivos, un documento
+controlado, dos revisiones y un hito: listado, búsqueda sin resultados,
+recuperación con Enter, filtro de estado, seis pestañas y apertura/cancelación
+de formularios. Inspección visual a 1920, 1366 y 390 px. La campaña de muestra
+no tiene OTs ni presupuestos vinculados: esas pestañas se verificaron vacías.
+No se guardaron registros ni se ejecutaron transiciones, vínculos o aprobaciones.
+
+Los dieciséis controladores async de las tres vistas se compararon mediante
+el AST de TypeScript con el código previo: no cambiaron sus payloads, permisos,
+confirmaciones ni mutaciones. Se conservaron también el refresco en vivo y las
+consultas. TypeScript, ESLint focalizado y doce pruebas existentes de apariencia,
+SelectField y progreso aprobados. CSS guard conserva 34.122 líneas y 1.158
+clases globales.
+
+
+## Archivos unificados · campañas y órdenes · 15/09/2026
+
+Primera etapa de unificación de la navegación, sin migraciones ni cambios en
+las reglas de aprobación o producción:
+
+- Campañas tiene cinco pestañas: Resumen, Órdenes, Presupuestos, Archivos y
+  Actividad. Archivos incorpora **Versiones y aprobaciones** y **Adjuntos
+  generales**. Cada grupo muestra la revisión liberada con acceso directo y
+  el historial desplegable; las solicitudes pendientes lo abren inicialmente.
+- Las revisiones conservan los mismos archivos físicos. Los adjuntos que ya
+  pertenecen a revisiones se muestran en el historial y no se repiten en el
+  uploader. `actualizarAdjuntosGenerales` conserva esas referencias cuando el
+  uploader informa una subida, edición o eliminación. La API sigue siendo la
+  autoridad sobre el almacenamiento y las restricciones de borrado.
+- El panel de versiones comunica los cambios a la ficha inmediatamente y
+  pausa el refresco en vivo durante sus formularios/acciones. El selector de
+  nueva revisión ofrece adjuntos aún sin versionar y no generados; sin
+  candidatos, el envío queda deshabilitado y se indica dónde subir el archivo.
+- Las OTs eliminan la pestaña Documentos. `ArchivosOrdenTab` integra
+  `archivos/archivos-produccion-panel` encima de los adjuntos generales y por
+  producto. Los controles incumplidos conservan su aviso y se señalan también
+  en la pestaña Archivos. Si no hay controles, no se agrega una sección vacía.
+  Una consulta fallida se muestra explícitamente, sin declararla cumplida.
+- El contador de OT deduplica por archivo físico: una revisión referenciada
+  por varios controles cuenta una vez. La carga de adjuntos es independiente
+  del panel de controles para que un error no oculte requisitos productivos.
+- Se conserva el tema claro de marca y la navegación grafito. En móvil la
+  última pestaña de campaña ocupa la fila completa. Sólo CSS Modules; sin
+  cambios en `globals.css` ni aumento de sus 34.122 líneas / 1.158 clases.
+
+Verificación: TypeScript, ESLint focalizado, seis tests de conservación de
+archivos, conteo y estados de controles, y CSS guard. En navegador: campaña
+CAM-2026-0001 con V1 liberada y V2 obsoleta, historial/aprobaciones existentes,
+apertura y cancelación de formularios, y OT-2026-0060 con adjuntos generales y
+por producto. La OT revisada no tiene controles; los casos pendientes y errores
+se verificaron con fixtures de componentes. Revisión visual de campaña a
+1920 y 390 px, sin desbordamiento horizontal. No se subieron archivos ni se
+crearon, aprobaron o liberaron registros para comprobar la UI.
+
+Alcance pendiente de una etapa posterior: crear grupos/versiones en OTs sin
+campaña. El modelo `ArchivoMaestro` continúa requiriendo campaña; no se simuló
+esa capacidad ni se cambió el esquema de datos.
+
+
+## OT · consulta y edición explícitas · 15/09/2026
+
+La ficha existente abre en consulta. `puedeEditarOrden` centraliza el modo;
+no sustituye permisos del usuario ni validaciones del estado de la OT.
+
+- Archivos recibe `soloLectura`: no hay input ni zona de subida, eliminación,
+  cambio de visibilidad ni restauración desde papelera. Las descargas permanecen.
+  El uploader verifica también el modo en sus handlers, cancela subidas pendientes
+  al pasar a consulta y descarta el diálogo de borrado.
+- El tratamiento fiscal requiere edición tanto por icono como por tecla X.
+  El resumen no muestra un lápiz fuera de edición; Datos permanece consultable.
+- Pagos y Comprobantes bloquean sus accesos a cobros, facturación, notas de crédito
+  y anulación. Compras/Tercerizados permite consultar los estados sin avanzarlos.
+  Los componentes compartidos conservan su comportamiento en otros módulos.
+- Cancelar OT, emitir un borrador y entregar requieren edición. El aviso de una
+  OT recién convertida ofrece «Revisar y emitir», que entra en edición antes de
+  confirmar desde la cabecera. No se cancelan ni emiten órdenes con staging
+  comercial pendiente; deben guardarse primero.
+- Distribuir entregas requiere edición y ausencia de staging. Tras guardar su
+  propio formulario se rehidrata el detalle actualizado. Preparación de corte
+  se monta sólo al editar: su GET puede generar revisiones persistentes. Los
+  gráficos de aprovechamiento y el resto de consultas siguen disponibles.
+- Los formularios operativos se cierran al volver a consulta. La ficha permite
+  «Finalizar edición» sin cambios comerciales; no ejecuta un guardado vacío.
+  Finalizadas/entregadas permiten entrar al modo para las acciones todavía
+  admitidas, sin reabrir sus campos comerciales. Canceladas permanecen en consulta.
+
+El guardado de datos/productos sigue siendo staging atómico. Subir archivos,
+operaciones fiscales y otros formularios operativos conservan su persistencia
+propia; este cambio exige el modo Edición para iniciarlos, no introduce un
+sistema de deshacer esas operaciones desde Cancelar edición.
+
+Validación: diez tests de render sobre los seis estados de OT, uploader de
+lectura/edición y accesos a cobros de Pagos/Comprobantes; TypeScript y ESLint
+focalizado. Navegador en OT-2026-0060: archivos existentes consultables, ausencia
+de controles de modificación y tecla X sin cambios, habilitación al editar y
+bloqueo al finalizar/cancelar; cobros de Comprobantes sólo dentro de edición.
+No se modificaron archivos, importes, comprobantes ni estados durante la QA.
+CSS guard conserva la base global, sin cambios de estilo.
+
+
+## Tablero de producción · identidad de Grafo (15/09)
+
+La ruta `/produccion/tablero` aplica `DesignSystemProvider theme="brand"
+appearance="light"`. Reutiliza los tokens de marca del Panel general y de las
+OTs: papel cálido, tipografía Geist, códigos monoespaciados, grafito y naranja.
+La cabecera conserva el monitor real (reloj por segundo, conexión y última
+sincronización), con el punto naranja del título y el reloj en una placa grafito.
+Lista/Kanban mantienen selección, flechas de teclado y menú de vista predeterminada;
+se presentan en una barra oscura con iconos y descripciones.
+
+Los ocho indicadores, filtros, agrupaciones y todas las columnas se conservan.
+Lista usa filas con más espacio, encabezados técnicos y estados suaves con texto;
+Kanban conserva las siete columnas, su desplazamiento horizontal y la carga
+progresiva. La consulta de terminados sigue siendo bajo demanda. Los selectores,
+tooltips y el formulario de personal heredan la marca también en sus portales.
+
+La ficha lateral conserva Ruta, Materiales, Archivos y Actividad según el alcance
+del usuario. Se ajustaron tipografía, metadatos, pasos y tabs; los botones de acción
+usan `renderAccion` del componente operativo existente. El alcance CSS es local al
+Tablero: no modifica el detalle de Planificación ni el de Colas. No cambian el
+motor de producción, cálculos, datos, permisos, asignaciones ni sincronización.
+
+Verificación: 109 pruebas existentes de filtros, agrupación, navegación, permisos,
+acciones, monitor y sincronización; TypeScript, lint focal y CSS guard. QA de consulta en
+Lista y Kanban, búsqueda de OT60, ficha de producto, apertura/cancelación del
+formulario de personal y consulta de terminados, sin ejecutar acciones productivas.
+Comprobado en escritorio y a 390 px: sin desborde de página, con desplazamiento
+propio en tablas/Kanban y pestañas del detalle siempre accesibles en móvil.
+
+## Planificación · identidad de Grafo (15/09)
+
+La ruta `/produccion/planificacion` extiende la marca clara al Gantt y sus dos
+paneles con `DesignSystemProvider theme="brand" appearance="light"`. Conserva el
+título accesible sin añadir una cabecera visible que quite espacio al calendario.
+Los indicadores usan la variante compartida de marca y el primero destaca en
+grafito. `SegmentedControl tone="graphite"` es optativo y mantiene su interacción
+de radio; los demás consumidores conservan su presentación predeterminada.
+
+El calendario combina cabecera grafito, grilla clara y metadatos monoespaciados.
+Operario/atención de máquina usa naranja, operación autónoma verde y esperas
+trama; selección y dependencias se destacan sin alterar anchuras ni duración.
+Los paneles Trabajo/Fechas/Recurso/Dependencias y Estado de la planificación usan
+superficies claras, separación por tarjetas y acciones visibles al pie. El tema y
+el alcance HeroUI acompañan los portales; las ayudas del Gantt tienen contraste
+explícito para conservar texto claro sobre grafito.
+
+No cambian el controlador, el worker, los cálculos, calendarios laborales, riesgos,
+agrupaciones ni selección. Se conservan alturas y offsets del Gantt, anchuras de
+columna, zoom proporcional, recorrido y apertura explícita de detalle.
+
+Verificación: 67 pruebas existentes de geometría, vista, entregas, eje laboral y
+controlador. QA en escritorio, 1366 px y 390 px: recursos/órdenes, búsqueda OT60,
+estado vacío, selección, recorrido, zoom por teclado, desplegar/plegar filas,
+período de dos semanas y ambos paneles; sin modificar registros productivos.
+El desplazamiento horizontal queda dentro del calendario. TypeScript, lint focal
+y CSS guard completan la validación.
+
+## Colas de trabajo · identidad de Grafo (15/09)
+
+La ruta `/produccion/colas` usa `DesignSystemProvider theme="brand"
+appearance="light"` en la vista y sus portales. Reutiliza papel cálido, Geist,
+metadatos monoespaciados y acentos naranja, con CSS Modules locales. Máquinas
+se presentan como tarjetas claras, con selección cálida y una línea naranja;
+el contador de la máquina activa ocupa una placa grafito. Los estados usan
+`NavigationTabList variant="detailed" tone="graphite"`, con iconos y contadores.
+La búsqueda queda debajo de la navegación; la selección muestra su alcance
+en una franja que destaca sólo cuando hay trabajos seleccionados.
+
+La tabla conserva todas sus columnas y grupos por material, paneles, modos de
+color, fechas, responsables, motivos y acciones. En pantallas pequeñas mantiene
+su desplazamiento propio y la selección de máquina pasa al control existente.
+No cambian filtros, paginación, URL, sincronización, agrupación, permisos ni
+transiciones; tampoco la restricción de layouts bloqueados o materiales mixtos.
+
+El simulador conserva cálculo, recomendación, dibujo proporcional y descarga.
+Su presentación combina cabecera y pie persistentes, contenido desplazable,
+métricas claras con el primer indicador grafito y detalle en tarjetas. Los
+botones usan `ActionButton`; el alcance de marca acompaña el portal. Los
+formularios operativos de motivos y tiempos comparten
+`produccion-dialog-brand.module.css` bajo el contexto de marca, también desde
+Tablero; sus consumidores sin ese contexto conservan el tema anterior.
+
+Verificación: 57 pruebas existentes de Colas, selección, acciones, simulación
+y dibujo, más TypeScript, lint focal y CSS guard. QA a 1920, 1366 y 390 px:
+navegación entre máquinas, búsqueda OT60, estado vacío, selección por material,
+restricción de nesting con selección mixta, simulación de cuatro piezas,
+cambio de ancho y consulta de márgenes. Apertura/cancelación del formulario de
+bloqueo, sin guardar ni ejecutar acciones productivas. Cabecera y cierre del
+simulador accesibles en móvil, con desplazamiento interno del contenido.
+
+## Estaciones · identidad de Grafo (15/09)
+
+`/produccion/estaciones` aplica `DesignSystemProvider theme="brand"
+appearance="light"` a la vista y sus portales. Usa la base de listados de marca:
+papel cálido, título con punto naranja, tipografía Geist, etiquetas técnicas
+monoespaciadas y primer indicador grafito. Las etapas separan los grupos con
+icono y línea; las tarjetas conservan todos sus datos y la alineación mediante
+subgrid. Carga y tiempos tienen mayor jerarquía; urgencias y bloqueos conservan
+sus colores semánticos, y la carga en camino se representa con trama y acento
+cálido. «Ver tareas» usa la flecha diagonal de Grafo y mantiene su ruta a Lista.
+
+La configuración de estación y el calendario del taller se presentan en
+secciones numeradas sobre fondo claro, con encabezado y acciones fijas. Los
+recursos conservan buscador, avisos de pertenencia, listas desplazables y
+acciones de quitar. `EstacionAsignacionSelect` obtiene el tema del contexto
+también en su portal. El diálogo de horario personal mantiene días, franjas,
+copia de horarios y validaciones; su presentación acompaña al formulario.
+`FormSheet` y `FormDialog` aceptan `className` optativo en el panel, sin alterar
+la presentación de sus demás consumidores.
+
+No cambian cálculos, ruteo, permisos, consultas, sincronización, filtros o
+asignaciones. La estación y los horarios personales continúan como borrador
+hasta guardar; los ajustes del calendario del taller siguen siendo inmediatos.
+Todos los cambios de estilo son locales, sin editar `globals.css`.
+
+Validación: 87 pruebas existentes de permisos de ruta, presentación operativa,
+colas, flujo y navegación; TypeScript y ESLint focalizado. QA a 1920, 1366 y
+390 px: búsqueda, filtros, estado vacío, tarjetas, apertura y cancelación de
+alta/configuración, menú de máquinas, horario personal y calendario del taller.
+Se conservaron los registros: no se guardaron estaciones, horarios ni ajustes
+del calendario durante la revisión. CSS guard y revisión de diff sin errores.
+
+### Inventario · Identidad Grafo en Materiales · 15/09/2026
+
+Materiales, la ficha, Biblioteca y Editor de costos reciben
+`DesignSystemProvider theme="brand" appearance="light"` en sus rutas. El tema
+acompaña selectores, tooltips, Nueva materia prima y el asistente de instalación.
+No se cambia el shell ni se extiende el alcance a Movimientos o Centro stock.
+
+- Catálogo: encabezado Geist con punto naranja, indicadores de materiales activos,
+  variantes y familias, tabla clara y acceso a la ficha con flecha diagonal. El
+  estado vacío queda fuera de la tabla para ser legible también en móvil.
+- Ficha: cinco pestañas grafito, estado del material junto a Guardar y datos
+  generales en secciones de identidad, clasificación/unidades y disponibilidad.
+  En escritorio se distribuyen en dos columnas; las tablas conservan su scroll.
+  Se actualizan variantes, precios, indicadores de inventario e historial.
+- Biblioteca: indicadores, filtros grafito, tarjetas con ilustraciones ampliadas,
+  superficies cálidas y acceso diagonal. Su asistente conserva nombres, alias,
+  selección de variantes, completar/copia y revisión. Header y footer permanecen
+  fuera del contenido desplazable, y los pasos se adaptan al ancho del sheet.
+- Editor de costos: grupos de material, unidades y precios con la nueva marca,
+  más un indicador de cambios pendientes conectado al contador existente.
+- Nueva materia prima: formulario claro en dos secciones numeradas, con la misma
+  selección de plantilla y resumen técnico. Crear continúa abriendo la ficha.
+
+Se conservan consultas, validaciones, payloads, conversiones, selección y guardado.
+Sólo se agregan indicadores de presentación derivados de los datos ya cargados.
+Los cambios están en CSS Modules locales; `globals.css` permanece intacto.
+
+Verificación en Chrome a 1920, 1024 y 390 px: búsqueda y vacío del catálogo,
+plantillas del alta, cinco pestañas de la ficha, tablas, filtro de Biblioteca,
+asistente hasta revisión, filtro de consumibles y borrador de precio (restaurado
+sin guardar). Sin instalaciones, altas ni cambios persistidos durante QA.
+TypeScript, cuatro pruebas de plantillas/unidades, CSS guard y diff check pasan.
+ESLint no presenta errores y conserva tres advertencias de hooks preexistentes
+en la ficha. Sin errores ni advertencias en la consola de la revisión final.
+
+### Inventario · Historial de movimientos · 15/09/2026
+
+La ruta de Movimientos aplica la marca clara de Grafo con su propio proveedor.
+Se reutilizan la base de listados, la tipografía y la tabla de Materiales, con
+estilos específicos en `movimientos-kardex.module.css`.
+
+Encabezado con punto naranja y acceso a Materiales, sección de registro,
+selector HeroUI con búsqueda sin distinción de tildes y contador de resultados.
+Se conserva Consultar, la consulta por UUID, el límite de 200 registros y el
+refresco automático cada 15 segundos y al recuperar foco/visibilidad. La búsqueda
+filtra opciones sin cambiar la variante consultada hasta elegir una.
+
+El historial vacío explica la futura consulta de cantidades, saldos y costos,
+con iconografía naranja/grafito y los tipos de movimientos. La variante filtrada
+ofrece volver a todas. Se diferencian carga, error inicial y resultado vacío;
+se retira la invitación a registrar stock desde Centro de stock.
+
+La tabla mantiene fecha, variante, tipo, origen, cantidad, saldo, costo promedio
+y referencia. Incorpora jerarquía de fecha/hora, indicadores semánticos de entrada
+y salida, números monoespaciados y desplazamiento horizontal. La API y las reglas
+de stock permanecen sin cambios. No se agregan registros ni datos de ejemplo.
+
+Verificado en Chrome a 1920 y 390 px: estado vacío, búsqueda sin tildes y sin
+resultados, selección de variante con nombre largo, consulta manual y vuelta a
+todas. La tabla con registros queda preparada por código; no había movimientos
+reales para su revisión visual. TypeScript, ESLint, CSS guard y diff check pasan.
+
+### CRM y Registros · Clientes, Proveedores y fichas · 15/09/2026
+
+Listados, altas y fichas aplican `DesignSystemProvider theme="brand"
+appearance="light"` por ruta, incluidos selectores, menús y confirmaciones.
+La presentación común vive en `crm/contactos-workspace.module.css`; cada módulo
+conserva sus consultas, formularios y reglas de negocio.
+
+Los directorios adoptan cabecera con punto naranja, acceso diagonal al alta,
+indicadores y tablas claras con iconos compactos, tipografía técnica y estados
+semánticos. El total corresponde al filtro actual; los indicadores de email y
+ubicación se calculan sólo sobre la página cargada y lo indican explícitamente.
+Búsqueda, selección, inhabilitados, importación, exportación, eliminación y
+paginación conservan sus callbacks y permisos. Vacíos con la primitiva `Empty`.
+
+Las fichas se encabezan con el nombre guardado y un resumen de razón social,
+email y cantidad de contactos/direcciones. Datos generales se distribuye en
+identificación, fiscalidad y contacto principal con secciones numeradas.
+Contactos y direcciones aparecen en paralelo cuando el ancho lo permite y se
+apilan en móvil. Las altas reutilizan la misma composición y todos sus campos.
+
+Clientes mantiene Ficha, Fidelización e Historial. Proveedores separa Ficha e
+Historial, conservando montado el formulario al cambiar de pestaña. Ambas barras
+usan grafito y conservan su número de columnas en móvil. Fidelización presenta
+el saldo en grafito y su diálogo con la marca clara. El historial se presenta
+como una secuencia de eventos. Se mantienen validaciones, versión de guardado,
+protección de borradores y condiciones de sólo lectura.
+
+Verificado en Chrome en escritorio y a 390 px: ambos directorios, búsquedas sin
+resultados, filtro de inhabilitados, selección y cancelación de eliminación,
+fichas, fidelización y su diálogo, historial, altas y selector fiscal. Un borrador
+de nombre de proveedor se conservó al cambiar de pestaña y se restauró sin guardar.
+No se crearon, eliminaron ni modificaron registros persistidos o puntos.
+TypeScript, ESLint, cuatro pruebas existentes de importación, CSS guard y diff
+check pasan. Sin cambios en `globals.css`, la API ni los payloads.
+
+### CRM · Cuenta corriente de clientes · 15/09/2026
+
+La ruta aplica marca clara con `DesignSystemProvider`; la composición se concentra
+en `administracion/cuenta-corriente.module.css`. Cabecera con punto naranja,
+identidad del cliente, PDF y registro de cobro. Saldo en grafito, órdenes sin cobrar
+y condiciones de crédito forman un resumen adaptable al ancho disponible.
+Se distinguen saldo deudor, saldo a favor del cliente y cuenta saldada sin cambiar
+signos, importes ni precisión monetaria.
+
+El historial conserva Fecha, Concepto, Debe, Haber y Saldo. Usa números técnicos,
+estados de cobro y detalle de aplicaciones comerciales/fiscales con un botón
+accesible por teclado. Se mantienen los porcentajes facturados y montos sin aplicar.
+El diálogo Antigüedad del saldo reutiliza `FormDialog` y muestra los mismos cinco
+tramos y valores, con barras proporcionales. El límite conserva su porcentaje,
+aviso de exceso, plazo y acceso a la ficha. El estado vacío tiene presentación propia.
+
+Verificado en Chrome en escritorio y a 390 px, con dos cuentas reales, apertura
+y cierre por teclado de imputaciones y adaptación móvil. Para deuda vencida,
+límite excedido y cuenta vacía se usó una ruta temporal con datos locales, retirada
+al finalizar. No se registraron cobros ni se modificaron datos persistidos.
+TypeScript, ESLint, las 13 pruebas existentes de moneda, CSS guard y diff check
+pasan. Sin cambios en `globals.css`, la API ni los cálculos financieros.
+
+### CRM · Cupones · Marca de Grafo · 15/09/2026
+
+La ruta de Cupones aplica marca clara explícita, incluidas las ventanas de alta,
+edición, historial, QR y eliminación. El selector de alcance recibe el tema mediante
+`useDesignTheme`. Se conservan la base de listados y sus cinco métricas, con el
+descuento mensual destacado en grafito, cabecera con punto naranja y acción diagonal.
+
+Los tickets mantienen las muescas, la separación del talón y el código QR original.
+El cuerpo usa papel claro, acento naranja y descuento destacado; el talón grafito
+reúne QR y disponibilidad de usos. Código copiable, estados, alcance, fechas y
+acciones conservan sus datos y callbacks. El QR mantiene blanco y negro, código
+plano y descarga PNG. Los resultados vacíos usan la primitiva `Empty`.
+
+El formulario agrupa sus mismos campos en tres secciones: El descuento, Dónde
+aplica y Vigencia y disponibilidad. El resumen de regla usa grafito, los campos
+siguen claros y el pie de acciones queda visible al desplazar el contenido.
+Historial reúne usos/reservas y cambios con iconografía y eventos legibles.
+
+Verificado en Chrome en escritorio y móvil: ticket, alta sin guardar, monto fijo,
+subcategorías agrupadas y búsqueda sin tildes, edición con código bloqueado,
+historial real, QR, búsqueda sin resultados, filtro de estado y cancelación de
+eliminación. Sin crear, editar, pausar, redimir ni eliminar cupones persistidos.
+TypeScript, ESLint, ocho pruebas existentes de cupones/tema, CSS guard y diff check
+pasan. Se mantienen permisos, reglas, consultas, paginación y payloads; sin cambios
+en `globals.css` ni en la API.
+
+### CRM · Fidelización · Marca de Grafo · 15/09/2026
+
+La vista aplica marca clara con proveedor de ruta y `useDesignTheme`. Cabecera con
+punto naranja, estado de acumulación y acción diagonal para guardar cambios.
+Los cuatro indicadores mantienen sus valores, con puntos vigentes destacados en
+grafito. Se corrige el singular de cliente en el indicador de canjes.
+
+Reglas del programa y Economía de puntos conservan una tarjeta común adaptable.
+La introducción explica margen → puntos → beneficio con iconos y el resumen de
+configuración. Los controles mantienen superficies claras, estado cálido para
+acumulación activa y una explicación visible de la equivalencia protegida. Se
+conservan los cuatro campos, su guardado explícito, permisos y bloqueo de conversión.
+
+Movimientos mantiene las fechas, clientes, tipos y variación de puntos. Incorpora
+iconos compactos de cliente, cifras monoespaciadas, unidades y un encabezado
+adaptado a móvil. El desplazamiento horizontal queda dentro de la tabla; el estado
+sin movimientos usa `Empty` con la misma marca.
+
+Verificado en Chrome a 1920, 1024 y 390 px: composición, acumulación activa/pausada,
+edición del porcentaje y actualización del resumen, campos protegidos, movimientos
+reales y desplazamiento horizontal. El borrador se restauró sin guardar ni alterar
+puntos persistidos. TypeScript, ESLint, cinco pruebas de cálculo de fidelización,
+cuatro pruebas de tema, CSS guard y diff check pasan. Consola sin errores ni
+advertencias. Sin cambios en reglas, formatos monetarios, API o `globals.css`.
+
+### Registros · Empleados · Marca de Grafo · 15/09/2026
+
+El layout de Empleados aplica `DesignSystemProvider theme="brand" appearance="light"`
+al listado, alta y ficha. Sus controles y portales leen `useDesignTheme` y
+`useDesignScope`. Se reutilizan la base de listados y las piezas visuales de
+`crm/contactos-workspace.module.css`, manteniendo el controlador propio.
+
+El directorio incorpora cabecera con punto naranja, acción diagonal, indicadores
+de legajos, sectores y cuentas vinculadas; estos últimos dos cuentan únicamente
+la página cargada. La tabla conserva todas sus columnas, selección, búsqueda,
+paginación, importación/exportación y bajas. Los nombres usan iconos compactos,
+las cabeceras usan tipografía mono y el primer indicador se destaca en grafito.
+
+La ficha muestra el nombre guardado y un resumen de estado, sector e ingreso.
+Legajo agrupa datos principales e información laboral en dos columnas, direcciones
+y acceso al sistema. Comisiones conserva su permiso y todas sus reglas; Historial
+muestra fecha completa, hora y responsable. Las pestañas usan grafito y sus paneles
+de edición permanecen montados para conservar borradores. Alta utiliza las mismas
+secciones, sin Historial. Se mantienen lectura por baja/permisos, restricciones de
+campos, control de versión y guardado explícito. La fecha de ingreso se presenta
+como día de calendario; el acceso sigue administrándose en Configuración → Usuarios.
+
+Verificado en navegador a 1920, 1024 y 390 px: listado, búsqueda sin resultados,
+selección y cancelación de baja, ficha, alta, comisiones activadas en borrador,
+historial y direcciones. Los borradores se conservan al cambiar de pestaña y se
+descartaron sin guardar datos. Comparación de los 19 controles confirma los mismos
+valores, handlers y restricciones; payload, validación y guardado permanecen iguales.
+Pasan TypeScript, ESLint focalizado, seis pruebas de importación/tema, CSS guard y
+diff check. No se modifica la API ni `globals.css`.
+
+
+### Costos · Centros de costo · Marca de Grafo · 15/09/2026
+
+La ruta aplica `DesignSystemProvider theme="brand" appearance="light"`, con tema
+y alcance heredados en los portales. El listado reutiliza la base de directorios:
+cabecera con punto naranja, acción diagonal, indicadores de gastos propios,
+centros en período y estructura repartida sobre las filas visibles. Se conservan
+todas las columnas, totales, comprobación del reparto y acciones de configuración,
+inactivación y eliminación. Los centros usan iconos según tipo y el valor hora
+se destaca con acento cálido. El vacío queda fuera de la tabla para mantenerse
+visible en móvil; los importes de los indicadores usan una columna en ancho pequeño.
+
+La ficha usa papel claro, pestañas grafito y un resumen de seis valores con el
+valor hora destacado. Conserva Datos generales, Gastos, Ajustes e Historial. Las
+planillas distinguen entradas editables, importes calculados y subtotales. Alta,
+vacíos, confirmaciones y el pie con estado del borrador comparten el estilo.
+Los gastos generales, empleados y depreciación siguen siendo carga manual;
+no hay vínculo nuevo con nómina ni maquinaria. No cambian los cálculos, precisión,
+prorrateo, copias de período, permisos, publicaciones ni snapshots de las órdenes.
+
+Verificado a 1920, 1024 y 390 px: listado, cuatro pestañas, alta, vacíos, búsqueda
+y confirmación de salida. En un borrador, aumentar un gasto en $ 1.000 incrementó
+el total en $ 1.000 y el valor hora en $ 6,25 para 160 horas; el importe se conservó
+al cambiar de pestaña y se descartó sin guardar. Los totales y las tarifas
+publicadas conservan sus valores. La comparación de funciones y controles con la
+versión anterior confirma el mismo funcionamiento. TypeScript, ESLint focalizado,
+cinco pruebas de período/tema, CSS guard y diff check pasan. Sin cambios en API ni
+`globals.css`.
+
+### Costos · Maquinaria · Marca de Grafo · 16/09/2026
+
+El layout propio de Maquinaria aplica `DesignSystemProvider theme="brand"
+appearance="light"` a listado, alta y ficha. Los portales de consumibles, perfiles,
+materiales y ayudas leen el mismo tema. Se reutiliza la base de directorios con
+cabecera, punto naranja, acción diagonal, iconos compactos y nombres de los equipos.
+Los códigos internos de máquina no se muestran en listados, fichas ni selectores.
+El listado reemplaza el engranaje de cada fila por `MaquinariaPlantillaGlyph`:
+14 dibujos SVG por plantilla, con volumen, naranja, grafito y papel como en el
+sheet de productos. Se asignan por plantilla, tienen alternativa genérica y
+son decorativos; nombre y tipo siguen identificando cada equipo. Las miniaturas
+ocupan 56 px con dibujos de 50 px y espaciado de fila ajustado para conservar densidad.
+Máquinas usa el total filtrado del servidor; Activas y Por completar cuentan sólo
+la página cargada. La búsqueda vacía se presenta fuera de la tabla para que sea
+visible también en móvil. Se conservan filtros, páginas, estados y permisos.
+
+Descripción, Ajustes e Historial usan pestañas grafito y superficies claras.
+La ficha muestra estado, centro y cantidad de perfiles, mantiene la identidad
+guardada en su encabezado y destaca la tarifa publicada del centro como consulta.
+Operación, capacidades, parámetros, perfiles y desgaste usan tarjetas y planillas
+con encabezados técnicos. Herramientas de corte se estiliza localmente, sin cambiar
+el módulo compartido que también consume Productos. Los modales de alta, tóner,
+tintas y perfiles comparten cabecera, cuerpo desplazable y acciones visibles.
+
+No se modifican plantillas, conversiones, cálculos, payloads, reglas de activación
+ni el guardado explícito. Se compararon 31 controles y nueve funciones con la
+versión anterior: mismos valores, restricciones y callbacks. La confirmación de
+salida se monta fuera de `Tabs`: su colección montaba también una copia del portal,
+generando dos diálogos y una salida que no completaba la navegación. Se verificó
+un único diálogo y el regreso al listado al descartar, sin guardar datos.
+
+Revisión en navegador a 1920, 1024 y 390 px: listado, filtros, ficha de impresora
+láser y corte, pestañas, alta, consumibles, perfil por herramienta y búsqueda de
+materiales. Se conservó una edición entre pestañas y se descartaron los borradores
+de prueba. TypeScript, ESLint focalizado, 22 pruebas de tóner, tecnologías, operación,
+aislamiento y tema, CSS guard y diff check pasan. Sin cambios en API ni globals.css.
+
+### Costos · Nodos de producción · Marca de Grafo · 16/09/2026
+
+El layout de `productos-servicios/pasos` aplica marca clara al listado, alta y
+configuración predeterminada. Los controles y portales heredan tema y alcance.
+El listado conserva búsqueda, categorías, acciones y permisos; incorpora cabecera
+con punto naranja, indicadores del catálogo completo, pestañas grafito, iconos por
+categoría y vacíos adaptados a móvil. Personalizadas cuenta plantillas del sistema
+con configuración base guardada; Nodos propios incluye simples y compuestos.
+
+`NodoConfiguracionHeader` unifica el regreso al catálogo, identidad y estado.
+En configuración base de un nodo simple reemplaza la columna lateral redundante
+y libera el ancho para los formularios. Se alinean información básica, ejecución,
+condiciones, máquinas, materiales/consumo, nesting, efectos, tercerización, tiempos
+y niveles, junto con las acciones de guardado. Los compuestos conservan la lista
+editable de operaciones internas con familias, nombres y obligatoriedad.
+Las reglas se apilan en móvil y los campos mantienen espacio para sus etiquetas.
+
+El editor sigue compartido con Productos y Flujos: las clases de marca tienen
+activación explícita mediante `NodosVisualProvider`; la ruta de producto se incorpora
+en la segunda pasada documentada más abajo. `configuracionBase` conserva su función
+de comportamiento. Los tokens de consumo usan fallbacks al estilo anterior fuera
+de este alcance. No cambian API, payloads,
+cálculos, herencias, validaciones ni persistencia. Se compararon 495 atributos de
+comportamiento con la versión anterior: se conservan; sólo se agregaron los valores
+de los tres indicadores informativos. No se modificó `globals.css`.
+
+Revisión en navegador a 1920, 1024 y 390 px: listado y búsqueda vacía, alta,
+compuesto existente, impresión por hoja, corte láser y trabajo manual. Se revisaron
+selectores, materiales, condiciones, nesting, tercerización, tiempos extra y niveles
+sin guardar datos. Consola sin errores/advertencias. Pasan TypeScript, 72 pruebas
+existentes de schema, tiempos, pendientes, reglas y tema, CSS guard y diff check.
+ESLint sin errores; conserva 12 advertencias previas del editor compartido.
+
+### Costos · Flujos de producción · Marca de Grafo · 16/09/2026
+
+El layout de `productos-servicios/rutas` aplica marca clara al listado, alta,
+ficha y portales. El listado incorpora cabecera con punto naranja, indicadores
+del catálogo completo, filtro grafito, iconos de recorrido y flechas diagonales.
+En uso cuenta flujos vinculados a productos. La vista previa muestra una secuencia
+numerada y distingue nodos simples, compuestos y componentes.
+
+La identidad ocupa una tarjeta superior y el editor recibe el ancho completo.
+El diagrama usa fondo claro punteado, conexiones entre momentos, cabeceras grafito
+y tarjetas de nodo con acciones agrupadas. Los paralelos mantienen su contador;
+una leyenda identifica los tipos de nodo. El resumen de versión, el historial y
+la migración comparten la misma paleta. Selección de nodos, edición de nombres,
+duplicación, migración y eliminación usan diálogos claros de marca. Las descripciones
+de nodos simples reutilizan `descripcionPasoParaUsuario` sólo al mostrarse.
+
+Se conservan los 86 atributos de comportamiento originales; sólo se agregan los
+tres valores informativos de los indicadores. No cambian API, payloads, permisos,
+estructura del flujo, guardado, detección de cambios, versiones ni migraciones.
+Los estilos permanecen en los tres CSS Modules de Flujos; no se modifica globals.css.
+
+Revisión en navegador a 1920, 1024 y 390 px: listado, búsqueda vacía, vista previa
+con teclado, alta, ficha, duplicación, cambio de nombre, movimiento con flechas,
+incorporación de simples, compuestos y componentes en paralelo, aviso de nueva
+versión, zoom y diálogo de migración. Se descartaron todos los borradores sin
+guardar, duplicar ni migrar datos. El arrastre conserva sus handlers originales;
+la simulación de arrastre en navegador no llegó a producir un movimiento.
+Pasan TypeScript, ESLint focalizado, 85 pruebas existentes de flujos, disposición
+productiva, componentes, descripciones y tema, CSS guard y diff check.
+
+### Costos · Catálogo de productos · Marca de Grafo · 16/09/2026
+
+Listado, alta y ficha adoptan marca clara con proveedores acotados a sus rutas.
+La tabla incorpora las ilustraciones del selector de productos, resueltas por
+categoría/subcategoría y con su fallback automático. El explorador conserva las
+fotografías y la navegación por categorías. Encabezados con punto naranja, cuatro
+indicadores, filtros grafito, controles claros y acciones con flecha diagonal.
+Resultados sigue contando el filtro y Vista actual la página cargada.
+
+La ficha conserva sus cinco secciones, con etiquetas visibles Producción y Precio
+para los ids existentes `produccion` y `pricing`. Se alinean identidad, geometría,
+nestings guardados, herramientas, métodos de precio, impuestos, comisiones, precios
+por cliente y diálogos. Los diagramas de consulta y edición usan fondo punteado,
+cabeceras grafito y tarjetas claras. La configuración operativa de un nodo conserva
+su estructura y usa el tema claro dentro de `data-producto-editor`; no se activa el
+modo de configuración base. El pie portado del configurador recibe su tema propio.
+
+Se compararon 269 atributos de comportamiento con HEAD: handlers, valores, destinos
+y restricciones permanecen intactos. No cambian API, cálculos, payloads, clasificación,
+permisos ni reglas de revisión/publicación. CSS local, sin cambios en globals.css.
+
+Pasan TypeScript, ESLint focalizado y 49 pruebas existentes de ilustraciones,
+geometrías, disposición productiva, nesting/precio compuesto, polling, selectores,
+apariencia y aislamiento CSS. Revisión en navegador de tabla, categorías,
+subcategorías, duplicación, alta, cinco pestañas de ficha, ruta y configuración de
+impresión; se recorren opciones sin crear ni guardar datos de prueba.
+Revisión adaptable a 1920, 1024 y 390 px: las pestañas pasan a tres o dos columnas
+según el ancho disponible y el alta conserva sus acciones visibles. Se comprobó
+búsqueda vacía y recuperación de resultados. CSS guard y diff check pasan;
+la consola no registró errores durante la revisión.
+
+#### Segunda pasada · Precio
+
+Se simplifica la regla base en método y parámetros, eliminando marcos anidados.
+Los tramos muestran etiquetas, unidades y acciones consistentes; el IVA queda
+debajo de los valores. Se corrigen la alineación de las opciones fiscales y del
+total de comisiones, y se ajustan el formulario por cliente y el precio compuesto.
+Un único componente aprovecha todo el ancho. Los estilos se limitan a CSS Modules.
+
+Se corrige también Checkbox en `producto-ui`: faltaba `HeroCheckbox.Content`, por
+lo que la casilla se dibujaba sin el control interactivo. Ahora responde a clic y
+teclado y sigue bloqueada mediante `ProductoEdicion` en consulta; dos pruebas de
+regresión comprueban el control, su estado y la restricción de edición.
+
+Se recorrieron los siete métodos, alta de excepción sin guardar y estrategia mixta
+con regla específica de un componente. Revisión visual a 1920, 1024 y 390 px, sin
+guardar datos de prueba. Se conservan handlers, valores, restricciones y destinos
+de los tres editores; no cambian cálculos ni payloads. Pasan TypeScript, ESLint,
+12 pruebas focalizadas, CSS Guard y diff check. Sin errores de consola en la revisión.
+
+#### Segunda pasada · Configuración de pasos de una ruta
+
+El editor de la ruta activa `NodosVisualProvider` para compartir los controles y
+la presentación de la configuración predeterminada de Nodos. El alcance visual
+`data-node-editor` es independiente de `configuracionBase`: no cambia el destino
+del guardado ni convierte la configuración del producto en configuración base.
+La cabecera conserva el regreso a la ruta, incorpora el punto naranja y aprovecha
+el ancho disponible. Los bloques, campos, selectores grafito y pie de guardado
+siguen la misma jerarquía visual que Nodos.
+
+Nesting organiza rotación y panelizado en tarjetas con descripciones completas,
+parámetros en columnas adaptables, unidades integradas y márgenes que se apilan
+según el espacio disponible. Costos directos usa una tarjeta y un sheet claros,
+con encabezado y acciones visibles; el selector de margen conserva sus tres
+valores. `brandClassName` en `nodos-sheet` permite variantes explícitas sin trasladar
+las clases del sheet legado a HeroUI. Fuera del proveedor se conserva la interfaz
+anterior.
+
+Se revisaron con datos existentes impresión por área y diseño gráfico: ejecución,
+condiciones, maquinaria, materiales, nesting, tiempos, niveles y costos. Revisión
+visual en escritorio y a 390 px, sin guardar datos de prueba; sin desborde horizontal
+en móvil ni errores de consola. Se conservan los 442 atributos de comportamiento
+comparados con el inicio de esta pasada; sólo se agregan valor y cambio equivalentes
+para el selector de margen. No cambian API, cálculos, herencias ni payloads.
+Pasan TypeScript, 76 pruebas existentes, CSS Guard y diff check. ESLint sin errores,
+con las 12 advertencias previas del editor compartido. Sin cambios en globals.css.
+
+#### Máquinas y selección de materiales · 16/09/2026
+
+Las máquinas candidatas se agrupan en tarjetas adaptables, con hasta dos columnas
+según el ancho disponible. Cada una reúne identidad, tecnología, modos habilitados
+y perfiles. Reutilizan `MaquinariaPlantillaGlyph`, normalizando únicamente para el
+dibujo la plantilla del lookup (enum en mayúsculas). La preferida se distingue con
+borde e indicador naranja; sigue siendo sólo el valor propuesto por defecto.
+El selector para agregar equipos se ubica junto al conteo de máquinas habilitadas.
+Los selectores de perfil tienen nombres accesibles por máquina y modo.
+
+Las opciones de «Quién elige el material» forman una banda continua de columnas
+iguales, sin espacios intermedios, con el estado elegido en naranja. Pasan a dos
+columnas y luego a una lista unida en pantallas pequeñas. Conservan descripciones,
+valores y callbacks, y comunican su estado mediante `aria-pressed`.
+
+La presentación está limitada a `data-node-editor`/`NodosVisualProvider`, tanto en
+Nodos como en rutas de producto. Se compararon los 404 atributos de comportamiento
+del editor con el inicio de esta pasada: permanecen idénticos. Verificación con
+datos reales a 1920, 1024 y 390 px; cambio de preferida, perfil y selección comercial
+sin guardar los borradores de prueba. Pasan TypeScript, 47 pruebas existentes,
+CSS Guard y diff check. ESLint sin errores, con las 12 advertencias previas.
+
+#### Configuración de componentes · 16/09/2026
+
+La configuración de uso de un componente adopta `ProductoVisualProvider` y la
+variante optativa `brand` del shell compartido. Cabecera con punto naranja,
+acciones con flecha diagonal, identidad y colección de piezas en una tarjeta
+unida. Los ajustes de flujo y grupos adicionales se agrupan en paneles claros;
+los parámetros compartidos conservan sus orígenes y fórmulas en filas adaptables.
+
+Las piezas vectoriales muestran miniaturas más grandes, datos técnicos legibles,
+cantidades y botones alineados. La banda grafito resume diseños y piezas por
+producto. Los campos y acciones usan los adaptadores del catálogo; las piezas
+rectangulares comparten la presentación mediante `data-component-config`.
+La revisión de capas recibe también los controles y el diálogo claros del catálogo.
+El shell conserva su variante anterior para los demás consumidores.
+
+Se compararon 123 atributos de comportamiento con el inicio de esta pasada:
+handlers, valores y restricciones permanecen iguales. Se preservan la herencia,
+las conversiones de unidades, los límites, las cantidades y el guardado explícito.
+Revisión con el componente Piezas de corrugado a 1920, 1024 y 390 px: piezas,
+fórmulas, grupos adicionales y diálogo vectorial, sin guardar datos de prueba.
+Sin desborde horizontal en móvil ni errores de consola durante la revisión.
+Pasan TypeScript, ESLint focalizado, 19 pruebas existentes, CSS Guard y diff check.
+Sin cambios en globals.css ni dependencias nuevas.
+
+### Centro de análisis · Portada y Resumen ejecutivo · 16/09/2026
+
+La portada adopta el papel cálido, el punto naranja y las tarjetas de Grafo. El
+Resumen ejecutivo se destaca en grafito; las categorías y los nueve destinos
+conservan sus permisos. El layout aplica el tema de marca claro, también a fechas,
+ayudas y menú de reportes. El período sigue en la URL; cambiar de reporte conserva
+el rango personalizado. Las otras ocho vistas mantienen su contenido actual.
+
+El Resumen ejecutivo se separa del archivo compartido y retira su render anterior.
+Los cinco indicadores conservan sus datos; ventas se destaca en grafito. Evolución
+y equilibrio ocupan el primer nivel, seguidos por clientes, productos y alertas.
+Los estados vacíos y la falta de comparativa se distinguen de valores iguales a
+cero. El avance puede superar el 100%; sólo se limita el recorrido del anillo.
+El margen de cada punto conserva el signo, en vez de ocultar pérdidas con un cero.
+No cambian consultas, endpoints, permisos ni cálculos de negocio del backend.
+
+`panel/charts/tremor-charts.tsx` adapta BarChart y SparkAreaChart v1.0.0 de Tremor
+(copy-and-paste, Apache-2.0), con la licencia completa junto al componente.
+Reutiliza Recharts 2.15 existente: barras apiladas con dominio negativo, cuadrícula,
+formatos regionales, leyendas, valores emergentes y navegación por teclado. No se
+agregan dependencias ni un nuevo sistema de controles. CSS Modules y tokens de
+marca; no se edita globals.css. Las miniáreas son decorativas y no añaden datos.
+
+«Ver datos de la evolución» permite consultar la serie con la precisión de la
+moneda. El CSV reconoce atributos semánticos `data-reporte-*` además de las clases
+previas, e incluye el período y la evolución aun plegada. Los nombres de clientes
+se exportan sin la decoración del ranking. Se conserva el escape CSV existente.
+
+Verificación: escritorio, 1024 y 390 px; controles de fechas y rechazo de rango
+invertido, navegación a Comercial manteniendo fechas, gráficos por teclado y CSV
+descargado e inspeccionado. Sin desborde horizontal en móvil ni errores de consola
+del reporte. Pruebas focalizadas cubren pérdidas, precisión, vacíos, fechas,
+avances superiores al 100%, permisos, rangos y compatibilidad de exportación.
+
+
+### Centro de análisis · Comercial · 16/09/2026
+
+Comercial adopta la misma base clara del Resumen ejecutivo. Los cinco indicadores
+mantienen sus importes y conteos, con ventas en grafito. Evolución de ventas y
+ticket ocupan la columna principal; categoría y tecnología, la lateral. El mapa
+mensual tiene ancho propio y los rankings incluyen órdenes, ticket y ventas con
+precisión monetaria. Clientes dormidos conserva su tabla y su estado vacío.
+
+`reportes-ui.tsx` y `reportes.module.css` reúnen las primitivas compartidas con
+Resumen ejecutivo, cuya presentación se conserva. Se retiran TabComercial y sus
+helpers exclusivos del archivo anterior. Las demás vistas continúan su migración
+por separado. No cambian endpoints, permisos, rangos ni cálculos del negocio.
+
+Se suma la adaptación local de AreaChart v1.0.0 de Tremor, con dos series sin
+apilar para promedio/mediana, línea discontinua y leyenda explícita. Conserva
+negativos, ceros, formatos regionales y un punto aislado cuando sólo hay una fecha.
+Los SVG se montan tras la hidratación en un marco con altura reservada: Recharts
+mide los textos con el DOM y puede producir ejes distintos al renderizar en servidor.
+Esta corrección se aplica también a las barras y miniáreas compartidas.
+
+«Ver datos» permite consultar y exportar las dos series con valores exactos,
+incluso plegadas. Los mixes, rankings y mapa mensual son tablas exportables.
+Los contadores de clientes nuevos y dormidos dejan de presentarse como porcentajes
+de variación; la comparación anual de ventas se conserva cuando existe. Se aclara
+«Órdenes históricas» en la tabla de dormidos. La única modificación de API es el
+texto de una aclaración: nuevos depende de la primera compra en el rango, mientras
+que dormidos describe la situación actual. Las consultas quedan intactas.
+
+Verificación: 36 pruebas focalizadas, TypeScript, ESLint, compilación de API,
+CSS Guard y diff check. Revisión con datos reales en 1920, 1024 y 390 px, sin
+desborde horizontal de la página. Se verificaron gráficos por teclado, ticket
+promedio/mediana, un único mes, períodos vacíos, CSV descargado y Resumen ejecutivo
+tras compartir componentes. La carga final no registra errores de hidratación.
+La app y la API quedan levantadas; la web de marketing continúa apagada.

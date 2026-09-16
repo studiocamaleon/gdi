@@ -48,8 +48,9 @@
   padding: 12px 14px;
   background: var(--surface-secondary);
   color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 500;
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
 }
@@ -62,7 +63,10 @@
   line-height: 1.5;
 }
 .maq-tabla tbody tr:hover {
-  background: var(--background);
+  background: var(--accent-soft);
+}
+.maq-tabla td {
+  padding-block: 12px;
 }
 .maq-tabla td:first-child {
   min-width: 200px;
@@ -117,6 +121,7 @@
 .maq-ficha-top {
   flex: none;
   padding: 20px 24px 0;
+  background: var(--canvas-background);
 }
 .breadcrumb {
   display: flex;
@@ -135,7 +140,7 @@
 .maq-ficha-cuerpo {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -196,7 +201,7 @@
   padding: 0;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
   color: var(--foreground);
@@ -209,8 +214,12 @@
 }
 .card :global(.card__title),
 .technicalCard :global(.card__title) {
-  font-size: 15px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 .card :global(.card__description),
 .technicalCard :global(.card__description) {
@@ -231,8 +240,13 @@
   grid-column: 1 / -1;
 }
 .history {
-  padding: 20px;
-  gap: 24px;
+  padding: 0;
+  gap: 0;
+}
+.history > :global(.card__content) {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
 }
 .history dl {
   display: grid;
@@ -240,9 +254,10 @@
   gap: 18px;
 }
 .history dt {
-  font-size: 12px;
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
   color: var(--muted-text);
-  margin-bottom: 5px;
+  margin-bottom: 8px;
 }
 .history dd {
   font-size: 13px;
@@ -277,9 +292,9 @@
   border-bottom: 1px solid var(--border);
 }
 .modalHeader h2 {
-  font-size: 19px;
-  font-weight: 650;
-  letter-spacing: -0.025em;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
   padding-right: 28px;
 }
 .modalHeader p {
@@ -300,6 +315,7 @@
   overflow: auto;
   padding: 20px 24px;
   gap: 20px;
+  background: var(--canvas-background);
 }
 .modalFooter {
   display: flex;
@@ -560,4 +576,197 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Marca Grafo: alcance local del listado, ficha y portales de Maquinaria. */
+.page {
+  color: var(--foreground);
+}
+.machineIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.machineIllustration {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 7px;
+  background: var(--canvas-background);
+}
+.machineIllustration svg {
+  display: block;
+  width: 50px;
+  height: 50px;
+}
+.maq-tabla tbody tr:hover .machineIllustration {
+  background: var(--accent-soft);
+}
+.ficha h1 {
+  overflow-wrap: anywhere;
+}
+.ficha header > div > p:last-child {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.breadcrumb svg {
+  width: 12px;
+  height: 12px;
+}
+.ficha .tabs {
+  margin-bottom: 0;
+}
+.descriptionPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.recordSummary {
+  margin: 0;
+}
+.card :global(.card__title) > svg,
+.technicalCard :global(.card__title) > svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+  color: var(--accent-soft-foreground);
+  stroke-width: 1.5;
+}
+.tariffField {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-width: 0;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 7px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+}
+.tariffField > div,
+.tariffField button {
+  color: var(--brand-muted-on-graphite);
+}
+.ficha
+  .tariffField
+  input:disabled:not([type="checkbox"]):not([type="radio"]):not(
+    [type="hidden"]
+  ) {
+  height: auto;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  font-size: 24px;
+  letter-spacing: -0.04em;
+}
+.identityGrid {
+  align-items: start;
+}
+.configurationAlert {
+  border-color: var(--border);
+  color: var(--foreground);
+  background: var(--surface);
+  border-left: 2px solid var(--accent);
+  border-radius: 8px;
+}
+.configurationAlert > svg {
+  color: var(--accent-soft-foreground);
+}
+.saveState {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.saveState::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.saveState[data-dirty="true"] {
+  color: var(--accent-soft-foreground);
+}
+.activityTitle {
+  margin: 0 0 10px;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.historyEvent {
+  display: flex;
+  gap: 16px;
+}
+.historyEvent time {
+  font-family: var(--brand-mono);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.dialogEyebrow {
+  margin-bottom: 9px;
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+.titleDot {
+  color: var(--accent);
+}
+.sectionEmpty {
+  padding: 28px 16px;
+  color: var(--muted-text);
+}
+.sectionEmpty [data-slot="empty-icon"] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.maq-desgaste-total {
+  padding: 15px 18px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-secondary);
+  border-radius: 6px;
+}
+.cuttingPanel > div:first-child {
+  background: var(--surface);
+}
+.cuttingPanel h3 {
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.cuttingPanel details {
+  border-radius: 7px;
+}
+.cuttingPanel details[open] > summary {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}
+.confirmDialog h2 {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+@media (max-width: 767px) {
+  .ficha .recordSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ficha .recordSummary > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .maq-ficha-pie .saveState {
+    width: 100%;
+  }
+  .maq-ficha-pie > button {
+    flex: 1;
+  }
 }

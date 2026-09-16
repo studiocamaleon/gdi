@@ -1,8 +1,7 @@
 "use client";
 
 import { ListBox, Select } from "@heroui/react";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./materiales.module.css";
 
@@ -20,6 +19,7 @@ export function MaterialMultiSelect({
   values: string[];
   onChange: (values: string[]) => void;
 }) {
+  const themeClass = useDesignTheme();
   const scope = useDesignScope();
   return (
     <Select
@@ -41,7 +41,7 @@ export function MaterialMultiSelect({
       </Select.Trigger>
       <Select.Popover
         {...scope}
-        className={`${theme.theme} ${styles.multiPopover}`}
+        className={`${themeClass} ${styles.multiPopover}`}
       >
         <ListBox>
           {options.map((option) => (

@@ -9,18 +9,23 @@ export function PanelCard({
   descripcion,
   icono: Icono,
   accion,
+  className,
   children,
 }: {
   titulo: string;
   descripcion?: string;
-  icono: LucideIcon;
+  icono?: LucideIcon;
   accion?: ReactNode;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <Card className={s.card} aria-label={titulo}>
+    <Card
+      className={[s.card, className].filter(Boolean).join(" ")}
+      aria-label={titulo}
+    >
       <div className={s.cardHead}>
-        <Icono size={19} aria-hidden />
+        {Icono && <Icono size={19} aria-hidden />}
         <div className="min-w-0 flex-1">
           <h2>{titulo}</h2>
           {descripcion && <p>{descripcion}</p>}

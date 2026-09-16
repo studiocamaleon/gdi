@@ -1,12 +1,59 @@
 .listTitle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 12px;
+  font-size: 17px;
+  letter-spacing: -0.03em;
+}
+.listTitle strong {
+  font-weight: 550;
 }
 .listTitle > span {
   color: var(--muted-text);
-  font-size: 12px;
+  font: 10px var(--brand-mono);
+  letter-spacing: 0;
+}
+.directoryIcon,
+.routeIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.listTitle .directoryIcon {
+  width: 36px;
+  height: 36px;
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite);
+  border-color: var(--brand-graphite-line);
+}
+.directoryIcon svg {
+  width: 18px;
+  height: 18px;
+}
+.routeIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.routeIdentity > div {
+  min-width: 0;
+}
+.routeIcon {
+  width: 38px;
+  height: 38px;
+  color: var(--muted-text);
+  background: var(--canvas-background);
+}
+.routeIcon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+}
+.table tr:hover .routeIcon {
+  color: var(--accent-soft-foreground);
+  background: var(--surface);
 }
 .search {
   width: 300px;
@@ -30,8 +77,9 @@
   background: var(--surface-secondary);
   border-bottom: 1px solid var(--border);
   color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 500;
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   text-align: left;
   white-space: nowrap;
 }
@@ -47,7 +95,7 @@
   cursor: pointer;
 }
 .table tr[role="link"]:hover {
-  background: var(--surface-secondary);
+  background: var(--accent-soft);
 }
 .table tr:focus-visible {
   outline: 2px solid var(--focus);
@@ -80,12 +128,51 @@
 }
 .preview {
   display: block;
-  width: 340px;
+  width: 390px;
   max-width: calc(100vw - 32px);
   max-height: 55vh;
   overflow-y: auto;
   padding: 16px;
   font-size: 12px;
+  background: var(--surface);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.previewTitle {
+  margin-bottom: 12px;
+  font: 10px/1.5 var(--brand-mono);
+  color: var(--muted-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.previewSteps {
+  display: grid;
+  gap: 0;
+}
+.previewSteps li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.previewSteps small {
+  margin-left: auto;
+  color: var(--muted-text);
+  font: 9px var(--brand-mono);
+}
+.previewIndex {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  font: 10px var(--brand-mono);
 }
 .dialogForm {
   display: flex;
@@ -108,7 +195,7 @@
 }
 .dangerNote {
   padding: 14px 16px;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--danger);
   background: var(--danger-soft);
   font-size: 13px;

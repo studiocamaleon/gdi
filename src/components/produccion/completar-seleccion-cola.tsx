@@ -16,6 +16,8 @@ import {
   type OpcionesAccionProduccion,
 } from "@/lib/acciones-produccion";
 import theme from "@/components/ui/workspace-theme.module.css";
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
+import dialogStyle from "./produccion-dialog-brand.module.css";
 
 /** Reúne las declaraciones; ninguna operación se guarda hasta resolver la selección entera. */
 export function CompletarSeleccionCola({
@@ -27,6 +29,7 @@ export function CompletarSeleccionCola({
   onConfirmar: (tiempos: TiempoCola[]) => Promise<void>;
   onCancelar: () => void;
 }) {
+  const { className: brandTheme } = useLegacyDesignScope();
   const [pendientes] = React.useState(() =>
     items.filter((i) => completarSeriaInstantaneo(i.control.paso)),
   );
@@ -64,7 +67,7 @@ export function CompletarSeleccionCola({
         if (!open && !busy) onCancelar();
       }}
     >
-      <DialogContent className={theme.theme} showCloseButton={!busy}>
+      <DialogContent className={brandTheme ? dialogStyle.dialog : theme.theme} overlayClassName={brandTheme ? dialogStyle.overlay : undefined} showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>Registrar tiempos</DialogTitle>
           <DialogDescription>

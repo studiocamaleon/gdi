@@ -3,12 +3,19 @@
 import { Card, Checkbox, Input } from "@heroui/react";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import { SelectField } from "@/components/design-system/select-field";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import * as React from "react";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  BoxesIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 import type {
   DefinicionPasoInternoCompuesto,
@@ -21,6 +28,14 @@ import {
   getPasosTenant,
 } from "@/lib/productos-servicios-api";
 import styles from "./paso-compuesto-configuracion.module.css";
+import { NodoConfiguracionHeader } from "./nodo-configuracion-header";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 
 function slug(value: string) {
   return value
@@ -44,6 +59,7 @@ function siguienteCodigoOperacion(
 
 export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [operaciones, setOperaciones] = React.useState<
     DefinicionPasoInternoCompuesto[]
   >(() =>
@@ -118,16 +134,13 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
   };
 
   return (
-    <main {...scope} className={`${theme.theme} ${listPage.page}`}>
-      <header className={listPage.header}>
-        <div>
-          <h1>{paso.nombre}</h1>
-          <p className={listPage.subtitle}>
-            Nodo compuesto · Sus operaciones internas calculan materiales,
-            recursos y tiempos. En producción se mostrará un único nodo.
-          </p>
-        </div>
-      </header>
+    <main {...scope} className={`${theme} ${listPage.page} ${styles.page}`}>
+      <NodoConfiguracionHeader
+        nombre={paso.nombre}
+        compuesto
+        origen="tenant"
+        estado={`${operaciones.length} ${operaciones.length === 1 ? "operación interna" : "operaciones internas"}`}
+      />
 
       <Card className={styles.panel}>
         <Card.Header className={styles.panelHead}>
@@ -161,10 +174,18 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
           </Button>
         </Card.Header>
         {!operaciones.length ? (
-          <div className={styles.empty}>
-            Agregá la primera operación que formará parte de este nodo
-            compuesto.
-          </div>
+          <Empty className={styles.empty}>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <BoxesIcon />
+              </EmptyMedia>
+              <EmptyTitle>Definí las operaciones del nodo</EmptyTitle>
+              <EmptyDescription>
+                Agregá la primera operación que formará parte de este nodo
+                compuesto.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <div className={styles.rows}>
             <div className={styles.rowHead} aria-hidden="true">
@@ -256,6 +277,7 @@ export function PasoCompuestoConfiguracion({ paso }: { paso: PasoTenant }) {
             Volver
           </Button>
           <Button type="button" isDisabled={guardando} onClick={guardar}>
+            <ArrowUpRightIcon />
             {guardando ? "Guardando…" : "Guardar operaciones"}
           </Button>
         </footer>

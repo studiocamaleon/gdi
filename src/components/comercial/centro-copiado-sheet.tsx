@@ -1,5 +1,7 @@
 "use client";
 
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -221,6 +223,8 @@ export default function CentroCopiadoSheet({
   clienteId,
   editItems,
 }: Props) {
+  const designScope = useDesignScope();
+  const designClass = useDesignTheme();
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
   // Tamaños que la config del tenant ofrece; null = todos los producibles.
   const [tamanosOfrecidos, setTamanosOfrecidos] = React.useState<
@@ -1097,7 +1101,8 @@ export default function CentroCopiadoSheet({
     <>
       <div className={s.backdrop} onClick={intentarCerrar} />
       <div
-        className={s.sheet}
+        {...designScope}
+        className={`${designClass} ${s.sheet}`}
         role="dialog"
         aria-modal="true"
         aria-label="Centro de copiado"

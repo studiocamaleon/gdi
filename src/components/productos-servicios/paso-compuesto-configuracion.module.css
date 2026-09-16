@@ -1,10 +1,17 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
 .panel {
   padding: 0;
   gap: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
+  background: var(--surface);
   box-shadow: none;
+  flex-shrink: 0;
 }
 .panelHead,
 .footer {
@@ -20,8 +27,9 @@
 }
 .panelHead strong {
   display: block;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
 }
 .panelHead > div > span {
   display: block;
@@ -51,14 +59,23 @@
 .rowHead {
   background: var(--surface-secondary);
   color: var(--muted-text);
-  font-size: 11px;
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
 }
 .row {
   border-bottom: 1px solid var(--border);
 }
 .index {
-  color: var(--muted-text);
-  font: 500 12px var(--font-mono, monospace);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 11px var(--brand-mono);
 }
 .field {
   min-width: 0;

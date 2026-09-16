@@ -1,4 +1,6 @@
-"use client"
+"use client";
+
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
 
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
@@ -31,12 +33,15 @@ function AlertDialogContent({
   /** Para subir el fondo junto con el diálogo cuando hay modales propios. */
   overlayClassName?: string
 }) {
+  const { className: designClass, ...designScope } = useLegacyDesignScope();
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="alert-dialog-content"
+        {...designScope}
         className={cn(
+          designClass,
           "fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-background p-6 shadow-lg",
           className,
         )}

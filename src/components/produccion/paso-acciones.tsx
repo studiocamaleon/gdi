@@ -27,6 +27,8 @@ import {
   type OpcionesAccionProduccion,
 } from "@/lib/acciones-produccion";
 import theme from "@/components/ui/workspace-theme.module.css";
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
+import dialogStyle from "./produccion-dialog-brand.module.css";
 
 export const ETIQUETAS_ACCION: Record<TableroPasoAccion, string> = {
   iniciar: "Iniciar",
@@ -136,6 +138,7 @@ export function PasoAccionesProduccion({
     opts?: OpcionesAccionProduccion,
   ) => Promise<void>;
 }) {
+  const { className: brandTheme } = useLegacyDesignScope();
   const [formulario, setFormulario] = React.useState<
     "bloquear" | "pausar" | "tiempo" | null
   >(null);
@@ -333,7 +336,7 @@ export function PasoAccionesProduccion({
             }
           }}
         >
-          <DialogContent className={theme.theme} showCloseButton={!ocupado}>
+          <DialogContent className={brandTheme ? dialogStyle.dialog : theme.theme} overlayClassName={brandTheme ? dialogStyle.overlay : undefined} showCloseButton={!ocupado}>
             <DialogHeader>
               <DialogTitle>{titulo}</DialogTitle>
               <DialogDescription>{descripcion}</DialogDescription>

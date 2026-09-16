@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { BoxesIcon, CopyPlusIcon, GitBranchIcon } from "lucide-react";
 import { toast } from "sonner";
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
 
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
 import { EditorDefiniciones } from "@/components/productos-servicios/receta-producto-tab";
@@ -20,6 +21,7 @@ import type {
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
 import styles from "./modelo-productivo-editor-view.module.css";
+import { NodosVisualProvider } from "./nodos-ui";
 
 export function ModeloProductivoEditorView({
   producto,
@@ -39,6 +41,7 @@ export function ModeloProductivoEditorView({
   nodoInicial?: string;
 }) {
   const router = useRouter();
+  const legacyScope = useLegacyDesignScope();
   const [modeloAbierto, setModeloAbierto] = React.useState(true);
   const [nodoSeleccionado, setNodoSeleccionado] = React.useState<string>(
     nodoInicial || "ruta",
@@ -157,36 +160,44 @@ export function ModeloProductivoEditorView({
     );
 
   return (
-    <ConfigPasosEditorView
-      producto={producto}
-      rutaAlternativa={rutaAlternativa}
-      catalogoFamilias={catalogoFamilias}
-      lookups={lookups}
-      catalogoCargos={catalogoCargos}
-      embedded
-      onPasoPersistido={async () => {
-        const actuales = await getRecetasProducto(producto.id);
-        const actual = actuales.find(
-          (r) => r.rutaAlternativa.id === rutaAlternativa.id,
-        );
-        const revision =
-          actual?.revisiones.find((r) => r.estado === "BORRADOR") ??
-          actual?.revisionPublicada;
-        if (revision) actualizarBorrador(revision);
-      }}
-      modeloProductivo={{
-        active: modeloAbierto,
-        estructura,
-        componentes: revisionVisible?.componentes ?? [],
-        etapas: revisionVisible?.pasosCompuestosJson ?? [],
-        nodoSeleccionado,
-        panel,
-        onOpen: (nodoClave = "ruta") => {
-          setNodoSeleccionado(nodoClave);
-          setModeloAbierto(true);
-        },
-        onClose: () => setModeloAbierto(false),
-      }}
-    />
+    <NodosVisualProvider>
+      <div
+        {...legacyScope}
+        data-producto-editor
+        className={`${legacyScope.className ?? ""} ${styles.workspace}`}
+      >
+        <ConfigPasosEditorView
+          producto={producto}
+          rutaAlternativa={rutaAlternativa}
+          catalogoFamilias={catalogoFamilias}
+          lookups={lookups}
+          catalogoCargos={catalogoCargos}
+          embedded
+          onPasoPersistido={async () => {
+            const actuales = await getRecetasProducto(producto.id);
+            const actual = actuales.find(
+              (r) => r.rutaAlternativa.id === rutaAlternativa.id,
+            );
+            const revision =
+              actual?.revisiones.find((r) => r.estado === "BORRADOR") ??
+              actual?.revisionPublicada;
+            if (revision) actualizarBorrador(revision);
+          }}
+          modeloProductivo={{
+            active: modeloAbierto,
+            estructura,
+            componentes: revisionVisible?.componentes ?? [],
+            etapas: revisionVisible?.pasosCompuestosJson ?? [],
+            nodoSeleccionado,
+            panel,
+            onOpen: (nodoClave = "ruta") => {
+              setNodoSeleccionado(nodoClave);
+              setModeloAbierto(true);
+            },
+            onClose: () => setModeloAbierto(false),
+          }}
+        />
+      </div>
+    </NodosVisualProvider>
   );
 }

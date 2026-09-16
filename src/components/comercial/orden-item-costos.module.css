@@ -9,13 +9,13 @@
   min-width: 0;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .cost-waterfall {
-  padding: 6px 16px;
+  padding: 16px 20px 8px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   container-type: inline-size;
 }
 .cost-waterfall .cw-row {
@@ -23,18 +23,18 @@
   grid-template-columns: minmax(0, 1fr) 100px 60px 112px;
   gap: 12px;
   align-items: baseline;
-  padding: 8px 0;
+  padding: 11px 0;
 }
 .cost-waterfall .cw-tipo {
   justify-self: start;
   padding: 2px 9px;
   color: var(--muted-foreground);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: normal;
   background: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   white-space: nowrap;
 }
 .cost-waterfall .cw-tipo:empty {
@@ -111,13 +111,13 @@
 }
 .cost-title {
   font-size: 11px;
-  text-transform: none;
-  letter-spacing: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--muted-foreground);
-  font-weight: 600;
+  font: 400 10px/1.5 var(--brand-mono, monospace);
 }
 .cost-section {
-  padding: 12px 14px;
+  padding: 16px;
 }
 .cost-charges {
   display: grid;
@@ -129,7 +129,7 @@
   margin-top: 10px;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--card);
 }
 .cost-steps-table,
@@ -144,9 +144,8 @@
   padding: 9px 14px;
   text-align: left;
   color: var(--muted-foreground);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: normal;
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  letter-spacing: 0.02em;
   text-transform: none;
   border-bottom: 1px solid var(--border);
   background: var(--muted);
@@ -265,7 +264,7 @@
   display: grid;
   gap: 4px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px;
   background: var(--card);
   font-size: 12px;
@@ -273,13 +272,13 @@
 }
 .cost-empty-line {
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px;
   background: var(--card);
 }
 .cost-charge {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px;
 }
 .cost-charge {
@@ -297,7 +296,7 @@
   align-items: center;
   gap: 4px;
   width: fit-content;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   color: var(--muted-foreground);
   font-size: 11px;
@@ -328,9 +327,9 @@
   max-width: 100%;
 }
 .cost-steps-table .cost-component-row td {
-  background: #f4f1ed;
-  border-top: 1px solid #d8d1c8;
-  border-bottom-color: #d8d1c8;
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+  border-top: 1px solid var(--border);
+  border-bottom-color: var(--border);
 }
 .cost-steps-table .cost-component-name {
   display: flex;
@@ -340,7 +339,7 @@
 .cost-steps-table .cost-component-name > svg {
   width: 17px;
   height: 17px;
-  color: var(--graf-accent, #e64b24);
+  color: var(--accent-soft-foreground);
 }
 .cost-steps-table .cost-component-name > span {
   display: grid;
@@ -353,4 +352,30 @@
 .cost-steps-table .cost-component-name small {
   color: var(--muted-foreground);
   font-size: 10.5px;
+}
+
+.waterfallHeading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.waterfallHeading svg { width: 17px; height: 17px; color: var(--accent-soft-foreground); }
+.cost-waterfall .cw-amount { font-variant-numeric: tabular-nums; }
+.cost-waterfall .cw-total { margin-top: 4px; padding-block: 16px; }
+.cost-waterfall .cw-total .cw-amount { font-size: 22px; letter-spacing: -0.035em; font-weight: 600; }
+@container (max-width: 420px) {
+  .cost-waterfall .cw-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .cost-waterfall .cw-label { grid-column: 1; grid-row: 1 / 3; font-size: 12px; }
+  .cost-waterfall .cw-amount { grid-column: 2; grid-row: 1; }
+  .cost-waterfall .cw-pct { grid-column: 2; grid-row: 2; font-size: 10px; }
+  .cost-waterfall .cw-pct:empty { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cost-row-chevron { transition: none; }
 }

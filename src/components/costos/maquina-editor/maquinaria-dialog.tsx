@@ -1,8 +1,10 @@
 "use client";
 import { useId, type ReactNode } from "react";
 import { Modal } from "@heroui/react";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import styles from "../maquinaria.module.css";
 
 export function MaquinariaDialog({
@@ -23,11 +25,12 @@ export function MaquinariaDialog({
   wide?: boolean;
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const descriptionId = useId();
   return (
     <Modal.Backdrop
       {...scope}
-      className={theme.theme}
+      className={theme}
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       isDismissable={isDismissable}
@@ -47,7 +50,13 @@ export function MaquinariaDialog({
             isDisabled={!isDismissable}
           />
           <Modal.Header className={styles.modalHeader}>
-            <Modal.Heading>{title}</Modal.Heading>
+            <span className={styles.dialogEyebrow}>
+              Maquinaria · Configuración
+            </span>
+            <Modal.Heading>
+              {title}
+              <span className={styles.titleDot}>.</span>
+            </Modal.Heading>
             <p id={descriptionId}>{description}</p>
           </Modal.Header>
           {children}

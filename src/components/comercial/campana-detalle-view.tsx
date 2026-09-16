@@ -23,11 +23,17 @@ import * as React from "react";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
+  ActivityIcon,
+  CalendarDaysIcon,
+  FlagIcon,
+  LayoutDashboardIcon,
+  MegaphoneIcon,
+  PackageIcon,
+  TrendingUpIcon,
   ShoppingBagIcon,
   WalletIcon,
   ReceiptIcon,
   FolderIcon,
-  LayersIcon,
   ClipboardListIcon,
   CheckCircle2Icon,
   CirclePauseIcon,
@@ -38,6 +44,7 @@ import {
   PlayIcon,
   PlusIcon,
   UnlinkIcon,
+  UserRoundIcon,
   UsersIcon,
   XCircleIcon,
 } from "lucide-react";
@@ -69,13 +76,20 @@ import { getOrdenesTrabajo } from "@/lib/ordenes-trabajo-api";
 import type { OrdenTrabajoListItem } from "@/lib/ordenes-trabajo";
 import styles from "./campanas.module.css";
 import layout from "@/components/design-system/list-page.module.css";
-import theme from "@/components/design-system/theme.module.css";
-import { useDesignScope } from "@/components/design-system/appearance";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { ListMetric } from "@/components/design-system/list-metric";
 import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import { DesarrolloDocumentalPanel } from "./desarrollo-documental-panel";
 import type { DesarrolloDocumental } from "@/lib/desarrollo-documental-api";
 import { getDesarrolloCampana } from "@/lib/desarrollo-documental-api";
+import {
+  actualizarAdjuntosGenerales,
+  idsDeArchivosVersionados,
+} from "@/lib/archivos-presentacion";
 import { listarArchivos } from "@/lib/archivos-api";
 
 const SIGUIENTES: Record<CampanaEstado, CampanaEstado[]> = {
@@ -122,24 +136,40 @@ function fechaHora(value: string) {
   return `${valor("day")}/${valor("month")}/${valor("year")} · ${valor("hour")}:${valor("minute")}`;
 }
 
-export function CampanaDetalleView({
-  initial,
-  initialArchivos,
-  empleados,
-  canManage,
-  initialDesarrollo,
-}: {
+type CampanaDetalleViewProps = {
   initial: CampanaDetalle;
   initialArchivos: Archivo[];
   empleados: EmpleadoOpcion[];
   canManage: boolean;
   initialDesarrollo: DesarrolloDocumental;
-}) {
+};
+
+export function CampanaDetalleView(props: CampanaDetalleViewProps) {
+  return (
+    <DesignSystemProvider appearance="light" theme="brand">
+      <CampanaDetalleViewContent {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function CampanaDetalleViewContent({
+  initial,
+  initialArchivos,
+  empleados,
+  canManage,
+  initialDesarrollo,
+}: CampanaDetalleViewProps) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const { moneda } = useConfigRegional();
   const [campana, setCampana] = React.useState(initial);
   const [archivos, setArchivos] = React.useState(initialArchivos);
   const [desarrollo, setDesarrollo] = React.useState(initialDesarrollo);
+  const [editandoArchivos, setEditandoArchivos] = React.useState(false);
+  const archivosVersionados = idsDeArchivosVersionados(desarrollo);
+  const adjuntosGenerales = archivos.filter(
+    (a) => !archivosVersionados.has(a.id),
+  );
   const [hitoOpen, setHitoOpen] = React.useState(false);
   const [editarOpen, setEditarOpen] = React.useState(false);
   const [equipoOpen, setEquipoOpen] = React.useState(false);
@@ -165,7 +195,12 @@ export function CampanaDetalleView({
   const actualizacionPendiente = React.useRef(false);
   const refrescandoEnVivo = React.useRef(false);
   const edicionActiva = Boolean(
-    working || hitoOpen || editarOpen || equipoOpen || vincularOpen,
+    working ||
+    hitoOpen ||
+    editarOpen ||
+    equipoOpen ||
+    vincularOpen ||
+    editandoArchivos,
   );
 
   const refrescarEnVivo = React.useCallback(async () => {
@@ -419,29 +454,53 @@ export function CampanaDetalleView({
     }
   }
 
+  const estadoLabel = {
+    borrador: "Borrador",
+    activo: "Activa",
+    pausado: "Pausada",
+    completado: "Completada",
+    cancelado: "Cancelada",
+  }[campana.estado];
+  const prioridadLabel = {
+    baja: "Baja",
+    normal: "Normal",
+    alta: "Alta",
+    critica: "Crítica",
+  }[campana.prioridad];
   const comercial = campana.dashboard.comercial;
   const money = (value: number) => formatearMoneda(value, moneda);
 
   return (
-    <main {...scope} className={`${theme.theme} ${layout.page}`}>
-      <div className={styles.breadcrumb}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${themeClass} ${layout.page} ${styles.page}`}
+    >
+      <nav className={styles.breadcrumb} aria-label="Ubicación">
         <Link href="/comercial/campanas">
           <ArrowLeftIcon className="size-3" /> Campañas
         </Link>
         <span>/</span>
-        <span className={styles.code}>{campana.codigo}</span>
-      </div>
+        <span className={styles.code} aria-current="page">
+          {campana.codigo}
+        </span>
+      </nav>
       <header className={`${layout.header} ${styles.detailHeader}`}>
         <div>
-          <p className={styles.eyebrow}>{campana.cliente.nombre}</p>
-          <h1>{campana.nombre}</h1>
+          <p className={styles.eyebrow}>
+            <MegaphoneIcon aria-hidden /> Campaña / {campana.cliente.nombre}
+          </p>
+          <h1>
+            {campana.nombre}
+            <span className={styles.titleDot}>.</span>
+          </h1>
           <div className={styles.detailMeta}>
             <span className={styles.code}>{campana.codigo}</span>
             <span className={styles.status} data-status={campana.estado}>
-              {campana.estado}
+              {estadoLabel}
             </span>
             <span className={styles.priority} data-priority={campana.prioridad}>
-              {campana.prioridad}
+              Prioridad {prioridadLabel.toLowerCase()}
             </span>
             {campana.tipo ? (
               <span className={styles.secondary}>{campana.tipo}</span>
@@ -472,6 +531,16 @@ export function CampanaDetalleView({
             >
               <Link2Icon data-icon="inline-start" /> Vincular
             </ActionButton>
+          </div>
+        ) : null}
+      </header>
+
+      {canManage && SIGUIENTES[campana.estado].length > 0 ? (
+        <div className={styles.lifecycle}>
+          <span className={styles.lifecycleLabel}>
+            <FlagIcon aria-hidden /> Gestionar estado
+          </span>
+          <div className={styles.actions}>
             {SIGUIENTES[campana.estado].map((estado) => {
               const Icon = ACCION[estado].icon;
               return (
@@ -492,8 +561,8 @@ export function CampanaDetalleView({
               );
             })}
           </div>
-        ) : null}
-      </header>
+        </div>
+      ) : null}
 
       <section className={styles.kpis} aria-label="Resumen comercial">
         <ListMetric
@@ -523,423 +592,555 @@ export function CampanaDetalleView({
         />
       </section>
 
-      {campana.dashboard.produccion.progreso ? (
-        <ProgresoExplicado
-          titulo="Avance productivo de la campaña"
-          progreso={campana.dashboard.produccion.progreso}
+      <Tabs defaultSelectedKey="resumen" className={styles.tabsRoot}>
+        <NavigationTabList
+          label="Secciones de campaña"
+          variant="detailed"
+          tone="graphite"
+          className={styles.navigation}
+          items={[
+            {
+              id: "resumen",
+              label: "Resumen",
+              description: "Hitos y producción",
+              icon: <LayoutDashboardIcon />,
+            },
+            {
+              id: "ordenes",
+              description: "Trabajo vinculado",
+              label: "Órdenes",
+              count: campana.ordenes.length,
+              icon: <ClipboardListIcon />,
+            },
+            {
+              id: "presupuestos",
+              description: "Propuestas comerciales",
+              label: "Presupuestos",
+              count: campana.cotizaciones.length,
+              icon: <FileTextIcon />,
+            },
+            {
+              id: "archivos",
+              description: "Adjuntos y versiones",
+              label: "Archivos",
+              count: archivos.length,
+              icon: <FolderIcon />,
+            },
+            {
+              id: "actividad",
+              label: "Actividad",
+              description: "Historial de cambios",
+              icon: <ActivityIcon />,
+            },
+          ]}
         />
-      ) : null}
-      <div className={styles.detailGrid}>
-        <div>
-          <Card
-            render={(props) => <section {...props} />}
-            className={styles.panel}
-          >
-            <div className={styles.panelHeader}>
-              <div>
-                <h2 className={styles.panelTitle}>Ruta de hitos</h2>
-                <p className={styles.panelNote}>
-                  Compromisos configurables y responsables.
-                </p>
+        <div className={styles.detailGrid}>
+          <div className={styles.workspace}>
+            <Tabs.Panel id="resumen" className={styles.summaryContent}>
+              <div className={styles.progressPanel}>
+                {campana.dashboard.produccion.progreso ? (
+                  <ProgresoExplicado
+                    titulo="Avance productivo de la campaña"
+                    progreso={campana.dashboard.produccion.progreso}
+                  />
+                ) : null}
               </div>
-              {canManage ? (
-                <ActionButton
-                  variant="outline"
-                  size="sm"
-                  onPress={() => setHitoOpen(true)}
-                >
-                  <PlusIcon data-icon="inline-start" /> Agregar hito
-                </ActionButton>
-              ) : null}
-            </div>
-            <div className={styles.panelBody}>
-              {campana.hitos.length ? (
-                campana.hitos.map((hito) => (
-                  <div className={styles.milestone} key={hito.id}>
-                    <span
-                      className={styles.milestoneNode}
-                      data-status={hito.estado}
-                    />
-                    <div>
-                      <div className={styles.milestoneTitle}>{hito.titulo}</div>
-                      <span className={styles.secondary}>
-                        {hito.responsable?.nombre ?? "Sin responsable"}
-                        {hito.descripcion ? ` · ${hito.descripcion}` : ""}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className={styles.status} data-status={hito.estado}>
-                        {hito.estado.replace("_", " ")}
-                      </span>
-                      <span className={styles.secondary}>
-                        {fecha(hito.fechaObjetivo)}
-                      </span>
-                      {canManage && hito.estado !== "cancelado" ? (
-                        <ActionButton
-                          variant="ghost"
-                          size="sm"
-                          className="mt-1"
-                          isPending={working === hito.id}
-                          onPress={() => void avanzarHito(hito)}
-                        >
-                          {hito.estado === "completado" ? "Reabrir" : "Avanzar"}
-                        </ActionButton>
-                      ) : null}
-                    </div>
+              <Card
+                render={(props) => <section {...props} />}
+                className={styles.panel}
+              >
+                <div className={styles.panelHeader}>
+                  <div>
+                    <p className={styles.sectionEyebrow}>Hoja de ruta</p>
+                    <h2 className={styles.panelTitle}>Hitos de la campaña</h2>
+                    <p className={styles.panelNote}>
+                      Los compromisos que marcan el avance del proyecto.
+                    </p>
                   </div>
-                ))
+                  {canManage ? (
+                    <ActionButton
+                      variant="outline"
+                      size="sm"
+                      onPress={() => setHitoOpen(true)}
+                    >
+                      <PlusIcon data-icon="inline-start" /> Agregar hito
+                    </ActionButton>
+                  ) : null}
+                </div>
+                <div className={styles.panelBody}>
+                  {campana.hitos.length ? (
+                    campana.hitos.map((hito, index) => (
+                      <div className={styles.milestone} key={hito.id}>
+                        <span
+                          className={styles.milestoneNode}
+                          data-status={hito.estado}
+                          aria-hidden
+                        >
+                          {hito.estado === "completado" ? (
+                            <CheckCircle2Icon />
+                          ) : (
+                            String(index + 1).padStart(2, "0")
+                          )}
+                        </span>
+                        <div>
+                          <div className={styles.milestoneTitle}>
+                            {hito.titulo}
+                          </div>
+                          <span className={styles.secondary}>
+                            {hito.responsable?.nombre ?? "Sin responsable"}
+                            {hito.descripcion ? ` · ${hito.descripcion}` : ""}
+                          </span>
+                        </div>
+                        <div className={styles.milestoneActions}>
+                          <span
+                            className={styles.status}
+                            data-status={hito.estado}
+                          >
+                            {hito.estado.replace("_", " ")}
+                          </span>
+                          <span className={styles.secondary}>
+                            {fecha(hito.fechaObjetivo)}
+                          </span>
+                          {canManage && hito.estado !== "cancelado" ? (
+                            <ActionButton
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1"
+                              isPending={working === hito.id}
+                              onPress={() => void avanzarHito(hito)}
+                            >
+                              {hito.estado === "completado"
+                                ? "Reabrir"
+                                : "Avanzar"}
+                            </ActionButton>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className={`${layout.empty} ${styles.empty}`}>
+                      <MilestoneIcon aria-hidden />
+                      <h2>Un proyecto, paso a paso</h2>
+                      <p>
+                        Agregá hitos para definir los compromisos, sus fechas y
+                        responsables.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+              {campana.observaciones ? (
+                <Card className={styles.panel}>
+                  <div className={styles.panelHeader}>
+                    <h2 className={styles.panelTitle}>Observaciones</h2>
+                  </div>
+                  <p className={styles.observations}>{campana.observaciones}</p>
+                </Card>
+              ) : null}
+            </Tabs.Panel>
+            <Tabs.Panel id="ordenes" className={styles.tabContent}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <p className={styles.sectionEyebrow}>
+                    Documentos / {campana.codigo}
+                  </p>
+                  <h2 className={styles.panelTitle}>Órdenes vinculadas</h2>
+                  <p className={styles.panelNote}>
+                    La ejecución y las entregas de esta campaña.
+                  </p>
+                </div>
+                <ClipboardListIcon className={styles.sectionIcon} aria-hidden />
+              </div>
+              {campana.ordenes.length ? (
+                <div
+                  className={styles.tableScroll}
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Documentos vinculados"
+                >
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Orden</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Entrega</th>
+                        <th scope="col">Avance</th>
+                        <th scope="col">Total</th>
+                        {canManage ? (
+                          <th scope="col" aria-label="Acciones" />
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campana.ordenes.map((orden) => (
+                        <tr key={orden.id}>
+                          <td>
+                            <Link
+                              className={styles.code}
+                              href={`/produccion/ordenes/${orden.id}`}
+                            >
+                              {orden.numero}
+                            </Link>
+                          </td>
+                          <td>
+                            <span
+                              className={styles.status}
+                              data-status={orden.estado}
+                            >
+                              {orden.estado}
+                            </span>
+                          </td>
+                          <td>{fecha(orden.fechaEntrega)}</td>
+                          <td className={styles.number}>
+                            <ProgresoValor
+                              progreso={orden.progreso}
+                              valor={orden.progresoPct}
+                            />
+                          </td>
+                          <td className={styles.number}>
+                            {money(orden.total)}
+                          </td>
+                          {canManage ? (
+                            <td className="text-right">
+                              <ActionButton
+                                variant="ghost"
+                                size="sm"
+                                isIconOnly
+                                title="Desvincular orden"
+                                aria-label="Desvincular orden"
+                                isPending={working === orden.id}
+                                onPress={() =>
+                                  void desvincularDocumento(
+                                    "ordenes",
+                                    orden.id,
+                                    orden.numero,
+                                  )
+                                }
+                              >
+                                <UnlinkIcon />
+                              </ActionButton>
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <div className={layout.empty}>
-                  <MilestoneIcon className="mx-auto mb-3 size-6" />
-                  Todavía no se definieron hitos.
+                <div className={`${layout.empty} ${styles.empty}`}>
+                  <ClipboardListIcon aria-hidden />
+                  <h2>Sin órdenes vinculadas</h2>
+                  <p>
+                    Vinculá una OT para seguir su producción y entrega desde
+                    esta campaña.
+                  </p>
                 </div>
               )}
-            </div>
-          </Card>
-
-          <Card
-            render={(props) => <section {...props} />}
-            className={styles.panel}
-          >
-            <Tabs defaultSelectedKey="ordenes" className={styles.tabsRoot}>
-              <NavigationTabList
-                label="Documentos de campaña"
-                className={styles.tabsList}
-                items={[
-                  {
-                    id: "ordenes",
-                    label: "Órdenes",
-                    count: campana.ordenes.length,
-                    icon: <ClipboardListIcon />,
-                  },
-                  {
-                    id: "presupuestos",
-                    label: "Presupuestos",
-                    count: campana.cotizaciones.length,
-                    icon: <FileTextIcon />,
-                  },
-                  {
-                    id: "archivos",
-                    label: "Archivos",
-                    count: archivos.length,
-                    icon: <FolderIcon />,
-                  },
-                  {
-                    id: "desarrollo",
-                    label: "Desarrollo",
-                    count: desarrollo.maestros.length,
-                    icon: <LayersIcon />,
-                  },
-                ]}
+            </Tabs.Panel>
+            <Tabs.Panel id="presupuestos" className={styles.tabContent}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <p className={styles.sectionEyebrow}>
+                    Documentos / {campana.codigo}
+                  </p>
+                  <h2 className={styles.panelTitle}>Presupuestos vinculados</h2>
+                  <p className={styles.panelNote}>
+                    Propuestas comerciales asociadas al proyecto.
+                  </p>
+                </div>
+                <FileTextIcon className={styles.sectionIcon} aria-hidden />
+              </div>
+              {campana.cotizaciones.length ? (
+                <div
+                  className={styles.tableScroll}
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Documentos vinculados"
+                >
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Presupuesto</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Emisión</th>
+                        <th scope="col">Total</th>
+                        {canManage ? (
+                          <th scope="col" aria-label="Acciones" />
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campana.cotizaciones.map((presupuesto) => (
+                        <tr key={presupuesto.id}>
+                          <td>
+                            <Link
+                              className={styles.code}
+                              href={`/comercial/presupuestos/${presupuesto.id}`}
+                            >
+                              {presupuesto.numero ?? "Sin emitir"}
+                            </Link>
+                          </td>
+                          <td>
+                            <span
+                              className={styles.status}
+                              data-status={presupuesto.estado}
+                            >
+                              {presupuesto.estado}
+                            </span>
+                          </td>
+                          <td>{fecha(presupuesto.fechaEmision)}</td>
+                          <td className={styles.number}>
+                            {money(presupuesto.total)}
+                          </td>
+                          {canManage ? (
+                            <td className="text-right">
+                              <ActionButton
+                                variant="ghost"
+                                size="sm"
+                                isIconOnly
+                                title="Desvincular presupuesto"
+                                aria-label="Desvincular presupuesto"
+                                isPending={working === presupuesto.id}
+                                onPress={() =>
+                                  void desvincularDocumento(
+                                    "cotizaciones",
+                                    presupuesto.id,
+                                    presupuesto.numero ??
+                                      "Presupuesto sin emitir",
+                                  )
+                                }
+                              >
+                                <UnlinkIcon />
+                              </ActionButton>
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={`${layout.empty} ${styles.empty}`}>
+                  <FileTextIcon aria-hidden />
+                  <h2>Sin presupuestos vinculados</h2>
+                  <p>
+                    Las propuestas que vincules se reunirán acá con su estado e
+                    importe.
+                  </p>
+                </div>
+              )}
+            </Tabs.Panel>
+            <Tabs.Panel
+              id="archivos"
+              className={`${styles.tabContent} ${styles.filesPanel}`}
+            >
+              <DesarrolloDocumentalPanel
+                campanaId={campana.id}
+                initial={desarrollo}
+                archivos={adjuntosGenerales}
+                ordenes={campana.ordenes}
+                canManage={canManage}
+                onCambio={setDesarrollo}
+                onEdicionChange={setEditandoArchivos}
               />
-              <Tabs.Panel id="ordenes" className={styles.tabContent}>
-                {campana.ordenes.length ? (
-                  <div
-                    className={styles.tableScroll}
-                    tabIndex={0}
-                    role="region"
-                    aria-label="Documentos vinculados"
-                  >
-                    <table className={styles.table}>
-                      <thead>
-                        <tr>
-                          <th>Orden</th>
-                          <th>Estado</th>
-                          <th>Entrega</th>
-                          <th>Avance</th>
-                          <th>Total</th>
-                          {canManage ? <th aria-label="Acciones" /> : null}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {campana.ordenes.map((orden) => (
-                          <tr key={orden.id}>
-                            <td>
-                              <Link
-                                className={styles.code}
-                                href={`/produccion/ordenes/${orden.id}`}
-                              >
-                                {orden.numero}
-                              </Link>
-                            </td>
-                            <td>
-                              <span
-                                className={styles.status}
-                                data-status={orden.estado}
-                              >
-                                {orden.estado}
-                              </span>
-                            </td>
-                            <td>{fecha(orden.fechaEntrega)}</td>
-                            <td className={styles.number}>
-                              <ProgresoValor
-                                progreso={orden.progreso}
-                                valor={orden.progresoPct}
-                              />
-                            </td>
-                            <td className={styles.number}>
-                              {money(orden.total)}
-                            </td>
-                            {canManage ? (
-                              <td className="text-right">
-                                <ActionButton
-                                  variant="ghost"
-                                  size="sm"
-                                  isIconOnly
-                                  title="Desvincular orden"
-                                  aria-label="Desvincular orden"
-                                  isPending={working === orden.id}
-                                  onPress={() =>
-                                    void desvincularDocumento(
-                                      "ordenes",
-                                      orden.id,
-                                      orden.numero,
-                                    )
-                                  }
-                                >
-                                  <UnlinkIcon />
-                                </ActionButton>
-                              </td>
-                            ) : null}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className={layout.empty}>
-                    Todavía no hay órdenes vinculadas.
-                  </div>
-                )}
-              </Tabs.Panel>
-              <Tabs.Panel id="presupuestos" className={styles.tabContent}>
-                {campana.cotizaciones.length ? (
-                  <div
-                    className={styles.tableScroll}
-                    tabIndex={0}
-                    role="region"
-                    aria-label="Documentos vinculados"
-                  >
-                    <table className={styles.table}>
-                      <thead>
-                        <tr>
-                          <th>Presupuesto</th>
-                          <th>Estado</th>
-                          <th>Emisión</th>
-                          <th>Total</th>
-                          {canManage ? <th aria-label="Acciones" /> : null}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {campana.cotizaciones.map((presupuesto) => (
-                          <tr key={presupuesto.id}>
-                            <td>
-                              <Link
-                                className={styles.code}
-                                href={`/comercial/presupuestos/${presupuesto.id}`}
-                              >
-                                {presupuesto.numero ?? "Sin emitir"}
-                              </Link>
-                            </td>
-                            <td>
-                              <span
-                                className={styles.status}
-                                data-status={presupuesto.estado}
-                              >
-                                {presupuesto.estado}
-                              </span>
-                            </td>
-                            <td>{fecha(presupuesto.fechaEmision)}</td>
-                            <td className={styles.number}>
-                              {money(presupuesto.total)}
-                            </td>
-                            {canManage ? (
-                              <td className="text-right">
-                                <ActionButton
-                                  variant="ghost"
-                                  size="sm"
-                                  isIconOnly
-                                  title="Desvincular presupuesto"
-                                  aria-label="Desvincular presupuesto"
-                                  isPending={working === presupuesto.id}
-                                  onPress={() =>
-                                    void desvincularDocumento(
-                                      "cotizaciones",
-                                      presupuesto.id,
-                                      presupuesto.numero ??
-                                        "Presupuesto sin emitir",
-                                    )
-                                  }
-                                >
-                                  <UnlinkIcon />
-                                </ActionButton>
-                              </td>
-                            ) : null}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className={layout.empty}>
-                    Todavía no hay presupuestos vinculados.
-                  </div>
-                )}
-              </Tabs.Panel>
-              <Tabs.Panel
-                id="archivos"
-                className={`${styles.tabContent} ${styles.panelBody}`}
-              >
+              <section className={styles.generalFiles}>
+                <div className={styles.filesHeading}>
+                  <p className={styles.sectionEyebrow}>Biblioteca de campaña</p>
+                  <h2 className={styles.panelTitle}>Adjuntos generales</h2>
+                  <p className={styles.panelNote}>
+                    Brief, referencias y nuevos archivos. Al incorporar un
+                    archivo a una revisión, lo encontrarás en su historial de
+                    versiones.
+                  </p>
+                </div>
                 <ArchivoUploader
                   scope="CAMPANA"
                   entidadId={campana.id}
-                  archivos={archivos}
-                  onCambio={setArchivos}
+                  archivos={adjuntosGenerales}
+                  onCambio={(adjuntos) =>
+                    setArchivos((actuales) =>
+                      actualizarAdjuntosGenerales(
+                        actuales,
+                        adjuntos,
+                        archivosVersionados,
+                      ),
+                    )
+                  }
                   soloLectura={!canManage}
-                  titulo="Adjuntar brief, cronograma o documentación"
-                  vacio="La campaña todavía no tiene archivos."
+                  titulo="Adjuntar archivos a la campaña"
+                  vacio="Todavía no hay adjuntos generales."
                   calcularHash
                 />
-              </Tabs.Panel>
-              <Tabs.Panel id="desarrollo" className={styles.tabContent}>
-                <DesarrolloDocumentalPanel
-                  campanaId={campana.id}
-                  initial={desarrollo}
-                  archivos={archivos}
-                  ordenes={campana.ordenes}
-                  canManage={canManage}
-                />
-              </Tabs.Panel>
-            </Tabs>
-          </Card>
-        </div>
-
-        <aside>
-          <Card
-            render={(props) => <section {...props} />}
-            className={styles.panel}
+              </section>
+            </Tabs.Panel>
+            <Tabs.Panel id="actividad" className={styles.summaryContent}>
+              <Card
+                render={(props) => <section {...props} />}
+                className={styles.panel}
+              >
+                <div className={styles.panelHeader}>
+                  <div>
+                    <p className={styles.sectionEyebrow}>Trazabilidad</p>
+                    <h2 className={styles.panelTitle}>
+                      Actividad de la campaña
+                    </h2>
+                    <p className={styles.panelNote}>
+                      Los últimos 20 cambios, con su fecha y responsable.
+                    </p>
+                  </div>
+                </div>
+                <div className={styles.panelBody}>
+                  <ol className={styles.timeline}>
+                    {campana.eventos.slice(0, 20).map((evento) => (
+                      <li className={styles.event} key={evento.id}>
+                        <p className={styles.eventText}>{evento.descripcion}</p>
+                        <div className={styles.eventMeta}>
+                          {evento.actor} · {fechaHora(evento.fecha)}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  {campana.eventos.length === 0 ? (
+                    <p className={styles.callout}>
+                      Todavía no hay actividad registrada.
+                    </p>
+                  ) : null}
+                </div>
+              </Card>{" "}
+            </Tabs.Panel>
+          </div>
+          <aside
+            className={styles.sidebar}
+            aria-label="Coordinación y recursos"
           >
-            <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>Coordinación</h2>
-            </div>
-            <div className={styles.panelBody}>
-              <dl className={styles.definitionList}>
-                <div className={styles.definition}>
-                  <dt>Responsable</dt>
-                  <dd>
-                    {campana.responsable ? (
-                      <span className={styles.person}>
-                        <IdentityAvatar name={campana.responsable.nombre} />
-                        <span>{campana.responsable.nombre}</span>
-                      </span>
-                    ) : (
-                      "Sin asignar"
-                    )}
-                  </dd>
-                </div>
-                <div className={styles.definition}>
-                  <dt>Inicio</dt>
-                  <dd>{fecha(campana.fechaInicio, true)}</dd>
-                </div>
-                <div className={styles.definition}>
-                  <dt>Objetivo</dt>
-                  <dd>{fecha(campana.fechaObjetivo, true)}</dd>
-                </div>
-                <div className={styles.definition}>
-                  <dt>Equipo</dt>
-                  <dd>
-                    {campana.equipo.length
-                      ? campana.equipo.map((m) => m.nombre).join(", ")
-                      : "Sin equipo"}
-                  </dd>
-                </div>
-              </dl>
-              {campana.descripcion ? (
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                  {campana.descripcion}
-                </p>
-              ) : null}
-            </div>
-          </Card>
-          <Card
-            render={(props) => <section {...props} />}
-            className={styles.panel}
-          >
-            <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>Disponibilidad material</h2>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.callout}>
-                {campana.dashboard.materiales.mensaje}
-              </div>
-            </div>
-          </Card>
-          {campana.dashboard.rentabilidad ? (
             <Card
               render={(props) => <section {...props} />}
               className={styles.panel}
             >
               <div className={styles.panelHeader}>
-                <h2 className={styles.panelTitle}>Rentabilidad estimada</h2>
+                <h2 className={styles.panelTitle}>Coordinación</h2>
+                <UsersIcon className={styles.sectionIcon} aria-hidden />
               </div>
               <div className={styles.panelBody}>
-                {campana.dashboard.rentabilidad.disponible ? (
-                  <dl className={styles.definitionList}>
-                    <div className={styles.definition}>
-                      <dt>Costo</dt>
-                      <dd className={styles.number}>
-                        {money(campana.dashboard.rentabilidad.costoEstimado)}
-                      </dd>
-                    </div>
-                    <div className={styles.definition}>
-                      <dt>Margen</dt>
-                      <dd className={styles.number}>
-                        {money(campana.dashboard.rentabilidad.margenEstimado)}
-                      </dd>
-                    </div>
-                    <div className={styles.definition}>
-                      <dt>Margen %</dt>
-                      <dd className={styles.number}>
-                        {campana.dashboard.rentabilidad.margenPct == null
-                          ? "—"
-                          : `${campana.dashboard.rentabilidad.margenPct.toFixed(1)}%`}
-                      </dd>
-                    </div>
-                  </dl>
+                <dl className={styles.definitionList}>
+                  <div className={styles.definition}>
+                    <dt>Responsable</dt>
+                    <dd>
+                      {campana.responsable ? (
+                        <span className={styles.person}>
+                          <IdentityAvatar name={campana.responsable.nombre} />
+                          <span>{campana.responsable.nombre}</span>
+                        </span>
+                      ) : (
+                        "Sin asignar"
+                      )}
+                    </dd>
+                  </div>
+                  <div className={styles.definition}>
+                    <dt>
+                      <CalendarDaysIcon aria-hidden /> Inicio
+                    </dt>
+                    <dd>{fecha(campana.fechaInicio, true)}</dd>
+                  </div>
+                  <div className={styles.definition}>
+                    <dt>
+                      <FlagIcon aria-hidden /> Objetivo
+                    </dt>
+                    <dd>{fecha(campana.fechaObjetivo, true)}</dd>
+                  </div>
+                  <div className={styles.definition}>
+                    <dt>Equipo</dt>
+                    <dd>
+                      {campana.equipo.length ? (
+                        <ul className={styles.team}>
+                          {campana.equipo.map((miembro) => (
+                            <li key={miembro.id}>
+                              <UserRoundIcon
+                                aria-hidden
+                                className={styles.teamIcon}
+                              />
+                              <span>
+                                {miembro.nombre}
+                                {miembro.funcion ? (
+                                  <small>{miembro.funcion}</small>
+                                ) : null}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        "Sin equipo"
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                {campana.descripcion ? (
+                  <p className={styles.description}>{campana.descripcion}</p>
                 ) : null}
-                <div className={`${styles.callout} mt-3`}>
-                  {campana.dashboard.rentabilidad.mensaje}
+              </div>
+            </Card>
+            <Card
+              render={(props) => <section {...props} />}
+              className={styles.panel}
+            >
+              <div className={styles.panelHeader}>
+                <h2 className={styles.panelTitle}>Materiales</h2>
+                <PackageIcon className={styles.sectionIcon} aria-hidden />
+              </div>
+              <div className={styles.panelBody}>
+                <div className={styles.callout}>
+                  {campana.dashboard.materiales.mensaje}
                 </div>
               </div>
             </Card>
-          ) : null}
-          <Card
-            render={(props) => <section {...props} />}
-            className={styles.panel}
-          >
-            <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>Actividad</h2>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.timeline}>
-                {campana.eventos.slice(0, 20).map((evento) => (
-                  <div className={styles.event} key={evento.id}>
-                    <p className={styles.eventText}>{evento.descripcion}</p>
-                    <div className={styles.eventMeta}>
-                      {evento.actor} · {fechaHora(evento.fecha)}
-                    </div>
+            {campana.dashboard.rentabilidad ? (
+              <Card
+                render={(props) => <section {...props} />}
+                className={styles.panel}
+              >
+                <div className={styles.panelHeader}>
+                  <h2 className={styles.panelTitle}>Rentabilidad estimada</h2>
+                  <TrendingUpIcon className={styles.sectionIcon} aria-hidden />
+                </div>
+                <div className={styles.panelBody}>
+                  {campana.dashboard.rentabilidad.disponible ? (
+                    <dl className={styles.definitionList}>
+                      <div className={styles.definition}>
+                        <dt>Costo</dt>
+                        <dd className={styles.number}>
+                          {money(campana.dashboard.rentabilidad.costoEstimado)}
+                        </dd>
+                      </div>
+                      <div className={styles.definition}>
+                        <dt>Margen</dt>
+                        <dd className={styles.number}>
+                          {money(campana.dashboard.rentabilidad.margenEstimado)}
+                        </dd>
+                      </div>
+                      <div className={styles.definition}>
+                        <dt>Margen %</dt>
+                        <dd className={styles.number}>
+                          {campana.dashboard.rentabilidad.margenPct == null
+                            ? "—"
+                            : `${campana.dashboard.rentabilidad.margenPct.toFixed(1)}%`}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+                  <div className={`${styles.callout} mt-3`}>
+                    {campana.dashboard.rentabilidad.mensaje}
                   </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        </aside>
-      </div>
+                </div>
+              </Card>
+            ) : null}
+          </aside>
+        </div>
+      </Tabs>
 
       <CampanaDialog
         isOpen={hitoOpen}
         onOpenChange={setHitoOpen}
-        title={<>Agregar hito</>}
+        title={<span className={form.dialogTitle}>Agregar hito</span>}
         description={<>Definí un compromiso concreto dentro de la campaña.</>}
       >
         <form onSubmit={crearHito}>
@@ -1024,7 +1225,7 @@ export function CampanaDetalleView({
       <CampanaDialog
         isOpen={editarOpen}
         onOpenChange={setEditarOpen}
-        title={<>Editar campaña</>}
+        title={<span className={form.dialogTitle}>Editar campaña</span>}
         description={
           <>Actualizá el encuadre comercial y las fechas de coordinación.</>
         }
@@ -1162,7 +1363,7 @@ export function CampanaDetalleView({
       <CampanaDialog
         isOpen={equipoOpen}
         onOpenChange={setEquipoOpen}
-        title={<>Equipo de campaña</>}
+        title={<span className={form.dialogTitle}>Equipo de campaña</span>}
         description={
           <>Seleccioná las personas que coordinan o ejecutan esta campaña.</>
         }
@@ -1226,7 +1427,7 @@ export function CampanaDetalleView({
       <CampanaDialog
         isOpen={vincularOpen}
         onOpenChange={setVincularOpen}
-        title={<>Vincular documento</>}
+        title={<span className={form.dialogTitle}>Vincular documento</span>}
         description={
           <>
             Solo se muestran documentos del mismo cliente y disponibles para

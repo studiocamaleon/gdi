@@ -170,7 +170,7 @@ export function PlanificacionGantt(props: Props) {
               <TooltipTrigger render={<button type="button" />} className={styles.deliveryPoint} data-start={posicion < 160} style={{ left: posicion }} aria-label={hitos.map(hito => `Entrega ${hito.orden}, ${hito.lote ?? hito.producto}: ${fechaPlan(hito.fecha)}`).join("; ")}>
                 <Diamond aria-hidden="true" /><span className={styles.deliveryCaption} style={{ maxWidth: Math.min(180, anchoDia - 28) }}>{etiqueta}</span>
               </TooltipTrigger>
-              <TooltipContent><div className={styles.deliveryTooltip}>{hitos.map(hito => <div key={hito.id}><strong>{hito.orden}{hito.lote ? ` · ${hito.lote}` : ""} · {fechaPlan(hito.fecha)}</strong><span>{hito.producto} · {hito.cliente}</span>{hito.lote && <span>{hito.detalle}</span>}</div>)}<small>Fecha comprometida, sin hora definida. El rombo se ubica al cierre de la jornada; los días no laborables se comprimen.</small></div></TooltipContent>
+              <TooltipContent className={styles.ganttTooltip}><div className={styles.deliveryTooltip}>{hitos.map(hito => <div key={hito.id}><strong>{hito.orden}{hito.lote ? ` · ${hito.lote}` : ""} · {fechaPlan(hito.fecha)}</strong><span>{hito.producto} · {hito.cliente}</span>{hito.lote && <span>{hito.detalle}</span>}</div>)}<small>Fecha comprometida, sin hora definida. El rombo se ubica al cierre de la jornada; los días no laborables se comprimen.</small></div></TooltipContent>
             </Tooltip>;
           })}
           {!hitosPorPosicion.length && <span className={styles.deliveryEmpty}>Sin entregas comprometidas en este período</span>}
@@ -203,7 +203,7 @@ export function PlanificacionGantt(props: Props) {
               {resumenVisible && <div className={styles.summaryBar} style={{ left: eje.aX(inicio!) * escala, width: Math.max(4, (eje.aX(fin!) - eje.aX(inicio!)) * escala) }} title={`Tramo estimado de ${grupo.nombre}`} />}
               {grupo.entrega && grupo.entrega >= desde && grupo.entrega <= hasta && <Tooltip>
                 <TooltipTrigger render={<button type="button" />} className={styles.milestone} style={{ left: Math.max(14, Math.min(ancho - 14, eje.aX(instanteDe(grupo.entrega, "23:59", zona)) * escala)) }} aria-label={`Entrega ${grupo.nombre}: ${fechaPlan(grupo.entrega)}`}><Diamond aria-hidden="true" /></TooltipTrigger>
-                <TooltipContent><div className={styles.taskTooltip}><strong>Entrega {grupo.nombre}</strong><span>{fechaPlan(grupo.entrega)}{grupo.tipo === "orden" ? " · Entrega final de la OT" : ""}</span><span>Fecha comprometida, sin hora definida.</span></div></TooltipContent>
+                <TooltipContent className={styles.ganttTooltip}><div className={styles.taskTooltip}><strong>Entrega {grupo.nombre}</strong><span>{fechaPlan(grupo.entrega)}{grupo.tipo === "orden" ? " · Entrega final de la OT" : ""}</span><span>Fecha comprometida, sin hora definida.</span></div></TooltipContent>
               </Tooltip>}
               {barras.map(({ op, geometria: g, pista }) => {
                 const tramos = op.agenda?.tramosOperacion ?? [];
@@ -218,7 +218,7 @@ export function PlanificacionGantt(props: Props) {
                   <span className={styles.phaseStrip} aria-hidden="true">{fases.map((fase, indice) => <span key={indice} className={styles.phaseSegment} data-phase={fase.tipo} style={{ left: `${fase.inicio}%`, width: `${fase.ancho}%` }} />)}</span>
                   {!g.corta && <><strong>{op.item.ordenNumero.replace(/^OT-\d{4}-/, "")} · {op.paso.nombre}</strong><small>{op.item.loteEntrega?.nombre ? `${op.item.loteEntrega.nombre} · ` : ""}{op.item.clienteNombre}</small></>}
                 </TooltipTrigger>
-                <TooltipContent side="top">
+                <TooltipContent className={styles.ganttTooltip} side="top">
                   <div className={styles.taskTooltip}>
                     <strong>{op.paso.nombre}</strong>
                     <span>{op.item.ordenNumero}{op.item.loteEntrega ? ` · ${op.item.loteEntrega.nombre}` : ""}</span>

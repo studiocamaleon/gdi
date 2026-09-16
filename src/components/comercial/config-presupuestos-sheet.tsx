@@ -5,8 +5,10 @@ import { Checkbox, Drawer, Input, Label, TextArea } from "@heroui/react";
 import { Save, Settings, X } from "lucide-react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import focus from "@/components/design-system/field-focus.module.css";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
@@ -22,6 +24,7 @@ export function ConfigPresupuestosSheet({
   onCerrar: () => void;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const { moneda } = useConfigRegional();
   const [cfg, setCfg] = React.useState<ConfigPresupuestos | null>(null);
   const [guardando, setGuardando] = React.useState(false);
@@ -64,7 +67,7 @@ export function ConfigPresupuestosSheet({
     <Drawer>
       <Drawer.Backdrop
         {...scope}
-        className={theme.theme}
+        className={themeClass}
         variant="opaque"
         isOpen
         onOpenChange={(open) => {

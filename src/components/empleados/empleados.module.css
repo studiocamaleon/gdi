@@ -1,7 +1,7 @@
 .page,
 .ficha {
   color: var(--foreground);
-  background: var(--background);
+  background: var(--canvas-background);
 }
 .actions,
 .toolbarEnd,
@@ -43,7 +43,7 @@
   min-width: 230px;
   max-width: calc(100vw - 32px);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .menu [role="menuitem"] {
   gap: 10px;
@@ -80,13 +80,13 @@
   border-color: var(--border);
 }
 .table tbody tr:hover {
-  background: var(--background);
+  background: var(--canvas-background);
 }
 .table tr[data-state="selected"] {
   background: var(--accent-soft);
 }
 .employeesTable {
-  min-width: 1160px;
+  min-width: 1080px;
 }
 .table .checkCell {
   width: 44px;
@@ -137,13 +137,13 @@
   gap: 0;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
 }
 .sectionHeader {
   gap: 5px;
-  padding: 18px 22px;
+  padding: 20px 22px;
   border-bottom: 1px solid var(--border);
 }
 .sectionHeader p {
@@ -155,9 +155,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 .sectionBody {
   display: flex;
@@ -190,7 +190,7 @@
 .ficha input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]) {
   min-width: 0;
   width: 100%;
-  height: 36px;
+  height: 38px;
   font-size: 13px;
 }
 .ficha [data-slot="description"] {
@@ -202,10 +202,10 @@
   color: var(--danger);
 }
 .resourceCard {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 .resourceCard .sectionHeader {
-  background: var(--background);
+  background: var(--canvas-background);
 }
 .primaryStar {
   width: 14px;
@@ -274,7 +274,7 @@
   gap: 12px;
   padding: 16px;
   border: 1px solid color-mix(in srgb, var(--danger) 25%, var(--border));
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--danger);
   background: var(--danger-soft);
   box-shadow: none;
@@ -287,8 +287,10 @@
   margin: 5px 0 0;
 }
 .sectionTitle > svg {
-  width: 18px;
-  height: 18px;
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.5;
+  color: var(--accent-soft-foreground);
 }
 .sectionHeader :global(.card__description) {
   margin-top: 4px;
@@ -309,12 +311,12 @@
   gap: 0;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
 }
 .commissionCard .sectionHeader {
-  background: var(--background);
+  background: var(--canvas-background);
 }
 .commissionGrid {
   display: grid;
@@ -332,7 +334,7 @@
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--foreground);
   background: var(--surface);
   box-shadow: none;
@@ -346,19 +348,43 @@
   margin: 5px 0 0;
   color: var(--muted-text);
 }
+/* Historial como secuencia del legajo. */
 .historyItem {
   display: flex;
   align-items: flex-start;
-  justify-content: flex-start;
-  gap: 12px;
+  gap: 14px;
+  position: relative;
 }
-.historyItem + .historyItem {
-  border-top: 1px solid var(--border);
-  padding-top: 16px;
+.historyItem:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 36px;
+  bottom: -20px;
+  left: 17px;
+  border-left: 1px solid var(--border);
+}
+.historyIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.historyIcon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
 }
 .historyItem p {
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.7;
+}
+.historyItem time {
+  font: 10px/1.6 var(--brand-mono);
 }
 @container list-page (max-width: 800px) {
   .commissionGrid {
@@ -371,5 +397,71 @@
 @media (max-width: 639px) {
   .commissionGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Legajo: el mismo papel y las mismas pestañas grafito de las fichas de Grafo. */
+.fichaTitle h1 {
+  overflow-wrap: anywhere;
+}
+.recordSummary {
+  composes: recordSummary from "../crm/contactos-workspace.module.css";
+  overflow: hidden;
+  grid-template-columns: 1fr 1.2fr 1fr;
+}
+.recordSummary .recordStatus {
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+}
+.recordStatus dt {
+  color: var(--brand-muted-on-graphite);
+}
+.recordStatus svg {
+  color: var(--accent);
+}
+.tabsRoot {
+  width: 100%;
+  min-width: 0;
+  gap: 22px;
+}
+.tabPanel {
+  min-width: 0;
+  padding: 0;
+}
+.tabPanel[data-inert] {
+  display: none;
+}
+.legajoGrid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 20px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.fullWidth {
+  grid-column: 1 / -1;
+}
+.accessCard .sectionHeader {
+  border-bottom: 0;
+}
+.ficha .mainTabs[data-variant="detailed"] [role="tablist"] {
+  grid-template-columns: repeat(var(--tab-count), minmax(0, 1fr));
+}
+.ficha fieldset:disabled {
+  opacity: 1;
+}
+@container list-page (max-width: 1000px) {
+  .legajoGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container list-page (max-width: 650px) {
+  .recordSummary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sectionTitle {
+    font-size: 18px;
   }
 }

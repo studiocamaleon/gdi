@@ -37,10 +37,7 @@ export type MetodoPrecio =
   | "fijo_con_margen_variable"
   | "variable_por_cantidad";
 
-export type EstrategiaPricingCompuesto =
-  | "GENERAL"
-  | "POR_COMPONENTE"
-  | "MIXTO";
+export type EstrategiaPricingCompuesto = "GENERAL" | "POR_COMPONENTE" | "MIXTO";
 
 export interface TabPrecioConfig {
   metodoCalculo: MetodoPrecio;
@@ -80,21 +77,33 @@ function newKey() {
   return `tier-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function tiersFromDetalle(metodo: MetodoPrecio, detalle: Record<string, unknown>): TierBase[] {
-  const arr = Array.isArray(detalle.tiers) ? (detalle.tiers as Array<Record<string, unknown>>) : [];
+function tiersFromDetalle(
+  metodo: MetodoPrecio,
+  detalle: Record<string, unknown>,
+): TierBase[] {
+  const arr = Array.isArray(detalle.tiers)
+    ? (detalle.tiers as Array<Record<string, unknown>>)
+    : [];
   return arr.map((t) => ({
     uiKey: newKey(),
-    quantityUntil: typeof t.quantityUntil === "number" ? t.quantityUntil : undefined,
+    quantityUntil:
+      typeof t.quantityUntil === "number" ? t.quantityUntil : undefined,
     quantity: typeof t.quantity === "number" ? t.quantity : undefined,
     price: typeof t.price === "number" ? t.price : undefined,
     marginPct: typeof t.marginPct === "number" ? t.marginPct : undefined,
   }));
 }
 
-function tiersToPayload(metodo: MetodoPrecio, tiers: TierBase[]): Array<Record<string, unknown>> {
+function tiersToPayload(
+  metodo: MetodoPrecio,
+  tiers: TierBase[],
+): Array<Record<string, unknown>> {
   return tiers.map((t) => {
     if (metodo === "margen_variable") {
-      return { quantityUntil: t.quantityUntil ?? 0, marginPct: t.marginPct ?? 0 };
+      return {
+        quantityUntil: t.quantityUntil ?? 0,
+        marginPct: t.marginPct ?? 0,
+      };
     }
     if (metodo === "variable_por_cantidad") {
       return { quantityUntil: t.quantityUntil ?? 0, price: t.price ?? 0 };
@@ -120,7 +129,9 @@ function cleanForCompare(value: unknown): unknown {
   );
 }
 
-export function normalizePrecioConfig(config: TabPrecioConfig | null | undefined): TabPrecioConfig {
+export function normalizePrecioConfig(
+  config: TabPrecioConfig | null | undefined,
+): TabPrecioConfig {
   const metodo = config?.metodoCalculo ?? "por_margen";
   const detalle = config?.detalle ?? {};
   const compuesto = config?.compuesto;
@@ -192,7 +203,9 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
     metodo === "variable_por_cantidad" ||
     metodo === "fijado_por_cantidad";
 
-  const [tiers, setTiers] = React.useState<TierBase[]>(() => tiersFromDetalle(metodo, detalle));
+  const [tiers, setTiers] = React.useState<TierBase[]>(() =>
+    tiersFromDetalle(metodo, detalle),
+  );
   const didMountTiers = React.useRef(false);
 
   // Si cambia el método, sincronizar tiers (limpiar si pasamos a no-tier)
@@ -221,7 +234,8 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
 
   const setMetodo = (m: MetodoPrecio) => {
     let newDetalle: Record<string, unknown> = {};
-    if (m === "por_margen") newDetalle = { marginPct: 40, minimumMarginPct: 25 };
+    if (m === "por_margen")
+      newDetalle = { marginPct: 40, minimumMarginPct: 25 };
     else if (m === "precio_fijo") newDetalle = { price: 0, minimumPrice: 0 };
     else if (m === "precio_fijo_para_margen_minimo")
       newDetalle = { price: 0, minimumPrice: 0, minimumMarginPct: 25 };
@@ -257,7 +271,9 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
   };
 
   const updateTier = (idx: number, patch: Partial<TierBase>) => {
-    setTiers((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+    setTiers((prev) =>
+      prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    );
   };
 
   const removeTier = (idx: number) => {
@@ -277,8 +293,12 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
           />
           <HumanSelect
             value={metodo}
-            onValueChange={(v) => setMetodo((v || "por_margen") as MetodoPrecio)}
-            options={METODOS.map((m) => optionFromLabel(m.value, metodoPrecioLabels))}
+            onValueChange={(v) =>
+              setMetodo((v || "por_margen") as MetodoPrecio)
+            }
+            options={METODOS.map((m) =>
+              optionFromLabel(m.value, metodoPrecioLabels),
+            )}
           />
           <FieldDescription>{metodoLabel.descripcion}</FieldDescription>
         </Field>
@@ -287,15 +307,20 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
       <FieldGroup className={pricingStyles.methodFields}>
         {metodo === "por_margen" && (
           <Field>
-            <FieldLabel htmlFor={`${fieldId}-margen-objetivo`}>Margen objetivo (%)</FieldLabel>
+            <FieldLabel htmlFor={`${fieldId}-margen-objetivo`}>
+              Margen objetivo (%)
+            </FieldLabel>
             <Input
               id={`${fieldId}-margen-objetivo`}
               type="number"
               value={(detalle.marginPct as number) ?? 0}
-              onChange={(e) => updateDetalleField("marginPct", Number(e.target.value))}
+              onChange={(e) =>
+                updateDetalleField("marginPct", Number(e.target.value))
+              }
             />
             <FieldDescription>
-              Preserva este margen sobre el precio neto después de costos internos y comisiones.
+              Preserva este margen sobre el precio neto después de costos
+              internos y comisiones.
             </FieldDescription>
           </Field>
         )}
@@ -309,7 +334,9 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
               id={`${fieldId}-precio-fijo`}
               type="number"
               value={(detalle.price as number) ?? 0}
-              onChange={(e) => updateDetalleField("price", Number(e.target.value))}
+              onChange={(e) =>
+                updateDetalleField("price", Number(e.target.value))
+              }
             />
           </Field>
         )}
@@ -317,12 +344,16 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
         {metodo === "precio_fijo_para_margen_minimo" && (
           <FieldGroup className={pricingStyles.fieldGrid}>
             <Field>
-              <FieldLabel htmlFor={`${fieldId}-precio-base`}>Precio base</FieldLabel>
+              <FieldLabel htmlFor={`${fieldId}-precio-base`}>
+                Precio base
+              </FieldLabel>
               <Input
                 id={`${fieldId}-precio-base`}
                 type="number"
                 value={(detalle.price as number) ?? 0}
-                onChange={(e) => updateDetalleField("price", Number(e.target.value))}
+                onChange={(e) =>
+                  updateDetalleField("price", Number(e.target.value))
+                }
               />
             </Field>
             <Field>
@@ -339,30 +370,10 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
               />
             </Field>
             <FieldDescription className="col-span-full">
-              Si el precio base no preserva el mínimo, el sistema lo ajusta hacia arriba.
+              Si el precio base no preserva el mínimo, el sistema lo ajusta
+              hacia arriba.
             </FieldDescription>
           </FieldGroup>
-        )}
-
-        {usaPrecioConfigurado && (
-          <Field orientation="horizontal" className={pricingStyles.switchField}>
-            <Switch
-              id={`${fieldId}-incluye-iva`}
-              checked={(detalle.precioIncluyeIva ?? true) !== false}
-              onCheckedChange={(checked) =>
-                onChange({
-                  metodoCalculo: metodo,
-                  detalle: { ...detalle, precioIncluyeIva: checked },
-                })
-              }
-            />
-            <FieldContent>
-              <FieldLabel htmlFor={`${fieldId}-incluye-iva`}>El precio incluye IVA</FieldLabel>
-              <FieldDescription>
-                Activado: el importe cargado es final. Desactivado: es neto y el IVA se suma.
-              </FieldDescription>
-            </FieldContent>
-          </Field>
         )}
 
         {usaTiers && (
@@ -372,7 +383,7 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
               <CardDescription>
                 Ordená la regla que se aplicará según la cantidad solicitada.
               </CardDescription>
-              <CardAction>
+              <CardAction className={pricingStyles.tierAction}>
                 <Button onClick={addTier} variant="outline" size="sm">
                   <PlusIcon data-icon="inline-start" />
                   Agregar tramo
@@ -389,73 +400,113 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
               <div className={pricingStyles.tierRows}>
                 {tiers.map((tier, idx) => (
                   <div key={tier.uiKey} className={pricingStyles.tierRow}>
-                    <Badge variant="secondary">#{idx + 1}</Badge>
+                    <Badge
+                      variant="secondary"
+                      className={pricingStyles.tierIndex}
+                    >
+                      #{idx + 1}
+                    </Badge>
 
                     {(metodo === "margen_variable" ||
                       metodo === "variable_por_cantidad") && (
-                      <>
-                        <span className={pricingStyles.tierText}>Hasta</span>
-                        <Input
-                          aria-label={`Límite del tramo ${idx + 1}`}
-                          type="number"
-                          value={tier.quantityUntil ?? 0}
-                          onChange={(e) =>
-                            updateTier(idx, { quantityUntil: Number(e.target.value) })
-                          }
-                        />
-                        <span className={pricingStyles.tierText}>{unidadLabel} →</span>
-                      </>
+                      <Field className={pricingStyles.tierField}>
+                        <FieldLabel htmlFor={`${fieldId}-limite-${tier.uiKey}`}>
+                          Hasta
+                        </FieldLabel>
+                        <div className={pricingStyles.tierInput}>
+                          <Input
+                            id={`${fieldId}-limite-${tier.uiKey}`}
+                            aria-label={`Límite del tramo ${idx + 1}`}
+                            type="number"
+                            value={tier.quantityUntil ?? 0}
+                            onChange={(e) =>
+                              updateTier(idx, {
+                                quantityUntil: Number(e.target.value),
+                              })
+                            }
+                          />
+                          <span className={pricingStyles.tierUnit}>
+                            {unidadLabel}
+                          </span>
+                        </div>
+                      </Field>
                     )}
 
                     {(metodo === "fijado_por_cantidad" ||
                       metodo === "fijo_con_margen_variable") && (
-                      <>
-                        <span className={pricingStyles.tierText}>Cantidad</span>
-                        <Input
-                          aria-label={`Cantidad del tramo ${idx + 1}`}
-                          type="number"
-                          value={tier.quantity ?? 0}
-                          onChange={(e) =>
-                            updateTier(idx, { quantity: Number(e.target.value) })
-                          }
-                        />
-                        <span className={pricingStyles.tierText}>→</span>
-                      </>
+                      <Field className={pricingStyles.tierField}>
+                        <FieldLabel
+                          htmlFor={`${fieldId}-cantidad-${tier.uiKey}`}
+                        >
+                          Cantidad exacta
+                        </FieldLabel>
+                        <div className={pricingStyles.tierInput}>
+                          <Input
+                            id={`${fieldId}-cantidad-${tier.uiKey}`}
+                            aria-label={`Cantidad del tramo ${idx + 1}`}
+                            type="number"
+                            value={tier.quantity ?? 0}
+                            onChange={(e) =>
+                              updateTier(idx, {
+                                quantity: Number(e.target.value),
+                              })
+                            }
+                          />
+                          <span className={pricingStyles.tierUnit}>
+                            {unidadLabel}
+                          </span>
+                        </div>
+                      </Field>
                     )}
 
                     {(metodo === "margen_variable" ||
                       metodo === "fijo_con_margen_variable") && (
-                      <>
-                        <Input
-                          aria-label={`Margen del tramo ${idx + 1}`}
-                          type="number"
-                          value={tier.marginPct ?? 0}
-                          onChange={(e) =>
-                            updateTier(idx, { marginPct: Number(e.target.value) })
-                          }
-                        />
-                        <span className={pricingStyles.tierText}>% margen objetivo</span>
-                      </>
+                      <Field className={pricingStyles.tierField}>
+                        <FieldLabel htmlFor={`${fieldId}-margen-${tier.uiKey}`}>
+                          Margen objetivo
+                        </FieldLabel>
+                        <div className={pricingStyles.tierInput}>
+                          <Input
+                            id={`${fieldId}-margen-${tier.uiKey}`}
+                            aria-label={`Margen del tramo ${idx + 1}`}
+                            type="number"
+                            value={tier.marginPct ?? 0}
+                            onChange={(e) =>
+                              updateTier(idx, {
+                                marginPct: Number(e.target.value),
+                              })
+                            }
+                          />
+                          <span className={pricingStyles.tierUnit}>%</span>
+                        </div>
+                      </Field>
                     )}
 
                     {(metodo === "variable_por_cantidad" ||
                       metodo === "fijado_por_cantidad") && (
-                      <>
-                        <span className={pricingStyles.tierText}>{moneda.simbolo}</span>
-                        <Input
-                          aria-label={`Precio del tramo ${idx + 1}`}
-                          type="number"
-                          value={tier.price ?? 0}
-                          onChange={(e) =>
-                            updateTier(idx, { price: Number(e.target.value) })
-                          }
-                        />
-                        <span className={pricingStyles.tierText}>{precioPorUnidadLabel}</span>
-                      </>
+                      <Field className={pricingStyles.tierField}>
+                        <FieldLabel htmlFor={`${fieldId}-precio-${tier.uiKey}`}>
+                          Precio {precioPorUnidadLabel}
+                        </FieldLabel>
+                        <div className={pricingStyles.tierInput}>
+                          <Input
+                            id={`${fieldId}-precio-${tier.uiKey}`}
+                            aria-label={`Precio del tramo ${idx + 1}`}
+                            type="number"
+                            value={tier.price ?? 0}
+                            onChange={(e) =>
+                              updateTier(idx, { price: Number(e.target.value) })
+                            }
+                          />
+                          <span className={pricingStyles.tierUnit}>
+                            {moneda.simbolo}
+                          </span>
+                        </div>
+                      </Field>
                     )}
 
-                    <span className={pricingStyles.tierGrow} />
                     <Button
+                      className={pricingStyles.tierRemove}
                       aria-label={`Eliminar tramo ${idx + 1}`}
                       variant="destructive"
                       size="icon-sm"
@@ -467,7 +518,7 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
                 ))}
               </div>
 
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className={pricingStyles.tierHint}>
                 {metodo === "margen_variable" &&
                   `Cada tramo aplica si la cantidad en ${unidadLabel} es menor o igual al límite.`}
                 {metodo === "variable_por_cantidad" &&
@@ -479,6 +530,30 @@ export function TabPrecioEditor({ value, onChange, unidadComercial }: Props) {
               </p>
             </CardContent>
           </Card>
+        )}
+        {usaPrecioConfigurado && (
+          <Field orientation="horizontal" className={pricingStyles.switchField}>
+            <Switch
+              id={`${fieldId}-incluye-iva`}
+              aria-label="El precio incluye IVA"
+              checked={(detalle.precioIncluyeIva ?? true) !== false}
+              onCheckedChange={(checked) =>
+                onChange({
+                  metodoCalculo: metodo,
+                  detalle: { ...detalle, precioIncluyeIva: checked },
+                })
+              }
+            />
+            <FieldContent>
+              <FieldLabel htmlFor={`${fieldId}-incluye-iva`}>
+                El precio incluye IVA
+              </FieldLabel>
+              <FieldDescription>
+                Activado: el importe cargado es final. Desactivado: es neto y el
+                IVA se suma.
+              </FieldDescription>
+            </FieldContent>
+          </Field>
         )}
       </FieldGroup>
     </div>

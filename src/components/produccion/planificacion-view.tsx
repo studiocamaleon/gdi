@@ -12,14 +12,12 @@ import { ActionButton } from "@/components/design-system/action-button";
 import { SegmentedControl } from "@/components/design-system/choice-controls";
 import { ListMetric } from "@/components/design-system/list-metric";
 import { SelectField } from "@/components/design-system/select-field";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme, useLegacyDesignScope } from "@/components/design-system/appearance";
 import layout from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { construirEje } from "@/lib/eje-laboral";
 import { claveFechaEnZona, instanteDe, sumarDiasAClave } from "@/lib/zona";
@@ -35,6 +33,8 @@ const NIVELES_ZOOM = [25, 50, 75, 100, 150, 200, 300, 400];
 
 export function PlanificacionView(inicial: DatosPlanificacion) {
   const scope = useDesignScope();
+  const designTheme = useDesignTheme();
+  const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
   const { datos, operaciones, simulacion, ahora, zona, noLaborables, actualizar, actualizando, error, calculando, sinSimulacion } = usePlanificacion(inicial);
   const [modo, setModo] = useState<"recursos" | "ordenes">("recursos");
   const [consulta, setConsulta] = useState("");
@@ -131,31 +131,31 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
     setPanelAbierto(false);
   };
 
-  if (sinSimulacion) return <section className={styles.page} aria-label="Planificación de producción" aria-busy={calculando}>
+  if (sinSimulacion) return <section {...scope} data-visual="brand" className={`${legacyTheme ?? designTheme} ${layout.page} ${styles.page}`} aria-label="Planificación de producción" aria-busy={calculando}>
     <Alert variant={error ? 'destructive' : 'default'}>{calculando ? <GdiSpinner /> : <RefreshCw />}
       <AlertTitle>{error ? 'No se pudo calcular la planificación' : 'Calculando planificación'}</AlertTitle>
       <AlertDescription>{error ?? 'Estamos ubicando las operaciones y sus dependencias en el calendario.'}</AlertDescription>
     </Alert>
-    {error && <Button variant="outline" onClick={() => void actualizar()}>Volver a intentar</Button>}
+    {error && <ActionButton variant="outline" onPress={() => void actualizar()}>Volver a intentar</ActionButton>}
   </section>;
 
-  return <section className={styles.page} aria-label="Planificación de producción" aria-busy={calculando}>
+  return <section {...scope} data-visual="brand" className={`${legacyTheme ?? designTheme} ${layout.page} ${styles.page}`} aria-label="Planificación de producción" aria-busy={calculando}>
     <h1 className="sr-only">Planificación de producción</h1>
 
     {error && <Alert variant="destructive"><TriangleAlert /><AlertTitle>No se pudo completar la consulta</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     {calculando && <Badge variant="secondary"><GdiSpinner />Actualizando fechas</Badge>}
     {(datos.initialPartialWarning || datos.initialMeta.alcance !== "completo") && <Alert><Info /><AlertDescription>{datos.initialPartialWarning ?? "Tu acceso muestra sólo parte del taller. Esta proyección puede omitir carga de otros trabajos y no confirma la capacidad total."}</AlertDescription></Alert>}
 
-    {/* El alcance HeroUI termina en los controles: no cambia los tokens del Gantt. */}
-    <div {...scope} className={`${theme.theme} ${header.stats}`}>
+    {/* La identidad visual se comparte con el calendario; su geometría y cálculos se conservan. */}
+    <div {...scope} className={`${designTheme} ${header.stats}`}>
       <ListMetric label="Órdenes en producción" value={numeroOrdenes} hint="Órdenes de trabajo" icon={ListTree} />
       <ListMetric label="Operaciones con fecha" value={programadas} hint={`De ${operaciones.length} operaciones`} icon={CalendarDays} />
       <ListMetric label="Entregas para revisar" value={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo} hint={`${ordenesVencidas} vencidas · ${ordenesEnRiesgo} en riesgo · ${ordenesPorRevisar} por confirmar`} icon={TriangleAlert} tone={ordenesVencidas + ordenesPorRevisar + ordenesEnRiesgo ? "danger" : "neutral"} />
     </div>
 
     <div className={styles.workbench}>
-    <div {...scope} className={`${theme.theme} ${header.viewControls}`}>
-      <SegmentedControl aria-label="Agrupar planificación" value={modo} options={[
+    <div {...scope} className={`${designTheme} ${header.viewControls}`}>
+      <SegmentedControl tone="graphite" aria-label="Agrupar planificación" value={modo} options={[
         { value: "recursos", label: "Por recursos", icon: <Factory size={15} aria-hidden /> },
         { value: "ordenes", label: "Por órdenes", icon: <ListTree size={15} aria-hidden /> },
       ]} onChange={(valor) => { setModo(valor as "recursos" | "ordenes"); if (valor === "ordenes" && seleccionId) setAbiertos((actual) => ({ ...actual, ...abrirGruposRecorridoPlan(ordenes, relacionadas) })); }} />
@@ -171,7 +171,7 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
     </div>
 
     <div key={modo} className={styles.ganttCard} role="region" aria-label={`Calendario por ${modo === "recursos" ? "recursos" : "órdenes"}`}>
-      <div {...scope} className={`${theme.theme} ${header.toolbar}`}>
+      <div {...scope} className={`${designTheme} ${header.toolbar}`}>
         <SearchField className={header.search} value={consulta} onChange={(valor) => { setFocoRecorrido(false); setConsulta(valor); }} aria-label="Buscar en planificación">
           <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
             <SearchField.SearchIcon />
@@ -216,8 +216,8 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
         <div><span><i className={styles.legendOperator} />Operario</span><span><i className={styles.legendMachine} />Operación autónoma</span><span><i className={styles.legendWait} />Espera / fuera de horario</span><span><i className={styles.legendSelected} />Selección</span><span><i className={styles.legendRelated} />Relacionada</span><span><i className={styles.legendPartial} />Orientativa</span><span><i className={styles.legendDiamond} />Entrega</span></div>
         {seleccion ? <div className={styles.selectionActions}>
           <span className={styles.selectionText} title={`${seleccion.item.ordenNumero} · ${seleccion.item.loteEntrega?.nombre ?? seleccion.productoNombre} · ${seleccion.paso.nombre}`}>{seleccion.item.ordenNumero}{seleccion.item.loteEntrega ? ` · ${seleccion.item.loteEntrega.nombre}` : ""} · {seleccion.paso.nombre}</span>
-          <Button variant="ghost" size="sm" onClick={verRecorrido} disabled={!rangoRecorrido}>Ver recorrido</Button>
-          <Button variant="outline" size="sm" onClick={() => setPanelAbierto(true)}>Ver detalle</Button>
+          <ActionButton variant="ghost" size="sm" onPress={verRecorrido} isDisabled={!rangoRecorrido}>Ver recorrido</ActionButton>
+          <ActionButton variant="outline" size="sm" onPress={() => setPanelAbierto(true)}>Ver detalle</ActionButton>
         </div> : <span>{consulta ? `${visibles.size} de ${operaciones.length} operaciones` : `${operaciones.length} operaciones`} · Seleccioná una tarea para ver sus dependencias</span>}
       </div>
     </div>
@@ -225,11 +225,11 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
 
     <footer className={styles.footer}>
       <div className={styles.footerNotes}><span>Calendario laboral · {zona.replaceAll("_", " ")} · Desplazá horizontalmente para recorrer los días</span><span>Consulta: {fechaHora(ahora)} · Indicadores sobre todas las órdenes accesibles.</span></div>
-      <Button variant={pendientes.length || sinRuta.length ? "outline" : "ghost"} size="sm" onClick={() => setVerPendientes(true)}><Info data-icon="inline-start" />{pendientes.length + sinRuta.length ? `${pendientes.length + sinRuta.length} sin planificación completa` : "Estado de la planificación"}</Button>
+      <ActionButton variant={pendientes.length || sinRuta.length ? "outline" : "ghost"} size="sm" onPress={() => setVerPendientes(true)}><Info size={16} aria-hidden />{pendientes.length + sinRuta.length ? `${pendientes.length + sinRuta.length} sin planificación completa` : "Estado de la planificación"}</ActionButton>
     </footer>
 
     <Sheet open={panelAbierto && !!seleccion} onOpenChange={setPanelAbierto}>
-      <SheetContent className={styles.detailPanel} initialFocus={tituloDetalle}>
+      <SheetContent {...scope} {...legacyScope} className={`${legacyTheme ?? designTheme} ${styles.detailPanel}`} overlayClassName={`${designTheme} ${styles.detailOverlay}`} initialFocus={tituloDetalle}>
         {seleccion && <>
           <SheetHeader className={styles.detailHeader}>
             <div className={styles.detailBadges}><Badge variant="outline">{seleccion.item.ordenNumero}</Badge>{seleccion.item.loteEntrega && <Badge variant="secondary"><Layers3 />{seleccion.item.loteEntrega.nombre}</Badge>}</div>
@@ -245,7 +245,6 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
               {seleccion.agenda?.enCurso && <><dt>Tiempo pendiente</dt><dd>{duracionPlan(seleccion.agenda.duracionMin)}</dd></>}
               {seleccion.agenda?.tercerizado && <><dt>Plazo del proveedor</dt><dd>{seleccion.agenda.plazoDias ?? "Sin definir"} días hábiles</dd></>}
             </dl><p className={styles.note}>La duración proviene de la cotización y se consulta sin modificarla.</p></div>
-            <Separator />
             <div className={styles.detailSection}><h3>Fechas de producción y entrega</h3><dl className={styles.facts}>
               <dt>Inicio de la operación</dt><dd>{fechaHora(seleccion.agenda?.inicio)}</dd>
               <dt>Fin de la operación</dt><dd>{fechaHora(seleccion.agenda?.fin)}</dd>
@@ -259,7 +258,6 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
               {estadoSeleccion === "revision" && <Alert><Info /><AlertTitle>Proyección orientativa</AlertTitle><AlertDescription>{motivosRevisionSeleccion.length ? motivosRevisionSeleccion.join(" ") : "Faltan datos o hay dependencias sin confirmar."} Esta estimación puede cambiar al completar esos datos.</AlertDescription></Alert>}
               <p className={styles.note}>El fin previsto se recalcula con el trabajo pendiente desde ahora. La entrega comprometida es la fecha guardada en la orden y se conserva hasta que se acuerde una reprogramación.</p>
             </div>
-            <Separator />
             <div className={styles.detailSection}><h3>Recurso y calendario</h3>{(() => {
               const estacion = datos.estaciones.find((estacion) => estacion.id === seleccion.estacionId);
               const equipo = estacion?.equipoProduccion;
@@ -268,29 +266,28 @@ export function PlanificacionView(inicial: DatosPlanificacion) {
               const minutosHumanos = reservas.reduce((sum, reserva) => sum + (reserva.fin - reserva.inicio) / 60_000 * reserva.personas, 0);
               return <><dl className={styles.facts}>{seleccion.paso.maquinaId && <><dt>Operación de máquina</dt><dd>{operacionSeleccion === "con_operario" ? "Con operario" : operacionSeleccion === "autonoma" ? "Autónoma" : "Sin configurar"}</dd></>}<dt>Calendario</dt><dd>{estacion ? etiquetaCalendario(estacion.calendario) ?? "Sin calendario propio; estimación orientativa" : "Sin estación configurada"}</dd><dt>{estacion?.planificacionPorEmpleados ? "Empleados de la estación" : "Equipo compartido"}</dt><dd>{estacion?.planificacionPorEmpleados ? `${estacion.empleados.length} personas · horarios individuales` : equipo ? `${equipo.nombre} · ${equipo.personas} personas` : "Sin configurar"}</dd>{reservas.length > 0 && <><dt>Atención, incluida separación</dt><dd>{duracionPlan(minutosHumanos)} · persona</dd></>}{fases.operario > 0 && <><dt>Trabajo de operario</dt><dd>{duracionPlan(fases.operario)}</dd></>}{fases.maquina_atendida > 0 && <><dt>Operación con operario</dt><dd>{duracionPlan(fases.maquina_atendida)}</dd></>}{fases.maquina > 0 && <><dt>Operación autónoma</dt><dd>{duracionPlan(fases.maquina)}</dd></>}{fases.sin_verificar > 0 && <><dt>Atención sin verificar</dt><dd>{duracionPlan(fases.sin_verificar)}</dd></>}</dl><p className={styles.note}>{fases.sin_verificar > 0 ? "El desglose no permite confirmar toda la atención: se reservan operarios de forma conservadora." : "Preparación, carga, recarga y cierre ocupan a los operarios. La operación autónoma permite atender otra máquina; la operación con operario mantiene a los operarios ocupados."}{seleccion.agenda?.faseEnCursoEstimada && " La fase actual se proyecta con el calendario y los tramos registrados."}</p>{seleccion.paso.maquinaId && <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/costos/maquinaria/${seleccion.paso.maquinaId}`} />}>Ver configuración de máquina<ArrowUpRight data-icon="inline-end" /></Button>}</>;
             })()}</div>
-            <Separator />
             <div className={styles.detailSection}><h3><ArrowDownRight />Depende de</h3>
               {seleccion.predecesores.length ? seleccion.predecesores.map((id) => {
                 const op = operaciones.find((op) => op.id === id);
                 const item = datos.initialItems.find((item) => item.pasos.some((paso) => paso.id === id));
                 const paso = item?.pasos.find((paso) => paso.id === id);
-                return op ? <Button variant="outline" className={styles.dependencyButton} key={id} onClick={() => elegir(op)}><span>{op.paso.nombre}<small>{op.item.loteEntrega?.nombre ?? op.productoNombre}{op.item.loteEntrega?.id !== seleccion.item.loteEntrega?.id ? " · Dependencia compartida" : ""}</small></span><ChevronRight /></Button> : <p className={styles.dependencyDone} key={id}>{paso?.nombre ?? "Dependencia fuera de esta consulta"}<Badge variant="secondary">{paso?.estado === "hecho" ? "Completada" : "Sin información"}</Badge></p>;
+                return op ? <ActionButton variant="outline" className={styles.dependencyButton} key={id} onPress={() => elegir(op)}><span>{op.paso.nombre}<small>{op.item.loteEntrega?.nombre ?? op.productoNombre}{op.item.loteEntrega?.id !== seleccion.item.loteEntrega?.id ? " · Dependencia compartida" : ""}</small></span><ChevronRight size={16} aria-hidden /></ActionButton> : <p className={styles.dependencyDone} key={id}>{paso?.nombre ?? "Dependencia fuera de esta consulta"}<Badge variant="secondary">{paso?.estado === "hecho" ? "Completada" : "Sin información"}</Badge></p>;
               }) : <p className={styles.note}>Sin pasos previos pendientes.</p>}
               <h3><ArrowUpRight />Habilita después</h3>
-              {operaciones.filter((op) => op.predecesores.includes(seleccion.id)).length ? operaciones.filter((op) => op.predecesores.includes(seleccion.id)).map((op) => <Button variant="outline" className={styles.dependencyButton} key={op.id} onClick={() => elegir(op)}><span>{op.paso.nombre}<small>{op.item.loteEntrega?.nombre ?? op.productoNombre}</small></span><ChevronRight /></Button>) : <p className={styles.note}>No hay operaciones posteriores pendientes.</p>}
+              {operaciones.filter((op) => op.predecesores.includes(seleccion.id)).length ? operaciones.filter((op) => op.predecesores.includes(seleccion.id)).map((op) => <ActionButton variant="outline" className={styles.dependencyButton} key={op.id} onPress={() => elegir(op)}><span>{op.paso.nombre}<small>{op.item.loteEntrega?.nombre ?? op.productoNombre}</small></span><ChevronRight size={16} aria-hidden /></ActionButton>) : <p className={styles.note}>No hay operaciones posteriores pendientes.</p>}
               {!!seleccion.paso.gatesOperativos?.some((gate) => gate.estado === "PENDIENTE") && <Alert><TriangleAlert /><AlertTitle>Requisitos pendientes</AlertTitle><AlertDescription>{seleccion.paso.gatesOperativos.filter((gate) => gate.estado === "PENDIENTE").map((gate) => gate.detalle ?? (gate.tipo === "MATERIAL" ? "Disponibilidad de material" : "Control de calidad")).join(" · ")}</AlertDescription></Alert>}
             </div>
           </div>
-          <div className={styles.detailFooter}><Button variant="outline" onClick={irATarea} disabled={!seleccion.agenda}><CalendarDays data-icon="inline-start" />Ubicar en calendario</Button><Button nativeButton={false} render={<Link href={`/produccion/ordenes/${seleccion.item.ordenId}`} />}>Ver orden<ArrowUpRight data-icon="inline-end" /></Button></div>
+          <div className={styles.detailFooter}><ActionButton variant="outline" onPress={irATarea} isDisabled={!seleccion.agenda}><CalendarDays size={16} aria-hidden />Ubicar en calendario</ActionButton><Button nativeButton={false} render={<Link href={`/produccion/ordenes/${seleccion.item.ordenId}`} />}>Ver orden<ArrowUpRight data-icon="inline-end" /></Button></div>
         </>}
       </SheetContent>
     </Sheet>
 
-    <Sheet open={verPendientes} onOpenChange={setVerPendientes}><SheetContent className={styles.detailPanel} initialFocus={tituloEstado}>
+    <Sheet open={verPendientes} onOpenChange={setVerPendientes}><SheetContent {...scope} {...legacyScope} className={`${legacyTheme ?? designTheme} ${styles.detailPanel}`} overlayClassName={`${designTheme} ${styles.detailOverlay}`} initialFocus={tituloEstado}>
       <SheetHeader className={styles.detailHeader}><SheetTitle ref={tituloEstado} tabIndex={-1}>Estado de la planificación</SheetTitle><SheetDescription>Datos pendientes de las órdenes accesibles. Cambiar la vista o los filtros no los elimina del cálculo.</SheetDescription></SheetHeader>
       <div className={styles.detailBody}>
         {!pendientes.length && !sinRuta.length && <Alert><Clock3 /><AlertTitle>Todas las operaciones tienen una fecha proyectada</AlertTitle><AlertDescription>{[...estados.values()].includes("revision") ? "Hay estimaciones orientativas: revisá los equipos, calendarios y dependencias en el detalle de las tareas." : "Podés consultar sus recursos, lotes y dependencias en el calendario."}</AlertDescription></Alert>}
-        {pendientes.map((op) => <div className={styles.pendingItem} key={op.id}><Badge variant="outline">{op.item.ordenNumero}{op.item.loteEntrega ? ` · ${op.item.loteEntrega.nombre}` : ""}</Badge><strong>{op.paso.nombre}</strong><p>{op.motivo}</p><Button variant="outline" size="sm" onClick={() => { setVerPendientes(false); elegir(op); }}>Ver operación<ChevronRight data-icon="inline-end" /></Button></div>)}
+        {pendientes.map((op) => <div className={styles.pendingItem} key={op.id}><Badge variant="outline">{op.item.ordenNumero}{op.item.loteEntrega ? ` · ${op.item.loteEntrega.nombre}` : ""}</Badge><strong>{op.paso.nombre}</strong><p>{op.motivo}</p><ActionButton variant="outline" size="sm" onPress={() => { setVerPendientes(false); elegir(op); }}>Ver operación<ChevronRight size={16} aria-hidden /></ActionButton></div>)}
         {sinRuta.map((item) => <div className={styles.pendingItem} key={item.id}><Badge variant="outline">{item.ordenNumero}</Badge><strong>{item.nombre}</strong><p>Este ítem no tiene una ruta productiva en el tablero.</p></div>)}
       </div>
     </SheetContent></Sheet>

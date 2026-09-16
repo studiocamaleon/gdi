@@ -2,15 +2,30 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  background: var(--canvas-background);
 }
 .page > * {
   flex-shrink: 0;
 }
+.page[data-visual="brand"] .header { padding-block: 0; }
 .eyebrow {
-  margin: 0 0 5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
   color: var(--muted-text);
-  font-size: 11px;
+  font: 10px / 1.5 var(--brand-mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.titleDot { color: var(--accent); }
+.metrics > :first-child {
+  --surface: var(--brand-graphite);
+  --foreground: var(--brand-on-graphite);
+  --muted-text: var(--brand-muted-on-graphite);
+  --surface-secondary: var(--brand-graphite-line);
+  border-color: var(--brand-graphite-line);
 }
 .metrics {
   display: grid;
@@ -24,7 +39,7 @@
   gap: 8px;
 }
 .filters {
-  padding: 14px;
+  padding: 16px;
   display: grid;
   grid-template-columns: minmax(200px, 1fr) minmax(180px, 220px) minmax(
       180px,
@@ -33,7 +48,8 @@
   gap: 12px;
   border: 1px solid var(--border);
   box-shadow: none;
-  border-radius: 10px;
+  border-radius: 8px;
+  background: var(--surface);
 }
 .search {
   min-width: 0;
@@ -48,15 +64,21 @@
   align-items: center;
   gap: 12px;
 }
+.groupHeader { padding-block: 8px 4px; }
+.groupHeader::after { content: ""; height: 1px; background: var(--border); flex: 1; }
 .groupHeader h2 {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: -.035em;
   margin: 0;
 }
-.groupHeader span {
+.groupHeader > span:last-of-type {
   color: var(--muted-text);
-  font-size: 11px;
+  font: 10px / 1.5 var(--brand-mono);
+  white-space: nowrap;
 }
+.groupIcon { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; color: var(--accent-soft-foreground); background: var(--surface); flex: none; }
+.groupIcon svg { width: 15px; height: 15px; }
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
@@ -68,9 +90,10 @@
   grid-template-rows: subgrid;
   grid-row: span 6;
   gap: 12px;
-  padding: 18px;
+  padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
+  background: var(--surface);
   box-shadow: none;
   min-width: 0;
 }
@@ -88,19 +111,23 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 72px;
 }
 .cardTitle {
   flex: 1;
   min-width: 0;
 }
 .cardTitle h3 {
-  font-size: 14px;
-  line-height: 1.4;
-  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -.03em;
   margin: 0 0 3px;
 }
 .cardTitle span {
-  font-size: 11px;
+  font: 9px / 1.5 var(--brand-mono);
+  letter-spacing: .03em;
+  text-transform: uppercase;
   color: var(--muted-text);
 }
 .stationIcon {
@@ -110,9 +137,10 @@
   width: 38px;
   height: 38px;
   flex: none;
-  border-radius: 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
   color: var(--accent-soft-foreground);
-  background: var(--accent-soft);
+  background: var(--canvas-background);
 }
 .stationIcon svg {
   width: 19px;
@@ -124,20 +152,23 @@
   gap: 8px;
 }
 .cardLoad strong {
-  font-size: 29px;
-  font-weight: 650;
+  font-size: 36px;
+  line-height: 1.2;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.035em;
 }
 .cardLoad > span {
-  font-size: 11px;
+  font: 9px / 1.5 var(--brand-mono);
+  letter-spacing: .04em;
+  text-transform: uppercase;
   color: var(--muted-text);
 }
 .loadBar {
   display: flex;
   height: 5px;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 2px;
   background: var(--surface-secondary);
 }
 .loadBar span {
@@ -153,7 +184,7 @@
   background: var(--danger);
 }
 .loadBar [data-kind="incoming"] {
-  background: var(--info-foreground);
+  background: repeating-linear-gradient(135deg, var(--muted-text) 0 2px, var(--surface-secondary) 2px 4px);
 }
 .cardCounters {
   display: grid;
@@ -164,8 +195,9 @@
 .stateCounter {
   min-width: 0;
   padding: 10px;
-  border-radius: 9px;
-  background: var(--surface-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--canvas-background);
   color: var(--foreground);
 }
 .stateCounter dt {
@@ -186,7 +218,8 @@
   margin: 5px 0 0;
   font-size: 22px;
   line-height: 1.1;
-  font-weight: 650;
+  font-weight: 500;
+  letter-spacing: -.035em;
   font-variant-numeric: tabular-nums;
 }
 .stateCounter[data-tone="warning"] {
@@ -194,8 +227,9 @@
   background: var(--warning-soft);
 }
 .stateCounter[data-tone="info"] {
-  color: var(--info-foreground);
-  background: var(--info-soft);
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
 }
 .cardNotices {
   display: flex;
@@ -249,7 +283,7 @@
   margin: 0;
   text-align: right;
   color: var(--foreground);
-  font-weight: 600;
+  font: 11px / 1.5 var(--brand-mono);
   font-variant-numeric: tabular-nums;
 }
 .cardFacts dd small {
@@ -300,16 +334,18 @@
 }
 .delivery {
   padding: 10px 12px;
-  border-radius: 9px;
-  background: var(--surface-secondary);
+  border-radius: 6px;
+  background: var(--canvas-background);
   color: var(--foreground);
   align-items: center;
   gap: 9px;
 }
 .deliveryLabel {
   display: block;
-  font-size: 10px;
-  margin-bottom: 1px;
+  font: 9px / 1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: .035em;
+  margin-bottom: 3px;
 }
 .delivery strong {
   font-size: 12px;
@@ -333,14 +369,14 @@
 }
 .empty {
   padding: 36px;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   box-shadow: none;
   text-align: center;
   align-items: center;
   gap: 10px;
 }
 .empty > svg {
-  color: var(--muted-text);
+  color: var(--accent-soft-foreground);
   width: 30px;
   height: 30px;
 }
@@ -354,7 +390,7 @@
   font-size: 12px;
   line-height: 1.6;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
 }
 .notice p {
@@ -374,4 +410,21 @@
   .filters {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.cardFooter a { gap: 16px; }
+.cardFooter a svg { color: var(--accent-soft-foreground); }
+.cardHead > button { flex: none; color: var(--muted-text); }
+.cardHead > button:hover { color: var(--accent-soft-foreground); }
+.notice summary { cursor: pointer; font-weight: 500; }
+.notice summary::marker { color: var(--accent-soft-foreground); }
+@media (max-width: 639px) {
+  .page { gap: 20px; }
+  .groupHeader { gap: 8px; }
+  .groupHeader h2 { font-size: 19px; }
+  .groupHeader::after { display: none; }
+  .stationCard { padding: 18px; }
+  .cardHead { min-height: 0; }
+  .filters { padding: 12px; }
+  .headerActions { gap: 8px; }
 }

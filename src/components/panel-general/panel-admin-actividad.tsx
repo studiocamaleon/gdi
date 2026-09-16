@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import type { PanelActividad } from "@/lib/panel-general-api";
 import s from "./panel-admin-view.module.css";
 
@@ -17,13 +18,16 @@ export function ActividadLista({
   items,
   ahora,
   onAbrir,
+  resumen = false,
 }: {
   items: PanelActividad["items"];
   ahora: number;
   onAbrir?: () => void;
+  resumen?: boolean;
 }) {
+  const { zonaHoraria } = useConfigRegional();
   return (
-    <ol className={s.timeline}>
+    <ol className={s.timeline} data-summary={resumen || undefined}>
       {items.map((item) => (
         <li key={item.id}>
           <span className={s.dot} aria-hidden />
@@ -40,7 +44,9 @@ export function ActividadLista({
           </div>
           <time
             dateTime={item.fecha}
-            title={new Date(item.fecha).toLocaleString("es-AR")}
+            title={new Date(item.fecha).toLocaleString("es-AR", {
+              timeZone: zonaHoraria,
+            })}
           >
             {tiempoActividad(item.fecha, ahora)}
           </time>

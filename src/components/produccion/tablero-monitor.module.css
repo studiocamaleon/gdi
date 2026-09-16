@@ -4,15 +4,10 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 18px 24px;
-  padding-bottom: 16px;
+  padding-bottom: 24px;
   color: var(--foreground);
 }
-.identity {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
+.identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .icon {
   display: grid;
   place-items: center;
@@ -20,82 +15,57 @@
   width: 44px;
   height: 44px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--accent-soft-foreground);
 }
-.icon svg { width: 22px; height: 22px; }
+.icon.icon svg { width: 22px; height: 22px; }
 .eyebrow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin-bottom: 5px;
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
+  margin-bottom: 7px;
+  font: 10px / 1.4 var(--brand-mono);
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--muted-text);
 }
-.connection {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  letter-spacing: .04em;
-}
+.connection { display: inline-flex; align-items: center; gap: 6px; letter-spacing: .04em; }
 .connection[data-tone="success"] { color: var(--success-soft-foreground); }
 .connection[data-tone="warning"] { color: var(--warning-soft-foreground); }
-.signal {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.header h1 {
-  margin: 0;
-  font-size: 23px;
-  line-height: 1.2;
-  font-weight: 650;
-  letter-spacing: -.03em;
-}
-.header p {
-  margin: 5px 0 0;
-  font-size: 12px;
-  color: var(--muted-text);
-}
-.telemetry {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-}
+.signal { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.header h1 { margin: 0; font-size: 32px; line-height: 1.15; font-weight: 500; letter-spacing: -.05em; }
+.titleDot { color: var(--accent); }
+.header p { margin: 7px 0 0; font-size: 12px; color: var(--muted-text); }
+.telemetry { display: flex; align-items: center; gap: 20px; }
 .clock {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-right: 22px;
-  border-right: 1px solid var(--border);
-  font-family: var(--font-mono, monospace);
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 8px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  font-family: var(--brand-mono);
   font-variant-numeric: tabular-nums;
 }
-.clockLabel {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  color: var(--muted-text);
-}
-.clock time {
-  font-size: 29px;
-  line-height: 1.1;
-  font-weight: 600;
-  letter-spacing: -.04em;
-}
-.date { font-size: 10px; color: var(--muted-text); }
-.sync { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.sync > span { color: var(--muted-text); font-size: 9px; font-variant-numeric: tabular-nums; }
-@media (max-width: 760px) {
-  .header { gap: 14px; }
+.clockLabel { font-size: 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--brand-muted-on-graphite); }
+.clock time { grid-column: 1 / -1; grid-row: 2; font-size: 27px; line-height: 1.1; font-weight: 400; letter-spacing: -.04em; }
+.date { font-size: 9px; color: var(--brand-muted-on-graphite); }
+.sync { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
+.sync > span { color: var(--muted-text); font: 9px / 1.5 var(--brand-mono); font-variant-numeric: tabular-nums; }
+@container production-board (max-width: 1050px) {
   .telemetry { width: 100%; justify-content: space-between; }
-  .clock { border: 0; padding: 0; }
+}
+@media (max-width: 640px) {
+  .header { gap: 18px; padding-bottom: 20px; }
   .icon { display: none; }
-  .header h1 { font-size: 21px; }
+  .header h1 { font-size: 27px; }
+  .telemetry { gap: 10px; }
+  .clock { gap: 3px; padding: 10px 12px; grid-template-columns: 1fr; }
+  .clock time { font-size: 24px; }
+  .date { grid-row: 3; }
 }

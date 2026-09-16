@@ -1,18 +1,19 @@
 .developmentPanel {
   min-width: 0;
-  padding: 0 14px 16px;
+  padding: 0 24px 24px;
 }
 .developmentHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding: 16px 4px 16px;
+  padding: 24px 0;
 }
 .developmentHeader h2 {
   margin: 2px 0 4px;
-  font-size: 15px;
-  letter-spacing: -0.025em;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
 }
 .developmentHeader p:not(.technicalEyebrow) {
   margin: 0;
@@ -22,9 +23,9 @@
 .technicalEyebrow {
   margin: 0;
   color: var(--accent-soft-foreground);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.2;
+  font: 10px / 1.5 var(--brand-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
 }
 .developmentActions,
@@ -36,11 +37,11 @@
 }
 .developmentStats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--background);
   color: var(--foreground);
 }
@@ -79,7 +80,7 @@
 .masterCard {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
   padding: 0;
@@ -105,8 +106,8 @@
   height: 38px;
   place-items: center;
   border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
+  border-radius: 8px;
+  background: var(--accent-soft);
   color: var(--accent-soft-foreground);
 }
 .masterIcon svg {
@@ -171,6 +172,39 @@
 .releaseBox[data-released="true"] {
   color: var(--success);
   background: var(--success-soft);
+}
+.releaseBox a {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.releaseBox a svg {
+  width: 13px;
+  height: 13px;
+}
+.revisionHistory > summary {
+  cursor: pointer;
+  padding: 14px 16px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.revisionHistory > summary span {
+  margin-left: 8px;
+  color: var(--muted-text);
+  font: 10px / 1.5 var(--brand-mono);
+}
+.revisionHistory > summary:focus-visible,
+.releaseBox a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -3px;
+}
+.revisionHistory[open] > summary {
+  border-bottom: 1px solid var(--border);
 }
 .revisionList {
   padding: 0 16px;
@@ -337,29 +371,6 @@
   font-size: 12px;
   text-align: center;
 }
-.developmentEmpty {
-  padding: 48px 20px;
-  border: 1px dashed var(--border);
-  border-radius: 9px;
-  background: var(--background);
-  text-align: center;
-}
-.developmentEmpty > svg {
-  width: 26px;
-  margin: 0 auto 10px;
-  color: var(--accent-soft-foreground);
-}
-.developmentEmpty h3 {
-  margin: 0;
-  font-size: 14px;
-}
-.developmentEmpty p {
-  max-width: 440px;
-  margin: 6px auto 0;
-  color: var(--muted-text);
-  font-size: 11px;
-}
-
 .gateWarning {
   display: flex;
   gap: 9px;
@@ -432,5 +443,41 @@
   }
   .inlineActions {
     grid-column: 1 / -1;
+  }
+}
+
+@container list-page (max-width: 800px) {
+  .developmentStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .developmentStats > div:nth-child(3) {
+    border-left: 0;
+  }
+  .developmentStats > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+}
+@container list-page (max-width: 580px) {
+  .developmentPanel {
+    padding: 0 18px 18px;
+  }
+  .developmentHeader {
+    padding-block: 20px;
+    gap: 14px;
+  }
+  .developmentHeader h2 {
+    font-size: 20px;
+  }
+  .developmentStats > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    border-bottom: 0;
+  }
+  .developmentStats > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+  .masterIdentity {
+    padding: 14px;
   }
 }

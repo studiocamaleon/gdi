@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import {
   ArrowLeftIcon,
+  ArrowUpRightIcon,
   HistoryIcon,
   RefreshCwIcon,
   RouteIcon,
-  SaveIcon,
+  GitBranchIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,8 +27,11 @@ import {
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import shared from "./flujos.module.css";
@@ -118,6 +122,7 @@ interface PasoEditable {
 
 export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { fechaNumerica } = useFecha();
   const [guardando, setGuardando] = React.useState(false);
@@ -416,17 +421,26 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   };
 
   return (
-    <main {...scope} className={`${theme.theme} ${listPage.page}`}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page}`}
+    >
       <Link href="/productos-servicios/rutas" className={styles.backLink}>
         <ArrowLeftIcon className="size-4" />
         Flujos de producción
       </Link>
       <header className={listPage.header}>
         <div>
+          <span className={brand.eyebrow}>
+            Costos ·{" "}
+            {modo === "crear" ? "Nuevo recorrido" : "Flujo reutilizable"}
+          </span>
           <h1>
             {modo === "crear"
               ? "Nuevo flujo"
               : (rutaExistente?.nombre ?? "Editar flujo")}
+            <span className={brand.titleDot}>.</span>
           </h1>
           <div className={`${listPage.subtitle} ${styles.subtitle}`}>
             {modo === "editar" ? (
@@ -443,22 +457,44 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             )}
           </div>
         </div>
-        {modo === "editar" && (
-          <Switch
-            id="ruta-activa"
-            aria-label="Flujo activo"
-            isSelected={activo}
-            onChange={setActivo}
-            size="sm"
-          >
-            <Switch.Content>
-              <span>Flujo activo</span>
-              <Switch.Control>
-                <Switch.Thumb />
-              </Switch.Control>
-            </Switch.Content>
-          </Switch>
-        )}
+        <div className={styles.headerAside}>
+          <div className={styles.summary}>
+            <span className={styles.summaryIcon} aria-hidden>
+              <GitBranchIcon />
+            </span>
+            <div>
+              <span>
+                {modo === "crear"
+                  ? "Nuevo flujo · V1"
+                  : `Versión ${rutaExistente?.versionActual}`}
+              </span>
+              <strong>
+                {workflow.nodos.length}{" "}
+                {workflow.nodos.length === 1 ? "nodo" : "nodos"} ·{" "}
+                {workflow.topologia === "DAG"
+                  ? "Con paralelos"
+                  : "Secuencia lineal"}
+              </strong>
+            </div>
+          </div>
+          {modo === "editar" && (
+            <Switch
+              className={styles.activeSwitch}
+              id="ruta-activa"
+              aria-label="Flujo activo"
+              isSelected={activo}
+              onChange={setActivo}
+              size="sm"
+            >
+              <Switch.Content>
+                <span>Flujo activo</span>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
+            </Switch>
+          )}
+        </div>
       </header>
       <div className={styles.editor}>
         <div className={styles.routeColumns}>
@@ -468,8 +504,8 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 <RouteIcon />
               </span>
               <div className={styles.identityCopy}>
-                <span className={styles.eyebrow}>Flujo reutilizable</span>
-                <Card.Title>Identidad</Card.Title>
+                <span className={styles.eyebrow}>01 · Identidad</span>
+                <Card.Title>Datos del flujo</Card.Title>
                 <Card.Description>
                   Definí cómo se reconocerá este flujo en el catálogo y al
                   incorporarlo a un producto.
@@ -510,7 +546,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       ⚠ Cambios en un flujo usado por {productosAfectados}{" "}
                       producto(s)
                     </p>
-                    <ul className="mb-3 ml-4 list-disc text-xs text-foreground/80 space-y-0.5">
+                    <ul className="mb-3 ml-4 flex flex-col gap-0.5 list-disc text-xs text-foreground/80">
                       {cambiosDetectados.map((c, idx) => (
                         <li key={idx}>
                           {c.tipo === "AGREGAR_PASO" &&
@@ -576,7 +612,11 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
               </span>
             </Card.Header>
             {rutaExistente!.versiones?.map((v) => (
-              <div key={v.version} className={styles.versionRow}>
+              <div
+                key={v.version}
+                className={styles.versionRow}
+                data-current={v.version === rutaExistente?.versionActual}
+              >
                 <Chip size="sm" variant="soft">
                   v{v.version}
                 </Chip>
@@ -694,7 +734,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
             onClick={handleGuardar}
             isDisabled={guardando || !nombre || workflow.nodos.length === 0}
           >
-            <SaveIcon className="size-4" />
+            <ArrowUpRightIcon />
             {guardando
               ? "Guardando..."
               : modo === "crear"
@@ -705,6 +745,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       </div>
 
       <FormDialog
+        className={brand.dialog}
         isOpen={confirmandoMigracion}
         isDismissable={!migrando}
         onOpenChange={(open) => {
@@ -737,6 +778,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
       </FormDialog>
       {rutaExistente && (
         <FormDialog
+          className={brand.dialog}
           isOpen={confirmandoBorrado}
           isDismissable={!eliminando}
           onOpenChange={setConfirmandoBorrado}

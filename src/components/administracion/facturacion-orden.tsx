@@ -293,6 +293,7 @@ export function ComprobantesOrdenTab({
   cobradoInicial,
   puedeFacturar,
   recargarToken = 0,
+  soloLectura = false,
 }: {
   ordenId: string;
   numero: string;
@@ -306,6 +307,7 @@ export function ComprobantesOrdenTab({
    * la OT, que monta su propio modal): fuerza recargar comprobantes y cobros.
    */
   recargarToken?: number;
+  soloLectura?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [comprobantes, setComprobantes] = React.useState<Comprobante[] | null>(
@@ -362,6 +364,13 @@ export function ComprobantesOrdenTab({
       : cobros.reduce((s, c) => s + c.montoBruto, 0);
   const saldoSinFacturar = Math.max(0, total - Math.max(0, facturado));
 
+  React.useEffect(() => {
+    if (!soloLectura) return;
+    setFacturarOpen(false);
+    setNcPara(null);
+    setCobroParaAnular(null);
+  }, [soloLectura]);
+
   const listaComp = comprobantes ?? [];
   const listaCobros = cobros ?? [];
 
@@ -378,7 +387,7 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Comprobantes fiscales <span className="ct">{listaComp.length}</span>
           </span>
-          {puedeFacturar && facturacionActiva && saldoSinFacturar > 0.01 ? (
+          {!soloLectura && puedeFacturar && facturacionActiva && saldoSinFacturar > 0.01 ? (
             <button
               type="button"
               className="btn btn-primary sm"
@@ -387,7 +396,7 @@ export function ComprobantesOrdenTab({
               <ReceiptTextIcon />
               Facturar
             </button>
-          ) : puedeFacturar &&
+          ) : !soloLectura && puedeFacturar &&
             facturacionActiva === false &&
             saldoSinFacturar > 0.01 ? (
             // No se esconde sin explicar: se dice por qué y adónde ir.
@@ -401,7 +410,7 @@ export function ComprobantesOrdenTab({
         ) : listaComp.length === 0 ? (
           <div className="mov-empty">
             Esta orden no tiene comprobantes fiscales.
-            {puedeFacturar
+            {soloLectura ? " Activá Editar orden para gestionar comprobantes." : puedeFacturar
               ? " Facturala entera o parcial cuando lo necesites — la deuda del cliente corre igual, esté facturada o no."
               : " Emití la orden para poder facturarla."}
           </div>
@@ -464,7 +473,7 @@ export function ComprobantesOrdenTab({
                 <span className="fo-comp-acc">
                   {c.tipo === "factura" &&
                   c.estado === "emitido" &&
-                  puedeAnular ? (
+                  !soloLectura && puedeAnular ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -490,12 +499,14 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Cobros <span className="ct">{listaCobros.length}</span>
           </span>
-          <Link
-            className="btn sm"
-            href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
-          >
-            Registrar cobro
-          </Link>
+          {!soloLectura && puedeFacturar ? (
+            <Link
+              className="btn sm"
+              href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
+            >
+              Registrar cobro
+            </Link>
+          ) : null}
         </div>
         {cobros === null ? (
           <div className="mov-empty">Cargando cobros…</div>
@@ -546,7 +557,7 @@ export function ComprobantesOrdenTab({
                   {formatMonedaOrden(c.montoBruto, moneda)}
                 </span>
                 <span className="fo-comp-acc">
-                  {puedeAnular ? (
+                  {!soloLectura && puedeAnular ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -581,7 +592,7 @@ export function ComprobantesOrdenTab({
         </Link>
       </div>
 
-      {facturarOpen ? (
+      {!soloLectura && facturarOpen ? (
         <FacturarOrdenModal
           ordenId={ordenId}
           numero={numero}
@@ -592,7 +603,7 @@ export function ComprobantesOrdenTab({
       ) : null}
 
       <ConfirmacionDestructiva
-        open={cobroParaAnular !== null}
+        open={!soloLectura && cobroParaAnular !== null}
         onOpenChange={(open) => {
           if (!open) setCobroParaAnular(null);
         }}
@@ -610,7 +621,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Anular cobro"
         onConfirmar={async (motivo) => {
-          if (!cobroParaAnular) return;
+          if (soloLectura || !cobroParaAnular) return;
           try {
             await anularCobro(cobroParaAnular.id, {
               motivo,
@@ -630,7 +641,7 @@ export function ComprobantesOrdenTab({
       />
 
       <ConfirmacionDestructiva
-        open={ncPara !== null}
+        open={!soloLectura && ncPara !== null}
         onOpenChange={(open) => {
           if (!open) setNcPara(null);
         }}
@@ -649,7 +660,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Emitir nota de crédito"
         onConfirmar={async (motivo) => {
-          if (!ncPara) return;
+          if (soloLectura || !ncPara) return;
           try {
             const nc = await notaCreditoOrden(ordenId, {
               comprobanteOrigenId: ncPara.id,

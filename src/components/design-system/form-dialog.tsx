@@ -2,9 +2,9 @@
 
 import { useId, type ReactNode } from "react";
 import { Modal } from "@heroui/react";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import styles from "./form-dialog.module.css";
+import { cn } from "@/lib/utils";
 
 /** Presentación común de los formularios; sus estados y envíos siguen en cada vista. */
 export function FormDialog({
@@ -14,6 +14,7 @@ export function FormDialog({
   description,
   children,
   isDismissable = true,
+  className,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -21,13 +22,15 @@ export function FormDialog({
   description: ReactNode;
   children: ReactNode;
   isDismissable?: boolean;
+  className?: string;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const descriptionId = useId();
   return (
     <Modal.Backdrop
       {...scope}
-      className={theme.theme}
+      className={themeClass}
       isOpen={isOpen}
       onOpenChange={onOpenChange}
       isDismissable={isDismissable}
@@ -35,7 +38,7 @@ export function FormDialog({
     >
       <Modal.Container size="lg" className={styles.container}>
         <Modal.Dialog
-          className={styles.dialog}
+          className={cn(styles.dialog, className)}
           aria-describedby={descriptionId}
         >
           <Modal.CloseTrigger

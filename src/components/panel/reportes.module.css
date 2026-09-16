@@ -1,0 +1,649 @@
+.report {
+  --chart-cost: var(--brand-graphite);
+  --chart-margin: var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  container: reporte / inline-size;
+}
+.periodNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.periodNote > span:first-child {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: 1.25fr repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.metric.metric {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 164px;
+  padding: 18px;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.metricHeader.metricHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 28px;
+  gap: 7px;
+  padding: 0;
+}
+.metricHeader :global(.card__title) {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-text);
+}
+.metricHeader > button {
+  margin-left: auto;
+}
+.metricIcon {
+  color: var(--muted-text);
+  flex-shrink: 0;
+}
+.metricIcon svg {
+  width: 15px;
+  height: 15px;
+}
+.metricValue {
+  display: block;
+  color: var(--foreground);
+  font-size: clamp(25px, 2.2vw, 34px);
+  line-height: 1.1;
+  letter-spacing: -0.055em;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+}
+.metricFooter.metricFooter {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 5px 7px;
+  margin-top: auto;
+  padding: 0;
+  color: var(--muted-text);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--danger);
+  white-space: nowrap;
+  font-family: var(--brand-mono);
+}
+.delta[data-positive="true"] {
+  color: var(--success);
+}
+.delta svg {
+  width: 12px;
+  height: 12px;
+}
+.metricFeatured.metricFeatured {
+  background: var(--brand-graphite);
+  border-color: var(--brand-graphite);
+  position: relative;
+  overflow: hidden;
+}
+.metricFeatured .metricHeader :global(.card__title),
+.metricFeatured .metricIcon,
+.metricFeatured .metricFooter {
+  color: var(--brand-muted-on-graphite);
+}
+.metricFeatured .metricValue {
+  color: var(--brand-on-graphite);
+}
+.metricFeatured .delta {
+  color: var(--accent);
+}
+.metricSpark {
+  position: absolute;
+  right: 16px;
+  bottom: 48px;
+  width: 38%;
+  opacity: 0.8;
+}
+.hint {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mainGrid {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr);
+  gap: 20px;
+}
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.card.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.cardHeader.cardHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.cardHeader :global(.card__title) {
+  color: var(--foreground);
+  font-size: 17px;
+  font-weight: 550;
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+}
+.cardHeader :global(.card__description) {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-text);
+}
+.cardContent.cardContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 0;
+  gap: 0;
+  min-width: 0;
+}
+.sectionMark {
+  color: var(--muted-text-2);
+  white-space: nowrap;
+  font: 9px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.headerIcon {
+  color: var(--accent-soft-foreground);
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.chartSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 40px;
+  padding: 22px 24px 0;
+}
+.chartSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.chartSummary span {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.chartSummary strong {
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.chartSummary > div + div strong {
+  color: var(--accent-soft-foreground);
+  font-size: 20px;
+  padding-top: 5px;
+}
+.chartWrap {
+  padding: 24px 20px 20px;
+  flex: 1;
+}
+.dataDetails {
+  border-top: 1px solid var(--border);
+}
+.dataDetails > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 22px;
+  list-style: none;
+  font-size: 11px;
+  color: var(--muted-text);
+  cursor: pointer;
+  background: var(--canvas-background);
+}
+.dataDetails > summary::-webkit-details-marker {
+  display: none;
+}
+.dataDetails > summary:hover {
+  color: var(--foreground);
+}
+.dataDetails > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.dataDetails[open] > summary svg {
+  transform: rotate(180deg);
+}
+.gauge {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 24px auto 12px;
+}
+.gauge svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-width: 9px;
+}
+.gaugeTrack {
+  stroke: var(--surface-secondary);
+}
+.gaugeValue {
+  stroke: var(--accent);
+  stroke-linecap: round;
+}
+.gauge[data-complete="true"] .gaugeValue {
+  stroke: var(--success);
+}
+.gauge > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.gauge strong {
+  font-size: 35px;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+.gauge span {
+  color: var(--muted-text);
+  font: 9px var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.equilibriumStatus {
+  margin: 0 24px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.equilibriumStatus svg {
+  width: 14px;
+  height: 14px;
+}
+.breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 24px;
+  margin: 0 0 18px;
+}
+.breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+.breakdown dt {
+  color: var(--muted-text);
+}
+.breakdown dd {
+  margin: 0;
+  font: 11px var(--brand-mono);
+}
+.remaining {
+  margin: auto 24px 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+}
+.remaining > span {
+  color: var(--muted-text);
+}
+.remaining strong {
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+.cardAction {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 22px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+.tableScroll {
+  overflow-x: auto;
+  min-width: 0;
+}
+.dataDetails .tableScroll {
+  max-height: 320px;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table thead {
+  background: var(--canvas-background);
+}
+.table th,
+.table td {
+  padding: 15px 22px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+.table th:first-child {
+  text-align: left;
+}
+.table thead th {
+  color: var(--muted-text);
+  font: 9px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  white-space: nowrap;
+}
+.table tbody th {
+  font-weight: 500;
+  min-width: 150px;
+  line-height: 1.5;
+}
+.table td {
+  font: 11px/1.5 var(--brand-mono);
+  white-space: nowrap;
+}
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+}
+.table [data-negative="true"] {
+  color: var(--danger);
+}
+.marginValue {
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--canvas-background);
+}
+.rankName {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.rankName > span {
+  padding-top: 2px;
+  color: var(--muted-text-2);
+  font: 10px/1.5 var(--brand-mono);
+}
+.rankName > div {
+  min-width: 0;
+  width: 100%;
+}
+.rankName strong {
+  font-weight: 500;
+}
+.rankName small {
+  display: block;
+  color: var(--muted-text);
+  font-size: 10px;
+  margin: 4px 0 10px;
+}
+.rankTrack {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-secondary);
+  overflow: hidden;
+}
+.rankTrack > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.alertCount {
+  font: 10px var(--brand-mono);
+  color: var(--muted-text);
+  white-space: nowrap;
+}
+.alerts {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 22px;
+}
+.alert.alert {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 18px 0;
+  background: transparent;
+}
+.alert:last-child {
+  border-bottom: 0;
+}
+.alert > svg {
+  color: var(--warning);
+}
+.alert[data-severity="critico"] > svg {
+  color: var(--danger);
+}
+.alert[data-severity="info"] > svg {
+  color: var(--muted-text);
+}
+.alert :global([data-slot="alert-title"]) {
+  font-size: 13px;
+  font-weight: 500;
+}
+.alert :global([data-slot="alert-description"]) {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.allClear {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+}
+.allClear svg {
+  width: 22px;
+  height: 22px;
+  color: var(--success);
+}
+.allClear strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.allClear p {
+  margin: 5px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.empty {
+  min-height: 230px;
+}
+.emptyMedia.emptyMedia {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  border-radius: 7px;
+}
+.source {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.source svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.source p {
+  margin: 0;
+}
+@container reporte (max-width: 1120px) {
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .metricFeatured {
+    grid-row: span 2;
+  }
+  .metricFeatured .metricSpark {
+    position: static;
+    width: 100%;
+    margin-top: 26px;
+  }
+  .metric {
+    min-height: 150px;
+  }
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+  .sectionMark {
+    display: none;
+  }
+}
+@container reporte (max-width: 800px) {
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .metricFeatured {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .metricFeatured .metricSpark {
+    position: absolute;
+    width: 40%;
+    right: 18px;
+    bottom: 32px;
+    margin-top: 0;
+  }
+  .equilibriumCard .cardContent {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    align-items: center;
+  }
+  .equilibriumCard .gauge {
+    grid-row: 1 / 4;
+  }
+  .equilibriumStatus {
+    margin: 24px 20px 14px;
+  }
+  .remaining {
+    margin: 0 24px 20px;
+  }
+  .equilibriumCard .cardAction {
+    grid-column: 1 / -1;
+  }
+  .equilibriumCard .empty {
+    grid-column: 1 / -1;
+  }
+}
+@container reporte (max-width: 500px) {
+  .report {
+    gap: 16px;
+  }
+  .metrics {
+    gap: 8px;
+  }
+  .metric.metric {
+    padding: 14px;
+  }
+  .metricHeader :global(.card__title) {
+    font-size: 11px;
+  }
+  .metricIcon {
+    display: none;
+  }
+  .metricHeader {
+    min-height: 30px;
+  }
+  .metricValue {
+    font-size: 27px;
+  }
+  .cardHeader.cardHeader {
+    padding: 18px 16px;
+  }
+  .cardHeader :global(.card__title) {
+    font-size: 17px;
+  }
+  .chartSummary {
+    padding: 18px 16px 0;
+    gap: 18px;
+  }
+  .chartSummary strong {
+    font-size: 23px;
+  }
+  .chartSummary > div + div strong {
+    font-size: 18px;
+  }
+  .chartWrap {
+    padding: 18px 10px;
+  }
+  .equilibriumCard .cardContent {
+    display: flex;
+  }
+  .table th,
+  .table td {
+    padding: 14px 16px;
+  }
+  .cardAction {
+    padding: 14px 16px;
+  }
+  .alerts {
+    padding: 2px 16px;
+  }
+  .breakdown {
+    width: 100%;
+  }
+  .remaining {
+    align-self: stretch;
+    margin-bottom: 0;
+  }
+}

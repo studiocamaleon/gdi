@@ -4,7 +4,7 @@
   position: relative;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--surface);
 }
 .table {
@@ -18,15 +18,15 @@
   background: var(--surface-secondary);
 }
 .table > thead > tr > th {
-  height: 48px;
+  height: 42px;
   padding: 8px 12px;
   border: 0;
   background: transparent;
   color: var(--muted-text);
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: normal;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
   text-transform: none;
   text-align: right;
   white-space: nowrap;
@@ -41,7 +41,7 @@
   padding: 18px 12px;
   border: 0;
   text-align: right;
-  vertical-align: top;
+  vertical-align: middle;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -58,7 +58,8 @@
   border-bottom: 0;
 }
 .table > tbody > tr[data-expanded="true"] {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  box-shadow: inset 3px 0 var(--accent);
 }
 .table > tbody > tr[aria-busy="true"] {
   opacity: 0.6;
@@ -86,6 +87,9 @@
   padding: 0;
   color: var(--foreground);
   font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -96,7 +100,7 @@
   border-radius: 4px;
 }
 .product:hover {
-  color: var(--accent);
+  color: var(--accent-soft-foreground);
 }
 
 .card {
@@ -104,10 +108,7 @@
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface);
+  padding: 0;
 }
 .header {
   display: flex;
@@ -126,10 +127,49 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
-.print {
-  background: var(--default);
+.tools .printAction,
+.tools .addAction {
+  gap: 9px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  transition: background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+.tools .printAction {
+  --button-bg: var(--surface);
+  border-color: var(--border-strong);
+}
+.quickIcon {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 5px;
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}
+.quickIcon svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.7;
+}
+.tools .actionArrow {
+  margin-left: 9px;
+  opacity: 0.7;
+  transition: transform 160ms ease;
+}
+@media (hover: hover) {
+  .tools .addAction:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .tools .addAction:hover .actionArrow {
+    transform: translate(1px, -1px);
+  }
+  .tools .printAction:hover {
+    border-color: var(--accent-soft-foreground);
+  }
 }
 .empty {
   display: flex;
@@ -138,32 +178,16 @@
   justify-content: center;
   min-height: 320px;
   padding: 36px 24px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
   text-align: center;
-}
-.emptyIcon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 56px;
-  height: 56px;
-  margin-bottom: 16px;
-  border-radius: 50%;
-  color: var(--accent-soft-foreground);
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 15px color-mix(in srgb, var(--accent) 6%, transparent);
-}
-.emptyIcon svg {
-  width: 27px;
-  height: 27px;
-  stroke-width: 1.7;
 }
 .emptyCopy h3 {
   margin: 0 0 6px;
-  font-size: 19px;
+  font-size: 23px;
   letter-spacing: -0.03em;
-  font-weight: 600;
+  font-weight: 500;
 }
 .emptyActions {
   display: flex;
@@ -197,7 +221,164 @@
   outline-offset: 0;
 }
 @container orden-content (max-width: 550px) {
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+  .tools .printAction,
+  .tools .addAction {
+    width: 100%;
+    min-width: 0;
+    gap: 5px;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+  .tools .actionArrow {
+    display: none;
+  }
+  .quickIcon {
+    width: 20px;
+    height: 22px;
+  }
   .empty {
     padding: 28px 12px;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tools .printAction,
+  .tools .addAction,
+  .tools .actionArrow {
+    transition: none;
+  }
+  .tools .addAction:hover,
+  .tools .addAction:hover .actionArrow {
+    transform: none;
+  }
+}
+
+/* En un panel angosto se conserva cada dato de la misma fila, sin duplicar
+ * cálculos ni esconder los controles. El encabezado sigue ofreciendo orden. */
+@container orden-content (max-width: 850px) {
+  .table {
+    min-width: 0;
+    display: block;
+  }
+  .table > thead,
+  .table > tbody {
+    display: block;
+  }
+  .table > thead > tr {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    gap: 4px 8px;
+  }
+  .table > thead > tr > th {
+    display: block;
+    width: auto;
+    height: 30px;
+    padding: 0;
+  }
+  .table > thead > tr > th:last-child {
+    display: none;
+  }
+  .table > tbody > tr:not(.detail) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 16px;
+    gap: 16px 12px;
+  }
+  .table > tbody > tr > td {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table > tbody > tr > td:first-child {
+    min-width: 0;
+    grid-column: 1 / -1;
+  }
+  .table > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted-text);
+    font: 400 10px/1.5 var(--brand-mono);
+    margin-bottom: 5px;
+  }
+  .table > tbody > tr > td[data-label="Producto"]::before {
+    content: none;
+  }
+  .table > tbody > tr > td[data-label="Subtotal"] > div {
+    align-items: flex-start;
+  }
+  .table .detail:not([hidden]) {
+    display: block;
+  }
+  .table .detail > td,
+  .table .detail > td > div {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+}
+@container orden-content (max-width: 420px) {
+  .table > tbody > tr:not(.detail) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.identityCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+  max-width: 420px;
+}
+.identity .disclosure {
+  width: 24px;
+  min-width: 24px;
+  height: 32px;
+  color: var(--muted-text);
+}
+.illustration {
+  display: grid;
+  place-items: center;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 52px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.illustration > svg {
+  width: 100%;
+  height: 100%;
+}
+.category {
+  color: var(--muted-text);
+  font: 400 10px/1.6 var(--brand-mono, monospace);
+  overflow-wrap: anywhere;
+}
+.table > tbody > tr > td.total {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+@container orden-content (max-width: 420px) {
+  .identity { gap: 8px; }
+  .illustration { flex-basis: 42px; width: 42px; height: 48px; }
+  .identity .disclosure { width: 20px; min-width: 20px; }
+  .product { font-size: 14px; }
 }

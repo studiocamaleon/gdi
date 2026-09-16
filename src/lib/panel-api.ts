@@ -464,6 +464,8 @@ export function getPanelResumen(rango?: RangoPanel) {
   >(`/reportes/panel/resumen${qs(rango)}`);
 }
 
+export type ResumenData = Awaited<ReturnType<typeof getPanelResumen>>;
+
 export function getPanelAlertas(rango?: RangoPanel) {
   return apiRequest<TabPanel<{ activas: AlertaPanel[] }>>(`/reportes/panel/alertas${qs(rango)}`);
 }

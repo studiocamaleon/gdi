@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import { Tooltip } from "@heroui/react";
 import { InfoIcon } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 
 export function MaquinaFieldLabel({
   label,
@@ -20,6 +22,7 @@ export function MaquinaFieldLabel({
   iconSize?: "sm" | "md";
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   return (
     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <label htmlFor={htmlFor}>
@@ -38,7 +41,7 @@ export function MaquinaFieldLabel({
           </ActionButton>
           <Tooltip.Content
             {...scope}
-            className={`${theme.theme} max-w-xs text-xs leading-relaxed`}
+            className={`${theme} max-w-xs text-xs leading-relaxed`}
           >
             {tooltip}
           </Tooltip.Content>

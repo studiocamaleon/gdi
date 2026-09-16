@@ -12,7 +12,22 @@
  */
 
 import * as React from "react";
-import { PlusIcon, SearchIcon, WorkflowIcon, BoxesIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  SearchIcon,
+  WorkflowIcon,
+  BoxesIcon,
+  LibraryIcon,
+  SlidersHorizontalIcon,
+  PrinterIcon,
+  ScissorsIcon,
+  LayersIcon,
+  HammerIcon,
+  HandIcon,
+  TruckIcon,
+  PenToolIcon,
+  FileCheckIcon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -22,10 +37,21 @@ import { ActionLink } from "@/components/design-system/action-link";
 import { SelectField } from "@/components/design-system/select-field";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { FormDialog } from "@/components/design-system/form-dialog";
-import { useDesignScope } from "@/components/design-system/appearance";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { normalizarBusqueda } from "@/components/ui/select-buscable";
-import { GrafoprintLoadingIndicator } from "@/components/brand/grafoprint-loading";
-import theme from "@/components/design-system/theme.module.css";
+import { ListMetric } from "@/components/design-system/list-metric";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import { categoriaFamiliaLabels, getLabel } from "@/lib/labels-humanos";
@@ -45,6 +71,25 @@ import {
 
 import { PasoAltaDialog } from "./paso-alta-dialog";
 import s from "./pasos-familias.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
+
+function NodoCategoriaIcon({ categoria }: { categoria?: string }) {
+  const Icon =
+    (
+      {
+        pre_prensa: FileCheckIcon,
+        produccion_impresion: PrinterIcon,
+        corte_y_formado: ScissorsIcon,
+        terminaciones: LayersIcon,
+        encuadernacion_armado: LayersIcon,
+        estructural_montaje: HammerIcon,
+        operaciones_manuales: HandIcon,
+        logistica_instalacion: TruckIcon,
+        servicios_profesionales: PenToolIcon,
+      } as Record<string, typeof WorkflowIcon>
+    )[categoria ?? ""] ?? WorkflowIcon;
+  return <Icon aria-hidden />;
+}
 
 export function PasosFamiliasView({
   puedeGestionar,
@@ -52,6 +97,7 @@ export function PasosFamiliasView({
   puedeGestionar: boolean;
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const [pasos, setPasos] = React.useState<PasoTenant[]>([]);
   const [plantillas, setPlantillas] = React.useState<PlantillaPaso[]>([]);
@@ -156,10 +202,17 @@ export function PasosFamiliasView({
   };
 
   return (
-    <main {...scope} className={`${theme.theme} ${listPage.page}`}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page} ${s.page}`}
+    >
       <header className={listPage.header}>
         <div>
-          <h1>Nodos de producción</h1>
+          <span className={brand.eyebrow}>Costos · Operaciones del taller</span>
+          <h1>
+            Nodos de producción<span className={brand.titleDot}>.</span>
+          </h1>
           <p className={listPage.subtitle}>
             Definí las operaciones del taller y cómo se calculan sus tiempos,
             materiales y recursos.
@@ -167,12 +220,37 @@ export function PasosFamiliasView({
         </div>
         {puedeGestionar && pasos.length > 0 ? (
           <Button onPress={() => setAltaAbierta(true)}>
-            <PlusIcon />
+            <ArrowUpRightIcon />
             Nuevo nodo
           </Button>
         ) : null}
       </header>
+      <section className={brand.metrics} aria-label="Resumen de nodos">
+        <ListMetric
+          label="Plantillas del sistema"
+          value={cargando || errorCarga ? "—" : sistema.length}
+          hint="Operaciones disponibles"
+          icon={LibraryIcon}
+        />
+        <ListMetric
+          label="Nodos propios"
+          value={cargando || errorCarga ? "—" : pasos.length}
+          hint="Simples y compuestos de tu empresa"
+          icon={WorkflowIcon}
+        />
+        <ListMetric
+          label="Personalizadas"
+          value={
+            cargando || errorCarga
+              ? "—"
+              : sistema.filter((familia) => familia.configBase).length
+          }
+          hint="Plantillas con valores guardados"
+          icon={SlidersHorizontalIcon}
+        />
+      </section>
       <Tabs
+        className={s.tabs}
         selectedKey={tipoVisible}
         onSelectionChange={(key) =>
           setTipoVisible(key as "SIMPLE" | "COMPUESTO")
@@ -197,16 +275,20 @@ export function PasosFamiliasView({
             },
           ]}
           variant="detailed"
+          tone="graphite"
         />
         <Tabs.Panel id={tipoVisible} className={s.wrap}>
           <Card className={s.seccion}>
             <Card.Header className={s.seccionHead}>
+              <span className={s.sectionIcon} aria-hidden>
+                {tipoVisible === "COMPUESTO" ? <BoxesIcon /> : <WorkflowIcon />}
+              </span>
               <div>
-                <div className={s.seccionTitulo}>
+                <h2 className={s.seccionTitulo}>
                   {tipoVisible === "COMPUESTO"
                     ? "Tus nodos compuestos"
                     : "Tus nodos simples"}
-                </div>
+                </h2>
                 <div className={s.seccionSub}>
                   {tipoVisible === "COMPUESTO"
                     ? "Agrupan nodos simples y se configuran en el contexto de cada producto."
@@ -216,31 +298,58 @@ export function PasosFamiliasView({
             </Card.Header>
 
             {cargando ? (
-              <div className={s.empty}>
-                <GrafoprintLoadingIndicator />
+              <div
+                className={s.loading}
+                aria-label="Cargando nodos"
+                aria-busy="true"
+              >
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
               </div>
             ) : errorCarga ? (
-              <div className={s.empty}>
-                <h3>No pudimos cargar tus nodos</h3>
-                <p>Revisá la conexión y volvé a intentar.</p>
-                <Button onPress={() => window.location.reload()}>
-                  Reintentar
-                </Button>
-              </div>
-            ) : pasosVisibles.length === 0 ? (
-              <div className={s.empty}>
-                <h3>
-                  {tipoVisible === "COMPUESTO"
-                    ? "Todavía no creaste nodos compuestos"
-                    : "Todavía no creaste nodos simples"}
-                </h3>
-                {puedeGestionar ? (
-                  <Button onPress={() => setAltaAbierta(true)}>
-                    <PlusIcon />
-                    Crear el primero
+              <Empty className={s.empty}>
+                <EmptyHeader>
+                  <EmptyTitle>No pudimos cargar tus nodos</EmptyTitle>
+                  <EmptyDescription>
+                    Revisá la conexión y volvé a intentar.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button onPress={() => window.location.reload()}>
+                    Reintentar
                   </Button>
+                </EmptyContent>
+              </Empty>
+            ) : pasosVisibles.length === 0 ? (
+              <Empty className={s.empty}>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    {tipoVisible === "COMPUESTO" ? (
+                      <BoxesIcon />
+                    ) : (
+                      <WorkflowIcon />
+                    )}
+                  </EmptyMedia>
+                  <EmptyTitle>
+                    {tipoVisible === "COMPUESTO"
+                      ? "Todavía no creaste nodos compuestos"
+                      : "Todavía no creaste nodos simples"}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {tipoVisible === "COMPUESTO"
+                      ? "Agrupá operaciones que tu equipo realiza como un único trabajo."
+                      : "Creá una variante de las plantillas del sistema con la configuración de tu taller."}
+                  </EmptyDescription>
+                </EmptyHeader>
+                {puedeGestionar ? (
+                  <EmptyContent>
+                    <Button onPress={() => setAltaAbierta(true)}>
+                      <ArrowUpRightIcon />
+                      Crear el primero
+                    </Button>
+                  </EmptyContent>
                 ) : null}
-              </div>
+              </Empty>
             ) : (
               <div className="overflow-x-auto">
                 <table className={s.table}>
@@ -325,6 +434,7 @@ export function PasosFamiliasView({
                               variant={"outline"}
                             >
                               Configurar
+                              <ArrowUpRightIcon aria-hidden />
                             </ActionLink>
                           ) : null}
                           {puedeGestionar ? (
@@ -357,8 +467,11 @@ export function PasosFamiliasView({
           {tipoVisible === "SIMPLE" ? (
             <Card className={s.seccion}>
               <Card.Header className={s.seccionHead}>
+                <span className={s.sectionIcon} aria-hidden>
+                  <LibraryIcon />
+                </span>
                 <div>
-                  <div className={s.seccionTitulo}>Catálogo del sistema</div>
+                  <h2 className={s.seccionTitulo}>Catálogo del sistema</h2>
                   <div className={s.seccionSub}>
                     Los {sistema.length} tipos de nodo que trae Grafoprint. Su
                     definición técnica se actualiza automáticamente; podés
@@ -366,7 +479,7 @@ export function PasosFamiliasView({
                   </div>
                 </div>
               </Card.Header>
-              <div className="flex flex-col gap-3 border-b p-4 sm:flex-row">
+              <div className={s.tools}>
                 <SearchField
                   aria-label="Buscar en el catálogo de nodos"
                   value={busquedaCatalogo}
@@ -394,6 +507,9 @@ export function PasosFamiliasView({
                     })),
                   ]}
                 />
+                <span className={s.resultCount} role="status">
+                  {sistemaFiltrado.length} de {sistema.length} nodos
+                </span>
               </div>
               <div className="overflow-x-auto">
                 <table className={s.table}>
@@ -409,7 +525,12 @@ export function PasosFamiliasView({
                     {sistemaFiltrado.map((f) => (
                       <tr key={f.codigo}>
                         <td>
-                          <div className={s.name}>{f.nombre}</div>
+                          <div className={s.nodeIdentity}>
+                            <span className={s.nodeIcon}>
+                              <NodoCategoriaIcon categoria={f.categoria} />
+                            </span>
+                            <div className={s.name}>{f.nombre}</div>
+                          </div>
                         </td>
                         <td>
                           <div className={s.description}>
@@ -428,6 +549,7 @@ export function PasosFamiliasView({
                               {f.configBase
                                 ? "Editar configuración"
                                 : "Configurar"}
+                              <ArrowUpRightIcon aria-hidden />
                             </ActionLink>
                           ) : null}
                         </td>
@@ -437,9 +559,17 @@ export function PasosFamiliasView({
                 </table>
               </div>
               {!cargando && sistemaFiltrado.length === 0 ? (
-                <p className="p-6 text-center text-sm text-muted-foreground">
-                  No hay tipos de nodo que coincidan con esos filtros.
-                </p>
+                <Empty className={s.empty}>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <SearchIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>Sin nodos para estos filtros</EmptyTitle>
+                    <EmptyDescription>
+                      Probá con otro nombre o categoría.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               ) : null}
             </Card>
           ) : null}
@@ -459,6 +589,7 @@ export function PasosFamiliasView({
       ) : null}
 
       <FormDialog
+        className={brand.dialog}
         isDismissable={!eliminando}
         isOpen={aEliminar !== null}
         onOpenChange={(open) => {

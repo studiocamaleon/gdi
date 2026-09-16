@@ -106,7 +106,9 @@ export class ReportesController {
     const comercial = await this.ventas.comercial(auth.tenantId, rango, anterior);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
-        limites: ['Clientes dormidos y nuevos: sobre todo el historial, no el rango.'],
+        limites: [
+          'Clientes nuevos: primera compra en el rango, verificada contra todo el historial. Clientes dormidos: situación actual sobre todo el historial.',
+        ],
         sinComparativa: comercial.sinComparativa,
       }),
       ...comercial,

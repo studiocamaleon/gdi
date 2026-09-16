@@ -24,8 +24,10 @@ import {
 } from "@/components/ui/collapsible";
 import { Popover as HeroPopover } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -43,6 +45,7 @@ export function ProductoValidacionPanel({
   variante = "panel",
 }: ProductoValidacionPanelProps) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [resultado, setResultado] = React.useState<ValidacionProducto | null>(
     null,
   );
@@ -106,7 +109,7 @@ export function ProductoValidacionPanel({
 
           <HeroPopover.Content
             {...scope}
-            className={theme.theme}
+            className={theme}
             placement="bottom end"
           >
             <HeroPopover.Dialog className="w-[min(420px,calc(100vw-52px))] p-4">

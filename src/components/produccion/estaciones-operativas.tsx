@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { Card, Chip, SearchField } from "@heroui/react";
 import {
-  ArrowRight,
+  ArrowUpRight,
   Armchair,
   Ban,
   CalendarDays,
@@ -120,7 +120,7 @@ export function StationCard({
         </div>
         <div className={s.cardLoad}>
           <strong>{stats.total}</strong>
-          <span>pasos activos</span>
+          <span>{stats.total === 1 ? "paso activo" : "pasos activos"}</span>
           {config?.activo === false && (
             <Chip size="sm" variant="soft">
               Inactiva
@@ -294,7 +294,7 @@ export function StationCard({
           aria-label={`Ver tareas de ${station.nm}`}
         >
           Ver tareas
-          <ArrowRight />
+          <ArrowUpRight data-icon="inline-end" />
         </ActionLink>
       </div>
     </Card>
@@ -469,6 +469,7 @@ export function EstacionesOperativas({
       {groups.map((group) => (
         <section key={group.key} className={s.group}>
           <div className={s.groupHeader}>
+            <span className={s.groupIcon} aria-hidden><Layers /></span>
             <h2>{group.name}</h2>
             <span>
               {group.rows.length}{" "}

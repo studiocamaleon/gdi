@@ -1,10 +1,9 @@
 import { calcularProgreso } from '../common/progreso-produccion';
 import { productosComercialesConTrabajo } from '../ordenes-trabajo/productos-comerciales';
 import { Injectable } from '@nestjs/common';
-import { RolSistema, type Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 
 import type { CurrentAuth } from '../auth/auth.types';
-import { expandir, ROLES_PREDEFINIDOS } from '../auth/permisos';
 import { claveFechaEnZona, sumarDiasAClave } from '../common/zona';
 import { regionalDelTenant } from '../common/regional';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
@@ -16,49 +15,6 @@ type KpiFormato = 'cantidad' | 'moneda';
 type Tono = 'neutro' | 'ok' | 'atencion' | 'critico';
 type Severidad = 'critico' | 'atencion' | 'info';
 type Dominio = 'comercial' | 'produccion' | 'administracion';
-
-export type VistaPanelGeneral =
-  | 'actual'
-  | 'jefe_produccion'
-  | 'vendedor'
-  | 'administrativo'
-  | 'operario';
-
-const VISTAS_PANEL: Array<{
-  id: VistaPanelGeneral;
-  etiqueta: string;
-  descripcion: string;
-}> = [
-  {
-    id: 'actual',
-    etiqueta: 'Mi vista · Administrador',
-    descripcion: 'Tus permisos efectivos',
-  },
-  {
-    id: 'jefe_produccion',
-    etiqueta: 'Jefe de producción',
-    descripcion: 'Taller, entregas y carga',
-  },
-  {
-    id: 'vendedor',
-    etiqueta: 'Vendedor',
-    descripcion: 'Sus presupuestos y órdenes',
-  },
-  {
-    id: 'administrativo',
-    etiqueta: 'Administrativo',
-    descripcion: 'Cobros, facturación y egresos',
-  },
-  {
-    id: 'operario',
-    etiqueta: 'Operario',
-    descripcion: 'Su mesa y bloqueos propios',
-  },
-];
-
-const VISTAS_VALIDAS = new Set<VistaPanelGeneral>(
-  VISTAS_PANEL.map((vista) => vista.id),
-);
 
 export type PanelKpi = {
   id: string;
@@ -100,18 +56,6 @@ type EntregaPanel = {
   href: string;
 };
 
-type TareaPersonal = {
-  pasoId: string;
-  ordenId: string;
-  ordenNumero: string;
-  itemNombre: string;
-  pasoNombre: string;
-  estado: string;
-  motivoBloqueo: string | null;
-  activa: boolean;
-  href: string;
-};
-
 type AccionRapida = {
   id: string;
   etiqueta: string;
@@ -126,7 +70,6 @@ type AccionRapida = {
 };
 
 type Tablero = Awaited<ReturnType<OrdenesTrabajoService['tablero']>>;
-type TableroItem = Tablero['items'][number];
 
 type ResumenProduccion = {
   entregasHoy: number;
@@ -165,25 +108,8 @@ export class PanelGeneralService {
     private readonly admin: PanelAdminService,
   ) {}
 
-  async obtener(auth: CurrentAuth, vistaSolicitada?: VistaPanelGeneral) {
-    const permisosReales = auth.permisos ?? new Set<string>();
-    const puedePrevisualizar =
-      auth.role === RolSistema.ADMINISTRADOR &&
-      permisosReales.has('configuracion.gestionar');
-    const vistaActual =
-      puedePrevisualizar &&
-      vistaSolicitada &&
-      VISTAS_VALIDAS.has(vistaSolicitada)
-        ? vistaSolicitada
-        : 'actual';
-    const rolPrevisualizado =
-      vistaActual === 'actual'
-        ? null
-        : ROLES_PREDEFINIDOS.find((rol) => rol.codigo === vistaActual);
-    const permisos = rolPrevisualizado
-      ? expandir(rolPrevisualizado.permisos)
-      : permisosReales;
-    const authDeVista: CurrentAuth = { ...auth, permisos };
+  async obtener(auth: CurrentAuth) {
+    const permisos = auth.permisos ?? new Set<string>();
     const veComercial = permisos.has('comercial.ver');
     const gestionaComercial = permisos.has('comercial.gestionar');
     const veProduccion = permisos.has('produccion.ver');
@@ -221,7 +147,7 @@ export class PanelGeneralService {
       : {};
 
     const tableroPromise = veProduccion
-      ? this.ordenesTrabajo.tablero(authDeVista)
+      ? this.ordenesTrabajo.tablero(auth)
       : Promise.resolve<Tablero>({
           items: [],
           alcance: 'completo',
@@ -251,7 +177,7 @@ export class PanelGeneralService {
       veProduccion && !perfilSoloProductivo && !comercialSoloPropio
         ? this.cuelloBotella(auth.tenantId, hoy)
         : Promise.resolve(null),
-      puedeConsultarActividadGeneral(auth) && vistaActual === 'actual'
+      puedeConsultarActividadGeneral(auth)
         ? this.admin.obtener(auth, hoy, zonaHoraria)
         : Promise.resolve(null),
     ]);
@@ -294,23 +220,30 @@ export class PanelGeneralService {
         (a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad],
       );
     }
-    const trabajoPersonal = this.trabajoPersonal(tablero);
+    // Separar antes de limitar: las atrasadas no deben desplazar a las de hoy.
+    // Se reutiliza la consulta autorizada del tenant y el día de su zona horaria.
+    const grupoEntregas = (riesgo: EntregaPanel['riesgo']) => {
+      const items = ordenesProximas.filter(
+        (entrega) => entrega.riesgo === riesgo,
+      );
+      return { items: items.slice(0, 6), total: items.length };
+    };
 
     return {
       administrador,
+      entregas:
+        !perfilSoloProductivo && (veProduccion || veComercial)
+          ? {
+              hoy: grupoEntregas('hoy'),
+              atrasada: grupoEntregas('atrasada'),
+              proxima: grupoEntregas('proxima'),
+            }
+          : null,
       generadoEl: ahora.toISOString(),
       fechaLocal: hoy,
-      vistaActual,
-      previsualizando: vistaActual !== 'actual',
-      vistasDisponibles: puedePrevisualizar
-        ? VISTAS_PANEL
-        : VISTAS_PANEL.slice(0, 1),
       kpis: this.armarKpis(prod, administracion, veProduccion),
       atencion: atencion.slice(0, 8),
       atencionTotal: atencion.length,
-      proximasEntregas: ordenesProximas.slice(0, 6),
-      proximasEntregasTotal: ordenesProximas.length,
-      trabajoPersonal,
       taller:
         veProduccion && !perfilSoloProductivo && !comercialSoloPropio
           ? {
@@ -322,15 +255,6 @@ export class PanelGeneralService {
               cuelloBotella: cuello,
             }
           : null,
-      administracion: administracion
-        ? {
-            cobrosVencidos: administracion.deudaVencidaCantidad,
-            porFacturar: administracion.facturacionPendienteCantidad,
-            pagosVencidos: administracion.egresosVencidosCantidad,
-            acreditacionesPendientes: administracion.acreditacionesPendientes,
-          }
-        : null,
-      vendedorSinVinculo,
       accionesRapidas: this.accionesRapidas({
         gestionaComercial,
         veProduccion,
@@ -343,18 +267,6 @@ export class PanelGeneralService {
 
   private pasos(tablero: Tablero) {
     return tablero.items.flatMap((item) => item.pasos);
-  }
-
-  private progreso(item: TableroItem) {
-    return calcularProgreso(item.pasos).porcentaje ?? 0;
-  }
-
-  private pasoActual(item: TableroItem) {
-    return (
-      item.pasos.find((p) =>
-        ['en_curso', 'pausado', 'bloqueado'].includes(p.estado),
-      ) ?? item.pasos.find((p) => p.estado !== 'hecho')
-    );
   }
 
   private async resumenProduccion(
@@ -963,33 +875,6 @@ export class PanelGeneralService {
         ORDEN_SEVERIDAD[x.severidad] - ORDEN_SEVERIDAD[y.severidad] ||
         x.id.localeCompare(y.id),
     );
-  }
-
-  private trabajoPersonal(tablero: Tablero) {
-    const tareas: TareaPersonal[] = [];
-    for (const item of tablero.items) {
-      for (const paso of item.pasos) {
-        const mio = paso.mesaEsMia || paso.tramoAbierto?.esMio;
-        if (!mio || paso.estado === 'hecho') continue;
-        tareas.push({
-          pasoId: paso.id,
-          ordenId: item.ordenId,
-          ordenNumero: item.ordenNumero,
-          itemNombre: item.nombre,
-          pasoNombre: paso.nombre,
-          estado: paso.estado,
-          motivoBloqueo: paso.motivoBloqueo,
-          activa: Boolean(paso.tramoAbierto?.esMio),
-          href: `/produccion/tablero`,
-        });
-      }
-    }
-    tareas.sort(
-      (a, b) =>
-        Number(b.activa) - Number(a.activa) ||
-        a.ordenNumero.localeCompare(b.ordenNumero),
-    );
-    return { tareas: tareas.slice(0, 8), total: tareas.length };
   }
 
   private accionesRapidas(p: {

@@ -23,10 +23,11 @@ import itemCostStyles from "./orden-item-costos.module.css";
 import workspaceTheme from "@/components/ui/workspace-theme.module.css";
 import { cn } from "@/lib/utils";
 import { Chip, Input as HeroInput, Tabs as HeroTabs } from "@heroui/react";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import { ActionButton as HeroButton } from "@/components/design-system/action-button";
-import { DesignSystemProvider } from "@/components/design-system/appearance";
-import designTheme from "@/components/design-system/theme.module.css";
+import { DesignSystemProvider, useLegacyDesignScope } from "@/components/design-system/appearance";
+import designTheme from "@/components/design-system/brand-workspace-theme.module.css";
 import {
   calcularResumenOrden,
   descuentoMontoDeItem,
@@ -62,6 +63,8 @@ import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-
 import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
 
 import * as React from "react";
+import issued from "./orden-issued.module.css";
+import { OrdenSectionHeading } from "./orden-section-heading";
 import { PlanificacionEntregas } from "./planificacion-entregas";
 import {
   useEntregasPrevias,
@@ -71,6 +74,13 @@ import type { VinculoPlanEntrega } from "@/lib/planificacion-entregas";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  CircleDollarSignIcon,
+  Grid2X2Icon,
+  Layers3Icon,
+  PaletteIcon,
+  PrinterIcon,
+  RulerIcon,
+  SlidersHorizontalIcon,
   BadgePercentIcon,
   BlocksIcon,
   CalendarIcon,
@@ -271,7 +281,6 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
-import { DocumentosLiberadosOtTab } from "@/components/comercial/documentos-liberados-ot-tab";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { ProduccionEntregas } from "./produccion-entregas";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
@@ -2300,15 +2309,18 @@ function ProduccionItemSinLotesView({
           </AlertDescription>
         </Alert>
       ) : null}
-      <Card size="sm">
+      <Card size="sm" className={itemStyles.technicalCard}>
         <CardHeader>
-          <CardTitle>Flujo de producción</CardTitle>
+          <CardTitle className={itemStyles.sectionTitle}>
+            <FactoryIcon aria-hidden="true" />
+            Flujo de producción
+          </CardTitle>
           {onExpand ? (
             <CardAction>
-              <Button variant="outline" size="sm" onClick={onExpand}>
+              <HeroButton variant="outline" size="sm" onPress={onExpand}>
                 <ExpandIcon data-icon="inline-start" />
                 Ampliar
-              </Button>
+              </HeroButton>
             </CardAction>
           ) : null}
         </CardHeader>
@@ -2414,12 +2426,15 @@ function AprovechamientoItemSinLotesView({
           aria-label="Aprovechamiento del material"
         >
           <div className={itemStyles.sectionHeading}>
-            <span>Disposición de piezas</span>
+            <span className={itemStyles.sectionTitle}>
+              <Grid2X2Icon aria-hidden="true" />
+              Disposición de piezas
+            </span>
             {onExpand ? (
-              <Button variant="outline" size="sm" onClick={onExpand}>
+              <HeroButton variant="outline" size="sm" onPress={onExpand}>
                 <ExpandIcon data-icon="inline-start" />
                 Ampliar
-              </Button>
+              </HeroButton>
             ) : null}
           </div>
           <div className={nestingStyles.itemNestings}>
@@ -2810,6 +2825,7 @@ function PanelEditorShell({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
   return (
     <Dialog
       open
@@ -2818,7 +2834,8 @@ function PanelEditorShell({
       }}
     >
       <DialogContent
-        className={cn(workspaceTheme.theme, itemStyles.panelEditorDialog)}
+        {...legacyScope}
+        className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.panelEditorDialog)}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -3319,6 +3336,10 @@ function CostosItemView({
     <div className={cn(itemCostStyles["op-costs"])}>
       <div className={itemStyles.costOverview}>
         <div className={cn(itemCostStyles["cost-waterfall"])}>
+          <h3 className={itemCostStyles.waterfallHeading}>
+            <CircleDollarSignIcon aria-hidden="true" />
+            Composición del precio
+          </h3>
           {filasNeto.map((fila) => (
             <div className={cn(itemCostStyles["cw-row"])} key={fila.key}>
               <span className={cn(itemCostStyles["cw-label"])}>
@@ -3383,7 +3404,9 @@ function CostosItemView({
 
         <Card size="sm" className={itemStyles.contribution}>
           <CardHeader>
-            <CardTitle>Margen de contribución</CardTitle>
+            <CardTitle className={itemStyles.contributionTitle}>
+              Margen de contribución
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className={itemStyles.contributionValue}>
@@ -3813,6 +3836,7 @@ export function OrdenProductoDetalle({
   /** Orden sin comprobante fiscal: la fila oculta Imp. y muestra Total neto. */
   sinComprobante?: boolean;
 }) {
+  const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
   const { zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
   const [loteId, setLoteId] = React.useState<string>();
@@ -3853,39 +3877,41 @@ export function OrdenProductoDetalle({
   return (
     <div>
       {expanded ? (
-        <Tabs
-          className={cn(workspaceTheme.theme, itemStyles.detail)}
-          value={innerTab}
-          onValueChange={(value) => setInnerTab(value as InnerTab)}
+        <HeroTabs
+          {...legacyScope}
+          className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.detail)}
+          selectedKey={innerTab}
+          onSelectionChange={(value) => setInnerTab(value as InnerTab)}
         >
           <div className={itemStyles.toolbar}>
-            <TabsList
-              variant="line"
-              className={itemStyles.scrollTabs}
-              aria-label={`Detalle de ${item.productoNombre}`}
-            >
-              <TabsTrigger value="specs">Especificaciones</TabsTrigger>
-              <TabsTrigger value="costos">Costos</TabsTrigger>
-              <TabsTrigger value="produccion">Flujo de producción</TabsTrigger>
-              <TabsTrigger value="aprovechamiento">Aprovechamiento</TabsTrigger>
-            </TabsList>
+            <NavigationTabList
+              variant="inset"
+              className={itemStyles.detailNavigation}
+              label={`Detalle de ${item.productoNombre}`}
+              items={[
+                { id: "specs", label: "Especificaciones", icon: <SlidersHorizontalIcon /> },
+                { id: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
+                { id: "produccion", label: "Flujo de producción", icon: <FactoryIcon /> },
+                { id: "aprovechamiento", label: "Aprovechamiento", icon: <Grid2X2Icon /> },
+              ]}
+            />
             <div className={itemStyles.actions}>
               {onEdit ? (
-                <Button variant="ghost" size="sm" onClick={onEdit}>
+                <HeroButton variant="outline" size="sm" onPress={onEdit}>
                   <Edit3Icon data-icon="inline-start" />
                   Editar especificaciones
-                </Button>
+                </HeroButton>
               ) : null}
               {onDescuento ? (
-                <Button variant="ghost" size="sm" onClick={onDescuento}>
+                <HeroButton variant="ghost" size="sm" onPress={onDescuento}>
                   <BadgePercentIcon data-icon="inline-start" />
                   {item.descuentoInput ? "Editar descuento" : "Descuento"}
-                </Button>
+                </HeroButton>
               ) : null}
             </div>
           </div>
 
-          <TabsContent value="specs" className={itemStyles.panel}>
+          <HeroTabs.Panel id="specs" className={itemStyles.panel}>
             {tieneEspecificacionesRaiz
               ? (() => {
                   // Cortas: grilla compacta que se estira al ancho (auto-fit).
@@ -3915,6 +3941,13 @@ export function OrdenProductoDetalle({
                     // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
                     const isEstampasSpec =
                       spec.lbl.toLowerCase() === "estampas";
+                    const SpecIcon = isMedidasSpec
+                      ? RulerIcon
+                      : isModoColorSpec ? PaletteIcon
+                      : /material|montaje/i.test(spec.lbl) ? Layers3Icon
+                      : /tecnolog|impresi/i.test(spec.lbl) ? PrinterIcon
+                      : isCarasSpec || isEstampasSpec ? Grid2X2Icon
+                      : SlidersHorizontalIcon;
                     return (
                       <div
                         className={cn(
@@ -3924,6 +3957,7 @@ export function OrdenProductoDetalle({
                         key={`${spec.lbl}-${idx}`}
                       >
                         <div className={itemStyles.specHeading}>
+                          <SpecIcon aria-hidden="true" />
                           <div className={itemStyles.specLabel}>{spec.lbl}</div>
                         </div>
                         <div
@@ -3981,10 +4015,10 @@ export function OrdenProductoDetalle({
                             key={adicional}
                             className={itemStyles.chipDetail}
                           >
-                            <Badge variant="secondary">
-                              <CheckIcon />
+                            <span className={itemStyles.optionalChip}>
+                              <CheckIcon aria-hidden="true" />
                               {adicional}
-                            </Badge>
+                            </span>
                             {details.length > 0 ? (
                               <span className={itemStyles.chipHint}>
                                 {details.join(" · ")}
@@ -3994,9 +4028,9 @@ export function OrdenProductoDetalle({
                         );
                       })
                     ) : (
-                      <Badge variant="secondary">
+                      <p className={itemStyles.emptyOptional}>
                         Sin opcionales activados
-                      </Badge>
+                      </p>
                     )}
                   </div>
                 </div>
@@ -4021,6 +4055,10 @@ export function OrdenProductoDetalle({
               ) : null}
 
               <div className={itemStyles.delivery}>
+                <div className={itemStyles.extrasHeading}>
+                  <CalendarIcon aria-hidden="true" />
+                  <span>Entrega del producto</span>
+                </div>
                 {!(entregasPrevias?.distribucion ?? item.distribucionEntregas)
                   ?.entregas.length ? (
                   <>
@@ -4062,6 +4100,7 @@ export function OrdenProductoDetalle({
                         <div
                           className={cn(
                             itemStyles.deliveryRow,
+                            itemStyles.deliveryEstimate,
                             fechasStyles.filaTiempo,
                           )}
                         >
@@ -4107,19 +4146,19 @@ export function OrdenProductoDetalle({
                 ) : null}
               </div>
             </div>
-          </TabsContent>
+          </HeroTabs.Panel>
 
-          <TabsContent value="costos" className={itemStyles.panel}>
+          <HeroTabs.Panel id="costos" className={itemStyles.panel}>
             <CostosItemView
               item={item}
               costo={costo}
               calculoPendiente={calculoPendiente}
               sinComprobante={sinComprobante}
             />
-          </TabsContent>
+          </HeroTabs.Panel>
 
           {(["produccion", "aprovechamiento"] as const).map((vista) => (
-            <TabsContent key={vista} value={vista} className={itemStyles.panel}>
+            <HeroTabs.Panel key={vista} id={vista} className={itemStyles.panel}>
               <FabricacionItemView
                 vista={vista}
                 loteId={loteId}
@@ -4132,9 +4171,9 @@ export function OrdenProductoDetalle({
                   readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
                 }
               />
-            </TabsContent>
+            </HeroTabs.Panel>
           ))}
-        </Tabs>
+        </HeroTabs>
       ) : null}
 
       <Dialog
@@ -4143,8 +4182,11 @@ export function OrdenProductoDetalle({
           if (!open) setVistaAmpliada(null);
         }}
       >
-        <DialogContent className={cn(workspaceTheme.theme, itemStyles.dialog)}>
-          <DialogHeader className="px-6 py-4 pr-14">
+        <DialogContent
+          {...legacyScope}
+          className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.dialog)}
+        >
+          <DialogHeader className={itemStyles.dialogHeader}>
             <DialogTitle>
               {vistaAmpliada === "aprovechamiento"
                 ? "Aprovechamiento"
@@ -4738,6 +4780,15 @@ export function PropuestaFicha({
       .catch(() => {});
   }, [ordenProp?.id]);
   const modoOrden = Boolean(orden);
+  const [editandoOrden, setEditandoOrden] = React.useState(false);
+  const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  // Única puerta para las mutaciones de esta ficha; los permisos y estados
+  // de cada operación siguen aplicándose además de este modo de presentación.
+  const puedeEditarOrden = !orden || (editandoOrden && !guardandoEdicion && orden.estado !== "cancelada");
+  const permisoEdicionRef = React.useRef(puedeEditarOrden);
+  React.useLayoutEffect(() => {
+    permisoEdicionRef.current = puedeEditarOrden;
+  }, [puedeEditarOrden]);
   // Sin comprobante fiscal (§6 cuaderno de margen). En creación es estado de
   // cliente que viaja en el payload de crear; en una OT persistida se sincroniza
   // desde el flag y se alterna vía endpoint.
@@ -4749,6 +4800,7 @@ export function PropuestaFicha({
   }, [orden]);
   const [togglingFiscal, setTogglingFiscal] = React.useState(false);
   const toggleTratamientoFiscal = React.useCallback(async () => {
+    if (!permisoEdicionRef.current) return;
     const siguiente = sinComprobante ? "FISCAL" : "SIN_COMPROBANTE";
     if (orden?.id) {
       setTogglingFiscal(true);
@@ -4773,8 +4825,8 @@ export function PropuestaFicha({
     }
   }, [orden?.id, sinComprobante]);
   const puedeToggleFiscal =
-    !modoOrden ||
-    (orden ? ["borrador", "pendiente"].includes(orden.estado) : false);
+    puedeEditarOrden && (!modoOrden ||
+    (orden ? ["borrador", "pendiente"].includes(orden.estado) : false));
   // Atajo de teclado: X alterna sin comprobante, para quien prefiere no ir al
   // botón. Se ignora mientras se escribe (input/textarea/select/editable) y con
   // modificadoras (no pisar Ctrl/Cmd+X).
@@ -4984,6 +5036,7 @@ export function PropuestaFicha({
   // cliente de la orden.
   React.useEffect(() => {
     const onEscaneado = (event: Event) => {
+      if (!permisoEdicionRef.current) return;
       const cliente = (event as CustomEvent<ClienteDetalle>).detail;
       if (!cliente?.id) return;
       setClientesEscaneados((prev) =>
@@ -5185,8 +5238,6 @@ export function PropuestaFicha({
   const emisionIdempotencyRef = React.useRef<string | null>(null);
   const borradorIdempotencyRef = React.useRef<string | null>(null);
   const tomosIdempotencyRef = React.useRef<Map<string, string>>(new Map());
-  const [editandoOrden, setEditandoOrden] = React.useState(false);
-  const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
   const cambioRemotoPendiente = React.useRef(false);
   const bloqueaCambioRemoto =
     editandoOrden ||
@@ -5221,6 +5272,11 @@ export function PropuestaFicha({
       aplicarCambioRemoto();
     }
   }, [aplicarCambioRemoto, bloqueaCambioRemoto]);
+  React.useEffect(() => {
+    if (puedeEditarOrden) return;
+    setConfirmCancelar(false);
+    setEntregaManualOpen(false);
+  }, [puedeEditarOrden]);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
 
   // Copia el link público de seguimiento del cliente (/t/<token>).
@@ -5242,8 +5298,8 @@ export function PropuestaFicha({
   );
   /** En modo orden, si el campo NO está en edición se muestra estático. */
   const campoEditable = React.useCallback(
-    (campo: string) => !orden || camposEdicion.has(campo),
-    [orden, camposEdicion],
+    (campo: string) => !orden || (puedeEditarOrden && camposEdicion.has(campo)),
+    [orden, puedeEditarOrden, camposEdicion],
   );
 
   /** Items tocables sólo antes de que el taller arranque (espejo backend). */
@@ -5254,7 +5310,7 @@ export function PropuestaFicha({
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
    * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
-  const itemsEnEdicion = puedeTocarItems && editandoOrden;
+  const itemsEnEdicion = puedeTocarItems && puedeEditarOrden;
   // Misma puerta para botones, atajos y confirmación de ambos sheets.
   const puedeModificarProductos =
     !guardandoEdicion &&
@@ -5402,11 +5458,12 @@ export function PropuestaFicha({
 
   const cancelarOrden = React.useCallback(
     async (motivo: string) => {
-      if (!orden || cancelando) return;
+      if (!permisoEdicionRef.current || !orden || cancelando || cambiosSinGuardar > 0) return;
       setCancelando(true);
       try {
         await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
         setConfirmCancelar(false);
+        setEditandoOrden(false);
         toast.success(
           acreditaYCancela
             ? `Orden ${orden.numero} cancelada y facturación acreditada.`
@@ -5423,7 +5480,7 @@ export function PropuestaFicha({
         setCancelando(false);
       }
     },
-    [orden, cancelando, acreditaYCancela, router],
+    [orden, cancelando, acreditaYCancela, router, cambiosSinGuardar],
   );
 
   /**
@@ -5689,7 +5746,7 @@ export function PropuestaFicha({
   }, []);
 
   const cancelarEdicion = React.useCallback(() => {
-    if (!orden) return;
+    if (!orden || togglingFiscal || cancelando) return;
     // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
     setClienteId(orden.clienteId ?? "");
     setCanalVenta(orden.canalVenta ?? "");
@@ -5703,7 +5760,7 @@ export function PropuestaFicha({
     setItems(orden.productos.map(rehidratarOrdenItem));
     setEditadosIds(new Set());
     setEditandoOrden(false);
-  }, [orden]);
+  }, [orden, togglingFiscal, cancelando]);
 
   /**
    * Commit atómico del staging. Los snapshots se recalculan primero y luego
@@ -5712,7 +5769,7 @@ export function PropuestaFicha({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
-      if (!orden) return;
+      if (!permisoEdicionRef.current || !orden) return;
       if (
         camposEditablesOrden(orden.estado).has("canalVenta") &&
         !validarCanalVenta()
@@ -5874,7 +5931,7 @@ export function PropuestaFicha({
    */
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(async () => {
-    if (!orden) return;
+    if (!permisoEdicionRef.current || !orden || cambiosSinGuardar > 0) return;
     if (!canalVentaValido(orden.canalVenta ?? "", orden.canalVenta)) {
       setEditandoOrden(true);
       setErrorCanalVenta(true);
@@ -5904,6 +5961,7 @@ export function PropuestaFicha({
       await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
       toast.success(`${orden.numero} emitida al taller.`);
       setMostrarRecienEmitida(true);
+      setEditandoOrden(false);
       router.refresh();
     } catch (error) {
       toast.error(
@@ -5912,15 +5970,13 @@ export function PropuestaFicha({
     } finally {
       setEmitiendoBorrador(false);
     }
-  }, [orden, router, zonaHoraria]);
+  }, [orden, router, zonaHoraria, cambiosSinGuardar]);
 
-  // Emitir desde el aviso de recién convertida. Se cierra pase lo que pase:
-  // si faltaba cliente o fecha, emitirBorrador ya avisó por toast y lo que
-  // corresponde es dejar la orden a la vista para corregirla.
-  const emitirDesdeAviso = React.useCallback(async () => {
-    await emitirBorrador();
+  // El aviso lleva a edición; la emisión se confirma desde la cabecera.
+  const emitirDesdeAviso = React.useCallback(() => {
     setAvisoBorradorAbierto(false);
-  }, [emitirBorrador]);
+    setEditandoOrden(true);
+  }, []);
 
   const descartarYSalir = React.useCallback(() => {
     if (!navPendiente) return;
@@ -7060,13 +7116,15 @@ export function PropuestaFicha({
   }
 
   return (
-    <DesignSystemProvider>
+    <DesignSystemProvider appearance="light" theme="brand">
       <section
         data-ui="heroui"
+        data-appearance="light"
         className={cn(
           designTheme.theme,
           "flex min-h-0 min-w-0 flex-1 flex-col bg-background",
           workspaceStyles.page,
+          orden && issued.page,
         )}
       >
         {initialLoadErrors.length > 0 ? (
@@ -7092,8 +7150,8 @@ export function PropuestaFicha({
                 historialCount={orden ? orden.eventosTotal : undefined}
                 comprobantesCount={orden ? 0 : undefined}
                 archivosCount={archivosCount}
-                documentosCount={
-                  orden ? (initialDocumentos?.gates.length ?? 0) : undefined
+                archivosPendientesCount={
+                  initialDocumentos?.gates.filter((gate) => !gate.cumplido).length
                 }
               />
             }
@@ -7122,7 +7180,7 @@ export function PropuestaFicha({
                       currentUser?.email ??
                       "Usuario actual")
                 }
-                onShowData={() => setTab("datos")}
+                onShowData={puedeEditarOrden ? () => setTab("datos") : undefined}
               >
                 <OrdenFinancialActions
                   empty={items.length === 0}
@@ -7224,6 +7282,13 @@ export function PropuestaFicha({
                       {sinComprobante ? <ChipSinComprobante /> : null}
                     </h1>
                   )}
+                  {orden && (
+                    <p className={issued.orderContext}>
+                      {orden.clienteNombre || "Sin cliente"}
+                      <span aria-hidden="true">/</span>
+                      {items.length} {items.length === 1 ? "producto" : "productos"}
+                    </p>
+                  )}
                   {!orden && (
                     <p className={workspaceStyles.description}>
                       {ordenTipo === "orden"
@@ -7252,74 +7317,63 @@ export function PropuestaFicha({
                   ) : orden && orden.estado !== "cancelada" ? (
                     // Acciones de la orden en la cabecera fija; facturación en Comprobantes.
                     <div className={workspaceStyles.quickActions}>
-                      {camposEditablesOrden(orden.estado).size > 0 ||
-                      esCancelable(orden.estado) ? (
-                        editandoOrden ? (
-                          <>
-                            <HeroButton
-                              type="button"
-                              variant="tertiary"
-                              size="sm"
-                              onPress={cancelarEdicion}
-                              isDisabled={guardandoEdicion}
-                            >
-                              Cancelar
-                            </HeroButton>
-                            <HeroButton
-                              type="button"
-                              variant="primary"
-                              size="sm"
-                              onPress={() => void guardarEdicion()}
-                              isDisabled={
-                                guardandoEdicion || cambiosSinGuardar === 0
-                              }
-                            >
-                              <CheckIcon />
-                              {guardandoEdicion
-                                ? "Guardando…"
-                                : cambiosSinGuardar > 0
-                                  ? `Guardar cambios (${cambiosSinGuardar})`
-                                  : "Guardar cambios"}
-                            </HeroButton>
-                          </>
-                        ) : (
-                          <>
-                            {camposEditablesOrden(orden.estado).size > 0 ? (
-                              <HeroButton
-                                type="button"
-                                variant="primary"
-                                size="sm"
-                                onPress={() => setEditandoOrden(true)}
-                              >
-                                <Edit3Icon />
-                                Editar orden
-                              </HeroButton>
-                            ) : null}
-                            {esCancelable(orden.estado) ? (
-                              <HeroButton
-                                type="button"
-                                variant="tertiary"
-                                size="sm"
-                                onPress={() => setConfirmCancelar(true)}
-                                isDisabled={
-                                  cancelando || (facturaViva && !puedeAnular)
-                                }
-                                title={
-                                  facturaViva && !puedeAnular
-                                    ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
-                                    : acreditaYCancela
-                                      ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
-                                      : "Cancelar la orden: sale del taller y deja de contar como venta"
-                                }
-                              >
-                                <XCircleIcon />
-                                Cancelar orden
-                              </HeroButton>
-                            ) : null}
-                          </>
-                        )
-                      ) : undefined}
-                      {orden.estado === "borrador" ? (
+                      {editandoOrden ? (
+                        <>
+                          <HeroButton
+                            type="button"
+                            variant="tertiary"
+                            size="sm"
+                            onPress={cancelarEdicion}
+                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                          >
+                            Cancelar
+                          </HeroButton>
+                          <HeroButton
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            onPress={() => void guardarEdicion()}
+                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                          >
+                            <CheckIcon />
+                            {guardandoEdicion
+                              ? "Guardando…"
+                              : cambiosSinGuardar > 0
+                                ? `Guardar cambios (${cambiosSinGuardar})`
+                                : "Finalizar edición"}
+                          </HeroButton>
+                        </>
+                      ) : (
+                        <HeroButton
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onPress={() => setEditandoOrden(true)}
+                        >
+                          <Edit3Icon />
+                          Editar orden
+                        </HeroButton>
+                      )}
+                      {puedeEditarOrden && esCancelable(orden.estado) ? (
+                        <HeroButton
+                          type="button"
+                          variant="tertiary"
+                          size="sm"
+                          onPress={() => setConfirmCancelar(true)}
+                          isDisabled={cancelando || cambiosSinGuardar > 0 || (facturaViva && !puedeAnular)}
+                          title={
+                            facturaViva && !puedeAnular
+                              ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
+                              : acreditaYCancela
+                                ? "Cancelar la orden: primero se acredita la factura con una nota de crédito"
+                                : "Cancelar la orden: sale del taller y deja de contar como venta"
+                          }
+                        >
+                          <XCircleIcon />
+                          Cancelar orden
+                        </HeroButton>
+                      ) : null}
+                      {puedeEditarOrden && orden.estado === "borrador" ? (
                         <HeroButton
                           type="button"
                           variant="primary"
@@ -7327,7 +7381,7 @@ export function PropuestaFicha({
                           onPress={() => void emitirBorrador()}
                           isDisabled={
                             emitiendoBorrador ||
-                            editandoOrden ||
+                            cambiosSinGuardar > 0 ||
                             !orden.clienteId
                           }
                           title={
@@ -7340,7 +7394,7 @@ export function PropuestaFicha({
                           {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
                         </HeroButton>
                       ) : null}
-                      {orden.estado === "finalizada" && puedeEntregar ? (
+                      {puedeEditarOrden && orden.estado === "finalizada" && puedeEntregar ? (
                         <Button
                           size="lg"
                           onClick={() => setEntregaManualOpen(true)}
@@ -7453,13 +7507,6 @@ export function PropuestaFicha({
                                 currentUser?.email ??
                                 "Usuario actual"
                               }
-                              initials={(
-                                currentUser?.nombreCompleto ??
-                                currentUser?.email ??
-                                "US"
-                              )
-                                .slice(0, 2)
-                                .toUpperCase()}
                             />
                             <span>
                               {currentUser?.nombreCompleto ??
@@ -7697,8 +7744,10 @@ export function PropuestaFicha({
               </>
             }
           >
+            {orden && <OrdenSectionHeading section={tab} />}
             {tab === "productos" ? (
               <OrdenProductosTable
+                catalogo={initialProductos}
                 items={items}
                 sinComprobante={sinComprobante}
                 expandedIds={openIds}
@@ -7785,17 +7834,19 @@ export function PropuestaFicha({
                     fechaEstimada={fechaEstimada}
                     readOnly={modoOrden}
                     editarFecha={itemsEnEdicion}
-                    prepararCorte={modoOrden && persistedItemIds.has(item.id)}
+                    prepararCorte={modoOrden && puedeEditarOrden && persistedItemIds.has(item.id)}
                     onDistribucionGuardada={
-                      orden
-                        ? () => {
-                            void recargarOrden();
-                          }
-                        : undefined
+                      orden ? () => {
+                        void getOrdenTrabajo(orden.id).then((actualizada) => {
+                          setOrden(actualizada);
+                          setItems(actualizada.productos.map(rehidratarOrdenItem));
+                          setFechaEstimada(actualizada.fechaEntrega ?? "");
+                        }).catch(() => router.refresh());
+                      } : undefined
                     }
                     planificarEntregas={
                       !!orden &&
-                      !editandoOrden &&
+                      puedeEditarOrden && cambiosSinGuardar === 0 &&
                       (orden.estado === "borrador" ||
                         orden.estado === "pendiente") &&
                       persistedItemIds.has(item.id)
@@ -7835,6 +7886,7 @@ export function PropuestaFicha({
                 <ProduccionOrdenTab
                   ordenId={orden.id}
                   onOrdenActualizada={recargarOrden}
+                  soloLectura={!puedeEditarOrden}
                 />
               ) : (
                 <EmptyTab
@@ -7851,6 +7903,7 @@ export function PropuestaFicha({
                     total={orden.total}
                     ordenId={orden.id}
                     puedeCobrar={orden.estado !== "borrador"}
+                    soloLectura={!puedeEditarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
                     }
@@ -7883,6 +7936,7 @@ export function PropuestaFicha({
                   facturadoInicial={orden.facturadoTotal}
                   cobradoInicial={orden.cobradoTotal}
                   puedeFacturar={orden.estado !== "borrador"}
+                  soloLectura={!puedeEditarOrden}
                   recargarToken={0}
                 />
               </div>
@@ -7891,6 +7945,8 @@ export function PropuestaFicha({
               orden ? (
                 <ArchivosOrdenTab
                   ordenId={orden.id}
+                  estadoDocumental={initialDocumentos}
+                  soloLectura={!puedeEditarOrden}
                   onTotalCambio={setArchivosCount}
                 />
               ) : (
@@ -7903,9 +7959,6 @@ export function PropuestaFicha({
                 />
               )
             ) : null}
-            {tab === "documentos" && orden ? (
-              <DocumentosLiberadosOtTab data={initialDocumentos} />
-            ) : null}
             {tab === "costos" ? (
               <CostosOrdenTab
                 items={items}
@@ -7915,45 +7968,40 @@ export function PropuestaFicha({
               />
             ) : null}
             {tab === "historial" && orden ? (
-              <div className="otd-card">
-                <div className="otd-card-head">
-                  <span className="ttl">
-                    Historial <span className="ct">{orden.eventosTotal}</span>
-                  </span>
-                </div>
+              <section className={issued.history} aria-label="Actividad de la orden">
+                <header className={issued.historyHeader}>
+                  <span>Registro de actividad</span>
+                  <span className={issued.counter}>{orden.eventosTotal} eventos</span>
+                </header>
                 {orden.eventos.length === 0 ? (
-                  <div className="otd-noprod">Sin eventos registrados.</div>
+                  <p className={issued.empty}>Sin eventos registrados.</p>
                 ) : (
-                  <div className="otd-timeline">
-                    {orden.eventosTotal > orden.eventos.length ? (
-                      <div className="otd-noprod">
-                        Se muestran los 200 eventos más recientes de{" "}
-                        {orden.eventosTotal}.
-                      </div>
-                    ) : null}
-                    {orden.eventos.map((ev, i) => {
-                      const { Icono, tone } =
-                        EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
-                      return (
-                        <div key={i} className={`otd-ev ${tone ?? ""}`}>
-                          <span className="otd-ev-ico">
-                            <Icono />
-                          </span>
-                          <div className="otd-ev-body">
-                            <div className="otd-ev-txt">{ev.descripcion}</div>
-                            <div className="otd-ev-meta">
-                              <span className="mono">
-                                {formatEventoFecha(ev.fecha)}
-                              </span>{" "}
-                              · {ev.usuarioNombre}
+                  <>
+                    {orden.eventosTotal > orden.eventos.length && (
+                      <p className={issued.empty}>
+                        Se muestran los 200 eventos más recientes de {orden.eventosTotal}.
+                      </p>
+                    )}
+                    <ol className={issued.timeline}>
+                      {orden.eventos.map((ev, i) => {
+                        const { Icono } = EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
+                        return (
+                          <li key={i} className={issued.event}>
+                            <span className={issued.eventIcon} aria-hidden="true"><Icono /></span>
+                            <div>
+                              <p>{ev.descripcion}</p>
+                              <div className={issued.eventMeta}>
+                                <time dateTime={ev.fecha}>{formatEventoFecha(ev.fecha)}</time>
+                                <span>{ev.usuarioNombre}</span>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </>
                 )}
-              </div>
+              </section>
             ) : null}
 
             {tab === "productos" ? (
@@ -8025,6 +8073,7 @@ export function PropuestaFicha({
           numero={orden?.numero ?? ""}
           emitiendo={emitiendoBorrador}
           onEmitirAhora={emitirDesdeAviso}
+          emitirLabel="Revisar y emitir"
           onEmitirDespues={() => setAvisoBorradorAbierto(false)}
         />
 
@@ -8063,7 +8112,7 @@ export function PropuestaFicha({
         />
 
         <ConfirmacionDestructiva
-          open={confirmCancelar}
+          open={puedeEditarOrden && confirmCancelar}
           onOpenChange={setConfirmCancelar}
           titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
           descripcion={
@@ -8237,7 +8286,7 @@ export function PropuestaFicha({
             onClose={() => setQrRetiroOpen(false)}
           />
         ) : null}
-        {entregaManualOpen && orden ? (
+        {puedeEditarOrden && entregaManualOpen && orden ? (
           <EntregaModal
             codigo={orden.numero}
             onClose={() => setEntregaManualOpen(false)}

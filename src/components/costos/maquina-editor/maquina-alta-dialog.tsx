@@ -4,6 +4,7 @@ import focus from "@/components/design-system/field-focus.module.css";
 import { SelectField } from "@/components/design-system/select-field";
 
 import * as React from "react";
+import { ArrowUpRightIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -171,6 +172,7 @@ export function MaquinaAltaDialog({
             Cancelar
           </Button>
           <Button type="submit" isDisabled={!puedeGuardar}>
+            <ArrowUpRightIcon />
             {creando ? "Creando…" : "Crear borrador"}
           </Button>
         </Modal.Footer>

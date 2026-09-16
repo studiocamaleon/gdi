@@ -6,8 +6,10 @@ import { CircleAlertIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import { NodosVisualProvider } from "./nodos-ui";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import listPage from "@/components/design-system/list-page.module.css";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
@@ -28,6 +30,7 @@ import type {
 
 export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [datos, setDatos] = React.useState<{
     producto: ProductoDetalle;
     ruta: RutaAlternativaDetalle;
@@ -226,7 +229,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
 
   if (error) {
     return (
-      <div {...scope} className={`${theme.theme} ${listPage.page}`}>
+      <div {...scope} className={`${theme} ${listPage.page}`}>
         <Alert variant="destructive">
           <CircleAlertIcon />
           <AlertTitle>No se pudo abrir la configuración</AlertTitle>
@@ -246,7 +249,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
       return <PasoCompuestoConfiguracion paso={pasoCompuesto} />;
     }
     return (
-      <div {...scope} className={`${theme.theme} ${listPage.page}`}>
+      <div {...scope} className={`${theme} ${listPage.page}`}>
         <Skeleton className="h-8 w-72" />
         <Skeleton className="h-[520px] w-full" />
       </div>

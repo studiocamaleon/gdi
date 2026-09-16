@@ -1,5 +1,6 @@
 "use client";
 import { Button, HumanSelect, NativeButton, NativeInput } from "./nodos-ui";
+import nodeStyles from "./nodos-editor.module.css";
 
 import * as React from "react";
 import { AlertCircleIcon } from "lucide-react";
@@ -236,6 +237,7 @@ export function RuleBuilder({
             ) : null}
 
             <div
+              className={nodeStyles.conditionRow}
               style={{
                 display: "grid",
                 gridTemplateColumns: field.pasos

@@ -38,7 +38,7 @@ describe("acceso a Estaciones", () => {
     vi.mocked(tienePermiso).mockImplementation(
       async (p) => p === "produccion.ver",
     );
-    const page = await Page();
+    const page = (await Page()).props.children;
     expect(page.type).toBe(EstacionesView);
     expect(cargarDatosTableroProduccion).toHaveBeenCalledWith({ soloPendientes: true });
     expect(page.props.configuracionDisponible).toBe(false);
@@ -47,7 +47,7 @@ describe("acceso a Estaciones", () => {
   });
   it("carga los recursos de configuración sólo con el permiso correspondiente", async () => {
     vi.mocked(tienePermiso).mockResolvedValue(true);
-    const page = await Page();
+    const page = (await Page()).props.children;
     expect(page.props.configuracionDisponible).toBe(true);
     expect(getRecursosEstaciones).toHaveBeenCalledOnce();
   });
@@ -56,7 +56,7 @@ describe("acceso a Estaciones", () => {
     vi.mocked(getRecursosEstaciones).mockRejectedValue(
       new Error("Sin recursos"),
     );
-    const page = await Page();
+    const page = (await Page()).props.children;
     expect(page.type).toBe(EstacionesView);
     expect(page.props.configuracionDisponible).toBe(false);
   });

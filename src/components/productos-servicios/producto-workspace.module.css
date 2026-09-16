@@ -9,7 +9,7 @@
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  background: var(--background);
+  background: var(--canvas-background);
 }
 
 .shell {
@@ -25,7 +25,7 @@
   gap: 6px;
   margin: 0 0 12px -7px;
   padding: 6px 8px;
-  border-radius: 9px;
+  border-radius: 8px;
   color: var(--pd-muted);
   font-size: 12.5px;
   font-weight: 560;
@@ -49,18 +49,18 @@
 
 .headerIcon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 66px;
+  height: 66px;
   flex: none;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--accent-soft-foreground);
   background: var(--accent-soft);
 }
 
 .headerIcon svg {
-  width: 20px;
-  height: 20px;
+  width: 52px;
+  height: 52px;
 }
 
 .headerBody {
@@ -72,8 +72,9 @@
   display: block;
   margin-bottom: 5px;
   color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 500;
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .titleRow {
@@ -86,8 +87,8 @@
 .titleRow h1 {
   margin: 0;
   color: var(--foreground);
-  font-size: 23px;
-  font-weight: 650;
+  font-size: clamp(26px, 2.1vw, 34px);
+  font-weight: 550;
   letter-spacing: -0.035em;
   line-height: 1.25;
 }
@@ -102,7 +103,7 @@
   color: var(--muted-text);
   background: var(--surface-secondary);
   font-size: 11.5px;
-  font-weight: 640;
+  font-weight: 550;
 }
 
 .productStatus > span {
@@ -153,7 +154,7 @@
   gap: 12px;
   padding: 13px 14px;
   border-color: var(--border);
-  border-radius: 13px;
+  border-radius: 8px;
   color: var(--foreground);
   background: var(--surface);
   text-align: left;
@@ -177,7 +178,7 @@
   height: 35px;
   padding: 8px;
   border: 1px solid var(--surface-secondary);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--accent-soft-foreground);
   background: var(--surface);
 }
@@ -192,7 +193,7 @@
 .newRouteMode strong {
   margin-bottom: 4px;
   font-size: 12.5px;
-  font-weight: 680;
+  font-weight: 550;
   line-height: 1.25;
 }
 
@@ -218,7 +219,7 @@
   gap: 12px;
   padding: 13px 14px;
   border: 1px solid var(--pd-border);
-  border-radius: 13px;
+  border-radius: 8px;
   color: var(--pd-ink);
   background: var(--surface);
   text-align: left;
@@ -247,7 +248,7 @@
 .structureChoiceGrid strong {
   margin-bottom: 4px;
   font-size: 13.5px;
-  font-weight: 680;
+  font-weight: 550;
 }
 
 .structureChoiceGrid small {
@@ -261,7 +262,7 @@
   width: 38px;
   height: 38px;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--pd-orange);
   background: var(--foreground);
 }
@@ -293,11 +294,16 @@
 }
 
 .tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+  min-width: 0;
+  gap: 0;
+  margin-bottom: 24px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 8px;
+  background: var(--brand-graphite);
+  overflow: hidden;
 }
 
 .productionUnified {
@@ -316,7 +322,7 @@
   overflow: hidden;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -337,7 +343,7 @@
 .productionRoutesSelectorTitle h2 {
   margin: 0;
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 550;
   color: var(--foreground);
 }
 
@@ -361,11 +367,11 @@
   gap: 7px;
   padding: 0 11px;
   border: 1px solid var(--pd-border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--pd-ink);
   background: var(--surface);
   font-size: 10.5px;
-  font-weight: 660;
+  font-weight: 550;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -382,7 +388,7 @@
   width: 220px;
   padding: 6px;
   border: 1px solid var(--pd-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -443,7 +449,7 @@
   margin: 0 18px 16px;
   padding: 13px 14px;
   border: 1px dashed var(--pd-border);
-  border-radius: 11px;
+  border-radius: 8px;
   color: var(--pd-muted);
   font-size: 11px;
 }
@@ -508,7 +514,7 @@
   padding: 13px 14px;
   border: 1px solid var(--pd-border);
   border-left: 3px solid var(--muted-text);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -546,7 +552,7 @@
 .publicationStatusSection {
   overflow: hidden;
   border: 1px solid var(--pd-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -689,7 +695,7 @@
 .publicationParent > span {
   color: var(--pd-orange);
   font-size: 9.5px;
-  font-weight: 680;
+  font-weight: 550;
   white-space: nowrap;
 }
 
@@ -704,7 +710,7 @@
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -735,7 +741,7 @@
 .productionUnifiedSectionHead strong {
   color: var(--pd-ink);
   font-size: 13px;
-  font-weight: 660;
+  font-weight: 550;
 }
 
 .productionUnifiedSectionHead small {
@@ -773,18 +779,18 @@
 }
 
 .tab:hover {
-  color: var(--surface);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--brand-on-graphite);
+  background: color-mix(in srgb, var(--accent) 10%, var(--brand-graphite));
 }
 
 .tab[data-active="true"] {
-  color: var(--accent-soft-foreground);
-  background: var(--accent-soft);
+  color: var(--brand-on-graphite);
+  background: color-mix(in srgb, var(--accent) 9%, var(--brand-graphite));
 }
 
 .tab[data-active="true"]::after {
   position: absolute;
-  inset: auto 0 -1px;
+  inset: auto 0 0;
   height: 2px;
   background: var(--accent);
   content: "";
@@ -931,7 +937,7 @@
   gap: 20px;
   padding: 20px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -952,7 +958,7 @@
   margin: 0;
   color: var(--foreground);
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 550;
 }
 .help {
   color: var(--muted-text);
@@ -1004,7 +1010,7 @@
   gap: 12px;
   padding: 14px 18px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 -4px 16px color-mix(in srgb, var(--foreground) 4%, transparent);
 }
@@ -1069,7 +1075,7 @@
   text-align: center;
   gap: 8px;
   padding: 32px 20px;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--surface-secondary);
 }
 .empty > svg {
@@ -1129,8 +1135,23 @@
   gap: 0;
 }
 .tabs .tab {
+  min-height: 56px;
+  min-width: 0;
   width: auto;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  color: var(--brand-muted-on-graphite);
+  border-right: 1px solid var(--brand-graphite-line);
+  border-radius: 0;
+}
+@container list-page (max-width: 900px) {
+  .tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container list-page (max-width: 540px) {
+  .tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .structureChoiceGrid > button {
   width: 100%;
@@ -1198,7 +1219,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     padding: 12px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
   }
   .measureRow > :first-child {
     grid-column: 1 / -1;
@@ -1223,4 +1244,67 @@
 .productionVersionStatus[data-state="published"] {
   color: var(--success);
   background: var(--success-soft);
+}
+
+.tabs .tab[data-active="true"] {
+  color: var(--brand-on-graphite);
+}
+.tabs .tabIcon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 5px;
+}
+.tabs .tab[data-active="true"] .tabIcon {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.tabs .tabStatus[data-state="ok"] {
+  color: var(--brand-muted-on-graphite);
+}
+.tabs .tabStatus[data-state="warning"] {
+  color: var(--accent);
+}
+.tabs .tabStatus[data-state="error"] {
+  color: var(--accent);
+}
+.sectionCopy h2,
+.productionRoutesSelectorTitle h2 {
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+.sectionHead {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.toolRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.toolRow:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+@media (max-width: 640px) {
+  .headerIcon {
+    width: 50px;
+    height: 50px;
+  }
+  .headerIcon svg {
+    width: 40px;
+    height: 40px;
+  }
+  .headerBody {
+    flex-basis: calc(100% - 68px);
+  }
+  .tabs .tab {
+    min-height: 50px;
+  }
 }

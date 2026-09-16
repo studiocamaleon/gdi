@@ -1,12 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import { useRouter } from "next/navigation";
 import {
   CirclePlusIcon,
   DollarSignIcon,
   LibraryIcon,
-  PencilIcon,
+  ArrowUpRightIcon,
+  LayersIcon,
+  PackageIcon,
   ToggleLeftIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -39,9 +42,9 @@ import {
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { FormDialog } from "@/components/design-system/form-dialog";
+import { ListMetric } from "@/components/design-system/list-metric";
 import { SelectField } from "@/components/design-system/select-field";
 import focus from "@/components/design-system/field-focus.module.css";
-import theme from "@/components/design-system/theme.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import styles from "./materiales.module.css";
 import {
@@ -133,6 +136,8 @@ function normalizarBusqueda(value: string) {
 export function MateriasPrimasPanel({
   initialMateriasPrimas,
 }: MateriasPrimasPanelProps) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const router = useRouter();
   const [materiasPrimas, setMateriasPrimas] = React.useState(
     initialMateriasPrimas,
@@ -244,12 +249,13 @@ export function MateriasPrimasPanel({
 
   return (
     <section
-      data-ui="heroui"
-      className={`${theme.theme} ${listPage.page} ${styles.page}`}
+      {...scope} data-visual="brand"
+      className={`${themeClass} ${listPage.page} ${styles.page}`}
     >
       <header className={listPage.header}>
         <div>
-          <h1>Materiales</h1>
+          <p className={styles.eyebrow}>Inventario · Catálogo</p>
+          <h1>Materiales<span className={styles.titleDot}>.</span></h1>
           <p className={listPage.subtitle}>
             Catálogo de materias primas, variantes y precios de referencia.
           </p>
@@ -272,6 +278,26 @@ export function MateriasPrimasPanel({
           </ActionButton>
         </div>
       </header>
+      <div className={styles.metrics}>
+        <ListMetric
+          label="Materiales activos"
+          value={materiasPrimas.filter((item) => item.activo).length}
+          hint="Disponibles en tu catálogo"
+          icon={PackageIcon}
+        />
+        <ListMetric
+          label="Variantes"
+          value={materiasPrimas.reduce((total, item) => total + item.variantes.length, 0)}
+          hint="Presentaciones registradas"
+          icon={LayersIcon}
+        />
+        <ListMetric
+          label="Familias"
+          value={new Set(materiasPrimas.map((item) => item.familia)).size}
+          hint="Tipos de materiales en tu empresa"
+          icon={LibraryIcon}
+        />
+      </div>
       <Card className={listPage.results}>
         <div className={listPage.toolbar}>
           <SearchField
@@ -306,47 +332,43 @@ export function MateriasPrimasPanel({
             </Switch>
           </div>
         </div>
-        <Table className={`${styles.table} ${styles.catalogTable}`}>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Familia</TableHead>
-              <TableHead>Subfamilia</TableHead>
-              <TableHead className="text-right">Variantes</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {materiasPrimasVisibles.length === 0 ? (
+        {materiasPrimasVisibles.length === 0 ? (
+          <div className={listPage.empty}>
+            <LibraryIcon size={28} aria-hidden />
+            <p>
+              {materiasPrimas.length === 0
+                ? "Todavía no hay materias primas cargadas."
+                : busqueda.trim()
+                  ? `Sin resultados para "${busqueda.trim()}".`
+                  : "No hay materias primas activas para mostrar."}
+            </p>
+          </div>
+        ) : (
+          <Table className={`${styles.table} ${styles.catalogTable}`}>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={6}>
-                  <div className={listPage.empty}>
-                    <LibraryIcon size={28} aria-hidden />
-                    <p>
-                      {materiasPrimas.length === 0
-                        ? "Todavía no hay materias primas cargadas."
-                        : busqueda.trim()
-                          ? `Sin resultados para "${busqueda.trim()}".`
-                          : "No hay materias primas activas para mostrar."}
-                    </p>
-                  </div>
-                </TableCell>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Familia</TableHead>
+                <TableHead>Subfamilia</TableHead>
+                <TableHead className="text-right">Variantes</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
-            ) : (
-              materiasPrimasVisibles.map((item) => (
+            </TableHeader>
+            <TableBody>
+              {materiasPrimasVisibles.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <div className={styles.materialName}>
                       <span className={styles.materialIcon}>
-                        <LibraryIcon size={17} aria-hidden />
+                        <LayersIcon size={18} aria-hidden />
                       </span>
                       <div>
                         <strong>{item.nombre}</strong>
                         <span>
                           Canónico:{" "}
                           {item.canonicalMaterialName ??
-                            "Personalizado por tenant"}
+                            "Material propio"}
                         </span>
                       </div>
                     </div>
@@ -379,7 +401,7 @@ export function MateriasPrimasPanel({
                         variant="outline"
                         href={`/inventario/materias-primas/${item.id}`}
                       >
-                        <PencilIcon size={15} /> Abrir ficha
+                        Abrir ficha <ArrowUpRightIcon data-icon="inline-end" />
                       </ActionLink>
                       <ActionButton
                         variant="outline"
@@ -391,62 +413,81 @@ export function MateriasPrimasPanel({
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
       <FormDialog
+        className={styles.createDialog}
         isOpen={isCreateOpen}
         onOpenChange={setIsCreateOpen}
         isDismissable={!isSaving}
-        title="Nueva materia prima"
+        title={<>Nueva materia prima<span className={styles.titleDot}>.</span></>}
         description="Elegí un nombre y una plantilla. Después podés completar los datos y las variantes en su ficha."
       >
         <Modal.Body className={styles.dialogBody}>
-          <TextField
-            className={styles.field}
-            value={nombreNuevo}
-            onChange={setNombreNuevo}
-            autoFocus
-          >
-            <Label>Nombre</Label>
-            <Input placeholder="Ej: Vinilo adhesivo blanco" />
-          </TextField>
-          <div className={styles.field}>
-            <label htmlFor="material-template">
-              Plantilla de materia prima
-            </label>
-            <SelectField
-              id="material-template"
-              aria-label="Plantilla de materia prima"
-              value={templateNuevo}
-              onChange={(value) => setTemplateNuevo(value ?? "")}
-              options={materiaPrimaTemplatesV1.map((template) => ({
-                value: template.id,
-                label: `${template.nombre} · ${familiaMateriaPrimaItems.find((familia) => familia.value === template.familia)?.label ?? template.familia}`,
-              }))}
-            />
-          </div>
-          {templateNuevo ? (
-            <div className={styles.templateInfo}>
-              <LibraryIcon size={18} aria-hidden />
+          <div className={styles.formSection}>
+            <div className={styles.sectionHeading}>
+              <span className={styles.sectionIndex}>01</span>
               <div>
-                <strong>
-                  Familia:{" "}
-                  {selectedTemplate
-                    ? (familiaMateriaPrimaItems.find(
-                        (familia) => familia.value === selectedTemplate.familia,
-                      )?.label ?? selectedTemplate.familia)
-                    : "—"}
-                  {selectedTemplate
-                    ? ` · Subfamilia: ${subfamiliaMateriaPrimaLabels[selectedTemplate.subfamilia] ?? selectedTemplate.subfamilia}`
-                    : ""}
-                </strong>
-                <p>{getMateriaPrimaTemplate(templateNuevo)?.descripcion}</p>
+                <h2>Identidad del material</h2>
+                <p>El nombre que vas a usar en tu catálogo.</p>
               </div>
             </div>
-          ) : null}
+            <TextField
+              className={styles.field}
+              value={nombreNuevo}
+              onChange={setNombreNuevo}
+              autoFocus
+            >
+              <Label>Nombre</Label>
+              <Input placeholder="Ej: Vinilo adhesivo blanco" />
+            </TextField>
+          </div>
+          <div className={styles.formSection}>
+            <div className={styles.sectionHeading}>
+              <span className={styles.sectionIndex}>02</span>
+              <div>
+                <h2>Base técnica</h2>
+                <p>La plantilla define los campos y las unidades iniciales.</p>
+              </div>
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="material-template">
+                Plantilla de materia prima
+              </label>
+              <SelectField
+                id="material-template"
+                aria-label="Plantilla de materia prima"
+                value={templateNuevo}
+                onChange={(value) => setTemplateNuevo(value ?? "")}
+                options={materiaPrimaTemplatesV1.map((template) => ({
+                  value: template.id,
+                  label: `${template.nombre} · ${familiaMateriaPrimaItems.find((familia) => familia.value === template.familia)?.label ?? template.familia}`,
+                }))}
+              />
+            </div>
+            {templateNuevo ? (
+              <div className={styles.templateInfo}>
+                <LibraryIcon size={18} aria-hidden />
+                <div>
+                  <strong>
+                    Familia:{" "}
+                    {selectedTemplate
+                      ? (familiaMateriaPrimaItems.find(
+                          (familia) => familia.value === selectedTemplate.familia,
+                        )?.label ?? selectedTemplate.familia)
+                      : "—"}
+                    {selectedTemplate
+                      ? ` · Subfamilia: ${subfamiliaMateriaPrimaLabels[selectedTemplate.subfamilia] ?? selectedTemplate.subfamilia}`
+                      : ""}
+                  </strong>
+                  <p>{getMateriaPrimaTemplate(templateNuevo)?.descripcion}</p>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </Modal.Body>
         <Modal.Footer className={styles.dialogFooter}>
           <ActionButton
@@ -462,6 +503,7 @@ export function MateriasPrimasPanel({
             isPending={isSaving}
           >
             {isSaving ? "Creando…" : "Crear y abrir ficha"}
+            <ArrowUpRightIcon data-icon="inline-end" />
           </ActionButton>
         </Modal.Footer>
       </FormDialog>

@@ -9,9 +9,9 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  ArrowUpRight,
   ChevronRight,
   Eye,
-  Package,
   Plus,
   Star,
   Trash2,
@@ -29,10 +29,14 @@ import {
   getItemOrderVisibleAmounts,
 } from "@/lib/orden-productos-presentacion";
 import { useOrdenProductosTable } from "./use-orden-productos-table";
+import { OrdenProductosIllustration } from "./orden-productos-illustration";
+import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
 import s from "./orden-productos-table.module.css";
+import type { ProductoListItem } from "@/lib/productos-servicios";
 
 type Props = {
   items: PropuestaItem[];
+  catalogo?: readonly ProductoListItem[];
   sinComprobante: boolean;
   expandedIds: Set<string>;
   onToggle: (id: string) => void;
@@ -53,6 +57,7 @@ type Props = {
 
 export function OrdenProductosTable({
   items,
+  catalogo,
   sinComprobante,
   expandedIds,
   onToggle,
@@ -69,6 +74,7 @@ export function OrdenProductosTable({
   const table = useOrdenProductosTable(items, sinComprobante);
   const rows = table.getRowModel().rows;
   const tableId = React.useId();
+  const catalogoPorId = new Map(catalogo?.map((producto) => [producto.id, producto]));
   const fmt = (n: number) => formatCurrency(n, moneda);
   return (
     <section className={s.card} aria-label="Productos de la orden">
@@ -77,23 +83,27 @@ export function OrdenProductosTable({
           <div className={s.tools}>
             {onPrint && (
               <Button
-                variant="ghost"
-                className={s.print}
+                variant="outline"
+                size="md"
+                className={s.printAction}
                 onPress={onPrint}
                 title="Impresiones rápidas (C)"
               >
-                <Zap />
+                <span className={s.quickIcon} aria-hidden="true"><Zap /></span>
                 Impresiones rápidas
               </Button>
             )}
             {onAdd && (
               <Button
-                tone="neutral"
+                variant="primary"
+                size="md"
+                className={s.addAction}
                 onPress={onAdd}
                 title="Agregar producto (P)"
               >
                 <Plus />
                 Agregar producto
+                <ArrowUpRight className={s.actionArrow} aria-hidden="true" />
               </Button>
             )}
           </div>
@@ -111,9 +121,7 @@ export function OrdenProductosTable({
       )}
       {items.length === 0 ? (
         <div className={s.empty}>
-          <span className={s.emptyIcon}>
-            <Package aria-hidden />
-          </span>
+          <OrdenProductosIllustration />
           <div className={s.emptyCopy}>
             <h3>Tu orden empieza con un producto</h3>
             <p>Agregá un producto o un trabajo para comenzar.</p>
@@ -133,19 +141,20 @@ export function OrdenProductosTable({
         </div>
       ) : (
         <div className={s.scroller}>
-          <table className={s.table}>
+          <table role="table" className={s.table}>
             <caption className="sr-only">
               Productos de la orden. Ordenar no modifica los importes ni el
               orden guardado.
             </caption>
-            <thead>
+            <thead role="rowgroup">
               {table.getHeaderGroups().map((group) => (
-                <tr key={group.id}>
+                <tr role="row" key={group.id}>
                   {group.headers.map((header) => {
                     const sorted = header.column.getIsSorted();
                     return (
                       <th
                         key={header.id}
+                        role="columnheader"
                         scope="col"
                         aria-sort={
                           sorted
@@ -183,9 +192,10 @@ export function OrdenProductosTable({
                 </tr>
               ))}
             </thead>
-            <tbody>
+            <tbody role="rowgroup">
               {rows.map((row) => {
                 const item = row.original;
+                const productoCatalogo = catalogoPorId.get(item.motorCodigo);
                 const amount = getItemOrderVisibleAmounts(item);
                 const total = sinComprobante ? amount.subtotal : amount.total;
                 const pending = item.precioUnitario === 0 && item.total === 0;
@@ -199,16 +209,18 @@ export function OrdenProductosTable({
                 return (
                   <React.Fragment key={row.id}>
                     <tr
+                      role="row"
                       ref={(node) => rowRef(item.id, node)}
                       data-expanded={open}
                       aria-busy={recotizandoIds.has(item.id) || undefined}
                     >
-                      <td>
-                        <div className="flex items-start gap-2">
+                      <td role="cell" data-label="Producto">
+                        <div className={s.identity}>
                           <Button
                             variant="ghost"
                             size="sm"
                             isIconOnly
+                            className={s.disclosure}
                             onPress={() => onToggle(item.id)}
                             aria-expanded={open}
                             aria-controls={detailId}
@@ -218,7 +230,15 @@ export function OrdenProductosTable({
                               className={open ? "rotate-90" : undefined}
                             />
                           </Button>
-                          <div className="flex min-w-0 flex-col gap-1 py-1">
+                          <span className={s.illustration} aria-hidden="true">
+                            <ProductoCatalogoGlyph
+                              categoriaCodigo={item.categoriaComercialCodigo || productoCatalogo?.subcategoriaComercial.categoria.codigo}
+                              subcategoriaCodigo={item.subcategoriaComercialCodigo || productoCatalogo?.subcategoriaComercial.codigo}
+                              compuesto={!!item.cotizacion.componentesFabricados?.length}
+                              cobro={item.unidadMedida === "m2" ? "Por m²" : item.unidadMedida === "metro_lineal" ? "Por metro lineal" : "Por unidad"}
+                            />
+                          </span>
+                          <div className={s.identityCopy}>
                             <button
                               type="button"
                               className={s.product}
@@ -234,7 +254,7 @@ export function OrdenProductosTable({
                                 </span>
                               )}
                             </button>
-                            <span className="text-xs text-muted-foreground">
+                            <span className={s.category}>
                               {[
                                 item.categoriaComercialNombre,
                                 item.subcategoriaComercialNombre,
@@ -257,15 +277,15 @@ export function OrdenProductosTable({
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <span className="font-medium">
-                          {formatCantidadItem(item)}
-                        </span>
-                        <span className="ml-1 text-muted-foreground">
-                          {formatUnidad(item.unidadMedida)}
+                      <td role="cell" data-label="Cantidad">
+                        <span>
+                          <span className="font-medium">{formatCantidadItem(item)}</span>
+                          <span className="ml-1 text-muted-foreground">
+                            {formatUnidad(item.unidadMedida)}
+                          </span>
                         </span>
                       </td>
-                      <td>
+                      <td role="cell" data-label="Subtotal">
                         {pending ? (
                           "A cotizar"
                         ) : (
@@ -291,26 +311,28 @@ export function OrdenProductosTable({
                         )}
                       </td>
                       {!sinComprobante && (
-                        <td>{pending ? "—" : fmt(amount.impuestos)}</td>
+                        <td role="cell" data-label="Impuestos">
+                          {pending ? "—" : fmt(amount.impuestos)}
+                        </td>
                       )}
-                      <td>
+                      <td role="cell" data-label="Unitario">
                         {pending || item.cantidad <= 0 ? (
                           "—"
                         ) : (
-                          <>
+                          <span>
                             <span>
                               {formatUnitPrice(total / item.cantidad, moneda)}
                             </span>
                             <span className="ml-1 text-xs text-muted-foreground">
                               /{formatUnidad(item.unidadMedida)}
                             </span>
-                          </>
+                          </span>
                         )}
                       </td>
-                      <td className="font-semibold">
+                      <td role="cell" data-label="Total" className={s.total}>
                         {pending ? "Pendiente" : fmt(total)}
                       </td>
-                      <td>
+                      <td role="cell" data-label="Acciones">
                         <div className="flex justify-end gap-1">
                           {actions.onVerPrecios && (
                             <Button
@@ -337,8 +359,8 @@ export function OrdenProductosTable({
                         </div>
                       </td>
                     </tr>
-                    <tr hidden={!open} className={s.detail}>
-                      <td colSpan={table.getVisibleLeafColumns().length}>
+                    <tr role="row" hidden={!open} className={s.detail}>
+                      <td role="cell" colSpan={table.getVisibleLeafColumns().length}>
                         <div id={detailId}>{renderDetail(item, row.index)}</div>
                       </td>
                     </tr>

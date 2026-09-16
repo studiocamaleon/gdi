@@ -7,7 +7,13 @@ import styles from "./identity-avatar.module.css";
 /** A3: identidad compacta con el degradado de marca compartido. */
 export function IdentityAvatar({
   name,
-  initials = name.slice(0, 2).toUpperCase(),
+  initials = name
+    .trim()
+    .split(/\s+/)
+    .filter((_, index, words) => index === 0 || index === words.length - 1)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase(),
 }: {
   name: string;
   initials?: string;

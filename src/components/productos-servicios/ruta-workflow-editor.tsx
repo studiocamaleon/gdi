@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowUpRightIcon,
   BoxesIcon,
   BoxIcon,
   GitBranchIcon,
@@ -31,6 +32,7 @@ import { FormDialog } from "@/components/design-system/form-dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import focus from "@/components/design-system/field-focus.module.css";
 import shared from "./flujos.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import {
   construirColumnasProductivas,
   insertarNodoProductivo,
@@ -50,6 +52,7 @@ import type {
   TipoNodoRutaWorkflow,
 } from "@/lib/productos-servicios";
 import styles from "./ruta-workflow-editor.module.css";
+import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
 
 function DropButton({
   onDragOver,
@@ -295,7 +298,7 @@ export function RutaWorkflowEditor({
     <Card className={styles.editor}>
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>Flujos de producción</span>
+          <span className={styles.eyebrow}>02 · Secuencia de producción</span>
           <h2>Recorrido del flujo</h2>
           <p>
             Ordená de izquierda a derecha. Los nodos en una misma columna se
@@ -304,7 +307,8 @@ export function RutaWorkflowEditor({
         </div>
         <div className={styles.headerTools}>
           <Chip className={styles.topology} size="sm" variant="soft">
-            <GitBranchIcon /> Flujo {value.topologia}
+            <GitBranchIcon />{" "}
+            {value.topologia === "DAG" ? "Con paralelos" : "Secuencia lineal"}
           </Chip>
           <div className={styles.zoom}>
             <Button
@@ -377,6 +381,7 @@ export function RutaWorkflowEditor({
               </DropButton>
               <div
                 className={styles.moment}
+                data-parallel={columna.length > 1}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => {
                   if (arrastrando) {
@@ -403,6 +408,7 @@ export function RutaWorkflowEditor({
                       <article
                         key={nodo.clave}
                         draggable
+                        data-dragging={arrastrando === nodo.clave}
                         onDragStart={() => setArrastrando(nodo.clave)}
                         onDragEnd={() => setArrastrando(null)}
                         className={`${styles.node} ${styles[nodo.tipo.toLowerCase()]}`}
@@ -533,7 +539,23 @@ export function RutaWorkflowEditor({
         </div>
       </div>
 
+      <div className={styles.canvasFooter}>
+        <span>
+          <WorkflowIcon /> Nodo simple
+        </span>
+        <span>
+          <Layers3Icon /> Nodo compuesto
+        </span>
+        <span>
+          <BoxesIcon /> Componente
+        </span>
+        <span className={styles.canvasHint}>
+          Arrastrá los nodos o usá las flechas para reordenar.
+        </span>
+      </div>
+
       <FormDialog
+        className={brand.dialog}
         isOpen={Boolean(destino)}
         onOpenChange={(open) => !open && setDestino(null)}
         title="¿Qué querés incorporar?"
@@ -616,9 +638,13 @@ export function RutaWorkflowEditor({
                   </span>
                   <span>
                     <strong>{opcion.nombre}</strong>
-                    <small>{opcion.descripcion}</small>
+                    <small>
+                      {opcion.tipo === "PASO"
+                        ? descripcionPasoParaUsuario(opcion.descripcion)
+                        : opcion.descripcion}
+                    </small>
                   </span>
-                  <PlusIcon />
+                  <ArrowUpRightIcon />
                 </Button>
               );
             })}
@@ -632,6 +658,7 @@ export function RutaWorkflowEditor({
         </Modal.Body>
       </FormDialog>
       <FormDialog
+        className={brand.dialog}
         isOpen={Boolean(nodoEditado)}
         onOpenChange={(open) => !open && setEditando(null)}
         title="Nombre visible del nodo"

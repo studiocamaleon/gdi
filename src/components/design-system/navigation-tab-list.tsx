@@ -11,6 +11,7 @@ export function NavigationTabList({
   label,
   className,
   variant = "compact",
+  tone = "default",
 }: {
   items: readonly {
     id: string;
@@ -22,18 +23,21 @@ export function NavigationTabList({
   }[];
   label: string;
   className?: string;
-  variant?: "compact" | "detailed";
+  variant?: "compact" | "detailed" | "inset";
+  tone?: "default" | "graphite";
 }) {
   // La variante de ficha distribuye las pestañas en filas; no necesita un scroller.
-  const Container = variant === "detailed" ? "div" : Tabs.ListContainer;
+  const Container = variant === "compact" ? Tabs.ListContainer : "div";
   return (
     <Container
       data-variant={variant}
+      data-tone={tone}
+      data-many={items.length > 6 || undefined}
       className={[styles.container, className].filter(Boolean).join(" ")}
       style={
         {
           "--tab-count": items.length,
-          "--tab-columns-narrow": Math.ceil(items.length / 2),
+          "--tab-columns-narrow": items.length <= 3 ? items.length : Math.ceil(items.length / 2),
         } as CSSProperties
       }
     >
@@ -50,7 +54,9 @@ export function NavigationTabList({
               .join(" · ")}
             className={styles.tab}
           >
-            {item.icon}
+            {tone === "graphite" && item.icon ? (
+              <span className={styles.iconWell} aria-hidden="true">{item.icon}</span>
+            ) : item.icon}
             <span className={styles.label}>
               <span>{item.label}</span>
               {variant === "detailed" && item.description && (

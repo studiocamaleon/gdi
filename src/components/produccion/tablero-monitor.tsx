@@ -2,8 +2,7 @@
 
 import { Factory, RefreshCw } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import { estadoMonitorProduccion } from "@/lib/sincronizacion-tablero";
 import { useRelojProduccion } from "./use-reloj-produccion";
 import s from "./tablero-monitor.module.css";
@@ -17,12 +16,13 @@ export function TableroMonitor({ zona, actualizadoEl, conexion, error, refreshin
   onRefresh: () => void;
 }) {
   const scope = useDesignScope();
+  const designTheme = useDesignTheme();
   const ahora = useRelojProduccion(1000, actualizadoEl?.getTime() ?? null);
   const estado = estadoMonitorProduccion(conexion, actualizadoEl?.getTime() ?? null, ahora, error);
   const fecha = ahora == null ? null : new Date(ahora);
   const formatoHora: Intl.DateTimeFormatOptions = { timeZone: zona, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" };
   return (
-    <header {...scope} className={`${theme.theme} ${s.header}`}>
+    <header {...scope} className={`${designTheme} ${s.header}`}>
       <div className={s.identity}>
         <span className={s.icon}><Factory aria-hidden="true" /></span>
         <div>
@@ -32,7 +32,7 @@ export function TableroMonitor({ zona, actualizadoEl, conexion, error, refreshin
               <span className={s.signal} aria-hidden="true" />{estado.etiqueta}
             </span>
           </div>
-          <h1>Tablero de producción</h1>
+          <h1>Tablero de producción<span className={s.titleDot} aria-hidden="true">.</span></h1>
           <p>Trabajos, personal y tiempos del taller.</p>
         </div>
       </div>

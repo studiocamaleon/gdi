@@ -3,7 +3,7 @@
   min-width: 0;
   max-width: 100%;
   gap: 0;
-  background: var(--card);
+  background: var(--background);
   color: var(--foreground);
   border-top: 1px solid var(--border);
   container-type: inline-size;
@@ -13,8 +13,9 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 16px;
-  padding: 10px 20px;
+  gap: 12px 20px;
+  padding: 14px 20px;
+  background: var(--card);
   border-bottom: 1px solid var(--border);
 }
 .scrollTabs {
@@ -33,14 +34,15 @@
 }
 .panel {
   min-width: 0;
-  padding: 20px;
+  padding: 24px;
 }
 .panel[hidden] {
   display: none;
 }
 .specs {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
+  background: var(--card);
   overflow: hidden;
   margin-bottom: 16px;
 }
@@ -51,9 +53,9 @@
 .spec {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 12px;
   min-width: 0;
-  padding: 16px;
+  padding: 18px;
   box-shadow:
     -1px 0 0 var(--border),
     0 -1px 0 var(--border);
@@ -68,13 +70,15 @@
 }
 .specLabel {
   color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.4;
+  font: 400 10px/1.4 var(--brand-mono, monospace);
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
 }
 .specValue {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.5;
+  letter-spacing: -0.015em;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
@@ -91,15 +95,16 @@
 .delivery {
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
+  background: var(--card);
   min-width: 0;
 }
 .extrasHeading {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 12px;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 13px;
   font-weight: 500;
 }
 .extrasHeading svg {
@@ -160,15 +165,18 @@
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
-  border-radius: 8px;
-  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background-color: var(--background);
+  background-image: radial-gradient(var(--border) 0.8px, transparent 0.8px);
+  background-size: 16px 16px;
 }
 .workflowCanvas {
   display: flex;
   align-items: center;
   width: max-content;
   min-width: 100%;
-  padding: 24px 16px;
+  padding: 28px 20px;
 }
 .workflowTerminal {
   display: grid;
@@ -181,11 +189,12 @@
 .workflowTerminal > span {
   width: 12px;
   height: 12px;
-  border: 2px solid var(--foreground);
+  border: 3px solid var(--accent-soft-foreground);
+  background: var(--card);
   border-radius: 50%;
 }
 .workflowTerminal small {
-  font-size: 10px;
+  font: 400 10px/1.5 var(--brand-mono, monospace);
 }
 .workflowLink {
   position: relative;
@@ -216,8 +225,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
-  font-weight: 500;
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--muted-foreground);
 }
 .workflowMoment > header small {
@@ -234,8 +244,9 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--card);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--foreground) 4%, transparent);
 }
 .workflowIcon {
   display: grid;
@@ -245,7 +256,9 @@
   flex: 0 0 28px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  color: var(--muted-foreground);
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--border));
 }
 .workflowIcon svg {
   width: 14px;
@@ -275,6 +288,12 @@
 .nestingContent {
   min-width: 0;
 }
+.nesting {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
 .sectionHeading {
   display: flex;
   align-items: center;
@@ -292,6 +311,11 @@
 }
 .contribution {
   min-width: 0;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
 }
 .contributionValue {
   font-size: 26px;
@@ -324,6 +348,7 @@
   max-width: none;
   height: calc(100dvh - 24px);
   transform: none;
+  translate: none;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -389,3 +414,72 @@
 .panel-editor-error { margin-top: 12px; border: 1px solid var(--destructive); border-radius: 6px; padding: 10px; color: var(--destructive); font-size: 12px; }
 .panel-editor-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 @media (max-width: 640px) { .panel-editor-grid:has(.panel-editor-list) { grid-template-columns: minmax(0, 1fr); } }
+
+.detailNavigation { flex: 1 1 590px; }
+.specHeading > svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  stroke-width: 1.6;
+  color: var(--accent-soft-foreground);
+}
+.optionalChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.optionalChip svg { width: 13px; height: 13px; flex-shrink: 0; }
+.emptyOptional { margin: 0; color: var(--muted-foreground); font-size: 12px; }
+.delivery > .extrasHeading { margin-bottom: 0; }
+.deliveryEstimate { padding-top: 12px; border-top: 1px dashed var(--border); }
+.technicalCard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: none;
+  background: var(--card);
+}
+.sectionTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.sectionTitle > svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--accent-soft-foreground); }
+.contributionTitle {
+  color: var(--muted-foreground);
+  font: 400 10px/1.6 var(--brand-mono, monospace);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+.dialog { background: var(--background); border: 1px solid var(--border); border-radius: 10px; }
+.dialogHeader { padding: 24px 56px 22px 24px; background: var(--card); }
+.dialogHeader h2 { font-size: 22px; font-weight: 500; letter-spacing: -0.035em; }
+@container (max-width: 640px) {
+  .detailNavigation { flex-basis: 100%; }
+  .toolbar { padding: 12px; gap: 10px; }
+  .actions { gap: 6px; }
+  .specValue { font-size: 13px; }
+  .specHeading { gap: 5px; }
+  .specLabel { font-size: 9px; }
+  .nesting { padding: 12px; }
+}
+@container (max-width: 360px) {
+  .deliveryRow { flex-wrap: wrap; gap: 8px; }
+  .specGrid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .dialog { inset: 6px; width: calc(100vw - 12px); height: calc(100dvh - 12px); }
+  .dialogHeader { padding: 20px 45px 18px 16px; }
+  .dialogHeader h2 { font-size: 19px; }
+  .dialogBody { padding: 12px; }
+}

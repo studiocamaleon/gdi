@@ -778,11 +778,13 @@ function WorkflowOrden({
 export function ProduccionOrdenTab({
   ordenId,
   onOrdenActualizada,
+  soloLectura = false,
 }: {
   ordenId: string;
   /** Avisa al padre que el estado de la OT pudo cambiar (ej: al avanzar una
    *  compra tercerizada que finaliza la orden) para refrescar header/stepper. */
   onOrdenActualizada?: () => void;
+  soloLectura?: boolean;
 }) {
   const [items, setItems] = React.useState<TableroItemData[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -888,7 +890,7 @@ export function ProduccionOrdenTab({
       <ProgresoExplicado progreso={progreso} lotes={progresoLotes} />
 
       {/* Compras / Tercerizados (F2) */}
-      <PanelComprasOt items={conRuta} onChanged={cargar} />
+      <PanelComprasOt items={conRuta} onChanged={cargar} soloLectura={soloLectura} />
 
       {/* Workflow DAG completo: padre, componentes y etapas en un recorrido. */}
       <div className="otd-card">

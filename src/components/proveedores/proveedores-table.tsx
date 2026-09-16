@@ -3,11 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpRightIcon,
+  MailIcon,
+  MapPinIcon,
   ChevronDownIcon,
   DownloadIcon,
   FileSpreadsheetIcon,
   PencilIcon,
-  PlusIcon,
   SearchXIcon,
   Trash2Icon,
   UploadIcon,
@@ -42,10 +44,20 @@ import { ChevronLeftIcon, ChevronRightIcon, TruckIcon } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { FormDialog } from "@/components/design-system/form-dialog";
-import { IdentityAvatar } from "@/components/design-system/identity-avatar";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
-import theme from "@/components/design-system/theme.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./proveedores.module.css";
@@ -84,7 +96,7 @@ function buildCsv(proveedores: ProveedorDetalle[]) {
     .map((row) =>
       row
         .map((cell) => `"${safeSpreadsheetCell(cell).replaceAll('"', '""')}"`)
-        .join(","),
+        .join(",")
     )
     .join("\n")}`;
 }
@@ -94,6 +106,7 @@ export function ProveedoresTable({
   canManage,
 }: ProveedoresTableProps) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [response, setResponse] = React.useState(initialResponse);
@@ -135,7 +148,7 @@ export function ProveedoresTable({
           toast.error(
             error instanceof Error
               ? error.message
-              : "No se pudo actualizar la lista.",
+              : "No se pudo actualizar la lista."
           );
         }
       })
@@ -147,7 +160,7 @@ export function ProveedoresTable({
 
   const proveedores = response.data;
   const selectedRows = proveedores.filter((proveedor) =>
-    selected.has(proveedor.id),
+    selected.has(proveedor.id)
   );
   const allSelected =
     proveedores.length > 0 &&
@@ -198,7 +211,7 @@ export function ProveedoresTable({
       try {
         const actualizado = await setProveedorActivo(
           proveedor.id,
-          !proveedor.activo,
+          !proveedor.activo
         );
         if (!verInactivos && !actualizado.activo) {
           await refreshCurrentPage();
@@ -206,7 +219,7 @@ export function ProveedoresTable({
           setResponse((current) => ({
             ...current,
             data: current.data.map((item) =>
-              item.id === actualizado.id ? actualizado : item,
+              item.id === actualizado.id ? actualizado : item
             ),
           }));
           setSelected((current) => {
@@ -218,13 +231,13 @@ export function ProveedoresTable({
         toast.success(
           actualizado.activo
             ? `${actualizado.nombre} vuelve a estar activo.`
-            : `${actualizado.nombre} quedó inhabilitado.`,
+            : `${actualizado.nombre} quedó inhabilitado.`
         );
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudo cambiar el estado.",
+            : "No se pudo cambiar el estado."
         );
       }
     });
@@ -234,14 +247,14 @@ export function ProveedoresTable({
     setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
       const resultados = await Promise.allSettled(
-        selectedRows.map((proveedor) => deleteProveedor(proveedor.id)),
+        selectedRows.map((proveedor) => deleteProveedor(proveedor.id))
       );
       const borrados = resultados.filter(
-        (resultado) => resultado.status === "fulfilled",
+        (resultado) => resultado.status === "fulfilled"
       ).length;
       const error = resultados.find(
         (resultado): resultado is PromiseRejectedResult =>
-          resultado.status === "rejected",
+          resultado.status === "rejected"
       );
       await refreshCurrentPage();
       if (borrados > 0)
@@ -250,7 +263,7 @@ export function ProveedoresTable({
         toast.error(
           error.reason instanceof Error
             ? error.reason.message
-            : "No se pudo eliminar un proveedor.",
+            : "No se pudo eliminar un proveedor."
         );
       }
     });
@@ -267,12 +280,14 @@ export function ProveedoresTable({
       const invalid = parsed.rows.find((row) => row.errors.length > 0);
       if (invalid) {
         toast.error(
-          `No se importó el archivo. Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`,
+          `No se importó el archivo. Fila ${
+            invalid.rowNumber
+          }: ${invalid.errors.join(" ")}`
         );
         return;
       }
       const payloads = parsed.rows.flatMap((row) =>
-        row.payload ? [row.payload] : [],
+        row.payload ? [row.payload] : []
       );
       try {
         const result = await importarProveedores(payloads);
@@ -280,7 +295,9 @@ export function ProveedoresTable({
         toast.success(`Se importaron ${result.total} proveedor(es).`);
       } catch (error) {
         toast.error(
-          `No se importó ninguna fila. ${error instanceof Error ? error.message : "Revisá el archivo."}`,
+          `No se importó ninguna fila. ${
+            error instanceof Error ? error.message : "Revisá el archivo."
+          }`
         );
       }
     });
@@ -290,12 +307,16 @@ export function ProveedoresTable({
 
   return (
     <section
+      data-visual="brand"
       {...scope}
-      className={`${theme.theme} ${listPage.page} ${styles.page}`}
+      className={`${theme} ${listPage.page} ${brand.workspace} ${styles.page}`}
     >
       <header className={listPage.header}>
         <div>
-          <h1>Proveedores</h1>
+          <p className={brand.eyebrow}>Registros · Relaciones comerciales</p>
+          <h1>
+            Proveedores<span className={brand.titleDot}>.</span>
+          </h1>
           <p className={listPage.subtitle}>
             Administrá los datos comerciales, fiscales y de pago de tus
             proveedores.
@@ -323,7 +344,7 @@ export function ProveedoresTable({
             </ActionButton>
             <Dropdown.Popover
               {...scope}
-              className={`${theme.theme} ${styles.menu}`}
+              className={`${theme} ${styles.menu}`}
               placement="bottom end"
             >
               <Dropdown.Menu aria-label="Acciones de proveedores">
@@ -387,14 +408,55 @@ export function ProveedoresTable({
           </Dropdown>
           {canManage && (
             <ActionLink href="/proveedores/nuevo">
-              <PlusIcon />
               Nuevo proveedor
+              <ArrowUpRightIcon />
             </ActionLink>
           )}
         </div>
       </header>
 
+      <div className={brand.metrics} aria-label="Resumen del listado">
+        <ListMetric
+          label="Proveedores"
+          value={response.total}
+          hint={
+            debouncedSearch
+              ? "Coinciden con la búsqueda"
+              : verInactivos
+              ? "Incluye inhabilitados"
+              : "Activos en el directorio"
+          }
+          icon={TruckIcon}
+        />
+        <ListMetric
+          label="Con email"
+          value={proveedores.filter((item) => item.email.trim()).length}
+          hint="En esta página"
+          icon={MailIcon}
+        />
+        <ListMetric
+          label="Con ubicación"
+          value={proveedores.filter((item) => item.ciudad.trim()).length}
+          hint="En esta página"
+          icon={MapPinIcon}
+        />
+      </div>
       <Card className={listPage.results}>
+        <Card.Header className={brand.directoryHeader}>
+          <div className={brand.directoryTitle}>
+            <span className={brand.directoryIcon} aria-hidden>
+              <TruckIcon />
+            </span>
+            <div>
+              <Card.Title className={brand.directoryHeading}>
+                Directorio de proveedores
+              </Card.Title>
+              <Card.Description>
+                Datos, contactos y estado de cada proveedor.
+              </Card.Description>
+            </div>
+          </div>
+        </Card.Header>
         <div className={listPage.toolbar}>
           <SearchField
             aria-label="Buscar proveedores"
@@ -455,17 +517,23 @@ export function ProveedoresTable({
         )}
         <div aria-busy={isLoading}>
           {proveedores.length === 0 ? (
-            <div className={listPage.empty}>
-              <SearchXIcon size={28} />
-              <strong>No encontramos proveedores</strong>
-              <p>
-                {debouncedSearch
-                  ? "Probá con otro nombre, CUIT, teléfono o ciudad."
-                  : "Todavía no hay proveedores para mostrar con este filtro."}
-              </p>
-            </div>
+            <Empty className={brand.empty}>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchXIcon />
+                </EmptyMedia>
+                <EmptyTitle>No encontramos proveedores</EmptyTitle>
+                <EmptyDescription>
+                  {debouncedSearch
+                    ? "Probá con otro nombre, documento, teléfono o ciudad."
+                    : "Todavía no hay proveedores para mostrar con este filtro."}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
-            <Table className={`${styles.table} ${styles.providersTable}`}>
+            <Table
+              className={`${styles.table} ${brand.table} ${styles.providersTable}`}
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead className={styles.checkCell}>
@@ -477,9 +545,9 @@ export function ProveedoresTable({
                         setSelected(
                           checked
                             ? new Set(
-                                proveedores.map((proveedor) => proveedor.id),
+                                proveedores.map((proveedor) => proveedor.id)
                               )
-                            : new Set(),
+                            : new Set()
                         )
                       }
                     >
@@ -527,24 +595,33 @@ export function ProveedoresTable({
                           href={`/proveedores/${proveedor.id}`}
                           className={styles.providerName}
                         >
-                          <span aria-hidden="true">
-                            <IdentityAvatar
-                              name={proveedor.nombre}
-                              initials={proveedor.nombre
-                                .split(/\s+/)
-                                .slice(0, 2)
-                                .map((part) => part[0])
-                                .join("")
-                                .toUpperCase()}
-                            />
+                          <span
+                            className={brand.identityIcon}
+                            aria-hidden="true"
+                          >
+                            <TruckIcon />
                           </span>
                           <strong>{proveedor.nombre}</strong>
+                          <ArrowUpRightIcon
+                            className={brand.rowArrow}
+                            aria-hidden
+                          />
                         </NavLink>
                       </TableCell>
                       <TableCell>{proveedor.cuit || "—"}</TableCell>
                       <TableCell>{proveedor.contacto || "—"}</TableCell>
-                      <TableCell>{proveedor.email || "—"}</TableCell>
-                      <TableCell>{proveedor.ciudad || "—"}</TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {proveedor.email && <MailIcon aria-hidden />}
+                          {proveedor.email || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {proveedor.ciudad && <MapPinIcon aria-hidden />}
+                          {proveedor.ciudad || "—"}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <Chip
                           size="sm"
@@ -620,6 +697,7 @@ export function ProveedoresTable({
         )}
       </Card>
       <FormDialog
+        className={brand.dialog}
         isOpen={confirmandoEliminar}
         onOpenChange={setConfirmandoEliminar}
         title="Eliminar proveedores"

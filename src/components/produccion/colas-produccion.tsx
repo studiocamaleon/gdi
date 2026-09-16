@@ -8,8 +8,7 @@ import { ActionButton } from '@/components/design-system/action-button';
 import { ActionLink } from '@/components/design-system/action-link';
 import { SelectField } from '@/components/design-system/select-field';
 import { NavigationTabList } from '@/components/design-system/navigation-tab-list';
-import { useDesignScope } from '@/components/design-system/appearance';
-import theme from '@/components/design-system/theme.module.css';
+import { useDesignScope, useDesignTheme, useLegacyDesignScope } from '@/components/design-system/appearance';
 import layout from '@/components/design-system/list-page.module.css';
 import focus from '@/components/design-system/field-focus.module.css';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -142,6 +141,8 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
   initialResumen: ResumenColas; initialError: string | null; initialMaquinaId?: string;
 }) {
   const scope = useDesignScope();
+  const designTheme = useDesignTheme();
+  const { className: legacyTheme } = useLegacyDesignScope();
   const [resumen, setResumen] = React.useState(initialResumen);
   const [maquinaId, setMaquinaId] = React.useState(initialMaquinaId ?? initialResumen.maquinas.find(m => m.pendientes > 0)?.id ?? initialResumen.maquinas[0]?.id ?? '');
   const [filtro, setFiltro] = React.useState({ estado: 'todos' as EstadoCola, q: '', page: 1 });
@@ -269,17 +270,17 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
   const totalMaquina = datos?.totales.todos ?? maquina?.pendientes ?? 0;
   const maquinas = resumen.maquinas.filter(m => `${m.nombre} ${m.estacion?.nombre ?? ''}`.toLocaleLowerCase('es').includes(buscarMaquina.toLocaleLowerCase('es')));
 
-  return <div {...scope} className={cn(theme.theme, layout.page, s.page)}>
+  return <div {...scope} data-visual="brand" className={cn(designTheme, layout.page, s.page)}>
     {revisionTiempos && <CompletarSeleccionCola items={revisionTiempos} onConfirmar={completar} onCancelar={() => setRevisionTiempos(null)} />}
     {simulacionIds && <SimularNestingCola maquinaId={maquinaId} pasoIds={simulacionIds} onCerrar={() => setSimulacionIds(null)} />}
     <header className={cn(layout.header, s.header)}>
-      <div className={s.title}><span className={s.eyebrow}>Producción</span><h1>Colas de trabajo</h1></div>
+      <div className={s.title}><span className={s.eyebrow}><Factory size={12} aria-hidden />Producción · Máquinas</span><h1>Colas de trabajo<span className={s.titleDot}>.</span></h1></div>
       <div className={s.actions}>
         <ActionLink variant="outline" href="/produccion/planificacion">Planificación<ArrowUpRight size={15} aria-hidden /></ActionLink>
         <ActionButton variant="outline" onPress={() => void refrescar()} isDisabled={refrescando}>{refrescando ? <GdiSpinner data-icon="inline-start" /> : <RefreshCw data-icon="inline-start" />}Actualizar</ActionButton>
       </div>
     </header>
-    {error && <Alert className={workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+    {error && <Alert className={legacyTheme ?? workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo actualizar la vista</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     <Card className={s.workspace}>
       <aside className={s.machines} aria-label="Máquinas">
         <div className={s.machineSearch}>
@@ -305,12 +306,18 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
       <section className={s.queue} aria-label="Trabajo de la máquina">
         <div className={s.mobileMachine}><SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: m.nombre })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} /></div>
         <div className={s.queueHeader}>
-          <div><h2 className={s.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
+          <div><span className={s.queueEyebrow}>Cola de producción</span><h2 className={s.sectionTitle}>{maquina?.nombre ?? 'Trabajo por máquina'}</h2><p>{maquina?.estacion?.nombre ?? 'Seleccioná una máquina para ver su cola.'}</p></div>
           {maquina && <div className={s.queueTotal}><strong>{totalMaquina}</strong><span>{totalMaquina === 1 ? 'operación' : 'operaciones'}</span></div>}
         </div>
         <Tabs selectedKey={filtro.estado} onSelectionChange={v => filtrar({ estado: v as EstadoCola, page: 1 })} className={s.tabs}>
           <div className={s.toolbar}>
-            <NavigationTabList label="Estado de los trabajos" items={ESTADOS.map(e => ({ id: e.id, label: e.label, count: datos?.totales[e.id] }))} />
+            <NavigationTabList className={s.statusTabs} variant="detailed" tone="graphite" label="Estado de los trabajos" items={ESTADOS.map(e => {
+              const Icono = e.id === 'todos' ? Layers : ICONO_ESTADO[e.id];
+              return { id: e.id, label: e.label, icon: <Icono aria-hidden />, count: datos?.totales[e.id] };
+            })} />
+          </div>
+          <div className={s.searchToolbar}>
+            <div className={s.context}><Layers aria-hidden="true" /><span>Agrupados por material</span><span className={s.contextSource}>Plan de fabricación vigente</span></div>
             <SearchField className={s.search} aria-label="Buscar OT, cliente, lote o trabajo" value={filtro.q} onChange={value => filtrar({ q: value, page: 1 })}>
               <SearchField.Group className={`${layout.searchGroup} ${focus.singleBorder}`}>
                 <SearchField.SearchIcon /><SearchField.Input placeholder="Buscar OT, cliente o trabajo…" maxLength={120} />
@@ -318,8 +325,7 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
             </SearchField>
           </div>
           <Tabs.Panel id={filtro.estado} className={s.content}>
-            <div className={s.context}><Layers aria-hidden="true" /><span>Agrupados por material</span><span className={s.contextSource}>Plan de fabricación vigente</span></div>
-            <div className={s.selectionBar}>
+            <div className={s.selectionBar} data-selected={haySeleccion || undefined}>
               <div className={s.selectionCopy}><strong aria-live="polite">{haySeleccion ? `${seleccion.ids.length} ${seleccion.ids.length === 1 ? 'trabajo seleccionado' : 'trabajos seleccionados'}` : 'Sin trabajos seleccionados'}</strong>
                 <span id="motivo-nesting-cola" aria-live="polite" title={detalleSeleccion}>{detalleSeleccion}</span>
               </div>
@@ -327,11 +333,11 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
                 <ActionButton variant="outline" isDisabled={!haySeleccion || Boolean(motivoNesting) || cargando || ocupado} aria-describedby="motivo-nesting-cola" onPress={() => { if (!motivoNesting) setSimulacionIds([...seleccion.ids]); }}><Scan data-icon="inline-start" />Simular nesting</ActionButton>
                 {puedeCompletar && <ActionButton isDisabled={!haySeleccion || !seleccionVigente || cargando || ocupado} onPress={prepararCompletado}><CircleCheck data-icon="inline-start" />{completando ? 'Completando…' : 'Completar seleccionados'}</ActionButton>}</div>
             </div>
-            {errorAccion && <Alert className={workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo registrar la acción</AlertTitle><AlertDescription>{errorAccion}</AlertDescription></Alert>}
+            {errorAccion && <Alert className={legacyTheme ?? workspaceTheme.theme} variant="destructive"><AlertTitle>No se pudo registrar la acción</AlertTitle><AlertDescription>{errorAccion}</AlertDescription></Alert>}
             <div className={s.tableScroll} aria-busy={cargando}>
-              {cargando ? <div className={s.loading} role="status" aria-label="Cargando trabajos">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className={`${workspaceTheme.theme} h-16 w-full`} />)}</div>
+              {cargando ? <div className={s.loading} role="status" aria-label="Cargando trabajos">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className={`${legacyTheme ?? workspaceTheme.theme} h-16 w-full`} />)}</div>
                 : datos?.items.length ? <TablaCola datos={datos} seleccion={seleccion} ocupado={ocupado} onAccion={puedeCompletar ? ejecutarAccion : undefined} onTomarMesa={puedeCompletar ? item => void tomarMesa(item) : undefined} onAlternar={item => setSeleccion(actual => alternarSeleccionCola(actual, item))} onGrupo={seleccionarGrupo} />
-                : !error && <Empty className={workspaceTheme.theme}><EmptyHeader><EmptyMedia variant="icon"><Factory /></EmptyMedia><EmptyTitle>{maquinaId ? 'No hay trabajos en esta selección' : 'No hay trabajo pendiente en máquinas'}</EmptyTitle><EmptyDescription>{filtro.estado === 'listos' ? 'Podés revisar En espera para ver qué falta antes de producir.' : 'Las operaciones de las órdenes emitidas aparecerán en la máquina que tienen asignada.'}</EmptyDescription></EmptyHeader></Empty>}
+                : !error && <Empty className={legacyTheme ?? workspaceTheme.theme}><EmptyHeader><EmptyMedia variant="icon"><Factory /></EmptyMedia><EmptyTitle>{maquinaId ? 'No hay trabajos en esta selección' : 'No hay trabajo pendiente en máquinas'}</EmptyTitle><EmptyDescription>{filtro.estado === 'listos' ? 'Podés revisar En espera para ver qué falta antes de producir.' : 'Las operaciones de las órdenes emitidas aparecerán en la máquina que tienen asignada.'}</EmptyDescription></EmptyHeader></Empty>}
             </div>
           </Tabs.Panel>
         </Tabs>

@@ -1,23 +1,20 @@
 "use client";
 
-import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { useState } from "react";
 import Link from "next/link";
-import { Card, Chip, ListBox, Modal, Select } from "@heroui/react";
+import { Modal } from "@heroui/react";
 import {
   ArrowRight,
   BanknoteArrowDown,
   ChartNoAxesCombined,
+  CheckCircle2,
   ClipboardList,
   Clock3,
   Factory,
   FileText,
   Package,
-  PanelsTopLeft,
   Play,
   Plus,
-  RefreshCw,
-  Target,
   TriangleAlert,
   TrendingUp,
   Truck,
@@ -25,14 +22,10 @@ import {
 } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { useDesignScope } from "@/components/design-system/appearance";
-import fieldFocus from "@/components/design-system/field-focus.module.css";
-import theme from "@/components/design-system/theme.module.css";
+import theme from "@/components/design-system/brand-theme.module.css";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { formatearMoneda } from "@/lib/moneda";
-import {
-  type PanelGeneralData,
-  type PanelGeneralVista,
-} from "@/lib/panel-general-api";
+import type { PanelGeneralData } from "@/lib/panel-general-api";
 import { PanelCard, Empty } from "./panel-admin-card";
 import { Entregas } from "./panel-admin-entregas";
 import { ActividadLista } from "./panel-admin-actividad";
@@ -51,13 +44,6 @@ const ICONOS: Record<string, LucideIcon> = {
   presupuesto: ClipboardList,
   facturacion: FileText,
 };
-const DETALLES: Record<string, string> = {
-  orden: "Nueva orden de trabajo",
-  produccion: "Ver órdenes en taller",
-  egreso: "Registrar un gasto",
-  presupuesto: "Nueva propuesta comercial",
-  facturacion: "Comprobantes pendientes",
-};
 
 export function PanelAdminView({
   data,
@@ -68,8 +54,6 @@ export function PanelAdminView({
   ahora,
   cargando,
   error,
-  refrescar,
-  cambiarVista,
   abrir,
 }: {
   data: PanelGeneralData;
@@ -80,8 +64,6 @@ export function PanelAdminView({
   ahora: number;
   cargando: boolean;
   error: string | null;
-  refrescar: () => void;
-  cambiarVista: (vista: PanelGeneralVista) => void;
   abrir: (href: string) => void;
 }) {
   const scope = useDesignScope();
@@ -111,55 +93,16 @@ export function PanelAdminView({
           <h1>
             {saludo}
             {nombre ? `, ${nombre}` : ""}
+            <span className={s.period}>.</span>
           </h1>
-          <p className={s.sub}>Lo importante de tu taller, hoy.</p>
+          <p className={s.sub}>Tu industria gráfica, en movimiento.</p>
         </div>
-        <div className={s.headerActions}>
-          {data.vistasDisponibles.length > 1 && (
-            <Select
-              aria-label="Vista del Panel general"
-              value={data.vistaActual}
-              isDisabled={cargando}
-              className={s.viewPicker}
-              onChange={(key) =>
-                key && cambiarVista(String(key) as PanelGeneralVista)
-              }
-            >
-              <Select.Trigger className={fieldFocus.singleBorder}>
-                <PanelsTopLeft size={15} />
-                <Select.Value />
-                <Select.Indicator />
-              </Select.Trigger>
-              <Select.Popover {...scope} className={theme.theme}>
-                <ListBox items={data.vistasDisponibles}>
-                  {(vista) => (
-                    <ListBox.Item id={vista.id} textValue={vista.etiqueta}>
-                      {vista.etiqueta}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  )}
-                </ListBox>
-              </Select.Popover>
-            </Select>
-          )}
-          <span className={s.actualizado} aria-live="polite">
-            Actualizado {actualizado}
-          </span>
-          <ActionButton
-            variant="outline"
-            isDisabled={cargando}
-            onPress={refrescar}
-          >
-            {cargando ? <GdiSpinner /> : <RefreshCw size={14} />}
-            Actualizar
+        {crear && (
+          <ActionButton onPress={() => abrir(crear.href)}>
+            <Plus size={16} />
+            Crear orden
           </ActionButton>
-          {crear && (
-            <ActionButton onPress={() => abrir(crear.href)}>
-              <Plus size={16} />
-              Crear orden
-            </ActionButton>
-          )}
-        </div>
+        )}
       </header>
       {error && (
         <p className={s.error} role="status">
@@ -167,99 +110,88 @@ export function PanelAdminView({
           No pudimos actualizar; conservamos la última información disponible.
         </p>
       )}
-      <section className={s.kpis} aria-label="Indicadores de hoy">
-        {data.kpis.map((kpi) => {
-          const Icono = ICONOS[kpi.id] ?? ChartNoAxesCombined;
-          return (
-            <Link
-              href={
-                kpi.id === "bloqueados"
-                  ? "/produccion/tablero?estado=blocked"
-                  : kpi.href
-              }
-              key={kpi.id}
-              className={s.kpi}
-              data-tone={kpi.tono}
-              data-kind={kpi.id}
-            >
-              <span className={s.kpiIcon}>
-                <Icono size={24} aria-hidden />
-              </span>
-              <div>
-                <p>{kpi.etiqueta}</p>
-                <strong>
-                  {kpi.formato === "moneda"
-                    ? formatearMoneda(kpi.valor, moneda, { decimales: 0 })
-                    : kpi.valor.toLocaleString("es-AR")}
-                </strong>
-              </div>
-              <ArrowRight className={s.kpiArrow} size={16} aria-hidden />
-              <small>{kpi.detalle}</small>
-            </Link>
-          );
-        })}
+      <section className={s.overview} aria-label="Indicadores de hoy">
+        <div className={s.overviewHead}>
+          <h2>
+            Tu operación, de un vistazo<span className={s.period}>.</span>
+          </h2>
+          <span
+            className={s.actualizado}
+            aria-live="polite"
+            data-error={Boolean(error)}
+          >
+            <span aria-hidden />
+            {cargando ? "Actualizando…" : `Actualizado ${actualizado}`}
+          </span>
+        </div>
+        <div className={s.kpis}>
+          {data.kpis.map((kpi) => {
+            const Icono = ICONOS[kpi.id] ?? ChartNoAxesCombined;
+            return (
+              <Link
+                href={
+                  kpi.id === "bloqueados"
+                    ? "/produccion/tablero?estado=blocked"
+                    : kpi.href
+                }
+                key={kpi.id}
+                className={s.kpi}
+                data-tone={kpi.tono}
+                data-kind={kpi.id}
+              >
+                <span className={s.kpiIcon}>
+                  <Icono size={16} aria-hidden />
+                </span>
+                <div>
+                  <p>{kpi.etiqueta}</p>
+                  <strong>
+                    {kpi.formato === "moneda"
+                      ? formatearMoneda(kpi.valor, moneda, { decimales: 0 })
+                      : kpi.valor.toLocaleString("es-AR")}
+                  </strong>
+                </div>
+                <ArrowRight className={s.kpiArrow} size={16} aria-hidden />
+                <small>{kpi.detalle}</small>
+              </Link>
+            );
+          })}
+        </div>
       </section>
-      {data.accionesRapidas.length > 0 && (
-        <Card className={s.focus}>
-          <div className={s.focusTitle}>
-            <span>
-              <Target size={28} />
-            </span>
-            <div>
-              <h2>Focus hoy</h2>
-              <p>Acciones rápidas para mantener tu producción en movimiento.</p>
-            </div>
-          </div>
-          <nav className={s.focusActions} aria-label="Acciones rápidas">
-            {data.accionesRapidas.map((a) => {
+      {(data.accionesRapidas.length > (crear ? 1 : 0) || bloqueos) && (
+        <nav className={s.quickActions} aria-label="Acciones rápidas">
+          <span className={s.quickLabel}>Accesos rápidos</span>
+          {data.accionesRapidas
+            .filter((a) => a !== crear)
+            .map((a) => {
               const Icono = ICONOS[a.icono] ?? FileText;
               return (
-                <Link
-                  href={a.href}
-                  key={a.id}
-                  className={s.focusAction}
-                  data-primary={a.icono === "orden" || undefined}
-                >
-                  <span className={s.actionIcon}>
-                    <Icono size={20} aria-hidden />
-                  </span>
-                  <div>
-                    <strong>{a.etiqueta}</strong>
-                    <small>{DETALLES[a.icono]}</small>
-                  </div>
-                  <ArrowRight size={16} aria-hidden />
+                <Link href={a.href} key={a.id} className={s.quickAction}>
+                  <Icono size={14} aria-hidden />
+                  {a.etiqueta}
                 </Link>
               );
             })}
-            {bloqueos && (
-              <Link
-                href="/produccion/tablero?estado=blocked"
-                className={s.focusAction}
-              >
-                <span className={s.actionIcon}>
-                  <TriangleAlert size={20} />
-                </span>
-                <div>
-                  <strong>Ver bloqueos</strong>
-                  <small>Revisar y resolver</small>
-                </div>
-                <ArrowRight size={16} />
-              </Link>
-            )}
-          </nav>
-        </Card>
+          {bloqueos && (
+            <Link
+              href="/produccion/tablero?estado=blocked"
+              className={s.quickAction}
+            >
+              <TriangleAlert size={14} aria-hidden />
+              Ver bloqueos
+            </Link>
+          )}
+        </nav>
       )}
-      <div className={s.layout}>
-        <div className={s.column}>
-          <Entregas data={data} abrir={abrir} />
+      <div className={s.layout} data-deliveries={Boolean(data.entregas)}>
+        {data.entregas && <Entregas grupos={data.entregas} abrir={abrir} />}
+        <aside className={s.column}>
           <PanelCard
             titulo="Requieren atención"
-            descripcion="Ordenado por urgencia"
-            icono={TriangleAlert}
+            className={s.priorities}
             accion={
-              <Chip size="sm" variant="soft">
-                {data.atencionTotal}
-              </Chip>
+              <span className={s.sectionCount}>
+                {data.atencionTotal} alertas
+              </span>
             }
           >
             {data.atencion.length ? (
@@ -278,18 +210,12 @@ export function PanelAdminView({
                         : undefined
                     }
                   >
-                    <span className={s.dot} />
+                    <b>{alerta.cantidad.toLocaleString("es-AR")}</b>
                     <div>
                       <strong>{alerta.titulo}</strong>
-                      <span className={s.domain}>
-                        {alerta.id === "documentacion-pendiente"
-                          ? "Pre-prensa"
-                          : alerta.dominio}
-                      </span>
                       <p>{alerta.detalle}</p>
                     </div>
-                    <b>{alerta.cantidad}</b>
-                    <ArrowRight size={16} />
+                    <ArrowRight size={16} aria-hidden />
                   </Link>
                 ))}
               </div>
@@ -298,14 +224,18 @@ export function PanelAdminView({
                 No hay pendientes urgentes para este momento.
               </Empty>
             )}
+            {bloqueos?.valor === 0 && data.atencion.length > 0 && (
+              <p className={s.quiet}>
+                <CheckCircle2 size={14} aria-hidden /> Sin bloqueos de
+                producción
+              </p>
+            )}
           </PanelCard>
-        </div>
-        <aside className={s.column}>
           {data.taller && (
             <PanelCard
-              titulo="Estado del taller"
-              descripcion="Foto operativa actual"
-              icono={ChartNoAxesCombined}
+              titulo="Estado de planta"
+              className={s.plant}
+              accion={<Factory size={18} aria-hidden />}
             >
               <div className={s.metrics}>
                 {[
@@ -354,34 +284,40 @@ export function PanelAdminView({
               )}
             </PanelCard>
           )}
-          {admin && (
-            <PanelCard
-              titulo="Actividad reciente"
-              icono={Clock3}
-              accion={
-                <ActionButton
-                  variant="outline"
-                  onPress={() => {
-                    setModal("actividad");
-                    reiniciarActividad();
-                    void cargarActividad();
-                  }}
-                >
-                  Ver toda
-                </ActionButton>
-              }
-            >
-              {admin?.actividad.items.length ? (
-                <ActividadLista items={admin.actividad.items} ahora={ahora} />
-              ) : (
-                <Empty titulo="Sin actividad reciente">
-                  Los movimientos registrados aparecerán aquí.
-                </Empty>
-              )}
-            </PanelCard>
-          )}
         </aside>
       </div>
+      {admin && (
+        <PanelCard
+          titulo="Actividad reciente"
+          descripcion="Los últimos movimientos de tu operación."
+          className={s.recent}
+          accion={
+            <ActionButton
+              variant="ghost"
+              onPress={() => {
+                setModal("actividad");
+                reiniciarActividad();
+                void cargarActividad();
+              }}
+            >
+              Ver toda
+              <ArrowRight size={14} aria-hidden />
+            </ActionButton>
+          }
+        >
+          {admin?.actividad.items.length ? (
+            <ActividadLista
+              items={admin.actividad.items}
+              ahora={ahora}
+              resumen
+            />
+          ) : (
+            <Empty titulo="Sin actividad reciente">
+              Los movimientos registrados aparecerán aquí.
+            </Empty>
+          )}
+        </PanelCard>
+      )}
       <Modal.Backdrop
         {...scope}
         className={theme.theme}
@@ -389,9 +325,9 @@ export function PanelAdminView({
         onOpenChange={(open) => !open && setModal(null)}
       >
         <Modal.Container size="lg" scroll="inside">
-          <Modal.Dialog>
-            <Modal.CloseTrigger aria-label="Cerrar" />
-            <Modal.Header>
+          <Modal.Dialog className={s.modalDialog}>
+            <Modal.CloseTrigger aria-label="Cerrar" className={s.modalClose} />
+            <Modal.Header className={s.modalHeader}>
               <Modal.Heading>
                 {modal === "actividad"
                   ? "Actividad del taller"

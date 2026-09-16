@@ -24,7 +24,6 @@ export type OrdenTab =
   | "pagos"
   | "comprobantes"
   | "archivos"
-  | "documentos"
   | "costos"
   | "historial";
 
@@ -65,7 +64,7 @@ export function OrdenTabs({
   historialCount,
   comprobantesCount,
   archivosCount,
-  documentosCount,
+  archivosPendientesCount = 0,
 }: {
   count: number;
   clientePendiente: boolean;
@@ -76,7 +75,7 @@ export function OrdenTabs({
   comprobantesCount?: number;
   /** null hasta que el tab de Archivos se abre y los cuenta. */
   archivosCount?: number | null;
-  documentosCount?: number;
+  archivosPendientesCount?: number;
 }) {
   const tabs: Array<{
     key: OrdenTab;
@@ -105,16 +104,6 @@ export function OrdenTabs({
       count: archivosCount ?? undefined,
       icon: <FolderIcon />,
     },
-    ...(documentosCount !== undefined
-      ? [
-          {
-            key: "documentos" as const,
-            label: "Documentos",
-            count: documentosCount,
-            icon: <FileCheck2Icon />,
-          },
-        ]
-      : []),
     // El tab Costos es el desglose de lo que le sale a la imprenta: material,
     // máquina, mano de obra. Quien no puede ver márgenes tampoco lo ve — y el
     // API ya le manda la orden sin esos campos, así que el tab estaría vacío.
@@ -142,6 +131,7 @@ export function OrdenTabs({
   return (
     <NavigationTabList
       variant="detailed"
+      tone="graphite"
       label="Secciones de la orden"
       items={tabs.map(({ key, ...item }) => ({
         id: key,
@@ -150,16 +140,17 @@ export function OrdenTabs({
         warning:
           key === "datos" && clientePendiente
             ? "Falta seleccionar un cliente"
-            : undefined,
+            : key === "archivos" && archivosPendientesCount > 0
+              ? `${archivosPendientesCount} controles de archivos pendientes`
+              : undefined,
         description: {
           datos: "Cliente y entrega",
           productos: "Ítems y cantidades",
           produccion: "Rutas y procesos",
           pagos: "Cobros y facturación",
-          archivos: "Adjuntos y notas",
+          archivos: "Adjuntos y versiones",
           costos: "Resumen y margen",
           comprobantes: "Facturas y notas",
-          documentos: "Documentación",
           historial: "Actividad de la orden",
         }[key],
       }))}

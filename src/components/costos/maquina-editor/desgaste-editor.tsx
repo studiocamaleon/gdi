@@ -1,4 +1,12 @@
 "use client";
+import { WrenchIcon } from "lucide-react";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import styles from "../maquinaria.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
@@ -105,11 +113,19 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
   return (
     <div className={`${styles["maq-perfiles"]} ${styles["maq-desgaste"]}`}>
       {componentes.length === 0 ? (
-        <p className={`${styles["maq-perfiles-vacio"]}`}>
-          {esCabezalCad
-            ? "Sin cabezal cargado: todavía no se prorratea su reemplazo por tinta procesada."
-            : "Sin piezas cargadas: la máquina no suma costo por click."}
-        </p>
+        <Empty className={styles.sectionEmpty}>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <WrenchIcon />
+            </EmptyMedia>
+            <EmptyTitle>Sin componentes de desgaste</EmptyTitle>
+            <EmptyDescription>
+              {esCabezalCad
+                ? "Sin cabezal cargado: todavía no se prorratea su reemplazo por tinta procesada."
+                : "Sin piezas cargadas: la máquina no suma costo por click."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <div className={`${styles["maq-perfiles-scroll"]}`}>
           <table className={`${styles["maq-perfiles-tabla"]}`}>

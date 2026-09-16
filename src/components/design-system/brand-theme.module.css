@@ -1,0 +1,53 @@
+/* Identidad de la web de Grafo aplicada explícitamente a superficies de app.
+ * Compone HeroUI; incluir esta misma clase en sus portales, nunca en el shell. */
+.theme {
+  composes: theme from "./theme.module.css";
+}
+
+.theme.theme {
+  --canvas-background: #f3f2ee;
+  --background: var(--canvas-background);
+  --foreground: #17191b;
+  --surface: #fbfaf7;
+  --surface-secondary: #eaeae4;
+  --muted-text: #646668;
+  --muted-text-2: #737674;
+  --border: #deded7;
+  --default: #eaeae4;
+  --accent: #ff7546;
+  --accent-foreground: #101214;
+  --accent-soft-foreground: #ac4020;
+  --action-primary-start: var(--accent);
+  --action-primary-end: var(--accent);
+  --action-primary-foreground: var(--accent-foreground);
+  --action-radius: 7px;
+  --field-radius: 7px;
+  --radius: 8px;
+  --danger: #ad3f27;
+  --warning: #936014;
+  --success: #387764;
+  --brand-graphite: #101214;
+  --brand-on-graphite: #f3f2ee;
+  --brand-muted-on-graphite: #b9bdbe;
+  --brand-graphite-line: #303437;
+  --brand-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --field-shadow: none;
+  --overlay-shadow: 0 16px 48px rgb(16 18 20 / 16%);
+  --backdrop: rgb(16 18 20 / 45%);
+}
+
+:global(.dark) .theme.theme:not([data-appearance="light"]),
+.theme.theme[data-appearance="dark"] {
+  --canvas-background: #171a1c;
+  --foreground: #f3f2ee;
+  --surface: #202426;
+  --surface-secondary: #292e30;
+  --muted-text: #afb3b4;
+  --muted-text-2: #a1a7a8;
+  --border: #353a3d;
+  --default: #292e30;
+  --accent-soft-foreground: #ff9876;
+  --danger: #ff9876;
+  --warning: #e5b876;
+  --success: #88c5ae;
+}

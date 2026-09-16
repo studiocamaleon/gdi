@@ -112,13 +112,14 @@
   align-items: baseline;
   justify-content: space-between;
   border-top: 1px solid var(--border);
-  padding-top: 12px;
+  padding-top: 18px;
   gap: 8px;
 }
 .wrap[data-layout="sidebar"] .totK {
-  font-size: 18px;
+  font-size: 13px;
   color: var(--foreground);
 }
 .wrap[data-layout="sidebar"] .totV {
-  font-size: 21px;
+  font-size: 25px;
+  font-weight: 500;
 }

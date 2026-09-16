@@ -1,5 +1,5 @@
 import { GrafoprintLoadingIndicator } from "@/components/brand/grafoprint-loading";
-import theme from "@/components/design-system/theme.module.css";
+import theme from "@/components/design-system/brand-theme.module.css";
 import styles from "./navigation-loading.module.css";
 
 export function NavigationLoading() {

@@ -3,6 +3,8 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
+  ArrowUpRightIcon,
+  ArrowRightIcon,
   AwardIcon,
   CoinsIcon,
   GiftIcon,
@@ -10,10 +12,10 @@ import {
   LockKeyholeIcon,
   PauseCircleIcon,
   CircleCheckIcon,
-  SaveIcon,
   SlidersHorizontalIcon,
   TrendingUpIcon,
   UsersRoundIcon,
+  UserRoundIcon,
 } from "lucide-react";
 import {
   actualizarFidelizacion,
@@ -29,8 +31,17 @@ import {
 } from "@heroui/react";
 import { ActionButton as Button } from "@/components/design-system/action-button";
 import { ListMetric } from "@/components/design-system/list-metric";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import { Field, FieldGroup } from "@/components/ui/field";
@@ -88,14 +99,22 @@ export function FidelizacionView({
       }
     });
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const m = initial.metricas;
   return (
-    <section {...scope} className={`${theme.theme} ${listPage.page}`}>
+    <section
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page}`}
+    >
       <div className={styles.contenido}>
         <header className={listPage.header}>
           <div>
+            <p className={styles.eyebrow}>CRM · Relación con clientes</p>
             <div className={styles.tituloLinea}>
-              <h1>Fidelización</h1>
+              <h1>
+                Fidelización<span className={styles.dot}>.</span>
+              </h1>
               <Chip
                 size="sm"
                 variant={config.acumulacionActiva ? "soft" : "secondary"}
@@ -119,8 +138,8 @@ export function FidelizacionView({
           </div>
           {puedeConfigurar ? (
             <Button onPress={guardar} isDisabled={saving}>
-              <SaveIcon size={16} aria-hidden />
-              {saving ? "Guardando…" : "Guardar"}
+              {saving ? "Guardando…" : "Guardar cambios"}
+              <ArrowUpRightIcon aria-hidden />
             </Button>
           ) : null}
         </header>
@@ -151,7 +170,7 @@ export function FidelizacionView({
           <ListMetric
             label="Puntos canjeados"
             value={fmt(m.canjeados)}
-            hint={`Mes actual · ${fmt(m.clientes)} clientes con cuenta`}
+            hint={`Mes actual · ${fmt(m.clientes)} ${m.clientes === 1 ? "cliente" : "clientes"} con cuenta`}
             icon={UsersRoundIcon}
           />
         </section>
@@ -165,12 +184,28 @@ export function FidelizacionView({
               <h2 id="fidelizacion-reglas">Reglas del programa</h2>
             </div>
             <strong className={styles.reglasDestacado}>
-              Una recompensa respaldada por margen real.
+              Del margen real al próximo beneficio.
             </strong>
+            <div className={styles.recorrido} aria-hidden>
+              <span>
+                <TrendingUpIcon />
+                <small>Margen</small>
+              </span>
+              <ArrowRightIcon />
+              <span>
+                <CoinsIcon />
+                <small>Puntos</small>
+              </span>
+              <ArrowRightIcon />
+              <span>
+                <GiftIcon />
+                <small>Beneficio</small>
+              </span>
+            </div>
             <p>
-              La equivalencia queda bloqueada después del primer movimiento.
-              Pausar sólo detiene nuevas ganancias; los saldos existentes siguen
-              siendo canjeables.
+              Una parte del margen se convierte en puntos para tus clientes. Si
+              pausás la acumulación, los saldos existentes siguen siendo
+              canjeables.
             </p>
             <dl className={styles.reglaResumen}>
               <div>
@@ -230,7 +265,10 @@ export function FidelizacionView({
                   </Switch.Control>
                 </Switch.Content>
               </Switch>
-              <Field className={styles.campo}>
+              <Field
+                className={styles.campo}
+                data-disabled={!puedeConfigurar || undefined}
+              >
                 <FieldLabel htmlFor="fidelizacion-pct">% del margen</FieldLabel>
                 <Input
                   className={focus.singleBorder}
@@ -249,7 +287,12 @@ export function FidelizacionView({
                   }
                 />
               </Field>
-              <Field className={styles.campo}>
+              <Field
+                className={styles.campo}
+                data-disabled={
+                  !puedeConfigurar || config.conversionBloqueada || undefined
+                }
+              >
                 <FieldLabel htmlFor="fidelizacion-monto">
                   Monto de referencia
                 </FieldLabel>
@@ -265,7 +308,12 @@ export function FidelizacionView({
                   }
                 />
               </Field>
-              <Field className={styles.campo}>
+              <Field
+                className={styles.campo}
+                data-disabled={
+                  !puedeConfigurar || config.conversionBloqueada || undefined
+                }
+              >
                 <FieldLabel htmlFor="fidelizacion-puntos">
                   Puntos equivalentes
                 </FieldLabel>
@@ -282,6 +330,14 @@ export function FidelizacionView({
                 />
               </Field>
             </FieldGroup>
+            <p className={styles.notaConversion}>
+              <LockKeyholeIcon aria-hidden />
+              <span>
+                {config.conversionBloqueada
+                  ? "La equivalencia está protegida porque ya hay movimientos. El valor de los puntos existentes se conserva."
+                  : "La equivalencia quedará protegida después del primer movimiento de puntos."}
+              </span>
+            </p>
           </div>
         </Card>
 
@@ -297,36 +353,57 @@ export function FidelizacionView({
               <h2 id="fidelizacion-movimientos">Movimientos recientes</h2>
               <p>Libro mayor de ganancias, canjes, ajustes y reversiones.</p>
             </div>
-            <Chip
-              size="sm"
-              variant="secondary"
-              className={styles.movimientosCantidad}
-            >
-              {initial.recientes.length} registros
-            </Chip>
+            <span className={styles.movimientosCantidad}>
+              {initial.recientes.length}{" "}
+              {initial.recientes.length === 1 ? "registro" : "registros"}
+            </span>
           </header>
-          <Table
-            className={styles.tabla}
-            aria-label="Movimientos recientes de fidelización"
-          >
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className={styles.numero}>Puntos</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initial.recientes.length ? (
-                initial.recientes.map((mov) => (
+          {initial.recientes.length === 0 ? (
+            <Empty className={styles.vacio}>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CoinsIcon />
+                </EmptyMedia>
+                <EmptyTitle>Todavía no hay movimientos</EmptyTitle>
+                <EmptyDescription>
+                  Las ganancias, los canjes y los ajustes de puntos aparecerán
+                  acá.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <Table
+              className={styles.tabla}
+              aria-label="Movimientos recientes de fidelización"
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className={styles.numero}>Puntos</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {initial.recientes.map((mov) => (
                   <TableRow key={mov.id}>
-                    <TableCell>
-                      {new Date(mov.createdAt).toLocaleString("es-AR")}
+                    <TableCell className={styles.fecha}>
+                      <time dateTime={mov.createdAt}>
+                        {new Date(mov.createdAt).toLocaleString("es-AR")}
+                      </time>
                     </TableCell>
-                    <TableCell>{mov.cliente?.nombre ?? "—"}</TableCell>
                     <TableCell>
-                        <Chip size="sm" variant="secondary">
+                      <span className={styles.cliente}>
+                        <UserRoundIcon aria-hidden />
+                        {mov.cliente?.nombre ?? "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="sm"
+                        variant="soft"
+                        className={styles.tipoMovimiento}
+                      >
                         {etiquetaMovimiento(mov.tipo)}
                       </Chip>
                     </TableCell>
@@ -336,18 +413,13 @@ export function FidelizacionView({
                     >
                       {mov.deltaPuntos > 0 ? "+" : ""}
                       {fmt(mov.deltaPuntos)}
+                      <span className={styles.unidad}> pts</span>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className={styles.vacio}>
-                    Todavía no hay movimientos.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </Card>
       </div>
     </section>

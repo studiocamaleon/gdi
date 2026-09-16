@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Tooltip } from "@heroui/react";
 import { Focusable } from "react-aria-components/Focusable";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import {
   ChevronDown,
   ChevronRight,
@@ -19,7 +19,6 @@ import {
   Undo2,
 } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
-import theme from "@/components/design-system/theme.module.css";
 import {
   agruparTrabajos,
   operadoresDelTrabajo,
@@ -194,6 +193,7 @@ function EstadoTrabajo({
   atributosCampo: AtributosCampo;
 }) {
   const scope = useDesignScope();
+  const designTheme = useDesignTheme();
   const celda = (
     <td
       {...atributosCampo("estado")}
@@ -230,7 +230,7 @@ function EstadoTrabajo({
       <Focusable>{celda}</Focusable>
       <Tooltip.Content
         {...scope}
-        className={`${theme.theme} ${s.waitTooltip}`}
+        className={`${designTheme} ${s.waitTooltip}`}
         placement="left"
       >
         <strong>Motivos de la espera</strong>
@@ -432,6 +432,7 @@ function FilaTrabajo({
 
 function Columnas() {
   const scope = useDesignScope();
+  const designTheme = useDesignTheme();
   return (
     <>
       <colgroup>
@@ -470,7 +471,7 @@ function Columnas() {
                 </Focusable>
                 <Tooltip.Content
                   {...scope}
-                  className={`${theme.theme} ${s.waitTooltip}`}
+                  className={`${designTheme} ${s.waitTooltip}`}
                 >
                   {EXPLICACION_TIEMPOS[t]}
                 </Tooltip.Content>
@@ -615,6 +616,8 @@ export function TableroLista({
   contextoFiltros?: string;
   asignacionManual?: AsignacionManual;
 }) {
+  const scope = useDesignScope();
+  const designTheme = useDesignTheme();
   const [pasoAsignacion, setPasoAsignacion] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const entrada = useMemo(() => {
@@ -641,7 +644,7 @@ export function TableroLista({
       : agruparTrabajos(datos.items)
   ).filter((grupo) => grupo.items.length > 0);
   return (
-    <div ref={root} data-ui="heroui" className={`${theme.theme} ${s.root}`}>
+    <div ref={root} {...scope} className={`${designTheme} ${s.root}`}>
       {!grupos.length && (
         <p className={s.emptyState} role="status">
           No hay trabajos para mostrar.

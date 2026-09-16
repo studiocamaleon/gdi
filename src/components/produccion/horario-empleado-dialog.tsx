@@ -4,6 +4,7 @@ import { ActionButton } from "@/components/design-system/action-button";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { CalendarioEditor, diasInvalidos } from "./calendario-editor";
 import type { CalendarioEstacion, Estacion } from "@/lib/estaciones";
+import f from "./estacion-form.module.css";
 
 export function HorarioEmpleadoDialog({
   nombre,
@@ -21,6 +22,7 @@ export function HorarioEmpleadoDialog({
   const [calendario, setCalendario] = useState(value);
   return (
     <FormDialog
+      className={f.dialog}
       isOpen
       onOpenChange={(open) => !open && onClose()}
       title={`Horario de ${nombre}`}

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { MateriasPrimasPanel } from "@/components/inventario/materias-primas-panel";
@@ -8,9 +9,11 @@ export const dynamic = "force-dynamic";
 
 export default function MateriasPrimasPage() {
   return (
-    <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
-      <MateriasPrimasPageContent />
-    </Suspense>
+    <DesignSystemProvider theme="brand" appearance="light">
+      <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
+        <MateriasPrimasPageContent />
+      </Suspense>
+    </DesignSystemProvider>
   );
 }
 

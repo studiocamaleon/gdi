@@ -136,3 +136,90 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Variante acotada al catálogo de OT. Centro de copiado conserva su cabecera. */
+.brand {
+  flex: none;
+  padding: 22px 26px 24px;
+  background: var(--surface);
+  border-color: var(--border);
+}
+.brand .canvas { opacity: 0.55; }
+.brand .veil {
+  background: linear-gradient(90deg, var(--surface) 16%, color-mix(in srgb, var(--surface) 94%, transparent) 48%, color-mix(in srgb, var(--surface) 20%, transparent));
+}
+.progress {
+  position: relative;
+  display: flex;
+  gap: 24px;
+  margin: 0 40px 22px 0;
+  padding: 0;
+  list-style: none;
+}
+.progress li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.progress li > span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  font: 9px var(--brand-mono);
+}
+.progress li[aria-current="step"] { color: var(--foreground); }
+.progress li[aria-current="step"] > span {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+}
+.progress li[data-complete] > span {
+  background: var(--brand-graphite);
+  border-color: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+}
+.brand .inner { position: static; align-items: flex-start; gap: 16px; }
+.brand .nm { position: relative; padding-right: 28px; }
+.brand .eyebrow { color: var(--muted-text); font: 9px var(--brand-mono); letter-spacing: 0.08em; margin-bottom: 8px; }
+.brand .title {
+  font-size: 25px;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.brand[data-stage="select"] .title { font-size: 34px; }
+.dot { color: var(--accent); }
+.brand .desc {
+  margin-top: 10px;
+  max-width: 58ch;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: normal;
+}
+.brand .close { top: 18px; right: 20px; width: 32px; height: 32px; border: 1px solid var(--border); background: var(--surface); }
+.brand .close:hover { border-color: var(--accent); color: var(--foreground); }
+.brand .back { position: relative; height: 32px; margin-top: 22px; border-radius: var(--action-radius); }
+.brand .close:focus-visible,
+.brand .back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.brand.sticky { margin-bottom: 20px; }
+@media (max-width: 560px) {
+  .brand { padding: 18px 20px; }
+  .brand.sticky { position: relative; top: auto; margin-right: -16px; margin-left: -16px; }
+  .brand .canvas { opacity: 0.3; }
+  .progress { gap: 14px; margin-bottom: 18px; }
+  .brand[data-stage="select"] .title { font-size: 29px; }
+  .brand .title { font-size: 22px; }
+  .brand .nm { padding-right: 0; }
+  .brand .inner { flex-wrap: wrap; gap: 12px; }
+  .brand .back { margin-top: 0; }
+  .brand .desc { font-size: 11px; }
+  .brand .close { right: 16px; top: 14px; }
+}

@@ -59,10 +59,10 @@ export default async function DashboardLayout({
         <NavigationFeedbackProvider>
           <NotificacionesProvider>
             <ImpersonacionBanner currentUser={currentUser} />
-            <DashboardFrame esAdministrador={currentUser.tenantActual.rol === "administrador"}>
+            <DashboardFrame>
               <AppSidebar currentUser={currentUser} />
               <SidebarInset className="main" style={{ minHeight: 0 }}>
-                <DashboardTopbar currentUser={currentUser} />
+                <DashboardTopbar />
 
                 <SuscripcionGlobalBanner currentUser={currentUser} />
 

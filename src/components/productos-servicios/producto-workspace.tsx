@@ -10,8 +10,10 @@ import {
 } from "./producto-ui";
 import { Tabs as HeroTabs, Dropdown, Separator } from "@heroui/react";
 import { RouterProvider } from "react-aria-components";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import listStyles from "@/components/design-system/list-page.module.css";
 import { PiezasArchivosProducto } from "./piezas-archivos-producto";
 import * as React from "react";
@@ -19,6 +21,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
+  ArrowUpRightIcon,
   BanknoteIcon,
   BoxIcon,
   BoxesIcon,
@@ -34,9 +37,7 @@ import {
   PlusIcon,
   PackageCheckIcon,
   RouteIcon,
-  SaveIcon,
   StarIcon,
-  TagIcon,
   Trash2Icon,
   WrenchIcon,
 } from "lucide-react";
@@ -136,6 +137,8 @@ import {
   modoCalculoCargoLabels,
 } from "@/lib/labels-humanos";
 import styles from "./producto-workspace.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import { ProductoCatalogoGlyph } from "@/components/comercial/producto-catalogo-glyph";
 
 export type ProductoWorkspaceTab =
   | "identidad"
@@ -418,9 +421,9 @@ const TABS: Array<{
 }> = [
   { id: "identidad", label: "Identidad", icon: IdCardIcon },
   { id: "comercial", label: "Comercial", icon: BriefcaseBusinessIcon },
-  { id: "produccion", label: "Routing", icon: RouteIcon },
+  { id: "produccion", label: "Producción", icon: RouteIcon },
   { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
-  { id: "pricing", label: "Pricing", icon: BanknoteIcon },
+  { id: "pricing", label: "Precio", icon: BanknoteIcon },
 ];
 
 function tabValidaciones(
@@ -535,6 +538,7 @@ export function ProductoWorkspace({
   );
 
   const scope = useDesignScope();
+  const theme = useDesignTheme();
 
   const tabHref = (tab: ProductoWorkspaceTab) => {
     const params = new URLSearchParams();
@@ -556,8 +560,9 @@ export function ProductoWorkspace({
     <ProductoVisualProvider>
       <main
         data-producto-ficha
+        data-visual="brand"
         {...scope}
-        className={`${theme.theme} ${listStyles.page} ${styles.page}`}
+        className={`${theme} ${listStyles.page} ${styles.page}`}
       >
         <div className={styles.shell}>
           <Link href="/productos-servicios" className={styles.back}>
@@ -566,12 +571,22 @@ export function ProductoWorkspace({
           </Link>
           <header className={styles.header}>
             <span className={styles.headerIcon} aria-hidden="true">
-              <TagIcon />
+              <ProductoCatalogoGlyph
+                subcategoriaCodigo={producto.subcategoriaComercial?.codigo}
+                categoriaCodigo={
+                  producto.subcategoriaComercial?.categoria?.codigo
+                }
+                compuesto={producto.esCompuesto}
+                cobro={producto.unidadComercial}
+              />
             </span>
             <div className={styles.headerBody}>
-              <span className={styles.eyebrow}>Ficha de producto</span>
+              <span className={styles.eyebrow}>Costos · Ficha de producto</span>
               <div className={styles.titleRow}>
-                <h1>{producto.nombre}</h1>
+                <h1>
+                  {producto.nombre}
+                  <span className={brand.titleDot}>.</span>
+                </h1>
                 <span
                   className={styles.productStatus}
                   data-active={producto.activo || undefined}
@@ -962,7 +977,9 @@ function IdentidadTab({
             }
           : {
               unidadComercial: unidadComercial as
-                "unidad" | "m2" | "metro_lineal",
+                | "unidad"
+                | "m2"
+                | "metro_lineal",
               modoMedidas: modoMedidasEfectivo,
               dimensionesRequeridas,
               minimoComercialPolitica,
@@ -1520,7 +1537,7 @@ function IdentidadTab({
             onClick={guardar}
             disabled={guardando}
           >
-            <SaveIcon className="mr-2 size-4" />
+            <ArrowUpRightIcon />
             {guardando ? "Guardando..." : "Guardar cambios"}
           </NativeButton>
         </div>
@@ -1896,6 +1913,7 @@ function RutasTab({
 }) {
   const router = useRouter();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [agregando, setAgregando] = React.useState(false);
   const [nuevaViaOpen, setNuevaViaOpen] = React.useState(false);
   const [modoNuevaVia, setModoNuevaVia] = React.useState<
@@ -2111,7 +2129,7 @@ function RutasTab({
 
                   <Dropdown.Popover
                     {...scope}
-                    className={`${theme.theme} ${styles.productionRouteMenu}`}
+                    className={`${theme} ${styles.productionRouteMenu}`}
                     placement="bottom end"
                   >
                     <Dropdown.Menu aria-label="Acciones de la ruta">
@@ -2299,7 +2317,9 @@ function RutasTab({
                   value={[modoNuevaVia]}
                   onValueChange={(values) => {
                     const modo = values.at(-1) as
-                      "duplicar" | "catalogo" | undefined;
+                      | "duplicar"
+                      | "catalogo"
+                      | undefined;
                     if (modo) cambiarModoNuevaVia(modo);
                   }}
                   variant="outline"
@@ -2718,16 +2738,7 @@ function HerramientaToggle({
   onToggle: () => void;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 16,
-        paddingTop: 14,
-        borderTop: "1px solid var(--hairline)",
-      }}
-    >
+    <div className={styles.toolRow}>
       <div style={{ maxWidth: 620 }}>
         <div style={{ fontWeight: 500, fontSize: 13 }}>{titulo}</div>
         <div
@@ -2827,7 +2838,7 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
             onClick={guardar}
             disabled={guardando}
           >
-            <SaveIcon className="mr-2 size-4" />
+            <ArrowUpRightIcon />
             {guardando ? "Guardando..." : "Guardar cambios"}
           </NativeButton>
         </div>

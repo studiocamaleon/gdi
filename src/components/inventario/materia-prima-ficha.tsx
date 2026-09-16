@@ -62,10 +62,9 @@ import { ActionButton } from "@/components/design-system/action-button";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { SelectField } from "@/components/design-system/select-field";
 import { ListMetric } from "@/components/design-system/list-metric";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { MaterialMultiSelect } from "./material-multi-select";
-import theme from "@/components/design-system/theme.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import styles from "./materiales.module.css";
 import {
@@ -707,6 +706,7 @@ export function MateriaPrimaFicha({
   maquinas,
 }: MateriaPrimaFichaProps) {
   const { moneda } = useConfigRegional();
+  const themeClass = useDesignTheme();
   const scope = useDesignScope();
   const { fechaNumerica, hora } = useFecha();
   const formatFechaCorta = (value: string) =>
@@ -1122,18 +1122,19 @@ export function MateriaPrimaFicha({
 
   return (
     <section
-      data-ui="heroui"
-      className={`${theme.theme} ${listPage.page} ${styles.page} ${styles.ficha}`}
+      {...scope} data-visual="brand"
+      className={`${themeClass} ${listPage.page} ${styles.page} ${styles.ficha}`}
     >
       <Link href="/inventario/materias-primas" className={styles.backLink}>
         <ArrowLeftIcon size={14} /> Materiales
       </Link>
       <header className={listPage.header}>
         <div>
-          <h1>{form.nombre || "Materia prima"}</h1>
+          <p className={styles.eyebrow}>Inventario · Ficha del material</p>
+          <h1>{form.nombre || "Materia prima"}<span className={styles.titleDot}>.</span></h1>
           <p className={listPage.subtitle}>
             Canónico:{" "}
-            {materiaPrima.canonicalMaterialName ?? "Personalizado por tenant"}
+            {materiaPrima.canonicalMaterialName ?? "Material propio"}
           </p>
           <div className={styles.metadata}>
             <span>{form.codigo}</span>
@@ -1146,6 +1147,23 @@ export function MateriaPrimaFicha({
           </div>
         </div>
         <div className={styles.headerActions}>
+          <div className={styles.activeToggle}>
+            <span>{form.activo ? "Material activo" : "Material inactivo"}</span>
+            <Switch
+              size="sm"
+              aria-label="Material activo"
+              isSelected={form.activo}
+              onChange={(checked) =>
+                setForm((prev) => ({ ...prev, activo: checked }))
+              }
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
+            </Switch>
+          </div>
           {hasChanges && (
             <span className={styles.unsaved}>Cambios sin guardar</span>
           )}
@@ -1167,217 +1185,245 @@ export function MateriaPrimaFicha({
         <div className={styles.tabsBar}>
           <NavigationTabList
             label="Ficha del material"
+            className={styles.fichaTabs}
+            variant="detailed"
+            tone="graphite"
             items={[
               {
                 id: "datos-base",
                 label: "Datos generales",
+                description: "Identidad y uso",
                 icon: <FileTextIcon size={16} />,
               },
               {
                 id: "opciones-variantes",
                 label: "Variantes",
+                description: "Opciones y formatos",
                 icon: <LayersIcon size={16} />,
                 count: form.variantes.length,
               },
               {
                 id: "precios",
                 label: "Precios",
+                description: "Costos y proveedores",
                 icon: <DollarSignIcon size={16} />,
               },
               {
                 id: "inventario",
                 label: "Inventario",
+                description: "Existencias y valor",
                 icon: <PackageIcon size={16} />,
               },
               {
                 id: "historial",
                 label: "Historial",
+                description: "Cambios del material",
                 icon: <HistoryIcon size={16} />,
               },
             ]}
           />
-          <div className={styles.activeToggle}>
-            <span>{form.activo ? "Material activo" : "Material inactivo"}</span>
-            <Switch
-              size="sm"
-              aria-label="Material activo"
-              isSelected={form.activo}
-              onChange={(checked) =>
-                setForm((prev) => ({ ...prev, activo: checked }))
-              }
-            >
-              <Switch.Content>
-                <Switch.Control>
-                  <Switch.Thumb />
-                </Switch.Control>
-              </Switch.Content>
-            </Switch>
-          </div>
         </div>
 
-        <Tabs.Panel id="datos-base" className={styles.tabPanel}>
-          <FieldGroup className={styles.formFields}>
-            <div className={styles.formGrid}>
-              <Field>
-                <FieldLabel htmlFor="material-codigo">Código</FieldLabel>
-                <Input
-                  id="material-codigo"
-                  value={form.codigo}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      codigo: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="material-nombre">Nombre</FieldLabel>
-                <Input
-                  id="material-nombre"
-                  value={form.nombre}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      nombre: event.target.value,
-                    }))
-                  }
-                />
-              </Field>
-            </div>
+        <Tabs.Panel id="datos-base" className={styles.generalPanel}>
+          <div className={styles.generalSections}>
+            <section className={styles.formSection}>
+              <div className={styles.sectionHeading}>
+                <span className={styles.sectionIndex}>01</span>
+                <div>
+                  <h2>Identidad del material</h2>
+                  <p>Datos con los que lo reconocés en tu catálogo.</p>
+                </div>
+              </div>
+              <FieldGroup className={styles.formFields}>
+                <div className={styles.formGrid}>
+                  <Field>
+                    <FieldLabel htmlFor="material-codigo">Código</FieldLabel>
+                    <Input
+                      id="material-codigo"
+                      value={form.codigo}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          codigo: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="material-nombre">Nombre</FieldLabel>
+                    <Input
+                      id="material-nombre"
+                      value={form.nombre}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          nombre: event.target.value,
+                        }))
+                      }
+                    />
+                  </Field>
+                </div>
 
-            <Field>
-              <FieldLabel htmlFor="material-descripcion">
-                Descripción
-              </FieldLabel>
-              <Textarea
-                id="material-descripcion"
-                value={form.descripcion}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    descripcion: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-
-            <div className={styles.formGrid}>
-              <Field>
-                <FieldLabel>Familia</FieldLabel>
-                <SelectField
-                  value={form.familia}
-                  onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      familia: value as FamiliaMateriaPrima,
-                    }))
-                  }
-                  aria-label="Familia"
-                  options={familiaMateriaPrimaItems}
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Subfamilia</FieldLabel>
-                <SelectField
-                  value={form.subfamilia}
-                  onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      subfamilia: value as SubfamiliaMateriaPrima,
-                    }))
-                  }
-                  aria-label="Subfamilia"
-                  options={subfamiliaMateriaPrimaItems}
-                />
-              </Field>
-            </div>
-
-            <div className={styles.formGrid}>
-              <Field>
-                <FieldLabel>Unidad de uso</FieldLabel>
-                <SelectField
-                  value={form.unidadStock}
-                  onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      unidadStock: value as UnidadMateriaPrima,
-                    }))
-                  }
-                  aria-label="Unidad de uso"
-                  options={unidadMateriaPrimaItems}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Unidad de compra</FieldLabel>
-                <SelectField
-                  value={form.unidadCompra}
-                  onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      unidadCompra: value as UnidadMateriaPrima,
-                    }))
-                  }
-                  aria-label="Unidad de compra"
-                  options={unidadMateriaPrimaItems}
-                />
-              </Field>
-            </div>
-
-            <div className={styles.formGrid}>
-              <Field>
-                <FieldLabel>Disponible como consumible</FieldLabel>
-                <div className={styles.switchBox}>
-                  <Switch
-                    size="sm"
-                    aria-label="Disponible como consumible"
-                    isSelected={form.esConsumible}
-                    isDisabled={templateAvailability.lockEsConsumible}
-                    onChange={(checked) =>
+                <Field>
+                  <FieldLabel htmlFor="material-descripcion">
+                    Descripción
+                  </FieldLabel>
+                  <Textarea
+                    id="material-descripcion"
+                    value={form.descripcion}
+                    onChange={(event) =>
                       setForm((prev) => ({
                         ...prev,
-                        esConsumible: checked,
+                        descripcion: event.target.value,
                       }))
                     }
-                  >
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch.Content>
-                  </Switch>
+                  />
+                </Field>
+
+              </FieldGroup>
+            </section>
+            <section className={styles.formSection}>
+              <div className={styles.sectionHeading}>
+                <span className={styles.sectionIndex}>02</span>
+                <div>
+                  <h2>Clasificación y unidades</h2>
+                  <p>Familia técnica y unidades para comprar y usar el material.</p>
                 </div>
-              </Field>
-              <Field>
-                <FieldLabel>Disponible como repuesto</FieldLabel>
-                <div className={styles.switchBox}>
-                  <Switch
-                    size="sm"
-                    aria-label="Disponible como repuesto"
-                    isSelected={form.esRepuesto}
-                    isDisabled={templateAvailability.lockEsRepuesto}
-                    onChange={(checked) =>
-                      setForm((prev) => ({ ...prev, esRepuesto: checked }))
-                    }
-                  >
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch.Content>
-                  </Switch>
+              </div>
+              <FieldGroup className={styles.formFields}>
+                <div className={styles.formGrid}>
+                  <Field>
+                    <FieldLabel>Familia</FieldLabel>
+                    <SelectField
+                      value={form.familia}
+                      onChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          familia: value as FamiliaMateriaPrima,
+                        }))
+                      }
+                      aria-label="Familia"
+                      options={familiaMateriaPrimaItems}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Subfamilia</FieldLabel>
+                    <SelectField
+                      value={form.subfamilia}
+                      onChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          subfamilia: value as SubfamiliaMateriaPrima,
+                        }))
+                      }
+                      aria-label="Subfamilia"
+                      options={subfamiliaMateriaPrimaItems}
+                    />
+                  </Field>
                 </div>
-              </Field>
-            </div>
-          </FieldGroup>
+
+                <div className={styles.formGrid}>
+                  <Field>
+                    <FieldLabel>Unidad de uso</FieldLabel>
+                    <SelectField
+                      value={form.unidadStock}
+                      onChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          unidadStock: value as UnidadMateriaPrima,
+                        }))
+                      }
+                      aria-label="Unidad de uso"
+                      options={unidadMateriaPrimaItems}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Unidad de compra</FieldLabel>
+                    <SelectField
+                      value={form.unidadCompra}
+                      onChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          unidadCompra: value as UnidadMateriaPrima,
+                        }))
+                      }
+                      aria-label="Unidad de compra"
+                      options={unidadMateriaPrimaItems}
+                    />
+                  </Field>
+                </div>
+
+              </FieldGroup>
+            </section>
+            <section className={styles.formSection}>
+              <div className={styles.sectionHeading}>
+                <span className={styles.sectionIndex}>03</span>
+                <div>
+                  <h2>Disponibilidad</h2>
+                  <p>Cómo puede utilizarse en la operación de tu empresa.</p>
+                </div>
+              </div>
+              <FieldGroup className={styles.formFields}>
+                <div className={styles.formGrid}>
+                  <Field>
+                    <FieldLabel>Disponible como consumible</FieldLabel>
+                    <div className={styles.switchBox}>
+                      <Switch
+                        size="sm"
+                        aria-label="Disponible como consumible"
+                        isSelected={form.esConsumible}
+                        isDisabled={templateAvailability.lockEsConsumible}
+                        onChange={(checked) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            esConsumible: checked,
+                          }))
+                        }
+                      >
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                        </Switch.Content>
+                      </Switch>
+                    </div>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Disponible como repuesto</FieldLabel>
+                    <div className={styles.switchBox}>
+                      <Switch
+                        size="sm"
+                        aria-label="Disponible como repuesto"
+                        isSelected={form.esRepuesto}
+                        isDisabled={templateAvailability.lockEsRepuesto}
+                        onChange={(checked) =>
+                          setForm((prev) => ({ ...prev, esRepuesto: checked }))
+                        }
+                      >
+                        <Switch.Content>
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                        </Switch.Content>
+                      </Switch>
+                    </div>
+                  </Field>
+                </div>
+              </FieldGroup>
+            </section>
+          </div>
         </Tabs.Panel>
 
         <Tabs.Panel id="opciones-variantes" className={styles.tabPanel}>
           <div className="flex flex-col gap-4">
-            <h4 className="text-sm font-semibold">
-              {form.nombre || "Variantes"}
-            </h4>
+            <div className={styles.sectionHeading}>
+              <span className={styles.sectionSymbol}><LayersIcon size={20} aria-hidden /></span>
+              <div>
+                <h2>Variantes del material</h2>
+                <p>Formatos, dimensiones y opciones de {form.nombre || "esta materia prima"}.</p>
+              </div>
+            </div>
             {showLaserWearRecommendation ? (
               <div className={styles.warning}>
                 <div className="flex items-start gap-2">
@@ -1444,7 +1490,7 @@ export function MateriaPrimaFicha({
                                   </ActionButton>
                                   <Tooltip.Content
                                     {...scope}
-                                    className={theme.theme}
+                                    className={themeClass}
                                   >
                                     {tooltipText}
                                   </Tooltip.Content>
@@ -1776,10 +1822,13 @@ export function MateriaPrimaFicha({
 
         <Tabs.Panel id="precios" className={styles.tabPanel}>
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              El precio de referencia se define por variante y por unidad de uso
-              ({unidadStockLabel}).
-            </p>
+            <div className={styles.sectionHeading}>
+              <span className={styles.sectionSymbol}><DollarSignIcon size={20} aria-hidden /></span>
+              <div>
+                <h2>Precios de referencia</h2>
+                <p>Costos por variante y por unidad de uso ({unidadStockLabel}).</p>
+              </div>
+            </div>
             <div className={styles.tableFrame}>
               <Table className={styles.table}>
                 <TableHeader>
@@ -2105,8 +2154,8 @@ export function MateriaPrimaFicha({
         <Tabs.Panel id="historial" className={styles.tabPanel}>
           <p className={styles.historyEmpty}>
             <HistoryIcon size={28} aria-hidden />
-            Este tab queda reservado para auditoría de cambios de plantilla,
-            datos técnicos y precios.
+            <strong>Historial del material</strong>
+            El registro de cambios de plantilla, datos técnicos y precios aún no está disponible.
           </p>
         </Tabs.Panel>
       </Tabs>

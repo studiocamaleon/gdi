@@ -1,0 +1,637 @@
+/* La OT persistida comparte el workspace claro y agrega sus paneles operativos.
+ * Estos ajustes a componentes legacy quedan limitados a esta ficha. */
+.page {
+  --graf-accent: var(--accent);
+}
+.orderContext {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 9px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.orderContext > span {
+  color: var(--border-strong);
+}
+.sectionHeading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 0 6px;
+}
+.sectionIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--accent-soft-foreground);
+  background: var(--surface);
+}
+.sectionIcon svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.6;
+}
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -.04em;
+  line-height: 1.2;
+}
+.sectionHeading p {
+  margin: 5px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* Finanzas: una misma jerarquía para saldos, cobros y facturación. */
+.page :global(.otd-page) {
+  min-width: 0;
+  background: transparent;
+}
+.page :global(.pagos-kpis) {
+  gap: 12px;
+}
+.page :global(.pk), .page :global(.otc-kpi) {
+  min-width: 0;
+  padding: 20px;
+  gap: 7px;
+  border-radius: 9px;
+  box-shadow: none;
+}
+.page :global(.pk)::before {
+  display: none;
+}
+.page :global(.pk .pk-l), .page :global(.otc-kpi-lbl) {
+  color: var(--muted-text);
+  font: 400 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.page :global(.pk .pk-v), .page :global(.otc-kpi-val) {
+  font-family: inherit;
+  font-size: clamp(23px, 2.2vw, 30px);
+  font-weight: 500;
+  letter-spacing: -.045em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.page :global(.pk .pk-s), .page :global(.otc-kpi-hint) {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.page :global(.pk-warn) {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+.page :global(.pagos-bar-card), .page :global(.arc-sum-card) {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.page :global(.pbc-ttl) {
+  font-size: 14px;
+  font-weight: 500;
+}
+.page :global(.pbc-track) {
+  height: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--surface-secondary);
+}
+.page :global(.pbc-fill) {
+  background: var(--success);
+}
+.page :global(.pbc-legend) {
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 11px;
+}
+.page :global(.pbc-badge) {
+  border-radius: 5px;
+  font: 400 11px/1.5 var(--brand-mono);
+}
+.page :global(.otd-card-head) {
+  padding: 20px;
+  border-color: var(--border);
+}
+.page :global(.otd-card-head .ttl) {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -.025em;
+}
+.page :global(.otd-card-head .sub) {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.page :global(.otd-card-head .btn svg) {
+  width: 16px;
+  height: 16px;
+}
+.page :global(.arc-sum-card .h) {
+  padding: 0 0 16px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.page :global(.arc-three) {
+  gap: 10px;
+}
+.page :global(.arc-tc) {
+  padding: 14px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.page :global(.arc-tc .l) {
+  font: 400 10px/1.5 var(--brand-mono);
+  color: var(--muted-text);
+}
+.page :global(.arc-tc .v) {
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -.035em;
+}
+.page :global(.pagos-reg) {
+  overflow: hidden;
+}
+.page :global(.prc-saldo) {
+  font-family: inherit;
+  font-weight: 500;
+}
+.page :global(.otd-track) {
+  background: var(--surface-secondary);
+}
+.page :global(.otd-track > svg) {
+  color: var(--accent-soft-foreground);
+}
+.page :global(.otd-noprod) {
+  padding: 28px 20px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.page :global(.fo-comps), .page :global(.cost-steps-table-wrap) {
+  overflow-x: auto;
+}
+.page :global(.otc-card-head) {
+  margin-bottom: 18px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.page :global(.cw-row) {
+  padding-block: 12px;
+}
+.page :global(.cw-label) {
+  font-size: 12px;
+}
+.page :global(.cw-amount) {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+/* Archivos: se conserva el destino de cada adjunto, con tarjetas por producto. */
+.page :global(.arch-tab) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0;
+}
+.page :global(.arch-bloque) {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.page :global(.arch-bloque:first-child), .page :global(.arch-bloque:has(.arch-papelera-head)) {
+  grid-column: 1 / -1;
+}
+.page :global(.arch-bloque-head) {
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  gap: 8px;
+}
+.page :global(.arch-bloque-head .t) {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -.025em;
+}
+.page :global(.arch-bloque-head .s) {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-text);
+}
+.page :global(.arch-drop) {
+  min-height: 112px;
+  padding: 22px;
+  border-radius: 7px;
+  background: var(--canvas-background);
+  border-color: var(--border-strong);
+  text-align: center;
+}
+.page :global(.arch-drop > svg) {
+  width: 26px;
+  height: 26px;
+  color: var(--accent-soft-foreground);
+  stroke-width: 1.4;
+  opacity: 1;
+}
+.page :global(.arch-drop-t) {
+  font-weight: 500;
+}
+.page :global(.arch-drop:is(:hover, :focus-visible, .dentro)) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.page :global(.arch-drop:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.page :global(.arch-row) {
+  padding: 12px;
+  border-radius: 7px;
+}
+/* Flujo real: conservar ramas y aristas; compactar el lienzo y dar aire al texto. */
+.page :global(.prodtab) {
+  min-width: 0;
+}
+.page :global(.prodtab .otp-workflow-shell) {
+  background-color: var(--canvas-background);
+  background-image: radial-gradient(var(--border-strong) .65px, transparent .65px);
+  background-size: 18px 18px;
+  scrollbar-width: thin;
+}
+.page :global(.prodtab .otp-workflow-canvas) {
+  min-height: 260px;
+  padding: 30px 24px;
+}
+.page :global(.prodtab .otp-exploded-canvas) {
+  min-height: 280px;
+}
+.page :global(.prodtab .otp-root-workflow-head) {
+  background: var(--surface);
+}
+.page :global(.prodtab .otp-root-workflow-head) {
+  padding: 18px 22px;
+  font-size: 13px;
+}
+.page :global(.prodtab .otp-workflow-summary) {
+  color: var(--muted-text);
+  font: 400 10px/1.5 var(--brand-mono);
+}
+.page :global(.prodtab .otp-workflow-view-toggle) {
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  border-radius: 7px;
+}
+.page :global(.prodtab .otp-workflow-view-toggle [data-slot="toggle-group-item"]) {
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 12px;
+}
+.page :global(.prodtab .otp-workflow-view-toggle [data-slot="toggle-group-item"][data-pressed]) {
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  box-shadow: none;
+}
+.page :global(.prodtab .otp-exploded-node) {
+  width: 270px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px 12px;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgb(20 20 20 / 3%);
+}
+.page :global(.prodtab .otp-exploded-node.current) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.page :global(.prodtab .otp-exploded-node.blocked) {
+  border-color: var(--danger);
+}
+.page :global(.prodtab .otp-exploded-node.stage) {
+  border-top: 2px solid var(--warning);
+}
+.page :global(.prodtab .otp-exploded-node-icon) {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.page :global(.prodtab .otp-exploded-node-body) {
+  gap: 5px;
+}
+.page :global(.prodtab .otp-exploded-node-body > span:first-child) {
+  font: 400 9px/1.3 var(--brand-mono);
+  color: var(--accent-soft-foreground);
+}
+.page :global(.prodtab .otp-exploded-node-body strong) {
+  color: var(--foreground);
+  font-weight: 500;
+  line-height: 1.4;
+}
+.page :global(.prodtab .otp-exploded-node-body small) {
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+  color: var(--muted-text);
+}
+.page :global(.prodtab .otp-exploded-status) {
+  grid-column: 2;
+  font: 400 9px/1.4 var(--brand-mono);
+}
+.page :global(.prodtab .otp-workflow-empty) {
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+}
+/* Historial semántico: fechas y autor acompañan el evento sin competir. */
+.history {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.historyHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.counter {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted-text);
+  font: 400 10px/1.4 var(--brand-mono);
+}
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 8px 24px 24px;
+}
+.event {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 16px;
+  position: relative;
+  padding: 22px 0;
+}
+.event:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 55px;
+  bottom: -21px;
+  left: 16px;
+  width: 1px;
+  background: var(--border);
+}
+.eventIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+}
+.eventIcon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.6;
+}
+.event:first-child .eventIcon {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  border-color: color-mix(in srgb, var(--accent) 25%, var(--border));
+}
+.event p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.eventMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 7px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.eventMeta time {
+  font: 400 10px/1.6 var(--brand-mono);
+}
+.empty {
+  padding: 28px 24px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+@container orden-content (max-width: 900px) {
+  .page :global(.pagos-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page :global(.otc-kpis), .page :global(.otc-real-kpis) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .page :global(.prodtab .otp-workflow-card-head) {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+}
+@container orden-content (max-width: 640px) {
+  .page :global(.arch-tab) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page :global(.pagos-kpis) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page :global(.pk), .page :global(.otc-kpi), .page :global(.arch-bloque) {
+    padding: 16px;
+  }
+  .page :global(.arc-three) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sectionHeading h2 {
+    font-size: 21px;
+  }
+  .sectionHeading {
+    align-items: flex-start;
+  }
+  .historyHeader {
+    padding: 18px;
+  }
+  .timeline {
+    padding: 4px 18px 16px;
+  }
+  .event {
+    gap: 12px;
+  }
+}
+
+/* Los paneles anteriores declaran padding y colores propios; normalizarlos
+ * aquí evita dobles márgenes y que producción vuelva al blanco anterior. */
+.page :global(.otd-card-head) {
+  padding: 0;
+  margin-bottom: 18px;
+}
+.page :global(.arc-three) {
+  display: grid;
+  padding: 16px 0 0;
+}
+.page :global(.arc-tc) {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 0 14px 16px;
+}
+.page :global(.arc-tc)::before {
+  width: 5px;
+  height: 5px;
+  top: 5px;
+}
+.page :global(.arc-tc:last-child) {
+  padding-bottom: 0;
+}
+.page :global(.arc-sum-card .h) {
+  text-transform: none;
+  letter-spacing: -.02em;
+  color: var(--foreground);
+}
+.page :global(.prc-saldo .v) {
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: -.035em;
+}
+.page :global(.pagos-reg .btn-primary) {
+  min-height: 38px;
+  font-size: 12px;
+}
+.page :global(.pagos-reg .btn-primary svg) {
+  width: 16px;
+  height: 16px;
+}
+.page :global(.prc-chip) {
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 10px;
+}
+.page :global(.prodtab) {
+  --surface: inherit;
+  --surface-2: inherit;
+  --border: inherit;
+  --border-strong: inherit;
+  --hairline: inherit;
+  --ink: inherit;
+  --ink-2: inherit;
+  --muted: var(--muted-text);
+  --muted-2: inherit;
+  --accent: inherit;
+  --ok: inherit;
+  --ok-bg: inherit;
+}
+.page :global(.prodtab .otd-card) {
+  padding: 0;
+  border-radius: 9px;
+  box-shadow: none;
+  overflow: hidden;
+}
+.page :global(.prodtab .otp-workflow-card-head) {
+  padding: 22px;
+  margin: 0;
+}
+.page :global(.prodtab .otp-root-workflow-head) {
+  border-top: 1px solid var(--border);
+}
+.page :global(.prodtab .otp-workflow-node) {
+  border-radius: 8px;
+  box-shadow: none;
+}
+.page :global(.ot-track-ico) {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  border-radius: 7px;
+}
+.page :global(.prodtab .otp-workflow-node) {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  border-top-width: 2px;
+}
+.page :global(.prodtab .otp-workflow-node-main) {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 10px;
+}
+.page :global(.prodtab .otp-workflow-node-icon) {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+.page :global(.prodtab .otp-workflow-node-body strong) {
+  font-weight: 500;
+  line-height: 1.4;
+}
+.page :global(.prodtab .otp-workflow-node-type), .page :global(.prodtab .otp-workflow-status) {
+  font: 400 9px/1.5 var(--brand-mono);
+}
+
+/* El nodo resumido contiene un grid propio; no debe heredar el grid del
+ * nodo de cotización, que usa el mismo nombre global con otra estructura. */
+.page :global(.prodtab .otp-workflow-node) {
+  display: block;
+  padding: 0;
+}
+.page :global(.prodtab .otp-workflow-node-main) {
+  width: 100%;
+  min-width: 0;
+}
+@container orden-content (max-width: 640px) {
+  .page :global(.prodtab .otp-workflow-view-toggle) {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+  }
+  .page :global(.prodtab .otp-workflow-view-toggle [data-slot="toggle-group-item"]) {
+    flex: 1 1 0;
+    min-width: 0;
+    height: auto;
+    min-height: 42px;
+    padding: 6px;
+    white-space: normal;
+    line-height: 1.3;
+    text-align: left;
+  }
+  .page :global(.prodtab .otp-workflow-view-toggle [data-slot="toggle-group-item"] svg) {
+    flex: none;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.page :global(.otc) {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.page :global(.otc-card) {
+  min-width: 0;
+}

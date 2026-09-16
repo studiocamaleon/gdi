@@ -1,5 +1,4 @@
-/* Única superficie gráfica del visor y sus miniaturas. Las capas técnicas
-   conservan colores SVG explícitos para que la descarga sea autocontenida. */
+/* Las capas SVG conservan colores explícitos para una exportación autocontenida. */
 .substrate {
   min-width: 0;
 }
@@ -7,9 +6,12 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 20px;
-  background: var(--muted);
-  border-radius: 8px;
+  padding: 24px;
+  background-color: var(--canvas-background, var(--muted));
+  background-image: radial-gradient(color-mix(in srgb, var(--foreground) 15%, transparent) .65px, transparent .65px);
+  background-size: 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
   overflow: auto;
   scrollbar-width: thin;
   overscroll-behavior: contain;
@@ -26,7 +28,6 @@
   overflow: hidden;
 }
 .substrate[data-compact] .canvasSvg {
-  width: 100%;
   width: 100%;
   height: 100%;
 }

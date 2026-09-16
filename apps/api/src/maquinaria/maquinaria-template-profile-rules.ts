@@ -80,7 +80,9 @@ function buildRule(params: {
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
-  // Discriminantes (detalle): caras, modo dúplex, colores y gramajeMaxGr.
+  // Discriminantes (detalle): caras, colores y gramajeMaxGr.
+  // modoDobleFaz y origenProductividad son campos obsoletos, retirados del
+  // editor el 2026-09-16. Se toleran para guardar perfiles existentes.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
     detalleKeys: [
       'caras',

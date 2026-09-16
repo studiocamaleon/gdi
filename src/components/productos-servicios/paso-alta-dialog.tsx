@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import {
-  ArrowRightIcon,
+  ArrowUpRightIcon,
   BoxesIcon,
   CheckIcon,
   SearchIcon,
@@ -43,6 +43,7 @@ import type { PasoTenant, PlantillaPaso } from "@/lib/productos-servicios";
 import { crearPasoTenant } from "@/lib/productos-servicios-api";
 import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
 import styles from "./paso-alta-dialog.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
 
 type Props = {
   open: boolean;
@@ -107,9 +108,14 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
 
   return (
     <FormDialog
+      className={brand.dialog}
       isOpen={open}
       onOpenChange={(next) => !next && onClose()}
-      title="Nuevo nodo propio"
+      title={
+        <>
+          Nuevo nodo propio<span className={brand.titleDot}>.</span>
+        </>
+      }
       description="Creá un nodo para tu empresa y definí cómo se usa en tus flujos de producción."
     >
       <Modal.Body className={styles.body}>
@@ -285,7 +291,7 @@ export function PasoAltaDialog({ open, plantillas, onClose, onCreado }: Props) {
           {creando ? <Spinner aria-label="Creando nodo" /> : null}
           {creando ? "Creando…" : "Crear y configurar"}
           {!creando ? (
-            <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+            <ArrowUpRightIcon data-icon="inline-end" aria-hidden="true" />
           ) : null}
         </Button>
       </Modal.Footer>

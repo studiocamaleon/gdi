@@ -4,8 +4,10 @@ import { Drawer } from "@heroui/react";
 import { XIcon } from "lucide-react";
 import * as Legacy from "@/components/ui/sheet";
 import { ActionButton } from "@/components/design-system/action-button";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { useNodosVisual } from "./nodos-ui";
 import s from "./nodos-editor.module.css";
 const SheetContext = React.createContext({
@@ -25,6 +27,7 @@ export function Sheet({
 }) {
   const enabled = useNodosVisual();
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const descriptionId = React.useId();
   if (!enabled)
     return (
@@ -42,7 +45,7 @@ export function Sheet({
     >
       <Drawer.Backdrop
         {...scope}
-        className={theme.theme}
+        className={theme}
         isOpen={open}
         onOpenChange={onOpenChange}
         isDismissable={!disablePointerDismissal}
@@ -53,15 +56,21 @@ export function Sheet({
     </SheetContext.Provider>
   );
 }
-export function SheetContent(
-  props: React.ComponentProps<typeof Legacy.SheetContent>,
-) {
+export function SheetContent({
+  brandClassName,
+  ...props
+}: React.ComponentProps<typeof Legacy.SheetContent> & {
+  brandClassName?: string;
+}) {
   const enabled = useNodosVisual();
   const ctx = React.useContext(SheetContext);
   if (!enabled) return <Legacy.SheetContent {...props} />;
   return (
     <Drawer.Content placement="right">
-      <Drawer.Dialog className={s.sheet} aria-describedby={ctx.descriptionId}>
+      <Drawer.Dialog
+        className={`${s.sheet} ${brandClassName ?? ""}`}
+        aria-describedby={ctx.descriptionId}
+      >
         {props.children as React.ReactNode}
         {props.showCloseButton !== false && (
           <ActionButton

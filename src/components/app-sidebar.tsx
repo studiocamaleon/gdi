@@ -3,9 +3,11 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ArrowUpRight, Layers3, X } from "lucide-react";
 
 import { type CurrentUser, type TenantSummary } from "@/lib/auth";
-import { GrafoprintIsologo as LogoNodes } from "@/components/brand/grafoprint-isologo";
+import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
+import { cn } from "@/lib/utils";
 import { NavLink } from "@/components/navigation/nav-link";
 import {
   hasChildren,
@@ -216,20 +218,6 @@ const Ico = {
   ),
 } satisfies Record<string, IconComponent>;
 
-function Brand({ collapsed = false }: { collapsed?: boolean }) {
-  return (
-    <div className={s.brand} title={collapsed ? "grafoprint" : undefined}>
-      <span className={s.mk}>
-        <LogoNodes size={30} />
-      </span>
-      <span className={s.nm}>
-        <div className={s.wordmark}>grafoprint</div>
-        <div className={s.org}>gráfica digital inteligente</div>
-      </span>
-    </div>
-  );
-}
-
 /** Iniciales para el avatar del pie (2 letras). */
 function inicialesDe(nombre: string): string {
   const partes = nombre.trim().split(/\s+/).filter(Boolean);
@@ -250,7 +238,7 @@ function highlightMatch(text: string, q: string): React.ReactNode {
   return (
     <>
       {text.slice(0, idx)}
-      <strong style={{ fontWeight: 700, color: "#c2410c" }}>
+      <strong className={s.match}>
         {text.slice(idx, idx + q.length)}
       </strong>
       {text.slice(idx + q.length)}
@@ -349,6 +337,25 @@ const SECCIONES: ReadonlyArray<{ label: string; keys: string[] }> = [
   },
 ];
 
+/** Filtra sólo la navegación ya autorizada; conserva los alias y los grupos. */
+function filtrarNav(nav: NavItem[], q: string): NavItem[] {
+  if (!q) return nav;
+  const match = (label: string) => label.toLowerCase().includes(q);
+  const result: NavItem[] = [];
+  for (const item of nav) {
+    if (!hasChildren(item)) {
+      if (match(item.label) || item.buscar?.some(match)) result.push(item);
+      continue;
+    }
+    const grupoMatch = match(item.label);
+    const children = item.children.filter(
+      (child) => grupoMatch || match(child.label),
+    );
+    if (children.length > 0) result.push({ ...item, children });
+  }
+  return result;
+}
+
 export function AppSidebar({ currentUser }: AppSidebarProps) {
   const pathname = usePathname();
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
@@ -404,25 +411,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
 
   // Navegación filtrada en vivo por el buscador del sidebar. Al filtrar, los
   // grupos con hijos que matchean se muestran expandidos.
-  const filteredNav = React.useMemo<NavItem[]>(() => {
-    if (!filtering) return nav;
-    const match = (label: string) => label.toLowerCase().includes(q);
-    const result: NavItem[] = [];
-    for (const item of nav) {
-      if (!hasChildren(item)) {
-        // `buscar`: las pantallas que el módulo tiene adentro pero no muestra
-        // como hijos (los reportes). Buscar "embudo" tiene que llegar igual.
-        if (match(item.label) || item.buscar?.some(match)) result.push(item);
-        continue;
-      }
-      const grupoMatch = match(item.label);
-      const children = item.children.filter(
-        (child) => grupoMatch || match(child.label),
-      );
-      if (children.length > 0) result.push({ ...item, children });
-    }
-    return result;
-  }, [filtering, q, nav]);
+  const filteredNav = filtrarNav(nav, q);
 
   React.useEffect(() => {
     if (!parentKey) {
@@ -465,7 +454,8 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
           key={item.key}
           href={item.href}
           title={item.label}
-          className={`${s.it} ${isDirectActive ? s.on : ""}`}
+          className={cn(s.it, isDirectActive && s.on)}
+          aria-current={isDirectActive ? "page" : undefined}
         >
           <span className={s.ic}>
             <IconCmp />
@@ -482,8 +472,8 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         <button
           type="button"
           title={item.label}
-          className={s.it}
-          aria-expanded={open}
+          className={cn(s.it, parentKey === item.key && s.activeGroup)}
+          aria-expanded={open && !collapsed}
           onClick={() => onGroupClick(item.key)}
         >
           <span className={s.ic}>
@@ -514,7 +504,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
               <NavLink
                 key={child.key}
                 href={child.href}
-                className={`${s.si} ${activeKey === child.key ? s.on : ""}`}
+                title={child.label}
+                className={cn(s.si, activeKey === child.key && s.on)}
+                aria-current={activeKey === child.key ? "page" : undefined}
               >
                 <span className={s.dot} />
                 <span className={s.tx}>
@@ -529,14 +521,30 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
   };
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className={s.container}>
       <aside
-        className={`${s.sb} ${collapsed ? s.mini : ""}`}
+        className={cn(s.sb, collapsed && s.mini)}
         data-collapsed={collapsed}
+        aria-label="Menú principal de Grafo"
       >
-        {/* Sin malla 3D ni toggle propio: el colapso vive en el botón del
-          topbar (SidebarTrigger), que hace exactamente lo mismo. */}
-        <Brand collapsed={collapsed} />
+        <div className={s.brand}>
+          <div className={s.brandRow}>
+            <GrafoprintBrand compact={collapsed} />
+            {isMobile && (
+              <button
+                type="button"
+                className={s.mobileClose}
+                aria-label="Cerrar menú"
+                onClick={() => setOpenMobile(false)}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {!collapsed && (
+            <p className={s.org}>Industria gráfica</p>
+          )}
+        </div>
 
         {collapsed ? (
           <button
@@ -561,13 +569,13 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
                   event.currentTarget.blur();
                 }
               }}
-              placeholder="Buscar…"
+              placeholder="Buscar en el menú…"
               aria-label="Buscar en el menú"
             />
           </label>
         )}
 
-        <nav className={s.nav}>
+        <nav className={s.nav} aria-label="Módulos del sistema">
           {SECCIONES.map((sec) => {
             const items = sec.keys
               .map((key) => filteredNav.find((it) => it.key === key))
@@ -594,7 +602,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
           })()}
 
           {filtering && filteredNav.length === 0 && !configMatch ? (
-            <div className={s.sinResultados}>
+            <div className={s.sinResultados} role="status">
               Sin resultados para “{query}”.
             </div>
           ) : null}
@@ -608,7 +616,12 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
                 <span className={s.lbl}>Sistema</span>
                 <span className={s.rule} />
               </div>
-              <NavLink href="/plataforma" title="Plataforma" className={s.it}>
+              <NavLink
+                href="/plataforma"
+                title="Plataforma"
+                className={cn(s.it, matchesRoute(pathname, "/plataforma") && s.on)}
+                aria-current={matchesRoute(pathname, "/plataforma") ? "page" : undefined}
+              >
                 <span className={s.ic}>
                   <Ico.Grid />
                 </span>
@@ -623,10 +636,17 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         {/* El plan y la facturación son configuración: el operario no tiene por
           qué ver cuánto paga la imprenta ni entrar a cambiarlo. */}
         {puede(currentUser, "configuracion.ver") ? (
-          <Link href="/suscripcion" className={s.plan} title={planNombre}>
+          <Link
+            href="/suscripcion"
+            className={s.plan}
+            title={`${planNombre} · Administrar suscripción`}
+            aria-label={`${planNombre}. ${formatPlanTier(suscripcion)}. Administrar suscripción`}
+            aria-current={matchesRoute(pathname, "/suscripcion") ? "page" : undefined}
+          >
             <div className={s.planT}>
-              <i />
+              <Layers3 className={s.planIcon} size={16} aria-hidden="true" />
               <span>{planNombre}</span>
+              <ArrowUpRight className={s.planArrow} size={15} aria-hidden="true" />
             </div>
             <div className={s.planD}>{formatPlanTier(suscripcion)}</div>
             <div className={s.bar}>
@@ -641,7 +661,8 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             <NavLink
               href="/configuracion"
               title="Configuración"
-              className={`${s.it} ${configActiva ? s.on : ""}`}
+              className={cn(s.it, configActiva && s.on)}
+              aria-current={configActiva ? "page" : undefined}
             >
               <span className={s.ic}>
                 <Ico.Cog />

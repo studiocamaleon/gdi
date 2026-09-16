@@ -1,24 +1,55 @@
-# Panel general · Administrador
+# Panel general único · Diseño de Administrador
 
-Implementación del 13/09/2026 basada en la referencia visual enviada ese día.
-Sólo cambia la vista propia de usuarios cuyo rol real es Administrador. Las
-previsualizaciones de otros roles conservan su presentación. Agenda queda fuera
-de esta fase. El sidebar original permanece; la cabecera superior de OT se
-reutiliza únicamente en esta vista, con búsqueda de secciones y apariencia local.
+El diseño aprobado el 15/09/2026 se aplica a todos los roles y usuarios con
+acceso al Panel general. Se eliminaron las variantes de Jefe de producción,
+Vendedor, Administrativo y Operario, la previsualización por URL, el selector y
+el botón Actualizar. El sidebar y la barra superior mantienen su composición.
+Compartir la presentación no cambia los permisos ni el alcance de datos.
 
 ## Composición visual
 
-- HeroUI 3 con `data-ui="heroui"`, tema compartido y portales con `useDesignScope`.
-- Botones C/S2 ya aprobados, tarjetas HeroUI, selector por lista, chips y tooltips.
-- KPIs, Focus hoy y dos columnas: entregas/atención y taller/actividad.
-- TanStack Table compone las seis columnas de entregas sin recalcular importes
-  ni progreso. Mantiene la explicación del avance ponderado y el detalle de
-  los productos. Sólo carga las primeras seis órdenes próximas del endpoint.
-- La geometría responde al ancho disponible, descontando el sidebar. En móvil
-  se apilan bloques y sólo la tabla desplaza sus columnas horizontalmente.
-- `page.tsx` resuelve datos y rol en servidor. `PanelGeneralView` conserva el
-  refresco cada 30 segundos y descarta respuestas anteriores a la última consulta.
-  Presentación, tabla y paginación de actividad están en archivos separados.
+- Papel cálido, grafito, naranja `#ff7546`, Geist y detalles en Geist Mono.
+  `design-system/brand-theme.module.css` compone la base HeroUI con estos tokens
+  y su variante oscura. Se aplica explícitamente a esta vista y sus portales;
+  no modifica las otras pantallas ni la base anterior de botones.
+- Franja grafito unificada para los KPIs, números grandes y separadores finos.
+  Crear orden es la acción principal; las otras acciones son accesos compactos.
+- Entregas a la izquierda; Requieren atención y Estado de planta a la derecha.
+  Actividad reciente ocupa el ancho inferior, con cuatro movimientos reales.
+- `ActionButton` conserva su comportamiento; dentro del tema de marca tiene
+  primario naranja con texto grafito y radio de 7 px. Pestañas T2,
+  tooltips y modales mantienen las primitivas HeroUI y `useDesignScope`.
+- Las entregas se presentan en filas con orden, producto/cliente, fecha, etapa
+  y avance ponderado. Se conservan las explicaciones de progreso y el detalle
+  de cada producto. Un trabajo sin avance calculable no se anuncia como listo.
+- Adaptación por ancho disponible: dos columnas en escritorio, bloques apilados
+  en móvil. No hay tabla horizontal. Respeta movimiento reducido y foco visible.
+- `page.tsx` conserva la carga de servidor; `PanelGeneralView` refresca cada
+  30 segundos y al volver a la pestaña, sin botón manual; descarta respuestas antiguas. El reloj inicial usa `generadoEl`
+  para que servidor y cliente produzcan el mismo texto durante la hidratación.
+
+## Entregas por fecha
+
+`GET /panel-general` entrega un único contrato sin `vistaActual`,
+`vistasDisponibles` ni `previsualizando`. El controlador y la página ignoran
+cualquier antiguo `?vista=...`; no hay sustitución de permisos por otro rol.
+
+`entregas` divide las órdenes autorizadas en `hoy`, `atrasada` y `proxima`
+**antes** del límite: cada grupo devuelve hasta seis órdenes y su total. Una
+cola de atrasadas no oculta las entregas de hoy. Se conservan tenant, permisos,
+alcance comercial, zona horaria y fechas de la consulta existente. Próximas
+abarca desde mañana hasta siete días inclusive. Sin acceso a ese resumen, la
+API devuelve `entregas: null` y la vista no ofrece el bloque ni sus enlaces.
+Se retiraron el resumen de entregas anterior y los campos exclusivos de las
+vistas eliminadas (`trabajoPersonal`, resumen administrativo duplicado y metadatos
+de selección). Los accesos a Producción/Mi mesa siguen siendo acciones existentes,
+no variantes del Panel.
+
+El pie explicita cuántas órdenes se muestran. «Ver órdenes» abre el listado
+completo, que también contiene las finalizadas pendientes de entrega; el filtro
+heredado `urgencia=atrasadas` del listado sólo contempla pendiente/producción y
+no representa todo este grupo de entregas. Los enlaces existentes de KPIs y
+alertas se conservan.
 
 ## Qué mide cada bloque
 
@@ -69,7 +100,8 @@ correcta. Los documentos que ya tenían historial conservan ese historial.
 ## Retirada de CSS
 
 No se añadieron reglas a `globals.css`. El Panel general operativo ya tenía un
-CSS Module compartido por roles, que sigue siendo necesario para las otras vistas.
+CSS Module compartido por las variantes retiradas; se eliminó completo
+(`panel-general-view.module.css`) al quedar sin consumidores.
 Se retiraron 30 líneas del indicador antiguo `.dash-head h1 .live` y su animación
 `dash-pulse`, sin consumidores bajo esa cabecera. Las clases `.dash-*` y `.d-*`
 restantes se conservan porque Reportes y Producción aún las usan. Los `.live` de
@@ -78,14 +110,14 @@ Tracking y Plataforma pertenecen a otros contenedores y conservan sus reglas.
 La importación selectiva de Card sigue aislada por PostCSS. Sus aliases de color
 apuntan a los tokens compartidos; no se importa el reset o tema global de HeroUI.
 
-## Validación
+## Validación de la unificación
 
-57 pruebas de API (alcance, cursor, métricas y confirmación de archivos) y nueve
-de presentación/aislamiento CSS aprobadas. TypeScript del frontend y de la API
-sin errores en la configuración de build, lint focalizado y `css:guard` aprobados.
-La configuración general de tests TypeScript de API conserva errores anteriores
-en suites ajenas; el chequeo de build excluye esos specs.
-
-En navegador: datos reales, historial, selector y previsualización de Operario
-con el diseño anterior, y pantallas de 1920, 1366 y 390 px sin desborde de página.
-No se emitieron ni modificaron órdenes para esta validación.
+- 46 pruebas de API y permisos: modelo común para los tres roles base,
+  conservación de alcances, grupos de entrega y retirada de previsualización.
+- Nueve pruebas de presentación: diseño único, controles eliminados, acciones
+  autorizadas, estados de carga/vacío, entregas y reloj estable.
+- TypeScript de frontend y build de API, lint focalizado, `git diff --check`
+  y `css:guard` (sin nuevas reglas globales; un CSS Module retirado).
+- Navegador con sesión real: una URL antigua `?vista=operario` muestra el Panel
+  único, sin selector ni botón Actualizar. Se mantienen entregas agrupadas y
+  actualización automática. Escritorio y móvil sin desborde horizontal.

@@ -2,8 +2,7 @@
 
 import type { AriaAttributes, ReactNode } from "react";
 import { ToggleButton, ToggleButtonGroup, Tooltip } from "@heroui/react";
-import { useDesignScope } from "./appearance";
-import theme from "./theme.module.css";
+import { useDesignScope, useDesignTheme } from "./appearance";
 import styles from "./choice-controls.module.css";
 
 type ChoiceProps = Pick<
@@ -21,8 +20,9 @@ export function SegmentedControl({
   options,
   value,
   onChange,
+  tone = "default",
   ...props
-}: ChoiceProps) {
+}: ChoiceProps & { tone?: "default" | "graphite" }) {
   return (
     <ToggleButtonGroup
       {...props}
@@ -30,6 +30,7 @@ export function SegmentedControl({
       disallowEmptySelection
       size="sm"
       className={styles.segmented}
+      data-tone={tone}
       selectedKeys={new Set([value])}
       onSelectionChange={(keys) => {
         const key = [...keys][0];
@@ -62,6 +63,7 @@ export function IconChoiceGroup({
   ...props
 }: ChoiceProps) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   return (
     <ToggleButtonGroup
       {...props}
@@ -91,7 +93,7 @@ export function IconChoiceGroup({
           >
             {option.icon}
           </ToggleButton>
-          <Tooltip.Content {...scope} className={theme.theme}>
+          <Tooltip.Content {...scope} className={themeClass}>
             {option.label}
           </Tooltip.Content>
         </Tooltip>

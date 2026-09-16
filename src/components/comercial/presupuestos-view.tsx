@@ -10,6 +10,14 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button, SearchField } from "@heroui/react";
 import {
+  ArrowUpRight,
+  Layers3,
+  FilePenLine,
+  ShieldCheck,
+  Clock3,
+  ArrowRightLeft,
+  SlidersHorizontal,
+  X,
   PlusIcon,
   SettingsIcon,
   Send,
@@ -23,11 +31,13 @@ import {
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { ListMetric } from "@/components/design-system/list-metric";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import layout from "@/components/design-system/list-page.module.css";
 import fieldFocus from "@/components/design-system/field-focus.module.css";
-import tabStyles from "@/components/design-system/navigation-tab-list.module.css";
 import { ConfigPresupuestosSheet } from "./config-presupuestos-sheet";
 import s from "./presupuestos-view.module.css";
 import type { MembershipRole } from "@/lib/auth";
@@ -39,16 +49,27 @@ import {
 import { fmtMoneda, PresupuestosTable } from "./presupuestos-table";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
-export function PresupuestosView({
-  initial,
-  rol,
-  filtroInicial,
-}: {
+type PresupuestosViewProps = {
   initial: PresupuestosListado;
   rol: MembershipRole;
   filtroInicial?: PresupuestoEstado;
-}) {
+};
+
+export function PresupuestosView(props: PresupuestosViewProps) {
+  return (
+    <DesignSystemProvider appearance="light" theme="brand">
+      <PresupuestosContent {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function PresupuestosContent({
+  initial,
+  rol,
+  filtroInicial,
+}: PresupuestosViewProps) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const { moneda } = useConfigRegional();
   const router = useRouter();
   const [data, setData] = React.useState(initial);
@@ -123,18 +144,48 @@ export function PresupuestosView({
       ? data.stats.reduce((s, estado) => s + estado.cantidad, 0)
       : statDe(k).cantidad;
 
+  const filtroActivo = filtro !== "todos" || Boolean(busqueda.trim());
+  const filtrar = (estado: PresupuestoEstado | "todos") => {
+    setPagina(0);
+    setFiltro(estado);
+    router.replace(
+      estado === "todos"
+        ? "/comercial/presupuestos"
+        : `/comercial/presupuestos?estado=${estado}`,
+    );
+  };
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    filtrar("todos");
+  };
+  const iconos = {
+    todos: Layers3,
+    borrador: FilePenLine,
+    pendiente_aprobacion: ShieldCheck,
+    enviado: Send,
+    aprobado: CircleCheck,
+    rechazado: CircleX,
+    vencido: Clock3,
+    convertido: ArrowRightLeft,
+  };
+
   return (
     <section
       {...scope}
-      className={`${theme.theme} ${layout.page}`}
+      data-visual="brand"
+      className={`${themeClass} ${layout.page} ${s.page}`}
       aria-label="Presupuestos"
     >
       <header className={layout.header}>
         <div className="min-w-0">
-          <h1>Presupuestos</h1>
+          <p className={s.eyebrow}>
+            <FileText aria-hidden /> Comercial / Presupuestos
+          </p>
+          <h1>
+            Presupuestos<span className={s.titleDot}>.</span>
+          </h1>
           <p className={layout.subtitle}>
-            El ciclo comercial: enviá, seguí la decisión del cliente y convertí
-            en orden.
+            De la propuesta al trabajo: cada oportunidad, en un solo lugar.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -149,7 +200,7 @@ export function PresupuestosView({
           ) : null}
           <ActionLink href="/comercial/crear-propuesta">
             <PlusIcon size={15} aria-hidden />
-            Nuevo presupuesto
+            Nuevo presupuesto <ArrowUpRight aria-hidden />
           </ActionLink>
         </div>
       </header>
@@ -158,14 +209,15 @@ export function PresupuestosView({
         <ListMetric
           label="Pipeline abierto"
           value={fmtMoneda(pipeline.total, moneda)}
-          hint={`${pipeline.cantidad} enviados esperando decisión`}
+          hint={`${pipeline.cantidad} ${pipeline.cantidad === 1 ? "enviado esperando" : "enviados esperando"} decisión`}
           icon={Send}
         />
         <ListMetric
           label="Aprobados sin convertir"
           value={fmtMoneda(aprobados.total, moneda)}
-          hint={`${aprobados.cantidad} listos para pasar a OT`}
+          hint={`${aprobados.cantidad} ${aprobados.cantidad === 1 ? "listo" : "listos"} para pasar a OT`}
           icon={CircleCheck}
+          tone="brand"
         />
         <ListMetric
           label="Tasa de cierre"
@@ -182,41 +234,14 @@ export function PresupuestosView({
           value={statDe("rechazado").cantidad + statDe("vencido").cantidad}
           hint={`${fmtMoneda(statDe("rechazado").total + statDe("vencido").total, moneda)} rechazados o vencidos`}
           icon={CircleX}
-          tone="brand"
+          tone="danger"
         />
       </div>
 
       <Card className={layout.results}>
-        <div className={layout.toolbar}>
-          <div
-            className={layout.filters}
-            role="group"
-            aria-label="Filtrar por estado"
-          >
-            {chips.map((f) => (
-              <Button
-                key={f.k}
-                type="button"
-                variant="ghost"
-                className={`${tabStyles.tab} ${layout.filter}`}
-                aria-pressed={filtro === f.k}
-                onPress={() => {
-                  setPagina(0);
-                  setFiltro(f.k);
-                  router.replace(
-                    f.k === "todos"
-                      ? "/comercial/presupuestos"
-                      : `/comercial/presupuestos?estado=${f.k}`,
-                  );
-                }}
-              >
-                {f.label}
-                <span className={tabStyles.count}>{countChip(f.k)}</span>
-              </Button>
-            ))}
-          </div>
+        <div className={s.toolbar}>
           <SearchField
-            className={layout.search}
+            className={s.search}
             aria-label="Buscar presupuestos por número o cliente"
             value={busqueda}
             onChange={(value) => {
@@ -225,22 +250,80 @@ export function PresupuestosView({
             }}
           >
             <SearchField.Group
-              className={`${layout.searchGroup} ${fieldFocus.singleBorder}`}
+              className={`${s.searchGroup} ${fieldFocus.singleBorder}`}
             >
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Buscar por Nº, cliente…" />
+              <SearchField.Input placeholder="Buscar por número o cliente…" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
             </SearchField.Group>
           </SearchField>
+          <span className={s.resultCount} role="status">
+            {data.paginacion.total}{" "}
+            {data.paginacion.total === 1 ? "presupuesto" : "presupuestos"}
+          </span>
         </div>
+        <div className={s.filters} role="group" aria-label="Filtrar por estado">
+          {chips.map((f) => {
+            const Icon = iconos[f.k];
+            return (
+              <Button
+                key={f.k}
+                type="button"
+                variant="ghost"
+                className={s.filter}
+                aria-pressed={filtro === f.k}
+                onPress={() => filtrar(f.k)}
+              >
+                <Icon aria-hidden />
+                <span>{f.label}</span>
+                <span className={s.filterCount}>{countChip(f.k)}</span>
+              </Button>
+            );
+          })}
+        </div>
+        {filtroActivo && (
+          <div className={s.activeFilters}>
+            <span>
+              <SlidersHorizontal aria-hidden />
+              {chips.find((f) => f.k === filtro)?.label}
+              {busqueda.trim() && (
+                <span className={s.query}>“{busqueda.trim()}”</span>
+              )}
+            </span>
+            <ActionButton variant="ghost" onPress={limpiarFiltros}>
+              <X aria-hidden />
+              Limpiar filtros
+            </ActionButton>
+          </div>
+        )}
 
         {lista.length === 0 ? (
-          <div className={layout.empty}>
-            <FileText size={28} aria-hidden />
+          <div className={`${layout.empty} ${s.empty}`}>
+            {filtroActivo ? (
+              <SlidersHorizontal aria-hidden />
+            ) : (
+              <FileText aria-hidden />
+            )}
+            <h2>
+              {filtroActivo
+                ? "No hay presupuestos con estos filtros"
+                : "Tu próxima propuesta empieza acá"}
+            </h2>
             <p>
-              {data.presupuestos.length === 0
-                ? "Todavía no emitiste presupuestos. Crealos desde la ficha comercial con el selector en “Presupuesto”."
-                : "Ningún presupuesto coincide con el filtro."}
+              {filtroActivo
+                ? "Probá con otro número, cliente o estado."
+                : "Creá un presupuesto desde la ficha comercial y seguí cada oportunidad hasta convertirla en una orden."}
             </p>
+            {filtroActivo ? (
+              <ActionButton variant="outline" onPress={limpiarFiltros}>
+                Limpiar filtros
+              </ActionButton>
+            ) : (
+              <ActionLink href="/comercial/crear-propuesta">
+                <PlusIcon aria-hidden />
+                Nuevo presupuesto
+              </ActionLink>
+            )}
           </div>
         ) : (
           <PresupuestosTable
@@ -249,31 +332,33 @@ export function PresupuestosView({
             onAbrir={(id) => router.push(`/comercial/presupuestos/${id}`)}
           />
         )}
-        {data.paginacion.total > data.paginacion.limit ? (
+        {data.paginacion.total > 0 ? (
           <footer className={layout.pager}>
-            <span className="text-muted-foreground tabular-nums">
+            <span className={s.pageCount}>
               {data.paginacion.skip + 1}–
               {data.paginacion.skip + data.presupuestos.length} de{" "}
               {data.paginacion.total}
             </span>
-            <div className="flex items-center gap-2">
-              <ActionButton
-                variant="outline"
-                isDisabled={pagina === 0}
-                onPress={() => setPagina((p) => Math.max(0, p - 1))}
-              >
-                <ChevronLeft size={15} aria-hidden />
-                Anterior
-              </ActionButton>
-              <ActionButton
-                variant="outline"
-                isDisabled={!data.paginacion.hayMas}
-                onPress={() => setPagina((p) => p + 1)}
-              >
-                Siguiente
-                <ChevronRight size={15} aria-hidden />
-              </ActionButton>
-            </div>
+            {data.paginacion.total > data.paginacion.limit && (
+              <div className="flex items-center gap-2">
+                <ActionButton
+                  variant="outline"
+                  isDisabled={pagina === 0}
+                  onPress={() => setPagina((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft size={15} aria-hidden />
+                  Anterior
+                </ActionButton>
+                <ActionButton
+                  variant="outline"
+                  isDisabled={!data.paginacion.hayMas}
+                  onPress={() => setPagina((p) => p + 1)}
+                >
+                  Siguiente
+                  <ChevronRight size={15} aria-hidden />
+                </ActionButton>
+              </div>
+            )}
           </footer>
         ) : null}
       </Card>

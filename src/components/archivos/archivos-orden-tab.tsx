@@ -5,6 +5,9 @@ import { toast } from "sonner";
 
 import { RotateCcwIcon, Trash2Icon } from "lucide-react";
 
+import { ArchivosProduccionPanel } from "./archivos-produccion-panel";
+import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
+import { contarArchivosDeOrden } from "@/lib/archivos-presentacion";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { formatBytes, type Archivo } from "@/lib/archivos";
 import {
@@ -24,9 +27,11 @@ import {
 function PapeleraOrden({
   ordenId,
   onRestaurado,
+  soloLectura,
 }: {
   ordenId: string;
   onRestaurado: () => void;
+  soloLectura: boolean;
 }) {
   const [items, setItems] = React.useState<ArchivoEnPapelera[]>([]);
   const [abierta, setAbierta] = React.useState(false);
@@ -48,6 +53,7 @@ function PapeleraOrden({
   if (items.length === 0) return null;
 
   const restaurar = async (a: ArchivoEnPapelera) => {
+    if (soloLectura) return;
     try {
       await restaurarArchivo(a.id);
       setItems((s) => s.filter((x) => x.id !== a.id));
@@ -90,13 +96,15 @@ function PapeleraOrden({
                 </span>
               </div>
               <div className="arch-acc">
-                <button
-                  type="button"
-                  title="Restaurar"
-                  onClick={() => void restaurar(a)}
-                >
-                  <RotateCcwIcon />
-                </button>
+                {!soloLectura ? (
+                  <button
+                    type="button"
+                    title="Restaurar"
+                    onClick={() => void restaurar(a)}
+                  >
+                    <RotateCcwIcon />
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -120,8 +128,10 @@ export function ArchivosOrdenTab({
   ordenId,
   soloLectura = false,
   onTotalCambio,
+  estadoDocumental,
 }: {
   ordenId: string;
+  estadoDocumental?: EstadoDocumentalOrden | null;
   soloLectura?: boolean;
   /** Para que la pestaña muestre el contador real. */
   onTotalCambio?: (total: number) => void;
@@ -156,12 +166,8 @@ export function ArchivosOrdenTab({
   }, [ordenId, token]);
 
   const total = React.useMemo(
-    () =>
-      data
-        ? data.documento.length +
-          data.items.reduce((n, i) => n + i.archivos.length, 0)
-        : 0,
-    [data],
+    () => (data ? contarArchivosDeOrden(data, estadoDocumental) : 0),
+    [data, estadoDocumental],
   );
 
   React.useEffect(() => {
@@ -183,60 +189,69 @@ export function ArchivosOrdenTab({
         : d,
     );
 
-  if (cargando) {
-    return <div className="otd-noprod">Cargando archivos…</div>;
-  }
-  if (!data) {
-    return <div className="otd-noprod">No se pudieron cargar los archivos.</div>;
-  }
-
   return (
-    <div className="arch-tab">
-      <div className="arch-bloque">
-        <div className="arch-bloque-head">
-          <span className="t">Archivos de la orden</span>
-          {data.documento.length > 0 ? (
-            <span className="n">{data.documento.length}</span>
-          ) : null}
-          <span className="s">
-            Orden de compra, referencias, lo que no es de un producto puntual
-          </span>
-        </div>
-        <ArchivoUploader
-          scope="ORDEN"
-          entidadId={ordenId}
-          archivos={data.documento}
-          onCambio={setDocumento}
-          soloLectura={soloLectura}
-          permitirPublico
-          titulo="Arrastrá archivos de la orden"
-          vacio="Todavía no hay archivos generales de esta orden."
-        />
-      </div>
-
-      <PapeleraOrden ordenId={ordenId} onRestaurado={recargar} />
-
-      {data.items.map((item) => (
-        <div key={item.itemId} className="arch-bloque">
-          <div className="arch-bloque-head">
-            <span className="t">{item.nombre}</span>
-            {item.archivos.length > 0 ? (
-              <span className="n">{item.archivos.length}</span>
-            ) : null}
-            <span className="s">Arte de producción de este producto</span>
+    <>
+      {estadoDocumental !== undefined ? (
+        <ArchivosProduccionPanel data={estadoDocumental} />
+      ) : null}
+      {cargando ? (
+        <div className="otd-noprod">Cargando archivos…</div>
+      ) : !data ? (
+        <div className="otd-noprod">No se pudieron cargar los archivos.</div>
+      ) : (
+        <div className="arch-tab">
+          <div className="arch-bloque">
+            <div className="arch-bloque-head">
+              <span className="t">Archivos de la orden</span>
+              {data.documento.length > 0 ? (
+                <span className="n">{data.documento.length}</span>
+              ) : null}
+              <span className="s">
+                Orden de compra, referencias, lo que no es de un producto
+                puntual
+              </span>
+            </div>
+            <ArchivoUploader
+              scope="ORDEN"
+              entidadId={ordenId}
+              archivos={data.documento}
+              onCambio={setDocumento}
+              soloLectura={soloLectura}
+              permitirPublico
+              titulo="Arrastrá archivos de la orden"
+              vacio="Todavía no hay archivos generales de esta orden."
+            />
           </div>
-          <ArchivoUploader
-            scope="ORDEN_ITEM"
-            entidadId={item.itemId}
-            archivos={item.archivos}
-            onCambio={(a) => setItem(item.itemId, a)}
+
+          <PapeleraOrden
+            ordenId={ordenId}
+            onRestaurado={recargar}
             soloLectura={soloLectura}
-            permitirPublico
-            titulo="Arrastrá el arte de este producto"
-            vacio="Sin arte cargado. Producción va a llegar a este paso sin el archivo."
           />
+
+          {data.items.map((item) => (
+            <div key={item.itemId} className="arch-bloque">
+              <div className="arch-bloque-head">
+                <span className="t">{item.nombre}</span>
+                {item.archivos.length > 0 ? (
+                  <span className="n">{item.archivos.length}</span>
+                ) : null}
+                <span className="s">Arte de producción de este producto</span>
+              </div>
+              <ArchivoUploader
+                scope="ORDEN_ITEM"
+                entidadId={item.itemId}
+                archivos={item.archivos}
+                onCambio={(a) => setItem(item.itemId, a)}
+                soloLectura={soloLectura}
+                permitirPublico
+                titulo="Arrastrá el arte de este producto"
+                vacio="Sin arte cargado. Producción va a llegar a este paso sin el archivo."
+              />
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }

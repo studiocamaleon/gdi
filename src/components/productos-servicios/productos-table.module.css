@@ -1,7 +1,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 .page > header {
   padding-bottom: 0;
@@ -9,10 +9,14 @@
 .page > * {
   flex-shrink: 0;
 }
-.metrics {
+.metrics.metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+  margin-bottom: 0;
+}
+.metrics.metrics > :first-child > strong {
+  color: var(--accent);
 }
 .filterBar {
   display: flex;
@@ -21,7 +25,7 @@
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -62,8 +66,9 @@
 .explorerHeader h2,
 .catalogHeader h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.03em;
 }
 .explorerHeader p,
 .catalogHeader p {
@@ -87,9 +92,9 @@
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  color: var(--accent-soft-foreground);
-  background: var(--accent-soft);
+  border-radius: 8px;
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite);
 }
 .catalogIcon svg {
   width: 16px;
@@ -104,7 +109,7 @@
 .categoryLink {
   min-width: 0;
   color: inherit;
-  border-radius: 12px;
+  border-radius: 8px;
   outline: none;
 }
 .categoryLink:focus-visible {
@@ -117,7 +122,7 @@
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   box-shadow: none;
   transition:
@@ -146,7 +151,7 @@
   padding-right: 28px;
   font-size: 15px;
   line-height: 1.4;
-  font-weight: 650;
+  font-weight: 550;
 }
 .categoryCardHeader p {
   display: -webkit-box;
@@ -196,8 +201,9 @@
 .table th {
   padding: 11px 16px;
   color: var(--muted-text);
-  font-size: 11px;
-  font-weight: 500;
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .table td {
@@ -208,7 +214,7 @@
   transition: background-color 150ms ease;
 }
 .table tbody tr:hover {
-  background: var(--surface-secondary);
+  background: var(--accent-soft);
 }
 .table tbody tr[data-state="incompleto"] {
   box-shadow: 3px 0 0 var(--danger) inset;
@@ -306,7 +312,7 @@
   }
 }
 @container list-page (max-width: 920px) {
-  .metrics {
+  .metrics.metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .categoryGrid {
@@ -358,4 +364,43 @@
   .table tbody tr {
     transition: none;
   }
+}
+
+.productGlyph {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: var(--canvas-background);
+}
+.productGlyph svg {
+  width: 36px;
+  height: 36px;
+}
+.productIdentity {
+  gap: 10px;
+}
+.catalogCount,
+.explorerCount {
+  font: 10px/1.5 var(--brand-mono);
+}
+.categoryMeta {
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.categoryArrow {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.categoryLink:hover .categoryArrow {
+  color: var(--brand-graphite);
+  background: var(--accent);
+  border-color: var(--accent);
 }

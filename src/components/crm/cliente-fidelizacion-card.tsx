@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { StarIcon, SlidersHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   ajustarPuntos,
@@ -10,6 +11,7 @@ import { Card, Chip, Input, Label, Modal, TextField } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import focus from "@/components/design-system/field-focus.module.css";
+import brand from "./contactos-workspace.module.css";
 import styles from "@/components/clientes/clientes.module.css";
 import {
   Table,
@@ -36,7 +38,7 @@ export function ClienteFidelizacionCard({
       getFidelizacionCuenta(clienteId)
         .then(setData)
         .catch(() => undefined),
-    [clienteId],
+    [clienteId]
   );
   React.useEffect(() => {
     void cargar();
@@ -57,7 +59,7 @@ export function ClienteFidelizacionCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <Card.Title className={styles.sectionTitle}>
-              Puntos de fidelización
+              <StarIcon aria-hidden /> Puntos de fidelización
             </Card.Title>
             <Card.Description>
               Saldo, reservas y movimientos auditados del cliente.
@@ -69,7 +71,7 @@ export function ClienteFidelizacionCard({
               variant="outline"
               onPress={() => setOpen(true)}
             >
-              Ajustar puntos
+              <SlidersHorizontalIcon /> Ajustar puntos
             </ActionButton>
           )}
         </div>
@@ -130,6 +132,7 @@ export function ClienteFidelizacionCard({
       </Card.Content>
       {puedeAjustar && (
         <FormDialog
+          className={brand.dialog}
           isOpen={open}
           onOpenChange={setOpen}
           title="Ajustar puntos"

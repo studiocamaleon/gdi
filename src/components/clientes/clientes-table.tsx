@@ -3,11 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpRightIcon,
+  MailIcon,
+  MapPinIcon,
   ChevronDownIcon,
   DownloadIcon,
   FileSpreadsheetIcon,
   PencilIcon,
-  PlusIcon,
   SearchXIcon,
   Trash2Icon,
   UploadIcon,
@@ -46,10 +48,20 @@ import {
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { FormDialog } from "@/components/design-system/form-dialog";
-import { IdentityAvatar } from "@/components/design-system/identity-avatar";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
-import theme from "@/components/design-system/theme.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./clientes.module.css";
@@ -86,7 +98,7 @@ function buildCsv(clientes: ClienteDetalle[]) {
     .map((row) =>
       row
         .map((cell) => `"${safeSpreadsheetCell(cell).replaceAll('"', '""')}"`)
-        .join(","),
+        .join(",")
     )
     .join("\n")}`;
 }
@@ -96,6 +108,7 @@ export function ClientesTable({
   canManage,
 }: ClientesTableProps) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [response, setResponse] = React.useState(initialResponse);
@@ -106,7 +119,7 @@ export function ClientesTable({
   const [isLoading, setIsLoading] = React.useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
   const [selectedClientes, setSelectedClientes] = React.useState<Set<string>>(
-    new Set(),
+    new Set()
   );
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDeleting, startDeleteTransition] = React.useTransition();
@@ -139,7 +152,7 @@ export function ClientesTable({
           toast.error(
             error instanceof Error
               ? error.message
-              : "No se pudo actualizar la lista.",
+              : "No se pudo actualizar la lista."
           );
         }
       })
@@ -151,7 +164,7 @@ export function ClientesTable({
 
   const clientes = response.data;
   const selectedRows = clientes.filter((cliente) =>
-    selectedClientes.has(cliente.id),
+    selectedClientes.has(cliente.id)
   );
   const allSelected =
     clientes.length > 0 &&
@@ -159,7 +172,7 @@ export function ClientesTable({
 
   const handleSelectAll = (checked: boolean) => {
     setSelectedClientes(
-      checked ? new Set(clientes.map((cliente) => cliente.id)) : new Set(),
+      checked ? new Set(clientes.map((cliente) => cliente.id)) : new Set()
     );
   };
 
@@ -213,7 +226,7 @@ export function ClientesTable({
           setResponse((current) => ({
             ...current,
             data: current.data.map((item) =>
-              item.id === actualizado.id ? actualizado : item,
+              item.id === actualizado.id ? actualizado : item
             ),
           }));
           setSelectedClientes((current) => {
@@ -225,13 +238,13 @@ export function ClientesTable({
         toast.success(
           actualizado.activo
             ? `${actualizado.nombre} vuelve a estar activo.`
-            : `${actualizado.nombre} quedó inhabilitado.`,
+            : `${actualizado.nombre} quedó inhabilitado.`
         );
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudo cambiar el estado.",
+            : "No se pudo cambiar el estado."
         );
       }
     });
@@ -241,20 +254,20 @@ export function ClientesTable({
     setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
       const resultados = await Promise.allSettled(
-        selectedRows.map((cliente) => deleteCliente(cliente.id)),
+        selectedRows.map((cliente) => deleteCliente(cliente.id))
       );
       const borrados = resultados.filter(
-        (resultado) => resultado.status === "fulfilled",
+        (resultado) => resultado.status === "fulfilled"
       ).length;
       const errores = resultados
         .filter(
           (resultado): resultado is PromiseRejectedResult =>
-            resultado.status === "rejected",
+            resultado.status === "rejected"
         )
         .map((resultado) =>
           resultado.reason instanceof Error
             ? resultado.reason.message
-            : "No se pudo eliminar un cliente.",
+            : "No se pudo eliminar un cliente."
         );
       await refreshCurrentPage();
       if (borrados > 0) toast.success(`${borrados} cliente(s) eliminado(s).`);
@@ -273,12 +286,14 @@ export function ClientesTable({
       const invalid = parsed.rows.find((row) => row.errors.length > 0);
       if (invalid) {
         toast.error(
-          `No se importó el archivo. Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`,
+          `No se importó el archivo. Fila ${
+            invalid.rowNumber
+          }: ${invalid.errors.join(" ")}`
         );
         return;
       }
       const payloads = parsed.rows.flatMap((row) =>
-        row.payload ? [row.payload] : [],
+        row.payload ? [row.payload] : []
       );
       try {
         const result = await importarClientes(payloads);
@@ -286,7 +301,9 @@ export function ClientesTable({
         toast.success(`Se importaron ${result.total} cliente(s).`);
       } catch (error) {
         toast.error(
-          `No se importó ninguna fila. ${error instanceof Error ? error.message : "Revisá el archivo."}`,
+          `No se importó ninguna fila. ${
+            error instanceof Error ? error.message : "Revisá el archivo."
+          }`
         );
       }
     });
@@ -296,12 +313,16 @@ export function ClientesTable({
 
   return (
     <section
+      data-visual="brand"
       {...scope}
-      className={`${theme.theme} ${listPage.page} ${styles.page}`}
+      className={`${theme} ${listPage.page} ${brand.workspace} ${styles.page}`}
     >
       <header className={listPage.header}>
         <div>
-          <h1>Clientes</h1>
+          <p className={brand.eyebrow}>CRM · Relaciones comerciales</p>
+          <h1>
+            Clientes<span className={brand.titleDot}>.</span>
+          </h1>
           <p className={listPage.subtitle}>
             Administrá los datos comerciales, fiscales y de contacto de tus
             clientes.
@@ -329,7 +350,7 @@ export function ClientesTable({
             </ActionButton>
             <Dropdown.Popover
               {...scope}
-              className={`${theme.theme} ${styles.menu}`}
+              className={`${theme} ${styles.menu}`}
               placement="bottom end"
             >
               <Dropdown.Menu aria-label="Acciones de clientes">
@@ -391,14 +412,55 @@ export function ClientesTable({
           </Dropdown>
           {canManage && (
             <ActionLink href="/crm/clientes/nuevo">
-              <PlusIcon />
               Nuevo cliente
+              <ArrowUpRightIcon />
             </ActionLink>
           )}
         </div>
       </header>
 
+      <div className={brand.metrics} aria-label="Resumen del listado">
+        <ListMetric
+          label="Clientes"
+          value={response.total}
+          hint={
+            debouncedSearch
+              ? "Coinciden con la búsqueda"
+              : verInactivos
+              ? "Incluye inhabilitados"
+              : "Activos en el directorio"
+          }
+          icon={UsersRoundIcon}
+        />
+        <ListMetric
+          label="Con email"
+          value={clientes.filter((item) => item.email.trim()).length}
+          hint="En esta página"
+          icon={MailIcon}
+        />
+        <ListMetric
+          label="Con ubicación"
+          value={clientes.filter((item) => item.ciudad.trim()).length}
+          hint="En esta página"
+          icon={MapPinIcon}
+        />
+      </div>
       <Card className={listPage.results}>
+        <Card.Header className={brand.directoryHeader}>
+          <div className={brand.directoryTitle}>
+            <span className={brand.directoryIcon} aria-hidden>
+              <UsersRoundIcon />
+            </span>
+            <div>
+              <Card.Title className={brand.directoryHeading}>
+                Directorio de clientes
+              </Card.Title>
+              <Card.Description>
+                Datos, contactos y estado de cada cliente.
+              </Card.Description>
+            </div>
+          </div>
+        </Card.Header>
         <div className={listPage.toolbar}>
           <SearchField
             aria-label="Buscar clientes"
@@ -459,17 +521,23 @@ export function ClientesTable({
         )}
         <div aria-busy={isLoading}>
           {clientes.length === 0 ? (
-            <div className={listPage.empty}>
-              <SearchXIcon size={28} />
-              <strong>No encontramos clientes</strong>
-              <p>
-                {debouncedSearch
-                  ? "Probá con otro nombre, documento, teléfono o ciudad."
-                  : "Todavía no hay clientes para mostrar con este filtro."}
-              </p>
-            </div>
+            <Empty className={brand.empty}>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchXIcon />
+                </EmptyMedia>
+                <EmptyTitle>No encontramos clientes</EmptyTitle>
+                <EmptyDescription>
+                  {debouncedSearch
+                    ? "Probá con otro nombre, documento, teléfono o ciudad."
+                    : "Todavía no hay clientes para mostrar con este filtro."}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
-            <Table className={`${styles.table} ${styles.clientsTable}`}>
+            <Table
+              className={`${styles.table} ${brand.table} ${styles.clientsTable}`}
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead className={styles.checkCell}>
@@ -522,24 +590,33 @@ export function ClientesTable({
                           href={`/crm/clientes/${cliente.id}`}
                           className={styles.clientName}
                         >
-                          <span aria-hidden="true">
-                            <IdentityAvatar
-                              name={cliente.nombre}
-                              initials={cliente.nombre
-                                .split(/\s+/)
-                                .slice(0, 2)
-                                .map((part) => part[0])
-                                .join("")
-                                .toUpperCase()}
-                            />
+                          <span
+                            className={brand.identityIcon}
+                            aria-hidden="true"
+                          >
+                            <UsersRoundIcon />
                           </span>
                           <strong>{cliente.nombre}</strong>
+                          <ArrowUpRightIcon
+                            className={brand.rowArrow}
+                            aria-hidden
+                          />
                         </NavLink>
                       </TableCell>
                       <TableCell>{cliente.razonSocial || "—"}</TableCell>
                       <TableCell>{cliente.contacto || "—"}</TableCell>
-                      <TableCell>{cliente.email || "—"}</TableCell>
-                      <TableCell>{cliente.ciudad || "—"}</TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {cliente.email && <MailIcon aria-hidden />}
+                          {cliente.email || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {cliente.ciudad && <MapPinIcon aria-hidden />}
+                          {cliente.ciudad || "—"}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <div className={styles.rowActions}>
                           <Chip
@@ -602,6 +679,7 @@ export function ClientesTable({
         )}
       </Card>
       <FormDialog
+        className={brand.dialog}
         isOpen={confirmandoEliminar}
         onOpenChange={setConfirmandoEliminar}
         title="Eliminar clientes"

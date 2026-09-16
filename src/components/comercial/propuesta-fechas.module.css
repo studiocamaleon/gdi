@@ -2,13 +2,10 @@
   display: flex;
   align-items: center;
   min-height: 36px;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  background: var(--surface);
+  padding: 7px 0;
   color: var(--ink);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }

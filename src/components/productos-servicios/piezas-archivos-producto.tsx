@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { FileUpIcon, PlusIcon, Trash2Icon, ShapesIcon } from "lucide-react";
-import { Button } from "./producto-ui";
+import { Button, useProductoVisual } from "./producto-ui";
 import { Input } from "./producto-ui";
 import { Checkbox } from "./producto-ui";
 import { Spinner } from "@/components/ui/spinner";
@@ -90,6 +90,8 @@ export function PiezasArchivosProducto({
   titulo?: string;
   descripcion?: string;
 }) {
+  const productoVisual = useProductoVisual();
+  const accionesDeComponente = paraComponente && productoVisual;
   const [pendiente, setPendiente] = React.useState<{
     archivoId: string;
     nombre: string;
@@ -330,7 +332,7 @@ export function PiezasArchivosProducto({
           )}
           <Button
             type="button"
-            className={styles.primaryAction}
+            className={accionesDeComponente ? undefined : styles.primaryAction}
             disabled={
               ocupado ||
               fuentes.filter((f) => f.predeterminada).length +
@@ -454,7 +456,9 @@ export function PiezasArchivosProducto({
               <Button
                 type="button"
                 variant="outline"
-                className={styles.secondaryAction}
+                className={
+                  accionesDeComponente ? undefined : styles.secondaryAction
+                }
                 disabled={
                   ocupado ||
                   (paraCotizacion && !!f.predeterminada && !f.permitirReemplazo)
@@ -469,7 +473,9 @@ export function PiezasArchivosProducto({
                   <Button
                     type="button"
                     variant="outline"
-                    className={styles.secondaryAction}
+                    className={
+                      accionesDeComponente ? undefined : styles.secondaryAction
+                    }
                     disabled={ocupado}
                     onClick={() => void revisarCapas(f)}
                   >

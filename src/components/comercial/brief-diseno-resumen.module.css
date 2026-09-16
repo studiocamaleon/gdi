@@ -1,0 +1,27 @@
+/* Resumen del brief dentro de la ficha técnica; el contenido completo sigue
+ * disponible en el diálogo y conserva los indicadores de completitud. */
+.summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 96px;
+  padding: 18px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+  container: brief-summary / inline-size;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--accent-soft, var(--background));
+  color: var(--accent-soft-foreground, var(--muted-foreground));
+}
+.action { flex-shrink: 0; color: var(--foreground); }
+@container brief-summary (max-width: 460px) {
+  .summary > .action { grid-column: 2 / -1; justify-self: start; }
+}

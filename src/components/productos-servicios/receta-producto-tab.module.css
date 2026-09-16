@@ -2027,9 +2027,7 @@
   box-shadow: 0 -10px 28px rgb(28 20 15 / 7%);
 }
 
-[data-slot="sidebar-wrapper"]:has(
-    [data-slot="sidebar"][data-state="collapsed"]
-  )
+[data-slot="sidebar-wrapper"]:has([data-slot="sidebar"][data-state="collapsed"])
   .editorEmbedded
   .editorFooter {
   left: var(--sidebar-width-icon, 66px);
@@ -2441,8 +2439,7 @@
   border-color: var(--signal, #e85f2a);
   color: #fff;
   background: var(--signal, #e85f2a);
-  outline: 3px solid
-    color-mix(in srgb, var(--signal, #e85f2a) 22%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--signal, #e85f2a) 22%, transparent);
   outline-offset: 2px;
 }
 
@@ -3138,7 +3135,8 @@
   border-top: 3px solid var(--border);
   background: var(--surface);
 }
-:global([data-producto-ficha]) .bomIntro span, :global([data-producto-ficha]) .bomTreeGuide > span {
+:global([data-producto-ficha]) .bomIntro span,
+:global([data-producto-ficha]) .bomTreeGuide > span {
   color: var(--accent-soft-foreground);
 }
 :global([data-producto-ficha]) .bomIntro h4 {
@@ -3161,7 +3159,8 @@
   background: var(--accent-soft);
   box-shadow: none;
 }
-:global([data-producto-ficha]) .bomLoading, :global([data-producto-ficha]) .bomError {
+:global([data-producto-ficha]) .bomLoading,
+:global([data-producto-ficha]) .bomError {
   border: 1px solid var(--border);
   color: var(--muted-text);
   background: var(--surface);
@@ -3169,7 +3168,8 @@
 :global([data-producto-ficha]) .bomError strong {
   color: var(--muted-text);
 }
-:global([data-producto-ficha]) .bomTreePanel, :global([data-producto-ficha]) .bomConsolidated {
+:global([data-producto-ficha]) .bomTreePanel,
+:global([data-producto-ficha]) .bomConsolidated {
   border: 1px solid var(--border);
   background-color: var(--surface);
 }
@@ -3199,12 +3199,16 @@
 :global([data-producto-ficha]) .bomChevron {
   color: var(--muted-text);
 }
-:global([data-producto-ficha]) .bomNodeIcon, :global([data-producto-ficha]) .bomMaterialIcon {
+:global([data-producto-ficha]) .bomNodeIcon,
+:global([data-producto-ficha]) .bomMaterialIcon {
   border: 1px solid var(--border);
   color: var(--foreground);
   background: var(--surface);
 }
-:global([data-producto-ficha]) .bomNode[data-root="true"] > .bomNodeHeader .bomNodeIcon {
+:global([data-producto-ficha])
+  .bomNode[data-root="true"]
+  > .bomNodeHeader
+  .bomNodeIcon {
   border-color: var(--border);
   color: var(--accent-soft-foreground);
   background: var(--surface);
@@ -3218,7 +3222,8 @@
 :global([data-producto-ficha]) .bomNodeIdentity small {
   color: var(--muted-text);
 }
-:global([data-producto-ficha]) .bomNodeStats span, :global([data-producto-ficha]) .bomNodeStats b {
+:global([data-producto-ficha]) .bomNodeStats span,
+:global([data-producto-ficha]) .bomNodeStats b {
   border: 1px solid var(--border);
   color: var(--muted-text);
   background: var(--surface);
@@ -3243,7 +3248,8 @@
 :global([data-producto-ficha]) .bomMaterialRow strong {
   color: var(--foreground);
 }
-:global([data-producto-ficha]) .bomMaterialRow small, :global([data-producto-ficha]) .bomMaterialRule {
+:global([data-producto-ficha]) .bomMaterialRow small,
+:global([data-producto-ficha]) .bomMaterialRule {
   color: var(--muted-text);
 }
 :global([data-producto-ficha]) .bomNoDirectMaterial {
@@ -3286,7 +3292,11 @@
 :global([data-producto-ficha]) .bomConsolidatedRows details > div > div {
   border-bottom: 1px solid var(--border);
 }
-:global([data-producto-ficha]) .bomConsolidatedRows details > div > div:last-child {
+:global([data-producto-ficha])
+  .bomConsolidatedRows
+  details
+  > div
+  > div:last-child {
   border-bottom: 0;
 }
 :global([data-producto-ficha]) .bomConsolidatedRows details > div strong {
@@ -3328,4 +3338,113 @@
 }
 :global([data-producto-ficha]) .emptyRecipe strong {
   color: var(--foreground);
+}
+
+:global([data-producto-ficha]) .bomIntro,
+:global([data-producto-ficha]) .bomNode,
+:global([data-producto-ficha]) .bomConsolidated {
+  border-radius: 8px;
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .bomIntro {
+  border-top-width: 1px;
+  background: var(--canvas-background);
+}
+:global([data-producto-ficha]) .bomIntro h4 {
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+:global([data-producto-ficha]) .bomViewSwitch {
+  border-radius: 6px;
+}
+:global([data-producto-ficha]) .bomViewSwitch button[data-active="true"] {
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite);
+  border-radius: 5px;
+}
+
+/* Edición de rutas del catálogo: sólo presentación, conserva cámara y arrastre. */
+:global([data-producto-editor]) .editorHeader h4 {
+  font-size: 26px;
+  font-weight: 550;
+  letter-spacing: -0.04em;
+}
+:global([data-producto-editor]) .editorHeader span {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+:global([data-producto-editor]) .editorHeader .headerActions button,
+:global([data-producto-editor]) .editorHeader .headerActions a {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+:global([data-producto-editor]) .flowSection {
+  background: var(--canvas-background);
+}
+:global([data-producto-editor]) .canvasControls {
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: none;
+}
+:global([data-producto-editor]) .roadmapViewport {
+  border-color: var(--border);
+  border-radius: 8px;
+  background-color: var(--canvas-background);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--foreground) 14%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: var(--roadmap-grid-size, 28px) var(--roadmap-grid-size, 28px);
+  background-position: var(--roadmap-grid-x, 0) var(--roadmap-grid-y, 0);
+  box-shadow: none;
+}
+:global([data-producto-editor]) .roadmapColumn {
+  align-self: center;
+  padding-top: 42px;
+  border-color: var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+:global([data-producto-editor]) .roadmapColumnHeader {
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: 32px;
+  padding: 8px 10px;
+  border-radius: 7px 7px 0 0;
+  background: var(--brand-graphite);
+}
+:global([data-producto-editor]) .roadmapColumnHeader > span {
+  color: var(--brand-muted-on-graphite);
+  font-size: 9px;
+  font-weight: 500;
+}
+:global([data-producto-editor]) .roadmapColumnHeader > small {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--brand-graphite));
+  border-radius: 4px;
+}
+:global([data-producto-editor]) .roadmapNode {
+  border-radius: 6px;
+  box-shadow: none;
+}
+:global([data-producto-editor]) .roadmapNode:hover {
+  border-color: var(--accent);
+}
+:global([data-producto-editor]) .roadmapColumn[data-active="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+:global([data-producto-editor]) .editorFooter {
+  background: var(--surface);
+  box-shadow: none;
+}
+:global([data-producto-editor]) .editorFooter button {
+  border-color: var(--accent);
+  border-radius: 8px;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: 550;
 }

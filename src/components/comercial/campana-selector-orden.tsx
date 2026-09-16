@@ -1,9 +1,8 @@
 "use client";
 
 import { ListBox, Select } from "@heroui/react";
-import theme from "@/components/design-system/theme.module.css";
 import fieldFocus from "@/components/design-system/field-focus.module.css";
-import { useDesignScope } from "@/components/design-system/appearance";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 
 /** Una campaña se elige de las disponibles para el cliente; nunca es texto libre. */
 export function CampanaSelectorOrden({
@@ -18,6 +17,7 @@ export function CampanaSelectorOrden({
   isDisabled?: boolean;
 }) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const items = [
     { id: "sin-campana", nombre: "Sin campaña", codigo: "" },
     ...options,
@@ -37,7 +37,7 @@ export function CampanaSelectorOrden({
         <Select.Value>{({ selectedText }) => selectedText}</Select.Value>
         <Select.Indicator />
       </Select.Trigger>
-      <Select.Popover {...scope} className={theme.theme}>
+      <Select.Popover {...scope} className={themeClass}>
         <ListBox items={items}>
           {(item) => (
             <ListBox.Item id={item.id} textValue={item.nombre}>

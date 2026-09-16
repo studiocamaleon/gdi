@@ -137,3 +137,38 @@
     padding-left: 14px;
   }
 }
+
+/* Lenguaje de plano técnico: papel, medidas discretas y acento de marca. */
+.header { padding: 20px; gap: 16px; }
+.header h3 { font-size: 18px; font-weight: 500; letter-spacing: -.035em; }
+.utilization { min-width: 165px; max-width: 240px; margin-left: auto; }
+.utilization > span { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; color: var(--muted-foreground); font-size: 11px; }
+.utilization strong { color: var(--foreground); font-size: 22px; line-height: 1.2; font-weight: 500; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.utilizationTrack { height: 4px; overflow: hidden; margin-top: 8px; border-radius: 2px; background: var(--border); }
+.utilizationTrack > span { display: block; height: 100%; background: var(--accent-soft-foreground, var(--primary)); }
+.nav { padding-bottom: 10px; }
+.nav :global([role="tablist"]) { padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted); }
+.nav :global([role="tab"]) { font-size: 12px; font-weight: 500; border-radius: 4px; }
+.nav :global([role="tab"][aria-selected="true"]) { background: var(--brand-graphite, var(--foreground)); color: var(--brand-on-graphite, var(--card)); }
+.nav :global([role="tab"][aria-selected="true"])::after { display: none; }
+.detailToolbar { font-size: 12px; margin-bottom: 16px; }
+.detailToolbar strong { font-weight: 500; }
+.detailToolbar :global(button) { border-radius: 5px; font-size: 11px; }
+.technical > summary { font-size: 11px; }
+@container (max-width: 500px) {
+  .utilization { margin-left: 0; width: 100%; max-width: none; }
+  .header { padding: 16px; }
+  .nav { padding-inline: 10px; }
+}
+
+/* Un único patrón debe poder leerse sin ocupar sólo un tercio de la galería. */
+.patternCard:only-child {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 520px;
+}
+.pieceCounts {
+  height: auto;
+  min-height: 48px;
+  max-height: 160px;
+}

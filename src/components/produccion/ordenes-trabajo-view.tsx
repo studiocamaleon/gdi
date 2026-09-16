@@ -2,8 +2,20 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button, Card, Chip, SearchField } from "@heroui/react";
 import {
+  ArrowUpRight,
+  CheckCheck,
+  CircleCheck,
+  CircleDashed,
+  Factory,
+  FilePenLine,
+  Layers3,
+  SlidersHorizontal,
+  Truck,
+  X,
+  CircleX,
   CalendarCheck2,
   ChevronLeft,
   ChevronRight,
@@ -12,19 +24,18 @@ import {
   Clock3,
   DownloadIcon,
   FilePlus2,
-  LayoutGrid,
   PlusIcon,
-  Table2,
   TriangleAlert,
 } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
-import { useDesignScope } from "@/components/design-system/appearance";
-import { SegmentedControl } from "@/components/design-system/choice-controls";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { IdentityAvatar } from "@/components/design-system/identity-avatar";
-import theme from "@/components/design-system/theme.module.css";
 import fieldFocus from "@/components/design-system/field-focus.module.css";
-import tabStyles from "@/components/design-system/navigation-tab-list.module.css";
 import { EstadoListado, ProgresoListado } from "./ordenes-trabajo-presentacion";
 import s from "./ordenes-trabajo-view.module.css";
 import layout from "@/components/design-system/list-page.module.css";
@@ -48,7 +59,6 @@ import {
 } from "@/components/navigation/config-regional-provider";
 
 type FiltroEstado = OrdenTrabajoEstado | "todas";
-type ModoVista = "tabla" | "tarjetas";
 
 export function EstadoOtBadge({
   estado,
@@ -69,7 +79,29 @@ export function EstadoOtBadge({
   );
 }
 
-export function OrdenesTrabajoView({
+type OrdenesTrabajoViewProps = {
+  ordenes?: OrdenTrabajoListItem[];
+  /** Indicadores del tenant completo, calculados por el backend. */
+  stats: OrdenesTrabajoStats;
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  q: string;
+  estado: FiltroEstado;
+  urgencia?: "atrasadas";
+  errorCarga?: string | null;
+};
+
+export function OrdenesTrabajoView(props: OrdenesTrabajoViewProps) {
+  return (
+    <DesignSystemProvider appearance="light" theme="brand">
+      <OrdenesTrabajoContent {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function OrdenesTrabajoContent({
   ordenes = [],
   stats,
   total,
@@ -80,25 +112,13 @@ export function OrdenesTrabajoView({
   estado: filtro,
   urgencia,
   errorCarga,
-}: {
-  ordenes?: OrdenTrabajoListItem[];
-  /** KPIs y contadores del tenant completo, calculados por el backend. */
-  stats: OrdenesTrabajoStats;
-  total: number;
-  page: number;
-  pages: number;
-  limit: number;
-  q: string;
-  estado: FiltroEstado;
-  urgencia?: "atrasadas";
-  errorCarga?: string | null;
-}) {
+}: OrdenesTrabajoViewProps) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const { moneda, zonaHoraria } = useConfigRegional();
   const { fechaNumerica } = useFecha();
   const router = useRouter();
   const [busqueda, setBusqueda] = React.useState(qInicial);
-  const [modo, setModo] = React.useState<ModoVista>("tabla");
   const [exportando, setExportando] = React.useState(false);
   const [navegando, startTransition] = React.useTransition();
 
@@ -283,31 +303,51 @@ export function OrdenesTrabajoView({
       : []),
   ];
 
+  const filtroActivo = Boolean(qInicial || urgencia || filtro !== "todas");
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    navegar({ q: "", estado: "todas", urgencia: undefined });
+  };
+  const iconosFiltro = {
+    todas: Layers3,
+    borrador: FilePenLine,
+    pendiente: CircleDashed,
+    produccion: Factory,
+    finalizada: CircleCheck,
+    entregada: Truck,
+    cancelada: CircleX,
+  };
+
   return (
     <section
       {...scope}
-      className={`${theme.theme} ${layout.page}`}
+      data-visual="brand"
+      className={`${themeClass} ${layout.page} ${s.page}`}
       aria-label="Órdenes de trabajo"
     >
       <header className={layout.header}>
         <div className="min-w-0">
-          <h1>Órdenes de trabajo</h1>
+          <p className={s.eyebrow}>
+            <ClipboardList aria-hidden /> Comercial / Órdenes
+          </p>
+          <h1>
+            Órdenes de trabajo<span className={s.titleDot}>.</span>
+          </h1>
           <p className={layout.subtitle}>
-            Seguimiento de todas las OT emitidas y en curso.
+            Cada trabajo, desde el primer borrador hasta la entrega.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className={s.headerActions}>
           <ActionButton
             variant="outline"
             isDisabled={exportando || Boolean(errorCarga)}
             onPress={exportarCsv}
           >
-            <DownloadIcon size={15} aria-hidden />
+            <DownloadIcon aria-hidden />
             {exportando ? "Exportando…" : "Exportar"}
           </ActionButton>
           <ActionLink href="/comercial/crear-propuesta">
-            <PlusIcon size={15} aria-hidden />
-            Nueva orden
+            <PlusIcon aria-hidden /> Nueva orden <ArrowUpRight aria-hidden />
           </ActionLink>
         </div>
       </header>
@@ -350,246 +390,272 @@ export function OrdenesTrabajoView({
       </div>
 
       <Card className={layout.results}>
-        <div className={layout.toolbar}>
-          <div
-            className={layout.filters}
-            role="group"
-            aria-label="Filtrar por estado"
+        <div className={s.toolbar}>
+          <SearchField
+            aria-label="Buscar órdenes por número o cliente"
+            className={s.search}
+            value={busqueda}
+            onChange={setBusqueda}
           >
-            {filtros.map((f) => (
+            <SearchField.Group
+              className={`${s.searchGroup} ${fieldFocus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar por número o cliente…" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <span className={s.resultCount} role="status">
+            {errorCarga
+              ? "Sin datos disponibles"
+              : navegando
+                ? "Buscando…"
+                : `${total} ${total === 1 ? "orden" : "órdenes"}`}
+          </span>
+        </div>
+        <div className={s.filters} role="group" aria-label="Filtrar por estado">
+          {filtros.map((f) => {
+            const Icon = iconosFiltro[f.k];
+            return (
               <Button
                 key={f.k}
                 type="button"
                 variant="ghost"
-                className={`${tabStyles.tab} ${layout.filter}`}
+                className={s.filter}
                 aria-pressed={!urgencia && filtro === f.k}
                 onPress={() => navegar({ estado: f.k, urgencia: undefined })}
               >
-                {f.label}
-                <span className={tabStyles.count}>{counts[f.k]}</span>
+                <Icon aria-hidden />
+                <span>{f.label}</span>
+                <span className={s.filterCount}>{counts[f.k]}</span>
               </Button>
-            ))}
-          </div>
-          <div className={layout.tools}>
-            <SearchField
-              aria-label="Buscar órdenes por número o cliente"
-              className={layout.search}
-              value={busqueda}
-              onChange={setBusqueda}
-            >
-              <SearchField.Group
-                className={`${layout.searchGroup} ${fieldFocus.singleBorder}`}
-              >
-                <SearchField.SearchIcon />
-                <SearchField.Input placeholder="Buscar por Nº, cliente…" />
-              </SearchField.Group>
-            </SearchField>
-            <SegmentedControl
-              aria-label="Vista de órdenes"
-              value={modo}
-              onChange={(value) => setModo(value as ModoVista)}
-              options={[
-                {
-                  value: "tabla",
-                  label: "Tabla",
-                  icon: <Table2 size={15} aria-hidden />,
-                },
-                {
-                  value: "tarjetas",
-                  label: "Tarjetas",
-                  icon: <LayoutGrid size={15} aria-hidden />,
-                },
-              ]}
-            />
-          </div>
+            );
+          })}
         </div>
+        {filtroActivo && (
+          <div className={s.activeFilters}>
+            <span>
+              <SlidersHorizontal aria-hidden />
+              {urgencia
+                ? "Entregas atrasadas"
+                : filtro !== "todas"
+                  ? ORDEN_TRABAJO_ESTADOS[filtro].label
+                  : "Todas las órdenes"}
+              {qInicial && <span className={s.query}>“{qInicial}”</span>}
+            </span>
+            <ActionButton variant="ghost" size="sm" onPress={limpiarFiltros}>
+              <X aria-hidden /> Limpiar filtros
+            </ActionButton>
+          </div>
+        )}
 
         <div className={s.content} aria-busy={navegando}>
-          {modo === "tabla" ? (
-            <div className={s.tableScroller}>
-              <div className={s.table}>
-                <div className={`${s.row} ${s.tableHead}`}>
-                  <span>Nº / Cliente</span>
-                  <span>Estado</span>
-                  <span>Progreso</span>
-                  <span className="text-center">Ítems</span>
-                  <span>Entrega</span>
-                  <span className="text-right">Total</span>
-                  <span>Vendedor</span>
-                </div>
-                {lista.map((o) => (
-                  <div
-                    key={o.id}
-                    className={`${s.row} ${s.orderRow}`}
-                    data-late={diasDeAtraso(o) > 0 || undefined}
-                    role="link"
-                    tabIndex={0}
-                    onClick={() => abrirOrden(o.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
+          {lista.length > 0 && (
+            <div
+              className={s.tableScroller}
+              role="region"
+              aria-label="Tabla de órdenes"
+              tabIndex={0}
+            >
+              <table className={s.table}>
+                <caption className="sr-only">
+                  Órdenes de trabajo: cliente, estado, avance, productos,
+                  entrega, total y vendedor.
+                </caption>
+                <colgroup>
+                  <col className={s.identityCol} />
+                  <col />
+                  <col />
+                  <col className={s.itemsCol} />
+                  <col />
+                  <col />
+                  <col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col">Orden / Cliente</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Avance</th>
+                    <th scope="col" className={s.center}>
+                      Ítems
+                    </th>
+                    <th scope="col">Entrega</th>
+                    <th scope="col" className={s.right}>
+                      Total
+                    </th>
+                    <th scope="col">Vendedor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lista.map((o) => (
+                    <tr
+                      key={o.id}
+                      className={s.orderRow}
+                      data-late={diasDeAtraso(o) > 0 || undefined}
+                      onClick={(event) => {
+                        // El enlace y el tooltip conservan sus interacciones nativas.
+                        if (
+                          (event.target as Element).closest(
+                            "a, button, [tabindex]",
+                          )
+                        )
+                          return;
                         abrirOrden(o.id);
-                      }
-                    }}
-                  >
-                    <span className="flex min-w-0 flex-col gap-1">
-                      <span className={s.number}>
-                        {o.numero}
-                        {esNueva(o) ? (
-                          <Chip size="sm" className={s.newTag}>
-                            NUEVA
-                          </Chip>
-                        ) : null}
-                      </span>
-                      <span
-                        className={s.client}
-                        title={`${o.clienteNombre} · ${o.resumen}`}
-                      >
-                        {o.clienteNombre} ·{" "}
-                        <span className="text-muted-foreground">
+                      }}
+                    >
+                      <td>
+                        <div className={s.orderIdentity}>
+                          <Link
+                            href={`/produccion/ordenes/${o.id}`}
+                            className={s.number}
+                          >
+                            {o.numero}
+                            <ArrowUpRight aria-hidden />
+                          </Link>
+                          {esNueva(o) && (
+                            <Chip size="sm" className={s.newTag}>
+                              Nueva
+                            </Chip>
+                          )}
+                        </div>
+                        <div className={s.client}>{o.clienteNombre}</div>
+                        <div className={s.description} title={o.resumen}>
                           {o.resumen}
-                        </span>
-                      </span>
-                    </span>
-                    <span>
-                      <EstadoListado estado={o.estado} />
-                    </span>
-                    <span>
-                      <ProgresoListado
-                        valor={o.progresoPct}
-                        estado={o.estado}
-                        progreso={o.progreso}
-                      />
-                    </span>
-                    <span className="text-center tabular-nums">
-                      {o.itemsCount}
-                    </span>
-                    <span className={s.delivery}>
-                      {formatFechaOrden(o.fechaEntrega)}
-                      {diasDeAtraso(o) > 0 ? (
-                        <span className={s.lateTag}>
-                          {diasDeAtraso(o)} d tarde
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-right font-semibold whitespace-nowrap tabular-nums">
-                      {formatMonedaOrden(o.total, moneda)}
-                    </span>
-                    <span className={layout.seller} title={o.vendedorNombre}>
-                      <span aria-hidden>
-                        <IdentityAvatar name={o.vendedorNombre} />
-                      </span>
-                      <span className="truncate">{o.vendedorNombre}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className={s.cards}>
-              {lista.map((o) => (
-                <Card<"button">
-                  key={o.id}
-                  render={(props) => <button {...props} />}
-                  type="button"
-                  className={s.orderCard}
-                  onClick={() => abrirOrden(o.id)}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className={s.number}>{o.numero}</span>
-                    {esNueva(o) ? (
-                      <Chip size="sm" className={s.newTag}>
-                        NUEVA
-                      </Chip>
-                    ) : (
-                      <EstadoListado estado={o.estado} />
-                    )}
-                  </span>
-                  {esNueva(o) ? (
-                    <span>
-                      <EstadoListado estado={o.estado} />
-                    </span>
-                  ) : null}
-                  <span className={s.cardClient}>{o.clienteNombre}</span>
-                  <span className={s.cardDescription}>{o.resumen}</span>
-                  <span className={s.cardProgress}>
-                    {o.estado === "borrador" ? (
-                      <span className="text-muted-foreground">Sin emitir</span>
-                    ) : (
-                      <ProgresoListado
-                        valor={o.progresoPct}
-                        estado={o.estado}
-                        progreso={o.progreso}
-                      />
-                    )}
-                  </span>
-                  <span className={s.cardFoot}>
-                    <span className="flex flex-col gap-1">
-                      <span className={s.caption}>Entrega</span>
-                      <span className={s.delivery}>
-                        {formatFechaOrden(o.fechaEntrega)}
-                        {diasDeAtraso(o) > 0 ? (
-                          <span className={s.lateTag}>
-                            {diasDeAtraso(o)} d tarde
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                    <span className="flex flex-col gap-1 text-right">
-                      <span className={s.caption}>Total</span>
-                      <span className="font-semibold whitespace-nowrap tabular-nums">
+                        </div>
+                      </td>
+                      <td>
+                        <EstadoListado estado={o.estado} />
+                      </td>
+                      <td>
+                        <ProgresoListado
+                          valor={o.progresoPct}
+                          estado={o.estado}
+                          progreso={o.progreso}
+                        />
+                      </td>
+                      <td className={s.center}>
+                        <span className={s.itemCount}>{o.itemsCount}</span>
+                      </td>
+                      <td>
+                        <EntregaOrden orden={o} atraso={diasDeAtraso(o)} />
+                      </td>
+                      <td className={s.total}>
                         {formatMonedaOrden(o.total, moneda)}
-                      </span>
-                    </span>
-                  </span>
-                </Card>
-              ))}
+                      </td>
+                      <td>
+                        <span
+                          className={layout.seller}
+                          title={o.vendedorNombre}
+                        >
+                          <span aria-hidden>
+                            <IdentityAvatar name={o.vendedorNombre} />
+                          </span>
+                          <span className="truncate">{o.vendedorNombre}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-
           {errorCarga ? (
-            <div className={layout.empty} role="alert">
-              <TriangleAlert size={24} aria-hidden />
+            <div className={`${layout.empty} ${s.empty}`} role="alert">
+              <TriangleAlert aria-hidden />
+              <h2>No pudimos cargar las órdenes</h2>
               <p>{errorCarga}</p>
               <ActionButton variant="outline" onPress={() => router.refresh()}>
                 Reintentar
               </ActionButton>
             </div>
           ) : lista.length === 0 ? (
-            <div className={layout.empty}>
-              <ClipboardList size={28} aria-hidden />
-              <p>Sin órdenes que coincidan con el filtro.</p>
+            <div className={`${layout.empty} ${s.empty}`}>
+              {filtroActivo ? (
+                <SlidersHorizontal aria-hidden />
+              ) : (
+                <ClipboardList aria-hidden />
+              )}
+              <h2>
+                {filtroActivo
+                  ? "No hay órdenes con estos filtros"
+                  : "Tu próxima orden empieza acá"}
+              </h2>
+              <p>
+                {filtroActivo
+                  ? "Probá con otro número, cliente o estado."
+                  : "Creá una orden y acompañá cada trabajo hasta su entrega."}
+              </p>
+              {filtroActivo ? (
+                <ActionButton variant="outline" onPress={limpiarFiltros}>
+                  Limpiar filtros
+                </ActionButton>
+              ) : (
+                <ActionLink href="/comercial/crear-propuesta">
+                  <PlusIcon aria-hidden /> Nueva orden
+                </ActionLink>
+              )}
             </div>
           ) : null}
         </div>
 
-        {pages > 1 ? (
+        {!errorCarga && total > 0 && (
           <footer className={layout.pager}>
-            <span className="text-muted-foreground tabular-nums">
-              {(page - 1) * limit + 1}–{Math.min(page * limit, total)} de{" "}
-              {total}
+            <span className={s.pageCount}>
+              <strong>
+                {(page - 1) * limit + 1}–{Math.min(page * limit, total)}
+              </strong>{" "}
+              de {total} {total === 1 ? "orden" : "órdenes"}
             </span>
-            <div className="flex items-center gap-2">
-              <ActionButton
-                variant="outline"
-                isDisabled={page <= 1 || navegando}
-                onPress={() => navegar({ page: page - 1 })}
-              >
-                <ChevronLeft size={15} aria-hidden />
-                Anterior
-              </ActionButton>
-              <ActionButton
-                variant="outline"
-                isDisabled={page >= pages || navegando}
-                onPress={() => navegar({ page: page + 1 })}
-              >
-                Siguiente
-                <ChevronRight size={15} aria-hidden />
-              </ActionButton>
-            </div>
+            {pages > 1 && (
+              <div className={s.pagination}>
+                <span>
+                  Página {page} de {pages}
+                </span>
+                <ActionButton
+                  variant="outline"
+                  isDisabled={page <= 1 || navegando}
+                  onPress={() => navegar({ page: page - 1 })}
+                >
+                  <ChevronLeft aria-hidden /> Anterior
+                </ActionButton>
+                <ActionButton
+                  variant="outline"
+                  isDisabled={page >= pages || navegando}
+                  onPress={() => navegar({ page: page + 1 })}
+                >
+                  Siguiente <ChevronRight aria-hidden />
+                </ActionButton>
+              </div>
+            )}
           </footer>
-        ) : null}
+        )}
       </Card>
     </section>
+  );
+}
+
+function EntregaOrden({
+  orden,
+  atraso,
+}: {
+  orden: OrdenTrabajoListItem;
+  atraso: number;
+}) {
+  return (
+    <span className={s.delivery}>
+      <span>{formatFechaOrden(orden.fechaEntrega)}</span>
+      {atraso > 0 && (
+        <span className={s.lateTag}>
+          <Clock3 aria-hidden />
+          {atraso} {atraso === 1 ? "día" : "días"} de atraso
+        </span>
+      )}
+      {orden.estado === "entregada" && (
+        <span className={s.deliveredTag}>
+          <CheckCheck aria-hidden />
+          Entregada
+        </span>
+      )}
+    </span>
   );
 }

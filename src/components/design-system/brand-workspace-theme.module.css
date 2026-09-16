@@ -1,0 +1,50 @@
+/* Adaptación explícita de la marca a módulos con controles de ambas generaciones.
+ * Los valores provienen del tema de marca; nunca del modo oscuro del shell. */
+.theme {
+  composes: theme from "./brand-theme.module.css";
+}
+.theme.theme {
+  --bg: var(--canvas-background);
+  --fg: var(--foreground);
+  --fg-2: var(--foreground);
+  --surface-1: var(--surface);
+  --border-strong: color-mix(in srgb, var(--foreground) 25%, var(--border));
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
+  --secondary: var(--surface-secondary);
+  --secondary-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --input: var(--border);
+  --ring: var(--focus);
+  --ink: var(--foreground);
+  --ink-2: var(--foreground);
+  --surface-2: var(--surface-secondary);
+  --hairline: var(--border);
+  --signal: var(--accent-soft-foreground);
+  --signal-bg: var(--accent-soft);
+  --signal-border: color-mix(in srgb, var(--accent) 35%, var(--border));
+  --ok: var(--success);
+  --ok-bg: color-mix(in srgb, var(--success) 8%, var(--surface));
+  --warn: var(--warning);
+  --warn-bg: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  --info: var(--muted-text);
+  --info-bg: var(--surface-secondary);
+  --muted-2: var(--muted-text-2);
+  --r-1: 5px;
+  --r-2: var(--field-radius);
+  --r-3: var(--radius);
+  --r-4: 12px;
+  --font-mono: var(--brand-mono);
+  --shadow-pop: var(--overlay-shadow);
+  --workspace-ready: var(--success);
+  --workspace-running: var(--accent-soft-foreground);
+  --workspace-waiting: var(--warning);
+}
+/* En las primitivas anteriores, muted representa una superficie, no texto. */
+.legacy.legacy {
+  --muted: var(--surface-secondary);
+}

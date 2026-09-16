@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
-  ArrowRightIcon,
+  ArrowUpRightIcon,
   BadgeCheckIcon,
   BoxesIcon,
   CircleAlertIcon,
@@ -42,8 +42,10 @@ import { ListMetric } from "@/components/design-system/list-metric";
 import { SelectField } from "@/components/design-system/select-field";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import listPage from "@/components/design-system/list-page.module.css";
 import focus from "@/components/design-system/field-focus.module.css";
 import { duplicarProducto, listProductos } from "@/lib/productos-servicios-api";
@@ -55,6 +57,8 @@ import {
 } from "@/lib/labels-humanos";
 
 import styles from "./productos-table.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import { ProductoCatalogoGlyph } from "@/components/comercial/producto-catalogo-glyph";
 
 type OrdenProductos = "recientes" | "nombre_asc" | "nombre_desc";
 type VistaProductos = "tabla" | "categorias";
@@ -193,6 +197,7 @@ export function ProductosServiciosTable({
   canManage: boolean;
 }) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [productos, setProductos] = React.useState(initialProductos);
   const [total, setTotal] = React.useState(initialTotal);
   const [pages, setPages] = React.useState(initialPages);
@@ -293,11 +298,15 @@ export function ProductosServiciosTable({
   return (
     <main
       {...scope}
-      className={`${theme.theme} ${listPage.page} ${styles.page}`}
+      data-visual="brand"
+      className={`${theme} ${listPage.page} ${styles.page}`}
     >
       <header className={listPage.header}>
         <div>
-          <h1>Catálogo de productos</h1>
+          <span className={brand.eyebrow}>Costos · Oferta del taller</span>
+          <h1>
+            Catálogo de productos<span className={brand.titleDot}>.</span>
+          </h1>
           <p className={listPage.subtitle}>
             Organizá la oferta comercial, su forma de cobro y la configuración
             productiva de cada producto.
@@ -305,13 +314,16 @@ export function ProductosServiciosTable({
         </div>
         {canManage ? (
           <ActionLink href="/productos-servicios/nuevo">
-            <PlusIcon data-icon="inline-start" />
+            <ArrowUpRightIcon data-icon="inline-start" />
             Nuevo producto
           </ActionLink>
         ) : null}
       </header>
 
-      <section className={styles.metrics} aria-label="Resumen del catálogo">
+      <section
+        className={`${styles.metrics} ${brand.metrics}`}
+        aria-label="Resumen del catálogo"
+      >
         <ListMetric
           label="Resultados"
           value={total}
@@ -349,6 +361,7 @@ export function ProductosServiciosTable({
         }
       >
         <NavigationTabList
+          tone="graphite"
           className={styles.compositionNav}
           label="Tipo de producto"
           variant="detailed"
@@ -471,6 +484,7 @@ export function ProductosServiciosTable({
         />
         <div className={styles.viewToggle}>
           <SegmentedControl
+            tone="graphite"
             aria-label="Cambiar vista del catálogo"
             value={query.vista}
             onChange={(value) => {
@@ -570,7 +584,7 @@ export function ProductosServiciosTable({
                             {subcategoria.descripcion}
                           </Card.Description>
                           <span className={styles.categoryArrow}>
-                            <ArrowRightIcon aria-hidden="true" />
+                            <ArrowUpRightIcon aria-hidden="true" />
                           </span>
                           <div className={styles.categoryMeta}>
                             {subcategoria.productos}{" "}
@@ -613,7 +627,7 @@ export function ProductosServiciosTable({
                             {categoria.descripcion}
                           </Card.Description>
                           <span className={styles.categoryArrow}>
-                            <ArrowRightIcon aria-hidden="true" />
+                            <ArrowUpRightIcon aria-hidden="true" />
                           </span>
                           <div className={styles.categoryMeta}>
                             <span>
@@ -727,6 +741,19 @@ export function ProductosServiciosTable({
                           title={producto.descripcion ?? undefined}
                         >
                           <span className={styles.productIdentity}>
+                            <span className={styles.productGlyph} aria-hidden>
+                              <ProductoCatalogoGlyph
+                                subcategoriaCodigo={
+                                  producto.subcategoriaComercial?.codigo
+                                }
+                                categoriaCodigo={
+                                  producto.subcategoriaComercial?.categoria
+                                    ?.codigo
+                                }
+                                compuesto={producto.esCompuesto}
+                                cobro={producto.unidadComercial}
+                              />
+                            </span>
                             <Tooltip delay={180}>
                               <Button
                                 variant="ghost"
@@ -740,7 +767,7 @@ export function ProductosServiciosTable({
                               <Tooltip.Content
                                 {...scope}
                                 placement="right"
-                                className={`${theme.theme} ${styles.statusTooltip}`}
+                                className={`${theme} ${styles.statusTooltip}`}
                               >
                                 <strong>{estado.label}</strong>
                                 <span>{estado.description}</span>
@@ -837,6 +864,7 @@ export function ProductosServiciosTable({
       ) : null}
 
       <FormDialog
+        className={brand.dialog}
         isOpen={Boolean(productoADuplicar)}
         isDismissable={!duplicando}
         onOpenChange={(open) => {

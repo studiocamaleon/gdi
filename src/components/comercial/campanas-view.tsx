@@ -33,8 +33,11 @@ import {
 } from "@/lib/campanas-api";
 import styles from "./campanas.module.css";
 import layout from "@/components/design-system/list-page.module.css";
-import theme from "@/components/design-system/theme.module.css";
-import { useDesignScope } from "@/components/design-system/appearance";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import { ListMetric } from "@/components/design-system/list-metric";
 import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 
@@ -63,20 +66,31 @@ function fechaCorta(value: string | null) {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
-export function CampanasView({
-  initial,
-  clientes,
-  empleados,
-  canManage,
-  initialClienteId = "",
-}: {
+type CampanasViewProps = {
   initial: CampanasListado;
   clientes: ClienteDetalle[];
   empleados: EmpleadoOpcion[];
   canManage: boolean;
   initialClienteId?: string;
-}) {
+};
+
+export function CampanasView(props: CampanasViewProps) {
+  return (
+    <DesignSystemProvider appearance="light" theme="brand">
+      <CampanasViewContent {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function CampanasViewContent({
+  initial,
+  clientes,
+  empleados,
+  canManage,
+  initialClienteId = "",
+}: CampanasViewProps) {
   const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const router = useRouter();
   const [listado, setListado] = React.useState(initial);
   const [q, setQ] = React.useState("");
@@ -144,13 +158,22 @@ export function CampanasView({
   const completadas = listado.stats.porEstado.completado ?? 0;
 
   return (
-    <main {...scope} className={`${theme.theme} ${layout.page}`}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${themeClass} ${layout.page} ${styles.page}`}
+    >
       <header className={layout.header}>
         <div>
-          <h1>Campañas</h1>
+          <p className={styles.eyebrow}>
+            <MegaphoneIcon aria-hidden /> Comercial / Campañas
+          </p>
+          <h1>
+            Campañas<span className={styles.titleDot}>.</span>
+          </h1>
           <p className={layout.subtitle}>
-            Una lectura consolidada de presupuestos, órdenes, hitos y entregas,
-            sin alterar el flujo operativo de cada documento.
+            Cada proyecto, de la primera idea a la entrega. Coordiná el equipo,
+            los documentos y la producción.
           </p>
         </div>
         {canManage ? (
@@ -164,7 +187,7 @@ export function CampanasView({
         <ListMetric
           label="Campañas activas"
           value={activas}
-          hint={`${listado.total} campañas en el registro`}
+          hint="Proyectos en marcha"
           icon={MegaphoneIcon}
           tone="brand"
         />
@@ -184,7 +207,7 @@ export function CampanasView({
         <ListMetric
           label="Completadas"
           value={completadas}
-          hint="Cierre explícito y auditado"
+          hint="Campañas finalizadas"
           icon={CheckCircle2Icon}
         />
       </section>
@@ -198,7 +221,7 @@ export function CampanasView({
             className={styles.search}
           >
             <SearchField.Group
-              className={`${layout.searchGroup} ${focus.singleBorder}`}
+              className={`${styles.searchGroup} ${focus.singleBorder}`}
             >
               <SearchField.SearchIcon />
               <SearchField.Input
@@ -240,9 +263,8 @@ export function CampanasView({
               isPending={loading}
               aria-label="Aplicar filtros"
               title="Aplicar filtros"
-              isIconOnly
             >
-              <SearchIcon />
+              <SearchIcon data-icon="inline-start" /> Aplicar
             </ActionButton>
           </div>
         </div>
@@ -257,14 +279,14 @@ export function CampanasView({
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Campaña</th>
-                  <th>Cliente</th>
-                  <th>Estado</th>
-                  <th>Responsable</th>
-                  <th>Compromiso</th>
-                  <th>Avance</th>
-                  <th>Documentos</th>
-                  <th>
+                  <th scope="col">Campaña</th>
+                  <th scope="col">Cliente</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Responsable</th>
+                  <th scope="col">Compromiso</th>
+                  <th scope="col">Avance</th>
+                  <th scope="col">Documentos</th>
+                  <th scope="col">
                     <span className="sr-only">Abrir</span>
                   </th>
                 </tr>
@@ -290,7 +312,8 @@ export function CampanasView({
                         className={styles.status}
                         data-status={campana.estado}
                       >
-                        {campana.estado}
+                        {ESTADOS.find((item) => item.value === campana.estado)
+                          ?.label ?? campana.estado}
                       </span>
                       {campana.riesgo ? (
                         <span className={`${styles.secondary} ${styles.risk}`}>
@@ -346,19 +369,30 @@ export function CampanasView({
             </table>
           </div>
         ) : (
-          <div className={layout.empty}>
-            <strong>No hay campañas con estos filtros.</strong>
-            <p className="mt-2 text-sm">
-              Probá ampliar la búsqueda o creá la primera campaña.
+          <div className={`${layout.empty} ${styles.empty}`}>
+            <MegaphoneIcon aria-hidden />
+            <h2>No hay campañas para mostrar</h2>
+            <p>
+              Revisá los filtros o creá una campaña para reunir sus documentos,
+              equipo y entregas.
             </p>
           </div>
         )}
+        <div className={layout.pager}>
+          <span className={styles.resultCount}>
+            {listado.data.length} de {listado.total}{" "}
+            {listado.total === 1 ? "campaña" : "campañas"}
+          </span>
+          <span className={styles.secondary}>
+            Seguimiento comercial y productivo
+          </span>
+        </div>
       </Card>
 
       <CampanaDialog
         isOpen={open}
         onOpenChange={setOpen}
-        title={<>Nueva campaña</>}
+        title={<span className={form.dialogTitle}>Nueva campaña</span>}
         description={
           <>
             Creá la unidad de coordinación. Los presupuestos y OTs se pueden

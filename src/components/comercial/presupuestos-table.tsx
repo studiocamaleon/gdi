@@ -1,7 +1,8 @@
 "use client";
 
 import { Chip } from "@heroui/react";
-import { Eye } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Eye } from "lucide-react";
 import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import layout from "@/components/design-system/list-page.module.css";
 import { formatearMoneda, type Moneda } from "@/lib/moneda";
@@ -68,27 +69,47 @@ export function PresupuestosTable({
   onAbrir: (id: string) => void;
 }) {
   return (
-    <div className={s.scroller}>
+    <div
+      className={s.scroller}
+      role="region"
+      aria-label="Tabla de presupuestos"
+      tabIndex={0}
+    >
       <table className={s.table} aria-label="Listado de presupuestos">
         <thead>
           <tr>
-            <th>Número</th>
-            <th>Cliente</th>
-            <th>Estado</th>
-            <th>Emisión</th>
-            <th>Válido hasta</th>
-            <th>Total</th>
-            <th>Vendedor</th>
+            <th scope="col">Número</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Emisión</th>
+            <th scope="col">Válido hasta</th>
+            <th scope="col">Total</th>
+            <th scope="col">Vendedor</th>
           </tr>
         </thead>
         <tbody>
           {lista.map((p) => (
-            <tr key={p.id} onClick={() => onAbrir(p.id)}>
-              <td className={s.number}>{p.numero}</td>
+            <tr
+              key={p.id}
+              onClick={(event) => {
+                if ((event.target as Element).closest("a, button, [tabindex]"))
+                  return;
+                onAbrir(p.id);
+              }}
+            >
+              <td>
+                <Link
+                  className={s.number}
+                  href={`/comercial/presupuestos/${p.id}`}
+                >
+                  {p.numero}
+                  <ArrowUpRight aria-hidden />
+                </Link>
+              </td>
               <td className={s.client}>
                 <span>{p.cliente}</span>
                 <span className={s.detail}>
-                  {p.items} item{p.items === 1 ? "" : "s"}
+                  {p.items} {p.items === 1 ? "ítem" : "ítems"}
                 </span>
               </td>
               <td>
@@ -107,7 +128,9 @@ export function PresupuestosTable({
                       <IdentityAvatar name={p.vendedor} />
                     </span>
                   )}
-                  <span>{p.vendedor ?? "—"}</span>
+                  <span className="truncate" title={p.vendedor ?? undefined}>
+                    {p.vendedor ?? "—"}
+                  </span>
                 </span>
               </td>
             </tr>

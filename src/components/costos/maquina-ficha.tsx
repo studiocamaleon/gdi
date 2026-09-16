@@ -12,7 +12,18 @@ import styles from "./maquinaria.module.css";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeftIcon, ArrowRightIcon, CircleAlertIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowUpRightIcon,
+  CircleAlertIcon,
+  CogIcon,
+  Settings2Icon,
+  HistoryIcon,
+  FactoryIcon,
+  PowerIcon,
+  LayersIcon,
+  ChevronRightIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,8 +31,18 @@ import { ActionButton as Button } from "@/components/design-system/action-button
 import { Card, Chip, Tabs, Modal } from "@heroui/react";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
-import { useDesignScope } from "@/components/design-system/appearance";
-import theme from "@/components/design-system/theme.module.css";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import listPage from "@/components/design-system/list-page.module.css";
 import { MaquinariaEdicion } from "./maquina-editor/maquinaria-edicion";
 
@@ -43,10 +64,25 @@ import { useMaquinaEditor } from "./maquina-editor/use-maquina-editor";
 
 type TabFicha = "descripcion" | "ajustes" | "historial";
 
-const TABS: Array<{ id: TabFicha; label: string }> = [
-  { id: "descripcion", label: "Descripción" },
-  { id: "ajustes", label: "Ajustes" },
-  { id: "historial", label: "Historial" },
+const TABS = [
+  {
+    id: "descripcion",
+    label: "Descripción",
+    description: "Identidad y vínculo económico",
+    icon: <CogIcon />,
+  },
+  {
+    id: "ajustes",
+    label: "Ajustes",
+    description: "Capacidad, perfiles y consumos",
+    icon: <Settings2Icon />,
+  },
+  {
+    id: "historial",
+    label: "Historial",
+    description: "Actividad del equipo",
+    icon: <HistoryIcon />,
+  },
 ];
 
 type MaquinaFichaProps = {
@@ -65,6 +101,7 @@ export function MaquinaFicha({
   puedeGestionar,
 }: MaquinaFichaProps) {
   const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const [tab, setTab] = React.useState<TabFicha>("descripcion");
   const [saving, setSaving] = React.useState(false);
@@ -142,187 +179,275 @@ export function MaquinaFicha({
     // Tres franjas: título+tabs fijos, cuerpo con scroll propio, pie fijo.
     // La barra de acciones NO flota sobre el contenido: el área visible
     // termina justo arriba de ella.
-    <Tabs
-      selectedKey={tab}
-      onSelectionChange={(value) => setTab(value as TabFicha)}
-      {...scope}
-      className={`${theme.theme} ${listPage.page} ${styles.ficha}`}
-    >
-      <div className={`${styles["maq-ficha-top"]}`}>
-        <header className={listPage.header}>
-          <div>
-            <nav className={styles.breadcrumb} aria-label="Ubicación">
-              <button
-                type="button"
-                onClick={() => salir("/costos/centros-de-costo")}
-              >
-                Costos
-              </button>
-              <span>/</span>
-              <button type="button" onClick={() => salir("/costos/maquinaria")}>
-                Maquinaria
-              </button>
-            </nav>
-            <h1>{nombreGuardado}</h1>
-            <p className={listPage.subtitle}>
-              {getPlantillaMaquinariaLabel(maquina.plantilla)} · Configuración
-              de la máquina
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            isDisabled={saving}
-            onPress={() => salir("/costos/maquinaria")}
-          >
-            <ArrowLeftIcon />
-            Volver a maquinaria
-          </Button>
-        </header>
-        <NavigationTabList label="Ficha de máquina" items={TABS} />
-      </div>
-
-      <div className={`${styles["maq-ficha-cuerpo"]}`}>
-        {tab !== "historial" &&
-        maquina.diagnosticoConfiguracion.faltantes.length > 0 ? (
-          <Alert>
-            <CircleAlertIcon />
-            <AlertTitle>
-              {maquina.diagnosticoConfiguracion.faltantes.length === 1
-                ? "Falta 1 dato para activar esta máquina"
-                : `Faltan ${maquina.diagnosticoConfiguracion.faltantes.length} datos para activar esta máquina`}
-            </AlertTitle>
-            <AlertDescription className="flex flex-col gap-3">
-              <ul className="list-disc pl-4">
-                {maquina.diagnosticoConfiguracion.faltantes.map((faltante) => (
-                  <li key={faltante.codigo}>{faltante.mensaje}</li>
-                ))}
-              </ul>
-              {tab !== "ajustes" &&
-              maquina.diagnosticoConfiguracion.faltantes.some(
-                (faltante) => faltante.seccion === "ajustes",
-              ) ? (
-                <Button
+    <>
+      <Tabs
+        selectedKey={tab}
+        onSelectionChange={(value) => setTab(value as TabFicha)}
+        {...scope}
+        data-visual="brand"
+        className={`${theme} ${listPage.page} ${styles.ficha}`}
+      >
+        <div className={`${styles["maq-ficha-top"]}`}>
+          <header className={listPage.header}>
+            <div>
+              <nav className={styles.breadcrumb} aria-label="Ubicación">
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="self-start"
-                  onClick={() => setTab("ajustes")}
+                  onClick={() => salir("/costos/centros-de-costo")}
                 >
-                  Ir a Ajustes
-                  <ArrowRightIcon data-icon="inline-end" />
-                </Button>
-              ) : null}
-            </AlertDescription>
-          </Alert>
+                  Costos
+                </button>
+                <ChevronRightIcon aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => salir("/costos/maquinaria")}
+                >
+                  Maquinaria
+                </button>
+              </nav>
+              <h1>
+                {nombreGuardado}
+                <span className={brand.titleDot}>.</span>
+              </h1>
+              <p className={listPage.subtitle}>
+                {getPlantillaMaquinariaLabel(maquina.plantilla)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              isDisabled={saving}
+              onPress={() => salir("/costos/maquinaria")}
+            >
+              <ArrowLeftIcon />
+              Volver a maquinaria
+            </Button>
+          </header>
+          <NavigationTabList
+            label="Ficha de máquina"
+            items={TABS}
+            variant="detailed"
+            tone="graphite"
+            className={styles.tabs}
+          />
+        </div>
+
+        <div className={`${styles["maq-ficha-cuerpo"]}`}>
+          {tab !== "historial" &&
+          maquina.diagnosticoConfiguracion.faltantes.length > 0 ? (
+            <Alert className={styles.configurationAlert}>
+              <CircleAlertIcon />
+              <AlertTitle>
+                {maquina.diagnosticoConfiguracion.faltantes.length === 1
+                  ? "Falta 1 dato para activar esta máquina"
+                  : `Faltan ${maquina.diagnosticoConfiguracion.faltantes.length} datos para activar esta máquina`}
+              </AlertTitle>
+              <AlertDescription className="flex flex-col gap-3">
+                <ul className="list-disc pl-4">
+                  {maquina.diagnosticoConfiguracion.faltantes.map(
+                    (faltante) => (
+                      <li key={faltante.codigo}>{faltante.mensaje}</li>
+                    ),
+                  )}
+                </ul>
+                {tab !== "ajustes" &&
+                maquina.diagnosticoConfiguracion.faltantes.some(
+                  (faltante) => faltante.seccion === "ajustes",
+                ) ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    onClick={() => setTab("ajustes")}
+                  >
+                    Ir a Ajustes
+                    <ArrowUpRightIcon data-icon="inline-end" />
+                  </Button>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <Tabs.Panel id="descripcion" className={styles.descriptionPanel}>
+            <div
+              className={`${brand.recordSummary} ${styles.recordSummary}`}
+              aria-label="Resumen de la máquina"
+            >
+              <div>
+                <PowerIcon aria-hidden="true" />
+                <dl>
+                  <dt>Estado del equipo</dt>
+                  <dd>{getEstadoMaquinaLabel(editor.form.estado)}</dd>
+                </dl>
+              </div>
+              <div>
+                <FactoryIcon aria-hidden="true" />
+                <dl>
+                  <dt>Centro de costo</dt>
+                  <dd>
+                    {centrosCosto.find(
+                      (centro) =>
+                        centro.id === editor.form.centroCostoPrincipalId,
+                    )?.nombre || "Sin asignar"}
+                  </dd>
+                </dl>
+              </div>
+              <div>
+                <LayersIcon aria-hidden="true" />
+                <dl>
+                  <dt>Perfiles configurados</dt>
+                  <dd>{editor.perfiles.length}</dd>
+                </dl>
+              </div>
+            </div>
+            <MaquinariaEdicion puedeGestionar={puedeGestionar}>
+              <MaquinaEditorIdentidad
+                editor={editor}
+                plantas={plantas}
+                centrosCosto={centrosCosto}
+              />
+            </MaquinariaEdicion>
+          </Tabs.Panel>
+
+          <Tabs.Panel id="ajustes">
+            <MaquinariaEdicion puedeGestionar={puedeGestionar}>
+              <MaquinaEditorSecciones editor={editor} />
+            </MaquinariaEdicion>
+          </Tabs.Panel>
+
+          <Tabs.Panel id="historial">
+            <Card className={`${styles.card} ${styles.history}`}>
+              <Card.Header>
+                <Card.Title>
+                  <HistoryIcon aria-hidden="true" /> Historial de la máquina
+                </Card.Title>
+                <Card.Description>
+                  Altas, cambios de configuración y disponibilidad del equipo.
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <dl>
+                  <div className="fila">
+                    <dt>Alta en el sistema</dt>
+                    <dd>{fechaHora(maquina.fechaAlta || maquina.createdAt)}</dd>
+                  </div>
+                  <div className="fila">
+                    <dt>Última modificación</dt>
+                    <dd>{fechaHora(maquina.updatedAt)}</dd>
+                  </div>
+                  <div className="fila">
+                    <dt>Estado actual</dt>
+                    <dd>{getEstadoMaquinaLabel(maquina.estado)}</dd>
+                  </div>
+                  <div className="fila">
+                    <dt>Tipo</dt>
+                    <dd>{getPlantillaMaquinariaLabel(maquina.plantilla)}</dd>
+                  </div>
+                </dl>
+                <div>
+                  <h2 className={styles.activityTitle}>Actividad registrada</h2>
+                  {historial.length > 0 ? (
+                    <ol
+                      className={brand.historyList}
+                      aria-label="Historial de cambios"
+                    >
+                      {historial.map((evento) => (
+                        <li key={evento.id} className={styles.historyEvent}>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Chip
+                                size="sm"
+                                variant="soft"
+                                className="capitalize"
+                              >
+                                {evento.accion}
+                              </Chip>
+                              <span className="text-sm font-medium">
+                                {evento.actorNombre}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {evento.descripcion}
+                            </p>
+                          </div>
+                          <time
+                            dateTime={evento.createdAt}
+                            className="shrink-0 text-xs text-muted-foreground"
+                          >
+                            {fechaHora(evento.createdAt)}
+                          </time>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <Empty className={styles.sectionEmpty}>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <HistoryIcon />
+                        </EmptyMedia>
+                        <EmptyTitle>Sin actividad registrada</EmptyTitle>
+                        <EmptyDescription>
+                          La auditoría comienza con la próxima edición o cambio
+                          de disponibilidad.
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                </div>
+              </Card.Content>
+            </Card>
+          </Tabs.Panel>
+        </div>
+
+        {tab !== "historial" && puedeGestionar ? (
+          <div className={`${styles["maq-ficha-pie"]}`}>
+            <span className={styles.saveState} data-dirty={editor.hayCambios}>
+              {saving
+                ? "Guardando cambios…"
+                : editor.hayCambios
+                  ? "Cambios sin guardar"
+                  : "Sin cambios pendientes"}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => salir("/costos/maquinaria")}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleGuardar()}
+              isDisabled={saving || !editor.hayCambios}
+              title={
+                editor.hayCambios ? undefined : "No hay cambios para guardar"
+              }
+            >
+              <ArrowUpRightIcon />
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
+          </div>
         ) : null}
 
-        <Tabs.Panel id="descripcion">
-          <MaquinariaEdicion puedeGestionar={puedeGestionar}>
-            <MaquinaEditorIdentidad
-              editor={editor}
-              plantas={plantas}
-              centrosCosto={centrosCosto}
-            />
-          </MaquinariaEdicion>
-        </Tabs.Panel>
-
-        <Tabs.Panel id="ajustes">
-          <MaquinariaEdicion puedeGestionar={puedeGestionar}>
-            <MaquinaEditorSecciones editor={editor} />
-          </MaquinariaEdicion>
-        </Tabs.Panel>
-
-        <Tabs.Panel id="historial">
-          <Card className={`${styles.card} ${styles.history}`}>
-            <dl>
-              <div className="fila">
-                <dt>Alta en el sistema</dt>
-                <dd>{fechaHora(maquina.fechaAlta || maquina.createdAt)}</dd>
-              </div>
-              <div className="fila">
-                <dt>Última modificación</dt>
-                <dd>{fechaHora(maquina.updatedAt)}</dd>
-              </div>
-              <div className="fila">
-                <dt>Estado actual</dt>
-                <dd>{getEstadoMaquinaLabel(maquina.estado)}</dd>
-              </div>
-              <div className="fila">
-                <dt>Tipo</dt>
-                <dd>{getPlantillaMaquinariaLabel(maquina.plantilla)}</dd>
-              </div>
-            </dl>
-            <div>
-              <h2 className="text-sm font-semibold">Actividad registrada</h2>
-              {historial.length > 0 ? (
-                <ol className="mt-3 divide-y" aria-label="Historial de cambios">
-                  {historial.map((evento) => (
-                    <li key={evento.id} className="flex gap-3 py-3 first:pt-0">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Chip size="sm" variant="soft" className="capitalize">
-                            {evento.accion}
-                          </Chip>
-                          <span className="text-sm font-medium">
-                            {evento.actorNombre}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {evento.descripcion}
-                        </p>
-                      </div>
-                      <time
-                        dateTime={evento.createdAt}
-                        className="shrink-0 text-xs text-muted-foreground"
-                      >
-                        {fechaHora(evento.createdAt)}
-                      </time>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Todavía no hay cambios registrados. La auditoría comienza con
-                  la próxima edición o cambio de disponibilidad.
-                </p>
-              )}
-            </div>
-          </Card>
-        </Tabs.Panel>
-      </div>
-
-      {tab !== "historial" && puedeGestionar ? (
-        <div className={`${styles["maq-ficha-pie"]}`}>
-          <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={() => void handleGuardar()}
-            isDisabled={saving || !editor.hayCambios}
-            title={
-              editor.hayCambios ? undefined : "No hay cambios para guardar"
-            }
-          >
-            {saving ? "Guardando..." : "Guardar"}
-          </Button>
-        </div>
-      ) : null}
-
-      {!puedeGestionar && tab !== "historial" ? (
-        <div className={`${styles["maq-ficha-pie"]}`}>
-          <Chip size="sm">Sólo lectura</Chip>
-          <Button variant="outline" onClick={() => salir("/costos/maquinaria")}>
-            Volver
-          </Button>
-        </div>
-      ) : null}
-
+        {!puedeGestionar && tab !== "historial" ? (
+          <div className={`${styles["maq-ficha-pie"]}`}>
+            <Chip size="sm">Sólo lectura</Chip>
+            <Button
+              variant="outline"
+              onClick={() => salir("/costos/maquinaria")}
+            >
+              Volver
+            </Button>
+          </div>
+        ) : null}
+      </Tabs>
+      {/* El portal queda fuera de Tabs: su colección también renderiza los hijos
+          auxiliares y montaría una segunda confirmación invisible. */}
       <FormDialog
         isOpen={salidaPendiente !== null}
         onOpenChange={(open) => {
           if (!open) setSalidaPendiente(null);
         }}
         isDismissable={!saving}
+        className={brand.dialog}
         title="Cambios sin guardar"
         description="Tenés cambios sin guardar en esta máquina. Si salís sin guardar, se descartan."
       >
@@ -358,6 +483,6 @@ export function MaquinaFicha({
           </Button>
         </Modal.Footer>
       </FormDialog>
-    </Tabs>
+    </>
   );
 }

@@ -312,6 +312,7 @@ export function PagosTab({
   ordenId,
   puedeCobrar = true,
   sinComprobante = false,
+  soloLectura = false,
 }: {
   pago: OrdenTrabajoPago | null;
   total: number;
@@ -321,6 +322,7 @@ export function PagosTab({
   puedeCobrar?: boolean;
   /** Orden sin comprobante fiscal: el total es neto (§6). */
   sinComprobante?: boolean;
+  soloLectura?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
@@ -361,6 +363,7 @@ export function PagosTab({
   const registrar = (
     mov: Omit<MovimientoView, "comprobante" | "usuarioNombre">,
   ) => {
+    if (soloLectura) return;
     setMovs((prev) => [
       {
         ...mov,
@@ -514,7 +517,7 @@ export function PagosTab({
                     {formatMonedaOrden(saldoReal, moneda)}
                   </span>
                 </div>
-                {puedeCobrar ? (
+                {!soloLectura && puedeCobrar ? (
                   <Link
                     className="btn btn-primary"
                     href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
@@ -524,8 +527,7 @@ export function PagosTab({
                   </Link>
                 ) : (
                   <div className="mov-empty" style={{ padding: "10px 0" }}>
-                    La orden es un borrador: emitila para poder registrar
-                    cobros.
+                    {soloLectura ? "Activá Editar orden para registrar cobros." : "La orden es un borrador: emitila para poder registrar cobros."}
                   </div>
                 )}
                 <div className="prc-methods">
@@ -737,7 +739,7 @@ export function PagosTab({
                 <div className="ps-sub">No hay saldo pendiente de cobro.</div>
               </div>
             </div>
-          ) : showForm ? (
+          ) : soloLectura ? (<div className="mov-empty">Activá Editar orden para registrar cobros.</div>) : showForm ? (
             <CobroForm
               saldo={saldo}
               onSubmit={registrar}
