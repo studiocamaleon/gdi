@@ -1,10 +1,41 @@
+import { proyectarPlanReferencia } from '../produccion/plan-referencia-paso';
+import { leerAsignacionPersonal, proyectarAsignacionPersonal, personalFijoDelPaso } from '../produccion/asignacion-personal';
+import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
+import { itemTableroInclude, itemActivoTablero, itemTerminadoTablero } from './tablero-consultas';
+import { TableroTerminadosQueryDto } from './dto/tablero-query.dto';
+import { exigirCanalVenta } from './canales-venta';
+import { sumaTramosMin } from './tiempos-ejecucion';
+export { sumaTramosMin } from './tiempos-ejecucion';
+import {
+  bloquearOrdenesEjecucion,
+  validarGrupoAcciones,
+  type AccionPasoEnGrupo,
+} from './ejecucion-pasos-atomica';
+import { nombreLoteProduccion } from '../planificacion-entregas/materializar-lotes-entrega';
+import { calcularProgreso, progresoDeOrden } from '../common/progreso-produccion';
+import { pasosProgresoSelect } from './progreso-select';
+import { recuperarDemandasHistoricas } from '../eta/demanda-historica';
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
+import { demandaDesdeTiempo, combinarDemandas, leerDemandaHumana, aplicarOperacionMaquina, leerModoOperacionMaquina, type ModoOperacionMaquina } from '../eta/motor/demanda-humana';
+import { loteTableroSelect, dependenciaTableroSelect, contextoLoteTablero, esperasTablero, type DependenciaTablero } from './tablero-contexto-lote';
+import { validarReprogramacionAlEmitir } from '../planificacion-entregas/reprogramacion-aplicar';
+import { bloquearColaEntrega } from '../planificacion-entregas/reprogramacion-bloqueo';
+import { fijarIniciosLotes } from '../planificacion-entregas/inicios-lotes-entrega';
+import { huellaContextoPlan } from '../planificacion-entregas/planificacion-contrato';
+import { materializarLotesEntrega } from '../planificacion-entregas/materializar-lotes-entrega';
+import { actualizarFechaFinalOrden, distribucionesDeItems } from '../planificacion-entregas/resumen-entregas';
+import { conservarPlanCambioCliente } from '../planificacion-entregas/conservar-plan-cambio-cliente';
+import {
+  prepararVinculosEntrega,
+  vincularEntregasAlCrear,
+} from '../planificacion-entregas/vincular-plan-entrega';
 import { productosComercialesConTrabajo } from './productos-comerciales';
 import { fronterasEjecutablesDAG } from './fronteras-ejecutables';
-import { snapshotPasoProduccion, requierePlanConservado, type ItemSnapshotProduccion, type PasoSnapshotProduccion } from '../produccion/snapshot-paso-produccion';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -38,7 +69,6 @@ import {
   MOTIVO_PAUSA_LABELS,
   ORDEN_TRABAJO_ESTADO_LABELS,
   ORDEN_TRABAJO_FLUJO,
-  progresoEfectivo,
   tiempoMedidoValido,
   type MotivoPausa,
   type OrdenTrabajoEstado,
@@ -56,36 +86,25 @@ import type {
   EditarOrdenTrabajoLoteDto,
 } from './dto/crear-orden-trabajo.dto';
 import type { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
-import type { AhorroConsolidacionDto } from './dto/completar-pasos-lote.dto';
 import type { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
 import {
-  colaConsolidacionDeFamilia,
   modoRegistroDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
 import { evaluarCupon, planDescuentoCupon } from '../cupones/cupon-reglas';
 import { FacturacionOrdenesService } from '../administracion/facturacion-ordenes.service';
 import {
-  acomodarTanda,
-  claveCompatibilidadVariante,
-} from '../produccion/produccion.service';
-import {
   compilarRutaLineal,
   nodoEjecutable,
   nodoReabrible,
   reducirGrafoAClaves,
+  resolverHabilitacionesActivas,
   type GrafoProduccion,
 } from './grafo-produccion';
 import { ControlConsolidacionProduccion } from './consolidacion-produccion';
 import { loteEnItem, trazabilidadDeComponente } from './snapshot-componente';
 import { resolverJobContextComponente } from '../productos-servicios/componentes-configuracion';
-import {
-  aplicarFallbackConfigLaser,
-  claveCompatibilidadLoteLaser,
-  extraerCompatibilidadLaser,
-  faltantesCompatibilidadLaser,
-} from '../produccion/simulador-laser-compatibilidad';
-import { resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
+import { motivoSinEstacion, resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import type { LoteNestingCompuestoSnapshot } from '../motor-universal/tipos';
 
@@ -171,40 +190,6 @@ function margenFidelizacion(
       return acc + neto - internos - comisiones - costo;
     }, 0) - cargosNeto
   );
-}
-
-type PasoAhorroConsolidacion = PasoSnapshotProduccion & {
-  id: string;
-  rutaPasoId: string | null;
-  item: ItemSnapshotProduccion;
-};
-
-function snapshotAhorroPaso(paso: PasoAhorroConsolidacion) {
-  const { jobContext, paso: traza } = snapshotPasoProduccion(paso.item, paso);
-  const material = traza?.materiales?.find(
-    (item) => item.tipoLineaCosto === 'MATERIAL',
-  );
-  const tecnologiaPaso = paso.rutaPasoId
-    ? jobContext?.[`tecnologia_${paso.rutaPasoId}`]
-    : null;
-  return {
-    varianteId:
-      typeof material?.materialVarianteId === 'string'
-        ? material.materialVarianteId
-        : null,
-    consumoCotizadoMl:
-      typeof traza?.nestingResult?.consumedLengthMm === 'number'
-        ? traza.nestingResult.consumedLengthMm / 1000
-        : null,
-    precioMl:
-      typeof material?.precioUnitario === 'number'
-        ? material.precioUnitario
-        : null,
-    tecnologia:
-      (typeof tecnologiaPaso === 'string' && tecnologiaPaso) ||
-      (typeof jobContext?.tecnologia === 'string' && jobContext.tecnologia) ||
-      null,
-  };
 }
 
 function redondearDinero(valor: number, decimales: number) {
@@ -366,6 +351,7 @@ import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 import { DesarrolloDocumentalService } from '../desarrollo-documental/desarrollo-documental.service';
 import {
   claveFechaEnZona,
+  esFechaCalendario,
   instanteDe,
   sumarDiasAClave,
   ZONA_DEFAULT,
@@ -382,6 +368,7 @@ type OrdenConRelaciones = Prisma.OrdenTrabajoGetPayload<{
 }>;
 
 const LIST_INCLUDE = {
+  pasos: { select: pasosProgresoSelect },
   cliente: { select: { nombre: true } },
   vendedor: { select: { nombreCompleto: true } },
   proyectoCampana: { select: { id: true, codigo: true, nombre: true } },
@@ -599,14 +586,6 @@ export function validarCancelacion(
   }
 }
 
-export function sumaTramosMin(
-  tramos: Array<{ inicioEl: Date; finEl: Date | null }>,
-): number {
-  return tramos.reduce((acc, tramo) => {
-    if (!tramo.finEl) return acc;
-    return acc + (tramo.finEl.getTime() - tramo.inicioEl.getTime()) / 60_000;
-  }, 0);
-}
 
 /**
  * Corte de jornada que aplica a un tramo abierto (D9): la hora `corte`
@@ -687,25 +666,7 @@ export function pasoReabrible(pasos: PasoSecuencia[], indice: number): boolean {
 export function progresoPonderadoPasos(
   entrada: Array<{ estado: string; duracionEstimadaMin: number | null; nestingLoteRol?: string | null }>,
 ): number {
-  // Las participaciones de un lote reflejan la operación principal. Un tiempo
-  // cero no debe convertirlas en trabajos de duración desconocida.
-  const pasos = entrada.filter((paso) => paso.nestingLoteRol !== 'PARTICIPANTE');
-  if (pasos.length === 0) return 0;
-  const conocidos = pasos
-    .map((paso) => paso.duracionEstimadaMin)
-    .filter((valor): valor is number => valor != null && valor > 0)
-    .sort((a, b) => a - b);
-  const pesoDesconocido =
-    conocidos.length > 0 ? conocidos[Math.floor(conocidos.length / 2)] : 1;
-  const peso = (paso: (typeof pasos)[number]) =>
-    paso.duracionEstimadaMin != null && paso.duracionEstimadaMin > 0
-      ? paso.duracionEstimadaMin
-      : pesoDesconocido;
-  const total = pasos.reduce((suma, paso) => suma + peso(paso), 0);
-  const hecho = pasos
-    .filter((paso) => paso.estado === 'hecho')
-    .reduce((suma, paso) => suma + peso(paso), 0);
-  return Math.round((hecho / total) * 100);
+  return calcularProgreso(entrada).porcentaje ?? 0;
 }
 
 export function gatesOperativosPendientes(
@@ -775,7 +736,49 @@ export class OrdenesTrabajoService {
     @Optional() private readonly eventosSistema?: EventosSistemaService,
   ) {}
 
-  private async prepararRecorridosDeItems(
+  /** Adopción transaccional compartida por la creación y la edición del plan. */
+  async sincronizarLotesEntrega(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    itemId: string,
+    retirar = false,
+  ) {
+    if (!retirar)
+      await validarReprogramacionAlEmitir(tx, this.eta, tenantId, itemId);
+    const trabajos = await materializarLotesEntrega(
+      tx,
+      this.prisma,
+      tenantId,
+      itemId,
+      retirar,
+    );
+    const raiz = await tx.ordenTrabajoItem.findFirstOrThrow({
+      where: { id: itemId, tenantId },
+      select: {
+        id: true,
+        ordenId: true,
+        cotizacionItemId: true,
+        orden: { select: { estado: true, proyectoCampanaId: true } },
+      },
+    });
+    if (trabajos && raiz.orden.estado !== 'borrador') {
+      await this.materializarPasosItems(
+        tx,
+        tenantId,
+        retirar ? [raiz] : (trabajos ?? []),
+      );
+      if (!retirar) await fijarIniciosLotes(tx, tenantId, itemId);
+      if (raiz.orden.proyectoCampanaId)
+        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+          tenantId,
+          ordenId: raiz.ordenId,
+          proyectoCampanaId: raiz.orden.proyectoCampanaId,
+          actorNombre: 'Planificación de entregas',
+        });
+    }
+  }
+
+  async prepararRecorridosDeItems(
     auth: CurrentAuth,
     itemIds: string[],
   ): Promise<void> {
@@ -786,7 +789,12 @@ export class OrdenesTrabajoService {
       if (visitados.has(itemId)) continue;
       visitados.add(itemId);
       try {
-        await this.preparacionesRecorrido.asegurarParaItem(auth, itemId);
+        const item = await this.prisma.ordenTrabajoItem.findFirst({
+          where: { id: itemId, tenantId: auth.tenantId },
+          select: { contieneLotesEntrega: true },
+        });
+        if (!item?.contieneLotesEntrega)
+          await this.preparacionesRecorrido.asegurarParaItem(auth, itemId);
       } catch (error) {
         this.logger.warn({
           event: 'preparacion_recorrido_corte_fallida',
@@ -919,7 +927,13 @@ export class OrdenesTrabajoService {
    * finalización fallen por la telemetría. Se `await`ea (no fire-and-forget)
    * para que la promesa/cierre ya estén escritos cuando la acción responde.
    */
+  private async actualizarAsignaciones(tenantId: string) {
+    try { await this.eta.sincronizarAsignaciones(tenantId); }
+    catch (error) { this.logger.error('No se pudo actualizar el reparto de producción; se reintentará automáticamente.', error); }
+  }
+
   private async capturarEtaEmision(auth: CurrentAuth, ordenId: string) {
+    await this.actualizarAsignaciones(auth.tenantId);
     try {
       await this.eta.capturarEmision(auth, ordenId);
     } catch (error) {
@@ -1179,8 +1193,47 @@ export class OrdenesTrabajoService {
       select: { tipo: true, fecha: true, datosJson: true },
       orderBy: { fecha: 'asc' as const },
     });
+    const distribuciones = await distribucionesDeItems(
+      this.prisma,
+      auth.tenantId,
+      orden.items.map((i) => i.id),
+    );
+    const detalle = this.toDetalle({ ...orden, publicToken });
+    const lotes = await this.prisma.loteProduccionEntrega.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        productoItemId: { in: orden.items.map((i) => i.id) },
+      },
+      orderBy: [{ productoItemId: 'asc' }, { secuencia: 'asc' }],
+      select: {
+        id: true,
+        secuencia: true,
+        cantidad: true,
+        fechaEntrega: true,
+        producto: { select: { nombre: true, cantidadUnidad: true } },
+        trabajos: { select: { pasos: { select: pasosProgresoSelect } } },
+      },
+    });
     return {
-      ...this.toDetalle({ ...orden, publicToken }),
+      ...detalle,
+      progreso: progresoDeOrden(orden),
+      progresoPct: progresoDeOrden(orden).porcentaje,
+      progresoLotes: lotes.map((lote) => ({
+        id: lote.id,
+        nombre: nombreLoteProduccion(lote.secuencia),
+        productoNombre: lote.producto.nombre,
+        cantidad: lote.cantidad,
+        unidad: lote.producto.cantidadUnidad,
+        fechaEntrega: lote.fechaEntrega.toISOString().slice(0, 10),
+        progreso: calcularProgreso(
+          lote.trabajos.flatMap((t) => t.pasos),
+          orden.estado,
+        ),
+      })),
+      productos: detalle.productos.map((i) => ({
+        ...i,
+        distribucionEntregas: distribuciones.get(i.id) ?? null,
+      })),
       fechasEstado: fechasEstadoDeEventos(transiciones),
     };
   }
@@ -1539,9 +1592,29 @@ export class OrdenesTrabajoService {
     // acá para poder registrarlo en EnlacePublico dentro de la misma tx.
     const tokenSeguimiento = emitida ? generarTokenPublico() : null;
 
+    const tienePlanEntrega = items.some((i) => i.planEntrega);
     let creada: { id: string };
     try {
       creada = await this.prisma.$transaction(async (tx) => {
+        if (tienePlanEntrega) await bloquearColaEntrega(tx, auth.tenantId);
+        const contextoEntrega = tienePlanEntrega
+          ? await this.eta.contextoSimulacion(auth.tenantId, tx)
+          : null;
+        const vinculosEntrega = await prepararVinculosEntrega(
+          tx,
+          auth.tenantId,
+          payload.clienteId ?? null,
+          items,
+          contextoEntrega
+            ? {
+                huella: huellaContextoPlan(
+                  contextoEntrega,
+                  contextoEntrega.margenEtaDias,
+                ),
+                ahora: contextoEntrega.ahora,
+              }
+            : undefined,
+        );
         const orden = await tx.ordenTrabajo.create({
           data: {
             tenantId: auth.tenantId,
@@ -1590,6 +1663,11 @@ export class OrdenesTrabajoService {
                 subcategoriaComercial: item.subcategoriaComercial ?? '',
                 cantidad: item.cantidad,
                 cantidadUnidad: item.cantidadUnidad,
+                fechaEntrega: item.fechaEntrega
+                  ? new Date(`${item.fechaEntrega}T00:00:00Z`)
+                  : payload.fechaEntrega
+                    ? new Date(`${payload.fechaEntrega}T00:00:00Z`)
+                    : null,
                 subtotal: item.subtotal,
                 impuestos: item.impuestos,
                 total: item.total,
@@ -1614,9 +1692,25 @@ export class OrdenesTrabajoService {
           },
         });
 
+        for (const v of vinculosEntrega) {
+          const i = await tx.ordenTrabajoItem.findFirstOrThrow({
+            where: {
+              tenantId: auth.tenantId,
+              ordenId: orden.id,
+              parentItemId: null,
+              cotizacionItemId: v.cotizacionItemId,
+            },
+            select: { id: true },
+          });
+          await tx.planEntregaItem.update({
+            where: { id: v.planId },
+            data: { ordenItemId: i.id },
+          });
+          await this.sincronizarLotesEntrega(tx, auth.tenantId, i.id);
+        }
         if (emitida) {
           const itemsCreados = await tx.ordenTrabajoItem.findMany({
-            where: { ordenId: orden.id },
+            where: { ordenId: orden.id, parentItemId: null },
             select: { id: true, ordenId: true, cotizacionItemId: true },
           });
           await this.materializarPasosItems(tx, auth.tenantId, itemsCreados);
@@ -1780,16 +1874,25 @@ export class OrdenesTrabajoService {
           });
         }
 
+        await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
+        await vincularEntregasAlCrear(
+          tx,
+          auth.tenantId,
+          orden.id,
+          vinculosEntrega,
+        );
         return orden;
       });
     } catch (error) {
       // Dos requests con la misma llave pueden pasar el lookup inicial a la
       // vez. El índice único elige un ganador; el perdedor devuelve esa misma
-      // orden en lugar de transformar un retry seguro en un conflicto.
+      // orden en lugar de transformar un retry seguro en un conflicto. El
+      // vínculo del plan puede detectar antes ese mismo guardado concurrente.
       if (
         payload.idempotencyKey &&
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        ((error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002') ||
+          error instanceof ConflictException)
       ) {
         const existente = await this.prisma.ordenTrabajo.findFirst({
           where: {
@@ -1926,6 +2029,13 @@ export class OrdenesTrabajoService {
     ) {
       throw new ConflictException(
         'La orden cambió mientras la estabas editando. Recargala para revisar la versión más reciente antes de volver a guardar.',
+      );
+    }
+
+    if (this.camposEditables(orden.estado as OrdenTrabajoEstado).has('canalVenta')) {
+      exigirCanalVenta(
+        payload.canalVenta === undefined ? orden.canalVenta : payload.canalVenta,
+        orden.canalVenta,
       );
     }
 
@@ -2172,6 +2282,31 @@ export class OrdenesTrabajoService {
         for (const [ordenIndice, item] of itemsAutorizados.entries()) {
           let destinoId: string;
           if (item.id) {
+            const previo = await tx.ordenTrabajoItem.findFirstOrThrow({
+              where: {
+                id: item.id,
+                tenantId: auth.tenantId,
+                ordenId: orden.id,
+              },
+              select: {
+                contieneLotesEntrega: true,
+                parentItemId: true,
+                cotizacionItemId: true,
+                cantidad: true,
+              },
+            });
+            if (previo.parentItemId)
+              throw new ConflictException(
+                'Las cantidades del lote se editan desde la distribución del producto.',
+              );
+            if (
+              previo.contieneLotesEntrega &&
+              (previo.cotizacionItemId !== item.cotizacionItemId ||
+                Number(previo.cantidad) !== item.cantidad)
+            )
+              throw new ConflictException(
+                'Eliminá la distribución antes de cambiar la cotización o la cantidad del producto.',
+              );
             const actualizado = await tx.ordenTrabajoItem.update({
               where: { id: item.id },
               data: { ...this.buildItemData(item), ordenIndice },
@@ -2231,6 +2366,18 @@ export class OrdenesTrabajoService {
         );
       }
 
+      if (
+        payload.clienteId !== undefined &&
+        !itemsAutorizados &&
+        !campos.includes('fechaEntrega')
+      ) {
+        await conservarPlanCambioCliente(
+          tx,
+          auth.tenantId,
+          orden.id,
+          orden.updatedAt,
+        );
+      }
       if (orden.proyectoCampanaId) {
         await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
           tenantId: auth.tenantId,
@@ -2241,6 +2388,8 @@ export class OrdenesTrabajoService {
         });
       }
 
+      if (itemsAutorizados)
+        await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -2358,6 +2507,13 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
+    if (this.camposEditables(orden.estado as OrdenTrabajoEstado).has('canalVenta')) {
+      exigirCanalVenta(
+        payload.canalVenta === undefined ? orden.canalVenta : payload.canalVenta,
+        orden.canalVenta,
+      );
+    }
+
     const estado = orden.estado as OrdenTrabajoEstado;
     const editables = this.camposEditables(estado);
     const enviados = (
@@ -2424,7 +2580,7 @@ export class OrdenesTrabajoService {
       antes: string | null;
       despues: string | null;
       descripcion: string;
-      data: Prisma.OrdenTrabajoUpdateInput;
+      data: Prisma.OrdenTrabajoUncheckedUpdateManyInput;
     }> = [];
     if (payload.clienteId && payload.clienteId !== orden.clienteId) {
       cambios.push({
@@ -2432,7 +2588,7 @@ export class OrdenesTrabajoService {
         antes: orden.clienteId,
         despues: payload.clienteId,
         descripcion: `Cliente: ${orden.cliente?.nombre ?? 'Sin cliente'} → ${clienteNuevo!.nombre}`,
-        data: { cliente: { connect: { id: payload.clienteId } } },
+        data: { clienteId: payload.clienteId },
       });
     }
     if (
@@ -2444,7 +2600,7 @@ export class OrdenesTrabajoService {
         antes: orden.vendedorEmpleadoId,
         despues: payload.vendedorEmpleadoId,
         descripcion: `Vendedor: ${orden.vendedor?.nombreCompleto ?? '—'} → ${vendedorNuevo!.nombreCompleto}`,
-        data: { vendedor: { connect: { id: payload.vendedorEmpleadoId } } },
+        data: { vendedorEmpleadoId: payload.vendedorEmpleadoId },
       });
     }
     if (payload.canalVenta && payload.canalVenta !== ordenCanal) {
@@ -2501,6 +2657,17 @@ export class OrdenesTrabajoService {
       if (actualizado.count !== 1) {
         throw new ConflictException(
           'La orden cambió mientras la estabas editando. Recargala antes de volver a guardar.',
+        );
+      }
+      if (
+        cambios.some((c) => c.campo === 'clienteId') &&
+        !cambios.some((c) => c.campo === 'fechaEntrega')
+      ) {
+        await conservarPlanCambioCliente(
+          tx,
+          auth.tenantId,
+          orden.id,
+          orden.updatedAt,
         );
       }
       await tx.ordenTrabajoEvento.createMany({
@@ -3106,6 +3273,9 @@ export class OrdenesTrabajoService {
       subcategoriaComercial: item.subcategoriaComercial ?? '',
       cantidad: item.cantidad,
       cantidadUnidad: item.cantidadUnidad,
+      ...(item.fechaEntrega !== undefined
+        ? { fechaEntrega: new Date(`${item.fechaEntrega}T00:00:00Z`) }
+        : {}),
       subtotal: item.subtotal,
       impuestos: item.impuestos,
       total: item.total,
@@ -3273,6 +3443,7 @@ export class OrdenesTrabajoService {
         orden.id,
         Number(orden.cargosDirectos ?? 0),
       );
+      await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -3394,6 +3565,27 @@ export class OrdenesTrabajoService {
         throw new ConflictException(
           'La orden cambió mientras editabas el producto. Recargala e intentá nuevamente.',
         );
+      const loteActual = await tx.ordenTrabajoItem.findFirstOrThrow({
+        where: { id: existente.id, tenantId: auth.tenantId },
+        select: {
+          contieneLotesEntrega: true,
+          parentItemId: true,
+          cotizacionItemId: true,
+          cantidad: true,
+        },
+      });
+      if (loteActual.parentItemId)
+        throw new ConflictException(
+          'Las cantidades del lote se editan desde la distribución del producto.',
+        );
+      if (
+        loteActual.contieneLotesEntrega &&
+        (loteActual.cotizacionItemId !== item.cotizacionItemId ||
+          Number(loteActual.cantidad) !== item.cantidad)
+      )
+        throw new ConflictException(
+          'Eliminá la distribución antes de cambiar la cotización o la cantidad del producto.',
+        );
       await tx.ordenTrabajoItem.update({
         where: { id: existente.id },
         data: this.buildItemData(item),
@@ -3434,6 +3626,7 @@ export class OrdenesTrabajoService {
         orden.id,
         Number(orden.cargosDirectos ?? 0),
       );
+      await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -3510,6 +3703,7 @@ export class OrdenesTrabajoService {
         orden.id,
         Number(orden.cargosDirectos ?? 0),
       );
+      await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -3564,6 +3758,7 @@ export class OrdenesTrabajoService {
     // Salir de borrador (a cualquier estado) es emitir: exige cliente y
     // fecha de entrega vigente, igual que la emisión directa.
     if (desde === 'borrador') {
+      exigirCanalVenta(orden.canalVenta, orden.canalVenta);
       this.validarEmision(hacia, orden.clienteId);
       this.validarFechaEntregaEmision(
         hacia,
@@ -3633,7 +3828,8 @@ export class OrdenesTrabajoService {
           token: tokenSeguimiento,
         });
       }
-      // Primera finalización: nace la deuda comercial y arranca su aging.
+      // Primera finalización: fija el vencimiento comercial para el aging.
+      // El cargo ya figura en cuenta corriente desde la emisión.
       // Sólo la primera (reabrir y re-finalizar no la resetea).
       if (hacia === 'finalizada') {
         await this.marcarPrimeraFinalizacion(tx, auth.tenantId, orden.id);
@@ -3953,7 +4149,7 @@ export class OrdenesTrabajoService {
   }
 
   /**
-   * Congela el nacimiento y el vencimiento de la deuda comercial. Una venta
+   * Congela el vencimiento del cargo registrado desde la emisión. Una venta
    * común vence el mismo día que finaliza; una cuenta corriente suma el plazo
    * vigente del cliente. Reabrir o editar luego al cliente no cambia la foto.
    */
@@ -4061,6 +4257,11 @@ export class OrdenesTrabajoService {
     fechaEntrega: string | null,
     zonaHoraria: string = ZONA_DEFAULT,
   ) {
+    if (fechaEntrega && !esFechaCalendario(fechaEntrega)) {
+      throw new BadRequestException(
+        'La fecha de entrega debe ser una fecha de calendario válida (AAAA-MM-DD), sin hora.',
+      );
+    }
     if (estado === 'borrador') return;
     if (!fechaEntrega) {
       throw new BadRequestException(
@@ -4471,6 +4672,9 @@ export class OrdenesTrabajoService {
         centroCostoNombre: paso.tiempo?.centroCostoNombre ?? null,
         maquinaId: paso.tiempo?.maquinaId ?? null,
         duracionEstimadaMin: paso.tiempo?.totalMin ?? null,
+        demandaHumanaJson:
+          (demandaDesdeTiempo(paso.tiempo) as Prisma.InputJsonValue) ??
+          Prisma.DbNull,
         operacionesIncorporacionSnapshotJson: paso.operacionesInternas?.length
           ? (paso.operacionesInternas.map((operacion) => ({
               ...operacion,
@@ -4510,31 +4714,72 @@ export class OrdenesTrabajoService {
     items: ItemAMaterializar[],
     opts?: { reemplazar?: boolean },
   ) {
-    const conSnapshot = items.filter((item) => item.cotizacionItemId);
-    if (opts?.reemplazar && items.length > 0) {
+    const actuales = await tx.ordenTrabajoItem.findMany({
+      where: { tenantId, id: { in: items.map((i) => i.id) } },
+      select: {
+        id: true,
+        ordenId: true,
+        cotizacionItemId: true,
+        contieneLotesEntrega: true,
+        loteEntregaId: true,
+        recetaSnapshotJson: true,
+        trazabilidadSnapshotJson: true,
+        planEntrega: { select: { alternativaElegidaId: true } },
+      },
+    });
+    for (const i of actuales.filter(
+      (i) => i.contieneLotesEntrega || i.planEntrega?.alternativaElegidaId,
+    )) {
+      await validarReprogramacionAlEmitir(tx, this.eta, tenantId, i.id);
+      // Una revisión en preparación no reemplaza los lotes ya adoptados.
+      // Sólo sincronizarLotesEntrega aplica explícitamente una nueva elección.
+      const hijos = i.contieneLotesEntrega
+        ? await tx.ordenTrabajoItem.findMany({
+            where: { tenantId, parentItemId: i.id },
+            select: { id: true, ordenId: true, cotizacionItemId: true },
+          })
+        : await materializarLotesEntrega(tx, this.prisma, tenantId, i.id);
+      if (!hijos)
+        throw new ConflictException(
+          'Guardá la distribución elegida antes de emitir la orden.',
+        );
+      await this.materializarPasosItems(tx, tenantId, hijos);
+      await fijarIniciosLotes(tx, tenantId, i.id);
+    }
+    const conSnapshot = actuales.filter(
+      (i) =>
+        !i.contieneLotesEntrega &&
+        !i.planEntrega?.alternativaElegidaId &&
+        (i.cotizacionItemId || i.loteEntregaId),
+    );
+    if (opts?.reemplazar && conSnapshot.length > 0) {
       await tx.ordenTrabajoItemPaso.deleteMany({
-        where: { tenantId, itemId: { in: items.map((item) => item.id) } },
+        where: { tenantId, itemId: { in: conSnapshot.map((item) => item.id) } },
       });
     }
-    if (conSnapshot.length === 0) return;
-
+    if (!conSnapshot.length) return;
     const snapshots = await tx.cotizacionItem.findMany({
       where: {
-        id: { in: conSnapshot.map((item) => item.cotizacionItemId!) },
+        id: {
+          in: conSnapshot.flatMap((i) =>
+            i.cotizacionItemId ? [i.cotizacionItemId] : [],
+          ),
+        },
         tenantId,
       },
       select: { id: true, trazabilidadJson: true },
     });
-    const trazabilidadPorId = new Map(
-      snapshots.map((snap) => [snap.id, snap.trazabilidadJson]),
+    const cotizacionesPorId = new Map(
+      snapshots.map((s) => [s.id, s.trazabilidadJson]),
     );
-    const itemsConReceta = await tx.ordenTrabajoItem.findMany({
-      where: {
-        tenantId,
-        id: { in: conSnapshot.map((item) => item.id) },
-      },
-      select: { id: true, recetaSnapshotJson: true },
-    });
+    const trazabilidadPorId = new Map(
+      conSnapshot.map((i) => [
+        i.id,
+        i.trazabilidadSnapshotJson ??
+          cotizacionesPorId.get(i.cotizacionItemId!),
+      ]),
+    );
+    const itemsConReceta = conSnapshot;
     const grafoPorItem = new Map(
       itemsConReceta.map((item) => [
         item.id,
@@ -4543,8 +4788,8 @@ export class OrdenesTrabajoService {
     );
     // Snapshot del nombre de cada proveedor de los pasos tercerizados.
     const proveedorIds = new Set<string>();
-    for (const snap of snapshots) {
-      for (const paso of pasosActivados(snap.trazabilidadJson)) {
+    for (const traza of trazabilidadPorId.values()) {
+      for (const paso of pasosActivados(traza)) {
         if (paso.tercerizado && paso.proveedorId) {
           proveedorIds.add(paso.proveedorId);
         }
@@ -4564,7 +4809,7 @@ export class OrdenesTrabajoService {
           tenantId,
           item.ordenId,
           item.id,
-          trazabilidadPorId.get(item.cotizacionItemId!),
+          trazabilidadPorId.get(item.id),
           proveedorNombrePorId,
           grafoPorItem.get(item.id) ?? null,
         );
@@ -4691,10 +4936,7 @@ export class OrdenesTrabajoService {
         tenantId,
         conSnapshot.map((item) => item.id),
         new Map(
-          conSnapshot.map((item) => [
-            item.id,
-            trazabilidadPorId.get(item.cotizacionItemId!),
-          ]),
+          conSnapshot.map((item) => [item.id, trazabilidadPorId.get(item.id)]),
         ),
       );
     }
@@ -4756,7 +4998,8 @@ export class OrdenesTrabajoService {
       // e hidratar el mismo plan para cada nivel y luego para los lotes.
       const trazaCruda = trazasPorItem.has(padre.id)
         ? trazasPorItem.get(padre.id)
-        : padre.trazabilidadSnapshotJson ?? padre.cotizacionItem?.trazabilidadJson;
+        : (padre.trazabilidadSnapshotJson ??
+          padre.cotizacionItem?.trazabilidadJson);
       trazasPorItem.set(padre.id, trazaCruda);
       const traza =
         trazaCruda &&
@@ -4881,6 +5124,8 @@ export class OrdenesTrabajoService {
             tenantId,
             ordenId: padre.ordenId,
             parentItemId: padre.id,
+            loteEntregaId: padre.loteEntregaId,
+            fechaEntrega: padre.fechaEntrega,
             componenteCodigo,
             nodoIncorporacionClave,
             recetaRevisionId: revisionHija.id,
@@ -5152,16 +5397,32 @@ export class OrdenesTrabajoService {
               (clave): clave is string => typeof clave === 'string',
             )
           : plantilla.nodosPredecesoresClaves;
-        const predecesoresPadre = clavesPredecesoras.length
+        const candidatosPadre = clavesPredecesoras.length
           ? await tx.ordenTrabajoItemPaso.findMany({
               where: {
                 tenantId,
                 itemId: padre.id,
-                nodoClave: { in: clavesPredecesoras },
               },
-              select: { id: true },
+              select: { id: true, nodoClave: true },
             })
           : [];
+        const grafoHabilitacion =
+          grafoDesdeSnapshotReceta(padre.recetaSnapshotJson) ??
+          grafoDesdeSnapshotReceta({
+            grafoProduccion: padre.recetaRevision.grafoProduccionJson,
+          });
+        const clavesHabilitantes = new Set(
+          grafoHabilitacion
+            ? resolverHabilitacionesActivas(
+                grafoHabilitacion,
+                clavesPredecesoras,
+                new Set(candidatosPadre.flatMap((p) => p.nodoClave ?? [])),
+              )
+            : clavesPredecesoras,
+        );
+        const predecesoresPadre = candidatosPadre.filter(
+          (p) => p.nodoClave && clavesHabilitantes.has(p.nodoClave),
+        );
         const habilitaciones = predecesoresPadre.flatMap((predecesor) =>
           grafoHijoEfectivo.raices.map((clave) => ({
             tenantId,
@@ -5224,7 +5485,8 @@ export class OrdenesTrabajoService {
       const lotes = lotesNestingAplicados(
         trazasPorItem.has(padreId)
           ? trazasPorItem.get(padreId)
-          : padre.trazabilidadSnapshotJson ?? padre.cotizacionItem?.trazabilidadJson,
+          : (padre.trazabilidadSnapshotJson ??
+              padre.cotizacionItem?.trazabilidadJson),
       ).map((lote) => loteEnItem(lote, padreId));
       if (lotes.length === 0) continue;
 
@@ -5237,6 +5499,8 @@ export class OrdenesTrabajoService {
               id: true,
               rutaPasoId: true,
               nombre: true,
+              demandaHumanaJson: true,
+              duracionEstimadaMin: true,
             },
           },
         },
@@ -5267,7 +5531,13 @@ export class OrdenesTrabajoService {
         }
         const resueltos = participantes as Array<{
           snapshot: LoteNestingCompuestoSnapshot['participantes'][number];
-          paso: { id: string; rutaPasoId: string | null; nombre: string };
+          paso: {
+            id: string;
+            rutaPasoId: string | null;
+            nombre: string;
+            demandaHumanaJson: Prisma.JsonValue;
+            duracionEstimadaMin: Prisma.Decimal | null;
+          };
         }>;
         const operativo =
           resueltos.find(
@@ -5357,6 +5627,15 @@ export class OrdenesTrabajoService {
               ? operativo.paso.nombre
               : `Nesting compartido · ${operativo.paso.nombre}`,
             duracionEstimadaMin: lote.duracionEstimadaMin,
+            demandaHumanaJson: combinarDemandas(
+              resueltos.map((r) =>
+                leerDemandaHumana(
+                  r.paso.demandaHumanaJson,
+                  Number(r.paso.duracionEstimadaMin ?? 0),
+                ),
+              ),
+              lote.duracionEstimadaMin,
+            ) as Prisma.InputJsonValue,
           },
         });
         if (aliases.length > 0) {
@@ -5410,6 +5689,7 @@ export class OrdenesTrabajoService {
       where: {
         tenantId: auth.tenantId,
         cotizacionItemId: { not: null },
+        contieneLotesEntrega: false,
         pasos: { none: {} },
         orden: { estado: { in: ESTADOS_TABLERO } },
       },
@@ -5555,7 +5835,7 @@ export class OrdenesTrabajoService {
   }
 
   /** Items activos con sus pasos, personalizados por alcance efectivo. */
-  async tablero(auth: CurrentAuth) {
+  async tablero(auth: CurrentAuth, soloPendientes = false) {
     await this.reconciliarTramosVencidos(auth.tenantId);
     await this.backfillPasosTablero(auth);
     const alcance = alcanceTableroProduccionDe(auth);
@@ -5585,72 +5865,15 @@ export class OrdenesTrabajoService {
       where: {
         tenantId: auth.tenantId,
         estado: { in: ESTADOS_TABLERO },
+        ...(soloPendientes ? { items: { some: itemActivoTablero } } : {}),
       },
       include: {
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
+          where: soloPendientes ? itemActivoTablero : { contieneLotesEntrega: false },
           orderBy: { ordenIndice: 'asc' as const },
-          include: {
-            // El tablero necesita conservar la jerarquía del BOM: sin el
-            // padre cargado los componentes se proyectaban como productos
-            // independientes y se perdía el contexto de la OT compuesta.
-            parentItem: { select: { id: true, nombre: true } },
-            // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
-            // renombrar el producto se refleja en el tablero. Null en OT manuales.
-            cotizacionItem: {
-              select: {
-                jobContextJson: true,
-                producto: { select: { nombre: true } },
-              },
-            },
-            // Sólo el conteo de archivos LISTO: el tablero muestra un clip
-            // con el número, no la lista. Traer las filas para contarlas
-            // sería N+1 disfrazado.
-            _count: {
-              select: { archivos: { where: { estado: ArchivoEstado.LISTO } } },
-            },
-            pasos: {
-              orderBy: { indice: 'asc' as const },
-              include: {
-                mesaUsuario: { select: { nombreCompleto: true, email: true } },
-                dependenciasEntrantes: {
-                  where: { obligatoria: true },
-                  select: { predecesorPasoId: true },
-                },
-                dependenciasSalientes: {
-                  where: { obligatoria: true },
-                  select: { sucesorPasoId: true },
-                },
-                gatesOperativos: {
-                  orderBy: { tipo: 'asc' as const },
-                  select: {
-                    id: true,
-                    tipo: true,
-                    estado: true,
-                    detalle: true,
-                    resueltoEl: true,
-                    resueltoPorNombre: true,
-                  },
-                },
-                tramos: {
-                  // Todos los tramos del paso (son pocos): la proyección
-                  // deriva el abierto, el último cierre y el acumulado.
-                  orderBy: {
-                    finEl: { sort: 'desc' as const, nulls: 'first' as const },
-                  },
-                  select: {
-                    usuarioId: true,
-                    usuarioNombre: true,
-                    inicioEl: true,
-                    finEl: true,
-                    motivoFin: true,
-                    motivoDetalle: true,
-                  },
-                },
-              },
-            },
-          },
+          include: itemTableroInclude,
         },
       },
       orderBy: [
@@ -5658,6 +5881,18 @@ export class OrdenesTrabajoService {
         { createdAt: 'asc' as const },
       ],
     });
+    const recuperadas = await recuperarDemandasHistoricas(
+      this.prisma,
+      auth.tenantId,
+      ordenes.flatMap((o) => o.items.flatMap((i) => i.pasos)),
+    );
+    for (const orden of ordenes)
+      for (const item of orden.items)
+        for (const paso of item.pasos) {
+          const demanda = recuperadas.get(paso.id);
+          if (demanda)
+            paso.demandaHumanaJson = demanda as unknown as Prisma.JsonValue;
+        }
     const tecnologias = await this.tecnologiaPorMaquinaDeItems(
       auth.tenantId,
       ordenes.flatMap((orden) => orden.items),
@@ -5679,6 +5914,17 @@ export class OrdenesTrabajoService {
         )
         .map((item) => item),
     );
+    await this.proyectarAprobacionesTablero(auth.tenantId, items);
+    if (soloPendientes) {
+      const idsPresentes = new Set(items.flatMap((i) => i.pasos.map((p) => p.id)));
+      const completadosExternos = new Set(ordenes.flatMap((o) => o.items.flatMap((i) =>
+        i.pasos.flatMap((p) => p.dependenciasEntrantes.filter((d) =>
+          d.predecesor.estado === 'hecho' && !idsPresentes.has(d.predecesorPasoId),
+        ).map((d) => d.predecesorPasoId)),
+      )));
+      for (const item of items) for (const paso of item.pasos)
+        paso.predecesorPasoIds = paso.predecesorPasoIds.filter((id) => !completadosExternos.has(id));
+    }
     return {
       items,
       alcance,
@@ -5686,6 +5932,64 @@ export class OrdenesTrabajoService {
       estacionIdsEjecutables,
       vendedorSinVinculo: false,
     };
+  }
+
+  /** Historial bajo demanda: pagina ítems en la BD, sin cargar el resto de la OT. */
+  async tableroTerminados(auth: CurrentAuth, query: TableroTerminadosQueryDto) {
+    if (query.desde && query.hasta && query.desde > query.hasta)
+      throw new BadRequestException('La fecha desde debe ser anterior o igual a la fecha hasta.');
+    const filtros: Prisma.OrdenTrabajoItemWhereInput[] = [itemTerminadoTablero];
+    const q = query.q?.trim();
+    if (q) filtros.push({ OR: [
+      { nombre: { contains: q, mode: 'insensitive' } },
+      { codigo: { contains: q, mode: 'insensitive' } },
+      { orden: { numero: { contains: q, mode: 'insensitive' } } },
+      { orden: { cliente: { nombre: { contains: q, mode: 'insensitive' } } } },
+      { cotizacionItem: { producto: { nombre: { contains: q, mode: 'insensitive' } } } },
+    ] });
+    if (query.desde || query.hasta) {
+      const fecha = {
+        ...(query.desde ? { gte: new Date(`${query.desde}T00:00:00.000Z`) } : {}),
+        ...(query.hasta ? { lte: new Date(`${query.hasta}T00:00:00.000Z`) } : {}),
+      };
+      filtros.push({ OR: [
+        { fechaEntrega: fecha },
+        { fechaEntrega: null, orden: { fechaEntrega: fecha } },
+      ] });
+    }
+    const page = query.page ?? 1, limit = query.limit ?? 25;
+    const filas = await this.prisma.ordenTrabajoItem.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        orden: { estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] } },
+        AND: filtros,
+      },
+      orderBy: [{ orden: { createdAt: 'desc' } }, { ordenIndice: 'asc' }, { id: 'asc' }],
+      skip: (page - 1) * limit,
+      take: limit + 1,
+      include: { ...itemTableroInclude, orden: { include: {
+        cliente: { select: { nombre: true } },
+        vendedor: { select: { nombreCompleto: true } },
+      } } },
+    });
+    const pagina = filas.slice(0, limit);
+    const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, pagina);
+    return {
+      items: pagina.map((item) => this.toTableroItem(item.orden, item, auth.userId, tecnologias)),
+      page, limit, hasMore: filas.length > limit,
+    };
+  }
+
+  /** Acceso explícito desde una fila o un enlace; nunca precarga el historial. */
+  async consultarItemTablero(auth: CurrentAuth, itemId: string) {
+    const existe = await this.prisma.ordenTrabajoItem.findFirst({
+      where: { id: itemId, tenantId: auth.tenantId, contieneLotesEntrega: false,
+        orden: { estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] } },
+      },
+      select: { id: true },
+    });
+    if (!existe) throw new NotFoundException('No se encontró el trabajo.');
+    return this.tableroItemActualizado(auth, itemId);
   }
 
   /**
@@ -5708,6 +6012,7 @@ export class OrdenesTrabajoService {
         tenantId: auth.tenantId,
         ordenId,
         cotizacionItemId: { not: null },
+        contieneLotesEntrega: false,
         pasos: { none: {} },
       },
       select: { id: true, ordenId: true, cotizacionItemId: true },
@@ -5719,9 +6024,11 @@ export class OrdenesTrabajoService {
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
+          where: { contieneLotesEntrega: false },
           orderBy: { ordenIndice: 'asc' as const },
           include: {
             parentItem: { select: { id: true, nombre: true } },
+            loteEntrega: { select: loteTableroSelect },
             // Producto vivo (vía cotización): su nombre ACTUAL para el card, así
             // renombrar el producto se refleja en el tablero. Null en OT manuales.
             cotizacionItem: {
@@ -5742,7 +6049,7 @@ export class OrdenesTrabajoService {
                 mesaUsuario: { select: { nombreCompleto: true, email: true } },
                 dependenciasEntrantes: {
                   where: { obligatoria: true },
-                  select: { predecesorPasoId: true },
+                  select: dependenciaTableroSelect,
                 },
                 dependenciasSalientes: {
                   where: { obligatoria: true },
@@ -5784,21 +6091,21 @@ export class OrdenesTrabajoService {
       auth.tenantId,
       orden?.items ?? [],
     );
-    return {
-      items: (orden?.items ?? []).map((item) =>
-        this.toTableroItem(
-          orden!,
-          item,
-          auth.userId,
-          tecnologias,
-          new Map(
-            (orden?.items ?? []).flatMap((fila) =>
-              fila.pasos.map((paso) => [paso.id, paso.estado] as const),
-            ),
+    const items = (orden?.items ?? []).map((item) =>
+      this.toTableroItem(
+        orden!,
+        item,
+        auth.userId,
+        tecnologias,
+        new Map(
+          (orden?.items ?? []).flatMap((fila) =>
+            fila.pasos.map((paso) => [paso.id, paso.estado] as const),
           ),
         ),
       ),
-    };
+    );
+    await this.proyectarAprobacionesTablero(auth.tenantId, items);
+    return { items };
   }
 
   /**
@@ -5810,6 +6117,7 @@ export class OrdenesTrabajoService {
   private async validarEjecucionEnEstacion(
     auth: CurrentAuth,
     paso: { familiaCodigo: string; maquinaId: string | null },
+    db: Prisma.TransactionClient = this.prisma,
   ) {
     if (!(auth.permisos?.has('produccion.ejecutar') ?? false)) {
       throw new ForbiddenException(
@@ -5817,7 +6125,7 @@ export class OrdenesTrabajoService {
       );
     }
     const [empleado, maquina, estaciones] = await Promise.all([
-      this.prisma.empleado.findFirst({
+      db.empleado.findFirst({
         where: {
           tenantId: auth.tenantId,
           userId: auth.userId,
@@ -5826,7 +6134,7 @@ export class OrdenesTrabajoService {
         select: { id: true },
       }),
       paso.maquinaId
-        ? this.prisma.maquina.findFirst({
+        ? db.maquina.findFirst({
             where: { tenantId: auth.tenantId, id: paso.maquinaId },
             select: {
               plantilla: true,
@@ -5835,14 +6143,14 @@ export class OrdenesTrabajoService {
             },
           })
         : Promise.resolve(null),
-      this.prisma.estacion.findMany({
+      db.estacion.findMany({
         where: { tenantId: auth.tenantId, activo: true },
         select: {
           id: true,
           activo: true,
           reglas: { select: { tipo: true, valor: true } },
           maquinas: {
-            select: { id: true, centroCostoPrincipalId: true },
+            select: { id: true, centroCostoPrincipalId: true, activo: true },
           },
           empleados: { select: { empleadoId: true } },
         },
@@ -5863,6 +6171,7 @@ export class OrdenesTrabajoService {
         reglas: item.reglas.filter((regla) => regla.tipo !== 'familia'),
         maquinas: item.maquinas.map((itemMaquina) => ({
           id: itemMaquina.id,
+          activo: itemMaquina.activo,
           centroCostoId: itemMaquina.centroCostoPrincipalId,
         })),
       })),
@@ -5871,12 +6180,18 @@ export class OrdenesTrabajoService {
         plantillaCodigo: familia?.plantillaCodigo ?? null,
         centroCostoId: null,
         maquinaId: paso.maquinaId,
+        requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
         tecnologia: resolverTecnologiaMaquina(maquina),
       },
     );
     if (!estacion) {
       throw new ForbiddenException(
-        'El paso no tiene una estación activa configurada.',
+        motivoSinEstacion([], {
+          familiaCodigo: paso.familiaCodigo,
+          centroCostoId: null,
+          maquinaId: paso.maquinaId,
+          requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
+        }) ?? 'El paso no tiene una estación activa configurada.',
       );
     }
     if (!estacion.empleados.some((fila) => fila.empleadoId === empleado.id)) {
@@ -5893,7 +6208,10 @@ export class OrdenesTrabajoService {
         id: true,
         itemId: true,
         estado: true,
+        updatedAt: true,
         mesaUsuarioId: true,
+        asignacionPersonalJson: true,
+        asignacionManualJson: true,
         familiaCodigo: true,
         maquinaId: true,
       },
@@ -5903,6 +6221,14 @@ export class OrdenesTrabajoService {
     }
     if (en && !auth.permisos?.has('produccion.supervisar')) {
       await this.validarEjecucionEnEstacion(auth, paso);
+    }
+    if (paso.asignacionManualJson)
+      throw new ConflictException('Este paso tiene una asignación del supervisor. Usá Reasignar personal para revisar el cambio.');
+    const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
+    if (en && asignacion?.personas.length && !auth.permisos?.has('produccion.supervisar')) {
+      const empleado = await this.prisma.empleado.findFirst({ where: { tenantId: auth.tenantId, userId: auth.userId, activo: true }, select: { id: true } });
+      if (!empleado || !asignacion.personas.some(p => p.empleadoId === empleado.id))
+        throw new ConflictException('Este paso ya tiene personal asignado. Pedí al supervisor que revise la asignación.');
     }
     if (en && paso.estado === 'hecho') {
       throw new BadRequestException(
@@ -5927,6 +6253,7 @@ export class OrdenesTrabajoService {
         id: paso.id,
         tenantId: auth.tenantId,
         mesaUsuarioId: en ? null : auth.userId,
+        updatedAt: paso.updatedAt,
       },
       data: { mesaUsuarioId: en ? auth.userId : null },
     });
@@ -5935,11 +6262,191 @@ export class OrdenesTrabajoService {
         'La asignación cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
       );
     }
+    await this.actualizarAsignaciones(auth.tenantId);
     return this.tableroItemActualizado(auth, paso.itemId);
   }
 
-  /** Acción de ejecución sobre un paso (iniciar/pausar/completar/…). */
+  /** La acción individual del Tablero usa el mismo núcleo transaccional que
+   * la futura ejecución conjunta. La respuesta pública no cambia. */
   async accionPaso(
+    auth: CurrentAuth,
+    ordenId: string,
+    itemId: string,
+    pasoId: string,
+    payload: AccionPasoOrdenTrabajoDto,
+    interno?: { tiempoLoteMin?: number; autoPausa?: boolean },
+  ) {
+    await this.accionesPasos(auth, [
+      { ordenId, itemId, pasoId, payload, interno },
+    ]);
+    return this.tableroItemActualizado(auth, itemId);
+  }
+
+  async accionTrabajoCola(
+    auth: CurrentAuth,
+    maquinaId: string,
+    pasoId: string,
+    payload: AccionPasoOrdenTrabajoDto,
+  ) {
+    if (
+      !auth.permisos?.has('produccion.ejecutar') &&
+      !auth.permisos?.has('produccion.supervisar')
+    )
+      throw new ForbiddenException(
+        'No tenés permiso para ejecutar producción.',
+      );
+    const paso = await this.prisma.ordenTrabajoItemPaso.findFirst({
+      where: { id: pasoId, tenantId: auth.tenantId, maquinaId },
+      select: { id: true, ordenId: true, itemId: true },
+    });
+    if (!paso)
+      throw new NotFoundException(
+        'El trabajo ya no está en esta máquina. Actualizá la cola.',
+      );
+    await this.accionesPasos(auth, [
+      {
+        ordenId: paso.ordenId,
+        itemId: paso.itemId,
+        pasoId,
+        payload,
+        interno: { accionEnCola: { maquinaId } },
+      },
+    ]);
+    return { pasoId };
+  }
+
+  /** Completar varias operaciones es un atajo de registro, no una tanda productiva. */
+  async completarTrabajosCola(
+    auth: CurrentAuth,
+    maquinaId: string,
+    pasoIds: string[],
+    tiempos: Array<{
+      pasoId: string;
+      tiempoDeclaradoMin?: number;
+      sinTiempoConfirmado?: boolean;
+    }> = [],
+  ) {
+    if (
+      !auth.permisos?.has('produccion.ejecutar') &&
+      !auth.permisos?.has('produccion.supervisar')
+    )
+      throw new ForbiddenException(
+        'No tenés permiso para ejecutar producción.',
+      );
+    if (
+      !pasoIds.length ||
+      pasoIds.length > 50 ||
+      new Set(pasoIds).size !== pasoIds.length
+    )
+      throw new BadRequestException(
+        'Seleccioná entre 1 y 50 trabajos distintos.',
+      );
+    const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
+      where: { tenantId: auth.tenantId, maquinaId, id: { in: pasoIds } },
+      select: { id: true, ordenId: true, itemId: true },
+    });
+    if (pasos.length !== pasoIds.length)
+      throw new NotFoundException(
+        'Uno o más trabajos ya no están en esta máquina. Actualizá la cola.',
+      );
+    if (
+      tiempos.some((t) => !pasoIds.includes(t.pasoId)) ||
+      new Set(tiempos.map((t) => t.pasoId)).size !== tiempos.length
+    )
+      throw new BadRequestException(
+        'Los tiempos deben corresponder a trabajos distintos de la selección.',
+      );
+    const porId = new Map(pasos.map((p) => [p.id, p]));
+    const tiemposPorId = new Map(tiempos.map((t) => [t.pasoId, t]));
+    await this.accionesPasos(
+      auth,
+      pasoIds.map((id) => {
+        const p = porId.get(id)!;
+        return {
+          ordenId: p.ordenId,
+          itemId: p.itemId,
+          pasoId: p.id,
+          payload: {
+            accion: 'completar',
+            tiempoDeclaradoMin: tiemposPorId.get(id)?.tiempoDeclaradoMin,
+            sinTiempoConfirmado: tiemposPorId.get(id)?.sinTiempoConfirmado,
+          },
+          interno: { accionEnCola: { maquinaId } },
+        };
+      }),
+    );
+    return { completados: pasoIds.length, pasoIds };
+  }
+
+  /** Núcleo interno: todas las operaciones se confirman juntas o se revierten.
+   * No es un endpoint ni valida compatibilidad de tandas. El futuro comando
+   * de tanda debe añadir membresía, revisión de impacto e idempotencia. */
+  async accionesPasos(auth: CurrentAuth, acciones: AccionPasoEnGrupo[]) {
+    validarGrupoAcciones(acciones);
+    if (
+      !auth.permisos?.has('produccion.ejecutar') &&
+      !auth.permisos?.has('produccion.supervisar')
+    ) {
+      throw new ForbiddenException(
+        'No tenés permiso para ejecutar producción.',
+      );
+    }
+    await this.reconciliarTramosVencidos(auth.tenantId);
+    const resultados = await this.prisma.$transaction(
+      async (tx) => {
+        await bloquearOrdenesEjecucion(tx, auth.tenantId, acciones);
+        const cambios = [];
+        for (const a of acciones) {
+          try {
+            cambios.push(
+              await this.aplicarAccionPaso(
+                tx,
+                auth,
+                a.ordenId,
+                a.itemId,
+                a.pasoId,
+                a.payload,
+                a.interno,
+              ),
+            );
+          } catch (error) {
+            if (a.interno?.accionEnCola && error instanceof HttpException) {
+              const referencia = await tx.ordenTrabajoItemPaso.findFirst({
+                where: { tenantId: auth.tenantId, id: a.pasoId },
+                select: {
+                  nombre: true,
+                  orden: { select: { numero: true } },
+                  item: { select: { nombre: true } },
+                },
+              });
+              if (referencia)
+                throw new HttpException(
+                  `${referencia.orden.numero} · ${referencia.item.nombre} · ${referencia.nombre}: ${error.message} ${a.payload.accion === 'completar' ? 'No se completó ningún trabajo de la selección.' : 'No se registró la acción.'}`,
+                  error.getStatus(),
+                );
+            }
+            throw error;
+          }
+        }
+        return cambios;
+      },
+      { timeout: 15_000 },
+    );
+
+    await this.actualizarAsignaciones(auth.tenantId);
+    // Efectos fuera de la transacción, una vez por OT y sólo tras confirmar.
+    const porOrden = new Map(resultados.map((r) => [r.ordenId, r]));
+    for (const r of porOrden.values()) {
+      if (r.ordenFinalizada)
+        await this.capturarEtaCierre(auth.tenantId, r.ordenId);
+      this.avisarAlCliente(r.ordenId);
+    }
+    return resultados;
+  }
+
+  /** Acción de ejecución sobre un paso (iniciar/pausar/completar/…). */
+  private async aplicarAccionPaso(
+    tx: Prisma.TransactionClient,
     auth: CurrentAuth,
     ordenId: string,
     itemId: string,
@@ -5950,21 +6457,45 @@ export class OrdenesTrabajoService {
      * `autoPausa` = pausa sin respuesta del operario (D13, la dispara el
      * widget tras el countdown — no lleva motivo del catálogo).
      */
-    interno?: { tiempoLoteMin?: number; autoPausa?: boolean },
+    interno?: AccionPasoEnGrupo['interno'],
   ) {
-    await this.reconciliarTramosVencidos(auth.tenantId);
     const [paso, actor] = await Promise.all([
-      this.prisma.ordenTrabajoItemPaso.findFirst({
+      tx.ordenTrabajoItemPaso.findFirst({
         where: { id: pasoId, tenantId: auth.tenantId, ordenId, itemId },
-        include: {
+        // La ejecución necesita estado y referencias, no la geometría del nesting.
+        select: {
+          id: true,
+          itemId: true,
+          indice: true,
+          nombre: true,
+          estado: true,
+          familiaCodigo: true,
+          maquinaId: true,
+          tipoEjecucion: true,
+          motivoBloqueo: true,
+          modoRegistro: true,
+          mesaUsuarioId: true,
+          asignacionPersonalJson: true,
+          iniciadoEl: true,
+          iniciadoPorId: true,
+          duracionEstimadaMin: true,
+          nestingLoteId: true,
+          nestingLoteRol: true,
           orden: {
             select: {
               estado: true,
+              numero: true,
               progresoPct: true,
               proyectoCampanaId: true,
             },
           },
-          item: { select: { nombre: true, ordenIndice: true } },
+          item: {
+            select: {
+              nombre: true,
+              ordenIndice: true,
+              contieneLotesEntrega: true,
+            },
+          },
           tramos: {
             select: { id: true, usuarioId: true, inicioEl: true, finEl: true },
           },
@@ -5973,20 +6504,31 @@ export class OrdenesTrabajoService {
           },
         },
       }),
-      this.prisma.empleado.findFirst({
+      tx.empleado.findFirst({
         where: { tenantId: auth.tenantId, userId: auth.userId },
-        select: { nombreCompleto: true },
+        select: { id: true, nombreCompleto: true },
       }),
     ]);
     if (!paso) {
       throw new NotFoundException('No se encontró el paso de producción.');
     }
+    if (
+      interno?.accionEnCola &&
+      (paso.maquinaId !== interno.accionEnCola.maquinaId ||
+        paso.tipoEjecucion !== 'interno' ||
+        paso.item.contieneLotesEntrega)
+    )
+      throw new ConflictException(
+        `${paso.orden.numero} · ${paso.item.nombre}: el trabajo ya no pertenece a esta cola.`,
+      );
     if (paso.nestingLoteRol === 'PARTICIPANTE') {
       throw new ConflictException(
         'Este paso forma parte de un nesting compartido y se ejecuta desde su operación principal.',
       );
     }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
+    const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
+    const asignado = !!actor && !asignacion?.conflicto && asignacion?.personas.some(p => p.empleadoId === actor.id);
     if (
       (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
       !supervisa
@@ -5996,15 +6538,16 @@ export class OrdenesTrabajoService {
       );
     }
     if (!supervisa) {
-      await this.validarEjecucionEnEstacion(auth, paso);
+      await this.validarEjecucionEnEstacion(auth, paso, tx);
       if (
         paso.mesaUsuarioId !== auth.userId &&
+        !asignado &&
         !paso.tramos.some(
           (tramo) => tramo.usuarioId === auth.userId && !tramo.finEl,
         )
       ) {
         throw new ForbiddenException(
-          'Este paso no está en tu mesa de trabajo.',
+          'Este paso no está asignado a vos. Actualizá el tablero o consultá al supervisor.',
         );
       }
     }
@@ -6027,8 +6570,7 @@ export class OrdenesTrabajoService {
       );
     }
 
-    // En modo solo_completar (runtime de máquina, D10) no hay cronómetro:
-    // el paso se completa de un click y el tiempo asentado es el estimado.
+    // Todas las vistas respetan el modo de registro del paso.
     const esCronometro = paso.modoRegistro === 'cronometro';
     const accionCronometro =
       payload.accion === 'iniciar' ||
@@ -6042,7 +6584,7 @@ export class OrdenesTrabajoService {
 
     // Fase 4: para órdenes nuevas mandan las precedencias explícitas. Una OT
     // histórica sin nodoClave conserva exactamente la frontera por índice.
-    const pasosOrden = await this.prisma.ordenTrabajoItemPaso.findMany({
+    const pasosOrden = await tx.ordenTrabajoItemPaso.findMany({
       where: { tenantId: auth.tenantId, ordenId },
       select: {
         id: true,
@@ -6059,7 +6601,7 @@ export class OrdenesTrabajoService {
       pasosItem.length > 0 &&
       pasosItem.every((candidato) => candidato.nodoClave);
     const dependencias = usaGrafo
-      ? ((await this.prisma.ordenTrabajoPasoDependencia.findMany({
+      ? ((await tx.ordenTrabajoPasoDependencia.findMany({
           where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
           select: { predecesorPasoId: true, sucesorPasoId: true },
         })) ?? [])
@@ -6134,6 +6676,7 @@ export class OrdenesTrabajoService {
         ordenId,
         paso.id,
         paso.itemId,
+        tx,
       );
     }
 
@@ -6197,8 +6740,12 @@ export class OrdenesTrabajoService {
         } else if (payload.tiempoDeclaradoMin != null) {
           tiempoRealMin = payload.tiempoDeclaradoMin;
           tiempoFuente = 'declarado';
-        } else {
+        } else if (payload.sinTiempoConfirmado === true) {
           tiempoFuente = 'invalido';
+        } else {
+          throw new ConflictException(
+            `"${paso.nombre}": el tiempo medido es insuficiente. Declará cuánto llevó o elegí Completar sin tiempo.`,
+          );
         }
       }
     }
@@ -6214,7 +6761,7 @@ export class OrdenesTrabajoService {
             ...(paso.iniciadoPorId == null
               ? { iniciadoPorId: auth.userId, iniciadoPorNombre: usuarioNombre }
               : {}),
-            mesaUsuarioId: auth.userId,
+            mesaUsuarioId: asignacion ? paso.mesaUsuarioId : auth.userId,
           };
         case 'pausar':
           return { estado: 'pausado' };
@@ -6257,670 +6804,249 @@ export class OrdenesTrabajoService {
       (payload.accion === 'iniciar' || payload.accion === 'completar');
     const letraItem = String.fromCharCode(65 + (paso.item.ordenIndice % 26));
 
-    const ordenFinalizada = await this.prisma.$transaction(async (tx) => {
-      // Serializa todas las acciones de una misma OT antes de recalcular su
-      // progreso. Evita que dos pasos distintos escriban porcentajes tomados
-      // de snapshots concurrentes.
-      const ordenTomada = await tx.ordenTrabajo.updateMany({
-        where: {
-          id: ordenId,
-          tenantId: auth.tenantId,
-          estado: ordenEstado,
-        },
-        data: { updatedAt: ahora },
-      });
-      if (ordenTomada.count !== 1) {
-        throw new ConflictException(
-          'La orden cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
-        );
-      }
-
-      // La fila de la orden ya está bloqueada por esta transacción. Volvemos
-      // a leer la frontera para que dos operadores sobre ramas relacionadas
-      // no puedan abrir/reabrir un nodo usando un snapshot concurrente viejo.
-      const pasosActuales = await tx.ordenTrabajoItemPaso.findMany({
-        where: { tenantId: auth.tenantId, ordenId },
-        select: {
-          id: true,
-          itemId: true,
-          indice: true,
-          nodoClave: true,
-          estado: true,
-        },
-      });
-      const pasosItemActuales = pasosActuales.filter(
-        (candidato) => candidato.itemId === itemId,
+    // Serializa todas las acciones de una misma OT antes de recalcular su
+    // progreso. Evita que dos pasos distintos escriban porcentajes tomados
+    // de snapshots concurrentes.
+    const ordenTomada = await tx.ordenTrabajo.updateMany({
+      where: {
+        id: ordenId,
+        tenantId: auth.tenantId,
+        estado: ordenEstado,
+      },
+      data: { updatedAt: ahora },
+    });
+    if (ordenTomada.count !== 1) {
+      throw new ConflictException(
+        'La orden cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
       );
-      const usaGrafoActual =
-        pasosItemActuales.length > 0 &&
-        pasosItemActuales.every((candidato) => candidato.nodoClave);
-      const dependenciasActuales = usaGrafoActual
-        ? ((await tx.ordenTrabajoPasoDependencia.findMany({
-            where: { tenantId: auth.tenantId, ordenId, obligatoria: true },
-            select: { predecesorPasoId: true, sucesorPasoId: true },
-          })) ?? [])
-        : [];
-      const fronteraActual = evaluarFrontera(
-        pasosActuales,
-        dependenciasActuales,
-      );
-      if (ejecuta && !fronteraActual.ejecutable) {
-        throw new ConflictException(
-          `Las dependencias de "${paso.nombre}" cambiaron mientras operabas. Actualizá el tablero.`,
-        );
-      }
-      if (payload.accion === 'reabrir' && !fronteraActual.reabrible) {
-        throw new ConflictException(
-          `Un nodo descendiente de "${paso.nombre}" ya arrancó. Actualizá el tablero.`,
-        );
-      }
+    }
 
-      // Compare-and-set: la transición sólo se confirma si el paso conserva
-      // exactamente el estado que validamos. El segundo de dos clicks
-      // concurrentes obtiene conflicto y no abre otro tramo.
-      const pasoTomado = await tx.ordenTrabajoItemPaso.updateMany({
+    // La frontera se validó con la OT y sus pasos bloqueados. Cada acción
+    // siguiente del grupo lee nuevamente el resultado de las anteriores.
+
+    // Compare-and-set: la transición sólo se confirma si el paso conserva
+    // exactamente el estado que validamos. El segundo de dos clicks
+    // concurrentes obtiene conflicto y no abre otro tramo.
+    const pasoTomado = await tx.ordenTrabajoItemPaso.updateMany({
+      where: {
+        id: paso.id,
+        tenantId: auth.tenantId,
+        ordenId,
+        itemId,
+        estado: estadoActual,
+      },
+      data,
+    });
+    if (pasoTomado.count !== 1) {
+      throw new ConflictException(
+        'El paso cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
+      );
+    }
+
+    // F4.4.2: el paso visible gobierna la tanda física completa. Sus
+    // aliases conservan la trazabilidad de cada componente y avanzan en la
+    // misma transacción, sin duplicar tiempo ni trabajo en el tablero.
+    if (paso.nestingLoteRol === 'OPERATIVO' && paso.nestingLoteId) {
+      await tx.ordenTrabajoItemPaso.updateMany({
         where: {
-          id: paso.id,
           tenantId: auth.tenantId,
           ordenId,
-          itemId,
-          estado: estadoActual,
+          nestingLoteId: paso.nestingLoteId,
+          nestingLoteRol: 'PARTICIPANTE',
         },
-        data,
-      });
-      if (pasoTomado.count !== 1) {
-        throw new ConflictException(
-          'El paso cambió mientras operabas. Actualizá el tablero e intentá nuevamente.',
-        );
-      }
-
-      // F4.4.2: el paso visible gobierna la tanda física completa. Sus
-      // aliases conservan la trazabilidad de cada componente y avanzan en la
-      // misma transacción, sin duplicar tiempo ni trabajo en el tablero.
-      if (paso.nestingLoteRol === 'OPERATIVO' && paso.nestingLoteId) {
-        await tx.ordenTrabajoItemPaso.updateMany({
-          where: {
-            tenantId: auth.tenantId,
-            ordenId,
-            nestingLoteId: paso.nestingLoteId,
-            nestingLoteRol: 'PARTICIPANTE',
-          },
-          data: {
-            ...data,
-            duracionEstimadaMin: 0,
-            ...(payload.accion === 'completar'
-              ? { tiempoRealMin: 0, tiempoFuente: 'medido_lote' }
-              : {}),
-          },
-        });
-      }
-
-      // Tramos (D2): iniciar/continuar abren sesión de trabajo; pausar,
-      // completar y bloquear cierran la abierta con su motivo.
-      if (payload.accion === 'iniciar' || payload.accion === 'continuar') {
-        await tx.ordenTrabajoPasoTramo.create({
-          data: {
-            tenantId: auth.tenantId,
-            pasoId: paso.id,
-            usuarioId: auth.userId,
-            usuarioNombre,
-            inicioEl: ahora,
-          },
-        });
-      } else if (tramoAbierto) {
-        await tx.ordenTrabajoPasoTramo.update({
-          where: { id: tramoAbierto.id },
-          data: {
-            finEl: ahora,
-            motivoFin:
-              payload.accion === 'completar'
-                ? 'completado'
-                : payload.accion === 'bloquear'
-                  ? 'bloqueo'
-                  : interno?.autoPausa
-                    ? 'auto_pausa'
-                    : `pausa:${motivo}`,
-            ...(payload.accion === 'pausar' && motivo === 'otro'
-              ? { motivoDetalle: payload.motivoDetalle?.trim() }
-              : {}),
-          },
-        });
-      }
-
-      // Progreso real: duración estimada ponderada. El helper conserva un
-      // fallback honesto por conteo cuando la orden no tiene tiempos.
-      const pasosParaProgreso = await tx.ordenTrabajoItemPaso.findMany({
-        where: { ordenId },
-        select: {
-          estado: true,
-          duracionEstimadaMin: true,
-          nestingLoteRol: true,
-        },
-      });
-      const total = pasosParaProgreso.length;
-      const hechos = pasosParaProgreso.filter(
-        (candidato) => candidato.estado === 'hecho',
-      ).length;
-      const progresoPonderado = progresoPonderadoPasos(
-        pasosParaProgreso.map((candidato) => ({
-          estado: candidato.estado,
-          nestingLoteRol: candidato.nestingLoteRol,
-          duracionEstimadaMin:
-            candidato.duracionEstimadaMin != null
-              ? Number(candidato.duracionEstimadaMin)
-              : null,
-        })),
-      );
-      // Estado destino de la OT tras la acción:
-      // - completar el último paso pendiente la FINALIZA sola;
-      // - reabrir un paso de una OT finalizada la reabre a producción;
-      // - el primer trabajo sobre una OT pendiente la promueve a producción.
-      const nuevoEstadoOrden: OrdenTrabajoEstado | null = ordenSeFinaliza(
-        payload.accion,
-        total,
-        hechos,
-      )
-        ? 'finalizada'
-        : reabreFinalizada
-          ? 'produccion'
-          : promueve
-            ? 'produccion'
-            : null;
-      await tx.ordenTrabajo.update({
-        where: { id: ordenId },
         data: {
-          ...(nuevoEstadoOrden ? { estado: nuevoEstadoOrden } : {}),
-          ...(total > 0 ? { progresoPct: progresoPonderado } : {}),
+          ...data,
+          duracionEstimadaMin: 0,
+          ...(payload.accion === 'completar'
+            ? { tiempoRealMin: 0, tiempoFuente: 'medido_lote' }
+            : {}),
         },
       });
-      // Primera finalización (acá: el último paso completado la finaliza
-      // solo): nace la deuda comercial y arranca su aging.
-      if (nuevoEstadoOrden === 'finalizada') {
-        await this.marcarPrimeraFinalizacion(tx, auth.tenantId, ordenId);
-      }
+    }
 
+    // Tramos (D2): iniciar/continuar abren sesión de trabajo; pausar,
+    // completar y bloquear cierran la abierta con su motivo.
+    if (
+      esCronometro &&
+      (payload.accion === 'iniciar' || payload.accion === 'continuar')
+    ) {
+      await tx.ordenTrabajoPasoTramo.create({
+        data: {
+          tenantId: auth.tenantId,
+          pasoId: paso.id,
+          usuarioId: auth.userId,
+          usuarioNombre,
+          inicioEl: ahora,
+        },
+      });
+    } else if (tramoAbierto) {
+      await tx.ordenTrabajoPasoTramo.update({
+        where: { id: tramoAbierto.id },
+        data: {
+          finEl: ahora,
+          motivoFin:
+            payload.accion === 'completar'
+              ? 'completado'
+              : payload.accion === 'bloquear'
+                ? 'bloqueo'
+                : interno?.autoPausa
+                  ? 'auto_pausa'
+                  : `pausa:${motivo}`,
+          ...(payload.accion === 'pausar' && motivo === 'otro'
+            ? { motivoDetalle: payload.motivoDetalle?.trim() }
+            : {}),
+        },
+      });
+    }
+
+    // Progreso real: duración estimada ponderada. El helper conserva un
+    // fallback honesto por conteo cuando la orden no tiene tiempos.
+    const pasosParaProgreso = await tx.ordenTrabajoItemPaso.findMany({
+      where: { ordenId },
+      select: {
+        estado: true,
+        duracionEstimadaMin: true,
+        nestingLoteRol: true,
+      },
+    });
+    const total = pasosParaProgreso.length;
+    const hechos = pasosParaProgreso.filter(
+      (candidato) => candidato.estado === 'hecho',
+    ).length;
+    const progresoPonderado = progresoPonderadoPasos(
+      pasosParaProgreso.map((candidato) => ({
+        estado: candidato.estado,
+        nestingLoteRol: candidato.nestingLoteRol,
+        duracionEstimadaMin:
+          candidato.duracionEstimadaMin != null
+            ? Number(candidato.duracionEstimadaMin)
+            : null,
+      })),
+    );
+    // Estado destino de la OT tras la acción:
+    // - completar el último paso pendiente la FINALIZA sola;
+    // - reabrir un paso de una OT finalizada la reabre a producción;
+    // - el primer trabajo sobre una OT pendiente la promueve a producción.
+    const nuevoEstadoOrden: OrdenTrabajoEstado | null = ordenSeFinaliza(
+      payload.accion,
+      total,
+      hechos,
+    )
+      ? 'finalizada'
+      : reabreFinalizada
+        ? 'produccion'
+        : promueve
+          ? 'produccion'
+          : null;
+    await tx.ordenTrabajo.update({
+      where: { id: ordenId },
+      data: {
+        ...(nuevoEstadoOrden ? { estado: nuevoEstadoOrden } : {}),
+        ...(total > 0 ? { progresoPct: progresoPonderado } : {}),
+      },
+    });
+    // Primera finalización (acá: el último paso completado la finaliza
+    // solo): nace la deuda comercial y arranca su aging.
+    if (nuevoEstadoOrden === 'finalizada') {
+      await this.marcarPrimeraFinalizacion(tx, auth.tenantId, ordenId);
+    }
+
+    await tx.ordenTrabajoEvento.create({
+      data: {
+        tenantId: auth.tenantId,
+        ordenId,
+        tipo: 'paso',
+        descripcion: `Producción: "${paso.nombre}" ${transicion.verbo} — item ${letraItem} · ${paso.item.nombre}${
+          payload.accion === 'bloquear'
+            ? ` (${motivo})`
+            : payload.accion === 'pausar'
+              ? ` (${
+                  interno?.autoPausa
+                    ? 'automática: sin respuesta'
+                    : MOTIVO_PAUSA_LABELS[motivo as MotivoPausa]
+                })`
+              : ''
+        }`,
+        usuarioNombre: interno?.autoPausa ? 'Sistema' : usuarioNombre,
+        usuarioId: interno?.autoPausa ? null : auth.userId,
+        origen: interno?.autoPausa ? 'sistema' : 'usuario',
+        datosJson: {
+          pasoId: paso.id,
+          itemId,
+          accion: payload.accion,
+          antes: estadoActual,
+          ...(paso.nestingLoteId ? { nestingLoteId: paso.nestingLoteId } : {}),
+          ...(motivo ? { motivo } : {}),
+        },
+      },
+    });
+    if (nuevoEstadoOrden) {
+      const nota =
+        nuevoEstadoOrden === 'finalizada'
+          ? 'todos los pasos completados'
+          : ordenEstado === 'finalizada'
+            ? 'se reabrió un paso'
+            : 'arrancó la producción';
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
           ordenId,
-          tipo: 'paso',
-          descripcion: `Producción: "${paso.nombre}" ${transicion.verbo} — item ${letraItem} · ${paso.item.nombre}${
-            payload.accion === 'bloquear'
-              ? ` (${motivo})`
-              : payload.accion === 'pausar'
-                ? ` (${
-                    interno?.autoPausa
-                      ? 'automática: sin respuesta'
-                      : MOTIVO_PAUSA_LABELS[motivo as MotivoPausa]
-                  })`
-                : ''
-          }`,
-          usuarioNombre: interno?.autoPausa ? 'Sistema' : usuarioNombre,
-          usuarioId: interno?.autoPausa ? null : auth.userId,
-          origen: interno?.autoPausa ? 'sistema' : 'usuario',
+          fecha: new Date(ahora.getTime() + 1),
+          tipo: 'estado',
+          descripcion: `Estado: ${ORDEN_TRABAJO_ESTADO_LABELS[ordenEstado]} → ${ORDEN_TRABAJO_ESTADO_LABELS[nuevoEstadoOrden]} (${nota})`,
+          usuarioNombre: 'Sistema',
+          usuarioId: null,
+          origen: 'sistema',
           datosJson: {
-            pasoId: paso.id,
-            itemId,
-            accion: payload.accion,
-            antes: estadoActual,
-            ...(paso.nestingLoteId
-              ? { nestingLoteId: paso.nestingLoteId }
-              : {}),
-            ...(motivo ? { motivo } : {}),
+            campo: 'estado',
+            antes: ordenEstado,
+            despues: nuevoEstadoOrden,
           },
         },
       });
-      if (nuevoEstadoOrden) {
-        const nota =
+    }
+    await this.eventosSistema?.publicar(
+      {
+        tenantId: auth.tenantId,
+        actorUserId: interno?.autoPausa
+          ? null
+          : (auth.impersonacion?.actorUserId ?? auth.userId),
+        actorNombre: interno?.autoPausa ? 'Sistema' : usuarioNombre,
+        tipo: `produccion.paso_${payload.accion}`,
+        entidadTipo: 'orden_trabajo',
+        entidadId: ordenId,
+        titulo:
           nuevoEstadoOrden === 'finalizada'
-            ? 'todos los pasos completados'
-            : ordenEstado === 'finalizada'
-              ? 'se reabrió un paso'
-              : 'arrancó la producción';
-        await tx.ordenTrabajoEvento.create({
-          data: {
-            tenantId: auth.tenantId,
-            ordenId,
-            fecha: new Date(ahora.getTime() + 1),
-            tipo: 'estado',
-            descripcion: `Estado: ${ORDEN_TRABAJO_ESTADO_LABELS[ordenEstado]} → ${ORDEN_TRABAJO_ESTADO_LABELS[nuevoEstadoOrden]} (${nota})`,
-            usuarioNombre: 'Sistema',
-            usuarioId: null,
-            origen: 'sistema',
-            datosJson: {
-              campo: 'estado',
-              antes: ordenEstado,
-              despues: nuevoEstadoOrden,
-            },
-          },
-        });
-      }
-      await this.eventosSistema?.publicar(
-        {
-          tenantId: auth.tenantId,
-          actorUserId: interno?.autoPausa
-            ? null
-            : (auth.impersonacion?.actorUserId ?? auth.userId),
-          actorNombre: interno?.autoPausa ? 'Sistema' : usuarioNombre,
-          tipo: `produccion.paso_${payload.accion}`,
-          entidadTipo: 'orden_trabajo',
-          entidadId: ordenId,
-          titulo:
-            nuevoEstadoOrden === 'finalizada'
-              ? 'Orden finalizada'
-              : payload.accion === 'bloquear'
-                ? 'Producción bloqueada'
-                : 'Avance de producción',
-          mensaje: `“${paso.nombre}” ${transicion.verbo} en ${paso.item.nombre}.`,
-          href: `/produccion/ordenes/${ordenId}`,
-          severidad:
-            payload.accion === 'bloquear'
-              ? SeveridadNotificacionInterna.ADVERTENCIA
-              : nuevoEstadoOrden === 'finalizada' ||
-                  payload.accion === 'completar'
-                ? SeveridadNotificacionInterna.EXITO
-                : SeveridadNotificacionInterna.INFO,
-          topicos: [
-            `orden:${ordenId}`,
-            'tablero-produccion',
-            ...(paso.orden.proyectoCampanaId
-              ? [`campana:${paso.orden.proyectoCampanaId}`]
-              : []),
-          ],
-          proyectoCampanaId: paso.orden.proyectoCampanaId ?? undefined,
-        },
-        tx,
-      );
-      return nuevoEstadoOrden === 'finalizada';
-    });
-
-    // La orden se finalizó sola (último paso completado): cierra el ciclo real
-    // y completa las promesas abiertas. Post-commit, best-effort.
-    if (ordenFinalizada) {
-      await this.capturarEtaCierre(auth.tenantId, ordenId);
-    }
-    this.avisarAlCliente(ordenId);
-
-    return this.tableroItemActualizado(auth, itemId);
-  }
-
-  /**
-   * Completa VARIOS pasos de una (el impresor manda varios archivos juntos
-   * y no debería marcar card por card). Reusa la acción individual por
-   * paso — mismas validaciones de frontera/estado, eventos, promoción de
-   * orden y auto-finalización — y devuelve un resultado PARCIAL honesto:
-   * los que no pudieron completarse vuelven con su motivo.
-   */
-  async completarPasosLote(
-    auth: CurrentAuth,
-    pasoIds: string[],
-    duracionTandaMin?: number,
-    ahorro?: AhorroConsolidacionDto,
-    validarCompatibilidadLaser = false,
-  ) {
-    const unicos = [...new Set(pasoIds)];
-    const pasos = await this.prisma.ordenTrabajoItemPaso.findMany({
-      where: { id: { in: unicos }, tenantId: auth.tenantId },
-      select: {
-        id: true,
-        ordenId: true,
-        itemId: true,
-        nombre: true,
-        rutaPasoId: true,
-        nestingLoteRol: true,
-        nestingLoteSnapshotJson: true,
-        familiaCodigo: true,
-        estado: true,
-        tipoEjecucion: true,
-        orden: {
-          select: {
-            pasos: {
-              select: {
-                id: true,
-                itemId: true,
-                indice: true,
-                nodoClave: true,
-                estado: true,
-                dependenciasEntrantes: { select: { predecesorPasoId: true } },
-                gatesOperativos: { select: { estado: true } },
-              },
-            },
-          },
-        },
-        duracionEstimadaMin: true,
-        item: {
-          select: {
-            jobContextSnapshotJson: true,
-            trazabilidadSnapshotJson: true,
-            cotizacionItem: {
-              select: { jobContextJson: true, trazabilidadJson: true },
-            },
-          },
-        },
+            ? 'Orden finalizada'
+            : payload.accion === 'bloquear'
+              ? 'Producción bloqueada'
+              : 'Avance de producción',
+        mensaje: `“${paso.nombre}” ${transicion.verbo} en ${paso.item.nombre}.`,
+        href: `/produccion/ordenes/${ordenId}`,
+        severidad:
+          payload.accion === 'bloquear'
+            ? SeveridadNotificacionInterna.ADVERTENCIA
+            : nuevoEstadoOrden === 'finalizada' ||
+                payload.accion === 'completar'
+              ? SeveridadNotificacionInterna.EXITO
+              : SeveridadNotificacionInterna.INFO,
+        topicos: [
+          `orden:${ordenId}`,
+          'tablero-produccion',
+          ...(paso.orden.proyectoCampanaId
+            ? [`campana:${paso.orden.proyectoCampanaId}`]
+            : []),
+        ],
+        proyectoCampanaId: paso.orden.proyectoCampanaId ?? undefined,
       },
-    });
-    const porId = new Map(pasos.map((paso) => [paso.id, paso]));
-
-    if (validarCompatibilidadLaser) {
-      if (pasos.length !== unicos.length) {
-        throw new BadRequestException(
-          'La tanda cambió. Actualizá la cola antes de confirmar la impresión.',
-        );
-      }
-
-      const extraidas = pasos.map((paso) => {
-        const snapshot = snapshotPasoProduccion(paso.item, paso);
-        return {
-          paso,
-          datos: extraerCompatibilidadLaser(
-            snapshot.jobContext,
-            snapshot.traza,
-            paso.rutaPasoId,
-          ),
-        };
-      });
-      const configIds = [
-        ...new Set(
-          extraidas
-            .map((item) => item.datos.configPasoId)
-            .filter((id): id is string => id !== null),
-        ),
-      ];
-      const configs = configIds.length
-        ? await this.prisma.productoConfigPaso.findMany({
-            where: { tenantId: auth.tenantId, id: { in: configIds } },
-            select: { id: true, paramsPasoJson: true, maquinaM1Id: true },
-          })
-        : [];
-      const configPorId = new Map(configs.map((item) => [item.id, item]));
-      const claves = new Set<string>();
-
-      for (const { paso, datos } of extraidas) {
-        if (
-          colaConsolidacionDeFamilia(paso.familiaCodigo) !== 'laser' ||
-          paso.tipoEjecucion === 'tercerizado' ||
-          paso.estado === 'bloqueado' ||
-          paso.nestingLoteRol === 'PARTICIPANTE' ||
-          !fronterasEjecutablesDAG(
-            paso.orden.pasos,
-            paso.orden.pasos.filter((p) => p.itemId === paso.itemId),
-          ).some((p) => p.id === paso.id)
-        ) {
-          throw new BadRequestException(
-            'La tanda cambió: uno de los trabajos ya no está listo para impresión láser.',
-          );
-        }
-        const resuelta = aplicarFallbackConfigLaser(
-          datos,
-          datos.configPasoId ? configPorId.get(datos.configPasoId) : undefined,
-        );
-        const faltantes = faltantesCompatibilidadLaser(resuelta);
-        const clave = claveCompatibilidadLoteLaser(resuelta);
-        if (!clave) {
-          throw new BadRequestException(
-            `No se puede completar la tanda: faltan ${faltantes.join(', ')}.`,
-          );
-        }
-        claves.add(clave);
-      }
-      if (claves.size !== 1) {
-        throw new BadRequestException(
-          'La tanda contiene trabajos con máquina, papel o configuración de impresión incompatibles.',
-        );
-      }
-    }
-
-    let ahorroVerificado: {
-      materiaPrimaId: string;
-      materiaPrimaNombre: string;
-      tecnologia: string | null;
-      jobs: number;
-      consumoSeparadoMl: number;
-      consumoConsolidadoMl: number;
-      ahorroMl: number;
-      costoSeparado: number | null;
-      costoConsolidado: number | null;
-      ahorroPesos: number | null;
-      baselineParcial: boolean;
-    } | null = null;
-
-    if (ahorro) {
-      if (pasos.length !== unicos.length) {
-        throw new BadRequestException(
-          'La tanda cambió. Actualizá la cola antes de confirmar la impresión.',
-        );
-      }
-      if (
-        pasos.some((p) => {
-          const snapshot = snapshotPasoProduccion(p.item, p);
-          return (
-            p.nestingLoteRol === 'PARTICIPANTE' ||
-            requierePlanConservado(
-              snapshot.paso?.nestingResult,
-              !!snapshot.lote,
-            )
-          );
-        })
-      )
-        throw new BadRequestException(
-          'Esta tanda tiene un plan de fabricación conservado. Completá sus operaciones desde la orden sin reacomodar el material.',
-        );
-      const acomodo = acomodarTanda(pasos, [ahorro.anchoMm]).anchos[0];
-      if (
-        !acomodo ||
-        acomodo.consumedLengthMm == null ||
-        acomodo.piezasAcomodadas === 0 ||
-        acomodo.incompatibles.length > 0
-      ) {
-        throw new BadRequestException(
-          'El ancho elegido no admite todos los trabajos de la tanda.',
-        );
-      }
-
-      const snapshots = pasos.map(snapshotAhorroPaso);
-      const idsVariantes = [
-        ...new Set(
-          snapshots
-            .map((item) => item.varianteId)
-            .filter((id): id is string => id !== null),
-        ),
-      ];
-      const variantes = await this.prisma.materiaPrimaVariante.findMany({
-        where: {
-          tenantId: auth.tenantId,
-          id: { in: [...idsVariantes, ahorro.varianteId] },
-          activo: true,
-        },
-        select: {
-          id: true,
-          materiaPrimaId: true,
-          atributosVarianteJson: true,
-          precioReferencia: true,
-          stocks: { select: { cantidadDisponible: true } },
-          materiaPrima: { select: { nombre: true } },
-        },
-      });
-      const seleccionada = variantes.find(
-        (item) => item.id === ahorro.varianteId,
-      );
-      const anchoSeleccionado = Number(
-        (seleccionada?.atributosVarianteJson as { anchoMm?: unknown } | null)
-          ?.anchoMm,
-      );
-      if (!seleccionada || anchoSeleccionado !== ahorro.anchoMm) {
-        throw new BadRequestException(
-          'El rollo seleccionado ya no está disponible para ese ancho.',
-        );
-      }
-
-      const compatibilidad = claveCompatibilidadVariante(
-        seleccionada.atributosVarianteJson,
-      );
-      const porVariante = new Map(variantes.map((item) => [item.id, item]));
-      const compatibles = snapshots.every((snapshot) => {
-        const variante = snapshot.varianteId
-          ? porVariante.get(snapshot.varianteId)
-          : null;
-        return (
-          variante != null &&
-          variante.materiaPrimaId === seleccionada.materiaPrimaId &&
-          claveCompatibilidadVariante(variante.atributosVarianteJson) ===
-            compatibilidad
-        );
-      });
-      if (!compatibles) {
-        throw new BadRequestException(
-          'La tanda contiene variantes de material que no se pueden imprimir juntas.',
-        );
-      }
-
-      const consumoConsolidadoMl = acomodo.consumedLengthMm / 1000;
-      const stockConocido = seleccionada.stocks.length > 0;
-      const stockDisponible = seleccionada.stocks.reduce(
-        (total, item) => total + Number(item.cantidadDisponible),
-        0,
-      );
-      if (stockConocido && stockDisponible < consumoConsolidadoMl) {
-        throw new BadRequestException(
-          'El rollo seleccionado no tiene stock suficiente para la tanda.',
-        );
-      }
-
-      const conConsumo = snapshots.filter(
-        (item) => item.consumoCotizadoMl != null,
-      );
-      const conCosto = conConsumo.filter((item) => item.precioMl != null);
-      const consumoSeparadoMl = conConsumo.reduce(
-        (total, item) => total + (item.consumoCotizadoMl ?? 0),
-        0,
-      );
-      const costoSeparado = conCosto.reduce(
-        (total, item) =>
-          total + (item.consumoCotizadoMl ?? 0) * (item.precioMl ?? 0),
-        0,
-      );
-      const precioSeleccionado =
-        seleccionada.precioReferencia != null
-          ? Number(seleccionada.precioReferencia)
-          : null;
-      const costoConsolidado =
-        precioSeleccionado != null
-          ? consumoConsolidadoMl * precioSeleccionado
-          : null;
-      const redondear = (valor: number) => Math.round(valor * 100) / 100;
-      ahorroVerificado = {
-        materiaPrimaId: seleccionada.materiaPrimaId,
-        materiaPrimaNombre: seleccionada.materiaPrima.nombre,
-        tecnologia:
-          snapshots.map((item) => item.tecnologia).find((item) => item) ?? null,
-        jobs: pasos.length,
-        consumoSeparadoMl: redondear(consumoSeparadoMl),
-        consumoConsolidadoMl: redondear(consumoConsolidadoMl),
-        ahorroMl: redondear(consumoSeparadoMl - consumoConsolidadoMl),
-        costoSeparado: conCosto.length > 0 ? redondear(costoSeparado) : null,
-        costoConsolidado:
-          costoConsolidado != null ? redondear(costoConsolidado) : null,
-        ahorroPesos:
-          conCosto.length > 0 && costoConsolidado != null
-            ? redondear(costoSeparado - costoConsolidado)
-            : null,
-        baselineParcial:
-          conConsumo.length < snapshots.length ||
-          conCosto.length < snapshots.length,
-      };
-    }
-
-    // Prorrateo de la tanda (D11): un solo número medido para todo el lote,
-    // repartido por peso del estimado. Los pasos sin estimado pesan como el
-    // estimado promedio (o 1 si ninguno tiene).
-    const tiempoLotePorPaso = new Map<string, number>();
-    if (duracionTandaMin != null && duracionTandaMin > 0 && pasos.length > 0) {
-      const estimados = pasos
-        .map((paso) =>
-          paso.duracionEstimadaMin != null
-            ? Number(paso.duracionEstimadaMin)
-            : null,
-        )
-        .filter((valor): valor is number => valor != null && valor > 0);
-      const pesoDefault =
-        estimados.length > 0
-          ? estimados.reduce((a, b) => a + b, 0) / estimados.length
-          : 1;
-      const pesoDe = (paso: (typeof pasos)[number]) => {
-        const estimado =
-          paso.duracionEstimadaMin != null
-            ? Number(paso.duracionEstimadaMin)
-            : null;
-        return estimado != null && estimado > 0 ? estimado : pesoDefault;
-      };
-      const sumaPesos = pasos.reduce((acc, paso) => acc + pesoDe(paso), 0);
-      for (const paso of pasos) {
-        tiempoLotePorPaso.set(
-          paso.id,
-          (duracionTandaMin * pesoDe(paso)) / sumaPesos,
-        );
-      }
-    }
-
-    let completados = 0;
-    const errores: Array<{ pasoId: string; motivo: string }> = [];
-    // Secuencial a propósito: dos pasos del lote pueden ser del mismo item
-    // (la frontera avanza al completar el primero) y la promoción de la
-    // orden no debe correr en paralelo consigo misma.
-    for (const pasoId of unicos) {
-      const paso = porId.get(pasoId);
-      if (!paso) {
-        errores.push({ pasoId, motivo: 'No se encontró el paso.' });
-        continue;
-      }
-      try {
-        await this.accionPaso(
-          auth,
-          paso.ordenId,
-          paso.itemId,
-          paso.id,
-          { accion: 'completar' },
-          { tiempoLoteMin: tiempoLotePorPaso.get(paso.id) },
-        );
-        completados += 1;
-      } catch (error: unknown) {
-        errores.push({
-          pasoId,
-          motivo:
-            error instanceof Error ? error.message : 'No se pudo completar.',
-        });
-      }
-    }
-
-    // Ahorro por consolidación de la tanda (simulador gran formato): se
-    // asienta SOLO si el lote completó entero — con completados parciales
-    // los números del batch (calculados para la tanda completa) mentirían.
-    if (ahorroVerificado && completados > 0 && errores.length === 0) {
-      const actor = await this.prisma.empleado.findFirst({
-        where: { tenantId: auth.tenantId, userId: auth.userId },
-        select: { nombreCompleto: true },
-      });
-      await this.prisma.ahorroConsolidacion.create({
-        data: {
-          tenantId: auth.tenantId,
-          usuarioId: auth.userId,
-          usuarioNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
-          materiaPrimaId: ahorroVerificado.materiaPrimaId,
-          materiaPrimaNombre: ahorroVerificado.materiaPrimaNombre,
-          tecnologia: ahorroVerificado.tecnologia,
-          jobs: ahorroVerificado.jobs,
-          consumoSeparadoMl: ahorroVerificado.consumoSeparadoMl,
-          consumoConsolidadoMl: ahorroVerificado.consumoConsolidadoMl,
-          ahorroMl: ahorroVerificado.ahorroMl,
-          costoSeparado: ahorroVerificado.costoSeparado,
-          costoConsolidado: ahorroVerificado.costoConsolidado,
-          ahorroPesos: ahorroVerificado.ahorroPesos,
-          baselineParcial: ahorroVerificado.baselineParcial,
-        },
-      });
-    }
-
-    return { completados, errores };
+      tx,
+    );
+    return {
+      ordenId,
+      itemId,
+      pasoId,
+      ordenFinalizada: nuevoEstadoOrden === 'finalizada',
+    };
   }
 
   /** Re-proyección de un item del tablero después de una acción. */
@@ -6928,6 +7054,8 @@ export class OrdenesTrabajoService {
     const item = await this.prisma.ordenTrabajoItem.findFirst({
       where: { id: itemId, tenantId: auth.tenantId },
       include: {
+        parentItem: { select: { id: true, nombre: true } },
+        loteEntrega: { select: loteTableroSelect },
         cotizacionItem: {
           select: {
             jobContextJson: true,
@@ -6940,7 +7068,7 @@ export class OrdenesTrabajoService {
             mesaUsuario: { select: { nombreCompleto: true, email: true } },
             dependenciasEntrantes: {
               where: { obligatoria: true },
-              select: { predecesorPasoId: true },
+              select: dependenciaTableroSelect,
             },
             dependenciasSalientes: {
               where: { obligatoria: true },
@@ -7001,6 +7129,7 @@ export class OrdenesTrabajoService {
       tecnologias,
       estadosOrden,
     );
+    await this.proyectarAprobacionesTablero(auth.tenantId, [proyectado]);
     if (alcanceTableroProduccionDe(auth) !== 'operario') return proyectado;
     return {
       ...proyectado,
@@ -7267,7 +7396,15 @@ export class OrdenesTrabajoService {
   private async tecnologiaPorMaquinaDeItems(
     tenantId: string,
     items: Array<{ pasos: Array<{ maquinaId: string | null }> }>,
-  ): Promise<Map<string, string | null>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        tecnologia: string | null;
+        operacionMaquina: ModoOperacionMaquina | null;
+      }
+    >
+  > {
     const maquinaIds = new Set<string>();
     for (const item of items) {
       for (const paso of item.pasos) {
@@ -7285,8 +7422,32 @@ export class OrdenesTrabajoService {
       },
     });
     return new Map(
-      maquinas.map((m) => [m.id, resolverTecnologiaMaquina(m)] as const),
+      maquinas.map(
+        (m) =>
+          [
+            m.id,
+            {
+              tecnologia: resolverTecnologiaMaquina(m),
+              operacionMaquina: leerModoOperacionMaquina(
+                (m.parametrosTecnicosJson as Record<string, unknown> | null)
+                  ?.operacionMaquina,
+              ),
+            },
+          ] as const,
+      ),
     );
+  }
+
+  private async proyectarAprobacionesTablero(
+    tenantId: string,
+    items: Array<ReturnType<OrdenesTrabajoService['toTableroItem']>>,
+  ) {
+    const referencias = items.flatMap((item) => item.pasos
+      .filter((paso) => paso.estado !== 'hecho')
+      .map((paso) => ({ id: paso.id, ordenId: item.ordenId, itemId: item.id, item })));
+    const aprobaciones = await leerAprobacionesPendientes(this.prisma, tenantId, referencias);
+    for (const item of items) for (const paso of item.pasos)
+      paso.aprobacionesPendientes = aprobaciones.get(paso.id) ?? [];
   }
 
   private toTableroItem(
@@ -7301,6 +7462,11 @@ export class OrdenesTrabajoService {
     item: {
       id: string;
       parentItemId: string | null;
+      loteEntregaId?: string | null;
+      loteEntrega?: Prisma.LoteProduccionEntregaGetPayload<{
+        select: typeof loteTableroSelect;
+      }> | null;
+      fechaEntrega?: Date | null;
       componenteCodigo: string | null;
       nodoIncorporacionClave: string | null;
       parentItem?: { id: string; nombre: string } | null;
@@ -7334,6 +7500,7 @@ export class OrdenesTrabajoService {
         centroCostoNombre: string | null;
         maquinaId: string | null;
         duracionEstimadaMin: Prisma.Decimal | null;
+        demandaHumanaJson?: Prisma.JsonValue;
         operacionesIncorporacionSnapshotJson: Prisma.JsonValue;
         nestingLoteId: string | null;
         nestingLoteRol: string | null;
@@ -7345,6 +7512,12 @@ export class OrdenesTrabajoService {
         plazoProveedorDias: number | null;
         estadoCompra: string | null;
         iniciadoEl: Date | null;
+        planificadoDesde?: Date | null;
+        planificadoHasta?: Date | null;
+        atencionPlanificadaJson?: Prisma.JsonValue;
+        asignacionPersonalJson?: Prisma.JsonValue;
+        asignacionManualJson?: Prisma.JsonValue;
+        planReferenciaJson?: Prisma.JsonValue;
         completadoEl: Date | null;
         modoRegistro: string;
         tiempoRealMin: Prisma.Decimal | null;
@@ -7353,7 +7526,7 @@ export class OrdenesTrabajoService {
         completadoPorNombre: string | null;
         mesaUsuarioId: string | null;
         mesaUsuario: { nombreCompleto: string | null; email: string } | null;
-        dependenciasEntrantes: Array<{ predecesorPasoId: string }>;
+        dependenciasEntrantes: DependenciaTablero[];
         dependenciasSalientes: Array<{ sucesorPasoId: string }>;
         gatesOperativos?: Array<{
           id: string;
@@ -7381,7 +7554,13 @@ export class OrdenesTrabajoService {
      * "por tecnología" (docs/estaciones-reglas-diseno.md). No se persiste: se
      * arma en lectura desde `Maquina`. Default vacío = ruteo por fallback.
      */
-    tecnologiaPorMaquina: Map<string, string | null> = new Map(),
+    tecnologiaPorMaquina: Map<
+      string,
+      {
+        tecnologia: string | null;
+        operacionMaquina: ModoOperacionMaquina | null;
+      }
+    > = new Map(),
     estadoPasosOrden: Map<string, string> = new Map(),
   ) {
     const contexto =
@@ -7396,6 +7575,8 @@ export class OrdenesTrabajoService {
     return {
       id: item.id,
       parentItemId: item.parentItemId,
+      loteEntregaId: item.loteEntregaId ?? null,
+      loteEntrega: contextoLoteTablero(item),
       componenteCodigo: item.componenteCodigo,
       nodoIncorporacionClave: item.nodoIncorporacionClave,
       componenteDe: item.parentItem
@@ -7417,9 +7598,9 @@ export class OrdenesTrabajoService {
         etiqueta: string;
         valor: string;
       }>,
-      fechaEntrega: orden.fechaEntrega
-        ? orden.fechaEntrega.toISOString().slice(0, 10)
-        : null,
+      fechaEntrega:
+        (item.fechaEntrega ?? orden.fechaEntrega)?.toISOString().slice(0, 10) ??
+        null,
       archivosCount: item._count?.archivos ?? 0,
       // El operario necesita estas instrucciones antes de iniciar Diseño
       // gráfico. Se proyecta sólo el brief, no todo el jobContext comercial.
@@ -7431,12 +7612,21 @@ export class OrdenesTrabajoService {
         indice: paso.indice,
         nodoClave: paso.nodoClave,
         esTerminal: paso.esTerminal,
+        planificadoDesde: paso.planificadoDesde?.toISOString() ?? null,
+        planificadoHasta: paso.planificadoHasta?.toISOString() ?? null,
+        planReferencia: proyectarPlanReferencia(paso.planReferenciaJson),
+        atencionPlanificada: paso.atencionPlanificadaJson,
+        dependenciasPendientes: esperasTablero(
+          paso.dependenciasEntrantes ?? [],
+        ),
         predecesorPasoIds: (paso.dependenciasEntrantes ?? []).map(
           (dependencia) => dependencia.predecesorPasoId,
         ),
+        aprobacionesPendientes: [] as string[],
         predecesoresSatisfechos: (paso.dependenciasEntrantes ?? []).every(
           (dependencia) =>
-            estadoPasosOrden.get(dependencia.predecesorPasoId) === 'hecho',
+            (estadoPasosOrden.get(dependencia.predecesorPasoId) ??
+              dependencia.predecesor?.estado) === 'hecho',
         ),
         sucesorPasoIds: (paso.dependenciasSalientes ?? []).map(
           (dependencia) => dependencia.sucesorPasoId,
@@ -7463,10 +7653,26 @@ export class OrdenesTrabajoService {
         centroCostoNombre: paso.centroCostoNombre,
         // Señal real de ruteo a estación (rediseño por reglas): la máquina que
         // ejecutó el paso y su tecnología derivada. Null en pasos sin máquina
-        // o en órdenes viejas → caen al fallback por familia + centro.
+        // o en órdenes viejas: si la familia exige máquina, queda sin estación.
         maquinaId: paso.maquinaId,
+        requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
+        demandaHumana:
+          paso.maquinaId && paso.estado !== 'hecho'
+            ? aplicarOperacionMaquina(
+                leerDemandaHumana(
+                  paso.demandaHumanaJson,
+                  Number(paso.duracionEstimadaMin ?? -1),
+                ),
+                tecnologiaPorMaquina.get(paso.maquinaId)?.operacionMaquina ??
+                  null,
+              )
+            : paso.demandaHumanaJson,
+        tramosEjecucion: paso.tramos.map((t) => ({
+          inicio: t.inicioEl.toISOString(),
+          fin: t.finEl?.toISOString() ?? null,
+        })),
         tecnologia: paso.maquinaId
-          ? (tecnologiaPorMaquina.get(paso.maquinaId) ?? null)
+          ? (tecnologiaPorMaquina.get(paso.maquinaId)?.tecnologia ?? null)
           : null,
         duracionEstimadaMin:
           paso.duracionEstimadaMin != null
@@ -7520,6 +7726,8 @@ export class OrdenesTrabajoService {
                 paso.tramos[0].motivoDetalle,
               )
             : null,
+        personalFijo: personalFijoDelPaso({ ...paso, operadorActualUsuarioId: paso.tramos.find(t => !t.finEl)?.usuarioId }, (leerAsignacionPersonal(paso.asignacionPersonalJson)?.personas ?? []).map(p => ({ id: p.empleadoId, userId: p.usuarioId }))),
+        asignacionPersonal: proyectarAsignacionPersonal(paso.asignacionPersonalJson, viewerUserId),
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario
           ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email
@@ -7532,6 +7740,7 @@ export class OrdenesTrabajoService {
 
   private toListItem(
     orden: Omit<OrdenConRelaciones, 'items'> & {
+      pasos?: Parameters<typeof calcularProgreso>[0];
       items: Array<{ nombre: string; parentItemId?: string | null }>;
     },
   ) {
@@ -7555,7 +7764,8 @@ export class OrdenesTrabajoService {
         : null,
       itemsCount: itemsComerciales.length,
       total: Number(orden.total ?? 0),
-      progresoPct: progresoEfectivo(estado, orden.progresoPct),
+      progresoPct: progresoDeOrden(orden).porcentaje,
+      progreso: progresoDeOrden(orden),
       resumen: itemsComerciales.map((item) => item.nombre).join(' · '),
       proyectoCampana: orden.proyectoCampana,
     };
@@ -7692,6 +7902,7 @@ export class OrdenesTrabajoService {
             subcategoriaComercial: itemCategorias.subcategoriaComercial ?? '',
             cantidad: Number(item.cantidad),
             cantidadUnidad: item.cantidadUnidad,
+            fechaEntrega: item.fechaEntrega?.toISOString().slice(0, 10) ?? null,
             subtotal: Number(item.subtotal),
             impuestos: Number(item.impuestos),
             total: Number(item.total),
@@ -7835,13 +8046,12 @@ export class OrdenesTrabajoService {
     }
 
     const productos = productosComercialesConTrabajo(orden.items);
-    let pasosTotal = 0;
-    let pasosHechos = 0;
+    const progreso = calcularProgreso(
+      productos.flatMap((i) => i.pasos),
+      orden.estado,
+    );
     const items = productos.map((item) => {
-      const total = item.pasos.length;
-      const hechos = item.pasos.filter((p) => p.estado === 'hecho').length;
-      pasosTotal += total;
-      pasosHechos += hechos;
+      const avance = calcularProgreso(item.pasos, orden.estado);
       const actual = item.pasos.find((p) => p.estado !== 'hecho');
       return {
         id: item.id,
@@ -7854,7 +8064,8 @@ export class OrdenesTrabajoService {
             valor: string;
           }>,
         ),
-        progresoPct: total > 0 ? Math.round((hechos / total) * 100) : 0,
+        progresoPct: avance.porcentaje,
+        progreso: avance,
         pasoActual: actual?.nombre ?? null,
         estacionActual: actual?.centroCostoNombre ?? null,
         archivos: item.archivos.map(archivoPublico),
@@ -7913,8 +8124,8 @@ export class OrdenesTrabajoService {
       fechaEntrega: orden.fechaEntrega
         ? orden.fechaEntrega.toISOString().slice(0, 10)
         : null,
-      progresoPct:
-        pasosTotal > 0 ? Math.round((pasosHechos / pasosTotal) * 100) : 0,
+      progresoPct: progreso.porcentaje,
+      progreso,
       fidelizacion: {
         puntos: orden.fidelizacionCanjePuntos
           ? orden.fidelizacionCanjePuntos

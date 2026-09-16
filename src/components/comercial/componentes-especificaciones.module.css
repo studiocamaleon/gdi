@@ -2,8 +2,8 @@
   margin-bottom: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  background: var(--surface);
+  border-radius: 8px;
+  background: var(--card);
 }
 
 .section > header {
@@ -11,8 +11,8 @@
   align-items: center;
   gap: 10px;
   padding: 13px 14px;
-  border-bottom: 1px solid var(--hairline);
-  background: linear-gradient(90deg, #fff 0%, #fffaf7 100%);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
 }
 
 .section > header > span:nth-child(2) {
@@ -24,12 +24,12 @@
 }
 
 .section > header strong {
-  color: var(--ink);
+  color: var(--foreground);
   font-size: 13px;
 }
 
 .section > header small {
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 11.5px;
 }
 
@@ -39,9 +39,9 @@
   height: 30px;
   flex: 0 0 30px;
   place-items: center;
-  border-radius: 9px;
-  background: #fff0e8;
-  color: #f05223;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
 }
 
 .icon svg {
@@ -52,10 +52,10 @@
 .count {
   min-width: 24px;
   padding: 3px 7px;
-  border: 1px solid #ffd7c6;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: #fff;
-  color: #c43d16;
+  background: var(--card);
+  color: var(--foreground);
   font-size: 11px;
   font-weight: 700;
   text-align: center;
@@ -70,8 +70,8 @@
 .card {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: 8px;
+  background: var(--card);
 }
 
 .card > summary {
@@ -91,7 +91,7 @@
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--muted-foreground);
   transition: transform 160ms ease;
 }
 
@@ -100,11 +100,9 @@
 }
 
 .componentIndex {
-  color: #f05223;
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  letter-spacing: 0.04em;
 }
 
 .identity {
@@ -117,26 +115,27 @@
 
 .identity strong {
   overflow: hidden;
-  color: var(--ink);
+  color: var(--foreground);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+  letter-spacing: -0.015em;
 }
 
 .identity small {
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 
 .body {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--border);
 }
 
 .specGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
   gap: 1px;
-  background: var(--hairline);
+  background: var(--border);
 }
 
 .spec {
@@ -145,20 +144,19 @@
   flex-direction: column;
   gap: 4px;
   padding: 11px 12px;
-  background: #fff;
+  background: var(--card);
 }
 
 .spec > span {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .spec > strong {
   overflow-wrap: anywhere;
-  color: var(--ink);
+  color: var(--foreground);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -209,29 +207,29 @@
   display: grid;
   gap: 8px;
   padding: 10px 10px 10px 22px;
-  border-top: 1px solid var(--hairline);
-  background: #fffaf7;
+  border-top: 1px solid var(--border);
+  background: var(--muted);
 }
 
 .childrenLabel {
-  color: #c43d16;
+  color: var(--foreground);
   font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .empty {
   margin: 0;
   padding: 12px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
 .pieces {
   min-width: 0;
-  border-top: 1px solid var(--hairline);
-  background: var(--surface);
+  border-top: 1px solid var(--border);
+  background: var(--card);
 }
 
 .piecesHead {
@@ -244,13 +242,13 @@
 }
 
 .piecesHead strong {
-  color: var(--ink);
+  color: var(--foreground);
   font-size: 12px;
   font-weight: 650;
 }
 
 .piecesHead > span {
-  color: var(--muted-text);
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 
@@ -262,26 +260,26 @@
 .pieces th {
   height: 32px;
   padding: 7px 12px;
-  border-top: 1px solid var(--hairline);
-  background: var(--surface-2);
-  color: var(--muted-text);
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-size: 9.5px;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .pieces td {
   padding: 10px 12px;
-  color: var(--ink);
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .pieces tr {
-  border-color: var(--hairline);
+  border-color: var(--border);
 }
 
 .pieces tfoot {
-  background: var(--surface-2);
+  background: var(--muted);
 }
 
 .pieceIdentity {
@@ -297,7 +295,7 @@
 
 .pieceIdentity span {
   max-width: 320px;
-  color: var(--muted-text);
+  color: var(--muted-foreground);
   font-size: 10.5px;
 }
 
@@ -309,4 +307,10 @@
   .specGrid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+.card[open] > summary { background: color-mix(in srgb, var(--accent) 4%, var(--card)); }
+.card > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .card > summary > svg { transition: none; }
 }

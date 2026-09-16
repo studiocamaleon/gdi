@@ -1,5 +1,4 @@
-import { PanelSaludEta } from "@/components/produccion/panel-salud-eta";
-import { MetaPie } from "@/components/panel/panel-general";
+import { ReporteSaludEta } from "@/components/panel/reporte-salud-eta";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
 import { getPanelSaludEta } from "@/lib/panel-api";
 import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
@@ -21,15 +20,5 @@ export default async function SaludEtaReportePage({
   const rango = rangoDeParametros(parametros, await zonaHorariaDelTenant());
   const data = await getPanelSaludEta(rango);
 
-  return (
-    <>
-      <PanelSaludEta
-        enReportes
-        initialPrecision={data.precision}
-        initialSalud={data.salud}
-        rango={rango}
-      />
-      <MetaPie meta={data.meta} />
-    </>
-  );
+  return <ReporteSaludEta d={data} />;
 }

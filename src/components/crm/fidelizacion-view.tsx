@@ -3,28 +3,48 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
+  ArrowUpRightIcon,
+  ArrowRightIcon,
   AwardIcon,
   CoinsIcon,
   GiftIcon,
   HistoryIcon,
-  SaveIcon,
+  LockKeyholeIcon,
+  PauseCircleIcon,
+  CircleCheckIcon,
   SlidersHorizontalIcon,
   TrendingUpIcon,
   UsersRoundIcon,
+  UserRoundIcon,
 } from "lucide-react";
 import {
   actualizarFidelizacion,
   type FidelizacionResumen,
 } from "@/lib/fidelizacion-api";
-import { Button } from "@/components/ui/button";
 import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+  Card,
+  Chip,
+  Description as FieldDescription,
+  Input,
+  Label as FieldLabel,
+  Switch,
+} from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ListMetric } from "@/components/design-system/list-metric";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import { Field, FieldGroup } from "@/components/ui/field";
 import {
   Table,
   TableBody,
@@ -78,213 +98,314 @@ export function FidelizacionView({
         );
       }
     });
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const m = initial.metricas;
   return (
-    <main className={styles.pagina}>
-      <header className={styles.encabezado}>
-        <div className={styles.tituloGrupo}>
-          <span className={styles.iconoModulo} aria-hidden="true">
-            <AwardIcon />
-          </span>
+    <section
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page}`}
+    >
+      <div className={styles.contenido}>
+        <header className={listPage.header}>
           <div>
-            <span className={styles.eyebrow}>Relaciones que vuelven</span>
+            <p className={styles.eyebrow}>CRM · Relación con clientes</p>
             <div className={styles.tituloLinea}>
-              <h1>Fidelización</h1>
-              <span
+              <h1>
+                Fidelización<span className={styles.dot}>.</span>
+              </h1>
+              <Chip
+                size="sm"
+                variant={config.acumulacionActiva ? "soft" : "secondary"}
+                color={config.acumulacionActiva ? "success" : "default"}
                 className={styles.estadoPrograma}
-                data-activa={config.acumulacionActiva}
               >
-                <i aria-hidden="true" />
-              {config.acumulacionActiva ? "Acumulando" : "Acumulación pausada"}
-              </span>
+                {config.acumulacionActiva ? (
+                  <CircleCheckIcon aria-hidden />
+                ) : (
+                  <PauseCircleIcon aria-hidden />
+                )}
+                {config.acumulacionActiva
+                  ? "Acumulando"
+                  : "Acumulación pausada"}
+              </Chip>
             </div>
-            <p>
+            <p className={listPage.subtitle}>
               Convertí una parte del margen real en puntos auditables para tus
               clientes.
             </p>
           </div>
-        </div>
-        {puedeConfigurar ? (
-          <Button
-            className={styles.guardar}
-            onClick={guardar}
-            disabled={saving}
-          >
-            <SaveIcon data-icon="inline-start" />
-            {saving ? "Guardando…" : "Guardar"}
-          </Button>
-        ) : null}
-      </header>
-      <section className={styles.kpis} aria-label="Indicadores de fidelización">
-        <Kpi
-          title="Puntos vigentes"
-          value={fmt(m.saldoPuntos)}
-          description={`${fmt(m.reservadosPuntos)} reservados`}
-          Icon={CoinsIcon}
-          principal
-        />
-        <Kpi
-          title="Equivalente pendiente"
-          value={money(m.equivalenteMonetario)}
-          description="Bonificaciones comprometidas"
-          Icon={GiftIcon}
-        />
-        <Kpi
-          title="Puntos emitidos"
-          value={fmt(m.emitidos)}
-          description="Mes actual"
-          Icon={TrendingUpIcon}
-        />
-        <Kpi
-          title="Puntos canjeados"
-          value={fmt(m.canjeados)}
-          description={`Mes actual · ${fmt(m.clientes)} clientes con cuenta`}
-          Icon={UsersRoundIcon}
-        />
-      </section>
-
-      <section className={styles.reglas}>
-        <header className={styles.reglasIntro}>
-          <span className={styles.reglasIcono} aria-hidden="true">
-            <SlidersHorizontalIcon />
-          </span>
-          <span className={styles.reglasKicker}>Reglas del programa</span>
-          <h2>Una recompensa respaldada por margen real.</h2>
-          <p>
-            La equivalencia queda bloqueada después del primer movimiento.
-            Pausar sólo detiene nuevas ganancias; los saldos existentes siguen
-            siendo canjeables.
-          </p>
-          <div className={styles.reglaResumen}>
-            <div>
-              <span>Acumulación</span>
-              <strong>{config.porcentajeMargen}% del margen</strong>
-            </div>
-            <div>
-              <span>Equivalencia</span>
-              <strong>
-                {fmt(config.puntosBase)} pts = {money(config.montoBase)}
-              </strong>
-            </div>
-          </div>
+          {puedeConfigurar ? (
+            <Button onPress={guardar} isDisabled={saving}>
+              {saving ? "Guardando…" : "Guardar cambios"}
+              <ArrowUpRightIcon aria-hidden />
+            </Button>
+          ) : null}
         </header>
 
-        <div className={styles.reglasFormulario}>
-          <div className={styles.formularioTitulo}>
-            <div>
-              <span>Configuración</span>
-              <h2>Economía de puntos</h2>
+        <section
+          className={styles.kpis}
+          aria-label="Indicadores de fidelización"
+        >
+          <ListMetric
+            label="Puntos vigentes"
+            value={fmt(m.saldoPuntos)}
+            hint={`${fmt(m.reservadosPuntos)} reservados`}
+            icon={CoinsIcon}
+            tone="brand"
+          />
+          <ListMetric
+            label="Equivalente pendiente"
+            value={money(m.equivalenteMonetario)}
+            hint="Bonificaciones comprometidas"
+            icon={GiftIcon}
+          />
+          <ListMetric
+            label="Puntos emitidos"
+            value={fmt(m.emitidos)}
+            hint="Mes actual"
+            icon={TrendingUpIcon}
+          />
+          <ListMetric
+            label="Puntos canjeados"
+            value={fmt(m.canjeados)}
+            hint={`Mes actual · ${fmt(m.clientes)} ${m.clientes === 1 ? "cliente" : "clientes"} con cuenta`}
+            icon={UsersRoundIcon}
+          />
+        </section>
+
+        <Card className={styles.reglas} aria-labelledby="fidelizacion-reglas">
+          <div className={styles.reglasIntro}>
+            <div className={styles.seccionTitulo}>
+              <span className={styles.iconoSeccion}>
+                <AwardIcon size={18} aria-hidden />
+              </span>
+              <h2 id="fidelizacion-reglas">Reglas del programa</h2>
             </div>
-            {config.conversionBloqueada ? (
-              <span className={styles.bloqueada}>Equivalencia protegida</span>
-            ) : null}
-          </div>
-          <FieldGroup className={styles.campos}>
-            <Field orientation="horizontal" className={styles.campoSwitch}>
-              <div className="flex flex-col gap-1">
-                <FieldLabel htmlFor="fidelizacion-activa">
-                  Acumular puntos
-                </FieldLabel>
-                <FieldDescription>Activa nuevas ganancias.</FieldDescription>
+            <strong className={styles.reglasDestacado}>
+              Del margen real al próximo beneficio.
+            </strong>
+            <div className={styles.recorrido} aria-hidden>
+              <span>
+                <TrendingUpIcon />
+                <small>Margen</small>
+              </span>
+              <ArrowRightIcon />
+              <span>
+                <CoinsIcon />
+                <small>Puntos</small>
+              </span>
+              <ArrowRightIcon />
+              <span>
+                <GiftIcon />
+                <small>Beneficio</small>
+              </span>
+            </div>
+            <p>
+              Una parte del margen se convierte en puntos para tus clientes. Si
+              pausás la acumulación, los saldos existentes siguen siendo
+              canjeables.
+            </p>
+            <dl className={styles.reglaResumen}>
+              <div>
+                <dt>
+                  <TrendingUpIcon size={15} aria-hidden />
+                  Acumulación
+                </dt>
+                <dd>{config.porcentajeMargen}% del margen</dd>
               </div>
+              <div>
+                <dt>
+                  <CoinsIcon size={15} aria-hidden />
+                  Equivalencia
+                </dt>
+                <dd>
+                  {fmt(config.puntosBase)} pts = {money(config.montoBase)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div className={styles.reglasFormulario}>
+            <header className={styles.formularioTitulo}>
+              <div className={styles.seccionTitulo}>
+                <span className={styles.iconoSeccion}>
+                  <SlidersHorizontalIcon size={18} aria-hidden />
+                </span>
+                <h2>Economía de puntos</h2>
+              </div>
+              {config.conversionBloqueada ? (
+                <Chip
+                  size="sm"
+                  variant="secondary"
+                  className={styles.estadoPrograma}
+                >
+                  <LockKeyholeIcon aria-hidden />
+                  Equivalencia protegida
+                </Chip>
+              ) : null}
+            </header>
+            <FieldGroup className={styles.campos}>
               <Switch
                 id="fidelizacion-activa"
-                checked={config.acumulacionActiva}
-                disabled={!puedeConfigurar}
-                onCheckedChange={(v) =>
-                  setConfig({ ...config, acumulacionActiva: v })
+                className={styles.campoSwitch}
+                isSelected={config.acumulacionActiva}
+                isDisabled={!puedeConfigurar}
+                onChange={(v) => setConfig({ ...config, acumulacionActiva: v })}
+              >
+                <Switch.Content className={styles.switchContenido}>
+                  <div className={styles.switchTexto}>
+                    <FieldLabel>Acumular puntos</FieldLabel>
+                    <FieldDescription>
+                      Activa nuevas ganancias.
+                    </FieldDescription>
+                  </div>
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                </Switch.Content>
+              </Switch>
+              <Field
+                className={styles.campo}
+                data-disabled={!puedeConfigurar || undefined}
+              >
+                <FieldLabel htmlFor="fidelizacion-pct">% del margen</FieldLabel>
+                <Input
+                  className={focus.singleBorder}
+                  id="fidelizacion-pct"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  disabled={!puedeConfigurar}
+                  value={config.porcentajeMargen}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      porcentajeMargen: Number(e.target.value),
+                    })
+                  }
+                />
+              </Field>
+              <Field
+                className={styles.campo}
+                data-disabled={
+                  !puedeConfigurar || config.conversionBloqueada || undefined
                 }
-              />
-            </Field>
-            <Field className={styles.campo}>
-              <FieldLabel htmlFor="fidelizacion-pct">% del margen</FieldLabel>
-              <Input
-                id="fidelizacion-pct"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                disabled={!puedeConfigurar}
-                value={config.porcentajeMargen}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    porcentajeMargen: Number(e.target.value),
-                  })
+              >
+                <FieldLabel htmlFor="fidelizacion-monto">
+                  Monto de referencia
+                </FieldLabel>
+                <Input
+                  className={focus.singleBorder}
+                  id="fidelizacion-monto"
+                  type="number"
+                  min="0.01"
+                  disabled={!puedeConfigurar || config.conversionBloqueada}
+                  value={config.montoBase}
+                  onChange={(e) =>
+                    setConfig({ ...config, montoBase: Number(e.target.value) })
+                  }
+                />
+              </Field>
+              <Field
+                className={styles.campo}
+                data-disabled={
+                  !puedeConfigurar || config.conversionBloqueada || undefined
                 }
-              />
-            </Field>
-            <Field className={styles.campo}>
-              <FieldLabel htmlFor="fidelizacion-monto">
-                Monto de referencia
-              </FieldLabel>
-              <Input
-                id="fidelizacion-monto"
-                type="number"
-                min="0.01"
-                disabled={!puedeConfigurar || config.conversionBloqueada}
-                value={config.montoBase}
-                onChange={(e) =>
-                  setConfig({ ...config, montoBase: Number(e.target.value) })
-                }
-              />
-            </Field>
-            <Field className={styles.campo}>
-              <FieldLabel htmlFor="fidelizacion-puntos">
-                Puntos equivalentes
-              </FieldLabel>
-              <Input
-                id="fidelizacion-puntos"
-                type="number"
-                min="1"
-                disabled={!puedeConfigurar || config.conversionBloqueada}
-                value={config.puntosBase}
-                onChange={(e) =>
-                  setConfig({ ...config, puntosBase: Number(e.target.value) })
-                }
-              />
-            </Field>
-          </FieldGroup>
-        </div>
-      </section>
-
-      <section className={styles.movimientos}>
-        <header className={styles.movimientosHeader}>
-          <span className={styles.movimientosIcono} aria-hidden="true">
-            <HistoryIcon />
-          </span>
-          <div>
-            <h2>Movimientos recientes</h2>
-            <p>
-            Libro mayor de ganancias, canjes, ajustes y reversiones.
+              >
+                <FieldLabel htmlFor="fidelizacion-puntos">
+                  Puntos equivalentes
+                </FieldLabel>
+                <Input
+                  className={focus.singleBorder}
+                  id="fidelizacion-puntos"
+                  type="number"
+                  min="1"
+                  disabled={!puedeConfigurar || config.conversionBloqueada}
+                  value={config.puntosBase}
+                  onChange={(e) =>
+                    setConfig({ ...config, puntosBase: Number(e.target.value) })
+                  }
+                />
+              </Field>
+            </FieldGroup>
+            <p className={styles.notaConversion}>
+              <LockKeyholeIcon aria-hidden />
+              <span>
+                {config.conversionBloqueada
+                  ? "La equivalencia está protegida porque ya hay movimientos. El valor de los puntos existentes se conserva."
+                  : "La equivalencia quedará protegida después del primer movimiento de puntos."}
+              </span>
             </p>
           </div>
-          <span className={styles.movimientosCantidad}>
-            {initial.recientes.length} registros
-          </span>
-        </header>
-        <div className={styles.tablaWrap}>
-          <Table className={styles.tabla}>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead className="text-right">Puntos</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initial.recientes.length ? (
-                initial.recientes.map((mov) => (
+        </Card>
+
+        <Card
+          className={styles.movimientos}
+          aria-labelledby="fidelizacion-movimientos"
+        >
+          <header className={styles.movimientosHeader}>
+            <span className={styles.iconoSeccion}>
+              <HistoryIcon size={18} aria-hidden />
+            </span>
+            <div>
+              <h2 id="fidelizacion-movimientos">Movimientos recientes</h2>
+              <p>Libro mayor de ganancias, canjes, ajustes y reversiones.</p>
+            </div>
+            <span className={styles.movimientosCantidad}>
+              {initial.recientes.length}{" "}
+              {initial.recientes.length === 1 ? "registro" : "registros"}
+            </span>
+          </header>
+          {initial.recientes.length === 0 ? (
+            <Empty className={styles.vacio}>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <CoinsIcon />
+                </EmptyMedia>
+                <EmptyTitle>Todavía no hay movimientos</EmptyTitle>
+                <EmptyDescription>
+                  Las ganancias, los canjes y los ajustes de puntos aparecerán
+                  acá.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <Table
+              className={styles.tabla}
+              aria-label="Movimientos recientes de fidelización"
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className={styles.numero}>Puntos</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {initial.recientes.map((mov) => (
                   <TableRow key={mov.id}>
-                    <TableCell>
-                      {new Date(mov.createdAt).toLocaleString("es-AR")}
+                    <TableCell className={styles.fecha}>
+                      <time dateTime={mov.createdAt}>
+                        {new Date(mov.createdAt).toLocaleString("es-AR")}
+                      </time>
                     </TableCell>
-                    <TableCell>{mov.cliente?.nombre ?? "—"}</TableCell>
                     <TableCell>
-                      <span className={styles.tipoMovimiento}>
-                        {etiquetaMovimiento(mov.tipo)}
+                      <span className={styles.cliente}>
+                        <UserRoundIcon aria-hidden />
+                        {mov.cliente?.nombre ?? "—"}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="sm"
+                        variant="soft"
+                        className={styles.tipoMovimiento}
+                      >
+                        {etiquetaMovimiento(mov.tipo)}
+                      </Chip>
                     </TableCell>
                     <TableCell
                       className={styles.puntosMovimiento}
@@ -292,50 +413,15 @@ export function FidelizacionView({
                     >
                       {mov.deltaPuntos > 0 ? "+" : ""}
                       {fmt(mov.deltaPuntos)}
+                      <span className={styles.unidad}> pts</span>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="text-center text-muted-foreground"
-                  >
-                    Todavía no hay movimientos.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function Kpi({
-  title,
-  value,
-  description,
-  Icon,
-  principal = false,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  principal?: boolean;
-}) {
-  return (
-    <article className={`${styles.kpi} ${principal ? styles.kpiPrincipal : ""}`}>
-      <span className={styles.kpiIcono} aria-hidden="true">
-        <Icon />
-      </span>
-      <div className={styles.kpiTexto}>
-        <span>{title}</span>
-        <strong>{value}</strong>
-        <small>{description}</small>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
       </div>
-    </article>
+    </section>
   );
 }

@@ -9,12 +9,12 @@
  *
  * Este script NO arregla lo viejo. Impide que empeore:
  *   - clase global NUEVA que no estaba en la línea de base -> ERROR
- *   - globals.css que crece -> aviso (no corta: a veces hay que tocar tokens)
+ *   - globals.css que crece -> ERROR
  *   - clase global que DESAPARECE -> felicita y pide actualizar la base
  *
  * Uso:
  *   node scripts/css-guard.mjs             # verifica
- *   node scripts/css-guard.mjs --update    # reescribe la línea de base
+ *   node scripts/css-guard.mjs --update    # baja la línea de base
  *   node scripts/css-guard.mjs --list      # lista las globales de hoy
  *
  * Qué cuenta como "global de verdad": un selector que es UNA clase sola.
@@ -135,6 +135,14 @@ const instantanea = {
 };
 
 if (args.includes("--update")) {
+  if (existsSync(BASE)) {
+    const anterior = JSON.parse(readFileSync(BASE, "utf8"));
+    const permitidas = new Set(anterior.globales);
+    if (totalLineas > anterior.totalLineas || clases.some(clase => !permitidas.has(clase))) {
+      console.error("La base sólo puede bajar: --update no permite incorporar clases ni aumentar líneas. Usá utilidades, tokens del sistema de diseño o CSS Modules.");
+      process.exit(1);
+    }
+  }
   writeFileSync(BASE, `${JSON.stringify(instantanea, null, 2)}\n`);
   console.log(`Línea de base actualizada: ${clases.length} clases globales, ${totalLineas} líneas.`);
   process.exit(0);
@@ -165,26 +173,16 @@ if (nuevas.length) {
     console.error(`    .${c}  (L${ls.join(", L")})`);
   }
   console.error(`
-  Una clase sin ancestro le pega a TODA la app. Opciones, en orden:
-
-    1. Que la vista nueva nazca con su propio archivo:
-         mi-vista.module.css  +  import s from "./mi-vista.module.css"
-       Adentro el nombre puede ser tan corto como quieras: el compilador lo
-       aísla solo. Es la salida recomendada.
-
-    2. Si de verdad va en globals.css, colgala de un ancestro:
-         .mi-vista .card { ... }     en vez de     .card { ... }
-
-    3. Si es a propósito parte del sistema compartido (.btn, .tbl, .tag…),
-       sumala a la base a conciencia:
-         npm run css:guard -- --update
+  Las vistas renovadas usan HeroUI + utilidades Tailwind y CSS Modules.
+  Consultá docs/sistema-visual-heroui.md. No agregues reglas de vistas al global.
 `);
 }
 
 if (totalLineas > base.totalLineas) {
-  console.warn(
-    `\n⚠ globals.css creció ${totalLineas - base.totalLineas} línea(s). ` +
-      `Si era inevitable (tokens, reset), actualizá la base; si era una vista, va en su módulo.`,
+  falla = true;
+  console.error(
+    `\n✗ globals.css creció ${totalLineas - base.totalLineas} línea(s). ` +
+      `Los estilos nuevos van en utilidades, tokens del sistema de diseño o CSS Modules.`,
   );
 }
 

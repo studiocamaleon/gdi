@@ -50,6 +50,7 @@ import {
   consumableUnitForTemplate,
   getConsumableChannelFromDetail,
   isConsumableChannel,
+  isDuplicatorMasterDetail,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
 } from './consumibles-impresion';
 import { getMaquinaDiagnosticoConfiguracion } from './maquinaria-configuracion';
@@ -192,6 +193,7 @@ const TEMPLATE_CATALOG_RULES: Record<
 };
 
 const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
+  'operacionMaquina',
   'procesamientoCorte',
   'altoMaxHoja',
   'altoMinHoja',
@@ -273,6 +275,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'estrategiaNestingVectorial',
   'sistemaLaminacionTransferencia',
   'soportaCorteIntegrado',
+  'tamborInstalado',
   'tecnologia',
   'tipoFilm',
   'tipoUnionVectorial',
@@ -1455,17 +1458,22 @@ export class MaquinariaService {
           `El consumible ${consumibleName} referencia un perfil operativo inexistente en la carga actual.`,
         );
       }
-      for (const detailKey of Object.keys(consumible.detalle ?? {})) {
+      const detalle = consumible.detalle ?? {};
+      const esMasterDuplicadora =
+        payload.plantilla === PlantillaMaquinariaDto.duplicadora_digital &&
+        isDuplicatorMasterDetail(detalle);
+      for (const detailKey of Object.keys(detalle)) {
+        if (detailKey === 'rol' && esMasterDuplicadora) continue;
         if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
           throw new BadRequestException(
             `El consumible ${consumibleName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`,
           );
         }
       }
-      const detalle = consumible.detalle ?? {};
       const channel = getConsumableChannelFromDetail(detalle);
       if (
         PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(payload.plantilla) &&
+        !esMasterDuplicadora &&
         !channel
       ) {
         throw new BadRequestException(
@@ -1601,6 +1609,11 @@ export class MaquinariaService {
   private validateTechnicalPayload(payload: UpsertMaquinaDto) {
     if (!payload.parametrosTecnicos) {
       return;
+    }
+
+    const operacion = payload.parametrosTecnicos.operacionMaquina;
+    if (operacion != null && operacion !== 'con_operario' && operacion !== 'autonoma') {
+      throw new BadRequestException('Elegí operación de máquina con operario o autónoma.');
     }
 
     if (payload.parametrosTecnicos.procesamientoCorte != null && !['mesa_de_corte', 'router_cnc', 'corte_laser'].includes(payload.plantilla)) throw new BadRequestException('Esta plantilla no admite recetas por herramientas de corte.');

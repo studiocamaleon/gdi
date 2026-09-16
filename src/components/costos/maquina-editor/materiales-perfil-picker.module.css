@@ -28,7 +28,7 @@
   max-width: 100%;
   padding: 3px 3px 3px 10px;
   border-radius: 8px;
-  background: var(--surface-2, var(--secondary));
+  background: var(--surface-secondary);
   overflow: visible;
   white-space: normal;
 }
@@ -39,11 +39,11 @@
 }
 
 .remove {
-  color: var(--muted-foreground);
+  color: var(--muted-text);
 }
 
 .remove:hover,
 .remove:focus-visible {
-  color: var(--brand-orange, var(--primary));
-  background: var(--accent-soft, var(--accent));
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
 }

@@ -1,44 +1,40 @@
 "use client";
 
-import { EncabezadoConfiguracion } from "@/components/configuracion/encabezado-configuracion";
-import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import {
   ArrowLeftIcon,
+  ArrowUpRightIcon,
   HistoryIcon,
   RefreshCwIcon,
   RouteIcon,
-  SaveIcon,
+  GitBranchIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+  Checkbox,
+  Chip,
+  Input,
+  Modal,
+  Switch,
+  TextArea as Textarea,
+} from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import shared from "./flujos.module.css";
 import {
   actualizarRuta,
   crearRuta,
@@ -125,6 +121,8 @@ interface PasoEditable {
 }
 
 export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { fechaNumerica } = useFecha();
   const [guardando, setGuardando] = React.useState(false);
@@ -372,6 +370,10 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   };
 
   const [confirmandoBorrado, setConfirmandoBorrado] = React.useState(false);
+  const [textoConfirmacion, setTextoConfirmacion] = React.useState("");
+  React.useEffect(() => {
+    if (!confirmandoBorrado) setTextoConfirmacion("");
+  }, [confirmandoBorrado]);
 
   const ejecutarMigracion = async () => {
     if (!rutaExistente || productosSeleccionados.length === 0) return;
@@ -419,72 +421,105 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
   };
 
   return (
-    <div className={`content ${visual.page}`}>
-      <div className="space-y-3">
-        <Link href="/productos-servicios/rutas" className="back-link">
-          <ArrowLeftIcon className="size-4" />
-          Flujos de producción
-        </Link>
-        <EncabezadoConfiguracion
-          area="flujos"
-          titulo={
-            modo === "crear"
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page}`}
+    >
+      <Link href="/productos-servicios/rutas" className={styles.backLink}>
+        <ArrowLeftIcon className="size-4" />
+        Flujos de producción
+      </Link>
+      <header className={listPage.header}>
+        <div>
+          <span className={brand.eyebrow}>
+            Costos ·{" "}
+            {modo === "crear" ? "Nuevo recorrido" : "Flujo reutilizable"}
+          </span>
+          <h1>
+            {modo === "crear"
               ? "Nuevo flujo"
-              : (rutaExistente?.nombre ?? "Editar flujo")
-          }
-          descripcion={
-            modo === "editar" ? (
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="tag version">
+              : (rutaExistente?.nombre ?? "Editar flujo")}
+            <span className={brand.titleDot}>.</span>
+          </h1>
+          <div className={`${listPage.subtitle} ${styles.subtitle}`}>
+            {modo === "editar" ? (
+              <>
+                <Chip size="sm" variant="soft">
                   v{rutaExistente?.versionActual}
-                </span>
+                </Chip>
                 {(rutaExistente?.productosAlternativas?.length ?? 0) > 0
                   ? `Usado por ${rutaExistente?.productosAlternativas?.length} producto(s)`
                   : "Flujo reutilizable · Secuencia y configuración de producción"}
-              </span>
+              </>
             ) : (
               "Organizá las operaciones y sus conexiones para reutilizarlas en tus productos."
-            )
-          }
-          acciones={
-            modo === "editar" ? (
-              <div className="flex items-center gap-2">
-                <Label htmlFor="ruta-activa">Flujo activo</Label>
-                <Switch
-                  id="ruta-activa"
-                  aria-label="Flujo activo"
-                  checked={activo}
-                  onCheckedChange={setActivo}
-                />
-              </div>
-            ) : null
-          }
-        />
-      </div>
-
-      <div className="route-editor">
-        <div className={`route-cols ${styles.routeColumns}`}>
-          <Card className={`wiz-section ${styles.identityCard}`}>
-            <CardHeader className={styles.identityHeader}>
+            )}
+          </div>
+        </div>
+        <div className={styles.headerAside}>
+          <div className={styles.summary}>
+            <span className={styles.summaryIcon} aria-hidden>
+              <GitBranchIcon />
+            </span>
+            <div>
+              <span>
+                {modo === "crear"
+                  ? "Nuevo flujo · V1"
+                  : `Versión ${rutaExistente?.versionActual}`}
+              </span>
+              <strong>
+                {workflow.nodos.length}{" "}
+                {workflow.nodos.length === 1 ? "nodo" : "nodos"} ·{" "}
+                {workflow.topologia === "DAG"
+                  ? "Con paralelos"
+                  : "Secuencia lineal"}
+              </strong>
+            </div>
+          </div>
+          {modo === "editar" && (
+            <Switch
+              className={styles.activeSwitch}
+              id="ruta-activa"
+              aria-label="Flujo activo"
+              isSelected={activo}
+              onChange={setActivo}
+              size="sm"
+            >
+              <Switch.Content>
+                <span>Flujo activo</span>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Content>
+            </Switch>
+          )}
+        </div>
+      </header>
+      <div className={styles.editor}>
+        <div className={styles.routeColumns}>
+          <Card className={styles.identityCard}>
+            <Card.Header className={styles.identityHeader}>
               <span className={styles.identityIcon} aria-hidden="true">
                 <RouteIcon />
               </span>
               <div className={styles.identityCopy}>
-                <span className={styles.eyebrow}>Flujo reutilizable</span>
-                <CardTitle>Identidad</CardTitle>
-                <CardDescription>
+                <span className={styles.eyebrow}>01 · Identidad</span>
+                <Card.Title>Datos del flujo</Card.Title>
+                <Card.Description>
                   Definí cómo se reconocerá este flujo en el catálogo y al
                   incorporarlo a un producto.
-                </CardDescription>
+                </Card.Description>
               </div>
-            </CardHeader>
-            <CardContent className={styles.identityContent}>
+            </Card.Header>
+            <Card.Content className={styles.identityContent}>
               <FieldGroup className={styles.fieldGroup}>
                 <Field>
                   <FieldLabel htmlFor="nombre">
                     Nombre <span className={styles.required}>*</span>
                   </FieldLabel>
                   <Input
+                    className={focus.singleBorder}
                     id="nombre"
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
@@ -495,6 +530,7 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 <Field>
                   <FieldLabel htmlFor="descripcion">Descripción</FieldLabel>
                   <Textarea
+                    className={focus.singleBorder}
                     id="descripcion"
                     value={descripcion}
                     onChange={(e) => setDescripcion(e.target.value)}
@@ -504,13 +540,13 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                 </Field>
               </FieldGroup>
               {modo === "editar" && requiereVersionadoPorUso && (
-                <Card className="bg-orange-50 border-orange-300">
-                  <CardContent className="pt-4">
-                    <p className="text-orange-900 mb-2 text-sm font-semibold">
+                <Card className={styles.versionNotice}>
+                  <Card.Content className="pt-4">
+                    <p className="mb-2 text-sm font-semibold">
                       ⚠ Cambios en un flujo usado por {productosAfectados}{" "}
                       producto(s)
                     </p>
-                    <ul className="mb-3 ml-4 list-disc text-xs text-foreground/80 space-y-0.5">
+                    <ul className="mb-3 ml-4 flex flex-col gap-0.5 list-disc text-xs text-foreground/80">
                       {cambiosDetectados.map((c, idx) => (
                         <li key={idx}>
                           {c.tipo === "AGREGAR_PASO" &&
@@ -536,25 +572,25 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                         <li>Cambian íconos de uno o más pasos.</li>
                       ) : null}
                     </ul>
-                    <p className="text-orange-800 mb-3 text-xs">
+                    <p className="mb-3 text-xs">
                       Se creará obligatoriamente la versión v
                       {(rutaExistente?.versionActual ?? 0) + 1}. Los productos
                       asociados conservarán su versión actual hasta que elijas
                       migrarlos desde esta ficha.
                     </p>
                     <Input
-                      className="mt-2"
+                      className={`${focus.singleBorder} mt-2`}
                       value={cambiosDescripcion}
                       onChange={(e) => setCambiosDescripcion(e.target.value)}
                       placeholder="Descripción del cambio (opcional, queda en el historial)"
                     />
-                  </CardContent>
+                  </Card.Content>
                 </Card>
               )}
-            </CardContent>
+            </Card.Content>
           </Card>
 
-          <div className="route-workflow-slot">
+          <div className={styles.workflowSlot}>
             <RutaWorkflowEditor
               value={workflow}
               onChange={actualizarWorkflow}
@@ -568,17 +604,23 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
         </div>
 
         {modo === "editar" && (rutaExistente?.versiones?.length ?? 0) > 0 && (
-          <div className="card versions-block">
-            <div className="card-head">
+          <Card className={styles.history}>
+            <Card.Header className={styles.sectionHeader}>
               <span className="inline-flex items-center gap-2">
                 <HistoryIcon className="size-4" />
-                <span className="title">Historial de versiones</span>
+                <strong>Historial de versiones</strong>
               </span>
-            </div>
+            </Card.Header>
             {rutaExistente!.versiones?.map((v) => (
-              <div key={v.version} className="versions-row">
-                <span className="vtag">v{v.version}</span>
-                <span className="vname">
+              <div
+                key={v.version}
+                className={styles.versionRow}
+                data-current={v.version === rutaExistente?.versionActual}
+              >
+                <Chip size="sm" variant="soft">
+                  v{v.version}
+                </Chip>
+                <span className={styles.versionName}>
                   {v.version === 1 &&
                   productosAfectados === 0 &&
                   v.cambios?.startsWith("Copia de ")
@@ -587,85 +629,89 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                       ? "Actualización del flujo de producción"
                       : (v.cambios ?? "Versión inicial")}
                 </span>
-                <span className="vdate">{fechaNumerica(v.createdAt)}</span>
+                <span className={styles.versionDate}>
+                  {fechaNumerica(v.createdAt)}
+                </span>
               </div>
             ))}
-          </div>
+          </Card>
         )}
 
         {modo === "editar" && productosDesactualizados.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Productos en versiones anteriores</CardTitle>
-              <CardDescription>
+          <Card className={styles.migration}>
+            <Card.Header className={styles.sectionHeader}>
+              <Card.Title>Productos en versiones anteriores</Card.Title>
+              <Card.Description>
                 Elegí qué asociaciones querés llevar a la versión v
                 {rutaExistente?.versionActual}. Se preserva la configuración de
                 los pasos cuya familia continúa en la nueva versión.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+              </Card.Description>
+            </Card.Header>
+            <Card.Content className="flex flex-col gap-3">
               {productosDesactualizados.map((alternativa) => {
                 const checked = productosSeleccionados.includes(alternativa.id);
                 const checkboxId = `migrar-ruta-${alternativa.id}`;
                 return (
-                  <Label
+                  <Checkbox
                     key={alternativa.id}
-                    htmlFor={checkboxId}
-                    className="flex items-center gap-3 rounded-lg border p-3"
+                    id={checkboxId}
+                    isSelected={checked}
+                    className={styles.productChoice}
+                    onChange={(next) =>
+                      setProductosSeleccionados((actuales) =>
+                        next
+                          ? [...new Set([...actuales, alternativa.id])]
+                          : actuales.filter((id) => id !== alternativa.id),
+                      )
+                    }
                   >
-                    <Checkbox
-                      id={checkboxId}
-                      checked={checked}
-                      onCheckedChange={(next) =>
-                        setProductosSeleccionados((actuales) =>
-                          next
-                            ? [...new Set([...actuales, alternativa.id])]
-                            : actuales.filter((id) => id !== alternativa.id),
-                        )
-                      }
-                    />
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate font-medium">
-                        {alternativa.producto.nombre}
+                    <Checkbox.Content>
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate font-medium">
+                          {alternativa.producto.nombre}
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          {alternativa.nombre} · v{alternativa.rutaVersion} → v
+                          {rutaExistente?.versionActual}
+                        </span>
                       </span>
-                      <span className="text-muted-foreground text-xs">
-                        {alternativa.nombre} · v{alternativa.rutaVersion} → v
-                        {rutaExistente?.versionActual}
-                      </span>
-                    </span>
-                  </Label>
+                    </Checkbox.Content>
+                  </Checkbox>
                 );
               })}
               <div className="flex justify-end">
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={productosSeleccionados.length === 0}
+                  isDisabled={productosSeleccionados.length === 0}
                   onClick={() => setConfirmandoMigracion(true)}
                 >
                   <RefreshCwIcon data-icon="inline-start" />
                   Migrar seleccionados ({productosSeleccionados.length})
                 </Button>
               </div>
-            </CardContent>
+            </Card.Content>
           </Card>
         ) : null}
 
-        <div className="route-actions-bar">
+        <div className={styles.actionsBar}>
           {modo === "editar" ? (
-            <button
+            <Button
               type="button"
-              className="btn btn-danger"
+              variant="danger-soft"
               onClick={() => setConfirmandoBorrado(true)}
-              disabled={guardando || eliminando}
+              isDisabled={guardando || eliminando}
             >
               <Trash2Icon className="size-4" />
               {eliminando ? "Eliminando..." : "Eliminar flujo"}
-            </button>
+            </Button>
           ) : (
             <div />
           )}
-          <span className="route-actions-copy">
+          <span className={styles.actionsCopy}>
             {modo === "crear"
               ? "Se guardará como V1 y quedará disponible para reutilizarlo en distintos productos."
               : (rutaExistente?.productosAlternativas?.length ?? 0) === 0
@@ -674,94 +720,134 @@ export function RutaFormView({ modo, rutaExistente, catalogoFamilias }: Props) {
                     (rutaExistente?.versionActual ?? 1) + 1
                   } para preservar los productos existentes.`}
           </span>
-          <button
+          <Button
             type="button"
-            className="btn"
+            variant="outline"
             onClick={() => router.push("/productos-servicios/rutas")}
-            disabled={guardando || eliminando}
+            isDisabled={guardando || eliminando}
           >
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-primary"
+            variant="primary"
             onClick={handleGuardar}
-            disabled={guardando || !nombre || workflow.nodos.length === 0}
+            isDisabled={guardando || !nombre || workflow.nodos.length === 0}
           >
-            <SaveIcon className="size-4" />
+            <ArrowUpRightIcon />
             {guardando
               ? "Guardando..."
               : modo === "crear"
                 ? "Crear flujo"
                 : "Guardar cambios"}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <AlertDialog
-        open={confirmandoMigracion}
+      <FormDialog
+        className={brand.dialog}
+        isOpen={confirmandoMigracion}
+        isDismissable={!migrando}
         onOpenChange={(open) => {
           if (!migrando) setConfirmandoMigracion(open);
         }}
+        title={
+          <>
+            Migrar {productosSeleccionados.length} asociación(es) a v
+            {rutaExistente?.versionActual}
+          </>
+        }
+        description="Se conservarán las configuraciones de familias equivalentes. Las configuraciones de pasos eliminados se descartarán y los pasos nuevos quedarán señalados para completar en cada producto."
       >
-        <AlertDialogContent
-          className="gp-alert-modal gp-alert-warning"
-          overlayClassName="gp-alert-overlay"
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Migrar {productosSeleccionados.length} asociación(es) a v
-              {rutaExistente?.versionActual}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Se conservarán las configuraciones de familias equivalentes. Las
-              configuraciones de pasos eliminados se descartarán y los pasos
-              nuevos quedarán señalados para completar en cada producto.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={migrando}
-              onClick={() => setConfirmandoMigracion(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              loading={migrando}
-              onClick={ejecutarMigracion}
-            >
-              Confirmar migración
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
+        <Modal.Footer className={shared.dialogFooter}>
+          <Button
+            variant="outline"
+            isDisabled={migrando}
+            onPress={() => setConfirmandoMigracion(false)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            isPending={migrando}
+            isDisabled={migrando}
+            onPress={ejecutarMigracion}
+          >
+            Confirmar migración
+          </Button>
+        </Modal.Footer>
+      </FormDialog>
       {rutaExistente && (
-        <ConfirmacionDestructiva
-          open={confirmandoBorrado}
+        <FormDialog
+          className={brand.dialog}
+          isOpen={confirmandoBorrado}
+          isDismissable={!eliminando}
           onOpenChange={setConfirmandoBorrado}
-          titulo="Eliminar flujo"
-          descripcion={
+          title="Eliminar flujo"
+          description={
             <>
               Vas a eliminar el flujo <strong>{rutaExistente.nombre}</strong>.
             </>
           }
-          impacto={
-            productosAfectados > 0
-              ? [
-                  `Hay ${productosAfectados} producto(s) usando este flujo.`,
-                  "Primero quitá el flujo de los productos que lo usan para poder eliminarlo.",
-                ]
-              : ["El flujo y todos sus nodos se borran del catálogo."]
-          }
-          nombreItem={rutaExistente.nombre}
-          accionLabel="Eliminar flujo"
-          onConfirmar={ejecutarEliminar}
-        />
+        >
+          <Modal.Body className={shared.dialogBody}>
+            <div className={shared.dangerNote}>
+              <strong>Esto va a:</strong>
+              <ul className="mt-1 ml-4 list-disc">
+                {(productosAfectados > 0
+                  ? [
+                      `Hay ${productosAfectados} producto(s) usando este flujo.`,
+                      "Primero quitá el flujo de los productos que lo usan para poder eliminarlo.",
+                    ]
+                  : ["El flujo y todos sus nodos se borran del catálogo."]
+                ).map((impacto) => (
+                  <li key={impacto}>{impacto}</li>
+                ))}
+              </ul>
+            </div>
+            <Field className="mt-4">
+              <FieldLabel htmlFor="confirmacion-flujo">
+                Para confirmar, escribí {rutaExistente.nombre} abajo:
+              </FieldLabel>
+              <Input
+                className={focus.singleBorder}
+                id="confirmacion-flujo"
+                value={textoConfirmacion}
+                onChange={(event) => setTextoConfirmacion(event.target.value)}
+                placeholder={rutaExistente.nombre}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+          </Modal.Body>
+          <Modal.Footer className={shared.dialogFooter}>
+            <Button
+              variant="outline"
+              isDisabled={eliminando}
+              onPress={() => setConfirmandoBorrado(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              isPending={eliminando}
+              isDisabled={
+                eliminando ||
+                textoConfirmacion.trim() !== rutaExistente.nombre.trim()
+              }
+              onPress={() => {
+                if (
+                  !eliminando &&
+                  textoConfirmacion.trim() === rutaExistente.nombre.trim()
+                )
+                  void ejecutarEliminar();
+              }}
+            >
+              Eliminar flujo
+            </Button>
+          </Modal.Footer>
+        </FormDialog>
       )}
-    </div>
+    </main>
   );
 }

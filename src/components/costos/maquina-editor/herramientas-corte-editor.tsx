@@ -1,8 +1,12 @@
 "use client";
+import styles from "../maquinaria.module.css";
+import { useMaquinariaPuedeEditar } from "./maquinaria-edicion";
+import focus from "@/components/design-system/field-focus.module.css";
+import { SelectField } from "@/components/design-system/select-field";
 import { useId } from "react";
 import { PlusIcon, Trash2Icon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { Checkbox } from "@heroui/react";
 import {
   Field,
   FieldGroup,
@@ -10,16 +14,8 @@ import {
   FieldSet,
   FieldLegend,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
+import { Input } from "@heroui/react";
+import { Switch } from "@heroui/react";
 import {
   configuracionCorteInicial,
   NOMBRES_OPERACION_CORTE,
@@ -48,6 +44,7 @@ export function NumeroCorte({
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Input
+        className={focus.singleBorder}
         id={id}
         aria-label={label}
         type="number"
@@ -61,7 +58,7 @@ export function NumeroCorte({
     </Field>
   );
 }
-export function OpcionCorte({
+export function OpcionCorteHero({
   label,
   value,
   onChange,
@@ -75,22 +72,14 @@ export function OpcionCorte({
   return (
     <Field>
       <FieldLabel>{label}</FieldLabel>
-      <Select value={value} onValueChange={(v) => v && onChange(v)}>
-        <SelectTrigger aria-label={label}>
-          <SelectValue>
-            {opciones.find((o) => o.value === value)?.label ?? "Elegir…"}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {opciones.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+      <SelectField
+        value={value}
+        onChange={(v) => v && onChange(v)}
+        aria-label={label}
+        options={[
+          ...(opciones.map((o) => ({ value: o.value, label: o.label })) ?? []),
+        ]}
+      />
     </Field>
   );
 }
@@ -99,6 +88,7 @@ export function HerramientasCorteEditor({
 }: {
   editor: MaquinaEditorState;
 }) {
+  const puedeEditar = useMaquinariaPuedeEditar();
   const { form, setForm, perfiles } = editor;
   if (!PLANTILLAS_PROCESAMIENTO_CORTE.includes(form.plantilla)) return null;
   const config = form.parametrosTecnicos?.procesamientoCorte as
@@ -147,7 +137,7 @@ export function HerramientasCorteEditor({
   };
   return (
     <section
-      className={s.panel}
+      className={`${s.panel} ${styles.cuttingPanel}`}
       aria-label="Herramientas y preparación de corte"
     >
       <div className={s.header}>
@@ -172,7 +162,7 @@ export function HerramientasCorteEditor({
               min={1}
               onChange={(v) => guardar({ ...config, posiciones: v ?? 1 })}
             />
-            <OpcionCorte
+            <OpcionCorteHero
               label="Reemplazo de herramienta"
               value={config.cambio}
               onChange={(v) =>
@@ -224,6 +214,7 @@ export function HerramientasCorteEditor({
                       Nombre
                     </FieldLabel>
                     <Input
+                      className={focus.singleBorder}
                       id={`herramienta-${h.id}`}
                       aria-label={`Nombre de ${h.nombre}`}
                       value={h.nombre}
@@ -232,7 +223,7 @@ export function HerramientasCorteEditor({
                       }
                     />
                   </Field>
-                  <OpcionCorte
+                  <OpcionCorteHero
                     label="Tipo de herramienta"
                     value={h.tipo}
                     opciones={tipos}
@@ -264,18 +255,32 @@ export function HerramientasCorteEditor({
                   )}
                   <Field orientation="horizontal">
                     <Switch
+                      isDisabled={!puedeEditar}
                       aria-label={`Herramienta ${h.nombre} activa`}
-                      checked={h.activo}
-                      onCheckedChange={(v) => actualizar(h.id, { activo: v })}
-                    />
+                      isSelected={h.activo}
+                      onChange={(v) => actualizar(h.id, { activo: v })}
+                    >
+                      <Switch.Content>
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      </Switch.Content>
+                    </Switch>
                     <FieldLabel>Activa</FieldLabel>
                   </Field>
                   <Field orientation="horizontal">
                     <Switch
+                      isDisabled={!puedeEditar}
                       aria-label={`${h.nombre} montada al comenzar`}
-                      checked={h.montada}
-                      onCheckedChange={(v) => actualizar(h.id, { montada: v })}
-                    />
+                      isSelected={h.montada}
+                      onChange={(v) => actualizar(h.id, { montada: v })}
+                    >
+                      <Switch.Content>
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      </Switch.Content>
+                    </Switch>
                     <FieldLabel>Montada al comenzar</FieldLabel>
                   </Field>
                 </FieldGroup>
@@ -285,24 +290,32 @@ export function HerramientasCorteEditor({
                     {OPERACIONES_CORTE.filter((op) =>
                       h.tipo === "RUEDA" ? op === "HENDIDO" : op !== "HENDIDO",
                     ).map((op) => (
-                      <label key={op}>
+                      <div key={op} className={s.checkItem}>
                         <Checkbox
-                          checked={h.operaciones.includes(op)}
-                          onCheckedChange={(v) =>
+                          isDisabled={!puedeEditar}
+                          aria-label={NOMBRES_OPERACION_CORTE[op]}
+                          isSelected={h.operaciones.includes(op)}
+                          onChange={(v) =>
                             actualizar(h.id, {
                               operaciones: v
                                 ? [...h.operaciones, op]
                                 : h.operaciones.filter((o) => o !== op),
                             })
                           }
-                        />
+                        >
+                          <Checkbox.Content>
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                          </Checkbox.Content>
+                        </Checkbox>
                         {NOMBRES_OPERACION_CORTE[op]}
-                      </label>
+                      </div>
                     ))}
                   </div>
                 </FieldSet>
                 <FieldGroup className={s.grid}>
-                  <OpcionCorte
+                  <OpcionCorteHero
                     label="Desgaste"
                     value={h.desgaste.modo}
                     opciones={[
@@ -353,7 +366,7 @@ export function HerramientasCorteEditor({
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={perfiles.some(
+                    isDisabled={perfiles.some(
                       (p) => p.detalle?.herramientaId === h.id,
                     )}
                     onClick={() =>
@@ -382,3 +395,5 @@ export function HerramientasCorteEditor({
     </section>
   );
 }
+
+export { OpcionCorte } from "./opcion-corte-legacy";

@@ -4,6 +4,9 @@ import Link from "next/link";
 import {
   ArrowUpRightIcon,
   CircleIcon,
+  ChartNoAxesCombinedIcon,
+  TargetIcon,
+  FactoryIcon,
 } from "lucide-react";
 
 import { usePuedeFn } from "@/components/navigation/permisos-provider";
@@ -81,6 +84,26 @@ export function ReportesCatalogo() {
                       ) : null}
                       <strong>{reporte.label}</strong>
                       <span>{reporte.descripcion}</span>
+                    </span>
+                    {destacada ? (
+                      <div className={styles.focusAreas} aria-hidden="true">
+                        <div>
+                          <ChartNoAxesCombinedIcon />
+                          <span>Ventas</span>
+                        </div>
+                        <div>
+                          <TargetIcon />
+                          <span>Rentabilidad</span>
+                        </div>
+                        <div>
+                          <FactoryIcon />
+                          <span>Operación</span>
+                        </div>
+                      </div>
+                    ) : null}
+                    <span className={styles.openLabel}>
+                      {destacada ? "Explorar resumen" : "Abrir reporte"}
+                      <ArrowUpRightIcon aria-hidden="true" />
                     </span>
                   </Link>
                 ))}

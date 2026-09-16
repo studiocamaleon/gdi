@@ -51,6 +51,7 @@ function armar(encontrado: boolean) {
     prisma,
     {} as unknown as StorageDriver,
     {} as unknown as SuscripcionesService,
+    {} as never,
   );
   // `verificarEntidad` es privado a propósito: es una comprobación interna del
   // alta, no una operación que alguien deba poder llamar de afuera.

@@ -150,8 +150,30 @@ const COSTING_STRATEGIES = new Set([
   'plate-segments',
 ]);
 
+export type PasoParaNestingConfig = Pick<
+  PasoCargado,
+  'configPasoId' | 'familiaCodigo' | 'paramsPasoJson' | 'maquina' | 'perfil'
+> & {
+  defaultsFamilia?: Pick<
+    NonNullable<PasoCargado['defaultsFamilia']>,
+    'demasiaMm' | 'solapePanelMm'
+  >;
+};
+
+export function anchoMaximoRolloMaquina(
+  maquina: PasoCargado['maquina'],
+): number | null {
+  const params = maquina?.parametrosTecnicosJson ?? {};
+  return readNumber(
+    maquina?.anchoUtil,
+    params.anchoUtil,
+    params.anchoMaxRolloMm,
+    params.anchoMaxMm,
+  );
+}
+
 export function resolveNestingConfig(
-  paso: PasoCargado,
+  paso: PasoParaNestingConfig,
   jobContext: JobContext,
   materialResuelto: MaterialResueltoParaNestingConfig | null,
 ): NestingConfigResolved {
@@ -344,12 +366,7 @@ export function resolveNestingConfig(
   // canónica y requerida). `anchoMaxRolloMm` quedó como fallback legacy: para
   // gran formato `anchoUtil` se deriva de él (coinciden), y para plotter CAD
   // `anchoUtil` es la fuente única (ver maquinaria-templates.ts).
-  const machineMaxRollWidthMm = readNumber(
-    paso.maquina?.anchoUtil,
-    maqParams.anchoUtil,
-    maqParams.anchoMaxRolloMm,
-    maqParams.anchoMaxMm,
-  );
+  const machineMaxRollWidthMm = anchoMaximoRolloMaquina(paso.maquina);
   const shouldValidateRollWidthAgainstMachine =
     geometry === 'ROLLO' &&
     algorithm !== 'shelf-rollo' &&
@@ -433,10 +450,7 @@ export function resolveNestingConfig(
     maqParams.commonLineHabilitado,
     false,
   );
-  const anchoCorteMm = Math.max(
-    0,
-    readNumber(perfilDetalle.anchoCorteMm) ?? 0,
-  );
+  const anchoCorteMm = Math.max(0, readNumber(perfilDetalle.anchoCorteMm) ?? 0);
   const commonLine =
     commonLineSolicitado && commonLineDisponible && anchoCorteMm > 0
       ? {

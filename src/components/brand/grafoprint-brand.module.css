@@ -1,0 +1,31 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-sans), Arial, sans-serif;
+  font-size: 23px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.9px;
+  white-space: nowrap;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 35px;
+  height: 38px;
+  border-radius: 9px;
+  background: #ffffff09;
+  color: var(--nav-accent, #ff7546);
+}
+
+.mark svg {
+  width: 23px;
+  height: 23px;
+}
+
+.period {
+  color: var(--nav-accent, #ff7546);
+}

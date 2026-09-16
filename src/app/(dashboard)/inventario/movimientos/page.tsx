@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 import { MovimientosKardexPanel } from "@/components/inventario/movimientos-kardex-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
@@ -8,18 +9,16 @@ export const dynamic = "force-dynamic";
 
 export default function MovimientosKardexPage() {
   return (
-    <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
-      <MovimientosKardexPageContent />
-    </Suspense>
+    <DesignSystemProvider theme="brand" appearance="light">
+      <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
+        <MovimientosKardexPageContent />
+      </Suspense>
+    </DesignSystemProvider>
   );
 }
 
 async function MovimientosKardexPageContent() {
   const materiasPrimas = await getMateriasPrimas();
 
-  return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <MovimientosKardexPanel materiasPrimas={materiasPrimas} />
-    </section>
-  );
+  return <MovimientosKardexPanel materiasPrimas={materiasPrimas} />;
 }

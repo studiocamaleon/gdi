@@ -2600,9 +2600,8 @@ export function fallbackSinLayoutDeFamilia(
 /**
  * Cola de consolidación donde entra un ítem cuyo paso FRONTERA (primer paso
  * no hecho) es de esta familia: impresión sobre material continuo
- * (`segun_material`) → simulador de gran formato; impresión sobre pliego →
- * simulador láser. Derivado de `esImpresion` + superficie declarada.
- * [Tanda A: los simuladores preguntaban por familiaCodigo]
+ * (`segun_material`) → gran formato; impresión sobre pliego →
+ * impresión por hoja. Derivado de `esImpresion` + superficie declarada.
  */
 export function colaConsolidacionDeFamilia(
   codigo: string,

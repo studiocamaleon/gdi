@@ -1,9 +1,45 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DownloadIcon, PlusIcon, SearchIcon } from "lucide-react";
+import Link from "next/link";
+import { Button, Card, Chip, SearchField } from "@heroui/react";
+import {
+  ArrowUpRight,
+  CheckCheck,
+  CircleCheck,
+  CircleDashed,
+  Factory,
+  FilePenLine,
+  Layers3,
+  SlidersHorizontal,
+  Truck,
+  X,
+  CircleX,
+  CalendarCheck2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  ClipboardList,
+  Clock3,
+  DownloadIcon,
+  FilePlus2,
+  PlusIcon,
+  TriangleAlert,
+} from "lucide-react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { IdentityAvatar } from "@/components/design-system/identity-avatar";
+import fieldFocus from "@/components/design-system/field-focus.module.css";
+import { EstadoListado, ProgresoListado } from "./ordenes-trabajo-presentacion";
+import s from "./ordenes-trabajo-view.module.css";
+import layout from "@/components/design-system/list-page.module.css";
+import { ListMetric } from "@/components/design-system/list-metric";
 import { toast } from "sonner";
 
 import {
@@ -23,7 +59,6 @@ import {
 } from "@/components/navigation/config-regional-provider";
 
 type FiltroEstado = OrdenTrabajoEstado | "todas";
-type ModoVista = "tabla" | "tarjetas";
 
 export function EstadoOtBadge({
   estado,
@@ -44,26 +79,29 @@ export function EstadoOtBadge({
   );
 }
 
-function ProgresoMini({
-  valor,
-  estado,
-}: {
-  valor: number | null;
-  estado: OrdenTrabajoEstado;
-}) {
-  if (valor === null) return <span className="dash">—</span>;
-  const e = ORDEN_TRABAJO_ESTADOS[estado];
+type OrdenesTrabajoViewProps = {
+  ordenes?: OrdenTrabajoListItem[];
+  /** Indicadores del tenant completo, calculados por el backend. */
+  stats: OrdenesTrabajoStats;
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  q: string;
+  estado: FiltroEstado;
+  urgencia?: "atrasadas";
+  errorCarga?: string | null;
+};
+
+export function OrdenesTrabajoView(props: OrdenesTrabajoViewProps) {
   return (
-    <div className="otl-prog">
-      <div className="otl-prog-track">
-        <span style={{ width: `${valor}%`, background: e.dot }} />
-      </div>
-      <span className="otl-prog-v mono">{valor}%</span>
-    </div>
+    <DesignSystemProvider appearance="light" theme="brand">
+      <OrdenesTrabajoContent {...props} />
+    </DesignSystemProvider>
   );
 }
 
-export function OrdenesTrabajoView({
+function OrdenesTrabajoContent({
   ordenes = [],
   stats,
   total,
@@ -74,24 +112,13 @@ export function OrdenesTrabajoView({
   estado: filtro,
   urgencia,
   errorCarga,
-}: {
-  ordenes?: OrdenTrabajoListItem[];
-  /** KPIs y contadores del tenant completo, calculados por el backend. */
-  stats: OrdenesTrabajoStats;
-  total: number;
-  page: number;
-  pages: number;
-  limit: number;
-  q: string;
-  estado: FiltroEstado;
-  urgencia?: "atrasadas";
-  errorCarga?: string | null;
-}) {
+}: OrdenesTrabajoViewProps) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const { moneda, zonaHoraria } = useConfigRegional();
   const { fechaNumerica } = useFecha();
   const router = useRouter();
   const [busqueda, setBusqueda] = React.useState(qInicial);
-  const [modo, setModo] = React.useState<ModoVista>("tabla");
   const [exportando, setExportando] = React.useState(false);
   const [navegando, startTransition] = React.useTransition();
 
@@ -276,310 +303,359 @@ export function OrdenesTrabajoView({
       : []),
   ];
 
+  const filtroActivo = Boolean(qInicial || urgencia || filtro !== "todas");
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    navegar({ q: "", estado: "todas", urgencia: undefined });
+  };
+  const iconosFiltro = {
+    todas: Layers3,
+    borrador: FilePenLine,
+    pendiente: CircleDashed,
+    produccion: Factory,
+    finalizada: CircleCheck,
+    entregada: Truck,
+    cancelada: CircleX,
+  };
+
   return (
-    <div
-      className="otl-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        width: "auto",
-        maxWidth: "none",
-        margin: 0,
-        padding: "28px 34px 60px",
-      }}
+    <section
+      {...scope}
+      data-visual="brand"
+      className={`${themeClass} ${layout.page} ${s.page}`}
+      aria-label="Órdenes de trabajo"
     >
-      <div className="otl-inner">
-        <div className="otl-head">
-          <div className="left">
-            <h1>Órdenes de trabajo</h1>
-            <div className="sub">
-              Seguimiento de todas las OT emitidas y en curso.
-            </div>
-          </div>
-          <div className="right">
-            <button
-              type="button"
-              className="btn"
-              disabled={exportando || Boolean(errorCarga)}
-              onClick={exportarCsv}
-            >
-              <DownloadIcon />
-              {exportando ? "Exportando…" : "Exportar"}
-            </button>
-            <Link href="/comercial/crear-propuesta" className="btn btn-primary">
-              <PlusIcon />
-              Nueva orden
-            </Link>
-          </div>
+      <header className={layout.header}>
+        <div className="min-w-0">
+          <p className={s.eyebrow}>
+            <ClipboardList aria-hidden /> Comercial / Órdenes
+          </p>
+          <h1>
+            Órdenes de trabajo<span className={s.titleDot}>.</span>
+          </h1>
+          <p className={layout.subtitle}>
+            Cada trabajo, desde el primer borrador hasta la entrega.
+          </p>
         </div>
-
-        <div className="otl-kpis">
-          <div className="otl-kpi">
-            <div className="k-lbl">Órdenes activas</div>
-            <div className="k-val mono">{kpis.activas}</div>
-            <div className="k-hint">Pendientes + en producción</div>
-          </div>
-          <button
-            type="button"
-            className={`otl-kpi danger ${urgencia === "atrasadas" ? "on" : ""}`}
-            onClick={() => navegar({ estado: "todas", urgencia: "atrasadas" })}
+        <div className={s.headerActions}>
+          <ActionButton
+            variant="outline"
+            isDisabled={exportando || Boolean(errorCarga)}
+            onPress={exportarCsv}
           >
-            <div className="k-lbl">Entregas atrasadas</div>
-            <div className="k-val mono">{kpis.atrasadas}</div>
-            <div className="k-hint">Pendientes + en producción</div>
-          </button>
-          <div className="otl-kpi">
-            <div className="k-lbl">Valor en curso</div>
-            <div className="k-val mono">
-              {formatMonedaOrden(kpis.valorEnCurso, moneda)}
-            </div>
-            <div className="k-hint">Sin entregadas ni borradores</div>
-          </div>
-          <div className="otl-kpi">
-            <div className="k-lbl">Próximas a entregar</div>
-            <div className="k-val mono">{kpis.proximasEntregar}</div>
-            <div className="k-hint">Dentro de 7 días</div>
-          </div>
-          <div className="otl-kpi accent">
-            <div className="k-lbl">Emitidas hoy</div>
-            <div className="k-val mono">{kpis.emitidasHoy}</div>
-            <div className="k-hint">{fechaNumerica(hoy.toISOString())}</div>
-          </div>
+            <DownloadIcon aria-hidden />
+            {exportando ? "Exportando…" : "Exportar"}
+          </ActionButton>
+          <ActionLink href="/comercial/crear-propuesta">
+            <PlusIcon aria-hidden /> Nueva orden <ArrowUpRight aria-hidden />
+          </ActionLink>
         </div>
+      </header>
 
-        <div className="otl-toolbar">
-          <div className="otl-filters">
-            {filtros.map((f) => (
-              <button
+      <div className={s.kpis}>
+        <ListMetric
+          label="Órdenes activas"
+          value={kpis.activas}
+          hint="Pendientes + en producción"
+          icon={ClipboardList}
+        />
+        <ListMetric
+          label="Entregas atrasadas"
+          value={kpis.atrasadas}
+          hint="Pendientes + en producción"
+          icon={Clock3}
+          tone="danger"
+          selected={urgencia === "atrasadas"}
+          onClick={() => navegar({ estado: "todas", urgencia: "atrasadas" })}
+        />
+        <ListMetric
+          label="Valor en curso"
+          value={formatMonedaOrden(kpis.valorEnCurso, moneda)}
+          hint="Sin entregadas ni borradores"
+          icon={CircleDollarSign}
+        />
+        <ListMetric
+          label="Próximas a entregar"
+          value={kpis.proximasEntregar}
+          hint="Dentro de 7 días"
+          icon={CalendarCheck2}
+        />
+        <ListMetric
+          label="Emitidas hoy"
+          value={kpis.emitidasHoy}
+          hint={fechaNumerica(hoy.toISOString())}
+          icon={FilePlus2}
+          tone="brand"
+        />
+      </div>
+
+      <Card className={layout.results}>
+        <div className={s.toolbar}>
+          <SearchField
+            aria-label="Buscar órdenes por número o cliente"
+            className={s.search}
+            value={busqueda}
+            onChange={setBusqueda}
+          >
+            <SearchField.Group
+              className={`${s.searchGroup} ${fieldFocus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar por número o cliente…" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <span className={s.resultCount} role="status">
+            {errorCarga
+              ? "Sin datos disponibles"
+              : navegando
+                ? "Buscando…"
+                : `${total} ${total === 1 ? "orden" : "órdenes"}`}
+          </span>
+        </div>
+        <div className={s.filters} role="group" aria-label="Filtrar por estado">
+          {filtros.map((f) => {
+            const Icon = iconosFiltro[f.k];
+            return (
+              <Button
                 key={f.k}
                 type="button"
-                className={`otl-fchip ${!urgencia && filtro === f.k ? "on" : ""}`}
-                onClick={() => navegar({ estado: f.k, urgencia: undefined })}
+                variant="ghost"
+                className={s.filter}
+                aria-pressed={!urgencia && filtro === f.k}
+                onPress={() => navegar({ estado: f.k, urgencia: undefined })}
               >
-                {f.label}
-                <span className="ct">{counts[f.k]}</span>
-              </button>
-            ))}
-          </div>
-          <div className="otl-tools-right">
-            <div className="otl-search">
-              <SearchIcon size={15} />
-              <input
-                placeholder="Buscar por Nº, cliente…"
-                value={busqueda}
-                onChange={(event) => setBusqueda(event.target.value)}
-              />
-            </div>
-            <div className="otl-viewtoggle">
-              <button
-                type="button"
-                className={modo === "tabla" ? "on" : ""}
-                onClick={() => setModo("tabla")}
-                title="Tabla"
-                aria-label="Ver como tabla"
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <path d="M3 9h18M3 15h18M4 4h16v16H4z" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className={modo === "tarjetas" ? "on" : ""}
-                onClick={() => setModo("tarjetas")}
-                title="Tarjetas"
-                aria-label="Ver como tarjetas"
-              >
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                </svg>
-              </button>
-            </div>
-          </div>
+                <Icon aria-hidden />
+                <span>{f.label}</span>
+                <span className={s.filterCount}>{counts[f.k]}</span>
+              </Button>
+            );
+          })}
         </div>
+        {filtroActivo && (
+          <div className={s.activeFilters}>
+            <span>
+              <SlidersHorizontal aria-hidden />
+              {urgencia
+                ? "Entregas atrasadas"
+                : filtro !== "todas"
+                  ? ORDEN_TRABAJO_ESTADOS[filtro].label
+                  : "Todas las órdenes"}
+              {qInicial && <span className={s.query}>“{qInicial}”</span>}
+            </span>
+            <ActionButton variant="ghost" size="sm" onPress={limpiarFiltros}>
+              <X aria-hidden /> Limpiar filtros
+            </ActionButton>
+          </div>
+        )}
 
-        <div
-          style={{
-            opacity: navegando ? 0.55 : 1,
-            transition: "opacity 0.15s",
-          }}
-        >
-          {modo === "tabla" ? (
-            <div className="otl-table">
-              <div className="otl-tr otl-th">
-                <span>Nº / Cliente</span>
-                <span>Estado</span>
-                <span>Progreso</span>
-                <span className="c">Ítems</span>
-                <span>Entrega</span>
-                <span className="r">Total</span>
-                <span className="r">Vendedor</span>
-              </div>
-              {lista.map((o) => (
-                <div
-                  key={o.id}
-                  className={`otl-tr otl-row ${diasDeAtraso(o) > 0 ? "late" : ""}`}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => abrirOrden(o.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      abrirOrden(o.id);
-                    }
-                  }}
-                >
-                  <span className="otl-idcell">
-                    <span className="nro mono">
-                      {o.numero}
-                      {esNueva(o) ? (
-                        <span className="otl-new-tag">NUEVA</span>
-                      ) : null}
-                    </span>
-                    <span className="cli">
-                      {o.clienteNombre} ·{" "}
-                      <span className="res">{o.resumen}</span>
-                    </span>
-                  </span>
-                  <span>
-                    <EstadoOtBadge estado={o.estado} sm />
-                  </span>
-                  <span>
-                    <ProgresoMini valor={o.progresoPct} estado={o.estado} />
-                  </span>
-                  <span className="c mono">{o.itemsCount}</span>
-                  <span className="mono entrega">
-                    {formatFechaOrden(o.fechaEntrega)}
-                    {diasDeAtraso(o) > 0 ? (
-                      <span className="otl-late-tag">
-                        {diasDeAtraso(o)} d tarde
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="r mono total">
-                    {formatMonedaOrden(o.total, moneda)}
-                  </span>
-                  <span className="r vend">{o.vendedorNombre}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="otl-cards">
-              {lista.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  className="otl-card"
-                  onClick={() => abrirOrden(o.id)}
-                >
-                  <div className="otl-card-top">
-                    <span className="nro mono">{o.numero}</span>
-                    {esNueva(o) ? (
-                      <span className="otl-new-tag">NUEVA</span>
-                    ) : (
-                      <EstadoOtBadge estado={o.estado} sm />
-                    )}
-                  </div>
-                  {esNueva(o) ? (
-                    <div style={{ marginTop: -2 }}>
-                      <EstadoOtBadge estado={o.estado} sm />
-                    </div>
-                  ) : null}
-                  <div className="otl-card-cli">{o.clienteNombre}</div>
-                  <div className="otl-card-res">{o.resumen}</div>
-                  <div className="otl-card-prog">
-                    {o.estado === "borrador" ? (
-                      <span className="dash">Sin emitir</span>
-                    ) : (
-                      <ProgresoMini valor={o.progresoPct} estado={o.estado} />
-                    )}
-                  </div>
-                  <div className="otl-card-foot">
-                    <span className="cf">
-                      <span className="l">Entrega</span>
-                      <span className="v mono">
-                        {formatFechaOrden(o.fechaEntrega)}
-                        {diasDeAtraso(o) > 0 ? (
-                          <span className="otl-late-tag">
-                            {diasDeAtraso(o)} d tarde
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                    <span className="cf r">
-                      <span className="l">Total</span>
-                      <span className="v mono total">
+        <div className={s.content} aria-busy={navegando}>
+          {lista.length > 0 && (
+            <div
+              className={s.tableScroller}
+              role="region"
+              aria-label="Tabla de órdenes"
+              tabIndex={0}
+            >
+              <table className={s.table}>
+                <caption className="sr-only">
+                  Órdenes de trabajo: cliente, estado, avance, productos,
+                  entrega, total y vendedor.
+                </caption>
+                <colgroup>
+                  <col className={s.identityCol} />
+                  <col />
+                  <col />
+                  <col className={s.itemsCol} />
+                  <col />
+                  <col />
+                  <col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col">Orden / Cliente</th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Avance</th>
+                    <th scope="col" className={s.center}>
+                      Ítems
+                    </th>
+                    <th scope="col">Entrega</th>
+                    <th scope="col" className={s.right}>
+                      Total
+                    </th>
+                    <th scope="col">Vendedor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lista.map((o) => (
+                    <tr
+                      key={o.id}
+                      className={s.orderRow}
+                      data-late={diasDeAtraso(o) > 0 || undefined}
+                      onClick={(event) => {
+                        // El enlace y el tooltip conservan sus interacciones nativas.
+                        if (
+                          (event.target as Element).closest(
+                            "a, button, [tabindex]",
+                          )
+                        )
+                          return;
+                        abrirOrden(o.id);
+                      }}
+                    >
+                      <td>
+                        <div className={s.orderIdentity}>
+                          <Link
+                            href={`/produccion/ordenes/${o.id}`}
+                            className={s.number}
+                          >
+                            {o.numero}
+                            <ArrowUpRight aria-hidden />
+                          </Link>
+                          {esNueva(o) && (
+                            <Chip size="sm" className={s.newTag}>
+                              Nueva
+                            </Chip>
+                          )}
+                        </div>
+                        <div className={s.client}>{o.clienteNombre}</div>
+                        <div className={s.description} title={o.resumen}>
+                          {o.resumen}
+                        </div>
+                      </td>
+                      <td>
+                        <EstadoListado estado={o.estado} />
+                      </td>
+                      <td>
+                        <ProgresoListado
+                          valor={o.progresoPct}
+                          estado={o.estado}
+                          progreso={o.progreso}
+                        />
+                      </td>
+                      <td className={s.center}>
+                        <span className={s.itemCount}>{o.itemsCount}</span>
+                      </td>
+                      <td>
+                        <EntregaOrden orden={o} atraso={diasDeAtraso(o)} />
+                      </td>
+                      <td className={s.total}>
                         {formatMonedaOrden(o.total, moneda)}
-                      </span>
-                    </span>
-                  </div>
-                </button>
-              ))}
+                      </td>
+                      <td>
+                        <span
+                          className={layout.seller}
+                          title={o.vendedorNombre}
+                        >
+                          <span aria-hidden>
+                            <IdentityAvatar name={o.vendedorNombre} />
+                          </span>
+                          <span className="truncate">{o.vendedorNombre}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-
           {errorCarga ? (
-            <div className="otl-empty" role="alert">
-              {errorCarga}{" "}
-              <button
-                type="button"
-                className="btn"
-                onClick={() => router.refresh()}
-              >
+            <div className={`${layout.empty} ${s.empty}`} role="alert">
+              <TriangleAlert aria-hidden />
+              <h2>No pudimos cargar las órdenes</h2>
+              <p>{errorCarga}</p>
+              <ActionButton variant="outline" onPress={() => router.refresh()}>
                 Reintentar
-              </button>
+              </ActionButton>
             </div>
           ) : lista.length === 0 ? (
-            <div className="otl-empty">
-              Sin órdenes que coincidan con el filtro.
+            <div className={`${layout.empty} ${s.empty}`}>
+              {filtroActivo ? (
+                <SlidersHorizontal aria-hidden />
+              ) : (
+                <ClipboardList aria-hidden />
+              )}
+              <h2>
+                {filtroActivo
+                  ? "No hay órdenes con estos filtros"
+                  : "Tu próxima orden empieza acá"}
+              </h2>
+              <p>
+                {filtroActivo
+                  ? "Probá con otro número, cliente o estado."
+                  : "Creá una orden y acompañá cada trabajo hasta su entrega."}
+              </p>
+              {filtroActivo ? (
+                <ActionButton variant="outline" onPress={limpiarFiltros}>
+                  Limpiar filtros
+                </ActionButton>
+              ) : (
+                <ActionLink href="/comercial/crear-propuesta">
+                  <PlusIcon aria-hidden /> Nueva orden
+                </ActionLink>
+              )}
             </div>
           ) : null}
         </div>
 
-        {pages > 1 ? (
-          <div className="otl-pager">
-            <span className="rango mono">
-              {(page - 1) * limit + 1}–{Math.min(page * limit, total)} de{" "}
-              {total}
+        {!errorCarga && total > 0 && (
+          <footer className={layout.pager}>
+            <span className={s.pageCount}>
+              <strong>
+                {(page - 1) * limit + 1}–{Math.min(page * limit, total)}
+              </strong>{" "}
+              de {total} {total === 1 ? "orden" : "órdenes"}
             </span>
-            <div className="botones">
-              <button
-                type="button"
-                className="btn"
-                disabled={page <= 1 || navegando}
-                onClick={() => navegar({ page: page - 1 })}
-              >
-                Anterior
-              </button>
-              <button
-                type="button"
-                className="btn"
-                disabled={page >= pages || navegando}
-                onClick={() => navegar({ page: page + 1 })}
-              >
-                Siguiente
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
+            {pages > 1 && (
+              <div className={s.pagination}>
+                <span>
+                  Página {page} de {pages}
+                </span>
+                <ActionButton
+                  variant="outline"
+                  isDisabled={page <= 1 || navegando}
+                  onPress={() => navegar({ page: page - 1 })}
+                >
+                  <ChevronLeft aria-hidden /> Anterior
+                </ActionButton>
+                <ActionButton
+                  variant="outline"
+                  isDisabled={page >= pages || navegando}
+                  onPress={() => navegar({ page: page + 1 })}
+                >
+                  Siguiente <ChevronRight aria-hidden />
+                </ActionButton>
+              </div>
+            )}
+          </footer>
+        )}
+      </Card>
+    </section>
+  );
+}
+
+function EntregaOrden({
+  orden,
+  atraso,
+}: {
+  orden: OrdenTrabajoListItem;
+  atraso: number;
+}) {
+  return (
+    <span className={s.delivery}>
+      <span>{formatFechaOrden(orden.fechaEntrega)}</span>
+      {atraso > 0 && (
+        <span className={s.lateTag}>
+          <Clock3 aria-hidden />
+          {atraso} {atraso === 1 ? "día" : "días"} de atraso
+        </span>
+      )}
+      {orden.estado === "entregada" && (
+        <span className={s.deliveredTag}>
+          <CheckCheck aria-hidden />
+          Entregada
+        </span>
+      )}
+    </span>
   );
 }

@@ -1,5 +1,6 @@
 import {
   IsIn,
+  IsBoolean,
   IsNumber,
   IsOptional,
   IsString,
@@ -30,6 +31,10 @@ export class AccionPasoOrdenTrabajoDto {
   @IsString()
   @MaxLength(300)
   motivoDetalle?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  sinTiempoConfirmado?: boolean;
 
   /**
    * Al completar en modo cronómetro con tiempo medido inválido, el operario

@@ -1,3 +1,5 @@
+import { AsignacionPersonalController } from './asignacion-personal.controller';
+import { AsignacionPersonalService } from './asignacion-personal.service';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { AdministracionModule } from '../administracion/administracion.module';
@@ -5,6 +7,7 @@ import { EtaModule } from '../eta/eta.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
 import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
+import { AccionesColaController } from './acciones-cola.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { EntregaService } from './entrega.service';
 import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorridos-vectoriales.module';
@@ -22,8 +25,8 @@ import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-
     RecorridosVectorialesModule,
     DesarrolloDocumentalModule,
   ],
-  controllers: [OrdenesTrabajoController],
-  providers: [OrdenesTrabajoService, EntregaService],
+  controllers: [AsignacionPersonalController, OrdenesTrabajoController, AccionesColaController],
+  providers: [OrdenesTrabajoService, EntregaService, AsignacionPersonalService],
   // Presupuestos convierte en OT reusando el create canónico.
   exports: [OrdenesTrabajoService],
 })

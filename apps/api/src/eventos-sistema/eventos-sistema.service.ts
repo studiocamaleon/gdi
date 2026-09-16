@@ -211,28 +211,37 @@ export class EventosSistemaService {
     return new Observable<MessageEvent>((subscriber) => {
       let cerrado = false;
       let consultando = false;
+      let inicializado = false;
       let cursor: bigint | null = this.cursorValido(lastEventId);
 
       const emitirPendientes = async () => {
         if (cerrado || consultando) return;
         consultando = true;
         try {
-          if (cursor === null) {
-            const ultimo = await this.prisma.eventoSistema.findFirst({
-              where: { tenantId: auth.tenantId },
-              orderBy: { id: 'desc' },
-              select: { id: true },
-            });
-            cursor = ultimo?.id ?? 0n;
+          if (!inicializado) {
+            const esConexionNueva = cursor === null;
+            if (cursor === null) {
+              const ultimo = await this.prisma.eventoSistema.findFirst({
+                where: { tenantId: auth.tenantId },
+                orderBy: { id: 'desc' },
+                select: { id: true },
+              });
+              cursor = ultimo?.id ?? 0n;
+            }
             const { cantidad } = await this.contarNoLeidas(auth);
+            inicializado = true;
             subscriber.next({
+              id: cursor.toString(),
               type: 'ready',
               data: { noLeidas: cantidad, ultimoId: cursor.toString() },
               retry: 3000,
             });
-            return;
+            // Al reconectar, confirma el canal y recupera lo ocurrido desde
+            // el último evento recibido; no salta al final del historial.
+            if (esConexionNueva) return;
           }
 
+          if (cursor === null) return;
           const eventos = await this.prisma.eventoSistema.findMany({
             where: { tenantId: auth.tenantId, id: { gt: cursor } },
             orderBy: { id: 'asc' },
@@ -262,11 +271,16 @@ export class EventosSistemaService {
 
       void emitirPendientes();
       const polling = setInterval(() => void emitirPendientes(), 1500);
-      const heartbeat = setInterval(
-        () =>
-          subscriber.next({ type: 'heartbeat', data: { ahora: Date.now() } }),
-        15000,
-      );
+      const heartbeat = setInterval(() => {
+        if (!inicializado || cursor === null) return;
+        // Nest genera un id secuencial cuando se omite. Un latido nunca
+        // debe adelantar el cursor real y hacer perder eventos al reconectar.
+        subscriber.next({
+          id: cursor.toString(),
+          type: 'heartbeat',
+          data: { ahora: Date.now() },
+        });
+      }, 15000);
       return () => {
         cerrado = true;
         clearInterval(polling);

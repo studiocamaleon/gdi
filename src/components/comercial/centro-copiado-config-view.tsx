@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import Link from "next/link";
 import {
@@ -11,7 +12,6 @@ import {
   History,
   Printer,
   Plus,
-  RefreshCw,
   Search,
   Settings2,
   Trash2,
@@ -605,7 +605,7 @@ export function CentroCopiadoConfigView() {
           </Alert>
         ) : (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <RefreshCw className="size-4 animate-spin" /> Cargando
+            <GdiSpinner /> Cargando
             configuración…
           </div>
         )}

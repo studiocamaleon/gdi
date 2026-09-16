@@ -61,7 +61,11 @@ describe('construirSnapshotsEstacion', () => {
   it('la cola excluye los pasos tercerizados (no ocupan puesto)', () => {
     const traza = [
       paso({ duracionMin: 120, tercerizado: false }),
-      paso({ duracionMin: null, tercerizado: true, estacionKey: '__proveedor__' }),
+      paso({
+        duracionMin: null,
+        tercerizado: true,
+        estacionKey: '__proveedor__',
+      }),
     ];
     const fotos = construirSnapshotsEstacion(traza, [est], AHORA, new Set());
     const e1 = fotos.find((f) => f.estacionKey === 'e1')!;
@@ -111,10 +115,7 @@ describe('construirSnapshotsItem', () => {
       ['i1', eta(new Date(2026, 6, 23), { parcial: true })],
       ['i2', eta(null, { sinEstimar: true })],
     ]);
-    const fotos = construirSnapshotsItem(
-      porItem,
-      new Map([['i1', null]]),
-    );
+    const fotos = construirSnapshotsItem(porItem, new Map([['i1', null]]));
     const i1 = fotos.find((f) => f.itemId === 'i1')!;
     const i2 = fotos.find((f) => f.itemId === 'i2')!;
     expect(i1.margenMin).toBeNull();
@@ -122,4 +123,48 @@ describe('construirSnapshotsItem', () => {
     expect(i2.margenMin).toBeNull();
     expect(i2.sinEstimar).toBe(true);
   });
+});
+
+it('el modo personal mide atención real y horizonte planificado sin usar los puestos anteriores', () => {
+  const ahora = new Date('2026-09-14T09:00:00-03:00');
+  const inicio = ahora.getTime(),
+    fin = inicio + 60 * 60000;
+  const cal: CalendarioEstacion = {
+    dias: {
+      lun: [{ desde: '09:00', hasta: '13:00' }],
+      mar: null,
+      mie: null,
+      jue: null,
+      vie: null,
+      sab: null,
+      dom: null,
+    },
+  };
+  const estacion: EstacionInfo = {
+    ...est,
+    calendario: cal,
+    capacidadConcurrente: 99,
+    planificacionPorEmpleados: true,
+    empleados: [
+      { id: 'ana', calendario: cal },
+      { id: 'bruno', calendario: cal },
+    ],
+  };
+  const traza = [
+    paso({
+      inicio: ahora,
+      fin: new Date(fin),
+      reservasHumanas: [
+        { inicio, fin, personas: 2, empleadoIds: ['ana', 'bruno'] },
+      ],
+    }),
+  ];
+  const [foto] = construirSnapshotsEstacion(
+    traza,
+    [estacion],
+    ahora,
+    new Set(),
+  );
+  expect(foto.utilizacion5dPct).toBe(25); // 120 minutos-persona / 480 disponibles.
+  expect(foto.horizonteDias).toBe(0.3); // Una hora del calendario de 4 h, redondeada.
 });

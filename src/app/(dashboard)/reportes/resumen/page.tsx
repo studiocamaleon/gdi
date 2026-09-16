@@ -1,4 +1,4 @@
-import { MetaPie, TabResumen } from "@/components/panel/panel-general";
+import { ResumenEjecutivo } from "@/components/panel/resumen-ejecutivo";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { getPanelResumen } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
@@ -24,11 +24,12 @@ export default async function Page({
   }
 
   const parametros = await searchParams;
-  const d = await getPanelResumen(rangoDeParametros(parametros, await zonaHorariaDelTenant()));
+  const d = await getPanelResumen(
+    rangoDeParametros(parametros, await zonaHorariaDelTenant()),
+  );
   return (
     <>
-      <TabResumen d={d} />
-      <MetaPie meta={d.meta} />
+      <ResumenEjecutivo d={d} />
     </>
   );
 }

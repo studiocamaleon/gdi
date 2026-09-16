@@ -19,9 +19,9 @@ const authCon = (permisos: string[]): CurrentAuth =>
   }) as CurrentAuth;
 
 function servicioVacio() {
-  return Object.create(
-    OrdenesTrabajoService.prototype,
-  ) as OrdenesTrabajoService;
+  return Object.assign(Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService, {
+    eta: { sincronizarAsignaciones: jest.fn().mockResolvedValue(0) },
+  });
 }
 
 describe('alcance seguro del Tablero de producción', () => {
@@ -218,6 +218,8 @@ describe('alcance seguro del Tablero de producción', () => {
         findFirst: jest.fn().mockResolvedValue({ estaciones: [] }),
       },
       ordenTrabajo: { findMany: jest.fn().mockResolvedValue([orden]) },
+      gateProduccionDocumento: { findMany: jest.fn().mockResolvedValue([]) },
+      ordenTrabajoItemPaso: { findMany: jest.fn().mockResolvedValue([]) },
     };
     service.reconciliarTramosVencidos = jest.fn().mockResolvedValue(undefined);
     service.backfillPasosTablero = jest.fn().mockResolvedValue(undefined);
@@ -249,6 +251,24 @@ describe('alcance seguro del Tablero de producción', () => {
 });
 
 describe('concurrencia del Tablero de producción', () => {
+  it.each(['maquina-sin-estacion', null])('no habilita una impresión por su familia cuando falta asignación de máquina: %s', async (maquinaId) => {
+    const service = servicioVacio() as unknown as {
+      prisma: unknown;
+      validarEjecucionEnEstacion: (auth: CurrentAuth, paso: { familiaCodigo: string; maquinaId: string | null }) => Promise<void>;
+    };
+    service.prisma = {
+      empleado: { findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }) },
+      maquina: { findFirst: jest.fn().mockResolvedValue({ plantilla: 'IMPRESORA_LASER' }) },
+      estacion: { findMany: jest.fn().mockResolvedValue([{
+        id: 'general', activo: true, maquinas: [],
+        reglas: [{ tipo: 'familia', valor: 'impresion_por_hoja' }],
+        empleados: [{ empleadoId: 'emp-1' }],
+      }]) },
+    };
+    await expect(service.validarEjecucionEnEstacion(authCon(['produccion.ejecutar']), {
+      familiaCodigo: 'impresion_por_hoja', maquinaId,
+    })).rejects.toBeInstanceOf(ForbiddenException);
+  });
   it('permite reclamar sólo una estación habilitada para el empleado vinculado', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const service = servicioVacio() as unknown as {
@@ -264,10 +284,11 @@ describe('concurrencia del Tablero de producción', () => {
           estado: 'pendiente',
           mesaUsuarioId: null,
           familiaCodigo: 'impresion_por_hoja',
-          maquinaId: null,
+          maquinaId: 'maquina-1',
         }),
         updateMany,
       },
+      maquina: { findFirst: jest.fn().mockResolvedValue({ plantilla: 'IMPRESORA_LASER' }) },
       empleado: { findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }) },
       estacion: {
         findMany: jest.fn().mockResolvedValue([
@@ -275,7 +296,7 @@ describe('concurrencia del Tablero de producción', () => {
             id: 'est-1',
             activo: true,
             reglas: [{ tipo: 'familia', valor: 'impresion_por_hoja' }],
-            maquinas: [],
+            maquinas: [{ id: 'maquina-1', centroCostoPrincipalId: null, activo: true }],
             empleados: [{ empleadoId: 'emp-1' }],
           },
         ]),
@@ -309,10 +330,11 @@ describe('concurrencia del Tablero de producción', () => {
           estado: 'pendiente',
           mesaUsuarioId: null,
           familiaCodigo: 'impresion_por_hoja',
-          maquinaId: null,
+          maquinaId: 'maquina-1',
         }),
         updateMany,
       },
+      maquina: { findFirst: jest.fn().mockResolvedValue({ plantilla: 'IMPRESORA_LASER' }) },
       empleado: { findFirst: jest.fn().mockResolvedValue({ id: 'emp-1' }) },
       estacion: {
         findMany: jest.fn().mockResolvedValue([
@@ -320,7 +342,7 @@ describe('concurrencia del Tablero de producción', () => {
             id: 'est-1',
             activo: true,
             reglas: [{ tipo: 'familia', valor: 'impresion_por_hoja' }],
-            maquinas: [],
+            maquinas: [{ id: 'maquina-1', centroCostoPrincipalId: null, activo: true }],
             empleados: [{ empleadoId: 'emp-2' }],
           },
         ]),
@@ -427,6 +449,8 @@ describe('concurrencia del Tablero de producción', () => {
       },
       empleado: { findFirst: jest.fn().mockResolvedValue(null) },
       estacion: { findMany: jest.fn().mockResolvedValue([]) },
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'orden-1' }]),
+      $transaction: (callback: (cliente: unknown) => Promise<unknown>) => callback(service.prisma),
     };
 
     await expect(
@@ -500,6 +524,13 @@ describe('concurrencia del Tablero de producción', () => {
         (callback: (cliente: typeof tx) => Promise<unknown>) => callback(tx),
       ),
     };
+    // Las lecturas de autorización/frontera ya pertenecen al cliente tx.
+    const lector = service.prisma as {
+      empleado: unknown;
+      ordenTrabajoItemPaso: { findFirst: unknown };
+    };
+    Object.assign(tx, { empleado: lector.empleado, $queryRaw: jest.fn().mockResolvedValue([{ id: 'orden-1' }]) });
+    Object.assign(tx.ordenTrabajoItemPaso, { findFirst: lector.ordenTrabajoItemPaso.findFirst });
 
     await expect(
       service.accionPaso(

@@ -1,6 +1,7 @@
 # Lenguaje visual rector — Programa Visual Ilusión
 
-**Estado:** contrato visual obligatorio  
+**Estado:** referencia histórica; sustituida para vistas renovadas por el [Sistema visual Shadcn](sistema-visual-shadcn.md), aprobado el 11/09/2026. Las pantallas aún no migradas conservan su apariencia hasta intervenirlas.
+
 **Aplica a:** Fases 1–16 del Plan Maestro  
 **Referencias canónicas:** Tesorería y detalle de Orden de Trabajo de Grafoprint  
 **Plan rector:** `docs/visual-ilusion-plan-maestro.md`
@@ -287,4 +288,3 @@ Una pantalla se considera incompleta si:
 - inventa una paleta o patrón ajeno al producto;
 - representa estados o flujo que el backend no garantiza;
 - sólo fue validada en un viewport o con datos ideales.
-

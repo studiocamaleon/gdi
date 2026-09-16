@@ -1,0 +1,58 @@
+.title {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+.field {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.field > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-text);
+  margin-top: 2px;
+}
+.field > div {
+  flex: 1;
+  min-width: 0;
+}
+.field dt {
+  font: 400 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.025em;
+  color: var(--muted-text);
+  margin-bottom: 5px;
+}
+.field dd {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.date button {
+  width: 24px;
+  height: 24px;
+}
+.date svg {
+  width: 12px;
+  height: 12px;
+}
+.seller {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

@@ -1,3 +1,9 @@
+import { sincronizarAsignaciones } from './asignacion-automatica';
+import { personalFijoDelPaso } from '../produccion/asignacion-personal';
+import { recuperarDemandasHistoricas } from './demanda-historica';
+import { aplicarOperacionMaquina, leerDemandaHumana, leerModoOperacionMaquina, type ModoOperacionMaquina, type DemandaHumana } from './motor/demanda-humana';
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
+import { agregarEtaEntregas, descendientesEntrega } from './eta-lotes-entrega';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -49,39 +55,56 @@ export class EtaService {
     private readonly produccion: ProduccionService,
   ) {}
 
+  async sincronizarAsignaciones(tenantId: string) {
+    return sincronizarAsignaciones(this.prisma, tenantId, db => this.contextoSimulacion(tenantId, db, false));
+  }
+
   // ── Ensamblado de entradas + corrida del motor ─────────────────────────
 
   /** Arma las 5 entradas desde la DB y corre la simulación de todo el taller. */
   async correr(tenantId: string): Promise<ResultadoSimulacion> {
+    const resultado = simularFlujo(await this.contextoSimulacion(tenantId));
+    const arbol = await this.prisma.ordenTrabajoItem.findMany({
+      where: { tenantId, orden: { estado: { in: ESTADOS_TABLERO } }, OR: [{ contieneLotesEntrega: true }, { loteEntregaId: { not: null } }] },
+      select: { id: true, parentItemId: true, contieneLotesEntrega: true, loteEntregaId: true },
+    });
+    agregarEtaEntregas(resultado.porItem, arbol);
+    return resultado;
+  }
+
+  /** Contexto compartido por ETA y F6. Recupera metadatos históricos de
+   * atención ausentes; no reserva capacidad ni modifica fechas o tiempos. */
+  async contextoSimulacion(tenantId: string, db: Prisma.TransactionClient = this.prisma, recuperarHistoricos = true) {
     const [items, estaciones, duraciones, dias, config, regional] =
       await Promise.all([
-        this.assembleItems(tenantId),
-        this.produccion.findEstaciones(tenantId),
-        this.produccion.findDuracionesFamilias(tenantId),
-        this.produccion.findDiasNoLaborables(tenantId),
-        this.produccion.getConfiguracion(tenantId),
-        regionalDelTenant(this.prisma, tenantId),
+        this.assembleItems(tenantId, db, recuperarHistoricos),
+        this.produccion.findEstaciones(tenantId, db),
+        this.produccion.findDuracionesFamilias(tenantId, db),
+        this.produccion.findDiasNoLaborables(tenantId, db),
+        this.produccion.getConfiguracion(tenantId, db),
+        regionalDelTenant(db, tenantId),
       ]);
     const medianas = new Map(
       duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
     );
     const noLaborables = new Set(dias.map((d) => d.fecha));
-    return simularFlujo({
+    return {
       items,
       estaciones: estaciones as Estacion[],
       medianas,
       ahora: new Date(),
       noLaborables,
       tiempoEntrePasosMin: config.tiempoEntrePasosMin,
+      margenEtaDias: config.margenEtaDias,
       // El calendario de las estaciones es hora de pared del TALLER, y este
       // proceso corre en UTC: sin la zona, las franjas se corren 3 horas.
       zona: regional.zonaHoraria,
-    });
+    };
   }
 
   /** El subconjunto de `TableroItemData` que el motor necesita, desde Prisma. */
-  private async assembleItems(tenantId: string): Promise<TableroItemData[]> {
-    const ordenes = await this.prisma.ordenTrabajo.findMany({
+  private async assembleItems(tenantId: string, db: Prisma.TransactionClient, recuperarHistoricos = true): Promise<TableroItemData[]> {
+    const ordenes = await db.ordenTrabajo.findMany({
       where: { tenantId, estado: { in: ESTADOS_TABLERO } },
       select: {
         id: true,
@@ -89,9 +112,14 @@ export class EtaService {
         estado: true,
         fechaEntrega: true,
         items: {
+          where: { contieneLotesEntrega: false },
           orderBy: { ordenIndice: 'asc' },
           select: {
             id: true,
+            nombre: true,
+            parentItemId: true,
+            loteEntregaId: true,
+            fechaEntrega: true,
             pasos: {
               orderBy: { indice: 'asc' },
               select: {
@@ -104,8 +132,16 @@ export class EtaService {
                 centroCostoId: true,
                 maquinaId: true,
                 duracionEstimadaMin: true,
+                demandaHumanaJson: true,
                 estado: true,
                 iniciadoEl: true,
+                tramos: { select: { inicioEl: true, finEl: true, usuarioId: true } },
+                planificadoDesde: true,
+                planificadoHasta: true,
+                atencionPlanificadaJson: true,
+                asignacionPersonalJson: true,
+                asignacionManualJson: true,
+                mesaUsuarioId: true,
                 tipoEjecucion: true,
                 plazoProveedorDias: true,
                 dependenciasEntrantes: {
@@ -122,6 +158,15 @@ export class EtaService {
         },
       },
     });
+    // Las revisiones puras no hacen backfill ni leen snapshots de geometría.
+    // Si falta atención congelada, el motor conserva su fallback orientativo.
+    const recuperadas = recuperarHistoricos
+      ? await recuperarDemandasHistoricas(db, tenantId, ordenes.flatMap(o => o.items.flatMap(i => i.pasos)))
+      : new Map<string, DemandaHumana>();
+    for (const orden of ordenes) for (const item of orden.items) for (const paso of item.pasos) {
+      const demanda = recuperadas.get(paso.id);
+      if (demanda) paso.demandaHumanaJson = demanda as unknown as Prisma.JsonValue;
+    }
     const fechaEntregaIso = (f: Date | null) =>
       f ? f.toISOString().slice(0, 10) : null;
     // Tecnología por máquina (derivada, no persistida): habilita el ruteo a
@@ -131,14 +176,19 @@ export class EtaService {
       ordenes.flatMap((orden) =>
         orden.items.flatMap((item) => item.pasos.map((p) => p.maquinaId)),
       ),
+      db,
     );
+    const empleadosAsignables = await db.empleado.findMany({ where: { tenantId }, select: { id: true, userId: true } });
     return ordenes.flatMap((orden) =>
       orden.items.map((item) => ({
         id: item.id,
+        nombre: item.nombre,
+        parentItemId: item.parentItemId,
+        loteEntregaId: item.loteEntregaId,
         ordenId: orden.id,
         ordenNumero: orden.numero,
         ordenEstado: orden.estado,
-        fechaEntrega: fechaEntregaIso(orden.fechaEntrega),
+        fechaEntrega: fechaEntregaIso(item.fechaEntrega ?? orden.fechaEntrega),
         sinRuta: item.pasos.length === 0,
         pasos: item.pasos.map(
           (paso): TableroPasoData => ({
@@ -146,6 +196,10 @@ export class EtaService {
             indice: paso.indice,
             nodoClave: paso.nodoClave,
             esTerminal: paso.esTerminal,
+            planificadoDesde: paso.planificadoDesde?.toISOString() ?? null,
+            planificadoHasta: paso.planificadoHasta?.toISOString() ?? null,
+            atencionPlanificada: paso.atencionPlanificadaJson,
+            personalFijo: personalFijoDelPaso({ ...paso, operadorActualUsuarioId: paso.tramos.find(t => !t.finEl)?.usuarioId }, empleadosAsignables),
             predecesorPasoIds: paso.dependenciasEntrantes.map(
               (dependencia) => dependencia.predecesorPasoId,
             ),
@@ -158,8 +212,13 @@ export class EtaService {
               resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null,
             centroCostoId: paso.centroCostoId,
             maquinaId: paso.maquinaId,
+        requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
+            demandaHumana: paso.maquinaId && paso.estado !== 'hecho'
+              ? aplicarOperacionMaquina(leerDemandaHumana(paso.demandaHumanaJson, Number(paso.duracionEstimadaMin ?? -1)), tecnologias.get(paso.maquinaId)?.operacionMaquina ?? null)
+              : paso.demandaHumanaJson,
+            tramosEjecucion: paso.tramos.map((t) => ({ inicio: t.inicioEl.toISOString(), fin: t.finEl?.toISOString() ?? null })),
             tecnologia: paso.maquinaId
-              ? (tecnologias.get(paso.maquinaId) ?? null)
+              ? (tecnologias.get(paso.maquinaId)?.tecnologia ?? null)
               : null,
             duracionEstimadaMin:
               paso.duracionEstimadaMin === null
@@ -182,12 +241,13 @@ export class EtaService {
   private async tecnologiaPorMaquina(
     tenantId: string,
     maquinaIds: Array<string | null>,
-  ): Promise<Map<string, string | null>> {
+    db: Prisma.TransactionClient,
+  ): Promise<Map<string, { tecnologia: string | null; operacionMaquina: ModoOperacionMaquina | null }>> {
     const ids = Array.from(
       new Set(maquinaIds.filter((id): id is string => id !== null)),
     );
     if (ids.length === 0) return new Map();
-    const maquinas = await this.prisma.maquina.findMany({
+    const maquinas = await db.maquina.findMany({
       where: { tenantId, id: { in: ids } },
       select: {
         id: true,
@@ -197,7 +257,7 @@ export class EtaService {
       },
     });
     return new Map(
-      maquinas.map((m) => [m.id, resolverTecnologiaMaquina(m)] as const),
+      maquinas.map((m) => [m.id, { tecnologia: resolverTecnologiaMaquina(m), operacionMaquina: leerModoOperacionMaquina((m.parametrosTecnicosJson as Record<string, unknown> | null)?.operacionMaquina) }] as const),
     );
   }
 
@@ -211,7 +271,7 @@ export class EtaService {
   async capturarEmision(auth: CurrentAuth, ordenId: string): Promise<void> {
     const items = await this.prisma.ordenTrabajoItem.findMany({
       where: { tenantId: auth.tenantId, ordenId },
-      select: { id: true, orden: { select: { fechaEntrega: true } } },
+      select: { id: true, fechaEntrega: true, orden: { select: { fechaEntrega: true } } },
     });
     if (items.length === 0) return;
 
@@ -236,7 +296,7 @@ export class EtaService {
           finEstimado: eta?.finEstimado ?? null,
           sinEstimar: eta ? eta.sinEstimar : true,
           parcial: eta?.parcial ?? false,
-          fechaEntrega: item.orden.fechaEntrega,
+          fechaEntrega: item.fechaEntrega ?? item.orden.fechaEntrega,
         };
       }),
     });
@@ -254,6 +314,9 @@ export class EtaService {
       where: { tenantId, ordenId },
       select: {
         id: true,
+        parentItemId: true,
+        contieneLotesEntrega: true,
+        loteEntregaId: true,
         pasos: {
           select: {
             iniciadoEl: true,
@@ -266,8 +329,10 @@ export class EtaService {
     });
 
     for (const item of items) {
+      const pasos = item.contieneLotesEntrega || item.loteEntregaId
+        ? descendientesEntrega(items, item).flatMap(i => i.pasos) : item.pasos;
       const ciclo = descomponerCiclo(
-        item.pasos.map((p) => ({
+        pasos.map((p) => ({
           iniciadoEl: p.iniciadoEl,
           completadoEl: p.completadoEl,
           tiempoRealMin:
@@ -345,7 +410,7 @@ export class EtaService {
             tenantId,
             orden: { estado: { in: ESTADOS_TABLERO } },
           },
-          select: { id: true, orden: { select: { fechaEntrega: true } } },
+          select: { id: true, fechaEntrega: true, orden: { select: { fechaEntrega: true } } },
         }),
         regionalDelTenant(this.prisma, tenantId),
       ]);
@@ -363,6 +428,8 @@ export class EtaService {
       nombre: e.nombre,
       calendario: e.calendario,
       capacidadConcurrente: e.capacidadConcurrente,
+      planificacionPorEmpleados: e.planificacionPorEmpleados,
+      empleados: e.empleados,
     }));
     const fotosEstacion = construirSnapshotsEstacion(
       traza.map((p) => ({
@@ -371,6 +438,8 @@ export class EtaService {
         esperaMin: p.esperaMin,
         candidatos: p.candidatos,
         inicio: p.inicio,
+        fin: p.fin,
+        reservasHumanas: p.reservasHumanas,
         tercerizado: p.tercerizado,
       })),
       estacionesInfo,

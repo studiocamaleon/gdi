@@ -97,3 +97,28 @@ export function getEtaColas(filtro?: {
 export function dispararEtaSnapshot() {
   return apiRequest<{ ok: boolean }>(`/eta/snapshot`, { method: "POST" });
 }
+
+/** Mismo contexto de capacidad que usa el ETA autoritativo. Los items incluyen
+ * sólo campos productivos; no se usan para renderizar el detalle comercial. */
+export async function getContextoPrevision() {
+  const c = await apiRequest<{
+    items: import("./tablero-produccion").TableroItemData[];
+    estaciones: import("./estaciones").Estacion[];
+    medianas: Array<[string, number]>;
+    noLaborables: string[];
+    ahora: string;
+    zona: string;
+    tiempoEntrePasosMin: number;
+    margenEtaDias: number;
+  }>("/eta/contexto-prevision");
+  return {
+    enCola: c.items,
+    estaciones: c.estaciones,
+    medianas: new Map(c.medianas),
+    noLaborables: new Set(c.noLaborables),
+    ahora: new Date(c.ahora),
+    zona: c.zona,
+    tiempoEntrePasosMin: c.tiempoEntrePasosMin,
+    margenEtaDias: c.margenEtaDias,
+  };
+}

@@ -3,6 +3,7 @@ import {
   nodoEjecutable,
   nodoReabrible,
   reducirGrafoAClaves,
+  resolverHabilitacionesActivas,
   validarYOrdenarGrafo,
 } from '../grafo-produccion';
 
@@ -16,6 +17,32 @@ const nodos = [
 ];
 
 describe('grafo de producción', () => {
+  it('mantiene todas las habilitaciones activas detrás de opcionales BOM omitidos', () => {
+    const g = validarYOrdenarGrafo(nodos.slice(0, 5), [
+      { desdeClave: 'diseno', haciaClave: 'uv' },
+      { desdeClave: 'uv', haciaClave: 'armado' },
+      { desdeClave: 'carton', haciaClave: 'acrilico' },
+      { desdeClave: 'acrilico', haciaClave: 'armado' },
+    ]);
+    expect(
+      resolverHabilitacionesActivas(
+        g,
+        ['armado'],
+        new Set(['diseno', 'uv', 'carton']),
+      ),
+    ).toEqual(expect.arrayContaining(['uv', 'carton']));
+    expect(
+      resolverHabilitacionesActivas(
+        g,
+        ['armado'],
+        new Set(['diseno', 'uv', 'carton']),
+      ),
+    ).not.toContain('diseno');
+    expect(resolverHabilitacionesActivas(g, ['diseno'], new Set())).toEqual([]);
+    expect(
+      resolverHabilitacionesActivas(g, ['uv', 'uv'], new Set(['uv'])),
+    ).toEqual(['uv']);
+  });
   it('compila una ruta histórica al DAG lineal equivalente', () => {
     const grafo = compilarRutaLineal(nodos.slice(0, 3));
 

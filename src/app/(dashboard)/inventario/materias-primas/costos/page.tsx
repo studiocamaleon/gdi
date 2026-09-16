@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 import { CostosMaterialesEditor } from "@/components/inventario/costos-materiales-editor";
@@ -8,18 +9,16 @@ export const dynamic = "force-dynamic";
 
 export default function CostosMaterialesPage() {
   return (
-    <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
-      <CostosMaterialesPageContent />
-    </Suspense>
+    <DesignSystemProvider theme="brand" appearance="light">
+      <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
+        <CostosMaterialesPageContent />
+      </Suspense>
+    </DesignSystemProvider>
   );
 }
 
 async function CostosMaterialesPageContent() {
   const materiasPrimas = await getMateriasPrimas();
 
-  return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <CostosMaterialesEditor initialMateriasPrimas={materiasPrimas} />
-    </section>
-  );
+  return <CostosMaterialesEditor initialMateriasPrimas={materiasPrimas} />;
 }

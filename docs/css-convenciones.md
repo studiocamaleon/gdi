@@ -1,11 +1,22 @@
 # CSS — convenciones y el trinquete
 
+La dirección de las próximas migraciones sigue el
+[Sistema visual HeroUI](sistema-visual-heroui.md), con Orden de trabajo como
+piloto. Colas conserva su [contrato Shadcn](sistema-visual-shadcn.md) hasta su
+migración. Las utilidades componen las vistas; los CSS Modules resuelven su
+geometría específica. Este documento regula el retiro del CSS heredado.
+
+**Medición vigente · 12/09/2026:** 40.456 líneas y 1.311 clases globales solas.
+El piloto OT retiró 100 selectores exclusivos y 712 líneas netas del global.
+El control ahora falla ante crecimiento y `--update` sólo baja los límites.
+Las cifras del diagnóstico que sigue son históricas.
+
 Cómo se escriben estilos nuevos, por qué `globals.css` llegó a 38k líneas y qué
 se hace al respecto sin frenar el desarrollo.
 
 ## El problema
 
-`globals.css` mide 38.093 líneas y entra **entero en todas las páginas**: lo
+En el diagnóstico inicial, `globals.css` medía 38.093 líneas y entra **entero en todas las páginas**: lo
 importa `src/app/layout.tsx` una sola vez, para toda la app.
 
 CSS no tiene módulos. Toda clase que se escribe sin ancestro es, literalmente,
@@ -169,7 +180,7 @@ costura probados con estilo computado.
 
 ## La regla
 
-> **Una vista nueva no escribe en `globals.css`. Nace con su propio módulo.**
+> **Una vista nueva no escribe en `globals.css`. Usa las primitivas y utilidades del sistema de diseño; CSS Modules para geometría específica.**
 
 ```
 mi-vista.module.css              import s from "./mi-vista.module.css";
@@ -229,7 +240,7 @@ No arregla lo viejo. Impide que empeore:
 
 - **Clase global nueva** que no está en la línea de base → error, con la línea y
   las tres salidas posibles.
-- **El archivo creció** → aviso, no corta (a veces hay que tocar tokens).
+- **El archivo creció** → error. Los tokens nuevos del piloto pertenecen al sistema de diseño, no a una vista en el global.
 - **Una global desapareció** → felicita y pide bajar el listón.
 
 La línea de base vive en `scripts/css-guard-baseline.json` y no se edita a mano:
@@ -238,8 +249,7 @@ La línea de base vive en `scripts/css-guard-baseline.json` y no se edita a mano
 npm run css:guard -- --update
 ```
 
-Los números de ese archivo **sólo deberían bajar**. Si suben, que sea una
-decisión consciente y no un descuido.
+Los números de ese archivo **sólo pueden bajar** con `--update`. El comando también rechaza clases nuevas aunque el archivo tenga menos líneas.
 
 ### Qué cuenta como global
 

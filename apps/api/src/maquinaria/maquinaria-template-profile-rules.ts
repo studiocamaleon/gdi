@@ -80,7 +80,9 @@ function buildRule(params: {
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
-  // Discriminantes (detalle): caras, modo dúplex, colores y gramajeMaxGr.
+  // Discriminantes (detalle): caras, colores y gramajeMaxGr.
+  // modoDobleFaz y origenProductividad son campos obsoletos, retirados del
+  // editor el 2026-09-16. Se toleran para guardar perfiles existentes.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
     detalleKeys: [
       'caras',
@@ -387,6 +389,9 @@ export function validatePerfilOperativoByTemplate(
   perfil: MaquinaPerfilOperativoItemDto,
   parametrosTecnicos?: Record<string, unknown>,
 ) {
+  // Compatibilidad con el control experimental retirado: no guardar ni aplicar
+  // ese campo. La atención se deriva de los tiempos cotizados.
+  if (perfil.detalle) delete perfil.detalle.atencionOperario;
   if (perfil.detalle?.procesamientoCorteVersion === 1) {
     if (
       !PLANTILLAS_PROCESAMIENTO_CORTE.includes(plantilla) ||

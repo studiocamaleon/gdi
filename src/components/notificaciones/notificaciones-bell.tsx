@@ -4,6 +4,7 @@ import * as React from "react";
 import { Bell, CheckCheck, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useNotificaciones } from "./notificaciones-provider";
+import { cn } from "@/lib/utils";
 import styles from "./notificaciones.module.css";
 
 const fecha = new Intl.DateTimeFormat("es-AR", {
@@ -13,7 +14,7 @@ const fecha = new Intl.DateTimeFormat("es-AR", {
   minute: "2-digit",
 });
 
-export function NotificacionesBell() {
+export function NotificacionesBell({ triggerClassName }: { triggerClassName?: string } = {}) {
   const router = useRouter();
   const [abierto, setAbierto] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -48,7 +49,7 @@ export function NotificacionesBell() {
     <div className={styles.root} ref={ref}>
       <button
         type="button"
-        className={styles.trigger}
+        className={cn(styles.trigger, triggerClassName)}
         aria-label={`Notificaciones${noLeidas ? `, ${noLeidas} sin leer` : ""}`}
         aria-expanded={abierto}
         onClick={() => setAbierto((valor) => !valor)}

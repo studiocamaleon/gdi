@@ -1,9 +1,40 @@
 "use client";
 
+import {
+  Card,
+  Input,
+  TextArea,
+  Modal,
+  Tabs,
+  Checkbox,
+  Label,
+} from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SelectField } from "@/components/design-system/select-field";
+import { CampanaDialog } from "./campana-dialog";
+import focus from "@/components/design-system/field-focus.module.css";
+import form from "./campana-form.module.css";
+
+import {
+  ProgresoValor,
+  ProgresoExplicado,
+} from "@/components/produccion/progreso-produccion";
 import * as React from "react";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
+  ActivityIcon,
+  CalendarDaysIcon,
+  FlagIcon,
+  LayoutDashboardIcon,
+  MegaphoneIcon,
+  PackageIcon,
+  TrendingUpIcon,
+  ShoppingBagIcon,
+  WalletIcon,
+  ReceiptIcon,
+  FolderIcon,
+  ClipboardListIcon,
   CheckCircle2Icon,
   CirclePauseIcon,
   Edit3Icon,
@@ -13,6 +44,7 @@ import {
   PlayIcon,
   PlusIcon,
   UnlinkIcon,
+  UserRoundIcon,
   UsersIcon,
   XCircleIcon,
 } from "lucide-react";
@@ -20,25 +52,7 @@ import { toast } from "sonner";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import type { Archivo } from "@/lib/archivos";
 import {
   cambiarEstadoCampana,
@@ -61,9 +75,21 @@ import {
 import { getOrdenesTrabajo } from "@/lib/ordenes-trabajo-api";
 import type { OrdenTrabajoListItem } from "@/lib/ordenes-trabajo";
 import styles from "./campanas.module.css";
+import layout from "@/components/design-system/list-page.module.css";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { IdentityAvatar } from "@/components/design-system/identity-avatar";
 import { DesarrolloDocumentalPanel } from "./desarrollo-documental-panel";
 import type { DesarrolloDocumental } from "@/lib/desarrollo-documental-api";
 import { getDesarrolloCampana } from "@/lib/desarrollo-documental-api";
+import {
+  actualizarAdjuntosGenerales,
+  idsDeArchivosVersionados,
+} from "@/lib/archivos-presentacion";
 import { listarArchivos } from "@/lib/archivos-api";
 
 const SIGUIENTES: Record<CampanaEstado, CampanaEstado[]> = {
@@ -110,23 +136,40 @@ function fechaHora(value: string) {
   return `${valor("day")}/${valor("month")}/${valor("year")} · ${valor("hour")}:${valor("minute")}`;
 }
 
-export function CampanaDetalleView({
-  initial,
-  initialArchivos,
-  empleados,
-  canManage,
-  initialDesarrollo,
-}: {
+type CampanaDetalleViewProps = {
   initial: CampanaDetalle;
   initialArchivos: Archivo[];
   empleados: EmpleadoOpcion[];
   canManage: boolean;
   initialDesarrollo: DesarrolloDocumental;
-}) {
+};
+
+export function CampanaDetalleView(props: CampanaDetalleViewProps) {
+  return (
+    <DesignSystemProvider appearance="light" theme="brand">
+      <CampanaDetalleViewContent {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function CampanaDetalleViewContent({
+  initial,
+  initialArchivos,
+  empleados,
+  canManage,
+  initialDesarrollo,
+}: CampanaDetalleViewProps) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const { moneda } = useConfigRegional();
   const [campana, setCampana] = React.useState(initial);
   const [archivos, setArchivos] = React.useState(initialArchivos);
   const [desarrollo, setDesarrollo] = React.useState(initialDesarrollo);
+  const [editandoArchivos, setEditandoArchivos] = React.useState(false);
+  const archivosVersionados = idsDeArchivosVersionados(desarrollo);
+  const adjuntosGenerales = archivos.filter(
+    (a) => !archivosVersionados.has(a.id),
+  );
   const [hitoOpen, setHitoOpen] = React.useState(false);
   const [editarOpen, setEditarOpen] = React.useState(false);
   const [equipoOpen, setEquipoOpen] = React.useState(false);
@@ -152,7 +195,12 @@ export function CampanaDetalleView({
   const actualizacionPendiente = React.useRef(false);
   const refrescandoEnVivo = React.useRef(false);
   const edicionActiva = Boolean(
-    working || hitoOpen || editarOpen || equipoOpen || vincularOpen,
+    working ||
+    hitoOpen ||
+    editarOpen ||
+    equipoOpen ||
+    vincularOpen ||
+    editandoArchivos,
   );
 
   const refrescarEnVivo = React.useCallback(async () => {
@@ -406,29 +454,53 @@ export function CampanaDetalleView({
     }
   }
 
+  const estadoLabel = {
+    borrador: "Borrador",
+    activo: "Activa",
+    pausado: "Pausada",
+    completado: "Completada",
+    cancelado: "Cancelada",
+  }[campana.estado];
+  const prioridadLabel = {
+    baja: "Baja",
+    normal: "Normal",
+    alta: "Alta",
+    critica: "Crítica",
+  }[campana.prioridad];
   const comercial = campana.dashboard.comercial;
   const money = (value: number) => formatearMoneda(value, moneda);
 
   return (
-    <main className={styles.page}>
-      <div className={styles.breadcrumb}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${themeClass} ${layout.page} ${styles.page}`}
+    >
+      <nav className={styles.breadcrumb} aria-label="Ubicación">
         <Link href="/comercial/campanas">
           <ArrowLeftIcon className="size-3" /> Campañas
         </Link>
         <span>/</span>
-        <span className={styles.code}>{campana.codigo}</span>
-      </div>
-      <header className={styles.detailHeader}>
+        <span className={styles.code} aria-current="page">
+          {campana.codigo}
+        </span>
+      </nav>
+      <header className={`${layout.header} ${styles.detailHeader}`}>
         <div>
-          <p className={styles.eyebrow}>{campana.cliente.nombre}</p>
-          <h1 className={styles.title}>{campana.nombre}</h1>
+          <p className={styles.eyebrow}>
+            <MegaphoneIcon aria-hidden /> Campaña / {campana.cliente.nombre}
+          </p>
+          <h1>
+            {campana.nombre}
+            <span className={styles.titleDot}>.</span>
+          </h1>
           <div className={styles.detailMeta}>
             <span className={styles.code}>{campana.codigo}</span>
             <span className={styles.status} data-status={campana.estado}>
-              {campana.estado}
+              {estadoLabel}
             </span>
             <span className={styles.priority} data-priority={campana.prioridad}>
-              {campana.prioridad}
+              Prioridad {prioridadLabel.toLowerCase()}
             </span>
             {campana.tipo ? (
               <span className={styles.secondary}>{campana.tipo}</span>
@@ -437,12 +509,12 @@ export function CampanaDetalleView({
         </div>
         {canManage ? (
           <div className={styles.actions}>
-            <Button variant="outline" onClick={() => setEditarOpen(true)}>
+            <ActionButton variant="outline" onPress={() => setEditarOpen(true)}>
               <Edit3Icon data-icon="inline-start" /> Editar
-            </Button>
-            <Button
+            </ActionButton>
+            <ActionButton
               variant="outline"
-              onClick={() => {
+              onPress={() => {
                 setEquipoDraft(
                   Object.fromEntries(
                     campana.equipo.map((m) => [m.empleadoId, m.funcion ?? ""]),
@@ -452,190 +524,292 @@ export function CampanaDetalleView({
               }}
             >
               <UsersIcon data-icon="inline-start" /> Equipo
-            </Button>
-            <Button variant="outline" onClick={() => void abrirVincular()}>
+            </ActionButton>
+            <ActionButton
+              variant="outline"
+              onPress={() => void abrirVincular()}
+            >
               <Link2Icon data-icon="inline-start" /> Vincular
-            </Button>
-            {SIGUIENTES[campana.estado].map((estado) => {
-              const Icon = ACCION[estado].icon;
-              return (
-                <Button
-                  key={estado}
-                  variant={
-                    estado === "cancelado"
-                      ? "destructive"
-                      : estado === "activo" || estado === "completado"
-                        ? "brand"
-                        : "outline"
-                  }
-                  onClick={() => void cambiarEstado(estado)}
-                  loading={working === estado}
-                >
-                  <Icon data-icon="inline-start" /> {ACCION[estado].label}
-                </Button>
-              );
-            })}
+            </ActionButton>
           </div>
         ) : null}
       </header>
 
-      <section className={styles.moneyBand} aria-label="Resumen comercial">
-        <div className={styles.moneyCell}>
-          <span className={styles.moneyLabel}>Valor de órdenes</span>
-          <strong className={styles.moneyValue}>
-            {money(comercial.vendido)}
-          </strong>
+      {canManage && SIGUIENTES[campana.estado].length > 0 ? (
+        <div className={styles.lifecycle}>
+          <span className={styles.lifecycleLabel}>
+            <FlagIcon aria-hidden /> Gestionar estado
+          </span>
+          <div className={styles.actions}>
+            {SIGUIENTES[campana.estado].map((estado) => {
+              const Icon = ACCION[estado].icon;
+              return (
+                <ActionButton
+                  key={estado}
+                  variant={
+                    estado === "cancelado"
+                      ? "danger"
+                      : estado === "activo" || estado === "completado"
+                        ? "primary"
+                        : "outline"
+                  }
+                  onPress={() => void cambiarEstado(estado)}
+                  isPending={working === estado}
+                >
+                  <Icon data-icon="inline-start" /> {ACCION[estado].label}
+                </ActionButton>
+              );
+            })}
+          </div>
         </div>
-        <div className={styles.moneyCell}>
-          <span className={styles.moneyLabel}>Presupuestado</span>
-          <strong className={styles.moneyValue}>
-            {money(comercial.presupuestado)}
-          </strong>
-        </div>
-        <div className={styles.moneyCell}>
-          <span className={styles.moneyLabel}>Facturado</span>
-          <strong className={styles.moneyValue}>
-            {money(comercial.facturado)}
-          </strong>
-        </div>
-        <div className={styles.moneyCell}>
-          <span className={styles.moneyLabel}>Cobrado</span>
-          <strong className={styles.moneyValue}>
-            {money(comercial.cobrado)}
-          </strong>
-        </div>
+      ) : null}
+
+      <section className={styles.kpis} aria-label="Resumen comercial">
+        <ListMetric
+          label="Valor de órdenes"
+          value={money(comercial.vendido)}
+          hint="Órdenes vinculadas"
+          icon={ShoppingBagIcon}
+          tone="brand"
+        />
+        <ListMetric
+          label="Presupuestado"
+          value={money(comercial.presupuestado)}
+          hint="Presupuestos de la campaña"
+          icon={FileTextIcon}
+        />
+        <ListMetric
+          label="Facturado"
+          value={money(comercial.facturado)}
+          hint="Comprobantes emitidos"
+          icon={ReceiptIcon}
+        />
+        <ListMetric
+          label="Cobrado"
+          value={money(comercial.cobrado)}
+          hint="Cobros registrados"
+          icon={WalletIcon}
+        />
       </section>
 
-      <div className={styles.detailGrid}>
-        <div>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <h2 className={styles.panelTitle}>Ruta de hitos</h2>
-                <p className={styles.panelNote}>
-                  Compromisos configurables y responsables.
-                </p>
+      <Tabs defaultSelectedKey="resumen" className={styles.tabsRoot}>
+        <NavigationTabList
+          label="Secciones de campaña"
+          variant="detailed"
+          tone="graphite"
+          className={styles.navigation}
+          items={[
+            {
+              id: "resumen",
+              label: "Resumen",
+              description: "Hitos y producción",
+              icon: <LayoutDashboardIcon />,
+            },
+            {
+              id: "ordenes",
+              description: "Trabajo vinculado",
+              label: "Órdenes",
+              count: campana.ordenes.length,
+              icon: <ClipboardListIcon />,
+            },
+            {
+              id: "presupuestos",
+              description: "Propuestas comerciales",
+              label: "Presupuestos",
+              count: campana.cotizaciones.length,
+              icon: <FileTextIcon />,
+            },
+            {
+              id: "archivos",
+              description: "Adjuntos y versiones",
+              label: "Archivos",
+              count: archivos.length,
+              icon: <FolderIcon />,
+            },
+            {
+              id: "actividad",
+              label: "Actividad",
+              description: "Historial de cambios",
+              icon: <ActivityIcon />,
+            },
+          ]}
+        />
+        <div className={styles.detailGrid}>
+          <div className={styles.workspace}>
+            <Tabs.Panel id="resumen" className={styles.summaryContent}>
+              <div className={styles.progressPanel}>
+                {campana.dashboard.produccion.progreso ? (
+                  <ProgresoExplicado
+                    titulo="Avance productivo de la campaña"
+                    progreso={campana.dashboard.produccion.progreso}
+                  />
+                ) : null}
               </div>
-              {canManage ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setHitoOpen(true)}
-                >
-                  <PlusIcon data-icon="inline-start" /> Agregar hito
-                </Button>
-              ) : null}
-            </div>
-            <div className={styles.panelBody}>
-              {campana.hitos.length ? (
-                campana.hitos.map((hito) => (
-                  <div className={styles.milestone} key={hito.id}>
-                    <span
-                      className={styles.milestoneNode}
-                      data-status={hito.estado}
-                    />
-                    <div>
-                      <div className={styles.milestoneTitle}>{hito.titulo}</div>
-                      <span className={styles.secondary}>
-                        {hito.responsable?.nombre ?? "Sin responsable"}
-                        {hito.descripcion ? ` · ${hito.descripcion}` : ""}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className={styles.status} data-status={hito.estado}>
-                        {hito.estado.replace("_", " ")}
-                      </span>
-                      <span className={styles.secondary}>
-                        {fecha(hito.fechaObjetivo)}
-                      </span>
-                      {canManage && hito.estado !== "cancelado" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-1"
-                          loading={working === hito.id}
-                          onClick={() => void avanzarHito(hito)}
-                        >
-                          {hito.estado === "completado" ? "Reabrir" : "Avanzar"}
-                        </Button>
-                      ) : null}
-                    </div>
+              <Card
+                render={(props) => <section {...props} />}
+                className={styles.panel}
+              >
+                <div className={styles.panelHeader}>
+                  <div>
+                    <p className={styles.sectionEyebrow}>Hoja de ruta</p>
+                    <h2 className={styles.panelTitle}>Hitos de la campaña</h2>
+                    <p className={styles.panelNote}>
+                      Los compromisos que marcan el avance del proyecto.
+                    </p>
                   </div>
-                ))
-              ) : (
-                <div className={styles.empty}>
-                  <MilestoneIcon className="mx-auto mb-3 size-6" />
-                  Todavía no se definieron hitos.
+                  {canManage ? (
+                    <ActionButton
+                      variant="outline"
+                      size="sm"
+                      onPress={() => setHitoOpen(true)}
+                    >
+                      <PlusIcon data-icon="inline-start" /> Agregar hito
+                    </ActionButton>
+                  ) : null}
                 </div>
-              )}
-            </div>
-          </section>
-
-          <section className={`${styles.panel} ${styles.tabs}`}>
-            <Tabs defaultValue="ordenes">
-              <TabsList variant="line" className={styles.tabsList}>
-                <TabsTrigger value="ordenes">
-                  Órdenes ({campana.ordenes.length})
-                </TabsTrigger>
-                <TabsTrigger value="presupuestos">
-                  Presupuestos ({campana.cotizaciones.length})
-                </TabsTrigger>
-                <TabsTrigger value="archivos">
-                  Archivos ({archivos.length})
-                </TabsTrigger>
-                <TabsTrigger value="desarrollo">
-                  Desarrollo ({desarrollo.maestros.length})
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="ordenes" className={styles.tabContent}>
-                {campana.ordenes.length ? (
-                  <Table className={styles.table}>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Orden</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Entrega</TableHead>
-                        <TableHead>Avance</TableHead>
-                        <TableHead>Total</TableHead>
-                        {canManage ? <TableHead aria-label="Acciones" /> : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                <div className={styles.panelBody}>
+                  {campana.hitos.length ? (
+                    campana.hitos.map((hito, index) => (
+                      <div className={styles.milestone} key={hito.id}>
+                        <span
+                          className={styles.milestoneNode}
+                          data-status={hito.estado}
+                          aria-hidden
+                        >
+                          {hito.estado === "completado" ? (
+                            <CheckCircle2Icon />
+                          ) : (
+                            String(index + 1).padStart(2, "0")
+                          )}
+                        </span>
+                        <div>
+                          <div className={styles.milestoneTitle}>
+                            {hito.titulo}
+                          </div>
+                          <span className={styles.secondary}>
+                            {hito.responsable?.nombre ?? "Sin responsable"}
+                            {hito.descripcion ? ` · ${hito.descripcion}` : ""}
+                          </span>
+                        </div>
+                        <div className={styles.milestoneActions}>
+                          <span
+                            className={styles.status}
+                            data-status={hito.estado}
+                          >
+                            {hito.estado.replace("_", " ")}
+                          </span>
+                          <span className={styles.secondary}>
+                            {fecha(hito.fechaObjetivo)}
+                          </span>
+                          {canManage && hito.estado !== "cancelado" ? (
+                            <ActionButton
+                              variant="ghost"
+                              size="sm"
+                              className="mt-1"
+                              isPending={working === hito.id}
+                              onPress={() => void avanzarHito(hito)}
+                            >
+                              {hito.estado === "completado"
+                                ? "Reabrir"
+                                : "Avanzar"}
+                            </ActionButton>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className={`${layout.empty} ${styles.empty}`}>
+                      <MilestoneIcon aria-hidden />
+                      <h2>Un proyecto, paso a paso</h2>
+                      <p>
+                        Agregá hitos para definir los compromisos, sus fechas y
+                        responsables.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+              {campana.observaciones ? (
+                <Card className={styles.panel}>
+                  <div className={styles.panelHeader}>
+                    <h2 className={styles.panelTitle}>Observaciones</h2>
+                  </div>
+                  <p className={styles.observations}>{campana.observaciones}</p>
+                </Card>
+              ) : null}
+            </Tabs.Panel>
+            <Tabs.Panel id="ordenes" className={styles.tabContent}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <p className={styles.sectionEyebrow}>
+                    Documentos / {campana.codigo}
+                  </p>
+                  <h2 className={styles.panelTitle}>Órdenes vinculadas</h2>
+                  <p className={styles.panelNote}>
+                    La ejecución y las entregas de esta campaña.
+                  </p>
+                </div>
+                <ClipboardListIcon className={styles.sectionIcon} aria-hidden />
+              </div>
+              {campana.ordenes.length ? (
+                <div
+                  className={styles.tableScroll}
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Documentos vinculados"
+                >
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Orden</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Entrega</th>
+                        <th scope="col">Avance</th>
+                        <th scope="col">Total</th>
+                        {canManage ? (
+                          <th scope="col" aria-label="Acciones" />
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
                       {campana.ordenes.map((orden) => (
-                        <TableRow key={orden.id}>
-                          <TableCell>
+                        <tr key={orden.id}>
+                          <td>
                             <Link
                               className={styles.code}
                               href={`/produccion/ordenes/${orden.id}`}
                             >
                               {orden.numero}
                             </Link>
-                          </TableCell>
-                          <TableCell>
+                          </td>
+                          <td>
                             <span
                               className={styles.status}
                               data-status={orden.estado}
                             >
                               {orden.estado}
                             </span>
-                          </TableCell>
-                          <TableCell>{fecha(orden.fechaEntrega)}</TableCell>
-                          <TableCell className={styles.number}>
-                            {orden.progresoPct == null
-                              ? "—"
-                              : `${orden.progresoPct}%`}
-                          </TableCell>
-                          <TableCell className={styles.number}>
+                          </td>
+                          <td>{fecha(orden.fechaEntrega)}</td>
+                          <td className={styles.number}>
+                            <ProgresoValor
+                              progreso={orden.progreso}
+                              valor={orden.progresoPct}
+                            />
+                          </td>
+                          <td className={styles.number}>
                             {money(orden.total)}
-                          </TableCell>
+                          </td>
                           {canManage ? (
-                            <TableCell className="text-right">
-                              <Button
+                            <td className="text-right">
+                              <ActionButton
                                 variant="ghost"
-                                size="icon-sm"
+                                size="sm"
+                                isIconOnly
                                 title="Desvincular orden"
-                                loading={working === orden.id}
-                                onClick={() =>
+                                aria-label="Desvincular orden"
+                                isPending={working === orden.id}
+                                onPress={() =>
                                   void desvincularDocumento(
                                     "ordenes",
                                     orden.id,
@@ -644,64 +818,90 @@ export function CampanaDetalleView({
                                 }
                               >
                                 <UnlinkIcon />
-                              </Button>
-                            </TableCell>
+                              </ActionButton>
+                            </td>
                           ) : null}
-                        </TableRow>
+                        </tr>
                       ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className={styles.empty}>
-                    Todavía no hay órdenes vinculadas.
-                  </div>
-                )}
-              </TabsContent>
-              <TabsContent value="presupuestos" className={styles.tabContent}>
-                {campana.cotizaciones.length ? (
-                  <Table className={styles.table}>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Presupuesto</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Emisión</TableHead>
-                        <TableHead>Total</TableHead>
-                        {canManage ? <TableHead aria-label="Acciones" /> : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={`${layout.empty} ${styles.empty}`}>
+                  <ClipboardListIcon aria-hidden />
+                  <h2>Sin órdenes vinculadas</h2>
+                  <p>
+                    Vinculá una OT para seguir su producción y entrega desde
+                    esta campaña.
+                  </p>
+                </div>
+              )}
+            </Tabs.Panel>
+            <Tabs.Panel id="presupuestos" className={styles.tabContent}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <p className={styles.sectionEyebrow}>
+                    Documentos / {campana.codigo}
+                  </p>
+                  <h2 className={styles.panelTitle}>Presupuestos vinculados</h2>
+                  <p className={styles.panelNote}>
+                    Propuestas comerciales asociadas al proyecto.
+                  </p>
+                </div>
+                <FileTextIcon className={styles.sectionIcon} aria-hidden />
+              </div>
+              {campana.cotizaciones.length ? (
+                <div
+                  className={styles.tableScroll}
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Documentos vinculados"
+                >
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Presupuesto</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Emisión</th>
+                        <th scope="col">Total</th>
+                        {canManage ? (
+                          <th scope="col" aria-label="Acciones" />
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
                       {campana.cotizaciones.map((presupuesto) => (
-                        <TableRow key={presupuesto.id}>
-                          <TableCell>
+                        <tr key={presupuesto.id}>
+                          <td>
                             <Link
                               className={styles.code}
                               href={`/comercial/presupuestos/${presupuesto.id}`}
                             >
                               {presupuesto.numero ?? "Sin emitir"}
                             </Link>
-                          </TableCell>
-                          <TableCell>
+                          </td>
+                          <td>
                             <span
                               className={styles.status}
                               data-status={presupuesto.estado}
                             >
                               {presupuesto.estado}
                             </span>
-                          </TableCell>
-                          <TableCell>
-                            {fecha(presupuesto.fechaEmision)}
-                          </TableCell>
-                          <TableCell className={styles.number}>
+                          </td>
+                          <td>{fecha(presupuesto.fechaEmision)}</td>
+                          <td className={styles.number}>
                             {money(presupuesto.total)}
-                          </TableCell>
+                          </td>
                           {canManage ? (
-                            <TableCell className="text-right">
-                              <Button
+                            <td className="text-right">
+                              <ActionButton
                                 variant="ghost"
-                                size="icon-sm"
+                                size="sm"
+                                isIconOnly
                                 title="Desvincular presupuesto"
-                                loading={working === presupuesto.id}
-                                onClick={() =>
+                                aria-label="Desvincular presupuesto"
+                                isPending={working === presupuesto.id}
+                                onPress={() =>
                                   void desvincularDocumento(
                                     "cotizaciones",
                                     presupuesto.id,
@@ -711,536 +911,602 @@ export function CampanaDetalleView({
                                 }
                               >
                                 <UnlinkIcon />
-                              </Button>
-                            </TableCell>
+                              </ActionButton>
+                            </td>
                           ) : null}
-                        </TableRow>
+                        </tr>
                       ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className={styles.empty}>
-                    Todavía no hay presupuestos vinculados.
-                  </div>
-                )}
-              </TabsContent>
-              <TabsContent
-                value="archivos"
-                className={`${styles.tabContent} ${styles.panelBody}`}
-              >
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={`${layout.empty} ${styles.empty}`}>
+                  <FileTextIcon aria-hidden />
+                  <h2>Sin presupuestos vinculados</h2>
+                  <p>
+                    Las propuestas que vincules se reunirán acá con su estado e
+                    importe.
+                  </p>
+                </div>
+              )}
+            </Tabs.Panel>
+            <Tabs.Panel
+              id="archivos"
+              className={`${styles.tabContent} ${styles.filesPanel}`}
+            >
+              <DesarrolloDocumentalPanel
+                campanaId={campana.id}
+                initial={desarrollo}
+                archivos={adjuntosGenerales}
+                ordenes={campana.ordenes}
+                canManage={canManage}
+                onCambio={setDesarrollo}
+                onEdicionChange={setEditandoArchivos}
+              />
+              <section className={styles.generalFiles}>
+                <div className={styles.filesHeading}>
+                  <p className={styles.sectionEyebrow}>Biblioteca de campaña</p>
+                  <h2 className={styles.panelTitle}>Adjuntos generales</h2>
+                  <p className={styles.panelNote}>
+                    Brief, referencias y nuevos archivos. Al incorporar un
+                    archivo a una revisión, lo encontrarás en su historial de
+                    versiones.
+                  </p>
+                </div>
                 <ArchivoUploader
                   scope="CAMPANA"
                   entidadId={campana.id}
-                  archivos={archivos}
-                  onCambio={setArchivos}
+                  archivos={adjuntosGenerales}
+                  onCambio={(adjuntos) =>
+                    setArchivos((actuales) =>
+                      actualizarAdjuntosGenerales(
+                        actuales,
+                        adjuntos,
+                        archivosVersionados,
+                      ),
+                    )
+                  }
                   soloLectura={!canManage}
-                  titulo="Adjuntar brief, cronograma o documentación"
-                  vacio="La campaña todavía no tiene archivos."
+                  titulo="Adjuntar archivos a la campaña"
+                  vacio="Todavía no hay adjuntos generales."
                   calcularHash
                 />
-              </TabsContent>
-              <TabsContent value="desarrollo" className={styles.tabContent}>
-                <DesarrolloDocumentalPanel
-                  campanaId={campana.id}
-                  initial={desarrollo}
-                  archivos={archivos}
-                  ordenes={campana.ordenes}
-                  canManage={canManage}
-                />
-              </TabsContent>
-            </Tabs>
-          </section>
-        </div>
-
-        <aside>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>Coordinación</h2>
-            </div>
-            <div className={styles.panelBody}>
-              <dl className={styles.definitionList}>
-                <div className={styles.definition}>
-                  <dt>Responsable</dt>
-                  <dd>{campana.responsable?.nombre ?? "Sin asignar"}</dd>
+              </section>
+            </Tabs.Panel>
+            <Tabs.Panel id="actividad" className={styles.summaryContent}>
+              <Card
+                render={(props) => <section {...props} />}
+                className={styles.panel}
+              >
+                <div className={styles.panelHeader}>
+                  <div>
+                    <p className={styles.sectionEyebrow}>Trazabilidad</p>
+                    <h2 className={styles.panelTitle}>
+                      Actividad de la campaña
+                    </h2>
+                    <p className={styles.panelNote}>
+                      Los últimos 20 cambios, con su fecha y responsable.
+                    </p>
+                  </div>
                 </div>
-                <div className={styles.definition}>
-                  <dt>Inicio</dt>
-                  <dd>{fecha(campana.fechaInicio, true)}</dd>
+                <div className={styles.panelBody}>
+                  <ol className={styles.timeline}>
+                    {campana.eventos.slice(0, 20).map((evento) => (
+                      <li className={styles.event} key={evento.id}>
+                        <p className={styles.eventText}>{evento.descripcion}</p>
+                        <div className={styles.eventMeta}>
+                          {evento.actor} · {fechaHora(evento.fecha)}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  {campana.eventos.length === 0 ? (
+                    <p className={styles.callout}>
+                      Todavía no hay actividad registrada.
+                    </p>
+                  ) : null}
                 </div>
-                <div className={styles.definition}>
-                  <dt>Objetivo</dt>
-                  <dd>{fecha(campana.fechaObjetivo, true)}</dd>
-                </div>
-                <div className={styles.definition}>
-                  <dt>Equipo</dt>
-                  <dd>
-                    {campana.equipo.length
-                      ? campana.equipo.map((m) => m.nombre).join(", ")
-                      : "Sin equipo"}
-                  </dd>
-                </div>
-              </dl>
-              {campana.descripcion ? (
-                <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                  {campana.descripcion}
-                </p>
-              ) : null}
-            </div>
-          </section>
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>Disponibilidad material</h2>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.callout}>
-                {campana.dashboard.materiales.mensaje}
-              </div>
-            </div>
-          </section>
-          {campana.dashboard.rentabilidad ? (
-            <section className={styles.panel}>
+              </Card>{" "}
+            </Tabs.Panel>
+          </div>
+          <aside
+            className={styles.sidebar}
+            aria-label="Coordinación y recursos"
+          >
+            <Card
+              render={(props) => <section {...props} />}
+              className={styles.panel}
+            >
               <div className={styles.panelHeader}>
-                <h2 className={styles.panelTitle}>Rentabilidad estimada</h2>
+                <h2 className={styles.panelTitle}>Coordinación</h2>
+                <UsersIcon className={styles.sectionIcon} aria-hidden />
               </div>
               <div className={styles.panelBody}>
-                {campana.dashboard.rentabilidad.disponible ? (
-                  <dl className={styles.definitionList}>
-                    <div className={styles.definition}>
-                      <dt>Costo</dt>
-                      <dd className={styles.number}>
-                        {money(campana.dashboard.rentabilidad.costoEstimado)}
-                      </dd>
-                    </div>
-                    <div className={styles.definition}>
-                      <dt>Margen</dt>
-                      <dd className={styles.number}>
-                        {money(campana.dashboard.rentabilidad.margenEstimado)}
-                      </dd>
-                    </div>
-                    <div className={styles.definition}>
-                      <dt>Margen %</dt>
-                      <dd className={styles.number}>
-                        {campana.dashboard.rentabilidad.margenPct == null
-                          ? "—"
-                          : `${campana.dashboard.rentabilidad.margenPct.toFixed(1)}%`}
-                      </dd>
-                    </div>
-                  </dl>
+                <dl className={styles.definitionList}>
+                  <div className={styles.definition}>
+                    <dt>Responsable</dt>
+                    <dd>
+                      {campana.responsable ? (
+                        <span className={styles.person}>
+                          <IdentityAvatar name={campana.responsable.nombre} />
+                          <span>{campana.responsable.nombre}</span>
+                        </span>
+                      ) : (
+                        "Sin asignar"
+                      )}
+                    </dd>
+                  </div>
+                  <div className={styles.definition}>
+                    <dt>
+                      <CalendarDaysIcon aria-hidden /> Inicio
+                    </dt>
+                    <dd>{fecha(campana.fechaInicio, true)}</dd>
+                  </div>
+                  <div className={styles.definition}>
+                    <dt>
+                      <FlagIcon aria-hidden /> Objetivo
+                    </dt>
+                    <dd>{fecha(campana.fechaObjetivo, true)}</dd>
+                  </div>
+                  <div className={styles.definition}>
+                    <dt>Equipo</dt>
+                    <dd>
+                      {campana.equipo.length ? (
+                        <ul className={styles.team}>
+                          {campana.equipo.map((miembro) => (
+                            <li key={miembro.id}>
+                              <UserRoundIcon
+                                aria-hidden
+                                className={styles.teamIcon}
+                              />
+                              <span>
+                                {miembro.nombre}
+                                {miembro.funcion ? (
+                                  <small>{miembro.funcion}</small>
+                                ) : null}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        "Sin equipo"
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                {campana.descripcion ? (
+                  <p className={styles.description}>{campana.descripcion}</p>
                 ) : null}
-                <div className={`${styles.callout} mt-3`}>
-                  {campana.dashboard.rentabilidad.mensaje}
+              </div>
+            </Card>
+            <Card
+              render={(props) => <section {...props} />}
+              className={styles.panel}
+            >
+              <div className={styles.panelHeader}>
+                <h2 className={styles.panelTitle}>Materiales</h2>
+                <PackageIcon className={styles.sectionIcon} aria-hidden />
+              </div>
+              <div className={styles.panelBody}>
+                <div className={styles.callout}>
+                  {campana.dashboard.materiales.mensaje}
                 </div>
               </div>
-            </section>
-          ) : null}
-          <section className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <h2 className={styles.panelTitle}>Actividad</h2>
-            </div>
-            <div className={styles.panelBody}>
-              <div className={styles.timeline}>
-                {campana.eventos.slice(0, 20).map((evento) => (
-                  <div className={styles.event} key={evento.id}>
-                    <p className={styles.eventText}>{evento.descripcion}</p>
-                    <div className={styles.eventMeta}>
-                      {evento.actor} · {fechaHora(evento.fecha)}
-                    </div>
+            </Card>
+            {campana.dashboard.rentabilidad ? (
+              <Card
+                render={(props) => <section {...props} />}
+                className={styles.panel}
+              >
+                <div className={styles.panelHeader}>
+                  <h2 className={styles.panelTitle}>Rentabilidad estimada</h2>
+                  <TrendingUpIcon className={styles.sectionIcon} aria-hidden />
+                </div>
+                <div className={styles.panelBody}>
+                  {campana.dashboard.rentabilidad.disponible ? (
+                    <dl className={styles.definitionList}>
+                      <div className={styles.definition}>
+                        <dt>Costo</dt>
+                        <dd className={styles.number}>
+                          {money(campana.dashboard.rentabilidad.costoEstimado)}
+                        </dd>
+                      </div>
+                      <div className={styles.definition}>
+                        <dt>Margen</dt>
+                        <dd className={styles.number}>
+                          {money(campana.dashboard.rentabilidad.margenEstimado)}
+                        </dd>
+                      </div>
+                      <div className={styles.definition}>
+                        <dt>Margen %</dt>
+                        <dd className={styles.number}>
+                          {campana.dashboard.rentabilidad.margenPct == null
+                            ? "—"
+                            : `${campana.dashboard.rentabilidad.margenPct.toFixed(1)}%`}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
+                  <div className={`${styles.callout} mt-3`}>
+                    {campana.dashboard.rentabilidad.mensaje}
                   </div>
-                ))}
+                </div>
+              </Card>
+            ) : null}
+          </aside>
+        </div>
+      </Tabs>
+
+      <CampanaDialog
+        isOpen={hitoOpen}
+        onOpenChange={setHitoOpen}
+        title={<span className={form.dialogTitle}>Agregar hito</span>}
+        description={<>Definí un compromiso concreto dentro de la campaña.</>}
+      >
+        <form onSubmit={crearHito}>
+          <div className={form.body}>
+            <div className={form.grid}>
+              <div className={form.span2}>
+                <label className={form.label} htmlFor="hito-titulo">
+                  Título <span className={form.required}>*</span>
+                </label>
+                <Input
+                  id="hito-titulo"
+                  name="titulo"
+                  className={`${form.input} ${focus.singleBorder}`}
+                  required
+                  maxLength={180}
+                  placeholder="Arte final aprobado"
+                />
+              </div>
+              <div>
+                <label className={form.label} htmlFor="hito-fecha">
+                  Fecha objetivo
+                </label>
+                <Input
+                  id="hito-fecha"
+                  name="fechaObjetivo"
+                  type="date"
+                  className={`${form.input} ${focus.singleBorder}`}
+                />
+              </div>
+              <div>
+                <label className={form.label} htmlFor="hito-responsable">
+                  Responsable
+                </label>
+                <SelectField
+                  id="hito-responsable"
+                  name="responsableEmpleadoId"
+                  className={form.select}
+                  defaultValue=""
+                  aria-label="Responsable"
+                  options={[
+                    { value: "", label: "Sin asignar" },
+                    ...empleados.map((empleado) => ({
+                      value: empleado.id,
+                      label: empleado.nombreCompleto,
+                    })),
+                  ]}
+                />
+              </div>
+              <div className={form.span2}>
+                <label className={form.label} htmlFor="hito-descripcion">
+                  Descripción
+                </label>
+                <TextArea
+                  id="hito-descripcion"
+                  name="descripcion"
+                  className={`${form.textarea} ${focus.singleBorder}`}
+                  maxLength={1000}
+                />
               </div>
             </div>
-          </section>
-        </aside>
-      </div>
-
-      <Dialog open={hitoOpen} onOpenChange={setHitoOpen}>
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Agregar hito</DialogTitle>
-            <DialogDescription>
-              Definí un compromiso concreto dentro de la campaña.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={crearHito}>
-            <div className={styles.dialogBody}>
-              <FieldGroup className={styles.formGrid}>
-                <Field className={styles.span2}>
-                  <FieldLabel className={styles.label} htmlFor="hito-titulo">
-                    Título <span className={styles.required}>*</span>
-                  </FieldLabel>
-                  <input
-                    id="hito-titulo"
-                    name="titulo"
-                    className={styles.input}
-                    required
-                    maxLength={180}
-                    placeholder="Arte final aprobado"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel className={styles.label} htmlFor="hito-fecha">
-                    Fecha objetivo
-                  </FieldLabel>
-                  <input
-                    id="hito-fecha"
-                    name="fechaObjetivo"
-                    type="date"
-                    className={styles.input}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="hito-responsable"
-                  >
-                    Responsable
-                  </FieldLabel>
-                  <select
-                    id="hito-responsable"
-                    name="responsableEmpleadoId"
-                    className={styles.select}
-                    defaultValue=""
-                  >
-                    <option value="">Sin asignar</option>
-                    {empleados.map((empleado) => (
-                      <option key={empleado.id} value={empleado.id}>
-                        {empleado.nombreCompleto}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field className={styles.span2}>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="hito-descripcion"
-                  >
-                    Descripción
-                  </FieldLabel>
-                  <textarea
-                    id="hito-descripcion"
-                    name="descripcion"
-                    className={styles.textarea}
-                    maxLength={1000}
-                  />
-                </Field>
-              </FieldGroup>
-              {hitoError ? (
-                <p className={styles.error} role="alert">
-                  {hitoError}
-                </p>
-              ) : null}
-            </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setHitoOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={styles.primaryButton}
-                loading={working === "hito"}
-                loadingText="Agregando…"
-              >
-                <PlusIcon data-icon="inline-start" /> Agregar hito
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editarOpen} onOpenChange={setEditarOpen}>
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Editar campaña</DialogTitle>
-            <DialogDescription>
-              Actualizá el encuadre comercial y las fechas de coordinación.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={guardarDatos}>
-            <div className={styles.dialogBody}>
-              <FieldGroup className={styles.formGrid}>
-                <Field className={styles.span2}>
-                  <FieldLabel className={styles.label} htmlFor="campana-nombre">
-                    Nombre
-                  </FieldLabel>
-                  <input
-                    id="campana-nombre"
-                    name="nombre"
-                    className={styles.input}
-                    defaultValue={campana.nombre}
-                    required
-                    maxLength={180}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel className={styles.label} htmlFor="campana-tipo">
-                    Tipo
-                  </FieldLabel>
-                  <input
-                    id="campana-tipo"
-                    name="tipo"
-                    className={styles.input}
-                    defaultValue={campana.tipo ?? ""}
-                    maxLength={80}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="campana-prioridad"
-                  >
-                    Prioridad
-                  </FieldLabel>
-                  <select
-                    id="campana-prioridad"
-                    name="prioridad"
-                    className={styles.select}
-                    defaultValue={campana.prioridad}
-                  >
-                    <option value="baja">Baja</option>
-                    <option value="normal">Normal</option>
-                    <option value="alta">Alta</option>
-                    <option value="critica">Crítica</option>
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel className={styles.label} htmlFor="campana-inicio">
-                    Inicio
-                  </FieldLabel>
-                  <input
-                    id="campana-inicio"
-                    name="fechaInicio"
-                    type="date"
-                    className={styles.input}
-                    defaultValue={campana.fechaInicio?.slice(0, 10) ?? ""}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="campana-objetivo"
-                  >
-                    Objetivo
-                  </FieldLabel>
-                  <input
-                    id="campana-objetivo"
-                    name="fechaObjetivo"
-                    type="date"
-                    className={styles.input}
-                    defaultValue={campana.fechaObjetivo?.slice(0, 10) ?? ""}
-                  />
-                </Field>
-                <Field className={styles.span2}>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="campana-responsable"
-                  >
-                    Responsable
-                  </FieldLabel>
-                  <select
-                    id="campana-responsable"
-                    name="responsableEmpleadoId"
-                    className={styles.select}
-                    defaultValue={campana.responsable?.id ?? ""}
-                  >
-                    <option value="">Sin asignar</option>
-                    {empleados.map((empleado) => (
-                      <option key={empleado.id} value={empleado.id}>
-                        {empleado.nombreCompleto}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field className={styles.span2}>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="campana-descripcion"
-                  >
-                    Descripción
-                  </FieldLabel>
-                  <textarea
-                    id="campana-descripcion"
-                    name="descripcion"
-                    className={styles.textarea}
-                    defaultValue={campana.descripcion ?? ""}
-                    maxLength={2000}
-                  />
-                </Field>
-                <Field className={styles.span2}>
-                  <FieldLabel
-                    className={styles.label}
-                    htmlFor="campana-observaciones"
-                  >
-                    Observaciones
-                  </FieldLabel>
-                  <textarea
-                    id="campana-observaciones"
-                    name="observaciones"
-                    className={styles.textarea}
-                    defaultValue={campana.observaciones ?? ""}
-                    maxLength={2000}
-                  />
-                </Field>
-              </FieldGroup>
-            </div>
-            <DialogFooter className={styles.dialogFooter}>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditarOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className={styles.primaryButton}
-                loading={working === "editar"}
-              >
-                Guardar cambios
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={equipoOpen} onOpenChange={setEquipoOpen}>
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Equipo de campaña</DialogTitle>
-            <DialogDescription>
-              Seleccioná las personas que coordinan o ejecutan esta campaña.
-            </DialogDescription>
-          </DialogHeader>
-          <div className={styles.dialogBody}>
-            <div className={styles.teamList}>
-              {empleados.map((empleado) => {
-                const seleccionado = Object.hasOwn(equipoDraft, empleado.id);
-                return (
-                  <div className={styles.teamRow} key={empleado.id}>
-                    <label className={styles.teamPerson}>
-                      <input
-                        type="checkbox"
-                        checked={seleccionado}
-                        onChange={(event) =>
-                          setEquipoDraft((actual) => {
-                            const siguiente = { ...actual };
-                            if (event.target.checked)
-                              siguiente[empleado.id] = "";
-                            else delete siguiente[empleado.id];
-                            return siguiente;
-                          })
-                        }
-                      />
-                      <span>{empleado.nombreCompleto}</span>
-                    </label>
-                    <input
-                      className={styles.input}
-                      aria-label={`Función de ${empleado.nombreCompleto}`}
-                      placeholder="Función en la campaña"
-                      disabled={!seleccionado}
-                      value={equipoDraft[empleado.id] ?? ""}
-                      onChange={(event) =>
-                        setEquipoDraft((actual) => ({
-                          ...actual,
-                          [empleado.id]: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            {hitoError ? (
+              <p className={form.error} role="alert">
+                {hitoError}
+              </p>
+            ) : null}
           </div>
-          <DialogFooter className={styles.dialogFooter}>
-            <Button variant="outline" onClick={() => setEquipoOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              className={styles.primaryButton}
-              loading={working === "equipo"}
-              onClick={() => void guardarEquipo()}
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setHitoOpen(false)}
             >
-              Guardar equipo
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Cancelar
+            </ActionButton>
+            <ActionButton type="submit" isPending={working === "hito"}>
+              <PlusIcon data-icon="inline-start" /> Agregar hito
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
 
-      <Dialog open={vincularOpen} onOpenChange={setVincularOpen}>
-        <DialogContent className={styles.dialog}>
-          <DialogHeader className={styles.dialogHeader}>
-            <DialogTitle>Vincular documento</DialogTitle>
-            <DialogDescription>
-              Solo se muestran documentos del mismo cliente y disponibles para
-              esta campaña.
-            </DialogDescription>
-          </DialogHeader>
-          <div className={styles.dialogBody}>
-            <FieldGroup className={styles.formGrid}>
-              <Field>
-                <FieldLabel className={styles.label} htmlFor="documento-tipo">
+      <CampanaDialog
+        isOpen={editarOpen}
+        onOpenChange={setEditarOpen}
+        title={<span className={form.dialogTitle}>Editar campaña</span>}
+        description={
+          <>Actualizá el encuadre comercial y las fechas de coordinación.</>
+        }
+      >
+        <form onSubmit={guardarDatos}>
+          <div className={form.body}>
+            <div className={form.grid}>
+              <div className={form.span2}>
+                <label className={form.label} htmlFor="campana-nombre">
+                  Nombre
+                </label>
+                <Input
+                  id="campana-nombre"
+                  name="nombre"
+                  className={`${form.input} ${focus.singleBorder}`}
+                  defaultValue={campana.nombre}
+                  required
+                  maxLength={180}
+                />
+              </div>
+              <div>
+                <label className={form.label} htmlFor="campana-tipo">
                   Tipo
-                </FieldLabel>
-                <select
-                  id="documento-tipo"
-                  className={styles.select}
-                  value={documentoTipo}
-                  onChange={(event) => {
-                    setDocumentoTipo(
-                      event.target.value as "cotizaciones" | "ordenes",
-                    );
-                    setDocumentoId("");
-                  }}
-                >
-                  <option value="cotizaciones">Presupuesto</option>
-                  <option value="ordenes">Orden de trabajo</option>
-                </select>
-              </Field>
-              <Field>
-                <FieldLabel className={styles.label} htmlFor="documento-id">
-                  Documento
-                </FieldLabel>
-                <select
-                  id="documento-id"
-                  className={styles.select}
-                  value={documentoId}
-                  disabled={working === "cargar-documentos"}
-                  onChange={(event) => setDocumentoId(event.target.value)}
-                >
-                  <option value="">Seleccionar…</option>
-                  {documentoTipo === "cotizaciones"
-                    ? presupuestosDisponibles.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.numero ?? "Sin emitir"} · {item.estado}
-                        </option>
-                      ))
-                    : ordenesDisponibles.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.numero} · {item.estado}
-                        </option>
-                      ))}
-                </select>
-              </Field>
-            </FieldGroup>
+                </label>
+                <Input
+                  id="campana-tipo"
+                  name="tipo"
+                  className={`${form.input} ${focus.singleBorder}`}
+                  defaultValue={campana.tipo ?? ""}
+                  maxLength={80}
+                />
+              </div>
+              <div>
+                <label className={form.label} htmlFor="campana-prioridad">
+                  Prioridad
+                </label>
+                <SelectField
+                  id="campana-prioridad"
+                  name="prioridad"
+                  className={form.select}
+                  defaultValue={campana.prioridad}
+                  aria-label="Prioridad"
+                  options={[
+                    { value: "baja", label: "Baja" },
+                    { value: "normal", label: "Normal" },
+                    { value: "alta", label: "Alta" },
+                    { value: "critica", label: "Crítica" },
+                  ]}
+                />
+              </div>
+              <div>
+                <label className={form.label} htmlFor="campana-inicio">
+                  Inicio
+                </label>
+                <Input
+                  id="campana-inicio"
+                  name="fechaInicio"
+                  type="date"
+                  className={`${form.input} ${focus.singleBorder}`}
+                  defaultValue={campana.fechaInicio?.slice(0, 10) ?? ""}
+                />
+              </div>
+              <div>
+                <label className={form.label} htmlFor="campana-objetivo">
+                  Objetivo
+                </label>
+                <Input
+                  id="campana-objetivo"
+                  name="fechaObjetivo"
+                  type="date"
+                  className={`${form.input} ${focus.singleBorder}`}
+                  defaultValue={campana.fechaObjetivo?.slice(0, 10) ?? ""}
+                />
+              </div>
+              <div className={form.span2}>
+                <label className={form.label} htmlFor="campana-responsable">
+                  Responsable
+                </label>
+                <SelectField
+                  id="campana-responsable"
+                  name="responsableEmpleadoId"
+                  className={form.select}
+                  defaultValue={campana.responsable?.id ?? ""}
+                  aria-label="Responsable"
+                  options={[
+                    { value: "", label: "Sin asignar" },
+                    ...empleados.map((empleado) => ({
+                      value: empleado.id,
+                      label: empleado.nombreCompleto,
+                    })),
+                  ]}
+                />
+              </div>
+              <div className={form.span2}>
+                <label className={form.label} htmlFor="campana-descripcion">
+                  Descripción
+                </label>
+                <TextArea
+                  id="campana-descripcion"
+                  name="descripcion"
+                  className={`${form.textarea} ${focus.singleBorder}`}
+                  defaultValue={campana.descripcion ?? ""}
+                  maxLength={2000}
+                />
+              </div>
+              <div className={form.span2}>
+                <label className={form.label} htmlFor="campana-observaciones">
+                  Observaciones
+                </label>
+                <TextArea
+                  id="campana-observaciones"
+                  name="observaciones"
+                  className={`${form.textarea} ${focus.singleBorder}`}
+                  defaultValue={campana.observaciones ?? ""}
+                  maxLength={2000}
+                />
+              </div>
+            </div>
           </div>
-          <DialogFooter className={styles.dialogFooter}>
-            <Button variant="outline" onClick={() => setVincularOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              className={styles.primaryButton}
-              disabled={!documentoId}
-              loading={working === "vincular"}
-              onClick={() => void vincularDocumento()}
+          <Modal.Footer className={form.footer}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setEditarOpen(false)}
             >
-              <Link2Icon data-icon="inline-start" /> Vincular
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Cancelar
+            </ActionButton>
+            <ActionButton type="submit" isPending={working === "editar"}>
+              Guardar cambios
+            </ActionButton>
+          </Modal.Footer>
+        </form>
+      </CampanaDialog>
+
+      <CampanaDialog
+        isOpen={equipoOpen}
+        onOpenChange={setEquipoOpen}
+        title={<span className={form.dialogTitle}>Equipo de campaña</span>}
+        description={
+          <>Seleccioná las personas que coordinan o ejecutan esta campaña.</>
+        }
+      >
+        <div className={form.body}>
+          <div className={form.teamList}>
+            {empleados.map((empleado) => {
+              const seleccionado = Object.hasOwn(equipoDraft, empleado.id);
+              return (
+                <div className={form.teamRow} key={empleado.id}>
+                  <Checkbox
+                    className={form.teamPerson}
+                    isSelected={seleccionado}
+                    onChange={(checked) =>
+                      setEquipoDraft((actual) => {
+                        const siguiente = { ...actual };
+                        if (checked) siguiente[empleado.id] = "";
+                        else delete siguiente[empleado.id];
+                        return siguiente;
+                      })
+                    }
+                  >
+                    <Checkbox.Content>
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                      <Label>{empleado.nombreCompleto}</Label>
+                    </Checkbox.Content>
+                  </Checkbox>
+                  <Input
+                    className={`${form.input} ${focus.singleBorder}`}
+                    aria-label={`Función de ${empleado.nombreCompleto}`}
+                    placeholder="Función en la campaña"
+                    disabled={!seleccionado}
+                    value={equipoDraft[empleado.id] ?? ""}
+                    onChange={(event) =>
+                      setEquipoDraft((actual) => ({
+                        ...actual,
+                        [empleado.id]: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <Modal.Footer className={form.footer}>
+          <ActionButton variant="outline" onPress={() => setEquipoOpen(false)}>
+            Cancelar
+          </ActionButton>
+          <ActionButton
+            isPending={working === "equipo"}
+            onPress={() => void guardarEquipo()}
+          >
+            Guardar equipo
+          </ActionButton>
+        </Modal.Footer>
+      </CampanaDialog>
+
+      <CampanaDialog
+        isOpen={vincularOpen}
+        onOpenChange={setVincularOpen}
+        title={<span className={form.dialogTitle}>Vincular documento</span>}
+        description={
+          <>
+            Solo se muestran documentos del mismo cliente y disponibles para
+            esta campaña.
+          </>
+        }
+      >
+        <div className={form.body}>
+          <div className={form.grid}>
+            <div>
+              <label className={form.label} htmlFor="documento-tipo">
+                Tipo
+              </label>
+              <SelectField
+                id="documento-tipo"
+                className={form.select}
+                value={documentoTipo}
+                onChange={(value) => {
+                  setDocumentoTipo(value as "cotizaciones" | "ordenes");
+                  setDocumentoId("");
+                }}
+                aria-label="Tipo de documento"
+                options={[
+                  { value: "cotizaciones", label: "Presupuesto" },
+                  { value: "ordenes", label: "Orden de trabajo" },
+                ]}
+              />
+            </div>
+            <div>
+              <label className={form.label} htmlFor="documento-id">
+                Documento
+              </label>
+              <SelectField
+                id="documento-id"
+                className={form.select}
+                value={documentoId}
+                disabled={working === "cargar-documentos"}
+                onChange={(value) => setDocumentoId(value)}
+                aria-label="Documento"
+                options={[
+                  { value: "", label: "Seleccionar…" },
+                  ...(documentoTipo === "cotizaciones"
+                    ? presupuestosDisponibles.map((item) => ({
+                        value: item.id,
+                        label: [
+                          item.numero ?? "Sin emitir",
+                          " ",
+                          "·",
+                          " ",
+                          item.estado,
+                        ].join(""),
+                      }))
+                    : ordenesDisponibles.map((item) => ({
+                        value: item.id,
+                        label: [item.numero, " ", "·", " ", item.estado].join(
+                          "",
+                        ),
+                      }))),
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+        <Modal.Footer className={form.footer}>
+          <ActionButton
+            variant="outline"
+            onPress={() => setVincularOpen(false)}
+          >
+            Cancelar
+          </ActionButton>
+          <ActionButton
+            isDisabled={!documentoId}
+            isPending={working === "vincular"}
+            onPress={() => void vincularDocumento()}
+          >
+            <Link2Icon data-icon="inline-start" /> Vincular
+          </ActionButton>
+        </Modal.Footer>
+      </CampanaDialog>
     </main>
   );
 }

@@ -3,6 +3,7 @@ import {
   TipoAprobacionDocumento,
 } from '@prisma/client';
 import {
+  DesarrolloDocumentalService,
   decisionRequiereComentario,
   gateDocumentoEstaCumplido,
 } from './desarrollo-documental.service';
@@ -56,5 +57,45 @@ describe('control documental de producción', () => {
     expect(
       decisionRequiereComentario(DecisionAprobacionDocumento.APROBAR),
     ).toBe(false);
+  });
+});
+
+it('un componente de un lote respeta también la aprobación pendiente del producto comercial', async () => {
+  const findMany = jest
+    .fn()
+    .mockResolvedValue([
+      {
+        nombre: 'Arte aprobado',
+        tipoAprobacion: TipoAprobacionDocumento.CLIENTE,
+        archivoMaestro: { revisionLiberada: null },
+      },
+    ]);
+  const padres: Record<
+    string,
+    { parentItemId: string | null; loteEntregaId?: string }
+  > = {
+    componente: { parentItemId: 'lote', loteEntregaId: 'entrega-a' },
+    lote: { parentItemId: 'producto' },
+    producto: { parentItemId: null },
+  };
+  const db = {
+    ordenTrabajoItem: {
+      findFirst: jest.fn(({ where }: { where: { id: string } }) =>
+        Promise.resolve(padres[where.id]),
+      ),
+    },
+    gateProduccionDocumento: { findMany },
+  };
+  const service = new DesarrolloDocumentalService(
+    db as never,
+    {} as never,
+    {} as never,
+  );
+  await expect(
+    service.exigirGatesCumplidos('ot', 'paso', 'componente'),
+  ).rejects.toThrow('Arte aprobado');
+  expect(findMany.mock.calls[0][0].where.OR).toContainEqual({
+    alcance: 'ITEM',
+    ordenItemId: { in: ['componente', 'lote', 'producto'] },
   });
 });

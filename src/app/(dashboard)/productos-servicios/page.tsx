@@ -1,8 +1,13 @@
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { Suspense } from "react";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { ProductosServiciosTable } from "@/components/productos-servicios/productos-table";
-import { getCatalogoComercial, getProductos, listProductos } from "@/lib/productos-servicios-api";
+import {
+  getCatalogoComercial,
+  getProductos,
+  listProductos,
+} from "@/lib/productos-servicios-api";
 import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +46,8 @@ async function ProductosServiciosPageContent({
       page,
       limit: PAGE_SIZE,
       search,
-      activo: estado === "activo" ? true : estado === "inactivo" ? false : undefined,
+      activo:
+        estado === "activo" ? true : estado === "inactivo" ? false : undefined,
       unidadComercial: unidad || undefined,
       subcategoriaCodigo: categoria || undefined,
       categoriaCodigo: categoriaGrupo || undefined,
@@ -53,47 +59,51 @@ async function ProductosServiciosPageContent({
     tienePermiso("costos.gestionar"),
   ]);
   return (
-    <ProductosServiciosTable
-      initialProductos={res.data}
-      initialTotal={res.total}
-      initialPages={res.pages}
-      pageSize={PAGE_SIZE}
-      canManage={canManage}
-      initialQuery={{
-        page,
-        search,
-        unidadComercial: unidad,
-        subcategoriaCodigo: categoria,
-        categoriaCodigo: categoriaGrupo,
-        estado,
-        orden,
-        vista,
-        composicion,
-      }}
-      categorias={catalogo.map((grupo) => ({
-        codigo: grupo.codigo,
-        nombre: grupo.nombre,
-        descripcion: grupo.descripcion,
-        subcategorias: grupo.subcategorias.length,
-        productos: todosLosProductos.filter(
-          (producto) => producto.subcategoriaComercial.categoria.codigo === grupo.codigo,
-        ).length,
-        items: grupo.subcategorias.map((subcategoria) => ({
-          codigo: subcategoria.codigo,
-          nombre: subcategoria.nombre,
-          descripcion: subcategoria.descripcion,
+    <DesignSystemProvider theme="brand" appearance="light">
+      <ProductosServiciosTable
+        initialProductos={res.data}
+        initialTotal={res.total}
+        initialPages={res.pages}
+        pageSize={PAGE_SIZE}
+        canManage={canManage}
+        initialQuery={{
+          page,
+          search,
+          unidadComercial: unidad,
+          subcategoriaCodigo: categoria,
+          categoriaCodigo: categoriaGrupo,
+          estado,
+          orden,
+          vista,
+          composicion,
+        }}
+        categorias={catalogo.map((grupo) => ({
+          codigo: grupo.codigo,
+          nombre: grupo.nombre,
+          descripcion: grupo.descripcion,
+          subcategorias: grupo.subcategorias.length,
           productos: todosLosProductos.filter(
-            (producto) => producto.subcategoriaComercial.codigo === subcategoria.codigo,
+            (producto) =>
+              producto.subcategoriaComercial.categoria.codigo === grupo.codigo,
           ).length,
-        })),
-      }))}
-      subcategorias={catalogo.flatMap((grupo) =>
-        grupo.subcategorias.map((subcategoria) => ({
-          value: subcategoria.codigo,
-          label: `${grupo.nombre} · ${subcategoria.nombre}`,
-        })),
-      )}
-    />
+          items: grupo.subcategorias.map((subcategoria) => ({
+            codigo: subcategoria.codigo,
+            nombre: subcategoria.nombre,
+            descripcion: subcategoria.descripcion,
+            productos: todosLosProductos.filter(
+              (producto) =>
+                producto.subcategoriaComercial.codigo === subcategoria.codigo,
+            ).length,
+          })),
+        }))}
+        subcategorias={catalogo.flatMap((grupo) =>
+          grupo.subcategorias.map((subcategoria) => ({
+            value: subcategoria.codigo,
+            label: `${grupo.nombre} · ${subcategoria.nombre}`,
+          })),
+        )}
+      />
+    </DesignSystemProvider>
   );
 }
 
@@ -102,7 +112,9 @@ function first(value: string | string[] | undefined) {
 }
 
 function normalizarUnidad(value: string | undefined) {
-  return value === "unidad" || value === "m2" || value === "metro_lineal" ? value : "";
+  return value === "unidad" || value === "m2" || value === "metro_lineal"
+    ? value
+    : "";
 }
 
 function normalizarEstado(value: string | undefined) {
@@ -110,7 +122,9 @@ function normalizarEstado(value: string | undefined) {
 }
 
 function normalizarOrden(value: string | undefined) {
-  return value === "nombre_asc" || value === "nombre_desc" ? value : "recientes";
+  return value === "nombre_asc" || value === "nombre_desc"
+    ? value
+    : "recientes";
 }
 
 function normalizarComposicion(value: string | undefined) {

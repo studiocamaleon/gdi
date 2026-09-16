@@ -1,4 +1,5 @@
-import { Controller, Get, INestApplication } from '@nestjs/common';
+import { Controller, Get, INestApplication, Sse } from '@nestjs/common';
+import { of } from 'rxjs';
 import { Test } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import request from 'supertest';
@@ -22,6 +23,12 @@ const resultado = {
 };
 @Controller('snapshot-prueba')
 class PruebaController {
+  @Sse('stream') stream() {
+    return of(
+      { type: 'ready', data: { ultimoId: '0', noLeidas: 0 } },
+      { type: 'cambio', id: '1', data: { topicos: ['tablero-produccion'] } },
+    );
+  }
   @Get() @OcultaMargenes() leer() {
     return resultado;
   }
@@ -47,6 +54,18 @@ beforeAll(async () => {
   await app.init();
 });
 afterAll(() => app.close());
+
+it('entrega eventos SSE sin modificar cabeceras ya enviadas ni compactar eventos', async () => {
+  const respuesta = await request(app.getHttpServer())
+    .get('/snapshot-prueba/stream')
+    .set('Accept', 'text/event-stream')
+    .expect(200);
+  expect(respuesta.headers['content-type']).toContain('text/event-stream');
+  expect(respuesta.text).toContain('event: ready');
+  expect(respuesta.text).toContain('event: cambio');
+  expect(respuesta.text).toContain('tablero-produccion');
+  expect(respuesta.text).not.toContain('event: error');
+});
 
 it('negocia el formato y conserva compatibilidad con clientes anteriores', async () => {
   const antiguo = await request(app.getHttpServer())

@@ -5,7 +5,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "./producto-ui";
 import styles from "./pricing-visual.module.css";
 
 export function PricingSectionHeader({

@@ -1,0 +1,253 @@
+.primaryGrid,
+.secondaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(400px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.secondaryGrid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(400px, 1fr);
+}
+.comparisonSummary > div + div strong {
+  color: var(--foreground);
+}
+.comparisonSummary > div:last-child strong {
+  color: var(--accent-soft-foreground);
+}
+.comparisonSummary strong[data-negative="true"] {
+  color: var(--danger);
+}
+.agingSummary {
+  padding-bottom: 20px;
+}
+.agingSummary > div + div strong {
+  color: var(--muted-text);
+}
+.agingSummary strong[data-overdue="true"] {
+  color: var(--danger);
+}
+.currentBadge {
+  display: inline-flex;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--canvas-background);
+  color: var(--muted-text);
+  font: 9px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.agingBar {
+  padding: 0 22px 22px;
+}
+.debtBar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-secondary);
+}
+.debtBar > span {
+  flex-basis: 0;
+  min-width: 0;
+}
+.agingTable th,
+.agingTable td {
+  padding: 14px 20px;
+}
+.agingTable tbody th {
+  min-width: 125px;
+}
+.franjaLabel,
+.agingLegend li,
+.debtDetails dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.franjaLabel i,
+.agingLegend i,
+.debtDetails i {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+.sectionTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 20px 22px;
+}
+.sectionTotal > span {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.sectionTotal strong {
+  color: var(--foreground);
+  font-weight: 500;
+  font-size: 23px;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.cardNote {
+  margin: 0;
+  padding: 14px 22px;
+  background: var(--canvas-background);
+  border-top: 1px solid var(--border);
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.reference.reference {
+  color: var(--muted-text);
+  font:
+    11px/1.5 var(--font-geist-sans),
+    sans-serif;
+  white-space: normal;
+  min-width: 160px;
+}
+.commission[data-has-fee="true"] {
+  color: var(--accent-soft-foreground);
+}
+.expenses th,
+.expenses td {
+  padding: 16px 20px;
+}
+.expenses tbody th {
+  width: 100%;
+  min-width: 160px;
+}
+.expenseTrack {
+  margin-top: 9px;
+}
+.debtors tbody th {
+  width: 40%;
+  min-width: 170px;
+}
+.debtorBalance.debtorBalance {
+  font-weight: 500;
+}
+.days {
+  padding: 4px 7px;
+  background: var(--canvas-background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted-text);
+}
+.days[data-overdue="true"] {
+  background: var(--accent-soft);
+  color: var(--danger);
+}
+.distributionCell.distributionCell {
+  width: 30%;
+  min-width: 270px;
+  text-align: left;
+}
+.debtDetails {
+  margin-top: 9px;
+}
+.debtDetails summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted-text);
+  font:
+    11px/1.5 var(--font-geist-sans),
+    sans-serif;
+}
+.debtDetails summary::-webkit-details-marker {
+  display: none;
+}
+.debtDetails summary:hover {
+  color: var(--accent-soft-foreground);
+}
+.debtDetails summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.debtDetails summary svg {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+}
+.debtDetails[open] summary svg {
+  transform: rotate(180deg);
+}
+.debtDetails dl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.debtDetails dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.debtDetails dt {
+  color: var(--muted-text);
+  font-size: 10px;
+}
+.debtDetails dd {
+  margin: 0;
+  font-size: 10px;
+}
+.agingLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  list-style: none;
+  margin: 0;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-text);
+  font-size: 10px;
+}
+@container reporte (max-width: 1120px) {
+  .primaryGrid,
+  .secondaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+@container reporte (max-width: 500px) {
+  .sectionTotal {
+    padding: 18px 16px;
+  }
+  .sectionTotal strong {
+    font-size: 21px;
+  }
+  .cardNote,
+  .agingLegend {
+    padding: 14px 16px;
+  }
+  .agingBar {
+    padding: 0 16px 18px;
+  }
+  .agingTable th,
+  .agingTable td,
+  .expenses th,
+  .expenses td {
+    padding: 14px 16px;
+  }
+  .agingSummary {
+    gap: 18px;
+    padding-bottom: 18px;
+  }
+  .expenses tbody th {
+    min-width: 120px;
+  }
+  .agingTable tbody th {
+    min-width: 115px;
+  }
+}

@@ -1,4 +1,9 @@
 # Estaciones de producción — diseño real
+> Actualización 14/09/2026: la operación y la configuración se unificaron en
+> `/produccion/estaciones`. «Por estación» ya no es una pestaña del Tablero.
+> Implementación vigente: [sistema visual HeroUI](sistema-visual-heroui.md).
+> El análisis siguiente conserva el contexto histórico de julio.
+
 
 > Análisis 2026-07-17 (rama `feat/tablero-ordenes-reales`). Complementa a
 > docs/tablero-produccion-conexion-diseno.md: la fase 1 del tablero usó el

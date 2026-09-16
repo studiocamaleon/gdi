@@ -312,6 +312,7 @@ describe('incorporación de componentes en pasos opcionales (PostgreSQL)', () =>
           const completar = (p: typeof preparacion) =>
             ordenes.accionPaso(auth, orden.id, p.itemId, p.id, {
               accion: 'completar',
+              sinTiempoConfirmado: true,
             });
           await expect(completar(hijos[0].pasos[0])).rejects.toThrow(
             /dependencias/,

@@ -4,6 +4,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { SSE_METADATA } from '@nestjs/common/constants';
 import { map } from 'rxjs';
 import { compactarJson, esJsonCompartido } from '../json-compartido';
 
@@ -14,6 +15,11 @@ export const MIME_JSON_COMPARTIDO = 'application/vnd.grafoprint.snapshot+json';
 @Injectable()
 export class JsonCompartidoInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler) {
+    // Nest envía las cabeceras SSE antes de suscribir los interceptores.
+    // El canal de eventos no negocia JSON ni permite modificar Vary aquí.
+    if (Reflect.getMetadata(SSE_METADATA, context.getHandler())) {
+      return next.handle();
+    }
     const http = context.switchToHttp();
     const request = http.getRequest<{ headers: { accept?: string } }>();
     const response = http.getResponse<{

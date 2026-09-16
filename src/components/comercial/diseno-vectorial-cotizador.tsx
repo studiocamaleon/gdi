@@ -1,9 +1,10 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import { registrarImportacionDxf, type ImportacionDxf } from '@/lib/escala-dxf';
 import { EscalaDxf } from './escala-dxf';
-import { AlertCircleIcon, LoaderCircleIcon, PlayIcon } from "lucide-react";
+import { AlertCircleIcon, PlayIcon } from "lucide-react";
 import {
   analizarSvgFabricacionEnWorker,
   normalizarFuenteVectorial,
@@ -574,10 +575,7 @@ export function DisenoVectorialCotizador({
                     onClick={calcularNesting}
                   >
                     {procesando ? (
-                      <LoaderCircleIcon
-                        className={styles.spinner}
-                        aria-hidden="true"
-                      />
+                      <GdiSpinner aria-hidden="true" />
                     ) : (
                       <PlayIcon aria-hidden="true" />
                     )}

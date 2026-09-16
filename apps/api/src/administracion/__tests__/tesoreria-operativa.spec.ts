@@ -454,7 +454,10 @@ describe('Tesorería operativa', () => {
         prisma.cuentaFondos.findUniqueOrThrow({ where: { id: cuentaId } }),
         prisma.cobro.findUniqueOrThrow({ where: { id: cobro.id } }),
         prisma.valor.findUniqueOrThrow({ where: { id: valor.id } }),
-        prisma.valorEvento.findMany({ where: { valorId: valor.id } }),
+        prisma.valorEvento.findMany({
+          where: { valorId: valor.id },
+          orderBy: { createdAt: 'asc' },
+        }),
         prisma.movimientoFondos.findMany({ where: { valorId: valor.id } }),
       ]);
 

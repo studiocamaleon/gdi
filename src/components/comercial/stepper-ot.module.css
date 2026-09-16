@@ -84,3 +84,51 @@
   opacity: 1;
   transform: translateY(0);
 }
+
+.flow[data-orientation="vertical"] {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.flow[data-orientation="vertical"] .line {
+  flex: none;
+  width: 1px;
+  min-width: 1px;
+  height: 9px;
+  margin-left: 4px;
+}
+
+.flow[data-orientation="vertical"] .tip {
+  left: 0;
+  right: auto;
+  max-width: 240px;
+  white-space: normal;
+}
+
+/* En espacios pequeños se conservan las cinco etapas en una sola fila. */
+@container etapas-orden (max-width: 560px) {
+  .flow[data-orientation="horizontal"] {
+    align-items: flex-start;
+    gap: 3px;
+  }
+
+  .flow[data-orientation="horizontal"] .stage {
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .flow[data-orientation="horizontal"] .lbl {
+    font-size: 10px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .flow[data-orientation="horizontal"] .line {
+    flex: 0 0 8px;
+    min-width: 8px;
+    margin-top: 4px;
+  }
+}

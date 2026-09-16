@@ -308,7 +308,9 @@ export function evaluateGranFormatoMixedShelfLayout(
           heightMm: piece.heightMm,
           rotated: false,
         },
-        ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+        ...(input.permitirRotacion &&
+        piece.allowRotation !== false &&
+        piece.widthMm !== piece.heightMm
           ? [
               {
                 widthMm: piece.heightMm,
@@ -476,7 +478,9 @@ export function evaluateGranFormatoMixedShelfLayout(
     for (const piece of orderedPieces) {
       const orientations = [
         { widthMm: piece.widthMm, heightMm: piece.heightMm, rotated: false },
-        ...(input.permitirRotacion && piece.widthMm !== piece.heightMm
+        ...(input.permitirRotacion &&
+        piece.allowRotation !== false &&
+        piece.widthMm !== piece.heightMm
           ? [
               {
                 widthMm: piece.heightMm,
@@ -500,9 +504,7 @@ export function evaluateGranFormatoMixedShelfLayout(
           const nextWidth =
             row.usedWidthMm === 0
               ? option.widthMm
-              : row.usedWidthMm +
-                input.separacionHorizontalMm +
-                option.widthMm;
+              : row.usedWidthMm + input.separacionHorizontalMm + option.widthMm;
           if (nextWidth > input.printableWidthMm) continue;
           const xMm =
             row.usedWidthMm === 0

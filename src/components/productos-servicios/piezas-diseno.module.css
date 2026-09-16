@@ -128,7 +128,9 @@
 .pieceFields[data-quantity="false"] {
   grid-template-columns: minmax(0, 1fr);
 }
-.legacyMain { grid-template-columns: minmax(0, 1fr) 132px auto; }
+.legacyMain {
+  grid-template-columns: minmax(0, 1fr) 132px auto;
+}
 .identity {
   display: flex;
   flex-direction: column;
@@ -612,5 +614,165 @@
   }
   .bomHeading > span {
     margin-left: 23px;
+  }
+}
+
+:global([data-producto-ficha]) .editor,
+.dialog:global([data-producto-dialog]) {
+  --piece-border: var(--border);
+  --piece-accent: var(--accent);
+  color: var(--foreground);
+  border-radius: 8px;
+}
+:global([data-producto-ficha]) .sectionHead,
+:global([data-producto-dialog]) .dialogHeader {
+  background: var(--surface);
+  border-color: var(--border);
+}
+:global([data-producto-ficha]) .sectionIcon {
+  border: 0;
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+:global([data-producto-ficha]) .eyebrow,
+:global([data-producto-dialog]) .eyebrow {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+:global([data-producto-ficha]) .editor .primaryAction,
+:global([data-producto-dialog]) .primaryAction {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+:global([data-producto-ficha]) .editor .secondaryAction,
+:global([data-producto-dialog]) .secondaryAction {
+  font-size: 13px;
+  min-height: 32px;
+  border-color: var(--border);
+  color: var(--foreground);
+}
+.dialog:global([data-producto-dialog]) {
+  z-index: auto;
+  padding: 0;
+}
+
+/* Configuración de un componente: misma superficie clara que sus parámetros. */
+:global([data-component-config]) .editor {
+  --piece-border: var(--border);
+  --piece-accent: var(--accent);
+  margin-block: 0;
+  border-color: var(--border);
+  border-radius: 8px;
+  color: var(--foreground);
+}
+:global([data-component-config]) .sectionHead {
+  padding: 20px;
+  background: var(--surface);
+  border-color: var(--border);
+}
+:global([data-component-config]) .sectionIcon {
+  border-radius: 8px;
+  border-color: var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+:global([data-component-config]) .eyebrow {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+}
+:global([data-component-config]) .heading h3 {
+  margin-block: 5px;
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+:global([data-component-config]) .toolbar {
+  padding: 12px 20px;
+  border-color: var(--brand-graphite-line);
+  background: var(--brand-graphite);
+}
+:global([data-component-config]) .toolbar p {
+  color: var(--brand-muted-on-graphite);
+  font: 10px/1.6 var(--brand-mono);
+}
+:global([data-component-config]) .piece {
+  padding: 20px;
+  border-color: var(--border);
+}
+:global([data-component-config]) .pieceMain {
+  grid-template-columns: 100px minmax(0, 1fr) 32px;
+  gap: 14px;
+}
+:global([data-component-config]) .pieceFields {
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 14px;
+}
+:global([data-component-config]) .preview {
+  height: 140px;
+  border-radius: 8px;
+  border-color: var(--border);
+  background-color: var(--canvas-background);
+}
+:global([data-component-config]) .preview > span {
+  font: 8px/1.5 var(--brand-mono);
+  letter-spacing: 0.03em;
+}
+:global([data-component-config]) .specs dt {
+  font: 9px/1.5 var(--brand-mono);
+  letter-spacing: 0.03em;
+}
+:global([data-component-config]) .specs dd {
+  color: var(--foreground);
+  font-weight: 500;
+  line-height: 1.5;
+}
+:global([data-component-config]) .pieceFooter {
+  justify-content: flex-start;
+  gap: 8px;
+  margin: 16px 0 0 114px;
+}
+:global([data-component-config]) .pieceFields [data-slot="field-label"] {
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+:global([data-component-config]) .editor input[type="number"] {
+  font: 500 14px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+:global([data-component-config]) .editor .removeAction {
+  margin-top: 20px;
+}
+@container component-main (max-width: 650px) {
+  :global([data-component-config]) .piece {
+    padding: 16px;
+  }
+  :global([data-component-config]) .pieceMain {
+    grid-template-columns: 64px minmax(0, 1fr) 32px;
+    gap: 10px;
+  }
+  :global([data-component-config]) .pieceFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :global([data-component-config]) .pieceMain > .preview {
+    display: flex;
+    height: 100px;
+    padding: 8px 8px 22px;
+  }
+  :global([data-component-config]) .pieceFooter {
+    margin-left: 0;
+  }
+}
+@media (max-width: 600px) {
+  :global([data-component-config]) .sectionHead {
+    padding: 18px 16px;
+  }
+  :global([data-component-config]) .toolbar {
+    padding-inline: 16px;
   }
 }

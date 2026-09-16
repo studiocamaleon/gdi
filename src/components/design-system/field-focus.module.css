@@ -1,0 +1,11 @@
+/* Un único borde de 2 px hacia dentro, sin anillo exterior ni salto de tamaño. */
+.singleBorder:is(:focus-visible, :focus-within, [data-focus-visible="true"]) {
+  border-color: var(--field-border-focus);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--field-border-focus);
+}
+
+/* Autocomplete delega el foco a su botón; lo muestra el contenedor anterior. */
+.singleBorder > button:focus-visible {
+  outline: none;
+}

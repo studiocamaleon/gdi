@@ -1,7 +1,5 @@
+import type { ProgresoProduccion } from "./progreso-produccion";
 import { apiRequest } from "@/lib/api";
-
-export type PanelGeneralVista =
-  "actual" | "jefe_produccion" | "vendedor" | "administrativo" | "operario";
 
 export type PanelGeneralKpi = {
   id: string;
@@ -31,25 +29,15 @@ export type PanelGeneralEntrega = {
   productos: Array<{
     id: string;
     nombre: string;
-    progresoPct: number;
+    progresoPct: number | null;
+    progreso?: ProgresoProduccion;
   }>;
   fechaEntrega: string;
-  progresoPct: number;
+  progresoPct: number | null;
+  progreso?: ProgresoProduccion;
   riesgo: "atrasada" | "hoy" | "proxima";
   pasoActual: string | null;
   estacionActual: string | null;
-  href: string;
-};
-
-export type PanelGeneralTarea = {
-  pasoId: string;
-  ordenId: string;
-  ordenNumero: string;
-  itemNombre: string;
-  pasoNombre: string;
-  estado: string;
-  motivoBloqueo: string | null;
-  activa: boolean;
   href: string;
 };
 
@@ -66,22 +54,50 @@ export type PanelGeneralAccion = {
     | "facturacion";
 };
 
+export type PanelActividad = {
+  items: Array<{
+    id: string;
+    fecha: string;
+    tipo: string;
+    titulo: string;
+    detalle: string;
+    actor: string | null;
+    href: string | null;
+  }>;
+  siguienteCursor: string | null;
+};
+
+export type PanelAdministrador = {
+  actividad: PanelActividad;
+  pasosCompletadosHoy: number | null;
+  documentacionPendiente: {
+    total: number;
+    ordenes: Array<{
+      id: string;
+      numero: string;
+      requisitos: number;
+      href: string;
+    }>;
+  };
+};
+
+export function getPanelActividad(cursor?: string): Promise<PanelActividad> {
+  return apiRequest(
+    `/panel-general/actividad${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+  );
+}
+
 export type PanelGeneralData = {
+  administrador?: PanelAdministrador | null;
+  entregas: Record<
+    PanelGeneralEntrega["riesgo"],
+    { items: PanelGeneralEntrega[]; total: number }
+  > | null;
   generadoEl: string;
   fechaLocal: string;
-  vistaActual: PanelGeneralVista;
-  previsualizando: boolean;
-  vistasDisponibles: Array<{
-    id: PanelGeneralVista;
-    etiqueta: string;
-    descripcion: string;
-  }>;
   kpis: PanelGeneralKpi[];
   atencion: PanelGeneralAtencion[];
   atencionTotal: number;
-  proximasEntregas: PanelGeneralEntrega[];
-  proximasEntregasTotal: number;
-  trabajoPersonal: { tareas: PanelGeneralTarea[]; total: number };
   taller: {
     itemsActivos: number;
     pasosEnCurso: number;
@@ -93,19 +109,9 @@ export type PanelGeneralData = {
       pasos: number;
     } | null;
   } | null;
-  administracion: {
-    cobrosVencidos: number;
-    porFacturar: number;
-    pagosVencidos: number;
-    acreditacionesPendientes: number;
-  } | null;
-  vendedorSinVinculo: boolean;
   accionesRapidas: PanelGeneralAccion[];
 };
 
-export function getPanelGeneral(
-  vista: PanelGeneralVista = "actual",
-): Promise<PanelGeneralData> {
-  const query = vista === "actual" ? "" : `?vista=${vista}`;
-  return apiRequest<PanelGeneralData>(`/panel-general${query}`);
+export function getPanelGeneral(): Promise<PanelGeneralData> {
+  return apiRequest<PanelGeneralData>("/panel-general");
 }

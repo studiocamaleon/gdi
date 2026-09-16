@@ -5,7 +5,7 @@
 **Versión inicial:** 1.0 — 29 de agosto de 2026  
 **Rama integradora:** `visual-ilusion/analisis`  
 **Documento de diagnóstico:** `docs/visual-ilusion-analisis-readiness.md`  
-**Contrato visual obligatorio:** `docs/visual-ilusion-lenguaje-visual.md`
+**Contrato visual vigente para vistas renovadas:** [Sistema visual Shadcn](sistema-visual-shadcn.md), aprobado el 11/09/2026. El [contrato anterior](visual-ilusion-lenguaje-visual.md) queda como referencia histórica de vistas no migradas.
 **Punto de restauración previo:** `/Users/lucasgomez/gdi-saas-backups/visual-ilusion-pre-plan-20260829-181912--03`
 
 **Decisión transversal de autoría productiva (2026-08-31):** la configuración
@@ -141,7 +141,7 @@ Cada fase requiere persistencia, reglas de negocio, permisos, auditoría, API, U
 
 ### P11. Una sola identidad visual Grafoprint
 
-Toda interfaz nueva debe aplicar el contrato `docs/visual-ilusion-lenguaje-visual.md`. Las superficies ejecutivas y de gestión toman como referencia Tesorería; las superficies densas, productivas o de piso toman como referencia la Orden de Trabajo. Los componentes shadcn pueden utilizarse como infraestructura de interacción y accesibilidad, pero nunca como estética predeterminada: cada módulo tendrá composición, jerarquía y estilos propios de Grafoprint mediante CSS Modules. La revisión visual contra esas referencias forma parte del criterio de cierre de cada fase.
+Las vistas renovadas aplican el [Sistema visual Shadcn](sistema-visual-shadcn.md), con Colas de trabajo como primera referencia aprobada. Se reutilizan primitivas, variantes y tokens compartidos; la composición permanece en CSS Modules. La migración se hace por pantalla y retira estilos sustituidos cuando ya no tienen consumidores. Tesorería y OT conservan su apariencia hasta ser intervenidas, sin imponerla a las vistas nuevas. La revisión visual y funcional forma parte del criterio de cierre.
 
 ### P12. Frescura operativa y notificaciones son infraestructura transversal
 
@@ -975,10 +975,14 @@ cotizable, trazable y ejecutable.
 
 ## Fase 5 — Centro de corte y planes de nesting persistentes
 
+**Análisis abierto del 11/09/2026:** se retiran los simuladores de gran formato e impresión láser por decisión del usuario. Se evalúa una organización común por colas de máquina, tandas e intervenciones humanas, contemplando archivos consecutivos, layouts mixtos y liberación conjunta hacia corte. Este análisis no inicia F5 ni autoriza todavía un centro nuevo. [Recorridos, decisiones confirmadas y cuestiones pendientes](produccion-colas-tandas-y-operarios-analisis-2026-09-11.md).
+
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 3–4.4.
 
 **Gate del 09/09/2026:** SUPERADO. H10 corregido, aceptación aprobada e integración local completada (`516e584ef`). F5 habilitada para análisis; aún no iniciada. Ver el [cierre ampliado de F4](visual-ilusion-fase-4-cierre-2026-09-09.md).
+
+**Decisión posterior del usuario (09/09/2026):** mantener F5 pendiente hasta decidir si el Centro de corte aporta valor. El siguiente diseño propuesto es entregas por cantidad/fecha y lotes generados por planificación, sin exigir implementar F5. [Propuesta de avance F6 + núcleo de planificación](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
 
 **Ampliación previa implementada el 08/09/2026:** antes de iniciar F5 se
 resolvieron operaciones, herramientas, perfiles y tiempos/costos estimados de
@@ -1030,8 +1034,33 @@ Convertir corte/nesting en trabajo planificado, versionado y trazable, no sólo 
 
 ## Fase 6 — Lotes productivos y producción parcial
 
-**Estado inicial:** PENDIENTE  
-**Dependencias:** Fases 3–5.
+**Estado actual:** DISTRIBUCIÓN Y REPROGRAMACIÓN VALIDADAS · ALCANCE CUANTITATIVO POSTERGADO.
+
+**Validación SaaS del 11/09/2026:** 3.588 pruebas únicas aprobadas, 200 usuarios en 20 empresas, recuperación ante caída de worker/Redis/PostgreSQL y paridad completa del ETA en 83 escenarios. Se optimizó el motor sin cambiar sus decisiones y se separó el cálculo pesado de la interfaz y del hilo HTTP. Los presupuestos locales pasaron hasta 5.000 operaciones del motor. El chequeo global de tipos de pruebas antiguas conserva 98 diagnósticos ajenos a la selección F6; el tipado de F6 y los builds del producto pasan. [Mediciones, límites y reproducción](visual-ilusion-fase-6-validacion-saas-2026-09-11.md).
+
+**Validación integral del 11/09/2026:** recorrido del catálogo actual desde cotización y distribución previa al guardado hasta emisión, reprogramación, CAD por lote y finalización de sus 16 pasos. Se corrigió la conservación de intervalos de operario al recargar una agenda con esperas y el margen mostrado cuando cambia una entrega. A las 3.528 pruebas únicas de API e interfaz se agregaron 19 de integración que persisten parámetros y verifican su efecto en ETA y Planificación; la regresión enfocada aprobó 96 pruebas API y 167 web/motores. Los calendarios y tiempos actuales son ejemplos de desarrollo: calibrarlos con el taller real no es un pendiente de este hito. [Informe, evidencia y límites](visual-ilusion-fase-6-validacion-integral-2026-09-11.md).
+
+**Prioridad del usuario (10/09/2026):** postergar el registro de avances y
+transferencias cuantitativas. Completar primero Distribuir entregas con propuestas
+de reprogramación de otros trabajos cuando impidan cumplir las fechas solicitadas:
+opciones calculadas, selección del usuario y aplicación consistente del plan.
+Priorizar las opciones que conservan todas las fechas comprometidas, mostrando
+si consumen el margen de días hábiles extra del ETA. Reprogramar producción no
+cambia automáticamente la entrega. Presentar al final las opciones que requieren
+cambiar una fecha, con el impacto y su aceptación explícitos.
+Este incremento anticipa replanificación de F11; el alcance cuantitativo original
+de F6 sigue pendiente. [Propuesta funcional y revisión técnica](visual-ilusion-fase-6-reprogramacion-asistida-2026-09-10.md).
+
+**Incremento del 10/09/2026:** reprogramación asistida disponible desde Distribuir entregas, con prioridad por conservar compromisos, consumo visible de margen hábil, exclusiones, aceptación explícita de nuevas fechas y publicación transaccional de agenda. [Implementación, pruebas y límites](visual-ilusion-fase-6-reprogramacion-implementada-2026-09-10.md).
+
+**Dependencias originales:** Fases 3–5.
+
+**Revisión de alcance del 09/09/2026:** el usuario necesita distribuir un mismo ítem de OT en entregas por cantidad/fecha y delegar en el sistema la propuesta de lotes, operaciones y fechas viables. No basta registrar lotes creados manualmente. Se propone diseñar F6 sobre F3–F4.4 con el núcleo necesario de planificación de F11, conservando F5 pendiente y su conexión futura como opcional. La dependencia definitiva y los contratos compartidos se fijarán antes de implementar. [Diseño de avance, límites y aceptación](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
+
+El alcance cuantitativo original que sigue se conserva íntegro. El primer caso de aceptación propuesto es **200 exhibidores → cuatro entregas de 50**, con fechas sugeridas o solicitadas y lotes productivos propuestos por el sistema. El [diseño funcional y primer prototipo](visual-ilusion-fase-6-entregas-planificacion-diseno.md) ya comparan alternativas con el ETA existente. El [adaptador al catálogo real](visual-ilusion-fase-6-validacion-catalogo-2026-09-09.md) conserva tiempos, costos, piezas y registro impresión/corte para 50/100/150/200. Su validación inicial señalaba tiempos fijos y una estación de ensamble sin configurar; el cierre posterior verifica la respuesta funcional a esos parámetros sin exigir calibrar los valores de ejemplo. La ejecución cuantitativa completa de F6 y el alcance completo de F11 siguen pendientes. El usuario confirmó priorizar las primeras entregas al sugerir fechas, mostrando cualquier costo adicional.
+
+**Incremento implementado:** [propuestas persistidas de entregas](visual-ilusion-fase-6-propuestas-persistidas-2026-09-09.md), con UI en OT guardadas, worker, revisiones, selección y detección de cambios. El hito posterior ya materializa rutas por lote; siguen pendientes la ejecución cuantitativa y las reservas firmes.
+- F6: la distribución y su alternativa ya pueden prepararse antes del primer guardado de OT y vincularse en su transacción de creación; [detalle y validación](visual-ilusion-fase-6-entregas-antes-de-guardar-2026-09-09.md). La adopción productiva se implementó en el hito siguiente.
 
 ### Objetivo de negocio
 
@@ -1069,9 +1098,12 @@ Pueden relacionarse, pero nunca ser la misma entidad.
 - Dividir 5.000 unidades en 1.000/1.000/1.500/1.500.
 - Tener simultáneamente lotes terminados, en armado, corte e impresión.
 - Registrar 1.000 entradas, 984 buenas, 11 scrap y 5 a reproceso sin descuadre.
-- Derivar progreso de OT y campaña de forma explicable.
+- Derivar progreso de OT y campaña de forma explicable. **Avance operativo implementado el 11/09/2026:** fórmula común por trabajo estimado, campañas ponderadas, explicación visible y desglose por lote. El avance cuantitativo físico permanece postergado. [Criterio, alcance y pruebas](visual-ilusion-fase-6-progreso-explicable-2026-09-11.md).
 
 ---
+
+**Hito implementado (09/09/2026):** [lotes ejecutables con rutas y archivos](visual-ilusion-fase-6-lotes-ejecutables-2026-09-09.md). N entregas generan N lotes de fabricación completa con sus cálculos congelados, inicios de planificación y costos comerciales sin duplicar. Pendiente: cantidades producidas/buenas/rechazadas, entrega física parcial y saldos; F6 continúa abierta.
+
 
 ## Fase 7 — Calidad, incidencias y reproceso
 
@@ -1220,6 +1252,14 @@ Convertir faltantes y pasos tercerizados en un ciclo controlado de solicitud, or
 
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 4, 6, 9 y 10.
+
+**Renovación del Gantt, 10/09/2026:** acceso independiente habilitado en Producción → Planificación con la visualización existente. Se cotejaron las referencias por recursos y por órdenes y se planificó la renovación visual, la identificación de puestos y la reprogramación auditada, conservando las duraciones de cotización como solo lectura. Las vistas renovadas y el movimiento manual siguen pendientes. [Plan y criterios de implementación](produccion-planificacion-gantt-renovacion-2026-09-10.md). Este avance no cierra F11 ni sustituye sus dependencias.
+
+**Ajuste de alcance del mismo día:** retirada la pestaña Simulación del tablero; acceso por Planificación. Antes de implementar asignaciones por puesto se analizará el reparto automático equitativo de carga en horas, respetando compromisos, dependencias y compatibilidad. La reasignación manual entre puestos se pospone.
+
+**Capacidad humana compartida, 10/09/2026:** implementada la base de equipos con cantidad de personas y calendario, vinculables a varias estaciones, y atención humana derivada de setup, cleanup y maniobras cotizadas, liberando personas durante el RUN puro de máquina. Se retiró el selector adicional de atención del perfil. El ETA de cotización, producción y F6 reserva esas personas entre estaciones sin modificar los tiempos ni costos cotizados. Incluye dotación de una o dos personas en colocaciones y calendario semanal de DTF los jueves. La configuración real del tenant queda pendiente de confirmar horarios y validar tiempos/dotaciones; no se crean equipos reales automáticamente. Las asignaciones individuales y la renovación visual del Gantt siguen pendientes. [Modelo, pruebas y límites](produccion-equipos-compartidos-2026-09-10.md). Este avance no cierra F11.
+
+**Diseño conjunto propuesto el 09/09/2026:** anticipar con F6 el núcleo necesario de escenarios, capacidad, fechas y confirmación para generar lotes realizables desde compromisos de entrega. El alcance completo de F11 y sus dependencias de inventario/abastecimiento se conservan. Se deberá mantener un único contrato de planificación y registrar los criterios cubiertos, sin declarar completa F11 por ese anticipo. [Propuesta](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
 
 ### Objetivo de negocio
 
@@ -1463,6 +1503,8 @@ Todas ────────────────────────�
 
 La numeración expresa el orden recomendado, no prohíbe investigación paralela. No se debe implementar una fase dependiente sobre contratos todavía inestables.
 
+**Secuencia en revisión (09/09/2026):** el esquema anterior conserva las dependencias originales. Para el próximo diseño se propone `F4.4 → F6 + núcleo necesario de F11`, manteniendo F5 pendiente de decisión. La propuesta no elimina alcances ni habilita implementar sobre contratos pendientes de definición; ver el [documento de avance](visual-ilusion-fase-6-planificacion-entregas-propuesta-2026-09-09.md).
+
 ---
 
 ## 9. Matriz de trazabilidad del informe funcional
@@ -1573,8 +1615,8 @@ Estos trabajos no forman una fase aislada; acompañan toda implementación.
 ### Lenguaje visual y control de calidad de interfaz
 
 - cada fase declara qué familia visual usa: Gestión ejecutiva, Operación técnica o una combinación jerarquizada;
-- Tesorería y la Orden de Trabajo son las referencias canónicas, no la apariencia por defecto de una librería de componentes;
-- shadcn se limita a primitivas de comportamiento, accesibilidad y composición; el acabado visual pertenece a Grafoprint;
+- Colas de trabajo es la primera referencia del sistema visual aprobado el 11/09/2026; se migra una vista a la vez;
+- se reutilizan las primitivas y variantes de Shadcn, con tokens compartidos y composición mantenible según el contrato visual vigente;
 - los estilos específicos viven en CSS Modules y reutilizan tokens existentes antes de introducir variantes nuevas;
 - desktop, tablet, mobile, estados vacíos, carga, error, permisos restringidos y alto volumen deben verificarse;
 - ninguna interfaz se acepta sin comparación visual documentada contra las referencias del contrato.
@@ -1684,7 +1726,7 @@ Esta tabla se actualizará al integrar cada fase.
 |   4.3 | COMPLETA                            | `visual-ilusion/fase-4-3-pricing-compuestos`         | `docs/visual-ilusion-fase-4-3-pricing-componentes-diseno.md`            | validación funcional y regresión integral                                     | Matriz general/mixta/por componente, snapshots, redondeo y QA responsive aprobados; Fase 4.4 habilitada                       |
 | 4.4 | COMPLETA · INTEGRADA EN LOCAL | `visual-ilusion/fase-4-4-nesting-compuestos` | `docs/visual-ilusion-fase-4-auditoria-integral-2026-09-07.md` | [Cierre integral 07/09/2026](visual-ilusion-fase-4-cierre-integral-2026-09-07.md) | Lotes seguros y multinivel, calidad Puma, exhibidor 1/10/50/51, CAD y OT aprobados |
 |     5 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
-|     6 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
+| 6 | DISTRIBUCIÓN Y REPROGRAMACIÓN VALIDADAS | `codex/f6-entregas-planificacion` | [Validación integral](visual-ilusion-fase-6-validacion-integral-2026-09-11.md) | Cotización → cuatro lotes completos → reprogramación → CAD → ejecución de 16 pasos; 3.547 pruebas API/web acumuladas | Parametrizaciones verificadas con datos de ejemplo; calibración real fuera de este hito. Avances cuantitativos y despachos parciales postergados por el usuario; F5 no iniciada |
 |     7 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     8 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |
 |     9 | PENDIENTE                           | —                                                    | —                                                                       | —                                                                             | —                                                                                                                             |

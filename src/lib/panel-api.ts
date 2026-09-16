@@ -192,7 +192,7 @@ export type ProduccionPanel = {
     pausas: Array<{ motivo: string; veces: number }>;
     operadores: Array<{ operador: string; minutos: number; pasos: number }>;
   };
-  /** Ahorro de material por consolidar tandas (simulador gran formato). */
+  /** Histórico de ahorro de material por consolidar tandas. */
   ahorros: {
     periodo: { tandas: number; jobs: number; ahorroMl: number; ahorroPesos: number };
     historico: { tandas: number; jobs: number; ahorroMl: number; ahorroPesos: number };
@@ -464,6 +464,8 @@ export function getPanelResumen(rango?: RangoPanel) {
   >(`/reportes/panel/resumen${qs(rango)}`);
 }
 
+export type ResumenData = Awaited<ReturnType<typeof getPanelResumen>>;
+
 export function getPanelAlertas(rango?: RangoPanel) {
   return apiRequest<TabPanel<{ activas: AlertaPanel[] }>>(`/reportes/panel/alertas${qs(rango)}`);
 }
@@ -487,6 +489,8 @@ export function getPanelFinanzas(rango?: RangoPanel) {
     `/reportes/panel/finanzas${qs(rango)}`,
   );
 }
+export type FinanzasData = Awaited<ReturnType<typeof getPanelFinanzas>>;
+
 export function getPanelProduccion(rango?: RangoPanel) {
   return apiRequest<TabPanel<ProduccionPanel>>(`/reportes/panel/produccion${qs(rango)}`);
 }

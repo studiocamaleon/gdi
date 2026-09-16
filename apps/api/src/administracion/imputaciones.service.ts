@@ -8,14 +8,16 @@ import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImputarCobroDto } from './dto/comprobante.dto';
 import { ejecutarTransaccionFondos } from './fondos-ledger';
+import { Prisma } from '@prisma/client';
+import { HISTORICO_SIN_ORDEN, saldoComercialCobro } from './saldo-comercial';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Aplica cobros a comprobantes. Reglas del negocio:
  *
- * - Un cobro sin imputaciones es un **anticipo a cuenta**: ya entró la
- *   plata pero todavía no se sabe contra qué factura va.
+ * - Sin imputaciones fiscales no significa disponible comercialmente:
+ *   puede estar aplicado a una OT que todavía no se facturó.
  * - La suma imputada nunca puede superar ni el monto del cobro ni el saldo
  *   del comprobante. Las dos validaciones corren dentro de la transacción
  *   que actualiza el saldo, para que dos imputaciones simultáneas no
@@ -29,6 +31,11 @@ export class ImputacionesService {
 
   async imputar(auth: CurrentAuth, cobroId: string, payload: ImputarCobroDto) {
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "Cobro"
+        WHERE "id" = ${cobroId}::uuid AND "tenantId" = ${auth.tenantId}::uuid
+        FOR UPDATE
+      `);
       const cobro = await tx.cobro.findFirst({
         where: { id: cobroId, tenantId: auth.tenantId },
         include: { imputaciones: true },
@@ -70,6 +77,23 @@ export class ImputacionesService {
         throw new BadRequestException(
           `El cobro sólo tiene $${disponible.toLocaleString('es-AR')} sin imputar.`,
         );
+      }
+
+      const historico = await tx.comprobante.findFirst({
+        where: {
+          id: comprobante.id,
+          tenantId: auth.tenantId,
+          ...HISTORICO_SIN_ORDEN,
+        },
+        select: { id: true },
+      });
+      if (historico) {
+        const { libre } = await saldoComercialCobro(tx, auth.tenantId, cobroId);
+        if (payload.monto > libre + 0.001) {
+          throw new BadRequestException(
+            `El cobro sólo tiene $${libre.toLocaleString('es-AR')} disponibles: el resto ya está aplicado o reservado a órdenes u otros comprobantes históricos.`,
+          );
+        }
       }
 
       const saldo = Number(comprobante.saldoPendiente);
@@ -124,7 +148,7 @@ export class ImputacionesService {
         cobroId,
         comprobanteId: payload.comprobanteId,
         monto: payload.monto,
-        /** Lo que queda del cobro sin aplicar: sigue siendo anticipo. */
+        /** Disponible fiscal; puede estar reservado comercialmente a OTs. */
         cobroSinImputar: r2(disponible - payload.monto),
       };
     });

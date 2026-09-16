@@ -1,10 +1,11 @@
 "use client";
+import { Input, HumanSelect, NativeButton } from "./nodos-ui";
 
 import * as React from "react";
 import { PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
-import { HumanSelect } from "@/components/ui/human-select";
+
+
 import {
   type TiempoExtraPaso,
   leerTiemposExtra,
@@ -121,7 +122,7 @@ export function TiemposExtraPasoFields({
                 </div>
                 {/* Neutros en reposo: el rojo permanente de un tacho por fila
                     grita más fuerte que el dato. */}
-                <button
+                <NativeButton
                   type="button"
                   className="btn btn-ghost btn-sm text-muted-foreground hover:text-foreground shrink-0"
                   onClick={() =>
@@ -131,8 +132,8 @@ export function TiemposExtraPasoFields({
                   aria-expanded={editando === bloque.id}
                 >
                   <PencilIcon className="size-3.5" />
-                </button>
-                <button
+                </NativeButton>
+                <NativeButton
                   type="button"
                   className="btn btn-ghost btn-sm text-muted-foreground shrink-0 hover:text-red-600"
                   onClick={() => {
@@ -142,7 +143,7 @@ export function TiemposExtraPasoFields({
                   aria-label={`Quitar ${bloque.etiqueta}`}
                 >
                   <Trash2Icon className="size-3.5" />
-                </button>
+                </NativeButton>
               </div>
 
               {editando === bloque.id ? (
@@ -224,13 +225,13 @@ export function TiemposExtraPasoFields({
                       trabajo se cobre en el taller.
                     </span>
                   </div>
-                  <button
+                  <NativeButton
                     type="button"
                     className="btn btn-outline btn-sm w-fit self-end"
                     onClick={() => setEditando(null)}
                   >
                     Listo
-                  </button>
+                  </NativeButton>
                 </div>
               ) : null}
             </div>
@@ -238,14 +239,14 @@ export function TiemposExtraPasoFields({
         </div>
       )}
 
-      <button
+      <NativeButton
         type="button"
         className="btn btn-outline btn-sm w-fit"
         onClick={agregar}
       >
         <PlusIcon className="mr-1 size-4" />
         Agregar tiempo extra
-      </button>
+      </NativeButton>
     </div>
   );
 }

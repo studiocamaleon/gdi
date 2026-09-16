@@ -5,8 +5,11 @@ import * as React from "react";
 import s from "./producto-sheet-header.module.css";
 
 interface ProductoSheetHeaderProps {
+  /** Presentación de marca optativa para los dos pasos del catálogo de OT. */
+  stage?: "select" | "config";
   /** Nombre del producto (título grande). */
   name: string;
+  titleId?: string;
   /** Descripción bajo el título. */
   desc: string;
   /** Línea mono en mayúsculas: familia · unidad de cobro. */
@@ -30,7 +33,9 @@ interface ProductoSheetHeaderProps {
  * por React (rAF con cleanup, ResizeObserver, respeta `prefers-reduced-motion`).
  */
 export function ProductoSheetHeaderConstelacion({
+  stage,
   name,
+  titleId,
   desc,
   eyebrow,
   onBack,
@@ -208,9 +213,19 @@ export function ProductoSheetHeaderConstelacion({
   }, []);
 
   return (
-    <div className={`${s.header} ${sticky ? s.sticky : ""}`}>
+    <div className={`${s.header} ${sticky ? s.sticky : ""} ${stage ? s.brand : ""}`} data-stage={stage}>
       <canvas ref={canvasRef} className={s.canvas} aria-hidden="true" />
       <span className={s.veil} aria-hidden="true" />
+      {stage ? (
+        <ol className={s.progress} aria-label="Pasos para agregar un producto">
+          <li aria-current={stage === "select" ? "step" : undefined} data-complete={stage === "config" || undefined}>
+            <span aria-hidden="true">01</span> Producto
+          </li>
+          <li aria-current={stage === "config" ? "step" : undefined}>
+            <span aria-hidden="true">02</span> Configuración
+          </li>
+        </ol>
+      ) : null}
       <div className={s.inner}>
         {onBack ? (
           <button type="button" className={s.back} onClick={onBack}>
@@ -232,7 +247,7 @@ export function ProductoSheetHeaderConstelacion({
         ) : null}
         <span className={s.nm}>
           <span className={s.eyebrow}>{eyebrow}</span>
-          <h2 className={s.title}>{name}</h2>
+          <h2 id={titleId} className={s.title}>{name}{stage ? <span className={s.dot} aria-hidden="true">.</span> : null}</h2>
           <span className={s.desc}>{desc}</span>
         </span>
         {onClose ? (

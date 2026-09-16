@@ -1,3 +1,4 @@
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { Suspense } from "react";
 
 import { ProveedoresTable } from "@/components/proveedores/proveedores-table";
@@ -21,5 +22,9 @@ async function ProveedoresPageContent() {
     tienePermiso("registros.gestionar"),
   ]);
 
-  return <ProveedoresTable initialResponse={response} canManage={canManage} />;
+  return (
+    <DesignSystemProvider theme="brand" appearance="light">
+      <ProveedoresTable initialResponse={response} canManage={canManage} />
+    </DesignSystemProvider>
+  );
 }

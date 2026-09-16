@@ -1,0 +1,174 @@
+.viewer {
+  min-width: 0;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  container-type: inline-size;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 20px 12px;
+}
+.header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.nav {
+  padding: 0 20px 6px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.panel {
+  padding: 16px;
+  min-width: 0;
+}
+.detailToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin: 8px 0 12px;
+}
+.technical {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+}
+.technical > summary {
+  padding: 14px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.technical[open] > summary {
+  padding-bottom: 16px;
+}
+.patternGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.patternCard {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.patternCard > :nth-child(2) {
+  margin: 0 8px;
+}
+.pieceCounts {
+  list-style: none;
+  padding: 10px 8px;
+  margin: 0;
+  height: 160px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+.cardFoot {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 8px 14px;
+  border-top: 1px solid var(--border);
+}
+.cardFoot > span {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+@container (max-width: 820px) {
+  .patternGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 500px) {
+  .patternGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel {
+    padding: 10px;
+  }
+  .header {
+    padding: 14px;
+  }
+  .nav {
+    padding-left: 14px;
+  }
+}
+
+/* Lenguaje de plano técnico: papel, medidas discretas y acento de marca. */
+.header { padding: 20px; gap: 16px; }
+.header h3 { font-size: 18px; font-weight: 500; letter-spacing: -.035em; }
+.utilization { min-width: 165px; max-width: 240px; margin-left: auto; }
+.utilization > span { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; color: var(--muted-foreground); font-size: 11px; }
+.utilization strong { color: var(--foreground); font-size: 22px; line-height: 1.2; font-weight: 500; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.utilizationTrack { height: 4px; overflow: hidden; margin-top: 8px; border-radius: 2px; background: var(--border); }
+.utilizationTrack > span { display: block; height: 100%; background: var(--accent-soft-foreground, var(--primary)); }
+.nav { padding-bottom: 10px; }
+.nav :global([role="tablist"]) { padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted); }
+.nav :global([role="tab"]) { font-size: 12px; font-weight: 500; border-radius: 4px; }
+.nav :global([role="tab"][aria-selected="true"]) { background: var(--brand-graphite, var(--foreground)); color: var(--brand-on-graphite, var(--card)); }
+.nav :global([role="tab"][aria-selected="true"])::after { display: none; }
+.detailToolbar { font-size: 12px; margin-bottom: 16px; }
+.detailToolbar strong { font-weight: 500; }
+.detailToolbar :global(button) { border-radius: 5px; font-size: 11px; }
+.technical > summary { font-size: 11px; }
+@container (max-width: 500px) {
+  .utilization { margin-left: 0; width: 100%; max-width: none; }
+  .header { padding: 16px; }
+  .nav { padding-inline: 10px; }
+}
+
+/* Un único patrón debe poder leerse sin ocupar sólo un tercio de la galería. */
+.patternCard:only-child {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: 520px;
+}
+.pieceCounts {
+  height: auto;
+  min-height: 48px;
+  max-height: 160px;
+}

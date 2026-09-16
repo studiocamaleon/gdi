@@ -677,6 +677,8 @@ export interface OperacionIncorporacionCosteada {
 }
 
 export interface PasoEjecutado {
+  requiereMaquina?: boolean;
+  plantillaCodigo?: string | null;
   rutaPasoId: string;
   rutaPasoOrden: number;
   familiaCodigo: string;
@@ -749,6 +751,10 @@ export interface PasoEjecutado {
      * con su centro y su dotación. El desglose los muestra bajo "Cargos".
      */
     tiemposExtra?: TiempoExtraEjecutado[];
+    /** Secuencia interna del run cotizado: ciclos y maniobras del operario. */
+    fasesRun?: import("../eta/motor/demanda-humana").FaseRun[];
+    operacionMaquina?: import("../eta/motor/demanda-humana").ModoOperacionMaquina | null;
+    demandaHumana?: import("../eta/motor/demanda-humana").DemandaHumana | null;
     totalMin: number;
     /** Centro de costo usado para tarifar este tiempo. */
     centroCostoId?: string | null;
@@ -1034,7 +1040,7 @@ export interface NestingEjecutado {
 
 /**
  * Geometría del acomodo, en TRES niveles concéntricos. Confundirlos ya costó
- * caro (el simulador acomodaba con márgenes que no eran los del motor), así
+ * caro al representar márgenes distintos a los del motor, así
  * que conviene tenerlos claros:
  *
  *   substrato            600 mm  ── el rollo/pliego entero
@@ -1044,7 +1050,7 @@ export interface NestingEjecutado {
  *
  * `margins` es el margen CRUDO de máquina (15), NO incluye la demasía. Quien
  * necesite el borde efectivo donde arrancan las piezas usa `usableArea`, o
- * suma `pieceBleedMm` (así lo hace `acomodarTanda` del simulador). Se reportan
+ * suma `pieceBleedMm`. Se reportan
  * separados porque la UI los muestra como dos cosas distintas.
  */
 export interface NestingVisualConfig {

@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { CheckIcon, LayersIcon, RefreshCwIcon, PlayIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Button } from "./producto-ui";
+import { Badge } from "./producto-ui";
+import { Input } from "./producto-ui";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Spinner } from "@/components/ui/spinner";
 import { leerCantidadesNesting, listarNestingsProducto, prepararNestingsProducto, type PreparacionNesting } from "@/lib/nestings-guardados-api";

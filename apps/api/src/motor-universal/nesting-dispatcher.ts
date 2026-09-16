@@ -2122,10 +2122,8 @@ function evaluateSequentialRollCandidate(
 }
 
 /**
- * Corre el/los algoritmos de rollo y devuelve el mejor layout. Exportado para
- * que el SIMULADOR de producción acomode la tanda consolidada con este mismo
- * motor en vez de reimplementar un packer propio (que derivaba: ver
- * docs/simulador-impresion-diseno.md).
+ * Corre los algoritmos de rollo configurados y devuelve el mejor layout.
+ * La cotización y las comprobaciones de geometría comparten este cálculo.
  */
 export function evaluateRollLayoutForConfiguredAlgorithm(
   shelfInput: EvaluateGranFormatoMixedShelfLayoutInput,

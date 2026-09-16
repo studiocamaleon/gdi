@@ -37,11 +37,106 @@ function dependencias() {
     etaSnapshotEstacion: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   const ordenes = { tablero: jest.fn().mockResolvedValue({ items: [] }) };
-  const servicio = new PanelGeneralService(prisma as never, ordenes as never);
-  return { prisma, ordenes, servicio };
+  const admin = {
+    obtener: jest.fn().mockResolvedValue({
+      actividad: { items: [], siguienteCursor: null },
+      pasosCompletadosHoy: 0,
+      documentacionPendiente: { total: 0, ordenes: [] },
+    }),
+  };
+  const servicio = new PanelGeneralService(
+    prisma as never,
+    ordenes as never,
+    admin as never,
+  );
+  return { prisma, ordenes, servicio, admin };
 }
 
 describe('Panel General', () => {
+  it('separa hoy y próximas antes del límite de seis, usando la fecha del tenant', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-16T01:30:00Z'));
+    const { servicio, prisma } = dependencias();
+    const fechas = [
+      ...Array<string>(8).fill('2026-09-14'),
+      '2026-09-15',
+      '2026-09-15',
+      '2026-09-16',
+      '2026-09-22',
+    ];
+    prisma.ordenTrabajo.findMany.mockResolvedValue(
+      fechas.map((fecha, i) => ({
+        id: `ot-${i}`,
+        numero: `OT-${i}`,
+        estado: 'pendiente',
+        fechaEntrega: new Date(`${fecha}T00:00:00Z`),
+        cliente: null,
+        items: [],
+      })),
+    );
+    const respuesta = await servicio.obtener(
+      authCon(['panel.ver', 'produccion.ver', 'comercial.ver']),
+    );
+    expect(respuesta.fechaLocal).toBe('2026-09-15');
+    expect(respuesta.entregas?.atrasada.total).toBe(8);
+    expect(respuesta.entregas?.atrasada.items).toHaveLength(6);
+    expect(respuesta.entregas?.hoy.total).toBe(2);
+    expect(respuesta.entregas?.hoy.items.map((e) => e.id)).toEqual([
+      'ot-8',
+      'ot-9',
+    ]);
+    expect(respuesta.entregas?.proxima.total).toBe(2);
+    expect(
+      respuesta.entregas?.proxima.items.map((e) => e.fechaEntrega),
+    ).toEqual(['2026-09-16', '2026-09-22']);
+    expect(prisma.ordenTrabajo.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: 'tenant-a',
+          estado: { in: ['pendiente', 'produccion', 'finalizada'] },
+          fechaEntrega: { lte: new Date('2026-09-22T00:00:00Z') },
+        },
+      }),
+    );
+  });
+
+  it.each(['ADMINISTRADOR', 'SUPERVISOR', 'OPERADOR'] as const)(
+    'devuelve el mismo modelo de panel para %s con sus permisos efectivos',
+    async (role) => {
+      const { servicio, ordenes } = dependencias();
+      const auth = {
+        ...authCon(['panel.ver', 'produccion.ver', 'comercial.ver']),
+        role,
+      };
+      const respuesta = await servicio.obtener(auth);
+      expect(respuesta.entregas).toEqual({
+        hoy: { items: [], total: 0 },
+        atrasada: { items: [], total: 0 },
+        proxima: { items: [], total: 0 },
+      });
+      expect(respuesta.kpis.map((kpi) => kpi.id)).toEqual([
+        'entregas-hoy',
+        'atrasadas',
+        'en-produccion',
+        'bloqueados',
+        'listos-retiro',
+      ]);
+      expect(respuesta).not.toHaveProperty('vistaActual');
+      expect(respuesta).not.toHaveProperty('previsualizando');
+      expect(respuesta).not.toHaveProperty('vistasDisponibles');
+      expect(respuesta).not.toHaveProperty('trabajoPersonal');
+      expect(ordenes.tablero).toHaveBeenCalledWith(auth);
+    },
+  );
+
+  it('conserva la autorización del historial empresarial al compartir la presentación', async () => {
+    const { servicio, admin } = dependencias();
+    const auth = authCon(['panel.ver', 'configuracion.gestionar']);
+    await servicio.obtener({ ...auth, role: 'OPERADOR' });
+    expect(admin.obtener).not.toHaveBeenCalled();
+    await servicio.obtener(auth);
+    expect(admin.obtener).toHaveBeenCalledTimes(1);
+  });
+
   afterEach(() => {
     jest.useRealTimers();
   });
@@ -52,7 +147,7 @@ describe('Panel General', () => {
     ]);
   });
 
-  it('para un operario sólo devuelve su mesa y no filtra clientes ni importes', async () => {
+  it('para un operario conserva las métricas propias y no expone clientes ni importes', async () => {
     const { servicio, ordenes, prisma } = dependencias();
     ordenes.tablero.mockResolvedValue({
       items: [
@@ -81,14 +176,11 @@ describe('Panel General', () => {
     );
     const serializado = JSON.stringify(respuesta);
 
-    expect(respuesta.trabajoPersonal.total).toBe(1);
-    expect(respuesta.trabajoPersonal.tareas[0]).toMatchObject({
-      ordenNumero: 'OT-001',
-      pasoNombre: 'Impresión',
-      activa: true,
-    });
+    expect(
+      respuesta.kpis.find((kpi) => kpi.id === 'en-produccion')?.valor,
+    ).toBe(1);
     expect(respuesta.taller).toBeNull();
-    expect(respuesta.proximasEntregas).toEqual([]);
+    expect(respuesta.entregas).toBeNull();
     expect(respuesta.accionesRapidas.map((a) => a.id)).toEqual(['mi-mesa']);
     expect(serializado).not.toContain('CLIENTE SECRETO');
     expect(serializado).not.toContain('monto');
@@ -107,8 +199,11 @@ describe('Panel General', () => {
       ]),
     );
 
-    expect(respuesta.vendedorSinVinculo).toBe(true);
-    expect(respuesta.proximasEntregas).toEqual([]);
+    expect(respuesta.entregas).toEqual({
+      hoy: { items: [], total: 0 },
+      atrasada: { items: [], total: 0 },
+      proxima: { items: [], total: 0 },
+    });
     expect(respuesta.taller).toBeNull();
     expect(respuesta.atencion[0]).toMatchObject({
       id: 'vendedor-sin-vinculo',
@@ -136,7 +231,7 @@ describe('Panel General', () => {
 
     expect(respuesta.fechaLocal).toBe('2026-08-18');
     expect(respuesta.taller).toBeNull();
-    expect(respuesta.proximasEntregas).toEqual([]);
+    expect(respuesta.entregas).toBeNull();
     expect(ordenes.tablero).not.toHaveBeenCalled();
     expect(prisma.ordenTrabajo.count).not.toHaveBeenCalled();
     expect(prisma.datosEmpresa.findUnique).toHaveBeenCalledWith(
@@ -154,42 +249,16 @@ describe('Panel General', () => {
     }
   });
 
-  it('permite al administrador previsualizar la composición de operario', async () => {
-    const { servicio, ordenes } = dependencias();
-    ordenes.tablero.mockResolvedValue({ items: [] });
-
-    const respuesta = await servicio.obtener(
-      authCon(['panel.ver', 'configuracion.gestionar']),
-      'operario',
-    );
-
-    expect(respuesta.vistaActual).toBe('operario');
-    expect(respuesta.previsualizando).toBe(true);
-    expect(respuesta.vistasDisponibles.map((vista) => vista.id)).toEqual([
-      'actual',
-      'jefe_produccion',
-      'vendedor',
+  it('el endpoint ya no reenvía una selección de vista al servicio', async () => {
+    const panel = { obtener: jest.fn().mockResolvedValue({}) };
+    const controller = new PanelGeneralController(panel as never, {} as never);
+    const auth = authCon(['panel.ver']);
+    // Incluso un cliente antiguo que mande un segundo argumento no altera permisos.
+    await (controller.obtener as (...args: unknown[]) => unknown)(
+      auth,
       'administrativo',
-      'operario',
-    ]);
-    expect(respuesta.taller).toBeNull();
-    expect(respuesta.administracion).toBeNull();
-    expect(respuesta.accionesRapidas.map((accion) => accion.id)).toEqual([
-      'mi-mesa',
-    ]);
-  });
-
-  it('ignora una previsualización solicitada por quien no es administrador', async () => {
-    const { servicio } = dependencias();
-    const auth = authCon(['panel.ver', 'produccion.gestionar']);
-    auth.role = 'OPERADOR';
-
-    const respuesta = await servicio.obtener(auth, 'administrativo');
-
-    expect(respuesta.vistaActual).toBe('actual');
-    expect(respuesta.previsualizando).toBe(false);
-    expect(respuesta.vistasDisponibles).toHaveLength(1);
-    expect(respuesta.administracion).toBeNull();
+    );
+    expect(panel.obtener).toHaveBeenCalledWith(auth);
   });
 
   it('incluye el avance individual de los productos en próximas entregas', async () => {

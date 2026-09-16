@@ -1,3 +1,4 @@
+import { demandaDesdeTiempo } from '../eta/motor/demanda-humana';
 import { recalcularOperacionesCongeladas } from './procesamiento-corte';
 import { aplicarRepartoCorte, planificarRepartoCorte } from './repartir-operaciones-corte';
 import { registrarCortesDelLote, corteHeredadoDe } from './registrar-corte-lote';
@@ -1388,6 +1389,8 @@ function aplicarGrupoConsolidado(args: {
         6,
       );
     }
+
+    if (paso.tiempo) paso.tiempo.demandaHumana = demandaDesdeTiempo({...paso.tiempo, demandaHumana:null});
 
     const diferenciaMaterial = material.costoTotal - costoMaterialAnterior;
     const diferenciaTotal =

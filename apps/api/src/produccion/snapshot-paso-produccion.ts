@@ -1,7 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type {
   LoteNestingCompuestoSnapshot,
-  NestingEjecutado,
   PasoEjecutado,
 } from '../motor-universal/tipos';
 
@@ -109,46 +108,5 @@ export function snapshotPasoProduccion(
     traza: { ...traza, pasos: [efectivo] },
     paso: efectivo,
     lote,
-  };
-}
-
-/** Estos planos se ejecutan como fueron cotizados. Reanidarlos requiere una
- * revisión operativa futura; el simulador de rollos no puede perder su CAD. */
-export function requierePlanConservado(
-  nesting?: NestingEjecutado | null,
-  esLote = false,
-) {
-  return Boolean(
-    nesting &&
-    (esLote ||
-      nesting.loteNestingCompuesto ||
-      nesting.layoutVinculadoGeometriaVectorial ||
-      nesting.layoutRegistradoLoteId ||
-      nesting.algorithm === 'irregular-2d-bottom-left-v1' ||
-      nesting.substrates?.some((s) => s.kind === 'sheet')),
-  );
-}
-
-/** Proyección geométrica explícita: no publica costos, tarifas ni outputs
- * económicos en la cola del operario. */
-export function planoOperativo(n: NestingEjecutado) {
-  return {
-    algorithm: n.algorithm,
-    cantidadCalculada: n.cantidadCalculada,
-    unidad: n.unidad,
-    aprovechamientoPct: n.aprovechamientoPct,
-    piezasAcomodadas: n.piezasAcomodadas ?? n.placements.length,
-    maquina: n.maquina,
-    sustrato: n.sustrato,
-    substrates: n.substrates,
-    placements: n.placements,
-    visualConfig: n.visualConfig,
-    consumedLengthMm: n.consumedLengthMm,
-    demandaNesting: n.demandaNesting,
-    demandaRectangular: n.demandaRectangular,
-    solucionNesting: n.solucionNesting,
-    commonLine: n.commonLine,
-    layoutVinculadoGeometriaVectorial: n.layoutVinculadoGeometriaVectorial,
-    layoutRegistradoLoteId: n.layoutRegistradoLoteId,
   };
 }

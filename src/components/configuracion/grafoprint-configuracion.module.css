@@ -61,6 +61,7 @@
   font-size: 12px;
   line-height: 1.55;
 }
+.headerNavigation,
 .headerActions {
   display: flex;
   flex: none;
@@ -68,35 +69,15 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-.page :global(.ccosto-toolbar),
-.page :global(.maq-toolbar) {
-  gap: 12px;
-  margin-bottom: 14px;
-  padding: 12px;
-  border: 1px solid var(--config-border);
-  border-radius: 12px;
-  background: #fff;
-}
-.page :global(.maq-buscador) {
-  flex: 1 1 300px;
-  max-width: 560px;
-  background: #fbfaf8;
-}
-.page :global(.ccosto-periodo) {
-  margin-left: auto;
-}
-.page :global(.card),
-.page :global(.maq-tabla-wrap) {
+.page :global(.card) {
   border-color: var(--config-border);
   border-radius: 14px;
   box-shadow: none;
 }
-.page :global(.tbl),
-.page :global(.maq-tabla) {
+.page :global(.tbl) {
   font-size: 12px;
 }
-.page :global(.tbl) thead th,
-.page :global(.maq-tabla) thead th {
+.page :global(.tbl) thead th {
   height: 42px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--config-border);
@@ -106,40 +87,15 @@
   letter-spacing: 0.065em;
   text-transform: uppercase;
 }
-.page :global(.tbl) td,
-.page :global(.maq-tabla) td {
+.page :global(.tbl) td {
   padding: 10px 14px;
   border-color: #eeeae5;
 }
-.page :global(.tbl) tbody tr:hover,
-.page :global(.maq-tabla) tbody tr:hover {
+.page :global(.tbl) tbody tr:hover {
   background: #fffaf6;
 }
-.page :global(.tbl) td:first-child,
-.page :global(.maq-tabla) td:first-child {
+.page :global(.tbl) td:first-child {
   font-weight: 550;
-}
-.page :global(.centros-costo-table) td:first-child {
-  min-width: 200px;
-}
-.page :global(.centros-costo-table .name) {
-  max-width: 280px;
-}
-.page :global(.configure-cost-btn) {
-  border: 1px solid #e4dfd9;
-  color: #403b36;
-  background: #fff;
-  box-shadow: none;
-}
-.page :global(.configure-cost-btn):hover {
-  border-color: #efb497;
-  color: #b9380a;
-  background: #fff4ed;
-}
-.page :global(.ccosto-tabla) td:not(:first-child):not(:last-child) {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
 }
 .page :global(.search-card-head) {
   padding: 14px 16px;
@@ -150,16 +106,6 @@
 }
 .page :global(.search-inline) {
   min-width: 180px;
-}
-.page :global(.maq-filtros) {
-  padding: 14px;
-  border: 1px solid var(--config-border);
-  border-radius: 12px;
-  background: #fbfaf8;
-}
-.page :global(.maq-inactiva) {
-  opacity: 1;
-  color: var(--config-muted);
 }
 
 /* El portal necesita su propio ámbito: no hereda la página que lo abre. */
@@ -198,70 +144,22 @@
   line-height: 1.55;
   color: #746e68;
 }
-.centroSheet :global(.ccosto-cuerpo) {
-  min-height: 0;
-  gap: 16px;
-  padding: 20px 24px;
-}
-.centroSheet :global(.ccosto-seccion) {
-  border-color: #e3ded8;
-  border-radius: 12px;
-}
-.centroSheet :global(.ccosto-seccion-head) {
-  background: #fcfaf7;
-  padding: 14px 16px;
-}
-.centroSheet :global(.ccosto-seccion-head) h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.centroSheet :global(.ccosto-seccion-head) h3::before {
-  content: "";
-  width: 3px;
-  height: 13px;
-  border-radius: 2px;
-  background: #f46a32;
-}
-.centroSheet :global(.ccosto-tabs) {
-  flex: none;
-  padding: 4px 24px 0;
-  background: #fff;
-}
-.centroSheet :global([data-slot="tabs-list"]),
-.machine :global([data-slot="tabs-list"]) {
+.centroSheet :global([data-slot="tabs-list"]) {
   height: auto;
   gap: 20px;
   padding: 0;
 }
-.centroSheet :global([data-slot="tabs-trigger"]),
-.machine :global([data-slot="tabs-trigger"]) {
+.centroSheet :global([data-slot="tabs-trigger"]) {
   padding: 12px 0;
   font-size: 12px;
 }
-.centroSheet :global([data-slot="tabs-trigger"][data-active]),
-.machine :global([data-slot="tabs-trigger"][data-active]) {
+.centroSheet :global([data-slot="tabs-trigger"][data-active]) {
   color: #c83b0a;
 }
-.centroSheet :global([data-slot="tabs-trigger"])::after,
-.machine :global([data-slot="tabs-trigger"])::after {
+.centroSheet :global([data-slot="tabs-trigger"])::after {
   background: #e75920;
 }
-.centroSheet :global(.ccosto-acciones) {
-  flex: none;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 24px;
-  border-top: 1px solid #e3ded8;
-  background: #fff;
-}
-.centroSheet :global(.ccosto-acciones) > button {
-  width: auto;
-}
-.centroSheet :global(input:focus-visible),
-.machine :global(input:focus-visible) {
+.centroSheet :global(input:focus-visible) {
   outline: 2px solid #ed8d5b;
   outline-offset: 2px;
 }
@@ -293,63 +191,6 @@
   padding: 20px 24px;
 }
 
-.machine {
-  background: #f7f5f2;
-}
-.machine :global(.maq-ficha-top) {
-  border-bottom: 1px solid #e3ded8;
-  background: #fff;
-}
-.machine .header {
-  padding: 18px 20px;
-  margin-bottom: 8px;
-}
-.machine :global(.maq-ficha-cuerpo) {
-  gap: 16px;
-}
-.machine :global([data-slot="card"]),
-.page :global(.route-editor [data-slot="card"]) {
-  gap: 0;
-  overflow: hidden;
-  padding-block: 0;
-  border: 1px solid #e1dbd4;
-  border-radius: 13px;
-  box-shadow: none;
-}
-.machine :global([data-slot="card-header"]) {
-  gap: 5px;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e8e2db;
-  background: #fcfaf7;
-}
-.machine :global([data-slot="card-title"]) {
-  font-size: 14px;
-  font-weight: 650;
-}
-.machine :global([data-slot="card-description"]) {
-  color: #79726c;
-  font-size: 12px;
-  line-height: 1.5;
-}
-.machine :global([data-slot="card-content"]) {
-  padding: 18px 20px;
-}
-.machine :global([data-slot="field-label"]) {
-  font-size: 12px;
-}
-.machine :global(.maq-ficha-pie) {
-  gap: 10px;
-  border-top-color: #e3ded8;
-  background: #fff;
-}
-.machine :global(.maq-migas) {
-  margin-top: 0;
-  font-size: 11px;
-}
-.machine :global(.maq-migas) button:hover {
-  color: #c83b0a;
-}
-
 .modal:global(.gp-modal) > :global([data-slot="dialog-header"])::before,
 .modal:global(.gp-modal) > form > :global([data-slot="dialog-header"])::before {
   content: "GRAFOPRINT · MAQUINARIA";
@@ -363,135 +204,10 @@
 .modal :global([data-slot="field-group"]) {
   gap: 20px;
 }
-.consumibles:global(.gp-modal) {
-  width: min(1080px, calc(100vw - 32px));
-  max-width: 1080px;
-}
-.consumiblesBody {
-  min-height: 0;
-  overflow: auto;
-  padding: 20px 24px;
-}
-.consumibles :global(.maq-modal-body) {
-  margin: 0;
-}
-.consumibles :global(.maq-modal-body) table {
-  min-width: 600px;
-}
-.consumibles :global(.maq-modal-body) th {
-  background: #f3efea;
-  color: #786f66;
-  font: 500 9px/1.5 var(--font-mono, monospace);
-  letter-spacing: 0.04em;
-}
-.consumibles :global(.maq-modal-body) input,
-.consumibles :global(.maq-modal-body) select {
-  border-color: #dfd8cf;
-  border-radius: 8px;
-}
-
-.nodeEditor {
-  --border: #e3ded8;
-  --surface-2: #f7f4ef;
-}
-.nodeEditor :global(.editor-side) {
-  background: #fcfaf7;
-  border-color: #e3ded8;
-}
-.nodeEditor :global(.side-head) {
-  background: linear-gradient(120deg, #fff, #fff2e9);
-}
-.nodeEditor :global(.side-head)::before {
-  display: block;
-  margin-bottom: 12px;
-  color: #bc400e;
-  font: 600 9px var(--font-mono, monospace);
-  letter-spacing: 0.1em;
-  content: "GRAFOPRINT · NODOS DE PRODUCCIÓN";
-}
-.nodeEditor :global(.panel) {
-  border-color: #e3ded8;
-  border-radius: 12px;
-  box-shadow: none;
-}
-.nodeEditor :global(.panel-head) {
-  background: #fcfaf7;
-}
-.flowModal:global(.gp-modal) > :global([data-slot="dialog-header"])::before,
-.flowModal:global(.gp-modal)
-  > form
-  > :global([data-slot="dialog-header"])::before {
-  content: "GRAFOPRINT · FLUJOS DE PRODUCCIÓN";
-}
-
-.machine :global(.maq-perfiles-tabla) th,
-.machine :global(.maq-desgaste-tabla) th {
-  padding-block: 12px;
-  background: #f4f0eb;
-  color: #766d64;
-  font: 500 10px/1.5 var(--font-mono, monospace);
-}
-.identityGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.identityDescription {
-  grid-column: 1 / -1;
-}
-@media (min-width: 1200px) {
-  .identityGrid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .machine .technicalCard {
-    display: grid;
-    grid-template-columns: 230px minmax(0, 1fr);
-    align-items: stretch;
-  }
-  .machine .technicalCard > :global([data-slot="card-header"]) {
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #e8e2db;
-    border-bottom: 0;
-  }
-}
 
 @media (max-width: 760px) {
-  .nodeEditor {
-    display: block;
-    overflow-y: auto;
-  }
-  .nodeEditor :global(.editor-shell) {
-    display: flex;
-    min-height: 100%;
-    height: auto;
-    flex-direction: column;
-    overflow: visible;
-  }
-  .nodeEditor :global(.editor-side) {
-    width: 100%;
-    height: auto;
-    flex: none;
-    border-right: 0;
-    border-bottom: 1px solid #e3ded8;
-  }
-  .nodeEditor :global(.editor-main) {
-    width: 100%;
-    min-width: 0;
-    overflow: visible;
-    padding: 18px 16px;
-  }
-  .nodeEditor :global(.paso-config-savebar) {
-    bottom: 0;
-  }
   .page {
     padding: 16px;
-  }
-  .page :global(.route-actions-bar) {
-    position: static;
-    width: 100%;
-    margin-top: 16px;
-    box-shadow: none;
   }
   .header {
     gap: 12px;
@@ -510,6 +226,9 @@
   .headerCopy {
     flex-basis: calc(100% - 54px);
   }
+  .headerNavigation {
+    width: 100%;
+  }
   .headerActions {
     width: 100%;
     justify-content: flex-end;
@@ -517,17 +236,6 @@
   .eyebrow {
     font-size: 8px;
     letter-spacing: 0.08em;
-  }
-  .page :global(.ccosto-toolbar),
-  .page :global(.maq-toolbar) {
-    align-items: stretch;
-  }
-  .page :global(.ccosto-periodo) {
-    margin-left: 0;
-  }
-  .page :global(.maq-acciones) {
-    flex-wrap: wrap;
-    justify-content: flex-end;
   }
   .centroSheet {
     top: 0;
@@ -539,29 +247,6 @@
   }
   .centroSheet > :global([data-slot="sheet-header"]) {
     padding: 20px 50px 16px 16px;
-  }
-  .centroSheet :global(.ccosto-cuerpo) {
-    padding: 16px;
-  }
-  .centroSheet :global(.ccosto-tabs) {
-    padding-inline: 16px;
-    overflow-x: auto;
-  }
-  .centroSheet :global(.ccosto-acciones) {
-    flex-wrap: wrap;
-    padding: 12px 16px;
-  }
-  .centroSheet :global(.ccosto-acciones) > button {
-    flex: 1 1 auto;
-  }
-  .machine :global([data-slot="card-content"]) {
-    padding: 16px;
-  }
-  .identityGrid {
-    grid-template-columns: 1fr;
-  }
-  .consumiblesBody {
-    padding: 16px;
   }
 }
 

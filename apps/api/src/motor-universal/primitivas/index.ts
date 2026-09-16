@@ -6,8 +6,7 @@
  * `primitivas` y el motor despacha por estos registros — cero `if` por
  * familia en el motor.
  */
-import { calcularMetrosLinealesUnion } from '../modificaciones-pre';
-import { leerEfectoDemasia } from '../efectos-paso';
+import type { FaseRun } from '../../eta/motor/demanda-humana';
 import { calculateSustratoToPliegoConversion } from '../../productos-servicios/nesting/helpers/sustrato-to-pliego';
 import type {
   PrimitivaAviso,
@@ -42,7 +41,9 @@ function cortesPorTandaDelJobContext(jobContext: unknown): number {
  * sino del plan de corte — tandas de pliegos por bajada de cuchilla.
  * [P1: era `calcularRunMinGuillotina`, rama `corte_guillotina` del motor]
  */
-const guillotina_por_cortes: PrimitivaTiempoRun = (paso, jobContext, deps) => {
+function tiemposGuillotina(
+  ...[paso, jobContext, deps]: Parameters<PrimitivaTiempoRun>
+) {
   const detalle = asRecord(paso.perfil?.detalleJson);
   const pliegosMaxPorTanda = Number(detalle.pliegosMaxPorTanda ?? 0);
   // El tiempo por corte vive en el perfil (2026-07-28). El valor de la
@@ -66,15 +67,37 @@ const guillotina_por_cortes: PrimitivaTiempoRun = (paso, jobContext, deps) => {
     !Number.isFinite(cortesPorTanda) ||
     cortesPorTanda <= 0
   ) {
-    return 0;
+    return { tandas: 0, cortePorTandaMin: 0, recargaMin: 0 };
   }
 
   const tandas = Math.ceil(pliegos / pliegosMaxPorTanda);
-  const cortesMin = (tandas * cortesPorTanda * tiempoPorCorteSeg) / 60;
-  const recargasMin =
-    Math.max(0, tandas - 1) * Number(paso.perfil?.feedReloadMin ?? 0);
-  return cortesMin + recargasMin;
+  return {
+    tandas,
+    cortePorTandaMin: (cortesPorTanda * tiempoPorCorteSeg) / 60,
+    recargaMin: Number(paso.perfil?.feedReloadMin ?? 0),
+  };
+}
+const guillotina_por_cortes: PrimitivaTiempoRun = (...args) => {
+  const t = tiemposGuillotina(...args);
+  return (
+    t.tandas * t.cortePorTandaMin + Math.max(0, t.tandas - 1) * t.recargaMin
+  );
 };
+function fasesGuillotina(
+  ...args: Parameters<PrimitivaTiempoRun>
+): FaseRun[] | undefined {
+  const t = tiemposGuillotina(...args);
+  // Límite de serialización: ante un volumen excepcional el ETA conserva
+  // una previsión atendida conservadora, en vez de perder recargas.
+  if (t.tandas > 9000) return undefined;
+  const fases: FaseRun[] = [];
+  for (let i = 0; i < t.tandas; i++) {
+    if (i > 0 && t.recargaMin > 0)
+      fases.push({ minutos: t.recargaMin, operario: true });
+    fases.push({ minutos: t.cortePorTandaMin, operario: false });
+  }
+  return fases;
+}
 
 // ─── cantidadPropia ─────────────────────────────────────────────────
 
@@ -393,9 +416,15 @@ export const REGISTRO_TIEMPO_RUN: Record<string, PrimitivaTiempoRun> = {
   guillotina_por_cortes,
 };
 
+export const REGISTRO_FASES_RUN: Record<
+  string,
+  (...args: Parameters<PrimitivaTiempoRun>) => FaseRun[] | undefined
+> = {
+  guillotina_por_cortes: fasesGuillotina,
+};
+
 export const REGISTRO_CANTIDAD_PROPIA: Record<string, PrimitivaCantidadPropia> =
-  {
-  };
+  {};
 
 export const REGISTRO_FACTOR_VELOCIDAD: Record<
   string,
@@ -408,12 +437,10 @@ export const REGISTRO_DESGASTE: Record<string, PrimitivaDesgaste> = {
   clicks_a4,
 };
 
-export const REGISTRO_COMPRA_SUSTRATO: Record<
-  string,
-  PrimitivaCompraSustrato
-> = {
-  pliegos_a_hojas,
-};
+export const REGISTRO_COMPRA_SUSTRATO: Record<string, PrimitivaCompraSustrato> =
+  {
+    pliegos_a_hojas,
+  };
 
 export const REGISTRO_SELECCION_PERFIL: Record<
   string,

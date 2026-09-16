@@ -3,11 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpRightIcon,
+  MailIcon,
+  MapPinIcon,
   ChevronDownIcon,
   DownloadIcon,
   FileSpreadsheetIcon,
   PencilIcon,
-  PlusIcon,
   SearchXIcon,
   Trash2Icon,
   UploadIcon,
@@ -28,35 +30,41 @@ import {
   downloadContactImportTemplate,
   parseContactImportCsv,
 } from "@/lib/contactos-importacion";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+  Checkbox,
+  Chip,
+  Dropdown,
+  Label,
+  Modal,
+  SearchField,
+  Switch,
+} from "@heroui/react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  UsersRoundIcon,
+} from "lucide-react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ListMetric } from "@/components/design-system/list-metric";
 import {
   Empty,
-  EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
+  EmptyDescription,
 } from "@/components/ui/empty";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import styles from "./clientes.module.css";
 import {
   Table,
   TableBody,
@@ -65,7 +73,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TablePagination } from "@/components/ui/table-pagination";
 
 type ClientesTableProps = {
   initialResponse: ClientesListResponse;
@@ -91,7 +98,7 @@ function buildCsv(clientes: ClienteDetalle[]) {
     .map((row) =>
       row
         .map((cell) => `"${safeSpreadsheetCell(cell).replaceAll('"', '""')}"`)
-        .join(","),
+        .join(",")
     )
     .join("\n")}`;
 }
@@ -100,6 +107,8 @@ export function ClientesTable({
   initialResponse,
   canManage,
 }: ClientesTableProps) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [response, setResponse] = React.useState(initialResponse);
@@ -110,7 +119,7 @@ export function ClientesTable({
   const [isLoading, setIsLoading] = React.useState(false);
   const [confirmandoEliminar, setConfirmandoEliminar] = React.useState(false);
   const [selectedClientes, setSelectedClientes] = React.useState<Set<string>>(
-    new Set(),
+    new Set()
   );
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDeleting, startDeleteTransition] = React.useTransition();
@@ -143,7 +152,7 @@ export function ClientesTable({
           toast.error(
             error instanceof Error
               ? error.message
-              : "No se pudo actualizar la lista.",
+              : "No se pudo actualizar la lista."
           );
         }
       })
@@ -155,7 +164,7 @@ export function ClientesTable({
 
   const clientes = response.data;
   const selectedRows = clientes.filter((cliente) =>
-    selectedClientes.has(cliente.id),
+    selectedClientes.has(cliente.id)
   );
   const allSelected =
     clientes.length > 0 &&
@@ -163,7 +172,7 @@ export function ClientesTable({
 
   const handleSelectAll = (checked: boolean) => {
     setSelectedClientes(
-      checked ? new Set(clientes.map((cliente) => cliente.id)) : new Set(),
+      checked ? new Set(clientes.map((cliente) => cliente.id)) : new Set()
     );
   };
 
@@ -217,7 +226,7 @@ export function ClientesTable({
           setResponse((current) => ({
             ...current,
             data: current.data.map((item) =>
-              item.id === actualizado.id ? actualizado : item,
+              item.id === actualizado.id ? actualizado : item
             ),
           }));
           setSelectedClientes((current) => {
@@ -229,13 +238,13 @@ export function ClientesTable({
         toast.success(
           actualizado.activo
             ? `${actualizado.nombre} vuelve a estar activo.`
-            : `${actualizado.nombre} quedó inhabilitado.`,
+            : `${actualizado.nombre} quedó inhabilitado.`
         );
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudo cambiar el estado.",
+            : "No se pudo cambiar el estado."
         );
       }
     });
@@ -245,20 +254,20 @@ export function ClientesTable({
     setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
       const resultados = await Promise.allSettled(
-        selectedRows.map((cliente) => deleteCliente(cliente.id)),
+        selectedRows.map((cliente) => deleteCliente(cliente.id))
       );
       const borrados = resultados.filter(
-        (resultado) => resultado.status === "fulfilled",
+        (resultado) => resultado.status === "fulfilled"
       ).length;
       const errores = resultados
         .filter(
           (resultado): resultado is PromiseRejectedResult =>
-            resultado.status === "rejected",
+            resultado.status === "rejected"
         )
         .map((resultado) =>
           resultado.reason instanceof Error
             ? resultado.reason.message
-            : "No se pudo eliminar un cliente.",
+            : "No se pudo eliminar un cliente."
         );
       await refreshCurrentPage();
       if (borrados > 0) toast.success(`${borrados} cliente(s) eliminado(s).`);
@@ -277,12 +286,14 @@ export function ClientesTable({
       const invalid = parsed.rows.find((row) => row.errors.length > 0);
       if (invalid) {
         toast.error(
-          `No se importó el archivo. Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`,
+          `No se importó el archivo. Fila ${
+            invalid.rowNumber
+          }: ${invalid.errors.join(" ")}`
         );
         return;
       }
       const payloads = parsed.rows.flatMap((row) =>
-        row.payload ? [row.payload] : [],
+        row.payload ? [row.payload] : []
       );
       try {
         const result = await importarClientes(payloads);
@@ -290,145 +301,227 @@ export function ClientesTable({
         toast.success(`Se importaron ${result.total} cliente(s).`);
       } catch (error) {
         toast.error(
-          `No se importó ninguna fila. ${error instanceof Error ? error.message : "Revisá el archivo."}`,
+          `No se importó ninguna fila. ${
+            error instanceof Error ? error.message : "Revisá el archivo."
+          }`
         );
       }
     });
   };
 
+  const pages = Math.ceil(response.total / response.limit);
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4 border-b border-border/70">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-2xl">
-              <CardTitle role="heading" aria-level={1}>
-                Clientes
-              </CardTitle>
-              <CardDescription>
-                Administrá los datos comerciales, fiscales y de contacto de tus
-                clientes.
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-              <Field className="min-w-0 lg:w-80">
-                <FieldLabel htmlFor="clientes-search" className="sr-only">
-                  Buscar clientes
-                </FieldLabel>
-                <Input
-                  id="clientes-search"
-                  placeholder="Nombre, DNI, CUIT, teléfono, email o ciudad"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </Field>
-              <Field orientation="horizontal" className="w-auto">
-                <Switch
-                  id="clientes-inactivos"
-                  aria-label="Mostrar también clientes inhabilitados"
-                  checked={verInactivos}
-                  onCheckedChange={(checked) => {
-                    setVerInactivos(checked);
-                    setPage(1);
-                  }}
-                />
-                <FieldLabel
-                  htmlFor="clientes-inactivos"
-                  className="font-normal whitespace-nowrap"
-                >
-                  Ver inhabilitados
-                </FieldLabel>
-              </Field>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    handleImportFile(file);
-                  }}
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button variant="sidebar" />}>
-                    {selectedRows.length > 0
-                      ? `Acciones (${selectedRows.length})`
-                      : "Acciones"}
-                    <ChevronDownIcon data-icon="inline-end" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {canManage ? (
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          onClick={() =>
-                            downloadContactImportTemplate("clientes")
-                          }
-                        >
-                          <FileSpreadsheetIcon />
-                          Descargar plantilla
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={isImporting}
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <UploadIcon />
-                          {isImporting ? "Importando…" : "Importar clientes"}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    ) : null}
-                    {canManage ? <DropdownMenuSeparator /> : null}
-                    <DropdownMenuGroup>
-                      {canManage ? (
-                        <DropdownMenuItem
-                          disabled={selectedRows.length !== 1}
-                          onClick={handleEditSelection}
-                        >
-                          <PencilIcon />
-                          Editar selección
-                        </DropdownMenuItem>
-                      ) : null}
-                      <DropdownMenuItem
-                        disabled={selectedRows.length === 0}
-                        onClick={handleExportSelection}
-                      >
-                        <DownloadIcon />
-                        Exportar selección
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                    {canManage ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={selectedRows.length === 0 || isDeleting}
-                          onClick={() => setConfirmandoEliminar(true)}
-                        >
-                          <Trash2Icon />
-                          Eliminar selección
-                        </DropdownMenuItem>
-                      </>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {canManage ? (
-                  <NavLink
-                    href="/crm/clientes/nuevo"
-                    className={buttonVariants({ variant: "brand" })}
+    <section
+      data-visual="brand"
+      {...scope}
+      className={`${theme} ${listPage.page} ${brand.workspace} ${styles.page}`}
+    >
+      <header className={listPage.header}>
+        <div>
+          <p className={brand.eyebrow}>CRM · Relaciones comerciales</p>
+          <h1>
+            Clientes<span className={brand.titleDot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
+            Administrá los datos comerciales, fiscales y de contacto de tus
+            clientes.
+          </p>
+        </div>
+        <div className={styles.actions}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              handleImportFile(file);
+            }}
+          />
+          <Dropdown>
+            <ActionButton variant="outline">
+              {isImporting && <GdiSpinner />}
+              {selectedRows.length > 0
+                ? `Acciones (${selectedRows.length})`
+                : "Acciones"}
+              <ChevronDownIcon />
+            </ActionButton>
+            <Dropdown.Popover
+              {...scope}
+              className={`${theme} ${styles.menu}`}
+              placement="bottom end"
+            >
+              <Dropdown.Menu aria-label="Acciones de clientes">
+                {canManage && (
+                  <Dropdown.Item
+                    id="plantilla"
+                    textValue="Descargar plantilla"
+                    onAction={() => downloadContactImportTemplate("clientes")}
                   >
-                    <PlusIcon data-icon="inline-start" />
-                    Nuevo cliente
-                  </NavLink>
-                ) : null}
-              </div>
+                    <FileSpreadsheetIcon />
+                    Descargar plantilla
+                  </Dropdown.Item>
+                )}
+                {canManage && (
+                  <Dropdown.Item
+                    id="importar"
+                    textValue="Importar clientes"
+                    isDisabled={isImporting}
+                    onAction={() => fileInputRef.current?.click()}
+                  >
+                    <UploadIcon />
+                    {isImporting ? "Importando…" : "Importar clientes"}
+                  </Dropdown.Item>
+                )}
+                {canManage && (
+                  <Dropdown.Item
+                    id="editar"
+                    textValue="Editar selección"
+                    isDisabled={selectedRows.length !== 1}
+                    onAction={handleEditSelection}
+                  >
+                    <PencilIcon />
+                    Editar selección
+                  </Dropdown.Item>
+                )}
+                <Dropdown.Item
+                  id="exportar"
+                  textValue="Exportar selección"
+                  isDisabled={selectedRows.length === 0}
+                  onAction={handleExportSelection}
+                >
+                  <DownloadIcon />
+                  Exportar selección
+                </Dropdown.Item>
+                {canManage && (
+                  <Dropdown.Item
+                    id="eliminar"
+                    textValue="Eliminar selección"
+                    variant="danger"
+                    isDisabled={selectedRows.length === 0 || isDeleting}
+                    onAction={() => setConfirmandoEliminar(true)}
+                  >
+                    <Trash2Icon />
+                    Eliminar selección
+                  </Dropdown.Item>
+                )}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+          {canManage && (
+            <ActionLink href="/crm/clientes/nuevo">
+              Nuevo cliente
+              <ArrowUpRightIcon />
+            </ActionLink>
+          )}
+        </div>
+      </header>
+
+      <div className={brand.metrics} aria-label="Resumen del listado">
+        <ListMetric
+          label="Clientes"
+          value={response.total}
+          hint={
+            debouncedSearch
+              ? "Coinciden con la búsqueda"
+              : verInactivos
+              ? "Incluye inhabilitados"
+              : "Activos en el directorio"
+          }
+          icon={UsersRoundIcon}
+        />
+        <ListMetric
+          label="Con email"
+          value={clientes.filter((item) => item.email.trim()).length}
+          hint="En esta página"
+          icon={MailIcon}
+        />
+        <ListMetric
+          label="Con ubicación"
+          value={clientes.filter((item) => item.ciudad.trim()).length}
+          hint="En esta página"
+          icon={MapPinIcon}
+        />
+      </div>
+      <Card className={listPage.results}>
+        <Card.Header className={brand.directoryHeader}>
+          <div className={brand.directoryTitle}>
+            <span className={brand.directoryIcon} aria-hidden>
+              <UsersRoundIcon />
+            </span>
+            <div>
+              <Card.Title className={brand.directoryHeading}>
+                Directorio de clientes
+              </Card.Title>
+              <Card.Description>
+                Datos, contactos y estado de cada cliente.
+              </Card.Description>
             </div>
           </div>
-        </CardHeader>
-
-        <CardContent className="px-0" aria-busy={isLoading}>
+        </Card.Header>
+        <div className={listPage.toolbar}>
+          <SearchField
+            aria-label="Buscar clientes"
+            value={search}
+            onChange={setSearch}
+            className={styles.search}
+          >
+            <SearchField.Group
+              className={`${listPage.searchGroup} ${focus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Nombre, DNI, CUIT, teléfono, email o ciudad" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={styles.toolbarEnd}>
+            <span className={styles.resultCount} role="status">
+              {isLoading ? (
+                <>
+                  <GdiSpinner />
+                  Actualizando…
+                </>
+              ) : (
+                <>
+                  <UsersRoundIcon size={15} />
+                  {response.total}{" "}
+                  {response.total === 1 ? "cliente" : "clientes"}
+                </>
+              )}
+            </span>
+            <Switch
+              size="sm"
+              isSelected={verInactivos}
+              onChange={(checked) => {
+                setVerInactivos(checked);
+                setPage(1);
+              }}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>Ver inhabilitados</Label>
+              </Switch.Content>
+            </Switch>
+          </div>
+        </div>
+        {selectedRows.length > 0 && (
+          <div className={styles.selection}>
+            <span>{selectedRows.length} cliente(s) seleccionado(s)</span>
+            <ActionButton
+              variant="ghost"
+              onPress={() => setSelectedClientes(new Set())}
+            >
+              Limpiar selección
+            </ActionButton>
+          </div>
+        )}
+        <div aria-busy={isLoading}>
           {clientes.length === 0 ? (
-            <Empty className="min-h-72 border-0">
+            <Empty className={brand.empty}>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <SearchXIcon />
@@ -442,105 +535,169 @@ export function ClientesTable({
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10 px-4">
-                      <Checkbox
-                        aria-label="Seleccionar todos los clientes de esta página"
-                        checked={allSelected}
-                        onCheckedChange={(checked) =>
-                          handleSelectAll(checked === true)
-                        }
-                      />
-                    </TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Razón social</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Ciudad</TableHead>
-                    <TableHead className="text-right">Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {clientes.map((cliente) => {
-                    const selected = selectedClientes.has(cliente.id);
-                    return (
-                      <TableRow
-                        key={cliente.id}
-                        data-state={selected ? "selected" : undefined}
-                      >
-                        <TableCell className="px-4">
-                          <Checkbox
-                            aria-label={`Seleccionar a ${cliente.nombre}`}
-                            checked={selected}
-                            onCheckedChange={(checked) =>
-                              handleSelectCliente(cliente.id, checked === true)
-                            }
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          <NavLink
-                            href={`/crm/clientes/${cliente.id}`}
-                            className="underline-offset-4 hover:underline"
+            <Table
+              className={`${styles.table} ${brand.table} ${styles.clientsTable}`}
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead className={styles.checkCell}>
+                    <Checkbox
+                      aria-label="Seleccionar todos los clientes de esta página"
+                      isSelected={allSelected}
+                      isIndeterminate={!allSelected && selectedRows.length > 0}
+                      onChange={handleSelectAll}
+                    >
+                      <Checkbox.Content>
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox.Content>
+                    </Checkbox>
+                  </TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Razón social</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead className="text-right">Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {clientes.map((cliente) => {
+                  const selected = selectedClientes.has(cliente.id);
+                  return (
+                    <TableRow
+                      key={cliente.id}
+                      data-state={selected ? "selected" : undefined}
+                    >
+                      <TableCell className={styles.checkCell}>
+                        <Checkbox
+                          aria-label={`Seleccionar a ${cliente.nombre}`}
+                          isSelected={selected}
+                          onChange={(checked) =>
+                            handleSelectCliente(cliente.id, checked)
+                          }
+                        >
+                          <Checkbox.Content>
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                          </Checkbox.Content>
+                        </Checkbox>
+                      </TableCell>
+                      <TableCell>
+                        <NavLink
+                          href={`/crm/clientes/${cliente.id}`}
+                          className={styles.clientName}
+                        >
+                          <span
+                            className={brand.identityIcon}
+                            aria-hidden="true"
                           >
-                            {cliente.nombre}
-                          </NavLink>
-                          {!cliente.activo ? (
-                            <Badge variant="outline" className="ml-2">
-                              Inhabilitado
-                            </Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>{cliente.razonSocial || "—"}</TableCell>
-                        <TableCell>{cliente.contacto || "—"}</TableCell>
-                        <TableCell>{cliente.email || "—"}</TableCell>
-                        <TableCell>{cliente.ciudad || "—"}</TableCell>
-                        <TableCell className="text-right">
-                          {canManage ? (
-                            <Button
-                              type="button"
+                            <UsersRoundIcon />
+                          </span>
+                          <strong>{cliente.nombre}</strong>
+                          <ArrowUpRightIcon
+                            className={brand.rowArrow}
+                            aria-hidden
+                          />
+                        </NavLink>
+                      </TableCell>
+                      <TableCell>{cliente.razonSocial || "—"}</TableCell>
+                      <TableCell>{cliente.contacto || "—"}</TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {cliente.email && <MailIcon aria-hidden />}
+                          {cliente.email || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {cliente.ciudad && <MapPinIcon aria-hidden />}
+                          {cliente.ciudad || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className={styles.rowActions}>
+                          <Chip
+                            size="sm"
+                            color={cliente.activo ? "success" : "default"}
+                            variant="soft"
+                          >
+                            <span className={styles.statusDot} />
+                            {cliente.activo ? "Activo" : "Inhabilitado"}
+                          </Chip>
+                          {canManage && (
+                            <ActionButton
                               variant="ghost"
-                              size="sm"
-                              disabled={isDeleting}
-                              onClick={() => cambiarEstado(cliente)}
+                              isDisabled={isDeleting}
+                              onPress={() => cambiarEstado(cliente)}
                             >
                               {cliente.activo ? "Inhabilitar" : "Habilitar"}
-                            </Button>
-                          ) : (
-                            <Badge
-                              variant={cliente.activo ? "secondary" : "outline"}
-                            >
-                              {cliente.activo ? "Activo" : "Inhabilitado"}
-                            </Badge>
+                            </ActionButton>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
-          <TablePagination
-            total={response.total}
-            page={response.page}
-            pageSize={response.limit}
-            onPageChange={setPage}
-          />
-        </CardContent>
+        </div>
+        {pages > 1 && (
+          <footer className={listPage.pager}>
+            <span>
+              {(response.page - 1) * response.limit + 1}–
+              {Math.min(response.page * response.limit, response.total)} de{" "}
+              {response.total}
+            </span>
+            <div className={styles.actions}>
+              <ActionButton
+                variant="outline"
+                isIconOnly
+                aria-label="Página anterior"
+                isDisabled={response.page <= 1}
+                onPress={() => setPage(response.page - 1)}
+              >
+                <ChevronLeftIcon />
+              </ActionButton>
+              <span>
+                {response.page} / {pages}
+              </span>
+              <ActionButton
+                variant="outline"
+                isIconOnly
+                aria-label="Página siguiente"
+                isDisabled={response.page >= pages}
+                onPress={() => setPage(response.page + 1)}
+              >
+                <ChevronRightIcon />
+              </ActionButton>
+            </div>
+          </footer>
+        )}
       </Card>
-
-      <ConfirmacionDestructiva
-        open={confirmandoEliminar}
+      <FormDialog
+        className={brand.dialog}
+        isOpen={confirmandoEliminar}
         onOpenChange={setConfirmandoEliminar}
-        titulo="Eliminar clientes"
-        descripcion={`Se eliminarán ${selectedRows.length} cliente(s) sin historial. Esta acción no se puede deshacer.`}
-        requiereTipear={false}
-        accionLabel="Eliminar"
-        onConfirmar={confirmarEliminarSeleccion}
-      />
-    </div>
+        title="Eliminar clientes"
+        description={`Se eliminarán ${selectedRows.length} cliente(s) sin historial. Esta acción no se puede deshacer.`}
+      >
+        <Modal.Footer className={styles.dialogFooter}>
+          <ActionButton
+            variant="outline"
+            onPress={() => setConfirmandoEliminar(false)}
+          >
+            Cancelar
+          </ActionButton>
+          <ActionButton variant="danger" onPress={confirmarEliminarSeleccion}>
+            <Trash2Icon />
+            Eliminar
+          </ActionButton>
+        </Modal.Footer>
+      </FormDialog>
+    </section>
   );
 }

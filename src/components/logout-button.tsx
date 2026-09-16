@@ -2,18 +2,19 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CirclePowerIcon } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 
 import { logout } from "@/lib/auth";
 import { clearSessionToken } from "@/lib/session";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * Cerrar sesión, en el header. La identidad y sus acciones (cambiar empresa,
  * cambiar clave, perfil) se movieron al modal que abre el avatar del sidebar;
  * el logout queda acá, a un click, siempre visible.
  */
-export function LogoutButton() {
+export function LogoutButton({ className }: { className?: string } = {}) {
   const router = useRouter();
   const [saliendo, startLogout] = React.useTransition();
 
@@ -32,14 +33,14 @@ export function LogoutButton() {
   return (
     <Button
       type="button"
-      variant="ghost"
-      size="sm"
+      variant="outline"
       onClick={handleLogout}
-      disabled={saliendo}
-      className="gap-2"
+      loading={saliendo}
+      loadingText="Cerrando sesión…"
+      className={cn("gap-2", className)}
     >
-      <CirclePowerIcon className="size-4" />
-      {saliendo ? "Cerrando sesión…" : "Cerrar sesión"}
+      Cerrar sesión
+      <ArrowUpRight data-icon="inline-end" aria-hidden="true" />
     </Button>
   );
 }

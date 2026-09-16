@@ -1,3 +1,7 @@
+"use client";
+import styles from "../maquinaria.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import { SelectField } from "@/components/design-system/select-field";
 /**
  * Tintas y tóner de UN perfil operativo: el modal "Configurar" que abre la
  * tabla de perfiles, con la calculadora de consumo para las láser.
@@ -8,22 +12,15 @@
  * resto de las impresoras: el consumo cambia con el papel.
  */
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
+import { Modal } from "@heroui/react";
+import { MaquinariaDialog } from "./maquinaria-dialog";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+
 import * as React from "react";
 import { CalculatorIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { FieldGroup } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@heroui/react";
 import { Label } from "@/components/ui/label";
 import { calcularConsumoTonerGm2 } from "@/lib/calculadora-toner";
 import {
@@ -86,7 +83,8 @@ function CalculadoraTonerGm2({
 
   return (
     <div className="rounded-md border bg-muted/20">
-      <button
+      <Button
+        variant="outline"
         type="button"
         onClick={() => setAbierta((v) => !v)}
         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
@@ -99,7 +97,7 @@ function CalculadoraTonerGm2({
           size={15}
           className={`text-muted-foreground transition-transform ${abierta ? "rotate-180" : ""}`}
         />
-      </button>
+      </Button>
 
       {abierta ? (
         <div className="space-y-3 border-t px-3 pb-3 pt-3">
@@ -114,6 +112,7 @@ function CalculadoraTonerGm2({
             <div className="space-y-1">
               <Label className="text-xs">Gramos netos de la botella</Label>
               <Input
+                className={focus.singleBorder}
                 type="number"
                 min={0}
                 step={1}
@@ -125,6 +124,7 @@ function CalculadoraTonerGm2({
             <div className="space-y-1">
               <Label className="text-xs">Rendimiento ISO (páginas A4)</Label>
               <Input
+                className={focus.singleBorder}
                 type="number"
                 min={0}
                 step={1}
@@ -138,6 +138,7 @@ function CalculadoraTonerGm2({
                 Cobertura ISO del fabricante (%)
               </Label>
               <Input
+                className={focus.singleBorder}
                 type="number"
                 min={0}
                 step={0.25}
@@ -152,20 +153,22 @@ function CalculadoraTonerGm2({
             <Label className="text-xs">Cobertura a calcular</Label>
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex overflow-hidden rounded-md border">
-                <button
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => setModo("iso")}
                   className={`px-3 py-1.5 text-xs ${modo === "iso" ? "bg-primary text-primary-foreground" : "bg-background"}`}
                 >
                   ISO ({covIso || 0}%)
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
                   type="button"
                   onClick={() => setModo("full")}
                   className={`px-3 py-1.5 text-xs ${modo === "full" ? "bg-primary text-primary-foreground" : "bg-background"}`}
                 >
                   Full-color
-                </button>
+                </Button>
               </div>
               {modo === "full" ? (
                 <div className="inline-flex items-center gap-1">
@@ -175,7 +178,7 @@ function CalculadoraTonerGm2({
                     step={1}
                     value={coberturaFull}
                     onChange={(e) => setCoberturaFull(e.target.value)}
-                    className="h-8 w-20"
+                    className={[focus.singleBorder, "h-8 w-20"].join(" ")}
                   />
                   <span className="text-xs text-muted-foreground">
                     % por color
@@ -216,27 +219,29 @@ function CalculadoraTonerGm2({
             <Label className="text-xs">Aplicar a la columna</Label>
             <div className="inline-flex overflow-hidden rounded-md border">
               {NIVELES_COBERTURA.map((nivel) => (
-                <button
+                <Button
+                  variant="outline"
                   key={nivel}
                   type="button"
                   onClick={() => setDestino(nivel)}
                   className={`px-3 py-1.5 text-xs ${destino === nivel ? "bg-primary text-primary-foreground" : "bg-background"}`}
                 >
                   {NIVEL_COBERTURA_LABELS[nivel]}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
 
-          <button
+          <Button
+            variant="outline"
             type="button"
-            disabled={!valido}
+            isDisabled={!valido}
             onClick={() => onApply(consumoRedondeado, destino)}
-            className="btn btn-primary h-8 w-full text-xs disabled:opacity-50"
+            className="w-full"
           >
             Usar {valido ? `${consumoRedondeado} g/m²` : "el valor"} en la
             columna {NIVEL_COBERTURA_LABELS[destino]} (4 canales CMYK)
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>
@@ -470,55 +475,49 @@ export function PerfilTintasModal({
   };
 
   return (
-    <Dialog
-      open
+    <MaquinariaDialog
+      isOpen
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      wide
+      title={<>Configurar {esLaser ? "tóner" : "tintas"}</>}
+      description={
+        <>{perfil.nombre} · Consumibles y rendimiento del perfil operativo.</>
+      }
     >
-      <DialogContent
-        className={`gp-modal ${visual.modal} ${visual.consumibles}`}
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader>
-          <DialogTitle>Configurar {esLaser ? "tóner" : "tintas"}</DialogTitle>
-          <DialogDescription>
-            {perfil.nombre} · Consumibles y rendimiento del perfil operativo.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup className={`maq-modal-body ${visual.consumiblesBody}`}>
-          {esLaser && channels.length > 0 ? (
-            <CalculadoraTonerGm2
-              onApply={(gm2, nivel) => {
-                const cmyk: ConsumibleCanal[] = [
-                  "cian",
-                  "magenta",
-                  "amarillo",
-                  "negro",
-                ];
-                const objetivo = channels.filter((canal) =>
-                  cmyk.includes(canal),
-                );
-                objetivo.forEach((canal) => setNivel(canal, nivel, gm2));
-                toast.success(
-                  `Consumo ${gm2} g/m² aplicado a la columna ${NIVEL_COBERTURA_LABELS[nivel]} en ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
-                );
-              }}
-            />
-          ) : null}
-          {channels.length === 0 ? (
-            <p className="maq-tintas-vacio">
-              Este perfil todavía no declara colores. Definí el campo “Colores”
-              del perfil para generar los canales de tinta.
-            </p>
-          ) : (
-            <>
-              {loadingMaterias ? (
-                <p className="maq-tintas-cargando">
-                  Cargando materias primas compatibles…
-                </p>
-              ) : null}
-              <table className="maq-tintas-tabla">
+      <Modal.Body className={styles.modalBody}>
+        {esLaser && channels.length > 0 ? (
+          <CalculadoraTonerGm2
+            onApply={(gm2, nivel) => {
+              const cmyk: ConsumibleCanal[] = [
+                "cian",
+                "magenta",
+                "amarillo",
+                "negro",
+              ];
+              const objetivo = channels.filter((canal) => cmyk.includes(canal));
+              objetivo.forEach((canal) => setNivel(canal, nivel, gm2));
+              toast.success(
+                `Consumo ${gm2} g/m² aplicado a la columna ${NIVEL_COBERTURA_LABELS[nivel]} en ${objetivo.length} canal${objetivo.length === 1 ? "" : "es"} CMYK`,
+              );
+            }}
+          />
+        ) : null}
+        {channels.length === 0 ? (
+          <p className={`${styles["maq-tintas-vacio"]}`}>
+            Este perfil todavía no declara colores. Definí el campo “Colores”
+            del perfil para generar los canales de tinta.
+          </p>
+        ) : (
+          <>
+            {loadingMaterias ? (
+              <p className={`${styles["maq-tintas-cargando"]}`}>
+                Cargando materias primas compatibles…
+              </p>
+            ) : null}
+            <div className={styles.tableScroll}>
+              <table className={`${styles["maq-tintas-tabla"]}`}>
                 <thead>
                   <tr>
                     <th>Color</th>
@@ -570,7 +569,7 @@ export function PerfilTintasModal({
                     return (
                       <tr key={canal}>
                         <td>
-                          <span className="maq-tintas-color">
+                          <span className={`${styles["maq-tintas-color"]}`}>
                             <span
                               className="sw"
                               style={{
@@ -592,7 +591,8 @@ export function PerfilTintasModal({
                                 : undefined);
                             return (
                               <td key={nivel}>
-                                <input
+                                <Input
+                                  className={focus.singleBorder}
                                   type="number"
                                   min={0}
                                   step={0.01}
@@ -617,7 +617,8 @@ export function PerfilTintasModal({
                           })
                         ) : (
                           <td>
-                            <input
+                            <Input
+                              className={focus.singleBorder}
                               type="number"
                               min={0}
                               step={0.01}
@@ -639,11 +640,10 @@ export function PerfilTintasModal({
                           </td>
                         )}
                         <td>
-                          <select
+                          <SelectField
                             value={selected}
                             aria-label={`Material vinculado a ${CANAL_META[canal].label}`}
-                            onChange={(event) => {
-                              const value = event.target.value;
+                            onChange={(value) => {
                               if (!value) {
                                 remove(canal);
                                 return;
@@ -660,99 +660,98 @@ export function PerfilTintasModal({
                                 unidad: consumibleUnidadFor(form.plantilla),
                               });
                             }}
-                          >
-                            <option value="">Sin vincular</option>
-                            {opciones.map((item) => (
-                              <option
-                                key={item.variante.id}
-                                value={item.variante.id}
-                              >
-                                {getConsumibleVariantOptionLabel(item)}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              { value: "", label: "Sin vincular" },
+                              ...(opciones.map((item) => ({
+                                value: item.variante.id,
+                                label: getConsumibleVariantOptionLabel(item),
+                              })) ?? []),
+                            ]}
+                          />
                         </td>
                         <td>
-                          <button
+                          <Button
+                            variant="ghost"
+                            isIconOnly
                             type="button"
-                            className="maq-tintas-quitar"
+                            className={`${styles["maq-tintas-quitar"]}`}
                             title="Quitar tinta del perfil"
                             aria-label={`Quitar ${CANAL_META[canal].label}`}
-                            disabled={!existing}
+                            isDisabled={!existing}
                             onClick={() => remove(canal)}
                           >
                             <XIcon />
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-              <p className="maq-tintas-nota">
-                {esLaser
-                  ? "El motor toma este tóner al cotizar con este perfil; en Productos no hace falta elegirlo por paso."
-                  : "El motor toma estas tintas automáticamente al cotizar con este perfil; en Productos no hace falta elegirlas por paso."}
-              </p>
-              {esDuplicadora ? (
-                <div className="mt-4 grid gap-3 rounded-md border p-3 md:grid-cols-2">
-                  <label className="grid gap-1 text-xs font-medium">
-                    Rollo máster
-                    <select
-                      value={master?.materiaPrimaVarianteId ?? ""}
-                      onChange={(event) => setMaster(event.target.value)}
-                    >
-                      <option value="">Sin vincular</option>
-                      {mastersCompatibles.map((item) => (
-                        <option key={item.variante.id} value={item.variante.id}>
-                          {getConsumibleVariantOptionLabel(item)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-xs font-medium">
-                    Másteres por rollo
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      disabled={!master}
-                      value={master?.rendimientoEstimado ?? 100}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          consumibles: current.consumibles.map((item) =>
-                            !item.perfilOperativoId &&
-                            String(
-                              (item.detalle ?? {}).rol ?? "",
-                            ).toLowerCase() === "master"
-                              ? {
-                                  ...item,
-                                  rendimientoEstimado: Number(
-                                    event.target.value,
-                                  ),
-                                }
-                              : item,
-                          ),
-                        }))
-                      }
-                    />
-                  </label>
-                  <p className="text-muted-foreground text-xs md:col-span-2">
-                    Se consume un máster por original y cara, no por cada copia.
-                  </p>
-                </div>
-              ) : null}
-            </>
-          )}
-        </FieldGroup>
+            </div>
+            <p className={`${styles["maq-tintas-nota"]}`}>
+              {esLaser
+                ? "El motor toma este tóner al cotizar con este perfil; en Productos no hace falta elegirlo por paso."
+                : "El motor toma estas tintas automáticamente al cotizar con este perfil; en Productos no hace falta elegirlas por paso."}
+            </p>
+            {esDuplicadora ? (
+              <div className="mt-4 grid gap-3 rounded-md border p-3 md:grid-cols-2">
+                <label className="grid gap-1 text-xs font-medium">
+                  Rollo máster
+                  <SelectField
+                    value={master?.materiaPrimaVarianteId ?? ""}
+                    onChange={(value) => setMaster(value)}
+                    aria-label="Seleccionar opción"
+                    options={[
+                      { value: "", label: "Sin vincular" },
+                      ...(mastersCompatibles.map((item) => ({
+                        value: item.variante.id,
+                        label: getConsumibleVariantOptionLabel(item),
+                      })) ?? []),
+                    ]}
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium">
+                  Másteres por rollo
+                  <Input
+                    className={focus.singleBorder}
+                    type="number"
+                    min={1}
+                    step={1}
+                    disabled={!master}
+                    value={master?.rendimientoEstimado ?? 100}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        consumibles: current.consumibles.map((item) =>
+                          !item.perfilOperativoId &&
+                          String(
+                            (item.detalle ?? {}).rol ?? "",
+                          ).toLowerCase() === "master"
+                            ? {
+                                ...item,
+                                rendimientoEstimado: Number(event.target.value),
+                              }
+                            : item,
+                        ),
+                      }))
+                    }
+                  />
+                </label>
+                <p className="text-muted-foreground text-xs md:col-span-2">
+                  Se consume un máster por original y cara, no por cada copia.
+                </p>
+              </div>
+            ) : null}
+          </>
+        )}
+      </Modal.Body>
 
-        <DialogFooter>
-          <Button type="button" onClick={onClose}>
-            Listo
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <Modal.Footer className={styles.modalFooter}>
+        <Button type="button" onClick={onClose}>
+          Listo
+        </Button>
+      </Modal.Footer>
+    </MaquinariaDialog>
   );
 }

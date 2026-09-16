@@ -229,7 +229,7 @@ export function emitirPresupuesto(payload: {
   clienteId: string;
   proyectoCampanaId?: string;
   vendedorEmpleadoId?: string;
-  canalVenta?: string;
+  canalVenta: string;
   fechaEntrega?: string;
   validezDias?: number;
   observaciones?: string;

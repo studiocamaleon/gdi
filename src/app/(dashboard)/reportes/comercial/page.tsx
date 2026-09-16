@@ -1,4 +1,4 @@
-import { TabComercial, MetaPie } from "@/components/panel/panel-general";
+import { ReporteComercial } from "@/components/panel/reporte-comercial";
 import { getPanelComercial } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
 import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
@@ -12,11 +12,8 @@ export default async function Page({
   searchParams: Promise<ParametrosPeriodo>;
 }) {
   const parametros = await searchParams;
-  const d = await getPanelComercial(rangoDeParametros(parametros, await zonaHorariaDelTenant()));
-  return (
-    <>
-      <TabComercial d={d} />
-      <MetaPie meta={d.meta} />
-    </>
+  const d = await getPanelComercial(
+    rangoDeParametros(parametros, await zonaHorariaDelTenant()),
   );
+  return <ReporteComercial d={d} />;
 }

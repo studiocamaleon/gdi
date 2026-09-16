@@ -1,5 +1,8 @@
 "use client";
 
+import { montoCobroEnOrden } from "@/lib/cobro-aplicado";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 import * as React from "react";
 import Link from "next/link";
 import {
@@ -293,6 +296,7 @@ export function ComprobantesOrdenTab({
   cobradoInicial,
   puedeFacturar,
   recargarToken = 0,
+  soloLectura = false,
 }: {
   ordenId: string;
   numero: string;
@@ -306,12 +310,14 @@ export function ComprobantesOrdenTab({
    * la OT, que monta su propio modal): fuerza recargar comprobantes y cobros.
    */
   recargarToken?: number;
+  soloLectura?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [comprobantes, setComprobantes] = React.useState<Comprobante[] | null>(
     null,
   );
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
+  const [errorCobros, setErrorCobros] = React.useState(false);
   const [facturarOpen, setFacturarOpen] = React.useState(false);
   const [refrescos, setRefrescos] = React.useState(0);
   /** La factura que se está por acreditar, o null. */
@@ -329,12 +335,14 @@ export function ComprobantesOrdenTab({
 
   React.useEffect(() => {
     let activo = true;
+    setCobros(null);
+    setErrorCobros(false);
     getComprobantes({ ordenId })
       .then((data) => activo && setComprobantes(data))
       .catch(() => activo && setComprobantes([]));
     getCobros({ ordenId })
       .then((data) => activo && setCobros(data))
-      .catch(() => activo && setCobros([]));
+      .catch(() => activo && setErrorCobros(true));
     getFacturacionHabilitada()
       .then((h: boolean) => activo && setFacturacionActiva(h))
       .catch(() => activo && setFacturacionActiva(false));
@@ -359,8 +367,15 @@ export function ComprobantesOrdenTab({
   const cobrado =
     cobros === null
       ? cobradoInicial
-      : cobros.reduce((s, c) => s + c.montoBruto, 0);
+      : cobros.reduce((s, c) => s + montoCobroEnOrden(c), 0);
   const saldoSinFacturar = Math.max(0, total - Math.max(0, facturado));
+
+  React.useEffect(() => {
+    if (!soloLectura) return;
+    setFacturarOpen(false);
+    setNcPara(null);
+    setCobroParaAnular(null);
+  }, [soloLectura]);
 
   const listaComp = comprobantes ?? [];
   const listaCobros = cobros ?? [];
@@ -378,7 +393,7 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Comprobantes fiscales <span className="ct">{listaComp.length}</span>
           </span>
-          {puedeFacturar && facturacionActiva && saldoSinFacturar > 0.01 ? (
+          {!soloLectura && puedeFacturar && facturacionActiva && saldoSinFacturar > 0.01 ? (
             <button
               type="button"
               className="btn btn-primary sm"
@@ -387,7 +402,7 @@ export function ComprobantesOrdenTab({
               <ReceiptTextIcon />
               Facturar
             </button>
-          ) : puedeFacturar &&
+          ) : !soloLectura && puedeFacturar &&
             facturacionActiva === false &&
             saldoSinFacturar > 0.01 ? (
             // No se esconde sin explicar: se dice por qué y adónde ir.
@@ -401,7 +416,7 @@ export function ComprobantesOrdenTab({
         ) : listaComp.length === 0 ? (
           <div className="mov-empty">
             Esta orden no tiene comprobantes fiscales.
-            {puedeFacturar
+            {soloLectura ? " Activá Editar orden para gestionar comprobantes." : puedeFacturar
               ? " Facturala entera o parcial cuando lo necesites — la deuda del cliente corre igual, esté facturada o no."
               : " Emití la orden para poder facturarla."}
           </div>
@@ -464,7 +479,7 @@ export function ComprobantesOrdenTab({
                 <span className="fo-comp-acc">
                   {c.tipo === "factura" &&
                   c.estado === "emitido" &&
-                  puedeAnular ? (
+                  !soloLectura && puedeAnular ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -490,14 +505,21 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Cobros <span className="ct">{listaCobros.length}</span>
           </span>
-          <Link
-            className="btn sm"
-            href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
-          >
-            Registrar cobro
-          </Link>
+          {!soloLectura && puedeFacturar ? (
+            <Link
+              className="btn sm"
+              href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
+            >
+              Registrar cobro
+            </Link>
+          ) : null}
         </div>
-        {cobros === null ? (
+        {errorCobros ? (
+          <Alert variant="destructive">
+            <AlertTitle>No se pudieron consultar los cobros</AlertTitle>
+            <AlertDescription>Volvé a abrir la pestaña para reintentar.</AlertDescription>
+          </Alert>
+        ) : cobros === null ? (
           <div className="mov-empty">Cargando cobros…</div>
         ) : listaCobros.length === 0 ? (
           <div className="mov-empty">
@@ -511,7 +533,7 @@ export function ComprobantesOrdenTab({
               <span>Método</span>
               <span>Recibo</span>
               <span>Acreditación</span>
-              <span className="r">Monto</span>
+              <span className="r">Aplicado a esta OT</span>
               <span aria-label="Acciones" />
             </div>
             {listaCobros.map((c) => (
@@ -521,7 +543,10 @@ export function ComprobantesOrdenTab({
                 style={{ gridTemplateColumns: COLS_COBRO }}
               >
                 <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
-                <span className="mov-metodo">{c.metodoNombre}</span>
+                <span className="mov-metodo">
+                  {c.metodoNombre}
+                  {c.origenAplicacion === "cuenta_corriente" ? <span className="mov-who"> · Cuenta corriente</span> : null}
+                </span>
                 <span className="mov-comp">
                   {c.numeroRecibo ? (
                     <a
@@ -543,10 +568,10 @@ export function ComprobantesOrdenTab({
                     : "Pendiente"}
                 </span>
                 <span className="mov-monto">
-                  {formatMonedaOrden(c.montoBruto, moneda)}
+                  {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
                 </span>
                 <span className="fo-comp-acc">
-                  {puedeAnular ? (
+                  {!soloLectura && puedeAnular ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -581,7 +606,7 @@ export function ComprobantesOrdenTab({
         </Link>
       </div>
 
-      {facturarOpen ? (
+      {!soloLectura && facturarOpen ? (
         <FacturarOrdenModal
           ordenId={ordenId}
           numero={numero}
@@ -592,13 +617,14 @@ export function ComprobantesOrdenTab({
       ) : null}
 
       <ConfirmacionDestructiva
-        open={cobroParaAnular !== null}
+        open={!soloLectura && cobroParaAnular !== null}
         onOpenChange={(open) => {
           if (!open) setCobroParaAnular(null);
         }}
         titulo={`Anular cobro ${cobroParaAnular?.numeroRecibo ?? ""}`}
         descripcion={`Se conserva el historial y se registra un contramovimiento por ${formatMonedaOrden(cobroParaAnular?.disponibleReal ?? 0, moneda)}.`}
         impacto={[
+          "Se anula el recibo completo, incluidas sus aplicaciones a otras órdenes o facturas.",
           "El importe vuelve a quedar pendiente en la cuenta corriente.",
           "Si ya ingresó a una cuenta, Tesorería registra la salida de reversión.",
           "El recibo queda anulado y no se elimina del historial.",
@@ -610,7 +636,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Anular cobro"
         onConfirmar={async (motivo) => {
-          if (!cobroParaAnular) return;
+          if (soloLectura || !cobroParaAnular) return;
           try {
             await anularCobro(cobroParaAnular.id, {
               motivo,
@@ -630,7 +656,7 @@ export function ComprobantesOrdenTab({
       />
 
       <ConfirmacionDestructiva
-        open={ncPara !== null}
+        open={!soloLectura && ncPara !== null}
         onOpenChange={(open) => {
           if (!open) setNcPara(null);
         }}
@@ -649,7 +675,7 @@ export function ComprobantesOrdenTab({
         }}
         accionLabel="Emitir nota de crédito"
         onConfirmar={async (motivo) => {
-          if (!ncPara) return;
+          if (soloLectura || !ncPara) return;
           try {
             const nc = await notaCreditoOrden(ordenId, {
               comprobanteOrigenId: ncPara.id,

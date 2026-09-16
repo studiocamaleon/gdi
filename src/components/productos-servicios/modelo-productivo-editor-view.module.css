@@ -1,3 +1,148 @@
+.workspace {
+  height: 100%;
+  min-width: 0;
+  color: var(--foreground);
+  background: var(--canvas-background);
+  --node-border: var(--border);
+  --node-surface: var(--surface);
+  --node-muted: var(--muted-text);
+  --node-ink: var(--foreground);
+  --node-accent: var(--accent-soft-foreground);
+  --node-accent-line: var(--accent);
+  --node-accent-soft: var(--accent-soft);
+  --node-accent-border: color-mix(in srgb, var(--accent) 25%, var(--border));
+  --node-warning: var(--warning);
+  --node-warning-soft: color-mix(in srgb, var(--warning) 7%, var(--surface));
+  --node-warning-border: color-mix(in srgb, var(--warning) 25%, var(--border));
+  --node-subtle: var(--canvas-background);
+  --node-radius: 8px;
+}
+
+.workspace.workspace :global(.editor-shell) {
+  box-shadow: none;
+}
+
+.workspace
+  :global(.editor-shell.modelo-configuracion-nodo-activa > .editor-main) {
+  background: var(--canvas-background);
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-header) {
+  background: var(--surface);
+  border-color: var(--border);
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-header h1) {
+  color: var(--foreground);
+  font-weight: 550;
+  letter-spacing: -0.045em;
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-copy > span) {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-copy p) {
+  color: var(--muted-text);
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-header > button) {
+  color: var(--foreground);
+  border-color: var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.workspace.workspace
+  :global(.editor-main .modelo-config-step-header > button:hover) {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-icon) {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  border-color: var(--border);
+  border-radius: 8px;
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-status) {
+  border-radius: 8px;
+  background: var(--brand-graphite);
+  border-color: var(--brand-graphite-line);
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-status > span) {
+  color: var(--brand-muted-on-graphite);
+  font-weight: 400;
+}
+.workspace.workspace :global(.editor-main .modelo-config-step-status strong) {
+  color: var(--brand-on-graphite);
+  font-weight: 550;
+}
+.workspace.workspace :global(.paso-config-intro > div:first-child > span) {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.workspace.workspace :global(.paso-config-intro h2) {
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+.workspace.workspace :global(.eje-guiado.is-fixed) {
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.workspace.workspace :global(.eje-guiado.is-fixed .eje-guiado-head) {
+  background: var(--canvas-background);
+  border-color: var(--border);
+}
+.workspace.workspace :global(.eje-guiado.is-fixed .eje-guiado-title) {
+  font-weight: 550 !important;
+  letter-spacing: -0.025em;
+}
+.workspace.workspace :global(.eje-guiado-content) {
+  background: var(--surface) !important;
+}
+.workspace.workspace :global(.eje-guiado-content label) {
+  color: var(--muted-text) !important;
+  font-weight: 500 !important;
+}
+.workspace.workspace :global(.eje-guiado-content input),
+.workspace.workspace :global(.eje-guiado-content select),
+.workspace.workspace :global(.eje-guiado-content [data-slot="select-trigger"]) {
+  border-color: var(--border);
+  border-radius: 8px;
+}
+.workspace.workspace :global(.paso-config-group-head) {
+  background: var(--canvas-background);
+  border-color: var(--border);
+  border-radius: 8px 8px 0 0;
+}
+.workspace.workspace :global(.editor-main .paso-config-savebar) {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.workspace.workspace :global(.paso-config-savebar .btn-primary) {
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: none;
+}
+
+.workspace .prepareBody,
+.workspace .prepareIcon {
+  border-radius: 8px;
+}
+
+.workspace .preparePanel header > span {
+  color: var(--muted-text);
+  font-weight: 400;
+}
+
+.workspace .prepareBody button {
+  min-height: 32px;
+  border-color: var(--accent);
+  border-radius: 8px;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: 550;
+}
+
 .preparePanel {
   min-height: 100%;
   color: #f5f3ef;
@@ -150,4 +295,10 @@
   border-color: var(--ink, #1d1b20);
   color: var(--surface, #fff);
   background: var(--ink, #1d1b20);
+}
+
+.workspace.workspace :global(.paso-config-savebar .btn-primary:disabled) {
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  opacity: 1;
 }

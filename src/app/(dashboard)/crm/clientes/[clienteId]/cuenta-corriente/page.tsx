@@ -1,3 +1,4 @@
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { notFound } from "next/navigation";
 import { CuentaCorrienteView } from "@/components/administracion/cuenta-corriente-view";
 import { getCuentaCorriente } from "@/lib/administracion-api";
@@ -16,5 +17,9 @@ export default async function Page({
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
-  return <CuentaCorrienteView cc={cuenta} />;
+  return (
+    <DesignSystemProvider theme="brand" appearance="light">
+      <CuentaCorrienteView cc={cuenta} />
+    </DesignSystemProvider>
+  );
 }

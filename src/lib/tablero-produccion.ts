@@ -1,3 +1,5 @@
+import { calcularProgreso } from "./progreso-produccion";
+import { claveFechaEnZona, diasEntreClaves, ZONA_DEFAULT } from "@/lib/zona";
 /**
  * Tablero de producción — contrato de datos REAL.
  *
@@ -40,14 +42,39 @@ export type TableroPasoTramoAbierto = {
 };
 
 export type TableroPasoData = {
+  demandaHumana?: unknown;
+  /** Intervalos registrados de ejecución; no incluyen pausas entre tramos. */
+  tramosEjecucion?: Array<{ inicio: string; fin: string | null }>;
+  /** Inicio aceptado del lote; la proyección no lo adelanta automáticamente. */
+  planificadoDesde?: string | null;
+  planificadoHasta?: string | null;
+  /** Referencia de cumplimiento; no restringe las reservas del motor. */
+  planReferencia?: {
+    inicio: string;
+    fin: string;
+    fijadoEl: string;
+    origen: "automatico" | "plan_aceptado";
+  } | null;
+  atencionPlanificada?: unknown;
+  personalFijo?: { empleadoIds?: string[]; obligatorioId?: string; preferidoId?: string };
   id: string;
   indice: number;
   /** Null en OTs históricas: esas conservan la semántica lineal por índice. */
   nodoClave?: string | null;
   esTerminal?: boolean;
   predecesorPasoIds?: string[];
+  /** Identidad de los trabajos que todavía debe esperar, incluso de otros ítems. */
+  dependenciasPendientes?: {
+    pasoId: string;
+    pasoNombre: string;
+    itemId: string;
+    itemNombre: string;
+    loteNombre: string | null;
+  }[];
   /** Evaluado por API contra todos los ítems de la OT (incluye componentes). */
   predecesoresSatisfechos?: boolean;
+  /** Aprobaciones documentales pendientes aplicables a este paso. */
+  aprobacionesPendientes?: string[];
   sucesorPasoIds?: string[];
   gatesOperativos?: Array<{
     id: string;
@@ -78,7 +105,9 @@ export type TableroPasoData = {
   /** Máquina que ejecutó el paso: señal REAL para el ruteo a estaciones (rediseño
    *  por reglas). Null en pasos sin máquina o en órdenes viejas. */
   maquinaId?: string | null;
-  /** Tecnología de esa máquina (derivada). Base del ruteo "por tecnología". */
+  /** La familia exige máquina; una OT histórica sin id no se considera manual. */
+  requiereMaquina?: boolean;
+  /** Tecnología derivada de la máquina; no determina una estación. */
   tecnologia?: string | null;
   duracionEstimadaMin: number | null;
   operacionesIncorporacionSnapshotJson?: Array<{
@@ -120,6 +149,7 @@ export type TableroPasoData = {
   tiempoAcumuladoMin: number;
   /** El paso está en MI mesa de trabajo (reclamo persistente por usuario). */
   mesaEsMia: boolean;
+  asignacionPersonal?: ReturnType<typeof import("../../apps/api/src/produccion/asignacion-personal").proyectarAsignacionPersonal>;
   /** Quién lo tiene en su mesa (para el resto del taller); null = nadie. */
   mesaUsuarioNombre: string | null;
   /** === Tercerización (F2) ===: 'interno' (tablero) | 'tercerizado' (Compras). */
@@ -131,10 +161,21 @@ export type TableroPasoData = {
 };
 
 export type TableroItemData = {
+  /** Sólo escenarios internos; no se acepta desde la API. */
+  prioridadPlanificacion?: number;
   /** Id del OrdenTrabajoItem. */
   id: string;
   /** Un componente fabricado es un subítem ejecutable del producto padre. */
   parentItemId?: string | null;
+  loteEntregaId?: string | null;
+  loteEntrega?: {
+    id: string;
+    nombre: string;
+    cantidad: number;
+    unidad: string;
+    productoNombre: string;
+    esProductoDelLote: boolean;
+  } | null;
   componenteCodigo?: string | null;
   nodoIncorporacionClave?: string | null;
   componenteDe?: { id: string; nombre: string } | null;
@@ -149,7 +190,7 @@ export type TableroItemData = {
   cantidad: number;
   cantidadUnidad: string;
   specs: Array<{ etiqueta: string; valor: string }>;
-  /** ISO date o null (a nivel orden). */
+  /** ISO date del lote/ítem, con respaldo en la fecha de la orden. */
   fechaEntrega: string | null;
   /** Cuántos archivos tiene el item (arte de producción). */
   archivosCount: number;
@@ -325,13 +366,16 @@ export function codigoVisibleItem(
 }
 
 /** Días de diferencia entre la fecha de entrega (date-only) y hoy. */
-export function diasHastaEntrega(fechaEntrega: string | null): number | null {
+export function diasHastaEntrega(
+  fechaEntrega: string | null,
+  ahora: Date = new Date(),
+  zona: string = ZONA_DEFAULT,
+): number | null {
   if (!fechaEntrega) return null;
-  const entrega = fechaLocalDesdeIso(fechaEntrega);
-  if (!entrega) return null;
-  const ahora = new Date();
-  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
-  return Math.round((entrega.getTime() - hoy.getTime()) / 86_400_000);
+  return diasEntreClaves(
+    claveFechaEnZona(ahora, zona),
+    fechaEntrega.slice(0, 10),
+  );
 }
 
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -351,8 +395,12 @@ const MESES_CORTOS = [
 ];
 
 /** "Vie 30 may", como el diseño (arrays fijos: sin depender del locale). */
-export function etiquetaEntrega(fechaEntrega: string | null): string {
-  const dias = diasHastaEntrega(fechaEntrega);
+export function etiquetaEntrega(
+  fechaEntrega: string | null,
+  ahora = new Date(),
+  zona = ZONA_DEFAULT,
+): string {
+  const dias = diasHastaEntrega(fechaEntrega, ahora, zona);
   if (dias === null) return "Sin fecha";
   if (dias === 0) return "Hoy";
   if (dias === 1) return "Mañana";
@@ -361,8 +409,12 @@ export function etiquetaEntrega(fechaEntrega: string | null): string {
   return `${DIAS_SEMANA[fecha.getDay()]} ${fecha.getDate()} ${MESES_CORTOS[fecha.getMonth()]}`;
 }
 
-export function etiquetaRestante(fechaEntrega: string | null): string {
-  const dias = diasHastaEntrega(fechaEntrega);
+export function etiquetaRestante(
+  fechaEntrega: string | null,
+  ahora = new Date(),
+  zona = ZONA_DEFAULT,
+): string {
+  const dias = diasHastaEntrega(fechaEntrega, ahora, zona);
   if (dias === null) return "—";
   if (dias === 0) return "Hoy";
   if (dias < 0) return `Vencida ${Math.abs(dias)}d`;
@@ -375,8 +427,10 @@ export function etiquetaRestante(fechaEntrega: string | null): string {
  */
 export function prioridadDerivada(
   fechaEntrega: string | null,
+  ahora: Date = new Date(),
+  zona: string = ZONA_DEFAULT,
 ): TableroPrioridad {
-  const dias = diasHastaEntrega(fechaEntrega);
+  const dias = diasHastaEntrega(fechaEntrega, ahora, zona);
   if (dias === null) return "normal";
   if (dias <= 0) return "urgent";
   if (dias <= 2) return "high";
@@ -392,7 +446,7 @@ export function itemTerminado(item: TableroItemData): boolean {
 /**
  * El item todavía tiene trabajo pendiente, pero ninguna frontera de su DAG
  * está habilitada. En una OT compuesta esto significa que espera componentes
- * u otros pasos de la orden; operativamente está bloqueado, no completado.
+ * u otros pasos de la orden; está en espera, no bloqueado ni completado.
  */
 export function itemEsperandoDependencias(item: TableroItemData): boolean {
   return (
@@ -403,10 +457,7 @@ export function itemEsperandoDependencias(item: TableroItemData): boolean {
 }
 
 export function itemBloqueado(item: TableroItemData): boolean {
-  return (
-    item.pasos.some((paso) => paso.estado === "bloqueado") ||
-    itemEsperandoDependencias(item)
-  );
+  return item.pasos.some((paso) => paso.estado === "bloqueado");
 }
 
 export function itemIniciado(item: TableroItemData): boolean {
@@ -488,20 +539,17 @@ export function pasoReabrible(
 }
 
 export function progresoItem(item: TableroItemData): number {
-  if (item.pasos.length === 0) return 0;
-  const hechos = item.pasos.filter((paso) => paso.estado === "hecho").length;
-  return Math.round((hechos / item.pasos.length) * 100);
+  return calcularProgreso(item.pasos).porcentaje ?? 0;
 }
 
 /** Vencida y sin terminar (no hay plan por paso todavía). */
-export function itemConRetraso(item: TableroItemData): boolean {
-  const dias = diasHastaEntrega(item.fechaEntrega);
+export function itemConRetraso(item: TableroItemData, ahora = new Date(), zona = ZONA_DEFAULT): boolean {
+  const dias = diasHastaEntrega(item.fechaEntrega, ahora, zona);
   return dias !== null && dias < 0 && !itemTerminado(item);
 }
 
-export function lineaEstado(item: TableroItemData): string {
+export function lineaEstado(item: TableroItemData, actual = pasoActual(item)): string {
   if (item.sinRuta) return "Sin ruta de producción cargada";
-  const actual = pasoActual(item);
   if (!actual) {
     // En un workflow DAG puede no haber una frontera ejecutable aunque todavía
     // queden pasos pendientes: sucede cuando el producto padre espera que
@@ -562,84 +610,50 @@ type EstacionRuteo = {
   id: string;
   activo: boolean;
   familias: string[];
-  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
-  /** Reglas nuevas (rediseño): 'tecnologia' | 'paso' (+ 'maquina'/'familia'). */
+  maquinas: Array<{ id?: string | null; activo?: boolean; centroCostoId: string | null }>;
+  /** Lectura compatible de asignaciones anteriores. Tecnología ya no asigna tareas. */
   reglas?: Array<{ tipo: string; valor: string }>;
 };
 
-type PasoRuteo = Pick<
-  TableroPasoData,
-  | "familiaCodigo"
-  | "plantillaCodigo"
-  | "centroCostoId"
-  | "maquinaId"
-  | "tecnologia"
->;
+type PasoRuteo = Pick<TableroPasoData,
+  "familiaCodigo" | "plantillaCodigo" | "centroCostoId" | "maquinaId" | "tecnologia" | "requiereMaquina"
+> & Partial<Pick<TableroPasoData, "tipoEjecucion">>;
 
-/**
- * Ruteo paso → estación (rediseño "estaciones por reglas",
- * docs/estaciones-reglas-diseno.md). La estación declara qué agrupa; el paso no
- * declara estación. Se prueba por prioridad, de lo más específico a lo general:
- *
- *   1. por MÁQUINA (la máquina del paso está en la estación) — señal real;
- *   2. por TECNOLOGÍA (regla) — la máquina del paso es de esa tecnología;
- *   3. por PASO concreto (regla) — separa pasos de la misma familia;
- *   4. por FAMILIA — la estación general (sin máquinas) de esa familia, o la
- *      única candidata. (Fase D: se retiró el ruteo por centro de costo, que era
- *      un eje de costeo, no de piso de taller.)
- *
- * Determinista: primer match por nivel. Sin match → null ("Sin estación").
- */
+/** Una máquina sólo se ejecuta donde está asignada. Las reglas de pasos se
+ * aplican exclusivamente sin máquina. Una asignación propia prevalece sobre
+ * la heredada de su plantilla; una ambigüedad nunca se resuelve por orden.
+ * Mantener idéntico en frontend y backend. */
 export function resolverEstacionDePaso<T extends EstacionRuteo>(
-  estaciones: T[],
-  paso: PasoRuteo,
+  estaciones: T[], paso: PasoRuteo,
 ): T | null {
-  const activas = estaciones.filter((estacion) => estacion.activo);
-
-  // 1. Por máquina: la máquina que ejecutó el paso está asignada a la estación.
+  if (paso.tipoEjecucion === "tercerizado") return null;
+  const activas = estaciones.filter((e) => e.activo);
   if (paso.maquinaId) {
-    const porMaquina = activas.find((estacion) =>
-      estacion.maquinas.some((maquina) => maquina.id === paso.maquinaId),
-    );
-    if (porMaquina) return porMaquina;
+    const candidatas = activas.filter((e) => e.maquinas.some(
+      (m) => m.id === paso.maquinaId && m.activo !== false,
+    ));
+    return candidatas.length === 1 ? candidatas[0] : null;
   }
-  // 2. Por tecnología (regla nueva).
-  if (paso.tecnologia) {
-    const porTecnologia = activas.find((estacion) =>
-      (estacion.reglas ?? []).some(
-        (regla) =>
-          regla.tipo === "tecnologia" && regla.valor === paso.tecnologia,
-      ),
-    );
-    if (porTecnologia) return porTecnologia;
+  // No confundir una OT incompleta con una operación manual.
+  if (paso.requiereMaquina || paso.tecnologia) return null;
+  for (const codigo of [paso.familiaCodigo, paso.plantillaCodigo]) {
+    if (!codigo) continue;
+    // Compatibilidad: la antigua regla explícita tiene prioridad sobre familia.
+    const explicitas = activas.filter((e) => (e.reglas ?? []).some(
+      (r) => r.tipo === "paso" && r.valor === codigo,
+    ));
+    if (explicitas.length) return explicitas.length === 1 ? explicitas[0] : null;
+    const heredadas = activas.filter((e) => e.familias.includes(codigo));
+    if (heredadas.length) return heredadas.length === 1 ? heredadas[0] : null;
   }
-  // 3. Por paso concreto (regla nueva; identidad del paso = su familiaCodigo).
-  // La regla puede apuntar al paso propio (su UUID) o a la plantilla de la
-  // que hereda: la instancia HEREDA la estación y puede tener la suya.
-  const porPaso = activas.find((estacion) =>
-    (estacion.reglas ?? []).some(
-      (regla) =>
-        regla.tipo === "paso" &&
-        (regla.valor === paso.familiaCodigo ||
-          (paso.plantillaCodigo != null &&
-            regla.valor === paso.plantillaCodigo)),
-    ),
-  );
-  if (porPaso) return porPaso;
-
-  // 4. Por familia: la estación general (sin máquinas) de esa familia, o —si no
-  //    hay general— la única candidata. Sin centro de costo (Fase D).
-  const candidatas = activas.filter(
-    (estacion) =>
-      estacion.familias.includes(paso.familiaCodigo) ||
-      (paso.plantillaCodigo != null &&
-        estacion.familias.includes(paso.plantillaCodigo)),
-  );
-  if (candidatas.length === 0) return null;
-  const general = candidatas.find((estacion) => estacion.maquinas.length === 0);
-  if (general) return general;
-  if (candidatas.length === 1) return candidatas[0];
   return null;
+}
+
+export function motivoSinEstacion(estaciones: EstacionRuteo[], paso: PasoRuteo): string | null {
+  if (paso.tipoEjecucion === "tercerizado" || resolverEstacionDePaso(estaciones, paso)) return null;
+  if (paso.maquinaId) return "Asigná la máquina cotizada a una estación activa y verificá que la máquina esté habilitada.";
+  if (paso.requiereMaquina || paso.tecnologia) return "Este paso requiere máquina, pero la orden no identifica cuál. Revisá su configuración de origen.";
+  return "Asigná este paso sin máquina a una única estación activa; revisá si falta la asignación o está repetida.";
 }
 
 /** Clave del bucket de pasos sin estación asignada. */
@@ -652,3 +666,51 @@ export const SIN_ESTACION_KEY = "sin-estacion";
  * OT, pero se agrupa acá para verlo junto.
  */
 export const TERCERIZADOS_KEY = "proveedor-tercerizado";
+
+
+/** La identidad del lote viene de su relación, nunca del nombre recortado. */
+export function nombreTrabajoTablero(item: TableroItemData): string {
+  return item.loteEntrega?.esProductoDelLote
+    ? item.loteEntrega.productoNombre
+    : item.nombre;
+}
+
+export function textoDependenciaTablero(
+  dependencia: NonNullable<TableroPasoData["dependenciasPendientes"]>[number],
+): string {
+  return [dependencia.pasoNombre, dependencia.itemNombre, dependencia.loteNombre]
+    .filter(Boolean).join(" · ");
+}
+
+type TareaOrdenEstacion = {
+  isBlocked: boolean;
+  overdue: boolean;
+  isCurrent: boolean;
+  item: {
+    data: Pick<TableroItemData, "id" | "fechaEntrega" | "ordenNumero" | "itemIndice">;
+  };
+  step: { paso: Pick<TableroPasoData, "id" | "indice" | "planificadoDesde"> };
+};
+
+function fechaParaOrdenEstacion(fecha: string | null | undefined): number {
+  const valor = fecha ? Date.parse(fecha) : NaN;
+  return Number.isFinite(valor) ? valor : Number.MAX_SAFE_INTEGER;
+}
+
+/** Prioridad operativa existente; dentro del mismo estado, entrega más cercana.
+ * Los empates se resuelven por planificación e identidad, no por el orden del API.
+ */
+export function compararTareasEstacion(a: TareaOrdenEstacion, b: TareaOrdenEstacion): number {
+  const peso = (t: TareaOrdenEstacion) =>
+    (t.isBlocked ? 0 : 1) + (t.overdue ? 0 : 2) + (t.isCurrent ? 1 : 4);
+  return (
+    peso(a) - peso(b) ||
+    fechaParaOrdenEstacion(a.item.data.fechaEntrega) - fechaParaOrdenEstacion(b.item.data.fechaEntrega) ||
+    fechaParaOrdenEstacion(a.step.paso.planificadoDesde) - fechaParaOrdenEstacion(b.step.paso.planificadoDesde) ||
+    a.item.data.ordenNumero.localeCompare(b.item.data.ordenNumero, "es", { numeric: true }) ||
+    a.item.data.itemIndice - b.item.data.itemIndice ||
+    a.step.paso.indice - b.step.paso.indice ||
+    a.item.data.id.localeCompare(b.item.data.id) ||
+    a.step.paso.id.localeCompare(b.step.paso.id)
+  );
+}

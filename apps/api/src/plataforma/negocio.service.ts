@@ -402,7 +402,7 @@ export class NegocioService {
         clave: 'tec_dom',
         severidad: 'oportunidad',
         titulo: `${tec0.pct}% del GMV se produce en ${nombre}`,
-        detalle: `Concentra la producción del ecosistema. Priorizar features de ${nombre} (simuladores, presets, nesting) rinde para casi todos.`,
+        detalle: `Concentra la producción del ecosistema. Priorizar features de ${nombre} (producción, presets, nesting) rinde para casi todos.`,
       });
     }
 

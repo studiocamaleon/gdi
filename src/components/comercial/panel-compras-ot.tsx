@@ -22,9 +22,11 @@ const LABEL: Record<string, string> = {
 export function PanelComprasOt({
   items,
   onChanged,
+  soloLectura = false,
 }: {
   items: TableroItemData[];
   onChanged: () => void;
+  soloLectura?: boolean;
 }) {
   const [saving, setSaving] = React.useState<string | null>(null);
 
@@ -46,6 +48,7 @@ export function PanelComprasOt({
   if (compras.length === 0) return null;
 
   const avanzar = async (pasoId: string, estado: string) => {
+    if (soloLectura) return;
     setSaving(pasoId);
     try {
       await avanzarCompraProduccion(pasoId, estado);
@@ -117,6 +120,7 @@ export function PanelComprasOt({
                   const activo = i <= idxActual;
                   // Volver a "pendiente" siempre se permite (es deshacer).
                   const deshabilitado =
+                    soloLectura ||
                     saving === paso.id ||
                     estado === actual ||
                     (bloqueada && estado !== "pendiente");

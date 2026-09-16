@@ -1,3 +1,16 @@
+"use client";
+import { WrenchIcon } from "lucide-react";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import styles from "../maquinaria.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import { SelectField } from "@/components/design-system/select-field";
 /**
  * Piezas que se gastan con el uso de la máquina. Las impresoras por hoja las
  * prorratean por clicks A4; el Plotter CAD prorratea su cabezal por los ml que
@@ -7,7 +20,7 @@
 import * as React from "react";
 import { PlusIcon, XIcon } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
+import { Input } from "@heroui/react";
 import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
@@ -98,16 +111,24 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
   );
 
   return (
-    <div className="maq-perfiles maq-desgaste">
+    <div className={`${styles["maq-perfiles"]} ${styles["maq-desgaste"]}`}>
       {componentes.length === 0 ? (
-        <p className="maq-perfiles-vacio">
-          {esCabezalCad
-            ? "Sin cabezal cargado: todavía no se prorratea su reemplazo por tinta procesada."
-            : "Sin piezas cargadas: la máquina no suma costo por click."}
-        </p>
+        <Empty className={styles.sectionEmpty}>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <WrenchIcon />
+            </EmptyMedia>
+            <EmptyTitle>Sin componentes de desgaste</EmptyTitle>
+            <EmptyDescription>
+              {esCabezalCad
+                ? "Sin cabezal cargado: todavía no se prorratea su reemplazo por tinta procesada."
+                : "Sin piezas cargadas: la máquina no suma costo por click."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="maq-perfiles-scroll">
-          <table className="maq-perfiles-tabla">
+        <div className={`${styles["maq-perfiles-scroll"]}`}>
+          <table className={`${styles["maq-perfiles-tabla"]}`}>
             <thead>
               <tr>
                 <th className="nombre">
@@ -141,6 +162,7 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                   <tr key={item.id ?? `nuevo-${indice}`}>
                     <td className="nombre">
                       <Input
+                        className={focus.singleBorder}
                         value={item.nombre}
                         placeholder={
                           esCabezalCad ? "Cabezal de impresión" : "Drum negro"
@@ -155,26 +177,28 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                       {esCabezalCad ? (
                         <span>Cabezal</span>
                       ) : (
-                        <select
+                        <SelectField
                           value={item.tipo}
                           aria-label={`Tipo del componente ${indice + 1}`}
-                          onChange={(e) =>
+                          onChange={(value) =>
                             actualizar(indice, {
-                              tipo: e.target
-                                .value as (typeof componentes)[number]["tipo"],
+                              tipo: value as (typeof componentes)[number]["tipo"],
                             })
                           }
-                        >
-                          {tipoComponenteDesgasteMaquinaItems.map((opcion) => (
-                            <option key={opcion.value} value={opcion.value}>
-                              {opcion.label}
-                            </option>
-                          ))}
-                        </select>
+                          options={[
+                            ...(tipoComponenteDesgasteMaquinaItems.map(
+                              (opcion) => ({
+                                value: opcion.value,
+                                label: opcion.label,
+                              }),
+                            ) ?? []),
+                          ]}
+                        />
                       )}
                     </td>
                     <td className="num">
                       <Input
+                        className={focus.singleBorder}
                         type="number"
                         inputMode="decimal"
                         min={0}
@@ -193,6 +217,7 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                     </td>
                     <td className="num">
                       <Input
+                        className={focus.singleBorder}
                         type="number"
                         inputMode="numeric"
                         min={0}
@@ -209,17 +234,20 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                         }
                       />
                     </td>
-                    <td className="num maq-desgaste-costo">
+                    <td className={`num ${styles["maq-desgaste-costo"]}`}>
                       {costo === null ? "—" : fmt(costo)}
                     </td>
                     {conColumnaColor ? (
                       <td className="color">
                         <div
-                          className="maq-seg maq-seg-mini"
+                          className={`${styles["maq-seg"]} ${styles["maq-seg-mini"]}`}
                           role="group"
                           aria-label={`El componente ${indice + 1} sólo se gasta en color`}
                         >
-                          <button
+                          <Button
+                            variant={
+                              Boolean(item.soloColor) ? "secondary" : "outline"
+                            }
                             type="button"
                             className={item.soloColor ? "activo" : ""}
                             aria-pressed={Boolean(item.soloColor)}
@@ -228,8 +256,9 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                             }
                           >
                             Sí
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant={!item.soloColor ? "secondary" : "outline"}
                             type="button"
                             className={item.soloColor ? "" : "activo"}
                             aria-pressed={!item.soloColor}
@@ -238,14 +267,16 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                             }
                           >
                             No
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     ) : null}
                     <td className="relleno" />
                     <td className="acciones">
-                      <span className="maq-perfiles-acciones">
-                        <button
+                      <span className={`${styles["maq-perfiles-acciones"]}`}>
+                        <Button
+                          variant="ghost"
+                          isIconOnly
                           type="button"
                           className="del"
                           title="Quitar pieza"
@@ -253,7 +284,7 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
                           onClick={() => quitar(indice)}
                         >
                           <XIcon />
-                        </button>
+                        </Button>
                       </span>
                     </td>
                   </tr>
@@ -265,18 +296,19 @@ export function DesgasteEditor({ form, setForm }: DesgasteEditorProps) {
       )}
 
       {!esCabezalCad || componentes.length === 0 ? (
-        <button
+        <Button
+          variant="outline"
           type="button"
-          className="maq-btn maq-perfiles-agregar"
+          className={`${styles["maq-btn"]} ${styles["maq-perfiles-agregar"]}`}
           onClick={agregar}
         >
           <PlusIcon />
           {esCabezalCad ? "Agregar cabezal" : "Agregar pieza"}
-        </button>
+        </Button>
       ) : null}
 
       {totales.mono > 0 || totales.color > 0 ? (
-        <p className="maq-desgaste-total">
+        <p className={`${styles["maq-desgaste-total"]}`}>
           {esCabezalCad ? "Costo por ml: " : "Costo por click: "}
           {conColumnaColor ? (
             <>

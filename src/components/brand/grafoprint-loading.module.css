@@ -1,0 +1,60 @@
+/* La marca permanece quieta; sólo los nodos indican actividad. */
+.indicator {
+  display: grid;
+  place-items: center;
+}
+
+.pageLogo {
+  width: 56px;
+  height: 56px;
+  color: var(--foreground);
+}
+
+.mark [data-node] {
+  animation: node-pulse 2400ms ease-in-out infinite;
+}
+
+.accentNodes [data-node] {
+  animation-name: node-accent;
+}
+
+.mark [data-node="2"] {
+  animation-delay: -1600ms;
+}
+
+.mark [data-node="3"] {
+  animation-delay: -800ms;
+}
+
+@keyframes node-pulse {
+  0%,
+  40%,
+  100% {
+    opacity: 0.55;
+  }
+  12%,
+  25% {
+    opacity: 1;
+  }
+}
+
+@keyframes node-accent {
+  0%,
+  40%,
+  100% {
+    fill: currentColor;
+  }
+  12%,
+  25% {
+    fill: var(--accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark [data-node] {
+    animation: none;
+  }
+  .accentNodes [data-node="3"] {
+    fill: var(--accent);
+  }
+}

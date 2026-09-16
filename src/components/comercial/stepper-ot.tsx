@@ -20,16 +20,18 @@ import s from "./stepper-ot.module.css";
 export function StepperOt({
   estado,
   fechasEstado,
+  orientation = "horizontal",
 }: {
   estado: OrdenTrabajoEstado;
   /** Fecha (ISO) por estado alcanzado. Los futuros no están. */
   fechasEstado?: Partial<Record<OrdenTrabajoEstado, string>>;
+  orientation?: "horizontal" | "vertical";
 }) {
   const curIdx = ORDEN_TRABAJO_FLOW.indexOf(estado);
   const ultimo = ORDEN_TRABAJO_FLOW.length - 1;
 
   return (
-    <div className={s.flow}>
+    <div className={s.flow} data-orientation={orientation}>
       {ORDEN_TRABAJO_FLOW.map((k, i) => {
         const e = ORDEN_TRABAJO_ESTADOS[k];
         const st = i < curIdx ? "past" : i === curIdx ? "cur" : "future";

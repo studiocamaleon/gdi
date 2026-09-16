@@ -103,6 +103,7 @@ describe('ejecución concurrente de un lote real (PostgreSQL)', () => {
     const accionar = (accion: 'iniciar' | 'completar') =>
       ordenes.accionPaso(auth, orden.id, operativo.itemId, operativo.id, {
         accion,
+        ...(accion === 'completar' ? { tiempoDeclaradoMin: 30 } : {}),
       });
     await expect(accionar('iniciar')).rejects.toThrow(
       /condici|Material|material/,
@@ -152,6 +153,11 @@ describe('ejecución concurrente de un lote real (PostgreSQL)', () => {
     });
     expect(participacion.estado).toBe('hecho');
     expect(Number(participacion.tiempoRealMin)).toBe(0);
+    const pasoOperativo = await db.ordenTrabajoItemPaso.findUniqueOrThrow({
+      where: { id: operativo.id },
+    });
+    expect(Number(pasoOperativo.tiempoRealMin)).toBe(30);
+    expect(pasoOperativo.tiempoFuente).toBe('declarado');
     expect(
       await db.ordenTrabajoEvento.count({ where: { tenantId, tipo: 'paso' } }),
     ).toBe(2);

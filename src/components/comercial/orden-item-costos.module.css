@@ -1,0 +1,381 @@
+/* Desglose financiero del ítem. Tokens y densidad del workspace. */
+.op-costs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+.cost-section {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cost-waterfall {
+  padding: 16px 20px 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  container-type: inline-size;
+}
+.cost-waterfall .cw-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px 60px 112px;
+  gap: 12px;
+  align-items: baseline;
+  padding: 11px 0;
+}
+.cost-waterfall .cw-tipo {
+  justify-self: start;
+  padding: 2px 9px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: normal;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.cost-waterfall .cw-tipo:empty {
+  visibility: hidden;
+}
+.cost-waterfall .cw-pct {
+  justify-self: end;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+@container (max-width: 560px) {
+  .cost-waterfall .cw-row {
+    grid-template-columns: minmax(0, 1fr) 50px 104px;
+  }
+}
+@container (max-width: 560px) {
+  .cost-waterfall .cw-tipo {
+    display: none;
+  }
+}
+.cost-waterfall .cw-row + .cw-row {
+  border-top: 1px solid var(--border);
+}
+.cost-waterfall .cw-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.cost-waterfall .cw-label small {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.cost-waterfall .cw-amount {
+  justify-self: end;
+  color: var(--foreground);
+  font-size: 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+.cost-waterfall .cw-subtotal {
+  border-top: 1.5px solid var(--border-strong) !important;
+}
+.cost-waterfall .cw-subtotal .cw-label,
+.cost-waterfall .cw-subtotal .cw-amount {
+  color: var(--foreground);
+  font-weight: 650;
+}
+.cost-waterfall .cw-subtotal .cw-amount {
+  font-size: 16px;
+}
+.cost-waterfall .cw-total {
+  border-top: 1px solid var(--border) !important;
+}
+.cost-waterfall .cw-total .cw-label,
+.cost-waterfall .cw-total .cw-amount {
+  color: var(--foreground);
+  font-weight: 700;
+}
+.cost-waterfall .cw-total .cw-amount {
+  font-size: 19px;
+}
+.cost-waterfall .cw-margen {
+  font-weight: 650;
+}
+.cost-waterfall .cw-margen:global(.warn) {
+  color: var(--signal);
+}
+.cost-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground);
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+}
+.cost-section {
+  padding: 16px;
+}
+.cost-charges {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cost-steps-table-wrap,
+.cost-detail-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+.cost-steps-table,
+.cost-detail-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.cost-steps-table th,
+.cost-detail-table th {
+  padding: 9px 14px;
+  text-align: left;
+  color: var(--muted-foreground);
+  font: 400 10px/1.5 var(--brand-mono, monospace);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--muted);
+  white-space: nowrap;
+}
+.cost-steps-table td,
+.cost-detail-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.cost-detail-table tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+.cost-detail-table th:first-child,
+.cost-detail-table td:first-child {
+  padding-left: 24px;
+}
+.cost-steps-table tr:last-child td,
+.cost-detail-table tr:last-child td {
+  border-bottom: 0;
+}
+.cost-steps-table :global(.num),
+.cost-detail-table :global(.num) {
+  text-align: center;
+  white-space: nowrap;
+}
+.cost-steps-table th:global(.num),
+.cost-detail-table th:global(.num) {
+  text-align: center;
+}
+.cost-steps-table :global(.num) span,
+.cost-detail-table td span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.cost-steps-table :global(.strong),
+.cost-detail-table :global(.strong) {
+  font-weight: 700;
+  color: var(--foreground);
+}
+.cost-steps-table :global(.muted-row) {
+  color: var(--muted-foreground);
+}
+.cost-steps-table tr:global(.clickable) {
+  cursor: pointer;
+}
+.cost-steps-table tr:global(.clickable):hover td {
+  background: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+.cost-row-chevron {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.14s ease;
+  color: var(--muted-foreground);
+  flex: 0 0 auto;
+}
+.cost-steps-table tr:global(.open) .cost-row-chevron {
+  transform: rotate(90deg);
+}
+.cost-step-name,
+.cost-step-center {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cost-step-title,
+.cost-step-center strong,
+.cost-detail-table td strong {
+  color: var(--foreground);
+  font-weight: 650;
+}
+.cost-step-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.2;
+}
+.cost-step-name small,
+.cost-step-center span {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.cost-step-detail-row td {
+  padding: 0;
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
+}
+.cost-step-expanded {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+.cost-detail-title {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.cost-empty-line {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.cost-detail-block {
+  display: grid;
+  gap: 8px;
+}
+.cost-detail-lines {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cost-empty-line {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card);
+}
+.cost-charge {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.cost-charge {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+}
+.cost-charge span {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.cost-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+}
+.cost-chip svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  stroke-width: 2;
+}
+.cost-step-name .cost-chip {
+  white-space: nowrap;
+}
+.cost-charge small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.cost-charge {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.cost-charge strong {
+  color: var(--foreground);
+}
+:global(.op-production) .cost-section {
+  min-width: 0;
+  max-width: 100%;
+}
+.cost-steps-table .cost-component-row td {
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+  border-top: 1px solid var(--border);
+  border-bottom-color: var(--border);
+}
+.cost-steps-table .cost-component-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.cost-steps-table .cost-component-name > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--accent-soft-foreground);
+}
+.cost-steps-table .cost-component-name > span {
+  display: grid;
+  gap: 2px;
+}
+.cost-steps-table .cost-component-name strong {
+  color: var(--foreground);
+  font-weight: 700;
+}
+.cost-steps-table .cost-component-name small {
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+}
+
+.waterfallHeading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.waterfallHeading svg { width: 17px; height: 17px; color: var(--accent-soft-foreground); }
+.cost-waterfall .cw-amount { font-variant-numeric: tabular-nums; }
+.cost-waterfall .cw-total { margin-top: 4px; padding-block: 16px; }
+.cost-waterfall .cw-total .cw-amount { font-size: 22px; letter-spacing: -0.035em; font-weight: 600; }
+@container (max-width: 420px) {
+  .cost-waterfall .cw-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; }
+  .cost-waterfall .cw-label { grid-column: 1; grid-row: 1 / 3; font-size: 12px; }
+  .cost-waterfall .cw-amount { grid-column: 2; grid-row: 1; }
+  .cost-waterfall .cw-pct { grid-column: 2; grid-row: 2; font-size: 10px; }
+  .cost-waterfall .cw-pct:empty { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cost-row-chevron { transition: none; }
+}

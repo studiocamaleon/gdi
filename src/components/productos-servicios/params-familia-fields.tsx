@@ -1,4 +1,5 @@
 "use client";
+import { NativeButton, NativeInput } from "./nodos-ui";
 
 import {
   OperacionesCorteFields,
@@ -119,7 +120,7 @@ export function ParamsFamiliaFields({
     if (param.tipo === "number") {
       return (
         <span className={s.ctl}>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             value={typeof valor === "number" ? String(valor) : ""}
@@ -143,7 +144,7 @@ export function ParamsFamiliaFields({
           {permitidos.map((opcion) => {
             const on = actuales.includes(opcion);
             return (
-              <button
+              <NativeButton
                 key={opcion}
                 type="button"
                 className={s.chip}
@@ -160,7 +161,7 @@ export function ParamsFamiliaFields({
                 }
               >
                 {etiquetaValorParam(opcion)}
-              </button>
+              </NativeButton>
             );
           })}
         </span>
@@ -170,7 +171,7 @@ export function ParamsFamiliaFields({
     if (param.tipo === "boolean") {
       const on = valorBooleanoParam(valor, param.default);
       return (
-        <button
+        <NativeButton
           type="button"
           className={s.tog}
           aria-pressed={on}
@@ -178,7 +179,7 @@ export function ParamsFamiliaFields({
         >
           <span className={s.tr} />
           <span className={s.togt}>{on ? "Sí" : "No"}</span>
-        </button>
+        </NativeButton>
       );
     }
 
@@ -211,7 +212,7 @@ export function ParamsFamiliaFields({
           {descripcion ? <span className={s.b}>{descripcion}</span> : null}
         </span>
         {renderControl(param)}
-        <button
+        <NativeButton
           type="button"
           className={s.lock}
           aria-pressed={editable}
@@ -229,7 +230,7 @@ export function ParamsFamiliaFields({
         >
           {editable ? OPEN : LOCK}
           {editable ? "Editable" : "Fijo"}
-        </button>
+        </NativeButton>
         {faltaObligatorio ? (
           <span className={s.reqmsg}>
             Elegí al menos un lado: sin lados el paso no puede calcular nada y

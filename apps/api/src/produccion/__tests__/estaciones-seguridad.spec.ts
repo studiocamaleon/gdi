@@ -12,7 +12,7 @@ const auth = {
   permisos: new Set(['produccion.configurar']),
 } as CurrentAuth;
 
-type ServicePrivado = ProduccionService & {
+type ServicePrivado = {
   validarReferencias: (
     authActual: CurrentAuth,
     payload: {
@@ -24,11 +24,11 @@ type ServicePrivado = ProduccionService & {
       reglas?: Array<{ tipo: 'tecnologia' | 'paso'; valor: string }>;
     },
   ) => Promise<unknown>;
-  validarInvariantesRuteo: (tx: unknown, tenantId: string) => Promise<void>;
+  validarInvariantesRuteo: (tx: unknown, tenantId: string, familias: string[]) => Promise<void>;
 };
 
 function servicio(prisma: Record<string, unknown>) {
-  return new ProduccionService(prisma as never) as ServicePrivado;
+  return new ProduccionService(prisma as never) as unknown as ServicePrivado;
 }
 
 describe('Estaciones — permisos y aislamiento', () => {
@@ -78,29 +78,34 @@ describe('Estaciones — permisos y aislamiento', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('revalida estaciones que quedan generales después de mover una máquina', async () => {
-    const service = servicio({});
-    const tx = {
-      estacion: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'a',
-            nombre: 'Impresión A',
-            maquinas: [],
-            reglas: [{ valor: 'impresion_por_hoja' }],
-          },
-          {
-            id: 'b',
-            nombre: 'Impresión B',
-            maquinas: [],
-            reglas: [{ valor: 'impresion_por_hoja' }],
-          },
-        ]),
-      },
-    };
-    await expect(
-      service.validarInvariantesRuteo(tx, auth.tenantId),
-    ).rejects.toBeInstanceOf(ConflictException);
+  it('rechaza configurar pasos que exigen máquina como manuales', async () => {
+    await expect(servicio({}).validarReferencias(auth, {
+      nombre: 'Laser', activo: true, familias: ['corte_laser'],
+    })).rejects.toThrow('requiere máquina');
+  });
+
+  it('no permite repetir un paso manual aunque la estación tenga máquinas', async () => {
+    const service = servicio({ estacionRegla: { findMany: jest.fn().mockResolvedValue([
+      { valor: 'embalaje', estacion: { nombre: 'Taller A' } },
+    ]) } });
+    await expect(service.validarReferencias(auth, {
+      nombre: 'Taller B', activo: true, familias: ['embalaje'], maquinaIds: ['maquina-b'],
+    })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('normaliza las reglas manuales anteriores al guardar', async () => {
+    const service = servicio({ estacionRegla: { findMany: jest.fn().mockResolvedValue([]) } });
+    await expect(service.validarReferencias(auth, {
+      nombre: 'Taller', activo: true, familias: ['embalaje'], reglas: [{ tipo: 'paso', valor: 'embalaje' }],
+    })).resolves.toMatchObject({ familias: ['embalaje'], reglas: [] });
+  });
+
+  it('revalida duplicados dentro de la transacción', async () => {
+    const tx = { estacionRegla: { findMany: jest.fn().mockResolvedValue([
+      { estacionId: 'a', valor: 'embalaje', estacion: { nombre: 'A' } },
+      { estacionId: 'b', valor: 'embalaje', estacion: { nombre: 'B' } },
+    ]) } };
+    await expect(servicio({}).validarInvariantesRuteo(tx, auth.tenantId, ['embalaje'])).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('ETA hereda la estación de la plantilla de un paso propio', () => {

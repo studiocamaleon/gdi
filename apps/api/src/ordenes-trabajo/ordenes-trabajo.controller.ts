@@ -15,6 +15,7 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { OrdenesTrabajoQueryDto } from './dto/ordenes-trabajo-query.dto';
+import { TableroQueryDto, TableroTerminadosQueryDto } from './dto/tablero-query.dto';
 import {
   CambiarEstadoOrdenTrabajoDto,
   CancelarOrdenTrabajoDto,
@@ -34,7 +35,6 @@ import { EntregaService } from './entrega.service';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
-import { CompletarPasosLoteDto } from './dto/completar-pasos-lote.dto';
 import { Public } from '../auth/public.decorator';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
@@ -152,24 +152,18 @@ export class OrdenesTrabajoController {
 
   /** Dataset del Tablero de producción (antes de :id: "tablero" no es un id). */
   @Get('tablero')
-  tablero(@CurrentSession() auth: CurrentAuth) {
-    return this.ordenesTrabajoService.tablero(auth);
+  tablero(@CurrentSession() auth: CurrentAuth, @Query() query: TableroQueryDto) {
+    return this.ordenesTrabajoService.tablero(auth, query.vista === 'activos');
   }
 
-  /** Completar varios pasos de una (simulador de impresión). */
-  @Permiso('produccion.ejecutar', 'produccion.supervisar')
-  @Post('tablero/pasos/completar-lote')
-  completarPasosLote(
-    @CurrentSession() auth: CurrentAuth,
-    @Body() payload: CompletarPasosLoteDto,
-  ) {
-    return this.ordenesTrabajoService.completarPasosLote(
-      auth,
-      payload.pasoIds,
-      payload.duracionTandaMin,
-      payload.ahorro,
-      payload.validarCompatibilidadLaser,
-    );
+  @Get('tablero/terminados')
+  tableroTerminados(@CurrentSession() auth: CurrentAuth, @Query() query: TableroTerminadosQueryDto) {
+    return this.ordenesTrabajoService.tableroTerminados(auth, query);
+  }
+
+  @Get('tablero/items/:itemId')
+  tableroItem(@CurrentSession() auth: CurrentAuth, @Param('itemId', ParseUUIDPipe) itemId: string) {
+    return this.ordenesTrabajoService.consultarItemTablero(auth, itemId);
   }
 
   /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */

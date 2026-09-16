@@ -1,9 +1,12 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { DesgloseOperacionesCorte } from "@/components/comercial/desglose-operaciones-corte";
 
 import * as React from "react";
-import { ArrowUpRightIcon, Layers3Icon, LoaderCircleIcon } from "lucide-react";
+import { ArrowUpRightIcon, Layers3Icon, } from "lucide-react";
+import theme from "@/components/ui/workspace-theme.module.css";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,7 +22,6 @@ import {
 } from "@/lib/plan-fabricacion-cotizacion";
 import { agruparPatronesNesting } from "@/lib/nesting-patrones";
 import { NestingViewer } from "./nesting-viewer";
-import { NestingPatronesView } from "./nesting-patrones-view";
 import { NestingPatronesDescargas } from "./nesting-patrones-descargas";
 import { nombreBaseSvg } from "@/lib/nesting-vectorial-export";
 import styles from "./plan-fabricacion.module.css";
@@ -97,7 +99,7 @@ export function PlanLotesCotizacion({
   return (
     <>
       <section
-        className={styles.summary}
+        className={cn(theme.theme, styles.summary)}
         aria-label="Resumen del plan de fabricación"
       >
         <div className={styles.summaryHeading}>
@@ -106,7 +108,7 @@ export function PlanLotesCotizacion({
           <span className={styles.status} data-ready={vigente} role="status">
             {estado === "calculando" ? (
               <>
-                <LoaderCircleIcon className="animate-spin" /> Calculando…
+                <GdiSpinner className="size-4" /> Calculando…
               </>
             ) : estado === "error" ? (
               "Requiere atención"
@@ -155,7 +157,6 @@ export function PlanLotesCotizacion({
               <Button
                 ref={triggerRef}
                 type="button"
-                className={styles.primary}
                 onClick={() => setOpen(true)}
               >
                 Ver plan <ArrowUpRightIcon />
@@ -175,14 +176,12 @@ export function PlanLotesCotizacion({
       <Dialog open={visible} onOpenChange={setOpen}>
         <DialogContent
           data-plan-fabricacion-dialog
-          className={styles.modal}
-          overlayClassName={`gp-modal-overlay ${styles.overlay}`}
+          className={cn(theme.theme, styles.modal)}
+          overlayClassName={styles.overlay}
           finalFocus={triggerRef}
         >
           <DialogHeader className={styles.modalHeader}>
-            <span className={styles.eyebrow}>
-              GrafoNest · Antes de producir
-            </span>
+            <span className={styles.eyebrow}>Antes de producir</span>
             <DialogTitle className={styles.modalTitle}>
               Plan de fabricación
             </DialogTitle>
@@ -231,39 +230,32 @@ export function PlanLotesCotizacion({
                       valor={o.procesamientoCorte}
                     />
                   ))}
-                {agruparPatronesNesting(actual.result).length ? (
-                  <NestingPatronesView
-                    key={actual.id}
-                    result={actual.result}
-                    ampliacionEnLinea
-                    archivos={
-                      cortes.length > 0 ? (
-                        <div className={styles.exports}>
-                          {cortes.map((o) => (
-                            <section key={o.id}>
-                              <h3>{o.nombre}</h3>
-                              <NestingPatronesDescargas
-                                result={o.result}
-                                nombreBase={`${nombreBaseSvg(cotizacion?.productoNombre ?? "producto")}-lote-${planes.indexOf(actual) + 1}-${nombreBaseSvg(o.nombre)}`}
-                                permitirDxf
-                              />
-                            </section>
-                          ))}
-                        </div>
-                      ) : undefined
-                    }
-                  />
-                ) : (
-                  <NestingViewer result={actual.result} />
-                )}
+                <NestingViewer
+                  key={actual.id}
+                  result={actual.result}
+                  archivos={
+                    cortes.length > 0 ? (
+                      <div className={styles.exports}>
+                        {cortes.map((o) => (
+                          <section key={o.id}>
+                            <h3>{o.nombre}</h3>
+                            <NestingPatronesDescargas
+                              result={o.result}
+                              nombreBase={`${nombreBaseSvg(cotizacion?.productoNombre ?? "producto")}-lote-${planes.indexOf(actual) + 1}-${nombreBaseSvg(o.nombre)}`}
+                              permitirDxf
+                            />
+                          </section>
+                        ))}
+                      </div>
+                    ) : undefined
+                  }
+                />
               </>
             ) : null}
           </div>
           <footer className={styles.modalFooter}>
             <span>El plan corresponde a esta cotización.</span>
-            <DialogClose
-              render={<Button type="button" className={styles.primary} />}
-            >
+            <DialogClose render={<Button type="button" />}>
               Volver a la cotización
             </DialogClose>
           </footer>

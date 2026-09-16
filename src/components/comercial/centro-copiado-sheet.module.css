@@ -591,3 +591,15 @@
     flex-wrap: wrap;
   }
 }
+
+.sheet[data-appearance="light"] :global(.btn-primary) {
+  background: var(--action-primary-gradient);
+  color: var(--action-primary-foreground);
+  border-color: transparent;
+  border-radius: var(--action-radius);
+}
+.sheet[data-appearance="light"] .statNum,
+.sheet[data-appearance="light"] .totalFinal strong {
+  font-family: inherit;
+  font-weight: 500;
+}

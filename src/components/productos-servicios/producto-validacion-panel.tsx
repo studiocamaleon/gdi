@@ -9,8 +9,8 @@ import {
   XCircleIcon,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "./producto-ui";
+import { Button } from "./producto-ui";
 import {
   Alert,
   AlertAction,
@@ -22,14 +22,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Popover as HeroPopover } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   validarProducto,
@@ -45,6 +44,8 @@ export function ProductoValidacionPanel({
   productoId,
   variante = "panel",
 }: ProductoValidacionPanelProps) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [resultado, setResultado] = React.useState<ValidacionProducto | null>(
     null,
   );
@@ -89,20 +90,13 @@ export function ProductoValidacionPanel({
 
     return (
       <div className="relative ml-auto shrink-0">
-        <Popover open={detallesAbiertos} onOpenChange={setDetallesAbiertos}>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                className={
-                  tieneErrores
-                    ? "border-destructive/30 bg-destructive/5 text-destructive hover:bg-destructive/10"
-                    : "border-amber-300/70 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                }
-                aria-label="Ver estado de configuración"
-              />
-            }
+        <HeroPopover
+          isOpen={detallesAbiertos}
+          onOpenChange={setDetallesAbiertos}
+        >
+          <ActionButton
+            variant={tieneErrores ? "danger-soft" : "outline"}
+            aria-label="Ver estado de configuración"
           >
             {tieneErrores ? <XCircleIcon /> : <AlertTriangleIcon />}
             {error
@@ -111,51 +105,52 @@ export function ProductoValidacionPanel({
             <ChevronDownIcon
               className={`transition-transform ${detallesAbiertos ? "rotate-180" : ""}`}
             />
-          </PopoverTrigger>
+          </ActionButton>
 
-          <PopoverContent
-            align="end"
-            side="bottom"
-            sideOffset={8}
-            className="w-[min(420px,calc(100vw-52px))] rounded-2xl border border-border bg-background p-4 text-left shadow-xl"
+          <HeroPopover.Content
+            {...scope}
+            className={theme}
+            placement="bottom end"
           >
-            <div className="flex items-start justify-between gap-3">
-              <PopoverHeader>
-                <PopoverTitle className="text-sm font-semibold text-foreground">
-                  {error
-                    ? "No se pudo validar el producto"
-                    : tieneErrores
-                      ? "Configuración incompleta"
-                      : "Configuración para revisar"}
-                </PopoverTitle>
-                <PopoverDescription className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {error
-                    ? error
-                    : tieneErrores
-                      ? "Completá estos ajustes antes de utilizar el producto en una cotización."
-                      : "El producto puede cotizarse, pero tiene recomendaciones pendientes."}
-                </PopoverDescription>
-              </PopoverHeader>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={ejecutar}
-                aria-label="Revalidar producto"
-              >
-                <RefreshCwIcon />
-              </Button>
-            </div>
-            {problemas.length > 0 ? (
-              <ul className="mt-3 flex list-disc flex-col gap-1.5 border-t border-border pt-3 pl-5 text-xs leading-5 text-foreground">
-                {problemas.map((problema, idx) => (
-                  <li key={`${problema.severidad}-${idx}`}>
-                    {problema.mensaje}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </PopoverContent>
-        </Popover>
+            <HeroPopover.Dialog className="w-[min(420px,calc(100vw-52px))] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <HeroPopover.Heading className="text-sm font-semibold text-foreground">
+                    {error
+                      ? "No se pudo validar el producto"
+                      : tieneErrores
+                        ? "Configuración incompleta"
+                        : "Configuración para revisar"}
+                  </HeroPopover.Heading>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {error
+                      ? error
+                      : tieneErrores
+                        ? "Completá estos ajustes antes de utilizar el producto en una cotización."
+                        : "El producto puede cotizarse, pero tiene recomendaciones pendientes."}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={ejecutar}
+                  aria-label="Revalidar producto"
+                >
+                  <RefreshCwIcon />
+                </Button>
+              </div>
+              {problemas.length > 0 ? (
+                <ul className="mt-3 flex list-disc flex-col gap-1.5 border-t border-border pt-3 pl-5 text-xs leading-5 text-foreground">
+                  {problemas.map((problema, idx) => (
+                    <li key={`${problema.severidad}-${idx}`}>
+                      {problema.mensaje}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </HeroPopover.Dialog>
+          </HeroPopover.Content>
+        </HeroPopover>
       </div>
     );
   }

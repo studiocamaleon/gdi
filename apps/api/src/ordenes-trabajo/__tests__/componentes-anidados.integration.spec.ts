@@ -1,7 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
 import { compilarRutaLineal, validarYOrdenarGrafo } from '../grafo-produccion';
-import { ProduccionService } from '../../produccion/produccion.service';
+import { snapshotPasoProduccion } from '../../produccion/snapshot-paso-produccion';
 import { ejecutarOrdenF4, serviciosRecorridoF4 } from '../../../test/soporte-recorridos-f4';
 import type { CurrentAuth } from '../../auth/auth.types';
 
@@ -264,35 +264,17 @@ describe('OT de compuesto con lotes anidados (PostgreSQL)', () => {
               haciaClave: d.sucesorPasoId,
             })),
           );
-          const produccion = new ProduccionService(tx as never);
-          const auth = {
-            tenantId,
-            permisos: new Set(['comercial.ver', 'finanzas.ver_margenes']),
-          } as never;
-          const simulador = await produccion.simulador(auth);
-          const trabajos = simulador.jobs.filter((j) => j.ordenId === orden.id);
+          const trabajos = operativos.filter((p) => p.familiaCodigo === 'impresion_por_area');
           expect(trabajos).toHaveLength(2);
           for (const trabajo of trabajos) {
-            expect(trabajo.piezas).toEqual([
-              { anchoMm: 10, altoMm: 20, cantidad: 60 },
-            ]);
-            expect(trabajo.varianteCotizada?.id).toBe(variante.id);
-            expect(trabajo.planFabricacion?.placements).toEqual(
+            const item = antes.find((i) => i.id === trabajo.itemId)!;
+            const snapshot = snapshotPasoProduccion({ ...item, cotizacionItem: null }, trabajo);
+            expect(snapshot.paso?.materiales?.find((m) => m.tipoLineaCosto === 'MATERIAL')?.materialVarianteId).toBe(variante.id);
+            expect(snapshot.paso?.nestingResult?.placements).toEqual(
               nestingResult.placements,
             );
-            expect(trabajo.duracionEstimadaMin).toBe(30);
+            expect(Number(trabajo.duracionEstimadaMin)).toBe(30);
           }
-          await expect(
-            produccion.simuladorNesting(auth, {
-              grupos: [
-                {
-                  key: 'congelado',
-                  pasoIds: [trabajos[0].pasoId],
-                  anchosMm: [300],
-                },
-              ],
-            }),
-          ).rejects.toThrow(/plan de fabricación conservado/);
           // Una modificación del producto vivo no cambia la ejecución congelada.
           await tx.producto.update({
             where: { id: ruta.productoId },

@@ -1,0 +1,64 @@
+/* La barra comparte el papel claro de las vistas de Grafo.
+ * La clase global conserva su geometría y exclusión al imprimir. */
+.topbar {
+  composes: theme from "../design-system/brand-theme.module.css";
+  background: var(--canvas-background);
+  color: var(--foreground);
+  border-bottom-color: var(--border);
+}
+
+.topbar .trigger {
+  color: var(--muted-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--action-radius);
+  box-shadow: none;
+}
+
+.topbar .trigger:hover,
+.topbar .trigger[aria-expanded="true"] {
+  color: var(--foreground);
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+
+.topbar .trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.topbar .logout {
+  height: var(--action-height-sm);
+  gap: 10px;
+  padding-inline: var(--action-padding-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--action-radius);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: var(--action-font-sm);
+  font-weight: 500;
+  box-shadow: none;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.topbar .logout > svg {
+  color: var(--accent-soft-foreground);
+}
+
+.topbar .logout:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent-soft-foreground);
+}
+
+.topbar .logout:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar .trigger,
+  .topbar .logout {
+    transition: none;
+  }
+}

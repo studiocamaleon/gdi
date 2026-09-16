@@ -1,0 +1,124 @@
+/* Fondo claro compartido con el sidebar, sin extenderle el resto del tema. */
+.canvas {
+  --canvas-background: #f8f9fc;
+}
+
+/* Fuente de verdad del piloto. Se aplica también a cada overlay en portal. */
+.theme {
+  composes: canvas;
+  --background: var(--canvas-background);
+  --info-soft: #eef4ff;
+  --info-foreground: #345083;
+  --foreground: #242630;
+  --surface: #fff;
+  --surface-foreground: var(--foreground);
+  --surface-secondary: #f2f2f4;
+  --overlay: var(--surface);
+  --overlay-foreground: var(--foreground);
+  --muted-text: #6c7080;
+  --muted-text-2: #85899a;
+  --muted-foreground: var(--muted-text);
+  --muted: var(--muted-text);
+  --border: #e4e6ee;
+  --separator: var(--border);
+  --default: #efeff1;
+  --default-foreground: var(--foreground);
+  --segment: var(--surface);
+  --segment-foreground: var(--foreground);
+  /* Naranja de Grafoprint, compartido con la identidad del shell. */
+  --accent: var(--side-accent, #ff6a2b);
+  --accent-foreground: #2b160d;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --accent-soft-foreground: var(--signal, #c2410c);
+  --accent-hover: color-mix(in srgb, var(--accent) 90%, var(--foreground));
+  /* Botones aprobados: C · Degradado cálido · Suave · Compacto. */
+  --action-neutral-background: #111214;
+  --action-neutral-hover: #2c2e33;
+  --action-neutral-foreground: #fff;
+  --action-primary-start: #c8440d;
+  --action-primary-end: #a83208;
+  --action-primary-foreground: #fff;
+  --action-primary-gradient: linear-gradient(
+    115deg,
+    var(--action-primary-start),
+    var(--action-primary-end)
+  );
+  --action-radius: 10px;
+  --action-height-sm: 32px;
+  --action-height-md: 38px;
+  --action-height-lg: 44px;
+  --action-padding-sm: 12px;
+  --action-padding-md: 16px;
+  --action-padding-lg: 20px;
+  --action-font-sm: 13px;
+  --action-font-md: 14px;
+  --action-font-lg: 14px;
+  --default-hover: color-mix(
+    in srgb,
+    var(--default) 90%,
+    var(--foreground) 10%
+  );
+  --danger: #cf3652;
+  --danger-foreground: #fff;
+  --success: #238267;
+  --success-foreground: #fff;
+  --warning: #a46512;
+  --warning-foreground: #fff;
+  --danger-soft: color-mix(in srgb, var(--danger) 9%, var(--surface));
+  --danger-soft-foreground: var(--danger);
+  --success-soft: color-mix(in srgb, var(--success) 9%, var(--surface));
+  --success-soft-foreground: var(--success);
+  --warning-soft: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  --warning-soft-foreground: var(--warning);
+  --danger-hover: color-mix(in srgb, var(--danger) 90%, var(--foreground));
+  --danger-soft-hover: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  --focus: var(--accent-soft-foreground);
+  --radius: 8px;
+  --field-radius: 10px;
+  --field-background: var(--surface);
+  --field-hover: var(--surface-secondary);
+  --field-focus: var(--surface);
+  --field-border-hover: var(--muted-text-2);
+  --field-border-focus: var(--focus);
+  --field-border: var(--border);
+  --field-border-width: 1px;
+  --border-width-field: var(--field-border-width);
+  --field-foreground: var(--foreground);
+  --field-placeholder: var(--muted-text);
+  --field-shadow: 0 1px 2px rgb(20 24 40 / 3%);
+  --overlay-shadow: 0 16px 48px rgb(20 24 40 / 16%);
+  --backdrop: rgb(20 24 40 / 35%);
+  /* El reset global de HeroUI no se importa. Sus modales y drawers necesitan
+   * esta capa, igual a la de los popovers portaleados por React Aria: el orden
+   * de apertura permite que un selector quede sobre su modal, y cubre el shell. */
+  --z-index-overlay: 100000;
+  --border-width: 1px;
+  --disabled-opacity: 0.45;
+  --ring-offset-width: 2px;
+  --cursor-interactive: pointer;
+  --cursor-disabled: not-allowed;
+  --ease-smooth: ease;
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+  font-size: 14px;
+  color-scheme: light;
+}
+
+:global(.dark) .theme:not([data-appearance="light"]),
+.theme[data-appearance="dark"] {
+  --background: #16171d;
+  --info-soft: #202d46;
+  --info-foreground: #b2caff;
+  --foreground: #ebedf4;
+  --surface: #202129;
+  --surface-secondary: #292b35;
+  --muted-text: #a7aabb;
+  --muted-text-2: #85899a;
+  --border: #353743;
+  --default: #2e303d;
+  --accent-soft-foreground: var(--accent);
+  --danger: #ff8196;
+  --success: #64ceab;
+  --warning: #eab665;
+  color-scheme: dark;
+}

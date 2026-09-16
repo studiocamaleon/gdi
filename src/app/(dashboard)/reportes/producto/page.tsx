@@ -1,4 +1,4 @@
-import { MetaPie, TabProducto } from "@/components/panel/panel-general";
+import { ReporteProducto } from "@/components/panel/reporte-producto";
 import { getPanelProducto } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
 import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
@@ -20,10 +20,5 @@ export default async function Page({
   const parametros = await searchParams;
   const rango = rangoDeParametros(parametros, await zonaHorariaDelTenant());
   const d = await getPanelProducto(rango);
-  return (
-    <>
-      <TabProducto d={d} rango={rango} />
-      <MetaPie meta={d.meta} />
-    </>
-  );
+  return <ReporteProducto d={d} rango={rango} />;
 }

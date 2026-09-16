@@ -97,6 +97,8 @@ export async function ejecutarOrdenF4(
       });
     await ordenes.accionPaso(auth, ordenId, p.itemId, p.id, {
       accion: 'completar',
+      // Este recorrido valida fabricación; no mide tiempo de operario.
+      sinTiempoConfirmado: true,
     });
     ejecutados++;
   }

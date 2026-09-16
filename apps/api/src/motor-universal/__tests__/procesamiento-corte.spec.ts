@@ -1,15 +1,14 @@
 import { registrarCortesDelLote } from '../registrar-corte-lote';
+import { demandaDesdeTiempo } from '../../eta/motor/demanda-humana';
 import { consolidarCortesRegistrados } from '../consolidar-cortes-registrados';
 import { escenarioHerramientas } from './fixtures/operaciones-corte';
-import {
-  prepararProcesamientoCorte,
-  recalcularOperacionesCongeladas,
-} from '../procesamiento-corte';
+import { recalcularOperacionesCongeladas } from '../procesamiento-corte';
 import {
   aplicarRepartoCorte,
   planificarRepartoCorte,
 } from '../repartir-operaciones-corte';
 import { MotorUniversalService } from '../motor.service';
+import type { ErrorMotor } from '../tipos';
 import {
   erroresConfiguracionCorte,
   erroresPerfilCorte,
@@ -31,6 +30,19 @@ describe('cotización por recorridos, herramientas y material', () => {
       );
       expect(r.recorridoMin).toBeCloseTo(0.55 * cantidad);
       expect(r.desgasteCosto).toBeCloseTo(1.8 * cantidad);
+      expect(r.fasesRun!.reduce((n, f) => n + f.minutos, 0)).toBeCloseTo(
+        r.runMin,
+      );
+      expect(
+        r
+          .fasesRun!.filter((f) => !f.operario)
+          .reduce((n, f) => n + f.minutos, 0),
+      ).toBeCloseTo(r.recorridoMin);
+      expect(
+        r
+          .fasesRun!.filter((f) => f.operario)
+          .reduce((n, f) => n + f.minutos, 0),
+      ).toBeCloseTo(r.manejoMin + r.ajustesMin + r.cambiosMin);
       expect(
         r.operaciones
           .flatMap((o) => o.fuentes)
@@ -106,27 +118,44 @@ describe('cotización por recorridos, herramientas y material', () => {
     s.material.materiaPrimaId = 'ajeno';
     expect(() => s.calcular()).toThrow();
   });
-  it('el motor cobra preparación una vez y redondea una sola vez después de sumar todas las operaciones', () => {
-    const s = escenarioHerramientas(2);
-    s.paso.procesamientoCorteCosteado = s.calcular();
-    const motor = Object.create(MotorUniversalService.prototype);
-    const errores: unknown[] = [];
-    const t = motor.calcularTiempo(
-      s.paso,
-      s.ctx,
-      errores,
-      new Map([['cc', { tarifa: 60 }]]),
-      '2026-09',
-    );
-    expect(errores).toEqual([]);
-    expect(t).toMatchObject({
-      setupMin: 5,
-      cleanupMin: 2,
-      totalMin: 11,
-      costo: 11,
-    });
-    expect(t.runMin).toBeCloseTo(3.22);
-  });
+  it.each(['autonoma', 'con_operario', null] as const)(
+    'el motor conserva preparación, costo y redondeo con operación %s',
+    (operacionMaquina) => {
+      const s = escenarioHerramientas(2);
+      s.paso.maquina!.parametrosTecnicosJson = {
+        ...s.paso.maquina!.parametrosTecnicosJson,
+        operacionMaquina,
+      };
+      s.paso.procesamientoCorteCosteado = s.calcular();
+      const motor = Object.create(
+        MotorUniversalService.prototype,
+      ) as MotorUniversalService;
+      const errores: ErrorMotor[] = [];
+      const t = motor['calcularTiempo'](
+        s.paso,
+        s.ctx,
+        errores,
+        new Map([['cc', { tarifa: 60 }]]),
+        '2026-09',
+      );
+      expect(errores).toEqual([]);
+      expect(t).toMatchObject({
+        setupMin: 5,
+        cleanupMin: 2,
+        totalMin: 11,
+        costo: 11,
+      });
+      expect(t.runMin).toBeCloseTo(3.22);
+      expect(t.demandaHumana!.verificada).toBe(operacionMaquina !== null);
+      expect(
+        t
+          .demandaHumana!.fases.filter(
+            (f: { personas: number }) => f.personas === 0,
+          )
+          .reduce((n: number, f: { minutos: number }) => n + f.minutos, 0),
+      ).toBeCloseTo(operacionMaquina === 'autonoma' ? 1.1 : 0);
+    },
+  );
   it('rechaza planes que pierden piezas y conserva la cotización frente a ediciones posteriores', () => {
     const s = escenarioHerramientas(2);
     const original = s.calcular();
@@ -163,6 +192,13 @@ describe('cotización por recorridos, herramientas y material', () => {
     expect(pasos[0].tiempo!.procesamientoCorte!.participacion?.porcentaje).toBe(
       50,
     );
+    for (const paso of pasos) {
+      const demanda = demandaDesdeTiempo(paso.tiempo)!;
+      expect(demanda.verificada).toBe(true);
+      expect(demanda.fases.reduce((n, f) => n + f.minutos, 0)).toBeCloseTo(
+        paso.tiempo!.totalMin,
+      );
+    }
   });
   it('valida capacidades y evita sumar maniobras dos veces con velocidad efectiva', () => {
     const s = escenarioHerramientas();

@@ -1,0 +1,13 @@
+/* A3: suave, compacto y con iniciales blancas. */
+.avatar {
+  width: var(--action-height-sm);
+  height: var(--action-height-sm);
+  flex-shrink: 0;
+  border-radius: var(--action-radius);
+}
+.fallback {
+  background: var(--action-primary-gradient);
+  color: var(--action-primary-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}

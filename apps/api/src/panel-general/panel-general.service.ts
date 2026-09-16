@@ -1,61 +1,20 @@
+import { calcularProgreso } from '../common/progreso-produccion';
 import { productosComercialesConTrabajo } from '../ordenes-trabajo/productos-comerciales';
 import { Injectable } from '@nestjs/common';
-import { RolSistema, type Prisma } from '@prisma/client';
+import { type Prisma } from '@prisma/client';
 
 import type { CurrentAuth } from '../auth/auth.types';
-import { expandir, ROLES_PREDEFINIDOS } from '../auth/permisos';
 import { claveFechaEnZona, sumarDiasAClave } from '../common/zona';
 import { regionalDelTenant } from '../common/regional';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
+import { puedeConsultarActividadGeneral } from './panel-actividad.service';
+import { PanelAdminService } from './panel-admin.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type KpiFormato = 'cantidad' | 'moneda';
 type Tono = 'neutro' | 'ok' | 'atencion' | 'critico';
 type Severidad = 'critico' | 'atencion' | 'info';
 type Dominio = 'comercial' | 'produccion' | 'administracion';
-
-export type VistaPanelGeneral =
-  | 'actual'
-  | 'jefe_produccion'
-  | 'vendedor'
-  | 'administrativo'
-  | 'operario';
-
-const VISTAS_PANEL: Array<{
-  id: VistaPanelGeneral;
-  etiqueta: string;
-  descripcion: string;
-}> = [
-  {
-    id: 'actual',
-    etiqueta: 'Mi vista · Administrador',
-    descripcion: 'Tus permisos efectivos',
-  },
-  {
-    id: 'jefe_produccion',
-    etiqueta: 'Jefe de producción',
-    descripcion: 'Taller, entregas y carga',
-  },
-  {
-    id: 'vendedor',
-    etiqueta: 'Vendedor',
-    descripcion: 'Sus presupuestos y órdenes',
-  },
-  {
-    id: 'administrativo',
-    etiqueta: 'Administrativo',
-    descripcion: 'Cobros, facturación y egresos',
-  },
-  {
-    id: 'operario',
-    etiqueta: 'Operario',
-    descripcion: 'Su mesa y bloqueos propios',
-  },
-];
-
-const VISTAS_VALIDAS = new Set<VistaPanelGeneral>(
-  VISTAS_PANEL.map((vista) => vista.id),
-);
 
 export type PanelKpi = {
   id: string;
@@ -85,25 +44,15 @@ type EntregaPanel = {
   productos: Array<{
     id: string;
     nombre: string;
-    progresoPct: number;
+    progresoPct: number | null;
+    progreso?: ReturnType<typeof calcularProgreso>;
   }>;
   fechaEntrega: string;
-  progresoPct: number;
+  progresoPct: number | null;
+  progreso?: ReturnType<typeof calcularProgreso>;
   riesgo: 'atrasada' | 'hoy' | 'proxima';
   pasoActual: string | null;
   estacionActual: string | null;
-  href: string;
-};
-
-type TareaPersonal = {
-  pasoId: string;
-  ordenId: string;
-  ordenNumero: string;
-  itemNombre: string;
-  pasoNombre: string;
-  estado: string;
-  motivoBloqueo: string | null;
-  activa: boolean;
   href: string;
 };
 
@@ -121,7 +70,6 @@ type AccionRapida = {
 };
 
 type Tablero = Awaited<ReturnType<OrdenesTrabajoService['tablero']>>;
-type TableroItem = Tablero['items'][number];
 
 type ResumenProduccion = {
   entregasHoy: number;
@@ -157,27 +105,11 @@ export class PanelGeneralService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordenesTrabajo: OrdenesTrabajoService,
+    private readonly admin: PanelAdminService,
   ) {}
 
-  async obtener(auth: CurrentAuth, vistaSolicitada?: VistaPanelGeneral) {
-    const permisosReales = auth.permisos ?? new Set<string>();
-    const puedePrevisualizar =
-      auth.role === RolSistema.ADMINISTRADOR &&
-      permisosReales.has('configuracion.gestionar');
-    const vistaActual =
-      puedePrevisualizar &&
-      vistaSolicitada &&
-      VISTAS_VALIDAS.has(vistaSolicitada)
-        ? vistaSolicitada
-        : 'actual';
-    const rolPrevisualizado =
-      vistaActual === 'actual'
-        ? null
-        : ROLES_PREDEFINIDOS.find((rol) => rol.codigo === vistaActual);
-    const permisos = rolPrevisualizado
-      ? expandir(rolPrevisualizado.permisos)
-      : permisosReales;
-    const authDeVista: CurrentAuth = { ...auth, permisos };
+  async obtener(auth: CurrentAuth) {
+    const permisos = auth.permisos ?? new Set<string>();
     const veComercial = permisos.has('comercial.ver');
     const gestionaComercial = permisos.has('comercial.gestionar');
     const veProduccion = permisos.has('produccion.ver');
@@ -215,7 +147,7 @@ export class PanelGeneralService {
       : {};
 
     const tableroPromise = veProduccion
-      ? this.ordenesTrabajo.tablero(authDeVista)
+      ? this.ordenesTrabajo.tablero(auth)
       : Promise.resolve<Tablero>({
           items: [],
           alcance: 'completo',
@@ -224,22 +156,31 @@ export class PanelGeneralService {
           vendedorSinVinculo: false,
         });
 
-    const [tablero, ordenesProximas, comerciales, administracion, cuello] =
-      await Promise.all([
-        tableroPromise,
-        perfilSoloProductivo || (!veProduccion && !veComercial)
-          ? Promise.resolve([])
-          : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
-        veComercial && !vendedorSinVinculo
-          ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
-          : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
-        gestionaAdministracion
-          ? this.resumenAdministracion(auth.tenantId, hoy, enSiete)
-          : Promise.resolve<ResumenAdministracion | null>(null),
-        veProduccion && !perfilSoloProductivo && !comercialSoloPropio
-          ? this.cuelloBotella(auth.tenantId, hoy)
-          : Promise.resolve(null),
-      ]);
+    const [
+      tablero,
+      ordenesProximas,
+      comerciales,
+      administracion,
+      cuello,
+      administrador,
+    ] = await Promise.all([
+      tableroPromise,
+      perfilSoloProductivo || (!veProduccion && !veComercial)
+        ? Promise.resolve([])
+        : this.ordenesProximas(auth.tenantId, hoy, enSiete, filtroVendedor),
+      veComercial && !vendedorSinVinculo
+        ? this.resumenComercial(auth.tenantId, hoy, enTres, filtroVendedor)
+        : Promise.resolve({ pendientesAprobacion: 0, porVencer: 0 }),
+      gestionaAdministracion
+        ? this.resumenAdministracion(auth.tenantId, hoy, enSiete)
+        : Promise.resolve<ResumenAdministracion | null>(null),
+      veProduccion && !perfilSoloProductivo && !comercialSoloPropio
+        ? this.cuelloBotella(auth.tenantId, hoy)
+        : Promise.resolve(null),
+      puedeConsultarActividadGeneral(auth)
+        ? this.admin.obtener(auth, hoy, zonaHoraria)
+        : Promise.resolve(null),
+    ]);
 
     const prod = veProduccion
       ? await this.resumenProduccion(
@@ -265,22 +206,44 @@ export class PanelGeneralService {
       veComercial,
       veProduccion,
     });
-    const trabajoPersonal = this.trabajoPersonal(tablero);
+    if (administrador?.documentacionPendiente.total) {
+      atencion.push({
+        id: 'documentacion-pendiente',
+        dominio: 'produccion',
+        severidad: 'atencion',
+        titulo: 'Documentación pendiente',
+        detalle: 'Órdenes con requisitos documentales aún sin cumplir.',
+        cantidad: administrador.documentacionPendiente.total,
+        href: '#documentacion-pendiente',
+      });
+      atencion.sort(
+        (a, b) => ORDEN_SEVERIDAD[a.severidad] - ORDEN_SEVERIDAD[b.severidad],
+      );
+    }
+    // Separar antes de limitar: las atrasadas no deben desplazar a las de hoy.
+    // Se reutiliza la consulta autorizada del tenant y el día de su zona horaria.
+    const grupoEntregas = (riesgo: EntregaPanel['riesgo']) => {
+      const items = ordenesProximas.filter(
+        (entrega) => entrega.riesgo === riesgo,
+      );
+      return { items: items.slice(0, 6), total: items.length };
+    };
 
     return {
+      administrador,
+      entregas:
+        !perfilSoloProductivo && (veProduccion || veComercial)
+          ? {
+              hoy: grupoEntregas('hoy'),
+              atrasada: grupoEntregas('atrasada'),
+              proxima: grupoEntregas('proxima'),
+            }
+          : null,
       generadoEl: ahora.toISOString(),
       fechaLocal: hoy,
-      vistaActual,
-      previsualizando: vistaActual !== 'actual',
-      vistasDisponibles: puedePrevisualizar
-        ? VISTAS_PANEL
-        : VISTAS_PANEL.slice(0, 1),
       kpis: this.armarKpis(prod, administracion, veProduccion),
       atencion: atencion.slice(0, 8),
       atencionTotal: atencion.length,
-      proximasEntregas: ordenesProximas.slice(0, 6),
-      proximasEntregasTotal: ordenesProximas.length,
-      trabajoPersonal,
       taller:
         veProduccion && !perfilSoloProductivo && !comercialSoloPropio
           ? {
@@ -292,15 +255,6 @@ export class PanelGeneralService {
               cuelloBotella: cuello,
             }
           : null,
-      administracion: administracion
-        ? {
-            cobrosVencidos: administracion.deudaVencidaCantidad,
-            porFacturar: administracion.facturacionPendienteCantidad,
-            pagosVencidos: administracion.egresosVencidosCantidad,
-            acreditacionesPendientes: administracion.acreditacionesPendientes,
-          }
-        : null,
-      vendedorSinVinculo,
       accionesRapidas: this.accionesRapidas({
         gestionaComercial,
         veProduccion,
@@ -313,21 +267,6 @@ export class PanelGeneralService {
 
   private pasos(tablero: Tablero) {
     return tablero.items.flatMap((item) => item.pasos);
-  }
-
-  private progreso(item: TableroItem) {
-    if (item.sinRuta) return 100;
-    if (item.pasos.length === 0) return 0;
-    const hechos = item.pasos.filter((p) => p.estado === 'hecho').length;
-    return Math.round((hechos / item.pasos.length) * 100);
-  }
-
-  private pasoActual(item: TableroItem) {
-    return (
-      item.pasos.find((p) =>
-        ['en_curso', 'pausado', 'bloqueado'].includes(p.estado),
-      ) ?? item.pasos.find((p) => p.estado !== 'hecho')
-    );
   }
 
   private async resumenProduccion(
@@ -384,7 +323,10 @@ export class PanelGeneralService {
         this.prisma.ordenTrabajoItemPaso.count({
           where: {
             tenantId,
-            OR: [{ nestingLoteRol: null }, { nestingLoteRol: { not: 'PARTICIPANTE' } }],
+            OR: [
+              { nestingLoteRol: null },
+              { nestingLoteRol: { not: 'PARTICIPANTE' } },
+            ],
             estado: 'bloqueado',
             orden: {
               ...filtroVendedor,
@@ -429,6 +371,7 @@ export class PanelGeneralService {
               select: {
                 estado: true,
                 nestingLoteRol: true,
+                duracionEstimadaMin: true,
                 nombre: true,
                 centroCostoNombre: true,
               },
@@ -440,20 +383,13 @@ export class PanelGeneralService {
     return filas.map((orden) => {
       const comerciales = productosComercialesConTrabajo(orden.items);
       const pasos = comerciales.flatMap((i) => i.pasos);
-      const hechos = pasos.filter((p) => p.estado === 'hecho').length;
+
       const productos = comerciales.map((item) => {
-        const pasosHechos = item.pasos.filter(
-          (paso) => paso.estado === 'hecho',
-        ).length;
         return {
           id: item.id,
           nombre: item.nombre,
-          progresoPct:
-            orden.estado === 'finalizada'
-              ? 100
-              : item.pasos.length > 0
-                ? Math.round((pasosHechos / item.pasos.length) * 100)
-                : 0,
+          progresoPct: calcularProgreso(item.pasos, orden.estado).porcentaje,
+          progreso: calcularProgreso(item.pasos, orden.estado),
         };
       });
       const actual =
@@ -471,12 +407,8 @@ export class PanelGeneralService {
             : `${comerciales.length} productos`,
         productos,
         fechaEntrega: fecha,
-        progresoPct:
-          orden.estado === 'finalizada'
-            ? 100
-            : pasos.length > 0
-              ? Math.round((hechos / pasos.length) * 100)
-              : 0,
+        progresoPct: calcularProgreso(pasos, orden.estado).porcentaje,
+        progreso: calcularProgreso(pasos, orden.estado),
         riesgo: fecha < hoy ? 'atrasada' : fecha === hoy ? 'hoy' : 'proxima',
         pasoActual: actual?.nombre ?? null,
         estacionActual: actual?.centroCostoNombre ?? null,
@@ -943,33 +875,6 @@ export class PanelGeneralService {
         ORDEN_SEVERIDAD[x.severidad] - ORDEN_SEVERIDAD[y.severidad] ||
         x.id.localeCompare(y.id),
     );
-  }
-
-  private trabajoPersonal(tablero: Tablero) {
-    const tareas: TareaPersonal[] = [];
-    for (const item of tablero.items) {
-      for (const paso of item.pasos) {
-        const mio = paso.mesaEsMia || paso.tramoAbierto?.esMio;
-        if (!mio || paso.estado === 'hecho') continue;
-        tareas.push({
-          pasoId: paso.id,
-          ordenId: item.ordenId,
-          ordenNumero: item.ordenNumero,
-          itemNombre: item.nombre,
-          pasoNombre: paso.nombre,
-          estado: paso.estado,
-          motivoBloqueo: paso.motivoBloqueo,
-          activa: Boolean(paso.tramoAbierto?.esMio),
-          href: `/produccion/tablero`,
-        });
-      }
-    }
-    tareas.sort(
-      (a, b) =>
-        Number(b.activa) - Number(a.activa) ||
-        a.ordenNumero.localeCompare(b.ordenNumero),
-    );
-    return { tareas: tareas.slice(0, 8), total: tareas.length };
   }
 
   private accionesRapidas(p: {

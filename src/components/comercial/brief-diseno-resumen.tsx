@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import styles from "./brief-diseno-resumen.module.css";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -147,9 +148,9 @@ export function BriefDisenoEspecificaciones({
   const completo = briefDisenoEstaCompleto(brief, caras);
 
   return (
-    <div className="grid min-h-24 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-t bg-card px-4 py-4 sm:px-6">
+    <div className={styles.summary}>
       <div
-        className="flex h-16 w-12 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground shadow-xs"
+        className={styles.icon}
         aria-hidden="true"
       >
         <FileTextIcon className="size-7" />
@@ -169,7 +170,7 @@ export function BriefDisenoEspecificaciones({
         type="button"
         variant="ghost"
         size="sm"
-        className="shrink-0 text-muted-foreground"
+        className={styles.action}
         onClick={onOpen}
       >
         <EyeIcon data-icon="inline-start" />

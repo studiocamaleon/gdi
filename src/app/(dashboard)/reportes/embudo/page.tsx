@@ -1,4 +1,4 @@
-import { TabEmbudo, MetaPie } from "@/components/panel/panel-general";
+import { ReporteEmbudo } from "@/components/panel/reporte-embudo";
 import { getPanelEmbudo } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
 import { rangoDeParametros, type ParametrosPeriodo } from "@/lib/panel-periodo";
@@ -12,11 +12,8 @@ export default async function Page({
   searchParams: Promise<ParametrosPeriodo>;
 }) {
   const parametros = await searchParams;
-  const d = await getPanelEmbudo(rangoDeParametros(parametros, await zonaHorariaDelTenant()));
-  return (
-    <>
-      <TabEmbudo d={d} />
-      <MetaPie meta={d.meta} />
-    </>
+  const d = await getPanelEmbudo(
+    rangoDeParametros(parametros, await zonaHorariaDelTenant()),
   );
+  return <ReporteEmbudo d={d} />;
 }

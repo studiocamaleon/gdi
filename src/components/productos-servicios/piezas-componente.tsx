@@ -1,9 +1,8 @@
 "use client";
-import { Button } from "@/components/ui/button";
+import { Button, Input } from "./producto-ui";
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field";
 import { LibraryIcon } from "lucide-react";
 import styles from "./piezas-diseno.module.css";
-import { Input } from "@/components/ui/input";
 import type { PiezaVectorialComponente } from "@/lib/productos-servicios-api";
 import type { FuenteGeometriaComercial } from "@/lib/producto-geometrias";
 import { PiezasArchivosProducto } from "./piezas-archivos-producto";

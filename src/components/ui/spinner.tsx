@@ -1,10 +1,6 @@
-import { cn } from "@/lib/utils"
-import { Loader2Icon } from "lucide-react"
+import type { SVGProps } from "react";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 
-function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
-  return (
-    <Loader2Icon data-slot="spinner" role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
-  )
+export function Spinner(props: SVGProps<SVGSVGElement>) {
+  return <GdiSpinner data-slot="spinner" role="status" aria-label="Cargando" aria-hidden={undefined} {...props} />;
 }
-
-export { Spinner }

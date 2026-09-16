@@ -1,3 +1,4 @@
+import { demandaDesdeTiempo } from '../eta/motor/demanda-humana';
 import { recalcularOperacionesCongeladas } from './procesamiento-corte';
 import {
   aplicarRepartoCorte,
@@ -240,6 +241,7 @@ export function consolidarCortesRegistrados(
         t.setupMin = setup;
         t.cleanupMin = cleanup;
         t.costo = redondear(t.costo + diferencia);
+        t.demandaHumana = demandaDesdeTiempo({...t, demandaHumana:null});
       }
       paso.costoTotal = redondear(paso.costoTotal + diferencia);
       componente.costoTotal = redondear(componente.costoTotal + diferencia);

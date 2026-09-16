@@ -1,0 +1,33 @@
+.valorConsulta {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.notas {
+  display: grid;
+  gap: 8px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.condicion,
+.alerta { margin: 0; }
+.alerta {
+  color: var(--signal);
+}
+
+.filaTiempo {
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.valorTiempo {
+  margin-left: auto;
+  text-align: right;
+  overflow-wrap: anywhere;
+}

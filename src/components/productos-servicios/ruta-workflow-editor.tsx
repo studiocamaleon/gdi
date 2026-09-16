@@ -1,10 +1,10 @@
 "use client";
 
-import visual from "@/components/configuracion/grafoprint-configuracion.module.css";
 import * as React from "react";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowUpRightIcon,
   BoxesIcon,
   BoxIcon,
   GitBranchIcon,
@@ -18,17 +18,21 @@ import {
   ZoomOutIcon,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Card,
+  Chip,
+  Input,
+  Modal,
+  SearchField,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import focus from "@/components/design-system/field-focus.module.css";
+import shared from "./flujos.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
 import {
   construirColumnasProductivas,
   insertarNodoProductivo,
@@ -48,6 +52,20 @@ import type {
   TipoNodoRutaWorkflow,
 } from "@/lib/productos-servicios";
 import styles from "./ruta-workflow-editor.module.css";
+import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
+
+function DropButton({
+  onDragOver,
+  onDrop,
+  ...props
+}: React.ComponentProps<typeof Button> &
+  Pick<React.HTMLAttributes<HTMLSpanElement>, "onDragOver" | "onDrop">) {
+  return (
+    <span className={styles.dropTarget} onDragOver={onDragOver} onDrop={onDrop}>
+      <Button {...props} isIconOnly />
+    </span>
+  );
+}
 
 type OpcionNodo = {
   id: string;
@@ -277,10 +295,10 @@ export function RutaWorkflowEditor({
   };
 
   return (
-    <section className={styles.editor}>
+    <Card className={styles.editor}>
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>Flujos de producción</span>
+          <span className={styles.eyebrow}>02 · Secuencia de producción</span>
           <h2>Recorrido del flujo</h2>
           <p>
             Ordená de izquierda a derecha. Los nodos en una misma columna se
@@ -288,25 +306,30 @@ export function RutaWorkflowEditor({
           </p>
         </div>
         <div className={styles.headerTools}>
-          <span className={styles.topology}>
-            <GitBranchIcon /> Flujo {value.topologia}
-          </span>
+          <Chip className={styles.topology} size="sm" variant="soft">
+            <GitBranchIcon />{" "}
+            {value.topologia === "DAG" ? "Con paralelos" : "Secuencia lineal"}
+          </Chip>
           <div className={styles.zoom}>
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onClick={() => setZoom((actual) => Math.max(70, actual - 10))}
+              isIconOnly
               aria-label="Alejar flujo de producción"
             >
               <ZoomOutIcon />
-            </button>
+            </Button>
             <span>{zoom}%</span>
-            <button
+            <Button
+              variant="ghost"
               type="button"
               onClick={() => setZoom((actual) => Math.min(130, actual + 10))}
+              isIconOnly
               aria-label="Acercar flujo de producción"
             >
               <ZoomInIcon />
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -321,7 +344,8 @@ export function RutaWorkflowEditor({
             <b>INICIO</b>
           </div>
           {columnas.length === 0 ? (
-            <button
+            <Button
+              variant="ghost"
               type="button"
               className={styles.empty}
               onClick={() => abrirAlta({ tipo: "SECUENCIAL", posicion: 0 })}
@@ -329,12 +353,14 @@ export function RutaWorkflowEditor({
               <PlusIcon />
               <strong>Agregar primer nodo</strong>
               <span>Nodo simple, nodo compuesto o componente</span>
-            </button>
+            </Button>
           ) : null}
           {columnas.map((columna, columnaIndex) => (
             <React.Fragment key={columna.map((nodo) => nodo.clave).join("|")}>
-              <button
+              <DropButton
+                variant="ghost"
                 type="button"
+                isIconOnly
                 className={styles.gapAdd}
                 onClick={() =>
                   abrirAlta({ tipo: "SECUENCIAL", posicion: columnaIndex })
@@ -352,9 +378,10 @@ export function RutaWorkflowEditor({
                 aria-label={`Agregar un momento antes del ${columnaIndex + 1}`}
               >
                 <PlusIcon />
-              </button>
+              </DropButton>
               <div
                 className={styles.moment}
+                data-parallel={columna.length > 1}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={() => {
                   if (arrastrando) {
@@ -381,6 +408,7 @@ export function RutaWorkflowEditor({
                       <article
                         key={nodo.clave}
                         draggable
+                        data-dragging={arrastrando === nodo.clave}
                         onDragStart={() => setArrastrando(nodo.clave)}
                         onDragEnd={() => setArrastrando(null)}
                         className={`${styles.node} ${styles[nodo.tipo.toLowerCase()]}`}
@@ -406,38 +434,45 @@ export function RutaWorkflowEditor({
                           </small>
                         </div>
                         <div className={styles.nodeActions}>
-                          <button
+                          <Button
+                            variant="ghost"
                             type="button"
                             onClick={() => abrirEdicionNombre(nodo)}
+                            isIconOnly
                             aria-label="Editar nombre del nodo"
                           >
                             <PencilIcon />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
                             type="button"
                             onClick={() => eliminar(nodo.clave)}
+                            isIconOnly
                             aria-label="Eliminar nodo"
                           >
                             <Trash2Icon />
-                          </button>
+                          </Button>
                         </div>
                         <div className={styles.moveActions}>
-                          <button
+                          <Button
+                            variant="ghost"
                             type="button"
-                            disabled={columnaIndex === 0}
+                            isDisabled={columnaIndex === 0}
                             onClick={() =>
                               mover(nodo.clave, {
                                 tipo: "SECUENCIAL",
                                 posicion: columnaIndex - 1,
                               })
                             }
+                            isIconOnly
                             aria-label="Mover nodo a la izquierda"
                           >
                             <ArrowLeftIcon />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
                             type="button"
-                            disabled={columnaIndex === columnas.length - 1}
+                            isDisabled={columnaIndex === columnas.length - 1}
                             onClick={() =>
                               mover(nodo.clave, {
                                 tipo: "SECUENCIAL",
@@ -448,16 +483,18 @@ export function RutaWorkflowEditor({
                                   columnaIndex + (columna.length === 1 ? 2 : 1),
                               })
                             }
+                            isIconOnly
                             aria-label="Mover nodo a la derecha"
                           >
                             <ArrowRightIcon />
-                          </button>
+                          </Button>
                         </div>
                       </article>
                     );
                   })}
                 </div>
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   className={styles.parallelAdd}
                   onClick={() =>
@@ -465,12 +502,13 @@ export function RutaWorkflowEditor({
                   }
                 >
                   <PlusIcon /> Agregar en paralelo
-                </button>
+                </Button>
               </div>
             </React.Fragment>
           ))}
           {columnas.length > 0 ? (
-            <button
+            <DropButton
+              variant="ghost"
               type="button"
               className={styles.gapAdd}
               onClick={() =>
@@ -492,7 +530,7 @@ export function RutaWorkflowEditor({
               aria-label="Agregar un momento al final"
             >
               <PlusIcon />
-            </button>
+            </DropButton>
           ) : null}
           <div className={`${styles.endpoint} ${styles.end}`}>
             <span />
@@ -501,24 +539,42 @@ export function RutaWorkflowEditor({
         </div>
       </div>
 
-      <Dialog
-        open={Boolean(destino)}
+      <div className={styles.canvasFooter}>
+        <span>
+          <WorkflowIcon /> Nodo simple
+        </span>
+        <span>
+          <Layers3Icon /> Nodo compuesto
+        </span>
+        <span>
+          <BoxesIcon /> Componente
+        </span>
+        <span className={styles.canvasHint}>
+          Arrastrá los nodos o usá las flechas para reordenar.
+        </span>
+      </div>
+
+      <FormDialog
+        className={brand.dialog}
+        isOpen={Boolean(destino)}
         onOpenChange={(open) => !open && setDestino(null)}
+        title="¿Qué querés incorporar?"
+        description="Elegí la clase de nodo y luego una opción del catálogo."
       >
-        <DialogContent
-          className={styles.dialog}
-          overlayClassName="gp-modal-overlay"
-        >
-          <DialogHeader className={styles.dialogHeader}>
-            <span className={styles.eyebrow}>
-              Grafoprint · Flujos de producción
-            </span>
-            <DialogTitle>¿Qué querés incorporar?</DialogTitle>
-            <DialogDescription>
-              Elegí la clase de nodo y luego una opción del catálogo.
-            </DialogDescription>
-          </DialogHeader>
-          <div className={styles.typeGrid}>
+        <Modal.Body className={styles.pickerBody}>
+          <ToggleButtonGroup
+            selectionMode="single"
+            disallowEmptySelection
+            isDetached
+            selectedKeys={new Set([tipo])}
+            onSelectionChange={(keys) => {
+              const next = [...keys][0];
+              if (next === "PASO" || next === "COMPONENTE" || next === "ETAPA")
+                setTipo(next);
+            }}
+            aria-label="Tipo de nodo"
+            className={styles.typeGrid}
+          >
             {(
               [
                 [
@@ -541,78 +597,81 @@ export function RutaWorkflowEditor({
                 ],
               ] as const
             ).map(([itemTipo, Icon, label, description]) => (
-              <button
-                type="button"
+              <ToggleButton
                 key={itemTipo}
-                className={tipo === itemTipo ? styles.typeActive : ""}
-                onClick={() => setTipo(itemTipo)}
+                id={itemTipo}
+                className={styles.typeOption}
               >
                 <Icon />
                 <span>
                   <strong>{label}</strong>
                   <small>{description}</small>
                 </span>
-              </button>
+              </ToggleButton>
             ))}
-          </div>
-          <label className={styles.search}>
-            <SearchIcon />
-            <Input
-              value={busqueda}
-              onChange={(event) => setBusqueda(event.target.value)}
-              placeholder="Buscar por nombre"
-              aria-label="Buscar nodo para el flujo"
-            />
-          </label>
+          </ToggleButtonGroup>
+          <SearchField
+            value={busqueda}
+            onChange={setBusqueda}
+            aria-label="Buscar nodo para el flujo"
+            className={styles.search}
+          >
+            <SearchField.Group className={focus.singleBorder}>
+              <SearchField.SearchIcon>
+                <SearchIcon />
+              </SearchField.SearchIcon>
+              <SearchField.Input placeholder="Buscar por nombre" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
           <div className={styles.optionList}>
             {opcionesFiltradas.map((opcion) => {
               const Icon = iconoTipo(opcion.tipo);
               return (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   key={opcion.id}
-                  onClick={() => agregar(opcion)}
+                  onPress={() => agregar(opcion)}
                 >
                   <span className={styles.optionIcon}>
                     <Icon />
                   </span>
                   <span>
                     <strong>{opcion.nombre}</strong>
-                    <small>{opcion.descripcion}</small>
+                    <small>
+                      {opcion.tipo === "PASO"
+                        ? descripcionPasoParaUsuario(opcion.descripcion)
+                        : opcion.descripcion}
+                    </small>
                   </span>
-                  <PlusIcon />
-                </button>
+                  <ArrowUpRightIcon />
+                </Button>
               );
             })}
-            {opcionesFiltradas.length === 0 ? (
+            {opcionesFiltradas.length === 0 && (
               <div className={styles.noResults}>
-                <BoxIcon /> No hay opciones disponibles para esta búsqueda.
+                <BoxIcon />
+                No hay opciones disponibles para esta búsqueda.
               </div>
-            ) : null}
+            )}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={Boolean(nodoEditado)}
+        </Modal.Body>
+      </FormDialog>
+      <FormDialog
+        className={brand.dialog}
+        isOpen={Boolean(nodoEditado)}
         onOpenChange={(open) => !open && setEditando(null)}
+        title="Nombre visible del nodo"
+        description="Este nombre se propone al aplicar la ruta a un producto."
       >
-        <DialogContent
-          className={`gp-modal gp-modal-compact ${visual.flowModal}`}
-          overlayClassName="gp-modal-overlay"
-        >
-          <DialogHeader>
-            <DialogTitle>Nombre visible del nodo</DialogTitle>
-            <DialogDescription>
-              Este nombre se propone al aplicar la ruta a un producto.
-            </DialogDescription>
-          </DialogHeader>
+        <Modal.Body className={shared.dialogBody}>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="flujo-nombre-nodo">
                 Nombre del nodo
               </FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id="flujo-nombre-nodo"
                 autoFocus
                 value={nombreEditado}
@@ -624,16 +683,16 @@ export function RutaWorkflowEditor({
               />
             </Field>
           </FieldGroup>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditando(null)}>
-              Cancelar
-            </Button>
-            <Button disabled={!nombreEditado.trim()} onClick={aplicarNombre}>
-              Listo
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </section>
+        </Modal.Body>
+        <Modal.Footer className={shared.dialogFooter}>
+          <Button variant="outline" onPress={() => setEditando(null)}>
+            Cancelar
+          </Button>
+          <Button isDisabled={!nombreEditado.trim()} onPress={aplicarNombre}>
+            Listo
+          </Button>
+        </Modal.Footer>
+      </FormDialog>
+    </Card>
   );
 }

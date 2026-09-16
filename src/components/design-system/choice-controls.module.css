@@ -1,0 +1,80 @@
+.choice {
+  --toggle-button-bg: transparent;
+  --toggle-button-bg-selected-hover: color-mix(
+    in srgb,
+    var(--accent) 16%,
+    var(--surface)
+  );
+  --toggle-button-bg-selected-pressed: var(--toggle-button-bg-selected-hover);
+  height: var(--action-height-sm);
+  gap: 6px;
+  padding-inline: var(--action-padding-sm);
+  font-size: var(--action-font-sm);
+}
+.segmented {
+  max-width: 100%;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--default);
+}
+.segmented .choice {
+  border-radius: 9px;
+}
+.segmented .choice[data-selected="true"] {
+  background: var(--action-primary-gradient);
+  color: var(--action-primary-foreground);
+}
+/* Agrupación de calendarios: misma interacción G4, identidad grafito optativa. */
+.segmented[data-tone="graphite"] {
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 7px;
+  background: var(--brand-graphite);
+  overflow: hidden;
+}
+.segmented[data-tone="graphite"] .choice {
+  height: 42px;
+  padding-inline: 16px;
+  border-radius: 0;
+  color: var(--brand-muted-on-graphite);
+  background: transparent;
+  font-size: 12px;
+  box-shadow: inset 0 -2px transparent;
+}
+.segmented[data-tone="graphite"] .choice + .choice {
+  border-left: 1px solid var(--brand-graphite-line);
+}
+.segmented[data-tone="graphite"] .choice:hover {
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite-line);
+}
+.segmented[data-tone="graphite"] .choice[data-selected="true"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--brand-graphite));
+  box-shadow: inset 0 -2px var(--accent);
+}
+.segmented[data-tone="graphite"] .choice:is(:focus-visible, [data-focus-visible="true"]) {
+  outline-color: var(--accent);
+}
+.icons {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.icons .choice {
+  width: var(--action-height-sm);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--action-radius);
+}
+.icons .choice[data-selected="true"] {
+  border-color: var(--accent-soft-foreground);
+}
+.choice:is(:focus-visible, [data-focus-visible="true"]) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  box-shadow: none;
+}

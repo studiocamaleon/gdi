@@ -34,6 +34,7 @@ interface AvisoOtEnBorradorProps {
   /** True mientras corre la emisión. */
   emitiendo?: boolean;
   onEmitirAhora: () => void | Promise<void>;
+  emitirLabel?: string;
   onEmitirDespues: () => void;
 }
 
@@ -42,6 +43,7 @@ export function AvisoOtEnBorrador({
   numero,
   emitiendo = false,
   onEmitirAhora,
+  emitirLabel = "Emitir al taller ahora",
   onEmitirDespues,
 }: AvisoOtEnBorradorProps) {
   return (
@@ -81,7 +83,7 @@ export function AvisoOtEnBorrador({
             onClick={() => void onEmitirAhora()}
             disabled={emitiendo}
           >
-            {emitiendo ? "Emitiendo…" : "Emitir al taller ahora"}
+            {emitiendo ? "Emitiendo…" : emitirLabel}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

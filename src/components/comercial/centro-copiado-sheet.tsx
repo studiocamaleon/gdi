@@ -1,5 +1,7 @@
 "use client";
 
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -81,7 +83,8 @@ type GrupoState = {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAgregar: (items: PropuestaItem[]) => void;
+  /** Devuelve false si el formulario ya no admite cambios. */
+  onAgregar: (items: PropuestaItem[]) => void | boolean;
   /** Cliente de la propuesta; habilita su precio especial en el motor. */
   clienteId?: string | null;
   /** Edición: la CARGA completa (todos los renglones que entraron juntos). */
@@ -220,6 +223,8 @@ export default function CentroCopiadoSheet({
   clienteId,
   editItems,
 }: Props) {
+  const designScope = useDesignScope();
+  const designClass = useDesignTheme();
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
   // Tamaños que la config del tenant ofrece; null = todos los producibles.
   const [tamanosOfrecidos, setTamanosOfrecidos] = React.useState<
@@ -781,7 +786,7 @@ export default function CentroCopiadoSheet({
         const files = filesDe(ic);
         return files.length ? { ...pi, archivosPendientes: files } : pi;
       });
-      onAgregar(items);
+      if (onAgregar(items) === false) return;
       toast.success(
         `${items.length} renglón(es) agregados desde el centro de copiado.`,
       );
@@ -1096,7 +1101,8 @@ export default function CentroCopiadoSheet({
     <>
       <div className={s.backdrop} onClick={intentarCerrar} />
       <div
-        className={s.sheet}
+        {...designScope}
+        className={`${designClass} ${s.sheet}`}
         role="dialog"
         aria-modal="true"
         aria-label="Centro de copiado"
