@@ -237,12 +237,13 @@ export function colorTextoAging(
 export type MovimientoCuentaCorriente = {
   id: string;
   fecha: string;
-  /** 'orden' = la OT finalizada al DEBE (deuda comercial); 'cobro' al HABER. */
+  /** Una OT emitida genera un único cargo; los cobros y NC lo compensan. */
   tipo: "orden" | "cobro" | "fa" | "nc" | "nd";
   sigla: string;
   descripcion: string;
   debe: number;
   haber: number;
+  /** Acumulado de cargos menos pagos: positivo = deuda; UI y PDF invierten el signo. */
   saldo: number;
   ordenId?: string;
   comprobanteId?: string;
@@ -266,8 +267,12 @@ export type CuentaCorriente = {
     plazoCuentaCorrienteDias: number | null;
     vendedor: string | null;
   };
-  /** Positivo = el cliente debe. */
+  /** Saldo de todas las OTs emitidas vigentes y movimientos. Positivo = deuda. */
   saldo: number;
+  /** Fondos generales que todavía pueden aplicarse a otra orden. */
+  anticipoDisponible?: number;
+  /** Parte de «A vencer» todavía sin fecha de vencimiento comercial. */
+  sinVencimiento?: number;
   comprobantesPendientes: number;
   /** null cuando no se definió límite de crédito. */
   usoLimitePct: number | null;
@@ -775,6 +780,9 @@ export type Cobro = {
   metodoTipo: string;
   cuentaDestinoNombre: string | null;
   montoBruto: number;
+  /** Sólo al consultar por OT: porción del recibo aplicada a esa orden. */
+  montoAplicadoOrden?: number;
+  origenAplicacion?: "directo" | "cuenta_corriente";
   comisionPctAplicada: number;
   comisionMonto: number;
   comisionIvaMonto: number;

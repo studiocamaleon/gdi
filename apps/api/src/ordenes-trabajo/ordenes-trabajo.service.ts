@@ -3828,7 +3828,8 @@ export class OrdenesTrabajoService {
           token: tokenSeguimiento,
         });
       }
-      // Primera finalización: nace la deuda comercial y arranca su aging.
+      // Primera finalización: fija el vencimiento comercial para el aging.
+      // El cargo ya figura en cuenta corriente desde la emisión.
       // Sólo la primera (reabrir y re-finalizar no la resetea).
       if (hacia === 'finalizada') {
         await this.marcarPrimeraFinalizacion(tx, auth.tenantId, orden.id);
@@ -4148,7 +4149,7 @@ export class OrdenesTrabajoService {
   }
 
   /**
-   * Congela el nacimiento y el vencimiento de la deuda comercial. Una venta
+   * Congela el vencimiento del cargo registrado desde la emisión. Una venta
    * común vence el mismo día que finaliza; una cuenta corriente suma el plazo
    * vigente del cliente. Reabrir o editar luego al cliente no cambia la foto.
    */

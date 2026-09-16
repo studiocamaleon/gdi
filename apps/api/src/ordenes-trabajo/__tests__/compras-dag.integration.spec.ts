@@ -160,6 +160,7 @@ describe('Compras tercerizadas dentro del DAG (PostgreSQL)', () => {
     });
     await ordenes.accionPaso(auth, orden.id, raiz.id, paralelo.id, {
       accion: 'completar',
+      sinTiempoConfirmado: true,
     });
     await ordenes.accionPaso(auth, orden.id, raiz.id, ensamble.id, {
       accion: 'iniciar',
@@ -172,6 +173,7 @@ describe('Compras tercerizadas dentro del DAG (PostgreSQL)', () => {
     ).toMatchObject({ estado: 'hecho', estadoCompra: 'recibido' });
     await ordenes.accionPaso(auth, orden.id, raiz.id, ensamble.id, {
       accion: 'completar',
+      sinTiempoConfirmado: true,
     });
     expect(
       await db.ordenTrabajo.findUnique({ where: { id: orden.id } }),

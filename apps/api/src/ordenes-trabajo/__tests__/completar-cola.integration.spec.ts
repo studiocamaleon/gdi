@@ -265,7 +265,7 @@ it('no toma trabajos asignados a otro operario', async () => {
   });
   await expect(
     controller.completar(auth, maquinaId, { pasoIds: [a.id] }),
-  ).rejects.toThrow('mesa');
+  ).rejects.toThrow('no está asignado a vos');
   expect(await hechos([a.id])).toBe(0);
 });
 it('doble clic o reintento no duplica el registro', async () => {
@@ -468,13 +468,13 @@ it('no salta la asignación a Mi mesa, ni siquiera para un trabajo libre', async
     where: { id: a.id },
     data: { mesaUsuarioId: null },
   });
-  await expect(iniciar(a.id)).rejects.toThrow('mesa');
+  await expect(iniciar(a.id)).rejects.toThrow('no está asignado a vos');
   await expect(
     controller.completar(auth, maquinaId, {
       pasoIds: [a.id],
       tiempos: [{ pasoId: a.id, sinTiempoConfirmado: true }],
     }),
-  ).rejects.toThrow('mesa');
+  ).rejects.toThrow('no está asignado a vos');
   const cola = await colas.listar(
     tenantId,
     maquinaId,

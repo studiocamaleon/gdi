@@ -25,7 +25,6 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -36,14 +35,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { TesoreriaDialog } from "./tesoreria-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  useDesignScope,
+  useLegacyDesignScope,
+} from "@/components/design-system/appearance";
 import {
   Empty,
   EmptyDescription,
@@ -53,14 +49,7 @@ import {
 } from "@/components/ui/empty";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectField } from "@/components/design-system/select-field";
 import {
   Table,
   TableBody,
@@ -163,26 +152,16 @@ function selectorCuenta(
   onValueChange: (value: string) => void,
   cuentas: CuentaFondos[],
 ) {
-  const seleccionada = cuentas.find((cuenta) => cuenta.id === value);
   return (
-    <Select value={value} onValueChange={(next) => onValueChange(next ?? "")}>
-      <SelectTrigger className="w-full" aria-label="Cuenta de depósito">
-        <SelectValue>
-          {seleccionada
-            ? `${seleccionada.nombre} · ${seleccionada.moneda}`
-            : "Seleccionar cuenta"}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {cuentas.map((cuenta) => (
-            <SelectItem key={cuenta.id} value={cuenta.id}>
-              {cuenta.nombre} · {cuenta.moneda}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <SelectField
+      value={value}
+      onChange={onValueChange}
+      aria-label="Cuenta de depósito"
+      options={cuentas.map((cuenta) => ({
+        value: cuenta.id,
+        label: `${cuenta.nombre} · ${cuenta.moneda}`,
+      }))}
+    />
   );
 }
 
@@ -249,127 +228,128 @@ function ValorOperacionDialog({
     (requiereMotivo && motivo.trim().length < 3);
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="gp-modal" overlayClassName="gp-modal-overlay">
-        <DialogHeader>
-          <DialogTitle>{titulo}</DialogTitle>
-          <DialogDescription>
-            Cheque {operacion.valor.numero} · {operacion.valor.banco} ·{" "}
-            {formatearMoneda(
-              operacion.valor.importe,
-              monedaDe(operacion.valor.moneda),
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
-          {operacion.tipo === "depositar" ? (
-            <Field>
-              <FieldLabel>Cuenta bancaria</FieldLabel>
-              {selectorCuenta(cuentaId, setCuentaId, compatibles)}
-              {compatibles.length === 0 ? (
-                <p className="text-sm text-destructive">
-                  No hay una cuenta activa en {operacion.valor.moneda}.
-                </p>
-              ) : null}
-            </Field>
-          ) : null}
-          {operacion.tipo !== "anular_propio" ? (
-            <Field>
-              <FieldLabel htmlFor="valor-fecha">
-                {operacion.tipo === "depositar"
-                  ? "Fecha de depósito"
-                  : operacion.tipo === "acreditar"
-                    ? "Fecha de acreditación"
-                    : operacion.tipo === "debitar"
-                      ? "Fecha del débito"
-                      : esCorreccion
-                        ? "Fecha de corrección"
-                        : "Fecha de rechazo"}
-              </FieldLabel>
-              <Input
-                id="valor-fecha"
-                type="date"
-                value={fecha}
-                onChange={(event) => setFecha(event.target.value)}
-              />
-            </Field>
-          ) : null}
-          {operacion.tipo === "acreditar" || operacion.tipo === "debitar" ? (
-            <Field>
-              <FieldLabel htmlFor="valor-referencia">
-                Referencia bancaria
-              </FieldLabel>
-              <Input
-                id="valor-referencia"
-                value={referencia}
-                onChange={(event) => setReferencia(event.target.value)}
-              />
-            </Field>
-          ) : null}
-          {requiereMotivo ? (
-            <Field data-invalid={motivo.length > 0 && motivo.trim().length < 3}>
-              <FieldLabel htmlFor="valor-motivo">
-                {esCorreccion
-                  ? "Motivo de la corrección"
-                  : operacion.tipo === "anular_propio"
-                    ? "Motivo de la anulación"
-                    : "Motivo del rechazo"}
-              </FieldLabel>
-              <Textarea
-                id="valor-motivo"
-                value={motivo}
-                onChange={(event) => setMotivo(event.target.value)}
-                placeholder={
-                  esCorreccion
-                    ? "Se seleccionó una cuenta incorrecta, se confirmó antes de tiempo…"
-                    : operacion.tipo === "anular_propio"
-                      ? "Se reemplazó el medio de pago, se anuló la emisión…"
-                      : "Fondos insuficientes, firma, orden de no pagar…"
-                }
-              />
-            </Field>
-          ) : (
-            <Field>
-              <FieldLabel htmlFor="valor-notas">Notas</FieldLabel>
-              <Textarea
-                id="valor-notas"
-                value={notas}
-                onChange={(event) => setNotas(event.target.value)}
-              />
-            </Field>
+    <TesoreriaDialog
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title={titulo}
+      description={
+        <>
+          Cheque {operacion.valor.numero} · {operacion.valor.banco} ·{" "}
+          {formatearMoneda(
+            operacion.valor.importe,
+            monedaDe(operacion.valor.moneda),
           )}
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            variant={
-              operacion.tipo === "rechazar" ||
-              operacion.tipo === "rechazar_propio" ||
-              operacion.tipo === "anular_propio"
-                ? "destructive"
-                : "default"
-            }
-            loading={ocupado}
-            loadingText="Registrando…"
-            disabled={invalido}
-            onClick={() =>
-              onConfirmar({
-                cuentaDestinoId:
-                  operacion.tipo === "depositar" ? cuentaId : undefined,
-                fecha,
-                referencia: referencia.trim() || undefined,
-                notas: notas.trim() || undefined,
-                motivo: motivo.trim() || undefined,
-              })
-            }
-          >
-            Confirmar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <FieldGroup className={styles.formBody}>
+        {operacion.tipo === "depositar" ? (
+          <Field>
+            <FieldLabel>Cuenta bancaria</FieldLabel>
+            {selectorCuenta(cuentaId, setCuentaId, compatibles)}
+            {compatibles.length === 0 ? (
+              <p className="text-sm text-destructive">
+                No hay una cuenta activa en {operacion.valor.moneda}.
+              </p>
+            ) : null}
+          </Field>
+        ) : null}
+        {operacion.tipo !== "anular_propio" ? (
+          <Field>
+            <FieldLabel htmlFor="valor-fecha">
+              {operacion.tipo === "depositar"
+                ? "Fecha de depósito"
+                : operacion.tipo === "acreditar"
+                  ? "Fecha de acreditación"
+                  : operacion.tipo === "debitar"
+                    ? "Fecha del débito"
+                    : esCorreccion
+                      ? "Fecha de corrección"
+                      : "Fecha de rechazo"}
+            </FieldLabel>
+            <Input
+              id="valor-fecha"
+              type="date"
+              value={fecha}
+              onChange={(event) => setFecha(event.target.value)}
+            />
+          </Field>
+        ) : null}
+        {operacion.tipo === "acreditar" || operacion.tipo === "debitar" ? (
+          <Field>
+            <FieldLabel htmlFor="valor-referencia">
+              Referencia bancaria
+            </FieldLabel>
+            <Input
+              id="valor-referencia"
+              value={referencia}
+              onChange={(event) => setReferencia(event.target.value)}
+            />
+          </Field>
+        ) : null}
+        {requiereMotivo ? (
+          <Field data-invalid={motivo.length > 0 && motivo.trim().length < 3}>
+            <FieldLabel htmlFor="valor-motivo">
+              {esCorreccion
+                ? "Motivo de la corrección"
+                : operacion.tipo === "anular_propio"
+                  ? "Motivo de la anulación"
+                  : "Motivo del rechazo"}
+            </FieldLabel>
+            <Textarea
+              id="valor-motivo"
+              value={motivo}
+              onChange={(event) => setMotivo(event.target.value)}
+              placeholder={
+                esCorreccion
+                  ? "Se seleccionó una cuenta incorrecta, se confirmó antes de tiempo…"
+                  : operacion.tipo === "anular_propio"
+                    ? "Se reemplazó el medio de pago, se anuló la emisión…"
+                    : "Fondos insuficientes, firma, orden de no pagar…"
+              }
+            />
+          </Field>
+        ) : (
+          <Field>
+            <FieldLabel htmlFor="valor-notas">Notas</FieldLabel>
+            <Textarea
+              id="valor-notas"
+              value={notas}
+              onChange={(event) => setNotas(event.target.value)}
+            />
+          </Field>
+        )}
+      </FieldGroup>
+      <footer className={styles.formFooter}>
+        <Button variant="outline" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button
+          variant={
+            operacion.tipo === "rechazar" ||
+            operacion.tipo === "rechazar_propio" ||
+            operacion.tipo === "anular_propio"
+              ? "destructive"
+              : "default"
+          }
+          loading={ocupado}
+          loadingText="Registrando…"
+          disabled={invalido}
+          onClick={() =>
+            onConfirmar({
+              cuentaDestinoId:
+                operacion.tipo === "depositar" ? cuentaId : undefined,
+              fecha,
+              referencia: referencia.trim() || undefined,
+              notas: notas.trim() || undefined,
+              motivo: motivo.trim() || undefined,
+            })
+          }
+        >
+          Confirmar
+        </Button>
+      </footer>
+    </TesoreriaDialog>
   );
 }
 
@@ -383,6 +363,8 @@ export function AcreditacionesView({
   cuentas: CuentaFondos[];
 }) {
   const router = useRouter();
+  const scope = useLegacyDesignScope();
+  const designScope = useDesignScope();
   const puedeGestionar = usePuede("administracion.gestionar");
   const puedeAnular = usePuede("administracion.anular");
   const { zonaHoraria } = useConfigRegional();
@@ -397,7 +379,7 @@ export function AcreditacionesView({
   const [ocupadoId, setOcupadoId] = React.useState<string | null>(null);
   const [operacion, setOperacion] = React.useState<OperacionValor>(null);
   const fmt = (importe: number, codigo: string) =>
-    formatearMoneda(importe, monedaDe(codigo), { decimales: 0 });
+    formatearMoneda(importe, monedaDe(codigo));
 
   React.useEffect(() => {
     setFilas(initialFilas.filter((fila) => !fila.esCheque));
@@ -582,7 +564,11 @@ export function AcreditacionesView({
   );
 
   return (
-    <main className={styles.pagina}>
+    <main
+      {...designScope}
+      {...scope}
+      className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
+    >
       <header className={styles.subEncabezado}>
         <Link
           href="/administracion/tesoreria"
@@ -593,7 +579,9 @@ export function AcreditacionesView({
         </Link>
         <div>
           <span className={styles.eyebrow}>Tesorería · operaciones</span>
-          <h1>Acreditaciones y valores</h1>
+          <h1>
+            Acreditaciones y valores<span aria-hidden="true">.</span>
+          </h1>
           <p>
             Confirmá fondos electrónicos y administrá el ciclo completo de
             cheques.
@@ -601,7 +589,7 @@ export function AcreditacionesView({
         </div>
       </header>
 
-      <section className={styles.kpisDos}>
+      <section className={styles.kpisDos} aria-label="Fondos pendientes">
         <article className={`${styles.kpi} ${styles.kpiPrincipal}`}>
           <span className={styles.kpiIcono} aria-hidden="true">
             <HandCoinsIcon />
@@ -611,7 +599,9 @@ export function AcreditacionesView({
             <strong className={styles.valorMultiple}>
               {totalElectronico.length
                 ? totalElectronico.map(([codigo, total]) => (
-                    <span key={codigo}>{fmt(total, codigo)}</span>
+                    <span key={codigo}>
+                      <small>{codigo}</small> {fmt(total, codigo)}
+                    </span>
                   ))
                 : "Sin pendientes"}
             </strong>
@@ -628,7 +618,9 @@ export function AcreditacionesView({
             <strong className={styles.valorMultiple}>
               {totalValores.length
                 ? totalValores.map(([codigo, total]) => (
-                    <span key={codigo}>{fmt(total, codigo)}</span>
+                    <span key={codigo}>
+                      <small>{codigo}</small> {fmt(total, codigo)}
+                    </span>
                   ))
                 : "Sin valores"}
             </strong>
@@ -655,7 +647,10 @@ export function AcreditacionesView({
         </CardHeader>
         <CardContent>
           {filas.length ? (
-            <Table className={styles.tabla}>
+            <Table
+              className={styles.tabla}
+              aria-label="Cobros electrónicos pendientes"
+            >
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha estimada</TableHead>
@@ -732,52 +727,42 @@ export function AcreditacionesView({
           <CardDescription>
             Depósito, acreditación, rechazo e historial de cheques y eCheq.
           </CardDescription>
-          <CardAction className="flex gap-2">
-            <div className="relative hidden sm:block">
-              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="w-56 pl-8"
-                value={busqueda}
-                onChange={(event) => setBusqueda(event.target.value)}
-                placeholder="Cheque, banco, cliente"
-              />
-            </div>
-            <Select
-              value={estado}
-              onValueChange={(next) => setEstado(next ?? "activos")}
-            >
-              <SelectTrigger aria-label="Estado de los valores">
-                <SelectValue>
-                  {estado === "activos"
-                    ? "Activos"
-                    : estado === "todos"
-                      ? "Todos"
-                      : (ESTADOS[estado] ?? "Seleccionar estado")}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="activos">Activos</SelectItem>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {Object.entries(ESTADOS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </CardAction>
         </CardHeader>
         <CardContent className={styles.carteraContenido}>
-          <div className="relative sm:hidden">
-            <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="pl-8"
-              value={busqueda}
-              onChange={(event) => setBusqueda(event.target.value)}
-              placeholder="Cheque, banco, cliente"
-            />
+          <div className={styles.valoresToolbar}>
+            <Field>
+              <FieldLabel htmlFor="tes-valores-buscar">Buscar valor</FieldLabel>
+              <div className="relative">
+                <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="tes-valores-buscar"
+                  className="pl-8"
+                  value={busqueda}
+                  onChange={(event) => setBusqueda(event.target.value)}
+                  placeholder="Cheque, banco, cliente"
+                />
+              </div>
+            </Field>
+            <Field>
+              <FieldLabel>Estado</FieldLabel>
+              <SelectField
+                value={estado}
+                onChange={setEstado}
+                aria-label="Estado de los valores"
+                options={[
+                  { value: "activos", label: "Activos" },
+                  { value: "todos", label: "Todos" },
+                  ...Object.entries(ESTADOS).map(([value, label]) => ({
+                    value,
+                    label,
+                  })),
+                ]}
+              />
+            </Field>
+            <span className={styles.resultadosValores}>
+              {valoresFiltrados.length}{" "}
+              {valoresFiltrados.length === 1 ? "valor" : "valores"}
+            </span>
           </div>
           {valoresFiltrados.length ? (
             <div className={styles.chequesGrid}>
@@ -787,10 +772,6 @@ export function AcreditacionesView({
                   className={styles.cheque}
                   data-estado={valor.estado}
                 >
-                  <span className={styles.marcaAgua} aria-hidden="true">
-                    G
-                  </span>
-
                   <header className={styles.chequeHeader}>
                     <div className={styles.chequeIdentidad}>
                       <span className={styles.chequeClase}>

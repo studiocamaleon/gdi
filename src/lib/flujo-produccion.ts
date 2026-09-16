@@ -17,6 +17,7 @@ import {
   recortarDemanda,
   aplicarOperacionMaquina,
   leerModoOperacionMaquina,
+  milisegundosDeMinutos,
 } from "./demanda-humana";
 import { finConflictoReserva } from "./eta-reservas";
 /**
@@ -207,7 +208,7 @@ export function sumarMinutosLaborales(
   zona: string = ZONA_DEFAULT,
 ): Date | null {
   let t = avanzarAVentana(calendario, desde, noLaborables, zona);
-  let restante = Math.ceil(minutos * 60000);
+  let restante = milisegundosDeMinutos(minutos);
   // Antes la guardia contaba días; con jornada cortada hay más de una
   // iteración por día (una por franja).
   let guardia = 0;
@@ -238,7 +239,7 @@ function tramosLaborales(
   zona: string,
 ): Array<{ inicio: number; fin: number }> | null {
   let t = avanzarAVentana(calendario, desde, noLaborables, zona),
-    restante = Math.ceil(minutos * 60000);
+    restante = milisegundosDeMinutos(minutos);
   const tramos: Array<{ inicio: number; fin: number }> = [];
   for (let i = 0; t && i < (HORIZONTE_DIAS + 7) * 6; i++) {
     const cierre = finDeFranjaActual(calendario, t, noLaborables, zona);

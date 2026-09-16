@@ -1,0 +1,275 @@
+.primaryGrid,
+.equalGrid,
+.savingsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(420px, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+.equalGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.savingsGrid {
+  grid-template-columns: minmax(340px, 0.8fr) minmax(0, 1.4fr);
+}
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.note {
+  margin: 0;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--canvas-background);
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.currentBadge {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--canvas-background);
+  color: var(--muted-text);
+  font: 9px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.deliverySummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 28px;
+  padding: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.deliverySummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.deliverySummary span {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.deliverySummary strong {
+  font-size: 25px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.deliverySummary small {
+  font-size: 12px;
+  color: var(--muted-text);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.deliverySummary [data-warning="true"] strong,
+.warning,
+.utilizationTable [data-warning="true"],
+.precisionTable small[data-warning="true"] {
+  color: var(--danger);
+}
+.deliveryTable th strong,
+.precisionTable th strong,
+.utilizationTable th strong,
+.savingsTable th strong {
+  font-weight: 500;
+}
+.deliveryTable th small,
+.precisionTable th small,
+.utilizationTable th small,
+.savingsTable th small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 10px;
+  font-weight: 400;
+}
+.precisionTable th,
+.precisionTable td,
+.utilizationTable th,
+.utilizationTable td,
+.deliveryTable th,
+.deliveryTable td {
+  padding: 16px 20px;
+}
+.precisionTable tbody th,
+.utilizationTable tbody th {
+  width: 100%;
+  min-width: 190px;
+}
+.track {
+  height: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-secondary);
+}
+.track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.track[data-tone="muted"] span {
+  background: var(--muted-text);
+}
+.track[data-tone="warning"] span {
+  background: var(--danger);
+}
+.deviation {
+  min-width: 90px;
+  color: var(--muted-text);
+}
+.deviation strong {
+  font-weight: 500;
+}
+.deviation small {
+  display: block;
+  margin-top: 3px;
+  font:
+    10px/1.4 var(--font-geist-sans),
+    sans-serif;
+}
+.deviation[data-tone="slow"] {
+  color: var(--danger);
+}
+.deviation[data-tone="fast"] {
+  color: var(--success);
+}
+.deviationTrack {
+  position: relative;
+  height: 5px;
+  margin-top: 8px;
+  background: var(--surface-secondary);
+  border-radius: 2px;
+}
+.deviationTrack::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--muted-text);
+}
+.deviationTrack span {
+  position: absolute;
+  height: 100%;
+  background: currentColor;
+  border-radius: 2px;
+}
+.qualitySummary {
+  padding-bottom: 20px;
+}
+.sourceBar {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  margin: 0 22px 22px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-secondary);
+}
+.sourceBar span {
+  flex-basis: 0;
+  min-width: 0;
+}
+.sourceName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sourceName i {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+.savingsSummary {
+  display: flex;
+  flex-direction: column;
+}
+.savingsSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px;
+}
+.savingsSummary > div + div {
+  border-top: 1px solid var(--border);
+  background: var(--canvas-background);
+}
+.savingsSummary span {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.savingsSummary strong {
+  color: var(--accent-soft-foreground);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+.savingsSummary small {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.savingAmount {
+  color: var(--success);
+}
+.compactTable tbody th {
+  min-width: 125px;
+}
+@container reporte (max-width: 1120px) {
+  .primaryGrid,
+  .equalGrid,
+  .savingsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+@container reporte (max-width: 500px) {
+  .primaryGrid,
+  .equalGrid,
+  .savingsGrid,
+  .cardStack {
+    gap: 16px;
+  }
+  .note {
+    padding: 14px 16px;
+  }
+  .deliverySummary {
+    padding: 18px 16px;
+    gap: 18px;
+  }
+  .deliverySummary strong {
+    font-size: 23px;
+  }
+  .sourceBar {
+    margin: 0 16px 18px;
+  }
+  .savingsSummary > div {
+    padding: 20px 16px;
+  }
+  .savingsSummary strong {
+    font-size: 25px;
+  }
+  .precisionTable th,
+  .precisionTable td,
+  .utilizationTable th,
+  .utilizationTable td,
+  .deliveryTable th,
+  .deliveryTable td {
+    padding: 14px 16px;
+  }
+  .precisionTable tbody th,
+  .utilizationTable tbody th {
+    min-width: 165px;
+  }
+}

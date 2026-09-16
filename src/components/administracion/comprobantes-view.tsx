@@ -2,358 +2,363 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { DownloadIcon, FileTextIcon, PlusIcon, SearchIcon } from "lucide-react";
-
+import { Card, SearchField } from "@heroui/react";
+import {
+  ArrowUpRightIcon,
+  CalendarDaysIcon,
+  FileMinus2Icon,
+  FilePlus2Icon,
+  FileTextIcon,
+  FilesIcon,
+  PlusIcon,
+  SearchXIcon,
+  WalletIcon,
+} from "lucide-react";
 import {
   COMPROBANTE_TIPO_LABELS,
-  COMPROBANTE_TIPO_SIGLA,
   estadoVisual,
   formatCuitODash,
   type Comprobante,
 } from "@/lib/administracion";
-import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { formatearMoneda } from "@/lib/moneda";
+import { formatearMoneda, formatearMonedaDoc, monedaDe } from "@/lib/moneda";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { ActionLink } from "@/components/design-system/action-link";
+import { ActionButton } from "@/components/design-system/action-button";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { SelectField } from "@/components/design-system/select-field";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { ComprobanteEstado, ComprobanteLetra } from "./comprobante-ui";
+import {
+  etiquetaSaldoComprobante,
+  fechaComprobante,
+} from "@/lib/comprobantes-presentacion";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 import s from "./comprobantes.module.css";
 
-// estadoVisual().clave se vuelve clase en runtime: el lookup tiene que ser explícito
-const CLASE_ESTADO: Record<string, string> = {
-  cae: s.eCae,
-  emitido: s.eEmitido,
-  borrador: s.eBorrador,
-  rechazado: s.eRechazado,
-  anulado: s.eAnulado,
-};
-
-const CHIPS_ESTADO: Array<[string, string]> = [
-  ["todos", "Todos"],
+const ESTADOS = [
+  ["todos", "Todos los estados"],
   ["borrador", "Borrador"],
-  ["emitido", "Emitido"],
+  ["emitido", "Sin CAE"],
   ["cae", "Con CAE"],
   ["rechazado", "Rechazado"],
   ["anulado", "Anulado"],
+] as const;
+const TIPOS = [
+  { value: "todos", label: "Todos", icon: <FilesIcon /> },
+  { value: "factura", label: "Facturas", icon: <FileTextIcon /> },
+  {
+    value: "nota_credito",
+    label: "Notas de crédito",
+    icon: <FileMinus2Icon />,
+  },
+  { value: "nota_debito", label: "Notas de débito", icon: <FilePlus2Icon /> },
 ];
-
-const CHIPS_TIPO: Array<[string, string]> = [
-  ["todos", "Todos"],
-  ["factura", "Factura"],
-  ["nota_credito", "N. Crédito"],
-  ["nota_debito", "N. Débito"],
-];
-
-function mesActual(fechaIso: string) {
+function mesActual(fecha: string) {
   const hoy = new Date();
-  const f = new Date(fechaIso);
   return (
-    f.getFullYear() === hoy.getFullYear() && f.getMonth() === hoy.getMonth()
+    fecha.slice(0, 7) ===
+    `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`
   );
 }
-
-/** El total en pesos: las facturas E vienen en USD con su cotización. */
+/** La conversión de las facturas USD a pesos conserva la cotización guardada. */
 function totalEnPesos(c: Comprobante, campo: "total" | "saldoPendiente") {
-  const v = c[campo];
-  return c.moneda === "USD" && c.cotizacion ? v * c.cotizacion : v;
-}
-
-function etiquetaSaldo(c: Comprobante, fmt: (monto: number) => string) {
-  if (c.estado === "anulado") return "—";
-  if (c.tipo === "nota_credito") {
-    return c.estado === "emitido" ? "Aplicada" : "—";
-  }
-  if (c.corregido && c.saldoPendiente <= 0) return "Corregido";
-  if (c.total < 0) return "—";
-  return c.saldoPendiente > 0 ? fmt(c.saldoPendiente) : "Cobrado";
+  return c.moneda === "USD" && c.cotizacion
+    ? c[campo] * c.cotizacion
+    : c[campo];
 }
 
 export function ComprobantesView({
-  initialComprobantes,
+  initialComprobantes: data,
 }: {
   initialComprobantes: Comprobante[];
 }) {
-  const router = useRouter();
-  const { moneda } = useConfigRegional();
-  const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
+  const puedeGestionar = usePuede("administracion.gestionar");
   const [q, setQ] = React.useState("");
   const [est, setEst] = React.useState("todos");
   const [tip, setTip] = React.useState("todos");
-
-  const data = initialComprobantes;
-
-  // "Con CAE" no es un estado del modelo: es emitido + CAE cargado.
-  const cumple = (c: Comprobante, filtro: string) => {
-    if (filtro === "todos") return true;
-    if (filtro === "cae") return c.estado === "emitido" && !!c.cae;
-    if (filtro === "emitido") return c.estado === "emitido" && !c.cae;
-    return c.estado === filtro;
-  };
-
-  const estCounts = React.useMemo(() => {
-    const counts: Record<string, number> = { todos: data.length };
-    for (const [clave] of CHIPS_ESTADO) {
-      if (clave === "todos") continue;
-      counts[clave] = data.filter((c) => cumple(c, clave)).length;
-    }
-    return counts;
-  }, [data]);
-
-  const list = React.useMemo(
-    () =>
-      data.filter((c) => {
-        if (!cumple(c, est)) return false;
-        if (tip !== "todos" && c.tipo !== tip) return false;
-        if (q) {
-          const heno = [
-            c.clienteNombre,
-            c.numeroCompleto,
-            c.clienteCuit ?? "",
-            c.ordenNumero ?? "",
-            c.letra,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!heno.includes(q.toLowerCase())) return false;
-        }
-        return true;
-      }),
-    [data, q, est, tip],
-  );
-
-  const vigentes = data.filter(
-    (c) => c.estado === "emitido" || c.estado === "rechazado",
-  );
-  const emitidas = data.filter(
-    (c) => c.estado === "emitido" && c.tipo === "factura" && mesActual(c.fecha),
-  ).length;
+  const cumple = (c: Comprobante, estado: string) =>
+    estado === "todos" || estadoVisual(c).clave === estado;
+  const list = data.filter((c) => {
+    if (!cumple(c, est) || (tip !== "todos" && c.tipo !== tip)) return false;
+    const texto = [
+      c.clienteNombre,
+      c.numeroCompleto,
+      c.clienteCuit ?? "",
+      c.ordenNumero ?? "",
+      ...c.ordenes.map((o) => o.numero),
+      c.letra,
+    ]
+      .join(" ")
+      .toLocaleLowerCase();
+    return texto.includes(q.trim().toLocaleLowerCase());
+  });
   const facturado = data
     .filter((c) => c.estado === "emitido")
     .reduce(
-      (s, c) =>
-        s +
-        (c.tipo === "nota_credito" ? -1 : 1) *
-          totalEnPesos(c, "total"),
+      (sum, c) =>
+        sum + (c.tipo === "nota_credito" ? -1 : 1) * totalEnPesos(c, "total"),
       0,
     );
-  const pendiente = vigentes
+  const pendiente = data
     .filter((c) => c.estado === "emitido" && c.tipo !== "nota_credito")
-    .reduce((s, c) => s + totalEnPesos(c, "saldoPendiente"), 0);
-  const ncCount = data.filter(
-    (c) =>
-      c.tipo === "nota_credito" &&
-      c.estado === "emitido" &&
-      mesActual(c.fecha),
-  ).length;
+    .reduce((sum, c) => sum + totalEnPesos(c, "saldoPendiente"), 0);
+  const delMes = data.filter(
+    (c) => c.estado === "emitido" && mesActual(c.fecha),
+  );
+  const fmtResumen = (n: number) => formatearMoneda(n, monedaDe("ARS"));
+  const limpiar = () => {
+    setQ("");
+    setEst("todos");
+    setTip("todos");
+  };
 
   return (
-    <div
-      className={s.page}
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "32px 28px 90px",
-      }}
-    >
-      <div className={s.wrap}>
-        <div className={s.head}>
+    <section {...scope} className={`${theme} ${listPage.page} ${s.page}`}>
+      <header className={listPage.header}>
+        <div>
+          <p className={s.eyebrow}>Administración · Documentos fiscales</p>
+          <h1>
+            Comprobantes<span className={s.dot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
+            Facturas, notas de crédito y débito. Su estado fiscal y el saldo de
+            cada documento.
+          </p>
+        </div>
+        {puedeGestionar && (
+          <ActionLink href="/administracion/comprobantes/nuevo">
+            <PlusIcon aria-hidden />
+            Nuevo comprobante
+          </ActionLink>
+        )}
+      </header>
+      <div className={s.metrics} aria-label="Resumen de comprobantes">
+        <div className={s.totalMetric}>
+          <ListMetric
+            label="Monto facturado"
+            value={fmtResumen(facturado)}
+            icon={FileTextIcon}
+            hint="Del listado · ARS, descontando notas de crédito."
+          />
+        </div>
+        <ListMetric
+          label="Saldo en comprobantes"
+          value={fmtResumen(pendiente)}
+          icon={WalletIcon}
+          hint="Pendiente en documentos de este listado · ARS."
+        />
+        <ListMetric
+          label="Facturas del mes"
+          value={delMes.filter((c) => c.tipo === "factura").length}
+          icon={CalendarDaysIcon}
+          hint="Facturas emitidas durante el mes actual."
+        />
+        <ListMetric
+          label="Notas de crédito del mes"
+          value={delMes.filter((c) => c.tipo === "nota_credito").length}
+          icon={FileMinus2Icon}
+          hint="Correcciones emitidas durante el mes actual."
+        />
+      </div>
+      <Card className={s.results}>
+        <Card.Header className={s.sectionHeader}>
+          <span className={s.sectionIcon}>
+            <FilesIcon aria-hidden />
+          </span>
           <div>
-            <h1>Comprobantes</h1>
-            <div className="sub">
-              Facturas, notas de crédito y débito emitidas — estado fiscal y
-              cobro.
-            </div>
+            <Card.Title>Registro de comprobantes</Card.Title>
+            <Card.Description>
+              Consultá cada documento y su autorización fiscal.
+            </Card.Description>
           </div>
-          <div className="right">
-            <button type="button" className="btn" disabled>
-              <DownloadIcon />
-              Exportar
-            </button>
-            <Link className="btn btn-primary" href="/administracion/comprobantes/nuevo">
-              <PlusIcon />
-              Emitir comprobante
-            </Link>
-          </div>
-        </div>
-
-        <div className={s.kpis}>
-          <div className={`${s.kpi} info`}>
-            <div className="l">Emitidos del mes</div>
-            <div className="v">{emitidas}</div>
-            <div className="s">Facturas A/B/C/E</div>
-          </div>
-          <div className={s.kpi}>
-            <div className="l">Monto facturado</div>
-            <div className="v">{fmt(facturado)}</div>
-            <div className="s">Neto de anulados</div>
-          </div>
-          <div className={`${s.kpi} warn`}>
-            <div className="l">Pendiente de cobro</div>
-            <div className="v">{fmt(pendiente)}</div>
-            <div className="s">Saldo en comprobantes</div>
-          </div>
-          <div className={s.kpi}>
-            <div className="l">Notas de crédito</div>
-            <div className="v">{ncCount}</div>
-            <div className="s">Emitidas este mes</div>
+          <span className={s.count}>
+            {list.length} de {data.length} comprobantes
+          </span>
+        </Card.Header>
+        <div className={s.toolbar}>
+          <SearchField
+            aria-label="Buscar comprobante"
+            value={q}
+            onChange={setQ}
+            className={s.search}
+          >
+            <SearchField.Group className={focus.singleBorder}>
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Cliente, CUIT, comprobante u orden…" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={s.stateFilter}>
+            <SelectField
+              aria-label="Estado fiscal"
+              value={est}
+              onChange={setEst}
+              options={ESTADOS.map(([value, label]) => ({
+                value,
+                label: `${label} (${data.filter((c) => cumple(c, value)).length})`,
+              }))}
+            />
           </div>
         </div>
-
-        {data.length === 0 ? (
-          <div className={s.empty}>
-            <div className="ico">
-              <FileTextIcon />
-            </div>
-            <h3>Todavía no emitiste comprobantes</h3>
-            <p>
-              Cuando factures una orden vas a ver acá cada comprobante con su
-              CAE, estado fiscal y saldo pendiente de cobro.
-            </p>
-            <Link
-              className="btn btn-primary"
-              style={{ margin: "0 auto" }}
-              href="/administracion/comprobantes/nuevo"
-            >
-              <PlusIcon />
-              Emitir primer comprobante
-            </Link>
-          </div>
+        <div className={s.typeFilters}>
+          <SegmentedControl
+            aria-label="Tipo de comprobante"
+            value={tip}
+            onChange={setTip}
+            options={TIPOS}
+          />
+        </div>
+        {list.length === 0 ? (
+          <Empty className={s.empty}>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                {data.length ? <SearchXIcon /> : <FileTextIcon />}
+              </EmptyMedia>
+              <EmptyTitle>
+                {data.length
+                  ? "No encontramos comprobantes con estos filtros"
+                  : "Todavía no hay comprobantes"}
+              </EmptyTitle>
+              <EmptyDescription>
+                {data.length
+                  ? "Probá otro cliente, número o estado fiscal."
+                  : "Las facturas y notas que emitas aparecerán acá con su estado, CAE y saldo."}
+              </EmptyDescription>
+            </EmptyHeader>
+            {data.length ? (
+              <ActionButton variant="outline" onPress={limpiar}>
+                Limpiar filtros
+              </ActionButton>
+            ) : (
+              puedeGestionar && (
+                <ActionLink href="/administracion/comprobantes/nuevo">
+                  <PlusIcon />
+                  Crear primer comprobante
+                </ActionLink>
+              )
+            )}
+          </Empty>
         ) : (
-          <>
-            <div className={s.toolbar}>
-              <div className={s.chips}>
-                {CHIPS_ESTADO.map(([k, l]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    className={`${s.chip} ${est === k ? "on" : ""}`}
-                    onClick={() => setEst(k)}
-                  >
-                    {l}
-                    <span className="ct">{estCounts[k] ?? 0}</span>
-                  </button>
-                ))}
-              </div>
-              <div className={s.search}>
-                <SearchIcon />
-                <input
-                  placeholder="Cliente, CUIT, Nº, orden…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className={s.subfilter}>
-              <span className="lbl">Tipo</span>
-              {CHIPS_TIPO.map(([k, l]) => (
-                <button
-                  key={k}
-                  type="button"
-                  className={`${s.tipchip} ${tip === k ? "on" : ""}`}
-                  onClick={() => setTip(k)}
-                >
-                  {l}
-                </button>
-              ))}
-              <span className={s.tcount} style={{ marginLeft: "auto" }}>
-                {list.length} de {data.length} comprobantes
-              </span>
-            </div>
-
-            <div className={s.tbl}>
-              <div className={`${s.tr} ${s.th}`}>
-                <span>Comprobante</span>
-                <span>Cliente</span>
-                <span>Orden</span>
-                <span>Fecha</span>
-                <span className="r">Neto / IVA / Total</span>
-                <span>Estado</span>
-                <span className="r">Saldo</span>
-              </div>
+          <Table className={s.table}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Comprobante</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Orden</TableHead>
+                <TableHead>Fecha</TableHead>
+                <TableHead className={s.number}>Importe</TableHead>
+                <TableHead>Estado fiscal</TableHead>
+                <TableHead className={s.number}>Saldo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {list.map((c) => {
-                const ev = estadoVisual(c);
-                const sigla = COMPROBANTE_TIPO_SIGLA[c.tipo];
+                const fmt = (n: number) =>
+                  formatearMonedaDoc(n, monedaDe(c.moneda));
                 return (
-                  <div
-                    key={c.id}
-                    className={`${s.tr} ${s.row}`}
-                    onClick={() =>
-                      router.push(`/administracion/comprobantes/${c.id}`)
-                    }
-                  >
-                    <span className={s.cmpId}>
-                      {/* La LETRA, no la sigla del tipo: es lo que define el
-                          tratamiento de IVA y lo primero que se busca al
-                          escanear la lista. El tipo lo sigue diciendo el color
-                          —y, en texto, la línea de abajo—. Mismo criterio que
-                          la ficha del comprobante. */}
-                      <span
-                        className={`${s.tipoBadge} ${sigla.toLowerCase()}`}
-                        title={`${COMPROBANTE_TIPO_LABELS[c.tipo]} ${c.letra}`}
+                  <TableRow key={c.id} data-state={c.estado}>
+                    <TableCell>
+                      <Link
+                        className={s.documentLink}
+                        href={`/administracion/comprobantes/${c.id}`}
                       >
-                        {c.letra}
-                      </span>
-                      <span className="num">
-                        <span className="n">{c.numeroCompleto}</span>
-                        <span className="t">
-                          {COMPROBANTE_TIPO_LABELS[c.tipo]} {c.letra}
+                        <ComprobanteLetra comprobante={c} />
+                        <span>
+                          <strong>{c.numeroCompleto}</strong>
+                          <small>
+                            {COMPROBANTE_TIPO_LABELS[c.tipo]} {c.letra}
+                          </small>
                         </span>
-                      </span>
-                    </span>
-                    <span className={s.cli}>
-                      <span className="nm">{c.clienteNombre}</span>
-                      <span className="cuit">
-                        {formatCuitODash(c.clienteCuit)}
-                      </span>
-                    </span>
-                    <span>
-                      {c.ordenNumero ? (
-                        <Link
-                          className={s.link}
-                          href={`/produccion/ordenes/${c.ordenId}`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {c.ordenNumero}
-                        </Link>
-                      ) : (
-                        <span className={s.fecha}>—</span>
+                        <ArrowUpRightIcon aria-hidden />
+                      </Link>
+                    </TableCell>
+                    <TableCell className={s.clientCell}>
+                      <strong>{c.clienteNombre}</strong>
+                      <small>{formatCuitODash(c.clienteCuit)}</small>
+                    </TableCell>
+                    <TableCell>
+                      <div className={s.orderLinks}>
+                        {(c.ordenes.length
+                          ? c.ordenes
+                          : c.ordenId
+                            ? [
+                                {
+                                  ordenId: c.ordenId,
+                                  numero: c.ordenNumero ?? "Ver orden",
+                                },
+                              ]
+                            : []
+                        ).map((o) => (
+                          <Link
+                            key={o.ordenId}
+                            href={`/produccion/ordenes/${o.ordenId}`}
+                          >
+                            {o.numero}
+                            <ArrowUpRightIcon aria-hidden />
+                          </Link>
+                        ))}
+                        {!c.ordenId && c.ordenes.length === 0 && (
+                          <span className={s.muted}>Sin orden</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className={s.date}>
+                      {fechaComprobante(c.fecha)}
+                    </TableCell>
+                    <TableCell className={s.number}>
+                      <strong>{fmt(c.total)}</strong>
+                      <small>Neto {fmt(c.netoGravado)}</small>
+                      <small>IVA {fmt(c.ivaTotal)}</small>
+                      {c.moneda === "USD" && (
+                        <small>TC {c.cotizacion ?? "—"}</small>
                       )}
-                    </span>
-                    <span className={s.fecha}>{c.fecha}</span>
-                    <span className={s.montos}>
-                      <span className="tot">{fmt(c.total)}</span>
-                      <span className="disc">
-                        Neto {fmt(c.netoGravado)} · IVA {fmt(c.ivaTotal)}
-                      </span>
-                      {c.moneda === "USD" ? (
-                        <span className="cur">USD · TC {c.cotizacion}</span>
-                      ) : null}
-                    </span>
-                    <span>
-                      <span className={`${s.estado} ${CLASE_ESTADO[ev.clave] ?? ""}`}>
-                        {c.estado !== "anulado" ? <span className="d" /> : null}
-                        {ev.label}
-                      </span>
-                    </span>
-                    <span
-                      className={`${s.saldoCell} ${c.saldoPendiente > 0 ? "pend" : "ok"}`}
+                    </TableCell>
+                    <TableCell>
+                      <ComprobanteEstado comprobante={c} />
+                    </TableCell>
+                    <TableCell
+                      className={`${s.number} ${s.balance}`}
+                      data-pending={
+                        c.estado === "emitido" &&
+                        c.tipo !== "nota_credito" &&
+                        c.saldoPendiente > 0
+                      }
                     >
-                      {etiquetaSaldo(c, fmt)}
-                      {c.saldoPendiente > 0 && c.total > 0 ? (
-                        <span className="sub">de {fmt(c.total)}</span>
-                      ) : null}
-                    </span>
-                  </div>
+                      {etiquetaSaldoComprobante(c, fmt)}
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-              {list.length === 0 ? (
-                <div className={s.sinResultados}>
-                  Ningún comprobante coincide con el filtro.
-                </div>
-              ) : null}
-            </div>
-          </>
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </div>
+      </Card>
+      <p className={s.caption}>
+        El saldo de comprobantes corresponde a estos documentos. La deuda
+        comercial completa se consulta en Cuentas por cobrar.
+      </p>
+    </section>
   );
 }

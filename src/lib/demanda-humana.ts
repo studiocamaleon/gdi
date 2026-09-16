@@ -1,4 +1,14 @@
 /** Requisitos de atención congelados al cotizar. Espejo front/API. */
+/** Resolución del calendario: redondea hacia arriba sin inventar un milisegundo
+ * por el error binario de convertir minutos que ya representan milisegundos. */
+export function milisegundosDeMinutos(minutos: number): number {
+  const ms = minutos * 60000;
+  const entero = Math.round(ms);
+  return Math.abs(ms - entero) <= Number.EPSILON * Math.max(1, Math.abs(ms)) * 4
+    ? entero
+    : Math.ceil(ms);
+}
+
 export type FaseRun = { minutos: number; operario: boolean };
 export type FaseHumana = { minutos: number; personas: number; operacionMaquina?: true };
 export type ModoOperacionMaquina = 'con_operario' | 'autonoma';

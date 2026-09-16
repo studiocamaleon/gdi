@@ -1,5 +1,6 @@
 import type { CalendarioEstacion, PersonaProduccion } from './estaciones-tipos';
 import type { ReservaHumana } from './capacidad-humana';
+import { milisegundosDeMinutos } from './demanda-humana';
 
 type Ventana = { inicio: number; fin: number };
 type Proyectar = (
@@ -81,7 +82,7 @@ function programarPersonal(
   // hacia arriba evita residuos submilisegundo y nunca acorta la atención.
   // La demanda cotizada conserva sus minutos originales.
   let t = args.desde.getTime(),
-    restante = Math.ceil(args.minutos * 60000);
+    restante = milisegundosDeMinutos(args.minutos);
   const limite = t + 366 * 24 * 60 * 60000;
   const resultado: Array<Ventana & { empleadoIds: string[] }> = [];
   while (restante > 0 && t < limite) {

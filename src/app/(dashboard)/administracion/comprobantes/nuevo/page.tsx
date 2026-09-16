@@ -1,11 +1,13 @@
-import Link from "next/link";
+import { ComprobantesSetup as SinConfig } from "@/components/administracion/comprobantes-setup";
+import { tienePermiso } from "@/lib/permisos-server";
+import { SinPermiso } from "@/components/navigation/sin-permiso";
 
 import {
   ComprobanteEmisionView,
   type ClienteOpcion,
   type OrdenOpcion,
 } from "@/components/administracion/comprobante-emision-view";
-import type { Comprobante, ConfiguracionFiscal } from "@/lib/administracion";
+import type { Comprobante } from "@/lib/administracion";
 import {
   getComprobante,
   getConfiguracionFiscal,
@@ -16,43 +18,19 @@ import type { CondicionFiscal } from "@/lib/clientes";
 
 export const dynamic = "force-dynamic";
 
-function SinConfig({ motivo, cta }: { motivo: string; cta: string }) {
-  return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "48px 28px" }}>
-      <div style={{ maxWidth: 520, margin: "0 auto", textAlign: "center" }}>
-        <h1 style={{ fontSize: 18, fontWeight: 650, marginBottom: 8 }}>
-          Falta configurar la facturación
-        </h1>
-        <p style={{ color: "var(--muted-text)", fontSize: 13.5 }}>{motivo}</p>
-        <Link
-          href="/configuracion/datos-fiscales"
-          className="btn btn-primary"
-          style={{ marginTop: 20, display: "inline-flex" }}
-        >
-          {cta}
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 export default async function NuevoComprobantePage({
   searchParams,
 }: {
   searchParams: Promise<{ origen?: string; ordenId?: string }>;
 }) {
+  if (!(await tienePermiso("administracion.gestionar")))
+    return <SinPermiso modulo="Emisión de comprobantes" />;
   const { origen: origenId } = await searchParams;
 
-  let config: ConfiguracionFiscal | null = null;
+  const config = await getConfiguracionFiscal();
   let clientes: ClienteOpcion[] = [];
   let ordenes: OrdenOpcion[] = [];
   let origen: Comprobante | null = null;
-
-  try {
-    config = await getConfiguracionFiscal();
-  } catch {
-    config = null;
-  }
 
   if (!config) {
     return (
@@ -72,7 +50,7 @@ export default async function NuevoComprobantePage({
     );
   }
 
-  try {
+  {
     const [cs, os] = await Promise.all([
       getClientes({ limit: 200 }),
       getOrdenesTrabajo({ limit: 50 }),
@@ -92,17 +70,10 @@ export default async function NuevoComprobantePage({
         clienteNombre: o.clienteNombre,
         itemsCount: o.itemsCount,
       }));
-  } catch {
-    clientes = [];
-    ordenes = [];
   }
 
   if (origenId) {
-    try {
-      origen = await getComprobante(origenId);
-    } catch {
-      origen = null;
-    }
+    origen = await getComprobante(origenId);
   }
 
   return (

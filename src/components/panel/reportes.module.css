@@ -112,6 +112,11 @@
 .metricFeatured .delta {
   color: var(--accent);
 }
+.metricFeatured .metricHeader > button {
+  --button-fg: var(--brand-muted-on-graphite);
+  --button-bg-hover: var(--brand-graphite-line);
+  color: var(--brand-muted-on-graphite);
+}
 .metricSpark {
   position: absolute;
   right: 16px;

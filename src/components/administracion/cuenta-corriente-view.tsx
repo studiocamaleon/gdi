@@ -53,10 +53,10 @@ import {
 import listPage from "@/components/design-system/list-page.module.css";
 import styles from "./cuenta-corriente.module.css";
 
-/** Mantiene moneda del tenant y precisión de la presentación original. */
+/** Conserva la moneda y los centavos del saldo. */
 function useFmt() {
   const { moneda } = useConfigRegional();
-  return (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
+  return (n: number) => formatearMoneda(n, moneda);
 }
 
 function AllocationGroup({
@@ -87,6 +87,11 @@ function AllocationGroup({
 
 function LedgerRow({ m }: { m: MovimientoCuentaCorriente }) {
   const fmt = useFmt();
+  // La API conserva la convención contable (debe - haber). En pantalla
+  // mostramos la perspectiva del cliente: los pagos suman y los cargos restan.
+  const saldoCliente = -m.saldo;
+  const conSigno = (monto: number) =>
+    `${monto > 0 ? "+ " : monto < 0 ? "− " : ""}${fmt(Math.abs(monto))}`;
   const [open, setOpen] = React.useState(false);
   const detailId = React.useId();
   const tiene = !!m.imputaciones?.length || !!m.aplicaciones?.length;
@@ -142,14 +147,17 @@ function LedgerRow({ m }: { m: MovimientoCuentaCorriente }) {
             </div>
           </div>
         </TableCell>
-        <TableCell className={styles.number}>
-          {m.debe > 0 ? fmt(m.debe) : <span className={styles.muted}>—</span>}
+        <TableCell className={`${styles.number} ${styles.debit}`}>
+          {m.debe > 0 ? conSigno(-m.debe) : <span className={styles.muted}>—</span>}
         </TableCell>
         <TableCell className={`${styles.number} ${styles.credit}`}>
-          {m.haber > 0 ? fmt(m.haber) : <span className={styles.muted}>—</span>}
+          {m.haber > 0 ? conSigno(m.haber) : <span className={styles.muted}>—</span>}
         </TableCell>
-        <TableCell className={`${styles.number} ${styles.balanceCell}`}>
-          {fmt(m.saldo)}
+        <TableCell
+          className={`${styles.number} ${styles.balanceCell}`}
+          data-balance={saldoCliente < 0 ? "debe" : saldoCliente > 0 ? "favor" : "cero"}
+        >
+          {conSigno(saldoCliente)}
         </TableCell>
       </TableRow>
       {open && tiene && (
@@ -191,13 +199,13 @@ function AgingModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title="Antigüedad del saldo"
-      description={`${cc.cliente.nombre} · distribución de la deuda por vencimiento.`}
+      title="Vencimientos pendientes"
+      description={`${cc.cliente.nombre} · saldo pendiente de pago, ordenado por vencimiento.`}
       className={styles.modal}
     >
       <Modal.Body className={styles.agingBody}>
         <div className={styles.agingTotal}>
-          <span>Total deudor</span>
+          <span>Saldo pendiente de pago</span>
           <strong>{fmt(total)}</strong>
         </div>
         {TRAMOS_AGING.map((tramo) => (
@@ -220,6 +228,13 @@ function AgingModal({
             </div>
           </div>
         ))}
+        {(cc.sinVencimiento ?? 0) > 0 && (
+          <p className={styles.hint}>
+            «A vencer» incluye {fmt(cc.sinVencimiento!)} de órdenes cuyo
+            vencimiento todavía no está definido. Se fija al finalizar la OT,
+            según las condiciones del cliente.
+          </p>
+        )}
       </Modal.Body>
       <Modal.Footer className={styles.modalFooter}>
         <ActionButton variant="outline" onPress={onClose}>
@@ -238,12 +253,12 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
   const saldo = cc.saldo;
   const pct = cc.usoLimitePct;
   const limite = cc.cliente.limiteCredito;
-  const estadoSaldo =
-    saldo > 0
-      ? "Saldo deudor"
-      : saldo < 0
-      ? "Saldo a favor del cliente"
-      : "Cuenta saldada";
+  const saldoCliente = -saldo;
+  const vencido = Math.round(
+    (cc.aging.d0_30 + cc.aging.d31_60 + cc.aging.d61_90 + cc.aging.d90_mas) * 100,
+  ) / 100;
+  const conSigno = (monto: number) =>
+    `${monto > 0 ? "+ " : monto < 0 ? "− " : ""}${fmt(Math.abs(monto))}`;
 
   return (
     <section
@@ -299,41 +314,56 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
       <div className={styles.summary} aria-label="Resumen de cuenta corriente">
         <Card
           className={`${styles.summaryCard} ${styles.balance}`}
-          data-status={saldo > 0 ? "deudor" : saldo < 0 ? "favor" : "cero"}
+          aria-label="Saldo total"
+          data-status={saldoCliente < 0 ? "debe" : saldoCliente > 0 ? "favor" : "cero"}
         >
           <div className={styles.summaryHeader}>
-            <span className={styles.summaryLabel}>Saldo actual</span>
-            <span className={styles.summaryIcon}>
-              <WalletIcon aria-hidden />
-            </span>
+            <span className={styles.summaryLabel}>Saldo total</span>
+            <span className={styles.summaryIcon}><WalletIcon aria-hidden /></span>
           </div>
-          <strong className={styles.amount}>{fmt(saldo)}</strong>
-          <span className={styles.balanceStatus}>
-            <span className={styles.statusDot} aria-hidden />
-            {estadoSaldo}
-          </span>
-        </Card>
-        <Card className={styles.summaryCard}>
-          <div className={styles.summaryHeader}>
-            <span className={styles.summaryLabel}>Órdenes sin cobrar</span>
-            <span className={styles.summaryIcon}>
-              <ReceiptTextIcon aria-hidden />
-            </span>
-          </div>
-          <strong className={styles.amount}>{cc.comprobantesPendientes}</strong>
+          <strong className={styles.amount}>
+            {conSigno(saldoCliente)}
+          </strong>
           <p className={styles.hint}>
-            {cc.comprobantesPendientes === 1
-              ? "Orden con saldo pendiente."
-              : "Órdenes con saldo pendiente."}
+            {saldoCliente < 0
+              ? "Saldo a pagar, incluido lo que aún no venció."
+              : saldoCliente > 0
+                ? "Saldo a favor del cliente."
+                : "Saldo total en cero."}
           </p>
         </Card>
-        <Card className={styles.summaryCard}>
+        <Card className={styles.summaryCard} aria-label="Saldo vencido">
           <div className={styles.summaryHeader}>
-            <span className={styles.summaryLabel}>Condiciones de crédito</span>
-            <span className={styles.summaryIcon}>
-              <ShieldCheckIcon aria-hidden />
-            </span>
+            <span className={styles.summaryLabel}>Saldo vencido</span>
+            <span className={styles.summaryIcon}><ReceiptTextIcon aria-hidden /></span>
           </div>
+          <strong className={`${styles.amount} ${vencido > 0 ? styles.debit : ""}`}>
+            {conSigno(-vencido)}
+          </strong>
+          <div className={styles.pendingDetail}>
+            <p className={styles.hint}>
+              {vencido > 0
+                ? "Pagos pendientes fuera de término."
+                : "No hay pagos vencidos."}
+            </p>
+            {cc.agingTotal > 0 && (
+              <ActionButton variant="ghost" onPress={() => setAging(true)}>
+                <ChartNoAxesColumnIcon />
+                Ver vencimientos
+                <ArrowUpRightIcon />
+              </ActionButton>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      <details className={styles.creditConditions}>
+        <summary>
+          <ShieldCheckIcon aria-hidden />
+          Condiciones de crédito
+          <ChevronRightIcon aria-hidden />
+        </summary>
+        <Card className={styles.creditDetails}>
           {cc.cliente.plazoCuentaCorrienteDias === null ? (
             <>
               <strong className={styles.creditTitle}>Venta común</strong>
@@ -388,7 +418,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
             <ArrowUpRightIcon aria-hidden />
           </Link>
         </Card>
-      </div>
+      </details>
 
       <Card className={styles.ledger}>
         <Card.Header className={styles.ledgerHeader}>
@@ -401,23 +431,15 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
                 Movimientos de la cuenta
               </Card.Title>
               <Card.Description className={styles.sectionDescription}>
-                Órdenes, cobros y saldo después de cada movimiento.
+                Cargos desde la emisión de cada orden y pagos recibidos, con el saldo después de cada movimiento.
               </Card.Description>
             </div>
           </div>
-          <ActionButton
-            variant="outline"
-            onPress={() => setAging(true)}
-            isDisabled={cc.agingTotal <= 0}
-            title={
-              cc.agingTotal <= 0
-                ? "No hay saldo deudor para analizar."
-                : undefined
-            }
-          >
-            <ChartNoAxesColumnIcon />
-            Antigüedad del saldo
-          </ActionButton>
+          <div className={styles.balanceLegend} aria-label="Cómo leer el saldo">
+            <span className={styles.debit}>− Debe</span>
+            <span className={styles.credit}>+ A favor</span>
+            <span>0 Al día</span>
+          </div>
         </Card.Header>
         {cc.movimientos.length === 0 ? (
           <Empty className={styles.empty}>
@@ -427,8 +449,8 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
               </EmptyMedia>
               <EmptyTitle>Todavía no hay movimientos</EmptyTitle>
               <EmptyDescription>
-                Cuando se finalice una orden de este cliente o se registre un
-                cobro, vas a ver su detalle y el saldo acá.
+                Cuando se emita una orden de este cliente o se registre un
+                cobro, vas a ver su detalle acá.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -442,9 +464,14 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
                 <TableRow>
                   <TableHead>Fecha</TableHead>
                   <TableHead>Concepto</TableHead>
-                  <TableHead className={styles.number}>Debe</TableHead>
-                  <TableHead className={styles.number}>Haber</TableHead>
-                  <TableHead className={styles.number}>Saldo</TableHead>
+                  <TableHead className={styles.number}>Cargos</TableHead>
+                  <TableHead className={styles.number}>Pagos y créditos</TableHead>
+                  <TableHead
+                    className={styles.number}
+                    title="Negativo: debe. Positivo: a favor. El vencimiento se consulta por separado."
+                  >
+                    Saldo
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -460,9 +487,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
                   {cc.movimientos.length === 1 ? "movimiento" : "movimientos"} ·
                   más recientes primero
                 </p>
-                <p className={styles.hint}>{estadoSaldo}</p>
               </div>
-              <strong>{fmt(saldo)}</strong>
             </Card.Footer>
           </>
         )}

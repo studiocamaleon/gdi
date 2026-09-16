@@ -242,8 +242,11 @@ La cuenta corriente de clientes usa marca clara por ruta y estilos en
 `administracion/cuenta-corriente.module.css`. Saldo destacado en grafito, condiciones
 de crédito y movimientos con aplicaciones comerciales/fiscales desplegables por
 botón accesible. Antigüedad del saldo usa `FormDialog` con el mismo tema. Conservar
-signos, precisión monetaria, cálculos, orden de movimientos y destinos de cobro/PDF;
-distinguir saldo deudor, saldo a favor y cuenta saldada sólo en la presentación.
+precisión monetaria, orden de movimientos y destinos de cobro/PDF. El resumen
+muestra **Saldo total** (neto del extracto) y **Saldo vencido** (suma de los cuatro
+tramos vencidos, excluyendo «A vencer»). UI y PDF muestran deuda negativa y
+saldo a favor positivo. Los cargos nacen al emitir la OT; el vencimiento se fija
+al finalizar. No reintroducir filas de reserva; ver `docs/anticipos-y-cuenta-corriente.md`.
 
 Cupones aplica marca clara por ruta y en sus portales. Conservar el ticket
 troquelado y el QR original, con talón grafito; formularios agrupados en descuento,
@@ -259,10 +262,11 @@ El recorrido margen → puntos → beneficio es explicativo; no simula nuevos im
 
 Centro de análisis aplica marca clara en su layout y portales. La portada y la
 cabecera de los nueve reportes comparten período, navegación y exportación; los
-permisos y rangos de URL se conservan. Resumen ejecutivo y Comercial tienen vistas
-propias (`resumen-ejecutivo.tsx` y `reporte-comercial.tsx`); comparten tarjetas,
-indicadores y estados vacíos en `reportes-ui.tsx`/`reportes.module.css`. Los otros
-reportes siguen en `panel-general.tsx` hasta migrarlos uno por uno. Los gráficos
+permisos y rangos de URL se conservan. Resumen ejecutivo, Comercial, Finanzas,
+Producción, Salud del ETA, Equipo, Ventas y producto, Clientes y Embudo tienen
+vistas propias (`resumen-ejecutivo.tsx` y `reporte-*.tsx`); comparten tarjetas,
+indicadores y estados vacíos en `reportes-ui.tsx`/`reportes.module.css`. Se retiró
+el antiguo `panel/panel-general.tsx`, ya sin consumidores. Los gráficos
 de barras, áreas y miniáreas son adaptaciones locales
 de Tremor sobre Recharts, con licencia en `panel/charts/TREMOR-LICENSE`, sin
 agregar el paquete completo ni estilos globales. Mantener márgenes negativos,
@@ -275,6 +279,50 @@ como conteo de primeras compras en el rango y dormidos como situación actual.
 La estacionalidad conserva hasta ocho categorías y meses con actividad de los
 últimos doce meses. Recharts se monta después de hidratar dentro de un marco
 de altura estable: no renderizar sus ejes medidos por DOM en el servidor.
+Finanzas compara totales del rango con barras agrupadas; no tiene serie temporal
+de costos. Gastos fijos están prorrateados al rango, y deuda/deudores son una foto
+actual. Mantener el gate `finanzas.ver_margenes` en la página y API, los valores
+no calculables como tales y los importes exactos en tablas/exportación.
+Producción usa barras por día con registros, sin interpolar días ausentes. Cola
+y bloqueos son actuales; ahorros separa período e histórico. Tiempo de ciclo
+llega al fin de producción y el cociente real/cotizado mayor a 100% significa
+más tiempo. Conservar medianas, muestra, decimales y utilización superior a 100%.
+Salud del ETA consume la respuesta nueva de cada navegación, sin copiar sus props
+a estado local. Las promesas son por ítem; separar cobertura de cerradas de la
+cobertura de todas las promesas del rango. Sesgo conserva signo y unidad de tiempo,
+sin deltas porcentuales ficticios. Las franjas y los supuestos se superponen:
+no apilarlos como partes excluyentes. Las duraciones sugeridas son sólo lectura.
+Equipo conserva orden alfabético, desvíos individuales sólo con la muestra mínima
+de la API y tiempos fraccionarios. La matriz muestra toda la cobertura observada
+con minutos/pasos y nombres completos; no certifica habilidades. Registro y series
+semanales tienen tablas exportables aun plegadas. Respetar por separado
+`margenesVisibles` y `comisionesVisibles`, también en el CSV.
+Ventas y producto usa barras de Tremor, con hasta seis series y resto agrupado
+sólo en el gráfico; el detalle conserva cada nombre/fecha/importe. El selector
+consulta la categoría con el mismo rango; cada categoría/rango tiene su propio
+estado de carga para no mostrar datos anteriores. Conservar límites de la API
+(20 productos, 12 para adicionales, 8 para medidas), sin recortes extra en UI.
+Consumos son teóricos, con unidad, formato y centésimos; margen/contribución/costo
+siguen `margenesVisibles`. El ticket con/sin adicionales compara grupos distintos,
+no ingreso atribuible al adicional. Los porcentajes de adicionales se superponen.
+Clientes separa actividad del período de cartera actual e historial completo.
+Recompra es mediana histórica con cinco intervalos mínimos; conservar decimales.
+La serie nuevos/recurrentes clasifica ventas según el primer día/semana/mes de
+compra, mientras que el KPI cuenta clientes únicos nuevos en todo el rango.
+Segmentos conserva seis reglas con `diasActivo` configurable; “Nuevos” del
+segmento significa una sola orden reciente. Concentración usa el denominador
+completo aunque muestre hasta diez clientes; el acumulado no siempre llega a
+100%. Riesgo muestra hasta ocho filas y el total real del segmento; vacío no
+implica ausencia de perdidos. Margen respeta `margenesVisibles`, importes negativos
+y costos faltantes tanto en pantalla como en CSV.
+Embudo conserva la cohorte de presupuestos enviados y etapas alcanzadas,
+con selector Cantidad/Importe y exportación de ambas medidas aun con detalle
+plegado. Las barras de importe usan el máximo de la serie para no recortar OT
+con ajustes mayores al presupuesto; ratios superiores al 100% permanecen visibles.
+Sin denominador no hay tasa calculable; una cohorte con monto cero sigue visible.
+Los presupuestos abiertos de hoy son independientes del filtro. “En gestión”
+no es una pérdida. La velocidad usa emisión/finalización de OT, no timestamps de
+entrega física: las etiquetas reflejan esas referencias y los tramos no se suman.
 
 Usar utilidades para composición y CSS Modules para geometría compleja. No
 copiar reglas del proveedor, añadir colores por vista ni convertir la ficha
@@ -351,3 +399,61 @@ Los datos anteriores conservan el modo previo hasta configurar empleados;
 la referencia del equipo se retiene sólo para coordinar esa transición.
 Ver `docs/produccion-empleados-horarios-2026-09-14.md` antes de cambiar el motor,
 la migración o las agendas. No inferir empleados ni horarios de cantidades de equipo.
+
+## Tesorería con identidad de Grafo
+
+`/administracion/tesoreria` y `acreditaciones` tienen un layout de marca claro
+acotado a esas rutas. `tesoreria-view.module.css` cubre ambas vistas y
+`TesoreriaDialog` compone `FormDialog` para sus operaciones. Conservar los
+permisos separados de gestionar/anular y los payloads/idempotencia del circuito.
+Mostrar importes con los decimales propios de cada moneda (incluidos centavos
+al arquear); nunca sumar posiciones de distintas monedas. Referencia y QA:
+`docs/sistema-visual-heroui.md`.
+
+## Facturación en lote con identidad de Grafo
+
+`/administracion/facturacion` usa marca clara, tabla y panel de preparación;
+`FacturacionResultado` presenta el resultado parcial en `FormDialog`. Mantener
+la confirmación previa con `FacturacionConfirmacion`: sólo «Confirmar y emitir»
+envía el lote revisado; cancelar conserva la selección y el envío bloquea cierres
+y solicitudes duplicadas. Conservar la selección fuera del filtro (la cabecera
+selecciona sólo visibles), agrupar
+únicamente órdenes del mismo cliente y respetar `administracion.gestionar`.
+Los importes sin facturar son fiscales, independientes de lo cobrado. Mantener
+los decimales de la moneda del tenant y no convertir un error de carga en vacío.
+No modificar emisión, matching o numeración desde la capa visual. Referencia y
+QA en `docs/sistema-visual-heroui.md`.
+
+
+## Cuentas por pagar con identidad de Grafo
+
+`/administracion/cuentas-por-pagar` usa marca clara local y presenta sus datos
+con `CuentasPagarWorkspace`; `EgresosView` sigue siendo el controlador compartido
+con Egresos. `EgresosBrand` adapta alta, pago y detalle mediante `EgresoDialog`
+sin modificar la presentación del modo Egresos. Mantener permisos, payloads,
+idempotencia, cuotas y la distinción entre gestión y anulación. Los selectores
+HeroUI usan filtrado externo de `filtrarOpciones` y portales con tema explícito.
+No redondear los importes a enteros. Los registros `DEMO-CXP-20260916` son datos
+de prueba autorizados, no fixtures automáticas; el script se limita a la base
+local. Referencia y QA en `docs/sistema-visual-heroui.md`.
+
+## Gastos fijos con identidad de Grafo
+
+`/administracion/gastos-fijos` usa marca clara y `FormSheet` con pestañas grafito.
+Los helpers de formulario están en `src/components/costos/gastos-fijos-form.ts`.
+Conservar la moneda del tenant al editar importes y enviar el estado `activo`
+actual: el backend aplica `true` si se omite. El resumen mensual considera
+activos dentro de su vigencia inclusiva; no representa vencimientos ni pagos.
+Los catálogos se cargan al abrir la ficha. No confundir este presupuesto con
+Egresos/Recurrentes. Ver `docs/sistema-visual-heroui.md` para presentación y QA.
+
+## Comprobantes con identidad de Grafo
+
+`/administracion/comprobantes` usa marca clara local en listado, alta, ficha y
+vista imprimible. Estados y fechas de presentación se centralizan en
+`src/lib/comprobantes-presentacion.ts`; no llamar cobrado a un documento anulado,
+borrador o rechazado. Importes con centavos en la moneda del comprobante;
+métricas del listado en ARS según cotización guardada, con el límite de consulta
+existente. Conservar permisos de gestión, letras/IVA, payloads, numeración,
+emisión y CAE. El PDF fiscal mantiene su contenido y generación. Referencia y QA:
+`docs/sistema-visual-heroui.md`.

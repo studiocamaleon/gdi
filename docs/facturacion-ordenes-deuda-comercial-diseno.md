@@ -2,6 +2,13 @@
 
 **Fecha:** 2026-07-18 · **Estado:** IMPLEMENTADO (etapas A–G completas, verificado E2E en homologación ARCA)
 
+> **Actualización 2026-09-16:** el cargo de cuenta corriente ahora nace al
+> **emitir** la OT, no al finalizar. El vencimiento sigue fijándose al finalizar
+> y las OTs sin vencimiento se muestran en «A vencer». Finalizar/reabrir conserva
+> el cargo original. Se retiraron las filas de reserva de anticipos. Esta regla
+> reemplaza las referencias históricas de este documento a «deuda al finalizar»;
+> ver [reglas vigentes](anticipos-y-cuenta-corriente.md).
+
 > Hallazgos de la implementación (2026-07-18):
 > - **Bug preexistente del tenant-guard**: `findUnique` con `select` parcial
 >   (sin tenantId) descartaba filas PROPIAS (post-filtro contra undefined).

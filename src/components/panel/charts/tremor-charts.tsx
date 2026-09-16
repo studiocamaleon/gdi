@@ -229,6 +229,8 @@ export function TremorBarChart({
   tickFormatter = String,
   label,
   height = 280,
+  mode = "stacked",
+  allowDecimals = true,
 }: {
   data: ChartDatum[];
   index: string;
@@ -239,6 +241,8 @@ export function TremorBarChart({
   tickFormatter?: (value: string) => string;
   label: string;
   height?: number;
+  mode?: "stacked" | "grouped";
+  allowDecimals?: boolean;
 }) {
   const helpId = useId();
   const ready = useChartReady();
@@ -283,6 +287,7 @@ export function TremorBarChart({
                 tickMargin={12}
               />
               <YAxis
+                allowDecimals={allowDecimals}
                 width={64}
                 axisLine={false}
                 tickLine={false}
@@ -335,9 +340,9 @@ export function TremorBarChart({
                   key={category.key}
                   name={category.label}
                   dataKey={category.key}
-                  stackId="stack"
+                  stackId={mode === "stacked" ? "stack" : undefined}
                   fill={category.color}
-                  maxBarSize={56}
+                  maxBarSize={mode === "stacked" ? 56 : 96}
                   isAnimationActive={false}
                 />
               ))}

@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { PagosTab } from "@/components/produccion/orden-trabajo-detalle-view";
@@ -10,6 +11,10 @@ import {
 import type { Archivo } from "@/lib/archivos";
 import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
 import { PropuestaFicha } from "./propuesta-ficha";
+
+vi.mock("react", async (importOriginal) => ({
+  ...(await importOriginal<typeof React>()),
+}));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -104,17 +109,35 @@ describe("controles que respetan el modo consulta de la OT", () => {
     expect(html).toContain('type="checkbox"');
   });
 
-  it("el acceso para registrar cobros requiere edición y además una OT emitida", () => {
-    const render = (soloLectura: boolean, puedeCobrar = true) =>
-      renderToStaticMarkup(
-        <PagosTab
-          ordenId="ot-1"
-          pago={null}
-          total={1000}
-          soloLectura={soloLectura}
-          puedeCobrar={puedeCobrar}
-        />,
-      );
+  it("no muestra saldos ni permite cobrar mientras consulta los cobros", () => {
+    const html = renderToStaticMarkup(
+      <PagosTab ordenId="ot-1" pago={null} total={1000} soloLectura={false} />,
+    );
+    expect(html).toContain("Cargando cobros");
+    expect(html).not.toContain("Saldo pendiente");
+    expect(html).not.toContain("/administracion/cobros/nuevo");
+  });
+
+  it("con los cobros cargados, el acceso requiere edición y además una OT emitida", () => {
+    const render = (soloLectura: boolean, puedeCobrar = true) => {
+      // SSR no ejecuta efectos: simula una consulta terminada sin cobros.
+      const estadoCobros = vi
+        .spyOn(React, "useState")
+        .mockImplementationOnce(() => [[], vi.fn()]);
+      try {
+        return renderToStaticMarkup(
+          <PagosTab
+            ordenId="ot-1"
+            pago={null}
+            total={1000}
+            soloLectura={soloLectura}
+            puedeCobrar={puedeCobrar}
+          />,
+        );
+      } finally {
+        estadoCobros.mockRestore();
+      }
+    };
     expect(render(true)).not.toContain("/administracion/cobros/nuevo");
     expect(render(false)).toContain("/administracion/cobros/nuevo");
     expect(render(false, false)).not.toContain("/administracion/cobros/nuevo");

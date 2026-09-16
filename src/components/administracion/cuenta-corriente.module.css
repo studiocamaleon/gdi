@@ -42,9 +42,9 @@
 }
 .summary {
   display: grid;
-  grid-template-columns: 1.1fr 0.75fr 1.2fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin: 4px 0 24px;
+  margin: 4px 0 12px;
 }
 .summaryCard {
   display: flex;
@@ -91,6 +91,12 @@
   --muted-text: var(--brand-muted-on-graphite);
   --border: var(--brand-graphite-line);
 }
+.balance[data-status="debe"] .amount {
+  color: color-mix(in srgb, var(--danger) 60%, var(--brand-on-graphite));
+}
+.balance[data-status="favor"] .amount {
+  color: color-mix(in srgb, var(--success) 60%, var(--brand-on-graphite));
+}
 .amount {
   font-size: clamp(27px, 2.4cqi, 38px);
   font-weight: 500;
@@ -99,22 +105,57 @@
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
-.balanceStatus {
-  display: inline-flex;
+.pendingDetail {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
-  color: var(--muted-text);
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.pendingDetail button {
+  margin-right: -10px;
+}
+.creditConditions {
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.creditConditions summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
   font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
 }
-.statusDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
+.creditConditions summary::-webkit-details-marker {
+  display: none;
 }
-.balance[data-status="favor"] .statusDot,
-.balance[data-status="cero"] .statusDot {
-  background: var(--success);
+.creditConditions summary svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-text);
+}
+.creditConditions summary svg:last-child {
+  margin-left: auto;
+}
+.creditConditions[open] summary svg:last-child {
+  transform: rotate(90deg);
+}
+.creditConditions summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.creditDetails {
+  gap: 12px;
+  padding: 6px 22px 22px;
+  border: 0;
+  border-radius: 0 0 8px 8px;
+  background: transparent;
+  box-shadow: none;
 }
 .hint {
   color: var(--muted-text);
@@ -253,8 +294,21 @@
 .balanceCell {
   font-weight: 600;
 }
-.credit {
+.debit,
+.balanceCell[data-balance="debe"] {
+  color: var(--danger);
+}
+.credit,
+.balanceCell[data-balance="favor"] {
   color: var(--success);
+}
+.balanceLegend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  color: var(--muted-text);
+  font-size: 12px;
 }
 .muted {
   color: var(--muted-text);
@@ -452,14 +506,6 @@
   padding: 16px 24px;
   border-top: 1px solid var(--border);
 }
-@container list-page (max-width: 1000px) {
-  .summary {
-    grid-template-columns: 1fr 1fr;
-  }
-  .summaryCard:last-child {
-    grid-column: 1 / -1;
-  }
-}
 @container list-page (max-width: 600px) {
   .summary {
     grid-template-columns: minmax(0, 1fr);
@@ -472,19 +518,8 @@
   .balance {
     grid-column: 1 / -1;
   }
-  .summaryCard:nth-child(2) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px 16px;
-  }
-  .summaryCard:nth-child(2) .amount {
-    grid-column: 2;
-    grid-row: 1 / 3;
-    align-self: center;
-  }
-  .summaryCard:last-child {
-    grid-column: auto;
-  }
+  .creditConditions summary { padding: 14px 16px; }
+  .creditDetails { padding: 6px 16px 16px; }
   .summaryIcon {
     display: none;
   }

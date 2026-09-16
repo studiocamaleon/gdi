@@ -3673,8 +3673,8 @@ model OrdenTrabajo {
   /// (grafoprint.com.ar/track/<token>). Se genera al emitir la OT (salir de
   /// borrador); null = todavía no compartible. Ver docs/tracking-publico-diseno.md
   publicToken                 String?                       @unique
-  /// Primera vez que la orden llegó a 'finalizada'. Ancla del aging de la
-  /// deuda COMERCIAL (la deuda nace acá, no en la factura). Reabrir la
+  /// Primera vez que la orden llegó a 'finalizada'. Ancla del vencimiento
+  /// comercial; el cargo ya existe desde la emisión. Reabrir la
   /// orden NO la borra: si vuelve a finalizar, el aging no se resetea.
   /// Ver docs/facturacion-ordenes-deuda-comercial-diseno.md
   fechaFinalizada             DateTime?

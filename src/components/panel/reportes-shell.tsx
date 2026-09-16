@@ -172,15 +172,7 @@ export function ReportesShell({ children }: { children: React.ReactNode }) {
         ) : null}
         <div
           data-reporte-cuerpo
-          className={cn(
-            styles.content,
-            !esIndice &&
-              !["/reportes/resumen", "/reportes/comercial"].includes(
-                pathname,
-              ) &&
-              "dash",
-            styles.reportBody,
-          )}
+          className={cn(styles.content, styles.reportBody)}
         >
           {children}
         </div>

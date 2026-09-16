@@ -70,7 +70,18 @@ export class CobrosService {
       where: {
         tenantId: auth.tenantId,
         anuladoEl: null,
-        ...(filtros?.ordenId ? { ordenId: filtros.ordenId } : {}),
+        ...(filtros?.ordenId
+          ? {
+              OR: [
+                { ordenId: filtros.ordenId },
+                {
+                  aplicacionesOrden: {
+                    some: { ordenId: filtros.ordenId, monto: { gt: 0 } },
+                  },
+                },
+              ],
+            }
+          : {}),
       },
       include: {
         metodoPago: { select: { nombre: true, tipo: true } },
@@ -78,11 +89,25 @@ export class CobrosService {
         cliente: { select: { nombre: true } },
         retenciones: true,
         valores: { select: { id: true, estado: true, numero: true } },
+        aplicacionesOrden: { select: { ordenId: true, monto: true } },
       },
       orderBy: { fecha: 'desc' },
-      take: 200,
+      // El total de una OT debe incluir todos sus recibos, sin truncarlo.
+      ...(filtros?.ordenId ? {} : { take: 200 }),
     });
-    return cobros.map((cobro) => this.toResponse(cobro));
+    return cobros.map((cobro) => ({
+      ...this.toResponse(cobro),
+      ...(filtros?.ordenId
+        ? {
+            montoAplicadoOrden: Number(
+              cobro.aplicacionesOrden.find((a) => a.ordenId === filtros.ordenId)
+                ?.monto ??
+                (cobro.ordenId === filtros.ordenId ? cobro.montoBruto : 0),
+            ),
+            origenAplicacion: cobro.ordenId ? 'directo' : 'cuenta_corriente',
+          }
+        : {}),
+    }));
   }
 
   async create(auth: CurrentAuth, payload: CrearCobroDto) {
@@ -403,7 +428,11 @@ export class CobrosService {
         );
         if (acreditaInmediato) {
           for (const aplicacion of aplicaciones) {
-            await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, aplicacion.ordenId);
+            await this.fidelizacion.reconciliarOrden(
+              tx,
+              auth.tenantId,
+              aplicacion.ordenId,
+            );
           }
         }
 
@@ -655,9 +684,16 @@ export class CobrosService {
         ordenId: cobro.ordenId,
         operacionId: randomUUID(),
       });
-      const aplicaciones = await tx.cobroOrden.findMany({ where: { cobroId: cobro.id }, select: { ordenId: true } });
+      const aplicaciones = await tx.cobroOrden.findMany({
+        where: { cobroId: cobro.id },
+        select: { ordenId: true },
+      });
       for (const aplicacion of aplicaciones) {
-        await this.fidelizacion.reconciliarOrden(tx, cobro.tenantId, aplicacion.ordenId);
+        await this.fidelizacion.reconciliarOrden(
+          tx,
+          cobro.tenantId,
+          aplicacion.ordenId,
+        );
       }
       return true;
     });
@@ -753,7 +789,11 @@ export class CobrosService {
       }
       await this.facturacionOrdenes.revertirCobro(tx, auth.tenantId, cobro.id);
       for (const aplicacion of cobro.aplicacionesOrden) {
-        await this.fidelizacion.reconciliarOrden(tx, auth.tenantId, aplicacion.ordenId);
+        await this.fidelizacion.reconciliarOrden(
+          tx,
+          auth.tenantId,
+          aplicacion.ordenId,
+        );
       }
       return { ok: true };
     });

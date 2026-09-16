@@ -2,7 +2,11 @@ import {
   programarFasePersonal,
   seleccionarDotacionPersonal,
 } from "./capacidad-personal";
-import { recortarDemanda, type DemandaHumana } from "./demanda-humana";
+import {
+  milisegundosDeMinutos,
+  recortarDemanda,
+  type DemandaHumana,
+} from "./demanda-humana";
 import type {
   CalendarioEstacion,
   EquipoProduccion,
@@ -127,10 +131,20 @@ export function programarAtencion(args: {
     fin = args.desde;
   const reservas: ReservaHumana[] = [];
   const trabajo: TramoOperacion[] = [];
+  let minutosAcumulados = 0,
+    msAcumulados = 0;
   const fases = [
     ...demanda.fases,
     { minutos: args.preparacionMin, personas: 1 },
-  ];
+  ].map((fase) => {
+    // Cuantizar los límites acumulados conserva el total cotizado. Redondear
+    // cada fase por separado puede empujar el último milisegundo al lunes.
+    minutosAcumulados += fase.minutos;
+    const finMs = milisegundosDeMinutos(minutosAcumulados);
+    const minutos = (finMs - msAcumulados) / 60000;
+    msAcumulados = finMs;
+    return { ...fase, minutos };
+  });
   const dotacion = Math.max(
     0,
     ...fases.filter((f) => f.minutos > 0).map((f) => f.personas),

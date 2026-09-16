@@ -3,11 +3,18 @@
 import { AlertCircleIcon, RefreshCwIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useLegacyDesignScope } from "@/components/design-system/appearance";
+import styles from "@/components/administracion/tesoreria-view.module.css";
+
 import { Button } from "@/components/ui/button";
 
 export default function TesoreriaError({ reset }: { reset: () => void }) {
+  const scope = useLegacyDesignScope();
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-6 lg:p-8">
+    <main
+      {...scope}
+      className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
+    >
       <Alert variant="destructive">
         <AlertCircleIcon />
         <AlertTitle>No pudimos cargar Tesorería</AlertTitle>

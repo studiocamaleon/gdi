@@ -489,6 +489,8 @@ export function getPanelFinanzas(rango?: RangoPanel) {
     `/reportes/panel/finanzas${qs(rango)}`,
   );
 }
+export type FinanzasData = Awaited<ReturnType<typeof getPanelFinanzas>>;
+
 export function getPanelProduccion(rango?: RangoPanel) {
   return apiRequest<TabPanel<ProduccionPanel>>(`/reportes/panel/produccion${qs(rango)}`);
 }

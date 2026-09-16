@@ -205,6 +205,42 @@ describe.each([
       expect(JSON.stringify(trabajos)).toBe(original);
     },
   );
+  it("las fases decimales que completan el viernes no derraman milisegundos al lunes", () => {
+    const turno: CalendarioEstacion = {
+      dias: {
+        lun: [{ desde: "09:00", hasta: "10:00" }],
+        mar: null,
+        mie: null,
+        jue: null,
+        vie: [{ desde: "09:00", hasta: "10:00" }],
+        sab: null,
+        dom: null,
+      },
+    };
+    const trabajo = item("decimal", "taller", 60, 1, {
+      demandaHumana: {
+        version: 1,
+        verificada: true,
+        fases: [
+          { minutos: 5, personas: 1 },
+          { minutos: 54.14285714285714, personas: 0 },
+          { minutos: 0.8571428571428612, personas: 1 },
+        ],
+      },
+    });
+    const r = simular({
+      items: [trabajo],
+      estaciones: [personal("taller", [persona("ana", turno)])],
+      medianas: new Map(),
+      ahora: fecha(18),
+      zona: "America/Argentina/Rio_Gallegos",
+    });
+    expect(r.porItem.get("decimal")?.finEstimado).toEqual(fecha(18, 10));
+    expect(
+      r.traza[0].tramosOperacion?.reduce((s, t) => s + t.fin - t.inicio, 0),
+    ).toBe(60 * 60000);
+  });
+
   it("equilibra minutos entre personas también en trabajos secuenciales de una máquina", () => {
     const trabajos = [
       item("a", "taller", 90),
@@ -547,17 +583,29 @@ describe.each([
     const a = manual("a", "diseño");
     a.pasos[0].personalFijo = { empleadoIds: ["ana"] };
     const original = correr([a], estaciones).traza[0];
-    a.pasos[0] = { ...a.pasos[0], personalFijo: { empleadoIds: ["bruno"] },
-      planificadoDesde: original.inicio.toISOString(), planificadoHasta: original.fin.toISOString(),
-      atencionPlanificada: original.atencionPlanificada };
+    a.pasos[0] = {
+      ...a.pasos[0],
+      personalFijo: { empleadoIds: ["bruno"] },
+      planificadoDesde: original.inicio.toISOString(),
+      planificadoHasta: original.fin.toISOString(),
+      atencionPlanificada: original.atencionPlanificada,
+    };
     const b = manual("0", "armado");
     b.pasos[0].personalFijo = { empleadoIds: ["ana"] };
     const c = manual("1", "armado");
     c.pasos[0].personalFijo = { empleadoIds: ["bruno"] };
     const resultado = correr([b, c, a], estaciones);
-    expect(resultado.traza.find(p => p.pasoId === "a")?.reservasHumanas?.every(r => r.empleadoIds?.includes("bruno"))).toBe(true);
-    expect(resultado.traza.find(p => p.pasoId === "0")?.inicio).toEqual(fecha(14, 9));
-    expect(resultado.traza.find(p => p.pasoId === "1")?.inicio).toEqual(fecha(14, 10));
+    expect(
+      resultado.traza
+        .find((p) => p.pasoId === "a")
+        ?.reservasHumanas?.every((r) => r.empleadoIds?.includes("bruno")),
+    ).toBe(true);
+    expect(resultado.traza.find((p) => p.pasoId === "0")?.inicio).toEqual(
+      fecha(14, 9),
+    );
+    expect(resultado.traza.find((p) => p.pasoId === "1")?.inicio).toEqual(
+      fecha(14, 10),
+    );
   });
   it.each([true, false])(
     "no duplica personas durante la transición de un equipo (personal primero: %s)",

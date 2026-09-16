@@ -1,5 +1,8 @@
 "use client";
 
+import { montoCobroEnOrden } from "@/lib/cobro-aplicado";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 import * as React from "react";
 import Link from "next/link";
 import {
@@ -314,6 +317,7 @@ export function ComprobantesOrdenTab({
     null,
   );
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
+  const [errorCobros, setErrorCobros] = React.useState(false);
   const [facturarOpen, setFacturarOpen] = React.useState(false);
   const [refrescos, setRefrescos] = React.useState(0);
   /** La factura que se está por acreditar, o null. */
@@ -331,12 +335,14 @@ export function ComprobantesOrdenTab({
 
   React.useEffect(() => {
     let activo = true;
+    setCobros(null);
+    setErrorCobros(false);
     getComprobantes({ ordenId })
       .then((data) => activo && setComprobantes(data))
       .catch(() => activo && setComprobantes([]));
     getCobros({ ordenId })
       .then((data) => activo && setCobros(data))
-      .catch(() => activo && setCobros([]));
+      .catch(() => activo && setErrorCobros(true));
     getFacturacionHabilitada()
       .then((h: boolean) => activo && setFacturacionActiva(h))
       .catch(() => activo && setFacturacionActiva(false));
@@ -361,7 +367,7 @@ export function ComprobantesOrdenTab({
   const cobrado =
     cobros === null
       ? cobradoInicial
-      : cobros.reduce((s, c) => s + c.montoBruto, 0);
+      : cobros.reduce((s, c) => s + montoCobroEnOrden(c), 0);
   const saldoSinFacturar = Math.max(0, total - Math.max(0, facturado));
 
   React.useEffect(() => {
@@ -508,7 +514,12 @@ export function ComprobantesOrdenTab({
             </Link>
           ) : null}
         </div>
-        {cobros === null ? (
+        {errorCobros ? (
+          <Alert variant="destructive">
+            <AlertTitle>No se pudieron consultar los cobros</AlertTitle>
+            <AlertDescription>Volvé a abrir la pestaña para reintentar.</AlertDescription>
+          </Alert>
+        ) : cobros === null ? (
           <div className="mov-empty">Cargando cobros…</div>
         ) : listaCobros.length === 0 ? (
           <div className="mov-empty">
@@ -522,7 +533,7 @@ export function ComprobantesOrdenTab({
               <span>Método</span>
               <span>Recibo</span>
               <span>Acreditación</span>
-              <span className="r">Monto</span>
+              <span className="r">Aplicado a esta OT</span>
               <span aria-label="Acciones" />
             </div>
             {listaCobros.map((c) => (
@@ -532,7 +543,10 @@ export function ComprobantesOrdenTab({
                 style={{ gridTemplateColumns: COLS_COBRO }}
               >
                 <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
-                <span className="mov-metodo">{c.metodoNombre}</span>
+                <span className="mov-metodo">
+                  {c.metodoNombre}
+                  {c.origenAplicacion === "cuenta_corriente" ? <span className="mov-who"> · Cuenta corriente</span> : null}
+                </span>
                 <span className="mov-comp">
                   {c.numeroRecibo ? (
                     <a
@@ -554,7 +568,7 @@ export function ComprobantesOrdenTab({
                     : "Pendiente"}
                 </span>
                 <span className="mov-monto">
-                  {formatMonedaOrden(c.montoBruto, moneda)}
+                  {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
                 </span>
                 <span className="fo-comp-acc">
                   {!soloLectura && puedeAnular ? (
@@ -610,6 +624,7 @@ export function ComprobantesOrdenTab({
         titulo={`Anular cobro ${cobroParaAnular?.numeroRecibo ?? ""}`}
         descripcion={`Se conserva el historial y se registra un contramovimiento por ${formatMonedaOrden(cobroParaAnular?.disponibleReal ?? 0, moneda)}.`}
         impacto={[
+          "Se anula el recibo completo, incluidas sus aplicaciones a otras órdenes o facturas.",
           "El importe vuelve a quedar pendiente en la cuenta corriente.",
           "Si ya ingresó a una cuenta, Tesorería registra la salida de reversión.",
           "El recibo queda anulado y no se elimina del historial.",

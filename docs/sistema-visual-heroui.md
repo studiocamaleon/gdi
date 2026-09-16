@@ -2120,3 +2120,488 @@ desborde horizontal de la página. Se verificaron gráficos por teclado, ticket
 promedio/mediana, un único mes, períodos vacíos, CSV descargado y Resumen ejecutivo
 tras compartir componentes. La carga final no registra errores de hidratación.
 La app y la API quedan levantadas; la web de marketing continúa apagada.
+
+
+### Centro de análisis · Finanzas · 16/09/2026
+
+Finanzas adopta las tarjetas e indicadores compartidos de Grafo, con ventas en
+grafito y superficies claras. `reporte-finanzas.tsx` reemplaza TabFinanzas y sus
+helpers exclusivos. Conserva los cinco indicadores, cuentas por cobrar,
+comisiones por método, gastos fijos y deudores. El gate de márgenes permanece
+antes de solicitar datos; los rangos y consultas no cambian.
+
+La comparación usa barras agrupadas de Tremor sobre el mismo agregado del backend,
+con importes exactos de ventas, costo y margen. «Ver datos del resultado» expone
+costos variables, contribución, gastos fijos y equilibrio, y se exporta plegado.
+No se presenta como serie diaria un único total. Gastos fijos se etiqueta como
+prorrateado al rango y muestra todas las categorías, sin el recorte anterior de ocho.
+Cuentas por cobrar y deudores llevan «Hoy» y una descripción de su alcance actual.
+
+La antigüedad usa etiquetas, colores semánticos e importes. Cada deudor permite
+abrir su distribución monetaria con un desplegable nativo; el CSV incluye esos
+saldos aun cerrado. Comisiones conserva bruto, cantidad, porcentaje y comisión,
+y muestra además el neto registrado. Ceros, pérdidas y valores no calculables se
+distinguen; avances del equilibrio superiores al 100% conservan su valor real.
+
+Los cuadros emergentes de gráficos ajustan su ancho al área disponible, también
+con rangos de fechas largos en móvil. El modo agrupado es optativo; el Resumen
+mantiene sus barras apiladas. No se agregan dependencias ni estilos globales.
+
+Verificación: 44 pruebas focalizadas, TypeScript, ESLint y CSS Guard. Pruebas del
+servidor cubren el gate y la conservación del rango personalizado. Revisión visual
+con datos reales en escritorio, 1024 y 390 px, período sin ventas, navegación por
+teclado del gráfico y CSV descargado con datos plegados. Casos con deudores y
+comisiones se cubren con datos de prueba, sin crear movimientos en la aplicación.
+
+
+### Centro de análisis · Producción · 16/09/2026
+
+Producción migra a `reporte-produccion.tsx`, las tarjetas compartidas y un CSS
+Module local. Se retira TabProduccion, manteniendo los helpers usados por Equipo
+y otros reportes. El gate del layout, consulta, período, zona horaria y contratos
+del backend permanecen intactos. No se agregan dependencias ni estilos globales.
+
+Los cinco indicadores conservan sus datos y entregas a tiempo se destaca en
+grafito. El tiempo de ciclo se describe hasta el fin de producción, según el
+cálculo existente. El cociente real/cotizado explica que 100% es igualdad y que
+un valor mayor implica más tiempo. Los bloqueos son conteos, sin un falso delta.
+
+Ritmo diario usa barras Tremor con eje de enteros, teclado y fechas calendario.
+Se muestran sólo los días recibidos, sin interpolar actividad. «Ver datos de
+producción» es consultable y exportable aun plegado. Cumplimiento separa órdenes
+a tiempo, fuera de fecha y sin fecha; no confunde falta de datos con 100% de éxito.
+La tabla incluye la fecha prometida y conserva el orden de atraso del backend.
+
+Precisión muestra medianas, decimales de minuto, tamaño de muestra y desvío con
+texto y color. Utilización mantiene decimales de hora, capacidad ausente y valores
+superiores al 100%; sólo el ancho decorativo se limita. Calidad del registro usa
+una barra apilada y una tabla con fuentes, conteos y porcentajes. Pausas conserva
+su período; Bloqueos muestra el desglose actual que ya proveía la API. Los tiempos
+por operador siguen en Equipo.
+
+Ahorros distingue período e histórico, con importes monetarios exactos, metros
+lineales, tandas y trabajos. El desglose por material conserva tecnología y alcance
+histórico. Su resumen también se exporta plegado; etiquetas de varias líneas se
+separan explícitamente en CSV. No se crean movimientos para mostrar ejemplos.
+
+Verificación: 52 pruebas focalizadas (incluidas ocho de esta migración), TypeScript,
+ESLint, CSS Guard y diff check. Revisión real en escritorio, 1024 y 390 px, gráfico
+por teclado, mes sin actividad y CSV descargado e inspeccionado. Las tablas amplias
+desplazan dentro de su tarjeta sin desbordar la página. Ahorros, atrasos, bloqueos
+y utilización mayor a 100% se cubren con datos de prueba. App y API permanecen
+encendidas; la web de marketing sigue apagada.
+
+
+### Centro de análisis · Salud del ETA · 16/09/2026
+
+La vista usa `reporte-salud-eta.tsx`, las primitivas compartidas de Reportes y un
+CSS Module local. Cuatro indicadores, precisión, cobertura y calibración de
+familias adoptan la marca clara con acento naranja e indicador principal grafito.
+Se retira el panel anterior y su variante independiente sin consumidores; la ruta
+histórica `/produccion/eta` conserva su redirección. API, cálculos y permisos no
+cambian. No se agregan dependencias ni estilos globales.
+
+Sesgo mantiene el signo negativo/positivo y unidades de tiempo; se retiran los
+falsos deltas porcentuales de sesgo, tardanza y supuestos. Cero se distingue de
+un resultado no calculable. Las métricas cuentan promesas por ítem, no órdenes.
+La mediana y el percentil 90 explican su significado; un detalle plegable permite
+consultar y exportar errores exactos en minutos, incluido el sesgo con signo.
+
+Precisión usa promesas del período ya cerradas y distingue su cobertura de la de
+todas las promesas registradas, incluidas las abiertas. Las franjas de tolerancia
+y los supuestos usan barras independientes: se pueden superponer. Un período sin
+promesas tiene un estado vacío explícito y no declara cobertura completa.
+
+Calibración conserva medianas, muestras, orden, sesgo y sugerencias de la API.
+Las barras comparan estimado/medido dentro de cada familia. Se aclaran el mínimo
+de tres muestras para la tabla y los umbrales vigentes de sugerencia (cinco y
+20% absoluto o más), con aplicación manual. No se incorporan acciones de escritura.
+
+La página pasa la respuesta vigente directamente al componente, eliminando la
+copia inicial en estado que podía conservar datos viejos al cambiar el período.
+El CSV conserva separación entre etiquetas de varias líneas y minutos exactos
+aunque el detalle esté cerrado.
+
+Verificación: 21 pruebas focalizadas, TypeScript, ESLint, CSS Guard y diff check.
+Revisión en escritorio, 1024 y 390 px, cambio a mes vacío y vuelta, y CSV real
+inspeccionado con sesgo negativo. Calibración con filas, decimales, sesgos positivos
+y negativos y sugerencias se cubre con datos de prueba; la base actual no reúne
+muestras suficientes para esa tabla. Sin crear promesas ni alterar duraciones.
+
+
+### Centro de análisis · Equipo · 16/09/2026
+
+Equipo migra a `reporte-equipo.tsx`, las primitivas compartidas de Reportes y
+un CSS Module local. Indicadores, trabajo por persona, disciplina de registro,
+eficiencia, polivalencia, cobertura y vendedores usan superficies claras,
+grafito y acento naranja. Se retira TabEquipo y sus helpers sin consumidores,
+sin modificar consultas, cálculos ni permisos de la API.
+
+El trabajo de producción mantiene orden alfabético y minutos con decimales.
+Se diferencia el número de pasos con trabajo del número de pasos completados,
+y el porcentaje medido representa pasos, no horas. Las personas se identifican
+con un icono compacto; las pausas automáticas conservan su conteo.
+
+Eficiencia respeta `muestraMinima` y el desvío con signo. Las miniáreas de Tremor
+muestran sólo la tendencia semanal de cada persona con muestra suficiente;
+sus valores, fechas y muestras se pueden consultar/exportar en el detalle.
+La muestra mínima se aplica al período completo, como en la API. No hay ranking
+ni clasificación personal por velocidad.
+
+La matriz de polivalencia muestra nombres completos, minutos y pasos en todas
+las familias/personas recibidas, retirando el recorte silencioso a ocho. La
+intensidad naranja acompaña los datos textuales. La cobertura de una sola persona
+se presenta aparte, explicando que es actividad observada en el período, no un
+certificado de habilidades o disponibilidad.
+
+Vendedores conserva órdenes, ticket, ventas, margen y comisión estimada según
+los permisos independientes `margenesVisibles` y `comisionesVisibles`. Importes
+exactos, márgenes negativos, cero y ausencia de regla se distinguen en pantalla
+y CSV. Las tablas del registro y de las semanas se exportan aun estando plegadas.
+
+Verificación: 24 pruebas focalizadas (presentación, permisos, página, período,
+exportación y apariencia), TypeScript, ESLint, CSS Guard y diff check. Revisión
+visual a 1920, 1024 y 390 px, detalle con teclado, cambio a mes vacío y regreso.
+CSV real de 38 filas verificado. La base actual tiene muestra insuficiente para
+la tendencia individual; sus variantes se cubren con fixtures, sin crear datos.
+
+
+### Centro de análisis · Ventas y producto · 16/09/2026
+
+La vista migra a `reporte-producto.tsx`, con exploración de categorías en
+`reporte-producto-mix.tsx`, primitivas compartidas y CSS Module local. Cinco
+indicadores resumen ventas, ítems principales, categorías, superficie cotizada
+y adopción de adicionales. Los cálculos, consultas y permisos de la API se
+conservan. Se retira TabProducto y sus gráficos/helpers sin consumidores.
+
+Evolución usa barras apiladas de Tremor por día, semana o mes, también con un
+único período. El gráfico conserva seis series principales y agrupa el resto;
+el detalle plegable/exportable mantiene todos los puntos recibidos. Las claves
+internas no se derivan del nombre para evitar colisiones con nombres de productos.
+No se interpolan días ausentes. Las fechas se formatean como calendario del
+reporte, sin desplazarlas a la zona del navegador.
+
+El selector de categoría usa SelectField y sus portales con marca clara. El
+detalle consulta el endpoint existente y muestra la evolución y productos de
+la categoría, con regreso a todas. La respuesta se monta por categoría/rango y
+los resultados tardíos se ignoran al salir; carga y error con reintento tienen
+estados explícitos. El resto de las secciones describe el período completo.
+
+Ventas, márgenes negativos y contribución conservan precisión. Todas las filas
+recibidas aparecen en pantalla y CSV: se retiran recortes adicionales a ocho,
+conservando los límites originales de API (20 productos, 12 productos con
+adicionales, 8 con medidas y 6 nombres de medidas estándar). Margen, contribución
+y costo de materiales siguen `margenesVisibles`, incluso en el detalle de categoría.
+
+Adicionales separa frecuencia, ticket por grupo y adopción por producto. Se
+explica que las ventas pertenecen a los ítems completos y pueden superponerse;
+la diferencia de ticket no es ingreso causado por el adicional. Un grupo sin
+ítems se distingue de un ticket cero y no se divide por cero. Medidas conserva
+sinDato aun sin medidas conocidas y permite exportar totales y nombres estándar.
+
+Materiales y tintas mantienen cantidades teóricas, unidades, formatos y decimales
+(hasta centésimos en la unidad original); no se presenta consumo como stock real.
+Ventas por tecnología tiene tabla y barras con importes completos.
+
+Verificación: 31 pruebas focalizadas (datos del mix, formatos, presentación,
+permisos, página, selector, período y CSV), TypeScript, ESLint, CSS Guard y diff
+check. Revisión visual en escritorio, 1024 y 390 px; selector de categorías,
+caso de un solo día, cambio de período vacío y regreso, detalles por teclado
+y tooltip móvil sin desbordes. CSV real de 127 filas inspeccionado, con las
+12 tablas incluidas y los detalles plegados. Sin errores de consola del reporte.
+
+
+### Centro de análisis · Clientes · 16/09/2026
+
+La vista migra a `reporte-clientes.tsx`, con primitivas de reportes y CSS Module
+local. Mantiene superficies claras, indicador principal grafito, acento naranja,
+iconos compactos de cliente, números legibles y tablas navegables por teclado.
+Se retira TabClientes y los gráficos/helpers antiguos que quedan sin consumidores.
+No se modifican consultas, reglas de negocio ni permisos del backend.
+
+La evolución de ventas de nuevos/recurrentes usa barras apiladas de Tremor por
+día, semana o mes, incluido el caso de un único punto. Resumen con importes
+completos, tooltip accesible y detalle exportable aun plegado. Se explica que
+“Nuevos” de la serie corresponde al primer intervalo de compra de cada cliente;
+el KPI de nuevos cuenta clientes únicos adquiridos en todo el período.
+
+Se separa la cartera actual de las ventas y retención del período. Recompra
+conserva la mediana histórica y su precisión (0,74 días en los datos actuales,
+antes redondeados a 1), sin confundir falta de muestra con cero. Segmentos muestra
+las seis reglas según el umbral configurado; “Nuevos” requiere una sola orden
+reciente. Ventas de segmentos y clientes en riesgo son históricas.
+
+Concentración conserva las diez filas de API, participación real y acumulado
+sin normalizarlo a 100%. Riesgo conserva sus ocho filas, total del segmento,
+fecha de última compra, órdenes y días sin comprar. Un tramo vacío no se
+presenta como ausencia de clientes perdidos. Márgenes, valores negativos y
+costos faltantes conservan su permiso y precisión también en la exportación.
+
+Verificación: 21 pruebas focalizadas de presentación, permisos, fechas, página,
+período y CSV; TypeScript, ESLint, CSS Guard y diff check. Revisión visual en
+escritorio, 1024 y 390 px, tablas y gráfico por teclado, tooltip móvil, cambio
+a mes sin ventas y regreso. CSV real de 41 filas inspeccionado con el detalle
+plegado. Los casos de riesgo, margen negativo y permisos se cubren con fixtures;
+no se crean datos en la base para simularlos.
+
+
+### Centro de análisis · Embudo · 16/09/2026
+
+La vista migra a `reporte-embudo.tsx`, con cuatro indicadores, superficies claras,
+acento naranja e iconografía de cada etapa. El recorrido se presenta en filas
+con barras comparables, cantidades, importes exactos y conversión paso a paso.
+Usa SegmentedControl grafito del sistema de diseño para Cantidad/Importe,
+con teclado y selección única. El detalle plegable siempre conserva ambas
+medidas y sus porcentajes, también para CSV.
+
+Se mantienen consultas, cohorte de presupuestos formales enviados en el rango,
+las cuatro etapas alcanzadas y permisos del módulo. “Alcanzaron producción”
+explica que incluye casos finalizados/entregados. El importe de las dos primeras
+etapas es el presupuesto; las siguientes usan la OT. Las barras se escalan al
+máximo sin recortar porcentajes superiores al 100% por ajustes de la orden.
+Una cohorte de monto cero permanece visible; ratios sin denominador muestran
+“—”/“Sin base”, sin inventar conversión ni ocultar los presupuestos.
+
+Presupuestos abiertos hoy declara su independencia del período seleccionado.
+“Pendientes y pérdidas” conserva todas las situaciones de la API, aclarando que
+“En gestión” todavía no está perdido. Un período vacío se distingue de uno en
+que todos los presupuestos se aprobaron. Deltas de aprobación son puntos
+porcentuales; sin base de comparación no se muestra un delta.
+
+Las etiquetas de tiempos reflejan las fechas que ya usa el backend:
+envío/resolución del presupuesto y emisión/finalización de la OT. El ciclo llega
+a finalización de producción, no a entrega física. Cada tramo usa sus propios
+casos con fechas; los promedios no se suman para obtener el ciclo total.
+Se conservan días fraccionarios, cero, negativos y ausencia de fechas.
+
+Con esta migración se elimina `panel/panel-general.tsx`, sin consumidores,
+y el wrapper de clases antiguas en ReportesShell. `globals.css` no cambia.
+Se mejora el contraste del botón informativo en indicadores grafito compartidos.
+
+Verificación: 21 pruebas focalizadas de presentación, escalas, rangos, página,
+permisos del selector de reportes y CSV; TypeScript, ESLint, CSS Guard y diff
+check. Revisión visual en escritorio, 1024 y 390 px, selección y detalle con
+teclado, período vacío y regreso. CSV real de 28 filas verificado con el detalle
+plegado. Los casos de importes superiores a la base, cero y tiempos se cubren
+con fixtures, sin crear registros. Sin errores de consola del reporte.
+
+## Tesorería · Administración (16-09-2026)
+
+La ruta `/administracion/tesoreria` y su subvista de acreditaciones usan
+`DesignSystemProvider theme="brand" appearance="light"`. Alcance local:
+no cambia el tema de los otros módulos de Administración ni `globals.css`.
+
+- Posición principal grafito, tarjetas claras para efectivo, bancos y valores;
+  acceso a acreditaciones con la flecha diagonal de Grafo.
+- Cuentas seleccionables con identidad, moneda, saldo y estado inactivo explícito;
+  detalle de cuenta, filtros, extracto, conciliación y paginación con jerarquía clara.
+- Acreditaciones: controles únicos y etiquetados para búsqueda y estado, tarjetas
+  de cheque con banco, beneficiario, importe, fechas e historial desplegable.
+- `TesoreriaDialog` compone `FormDialog` para crear/editar cuenta, transferir,
+  ajustar, arquear y operar valores. Campos desplazables y acciones fijas;
+  selectores HeroUI conservan la marca y el foco dentro de portales.
+- Saldos, movimientos, arqueos y valores respetan los decimales de cada moneda;
+  no se fuerzan enteros ni dos decimales para monedas que no los usan.
+
+Se conservan consultas, filtros, cálculos, payloads, idempotencia, validaciones,
+permisos de gestión/anulación, transiciones de valores, CSV y guardado existentes.
+Las posiciones en otras monedas permanecen separadas; los cheques no se duplican
+como cobros electrónicos. No se ejecutaron operaciones financieras para probar.
+
+Verificación: ocho pruebas de presentación y permisos con fixtures de distintas
+monedas, cuentas inactivas, saldos negativos, cobros y estados de cheques;
+TypeScript, ESLint, CSS Guard y revisión del diff. QA de escritorio, 1024 y 390 px:
+cuentas, formularios, selector en modal, saldo insuficiente, diferencia de centavos
+al arquear, búsqueda de valores, filtro de estado e historial. Los casos de
+cheques en cartera, depositados y propios se verifican con fixtures; los cheques
+acreditados/rechazados y sus formularios se inspeccionan con datos existentes.
+
+## Cuentas por cobrar · Administración (16-09-2026)
+
+La ruta `/administracion/deudores` usa el tema de marca claro mediante un
+provider local. Se reemplazan las clases antiguas por un módulo CSS, sin
+modificar `globals.css` ni las reglas de deuda, aplicaciones o vencimientos.
+
+- Resumen con total por cobrar en grafito, saldo vencido y cantidad de cuentas.
+  El vencido suma los cuatro tramos vencidos; «A vencer» incluye las órdenes
+  emitidas que aún no tienen fecha de vencimiento definida.
+- Cinco tramos con importes completos, porcentaje y barras; tabla con colores
+  suaves por tramo, centavos y enlaces accesibles a las cuentas corrientes.
+- Búsqueda por nombre/CUIT y orden con TanStack Table. «Atraso +60 días» aclara
+  el criterio ya existente. Los filtros y el orden tienen referencias estables
+  para evitar ciclos de recálculo al cambiar resultados.
+- El pie suma las filas visibles y declara «Total de la búsqueda» cuando se
+  filtra; los indicadores superiores siempre corresponden a toda la cartera.
+- Se distinguen cartera sin deuda, búsqueda sin coincidencias y error de carga
+  con reintento. Se retira Exportar, que estaba permanentemente deshabilitado.
+
+Revisión con datos existentes en escritorio, 1024 y 390 px: búsqueda sin
+coincidencias, limpieza, búsqueda de cliente, cambio del criterio de orden y
+navegación a la cuenta corriente. La cartera actual tiene una sola cuenta;
+no se crearon registros ni se ejecutaron operaciones financieras para probar.
+TypeScript, ESLint sin errores (advertencia de React Compiler sobre TanStack),
+CSS Guard y revisión de whitespace.
+
+
+## Cuentas por pagar · Administración (16-09-2026)
+
+`/administracion/cuentas-por-pagar` tiene un provider local de marca clara.
+`CuentasPagarWorkspace` presenta los datos y `EgresosView` conserva el estado,
+los permisos, las validaciones, la idempotencia y los envíos compartidos con
+Egresos. Esta última ruta conserva su presentación previa.
+
+- Cuatro indicadores: total por pagar en grafito, saldo vencido, próximos siete
+  días y saldo de las cuentas. Importes con centavos, sin redondearlos a enteros.
+- Pestañas grafito Por pagar y Proveedores. Agenda ordenada por vencimiento,
+  búsqueda, fechas relativas, estado parcial y selección para pagos agrupados.
+  No se permite pagar juntos egresos de beneficiarios diferentes.
+- Antigüedad por proveedor con color suave por tramo, acceso a su ficha y totales
+  de las filas visibles. Error de carga con reintento separado del estado vacío.
+- Alta, pago, detalle y confirmaciones usan `FormDialog` y `ActionButton` dentro
+  del contexto `EgresosBrand`. Tema propagado a los portales. Los selectores
+  usan Autocomplete con filtrado externo y la normalización previa (nombre,
+  detalle y grupo), también para conservar la búsqueda sin acentos. Las opciones
+  muestran el grupo como segunda línea; Escape cierra primero la lista.
+- El detalle destaca Total / Pagado / Pendiente y conserva fechas, impuestos,
+  adjuntos, historial de pagos, edición y anulaciones. No duplica los importes
+  destacados dentro de la ficha.
+- Recargar Cuentas por pagar conserva el alcance de sólo pendientes en ambas
+  pestañas. Su búsqueda sigue siendo local para poder limpiar un filtro luego
+  de registrar/editar. No se modifican consultas ni cálculos del backend.
+
+### Datos de demostración
+
+Por pedido del usuario, se cargaron **10 egresos DEMO** en la base local de
+desarrollo: tres proveedores, un beneficiario sin ficha, distintos tramos de
+vencimiento, una compra dividida en tres cuotas y un pago parcial de $31.250,55.
+El pago usa exclusivamente `DEMO · Banco de pruebas` y
+`DEMO · Transferencia de prueba`; genera los movimientos habituales del sistema
+sin alterar los saldos de las cuentas preexistentes. La cuenta de prueba queda
+con saldo negativo por ese pago; los indicadores y reportes de desarrollo
+incluyen estos registros.
+
+Script manual: `apps/api/scripts/seed-cuentas-pagar-demo.cjs`. Exige host local,
+base `gdi_saas`, entorno distinto de producción, `--tenant UUID --aplicar`;
+usa servicios de negocio para crear obligaciones y pagos y evita duplicados.
+El manifiesto local de IDs está en `.tmp/demo/cuentas-pagar-20260916.json`.
+No ejecutar automáticamente al levantar la app ni en producción.
+
+QA: escritorio, 1024 y 390 px; tabla con desplazamiento horizontal contenido,
+búsqueda y limpieza, selección de distintos/iguales proveedores, pago con
+retenciones y cheques, detalle parcial, bloqueo de importes ya pagados, alta con
+categorías filtradas por grupo, plazo del proveedor, cuotas, factura A e IVA
+con centavos; descarte del borrador y Escape en portales anidados. Los borradores
+de la revisión visual se descartaron sin registrar pagos adicionales.
+
+Validación final: 25 pruebas existentes del módulo (modos, cuentas, categorías y
+reparto), TypeScript sin errores, ESLint sin errores, CSS Guard y `git diff --check`.
+
+## Gastos fijos — septiembre de 2026
+
+`/administracion/gastos-fijos` usa `DesignSystemProvider` con marca clara,
+`GastosFijosPanel` y estilos locales en `gastos-fijos.module.css`.
+
+- Cabecera de Administración, resumen mensual principal en grafito y métricas
+  de gastos activos/categorías. La estructura mensual suma los importes mensuales
+  de gastos **activos y vigentes en el mes actual**, con ambos extremos incluidos.
+- Tabla con categoría bajo la descripción, proveedor, vigencia, estado, importe
+  por período y equivalente mensual. El pie considera sólo las filas visibles
+  activas y vigentes. Búsqueda por descripción, categoría o proveedor y selector
+  de estado siempre visible; los indicadores superiores resumen toda la lista.
+- Alta/edición en `FormSheet`, con pestañas grafito, campos claros y vista previa
+  del equivalente mensual. Se conservan proveedor, método, notas, categoría,
+  documento y las tres formas de definir la vigencia. El final por períodos se
+  sigue guardando como un último mes inclusivo, no como una fecha de vencimiento.
+- Selectores y confirmaciones HeroUI mantienen el tema en portales. Cierre con
+  cambios permite seguir editando, guardar o descartar. La eliminación mantiene
+  confirmación sin tipeo. Fallos de carga de catálogos permiten reintentar.
+- El importe usa `MoneyInput` y el parser de la moneda del tenant, evitando que
+  `1.234,56` termine convertido en cero. La edición envía el estado actual para
+  no reactivar involuntariamente un gasto inactivo. La categoría predeterminada
+  también se aplica al abrir una segunda alta con catálogos ya cargados.
+
+No se modifican permisos, endpoints ni fórmulas del backend. La vigencia define
+el presupuesto de estructura; facturas y pagos pertenecen a Egresos. No se
+agregaron datos: la revisión utiliza los diez gastos existentes.
+
+QA: escritorio y móvil de 390 px; tabla contenida, búsqueda/estados vacíos,
+alta y ficha existente, selector de categoría, importe anual con centavos,
+fin por períodos, navegación por tabs y Escape en selector anidado. Las pruebas
+unitarias cubren meses inclusivos, cruces de año, importes regionales y estado
+inactivo al editar; también se ejecutan las pruebas de frecuencia del backend.
+
+## Comprobantes — septiembre de 2026
+
+`/administracion/comprobantes` aplica marca clara local a listado, alta, detalle
+y vista imprimible. Usa `comprobantes.module.css` para el listado y
+`comprobante.module.css` para las fichas; no agrega estilos globales.
+
+- Listado con indicadores, búsqueda por cliente/CUIT/número/orden, selector de
+  estado fiscal y filtro por tipo. La métrica principal conserva la suma de
+  facturas y ND emitidas menos NC, convertida a ARS con la cotización guardada.
+  Los indicadores corresponden a los documentos cargados (límite existente de
+  200), no a todo el historial. Las fechas del mes se comparan como fechas
+  civiles, sin desplazarlas al día anterior por zona horaria.
+- Filas con letra, tipo, vínculos a órdenes, neto/IVA/total, estado fiscal y saldo.
+  Los importes conservan centavos y moneda del documento. El saldo de un anulado,
+  borrador o rechazado no se presenta como cobrado; una NC emitida dice Aplicada
+  y un documento corregido sin saldo conserva ese estado. La deuda comercial
+  completa se consulta en Cuentas por cobrar.
+- Ficha con pestañas grafito Datos / Ítems / Cobros, receptor, documentos
+  vinculados, pagos imputados y resumen de importes. Autorización fiscal separada
+  del saldo. Cargar CAE usa `FormDialog` con tema de marca en el portal.
+- Alta con receptor/datos fiscales, ítems editables y resumen lateral. Seleccionar
+  una OT oculta los importes manuales y explica que se obtendrán al crear el
+  borrador. Se conservan cálculo de letra e IVA, parámetros, endpoints y circuito
+  de borrador → emisión → CAE. Alta y acciones de gestión respetan
+  `administracion.gestionar`, también en la ruta de alta.
+- Vista imprimible con acciones de marca; mantiene contenido fiscal, QR y
+  generación del PDF. Las columnas numéricas no cortan el símbolo monetario.
+- Error de carga con reintento separado del vacío. Sólo una respuesta 404 del
+  detalle se traduce a no encontrado; otros errores llegan al límite de error.
+
+QA: listado y ficha en escritorio y móvil de 390 px; filtros por tipo/estado,
+búsqueda y limpieza; documentos anulados, notas de crédito y factura con pagos;
+alta manual, ítems, centavos, USD/cotización y origen en OT; vista imprimible.
+No se guardaron los borradores de revisión ni se emitieron documentos fiscales.
+Validación: 7 pruebas de presentación y 46 existentes de letra/totales del backend,
+TypeScript, ESLint, CSS Guard y `git diff --check`.
+
+## Facturación — septiembre de 2026
+
+`/administracion/facturacion` aplica marca clara mediante un layout local y
+`facturacion.module.css`. Conserva consulta, selección de órdenes finalizadas o
+entregadas, agrupación por cliente y el circuito de emisión del backend.
+
+- Indicadores de importe sin facturar, órdenes pendientes y clientes. Importes
+  en moneda del tenant con sus decimales; sin redondear los centavos a enteros.
+- Tabla semántica con búsqueda, estado, fecha civil, total/facturado/cobrado y
+  saldo fiscal. Se explica la independencia entre facturar y cobrar.
+- Panel de preparación con órdenes seleccionadas, importe, cantidad de facturas
+  y selector grafito Por orden / Agrupada. Sólo admite agrupar con el mismo
+  cliente; en una selección mixta conserva una factura por orden. El checkbox
+  de cabecera afecta sólo las filas visibles; una búsqueda mantiene el resto
+  de la selección y el panel señala las órdenes ocultas por ese filtro.
+- Controles de selección y emisión limitados a `administracion.gestionar`, igual
+  que el endpoint existente. Durante la emisión se bloquea la edición del lote.
+- «Emitir factura» abre `FacturacionConfirmacion` antes de llamar al API. Muestra
+  las órdenes, clientes, importes, modalidad y cantidad de facturas. Cancelar,
+  Escape o cerrar conservan la selección; sólo «Confirmar y emitir» envía el
+  lote revisado. Durante el envío se bloquean cierre, cancelación y doble envío.
+- `FacturacionResultado` usa `FormDialog`, con cantidades y estado por orden,
+  motivos de error y vínculos a los comprobantes, incluidos los rechazados que
+  haya devuelto el API. Cerrar limpia la selección y refresca los pendientes.
+  Se conserva el resultado parcial por orden del circuito de emisión existente.
+- Error de consulta separado del vacío: un fallo del API no presenta la
+  facturación como al día. Carga integrada al indicador global del dashboard.
+
+QA: escritorio y móvil de 390 px, selección parcial y total, agrupación, filtro
+con selección oculta y deselección sólo de visibles. Una ruta temporal de QA,
+retirada al finalizar, permitió revisar clientes distintos, importes con
+centavos, vacío y modal con éxito/error sin emitir ni persistir datos. Cuatro
+pruebas de presentación cubren permisos de consulta/gestión, centavos, fecha
+civil y vacío. TypeScript, ESLint, CSS Guard y revisión de whitespace.
+
+Confirmación previa: revisada en navegador con una orden, dos facturas por orden
+y una agrupada; totales y cantidades correctos. Cancelar y Escape conservan la
+selección. Modal verificado también a 390 px, sin emitir comprobantes de prueba.
