@@ -1,3 +1,5 @@
+import { MfaService } from '../../auth/mfa.service';
+import { SecretosService } from '../../integraciones/cripto/secretos.service';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
@@ -43,6 +45,11 @@ describe('Impersonación', () => {
     prisma as unknown as PrismaService,
     jwt,
     new SessionCacheService(),
+    new MfaService(
+      prisma as unknown as PrismaService,
+      new SecretosService(),
+      new SessionCacheService(),
+    ),
   );
   const impersonacion = new ImpersonacionService(
     prisma as unknown as PrismaService,

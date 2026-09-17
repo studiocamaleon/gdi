@@ -21,6 +21,7 @@ import {
 } from "@/components/configuracion/configuracion-secciones";
 import { Sidebar, useSidebar } from "@/components/ui/sidebar";
 import { PerfilUsuarioModal } from "@/components/perfil-usuario-modal";
+import { UsuarioAvatar } from "@/components/usuario-avatar";
 import s from "@/components/app-sidebar.module.css";
 
 type AppSidebarProps = {
@@ -218,14 +219,6 @@ const Ico = {
   ),
 } satisfies Record<string, IconComponent>;
 
-/** Iniciales para el avatar del pie (2 letras). */
-function inicialesDe(nombre: string): string {
-  const partes = nombre.trim().split(/\s+/).filter(Boolean);
-  if (partes.length === 0) return "—";
-  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
-  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
-}
-
 function matchesRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -238,9 +231,7 @@ function highlightMatch(text: string, q: string): React.ReactNode {
   return (
     <>
       {text.slice(0, idx)}
-      <strong className={s.match}>
-        {text.slice(idx, idx + q.length)}
-      </strong>
+      <strong className={s.match}>{text.slice(idx, idx + q.length)}</strong>
       {text.slice(idx + q.length)}
     </>
   );
@@ -541,9 +532,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
               </button>
             )}
           </div>
-          {!collapsed && (
-            <p className={s.org}>Industria gráfica</p>
-          )}
+          {!collapsed && <p className={s.org}>Industria gráfica</p>}
         </div>
 
         {collapsed ? (
@@ -619,8 +608,13 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
               <NavLink
                 href="/plataforma"
                 title="Plataforma"
-                className={cn(s.it, matchesRoute(pathname, "/plataforma") && s.on)}
-                aria-current={matchesRoute(pathname, "/plataforma") ? "page" : undefined}
+                className={cn(
+                  s.it,
+                  matchesRoute(pathname, "/plataforma") && s.on,
+                )}
+                aria-current={
+                  matchesRoute(pathname, "/plataforma") ? "page" : undefined
+                }
               >
                 <span className={s.ic}>
                   <Ico.Grid />
@@ -641,12 +635,18 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             className={s.plan}
             title={`${planNombre} · Administrar suscripción`}
             aria-label={`${planNombre}. ${formatPlanTier(suscripcion)}. Administrar suscripción`}
-            aria-current={matchesRoute(pathname, "/suscripcion") ? "page" : undefined}
+            aria-current={
+              matchesRoute(pathname, "/suscripcion") ? "page" : undefined
+            }
           >
             <div className={s.planT}>
               <Layers3 className={s.planIcon} size={16} aria-hidden="true" />
               <span>{planNombre}</span>
-              <ArrowUpRight className={s.planArrow} size={15} aria-hidden="true" />
+              <ArrowUpRight
+                className={s.planArrow}
+                size={15}
+                aria-hidden="true"
+              />
             </div>
             <div className={s.planD}>{formatPlanTier(suscripcion)}</div>
             <div className={s.bar}>
@@ -682,7 +682,10 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
             title={`${usuarioNombre} · ${tenantNombre}`}
             aria-label="Abrir perfil de usuario"
           >
-            <span className={s.av}>{inicialesDe(usuarioNombre)}</span>
+            <UsuarioAvatar
+              nombre={usuarioNombre}
+              version={currentUser.fotoPerfilVersion}
+            />
             <span className={s.userNm}>
               <span className={s.userA}>{usuarioNombre}</span>
               <span className={s.userB}>

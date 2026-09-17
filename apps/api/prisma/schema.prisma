@@ -948,6 +948,9 @@ model User {
   /// sabiendo con qué clave trabaja después.
   debeCambiarPassword      Boolean                               @default(false)
   nombreCompleto           String?
+  fotoPerfilVersion        String?                               @db.Uuid
+  mfa                      UserMfa?
+  mfaChallenges            MfaChallenge[]
   activo                   Boolean                               @default(true)
   /// Rol en el control plane. Null = usuario común (la enorme mayoría).
   /// Se otorga por script/consola y todo cambio queda en PlataformaEvento.
@@ -976,6 +979,41 @@ model User {
   liberacionesDocumentales ArchivoRevision[]                     @relation("ArchivoRevisionLiberadaPor")
   eventosSistemaActuados   EventoSistema[]                       @relation("EventoSistemaActor")
   notificacionesInternas   NotificacionInterna[]
+}
+
+/// Identidad global: nunca se expone desde consultas generales de User.
+model UserMfa {
+  userId           String   @id @db.Uuid
+  secret           Json?
+  activatedAt      DateTime?
+  pendingSecret    Json?
+  pendingId        String?  @db.Uuid
+  pendingSessionId String?  @db.Uuid
+  pendingExpiresAt DateTime?
+  lastUsedStep     Int?
+  recoveryHashes   String[] @default([])
+  version          Int      @default(0)
+  failedAttempts   Int      @default(0)
+  lockedUntil      DateTime?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Primer factor verificado; no autoriza llamadas al API ni crea una sesión.
+model MfaChallenge {
+  tokenHash      String   @id
+  userId         String   @db.Uuid
+  destination    String
+  membershipId   String?  @db.Uuid
+  passwordStamp  String
+  mfaVersion     Int
+  expiresAt      DateTime
+  attempts       Int      @default(0)
+  usedAt         DateTime?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
 }
 
 /// Outbox interno append-only. Es a la vez cursor durable para SSE y registro

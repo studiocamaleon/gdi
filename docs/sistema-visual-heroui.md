@@ -2676,3 +2676,21 @@ secciones/permisos y API de Centro de copiado, y `git diff --check`. Revisión
 en Chrome de las nueve secciones y formularios, con comprobación móvil a
 390 px. Se probaron borradores y cancelación sin guardar configuraciones,
 emitir mensajes, crear credenciales ni modificar permisos.
+
+## Perfil de usuario — 17 de septiembre de 2026
+
+El avatar del menú abre un `FormDialog` con tema de marca claro, cabecera en
+grafito y pestañas Perfil, Seguridad y Empresas. Nombre editable, correo de
+consulta y foto con vista previa; guardar deshabilitado sin cambios y contador
+integrado. `UsuarioAvatar` comparte foto/iniciales con el menú lateral.
+
+Seguridad incluye cambio de contraseña y MFA con QR, entrada manual, códigos
+de recuperación, renovación y desactivación. Se bloquea el cierre durante
+operaciones y hasta confirmar el guardado de los códigos recién generados.
+El modal tiene scroll interno para mantener accesibles los formularios largos
+en móvil; las tres pestañas conservan sus etiquetas a 320 px. La verificación
+MFA del login usa la presentación de acceso existente y contempla plataforma.
+
+Validación: 47 pruebas de API, TypeScript web/API, ESLint, CSS Guard y revisión
+Chrome en escritorio, 390 y 320 px. No se añadieron estilos globales. Detalle
+funcional y despliegue en `docs/perfil-usuario-mfa.md`.

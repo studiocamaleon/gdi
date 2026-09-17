@@ -1,3 +1,5 @@
+import { MfaService } from '../mfa.service';
+import { SecretosService } from '../../integraciones/cripto/secretos.service';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
@@ -39,11 +41,18 @@ describe('Login de backoffice (sesión de plataforma)', () => {
     prisma as unknown as PrismaService,
     jwt,
     new SessionCacheService(),
+    new MfaService(
+      prisma as unknown as PrismaService,
+      new SecretosService(),
+      new SessionCacheService(),
+    ),
   );
   // Reflector que responde @SinTenant según la marca del handler falso.
   const reflector = {
-    getAllAndOverride: (key: string, targets: Array<{ __sinTenant?: boolean }>) =>
-      key === SIN_TENANT_KEY ? Boolean(targets[0]?.__sinTenant) : false,
+    getAllAndOverride: (
+      key: string,
+      targets: Array<{ __sinTenant?: boolean }>,
+    ) => (key === SIN_TENANT_KEY ? Boolean(targets[0]?.__sinTenant) : false),
   } as unknown as Reflector;
   const guard = new AuthGuard(
     reflector,
@@ -78,14 +87,14 @@ describe('Login de backoffice (sesión de plataforma)', () => {
     const email = await crearUsuario('ADMIN');
     const r = await auth.loginPlataforma({ email, password });
     expect(r.accessToken).toBeTruthy();
-    expect(r.staff.rolPlataforma).toBe('ADMIN');
+    expect('staff' in r && r.staff.rolPlataforma).toBe('ADMIN');
   });
 
   it('un usuario de tenant SIN rol de plataforma NO entra por el backoffice', async () => {
     const email = await crearUsuario(null);
-    await expect(
-      auth.loginPlataforma({ email, password }),
-    ).rejects.toThrow(/equipo de Grafo/i);
+    await expect(auth.loginPlataforma({ email, password })).rejects.toThrow(
+      /equipo de Grafo/i,
+    );
   });
 
   it('credenciales mal → invalidas (sin filtrar si el email existe)', async () => {

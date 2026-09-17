@@ -48,6 +48,11 @@ export function AcceptInvitationForm({
           invitation.requiresPasswordSetup ? password : undefined,
         );
 
+        if ("requiereLogin" in response) {
+          router.replace("/login");
+          return;
+        }
+
         if (response.accessToken) {
           await setSessionToken(response.accessToken);
         }
@@ -83,7 +88,9 @@ export function AcceptInvitationForm({
 
             {invitation.requiresPasswordSetup ? (
               <Field>
-                <FieldLabel htmlFor="invitation-password">Clave inicial</FieldLabel>
+                <FieldLabel htmlFor="invitation-password">
+                  Clave inicial
+                </FieldLabel>
                 <Input
                   id="invitation-password"
                   type="password"
@@ -100,8 +107,8 @@ export function AcceptInvitationForm({
               <Field>
                 <FieldLabel>Usuario existente</FieldLabel>
                 <FieldDescription>
-                  Tu usuario ya tiene clave. Al continuar se agregara esta empresa
-                  a tu acceso actual.
+                  Tu usuario ya tiene clave. Al continuar se agregara esta
+                  empresa a tu acceso actual.
                 </FieldDescription>
               </Field>
             )}
@@ -111,7 +118,12 @@ export function AcceptInvitationForm({
             <p className="text-sm text-destructive">{errorMessage}</p>
           ) : null}
 
-          <Button type="submit" variant="brand" className="w-full" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            variant="brand"
+            className="w-full"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? (
               <GdiSpinner className="size-4" />
             ) : (

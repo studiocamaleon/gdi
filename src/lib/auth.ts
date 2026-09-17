@@ -57,6 +57,7 @@ export type CurrentUser = {
   id: string;
   email: string;
   nombreCompleto?: string | null;
+  fotoPerfilVersion?: string | null;
   /** Rol en el control plane (staff de Grafo). Sólo decide si la UI muestra
    *  el acceso a /plataforma; la autorización real la hace el API. */
   rolPlataforma?: "ADMIN" | "SOPORTE" | null;
@@ -74,6 +75,23 @@ export type AuthResponse = {
   currentUser: CurrentUser;
 };
 
+export type MfaChallenge = {
+  requiereMfa: true;
+  challengeToken: string;
+  expiresIn: number;
+  accessToken: null;
+};
+export type PlatformAuthResponse = {
+  accessToken: string | null;
+  sessionId: string;
+  staff: {
+    id: string;
+    email: string;
+    nombreCompleto: string | null;
+    rolPlataforma: "ADMIN" | "SOPORTE";
+  };
+};
+
 export type InvitationState = {
   email: string;
   tenantNombre: string;
@@ -82,7 +100,7 @@ export type InvitationState = {
 };
 
 export async function login(email: string, password: string) {
-  return apiRequest<AuthResponse>(
+  return apiRequest<AuthResponse | MfaChallenge>(
     "/auth/login",
     {
       method: "POST",
@@ -93,16 +111,7 @@ export async function login(email: string, password: string) {
 }
 
 export async function loginPlataforma(email: string, password: string) {
-  return apiRequest<{
-    accessToken: string | null;
-    sessionId: string;
-    staff: {
-      id: string;
-      email: string;
-      nombreCompleto: string | null;
-      rolPlataforma: "ADMIN" | "SOPORTE";
-    };
-  }>(
+  return apiRequest<PlatformAuthResponse | MfaChallenge>(
     "/auth/login-plataforma",
     {
       method: "POST",
@@ -119,9 +128,11 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  return apiRequest<{ accessToken: string | null; sessionId: string; currentUser: CurrentUser }>(
-    "/tenants/current",
-  );
+  return apiRequest<{
+    accessToken: string | null;
+    sessionId: string;
+    currentUser: CurrentUser;
+  }>("/tenants/current");
 }
 
 export async function switchTenant(tenantId: string) {
@@ -145,11 +156,22 @@ export async function getInvitationState(token: string) {
 }
 
 export async function acceptInvitation(token: string, password?: string) {
-  return apiRequest<AuthResponse>(
+  return apiRequest<AuthResponse | { requiereLogin: true; accessToken: null }>(
     `/auth/invitations/${token}/accept`,
     {
       method: "POST",
       body: JSON.stringify(password ? { password } : {}),
+    },
+    { auth: false },
+  );
+}
+
+export function verificarMfa(challengeToken: string, codigo: string) {
+  return apiRequest<AuthResponse | PlatformAuthResponse>(
+    "/auth/mfa/verificar",
+    {
+      method: "POST",
+      body: JSON.stringify({ challengeToken, codigo }),
     },
     { auth: false },
   );
