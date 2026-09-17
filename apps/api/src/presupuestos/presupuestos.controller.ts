@@ -51,6 +51,20 @@ export class PresupuestosController {
   }
 
   @Public()
+  @Get('track/:token/logo')
+  async logoPublico(
+    @Param('token') token: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.service.logoPublicoPorToken(token);
+    if (!url) {
+      res.status(404).end();
+      return;
+    }
+    res.redirect(302, url);
+  }
+
+  @Public()
   @Post('track/:token/decision')
   decisionPublica(
     @Param('token') token: string,

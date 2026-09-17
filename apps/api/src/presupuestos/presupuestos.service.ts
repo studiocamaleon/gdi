@@ -971,8 +971,15 @@ export class PresupuestosService {
       }
     }
     await this.prisma.$transaction(async (tx) => {
-      await tx.cotizacion.update({
-        where: { id },
+      // El cliente puede resolver desde el link mientras el comercial confirma.
+      const cambio = await tx.cotizacion.updateMany({
+        where: {
+          id,
+          estado: c.estado,
+          ...(dto.resultado === 'aprobado' && c.fechaValidez
+            ? { fechaValidez: { gte: new Date() } }
+            : {}),
+        },
         data: {
           estado: dto.resultado,
           fechaResuelto: new Date(),
@@ -982,6 +989,11 @@ export class PresupuestosService {
             dto.resultado === 'rechazado' ? dto.motivoPerdidaDetalle : null,
         },
       });
+      if (cambio.count !== 1) {
+        throw new BadRequestException(
+          'El presupuesto cambió de estado o venció. Actualizá la página para ver su estado actual.',
+        );
+      }
       if (dto.resultado === 'rechazado') {
         await this.cupones.liberarReservasPresupuesto(
           tx,
@@ -1001,7 +1013,7 @@ export class PresupuestosService {
       tipo: dto.resultado,
       descripcion:
         dto.resultado === 'aprobado'
-          ? 'Marcado como aprobado por el cliente.'
+          ? 'Aprobación del cliente registrada por el equipo comercial (por otro canal).'
           : `Marcado como perdido: ${ETIQUETA_MOTIVO[dto.motivoPerdida!] ?? dto.motivoPerdida}${dto.motivoPerdidaDetalle ? ` — ${dto.motivoPerdidaDetalle}` : ''}.`,
     });
     this.avisarAlCliente(id);
@@ -1164,6 +1176,16 @@ export class PresupuestosService {
   }
 
   // ── Link público: ver + decidir ────────────────────────────────────
+  /** El token autoriza únicamente el logo del tenant de este presupuesto. */
+  async logoPublicoPorToken(token: string): Promise<string | null> {
+    const enlace = await this.enlaces.resolver(
+      token,
+      TipoEnlacePublico.PRESUPUESTO,
+    );
+    if (!enlace) return null;
+    return this.archivos.urlDeLogoPublico(enlace.tenantId);
+  }
+
   /** El token se resuelve contra EnlacePublico (sin sesión no hay
    *  tenantContext — el token ES la credencial; mismo patrón que el
    *  tracking de OT). Ver docs/enlaces-publicos-diseno.md */
@@ -1177,7 +1199,7 @@ export class PresupuestosService {
     const c = await this.prisma.cotizacion.findUnique({
       where: { id: enlace.entidadId },
       include: {
-        tenant: { select: { nombre: true } },
+        tenant: { select: { nombre: true, logoArchivoId: true } },
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
       },
@@ -1238,6 +1260,7 @@ export class PresupuestosService {
       numero: c.numero,
       estado,
       negocio: c.tenant.nombre,
+      tieneLogo: c.tenant.logoArchivoId != null,
       // El link es público y cruza fronteras: el front formatea los montos
       // con esta moneda (símbolo desambiguado), no con un "$" asumido.
       monedaCodigo: regional.moneda.codigo,

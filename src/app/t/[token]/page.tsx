@@ -1,3 +1,4 @@
+import { DocumentoNoEncontrado } from "@/components/publico/documento-publico";
 import { TrackingView } from "@/components/tracking/tracking-view";
 import { getTrackingPublico, type TrackingPublico } from "@/lib/tracking";
 
@@ -22,20 +23,7 @@ export default async function TrackPage({
     data = null;
   }
 
-  if (!data) {
-    return (
-      <div className="t-notfound">
-        <div className="t-notfound-card">
-          <div className="mark">?</div>
-          <h1>No encontramos ese pedido</h1>
-          <p>
-            El link puede ser incorrecto o el pedido ya no está disponible.
-            Revisá el enlace que te compartieron.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (!data) return <DocumentoNoEncontrado tipo="pedido" />;
 
   return <TrackingView token={token} initialData={data} />;
 }

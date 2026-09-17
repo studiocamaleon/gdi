@@ -1,0 +1,339 @@
+.page {
+  min-height: 100dvh;
+  width: 100%;
+  background: var(--canvas-background);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.container {
+  width: min(1120px, 100%);
+  margin-inline: auto;
+  padding: 0 32px;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 102px;
+  border-bottom: 1px solid var(--border);
+}
+.business {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.business > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.business strong {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.business > div > span {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.businessMark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  height: 42px;
+  overflow: hidden;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 7px;
+}
+.businessMark:has(img) {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.businessMark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 5px;
+}
+.powered {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.powered > span:first-child {
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.powered > span:last-child {
+  font-size: 16px;
+}
+.main {
+  padding-block: 30px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 7px;
+  padding: 26px 0 36px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.footer svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.footer p {
+  margin: 0;
+}
+.hero {
+  padding: 30px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 8px;
+}
+.heroTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.eyebrow {
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--accent-soft-foreground);
+}
+.hero .eyebrow {
+  color: var(--accent);
+}
+.heroTitle {
+  font-size: clamp(27px, 3.2vw, 38px);
+  font-weight: 550;
+  line-height: 1.18;
+  letter-spacing: -0.045em;
+  margin: 0;
+  text-wrap: balance;
+}
+.heroTitle strong {
+  color: var(--accent);
+  font-weight: inherit;
+}
+.heroDescription {
+  margin: 12px 0 0;
+  color: var(--brand-muted-on-graphite);
+  font-size: 13px;
+}
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 40px;
+  margin: 26px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--brand-graphite-line);
+}
+.heroMeta > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.heroMeta dt {
+  color: var(--brand-muted-on-graphite);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.heroMeta dd {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.heroMeta code {
+  font: 12px var(--brand-mono);
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  align-items: start;
+  gap: 22px;
+}
+.stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 22px;
+}
+.panel {
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: none;
+  background: var(--surface);
+  color: var(--foreground);
+  overflow: hidden;
+  min-width: 0;
+}
+.panelHeader {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.panelTitle {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.025em;
+  font-weight: 550;
+}
+.sectionIcon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent-soft-foreground);
+}
+.sectionIcon svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.5;
+}
+.sectionDetail {
+  margin-left: auto;
+  color: var(--muted-text);
+  font: 10px var(--brand-mono);
+}
+.panelBody {
+  padding: 0;
+}
+.status {
+  font-size: 11px;
+  white-space: normal;
+}
+.hero .status {
+  --chip-bg: var(--brand-graphite-line);
+  color: var(--brand-on-graphite);
+  border: 1px solid var(--brand-graphite-line);
+  background: var(--brand-graphite-line);
+}
+.empty {
+  margin: 32px auto;
+  padding: 60px 24px;
+  max-width: 560px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.specs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+  margin: 18px 0 0;
+}
+.specs > div {
+  min-width: 0;
+}
+.specs dt {
+  font-size: 11px;
+  color: var(--muted-text);
+  margin-bottom: 3px;
+}
+.specs dd {
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.notice {
+  padding: 16px;
+  border-radius: 7px;
+}
+.notice[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+  background: var(--ok-bg);
+}
+.notice[data-tone="success"] > svg {
+  color: var(--success);
+}
+@media (max-width: 780px) {
+  .container {
+    padding-inline: 20px;
+  }
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .header {
+    min-height: 86px;
+  }
+  .main {
+    padding-top: 22px;
+    gap: 20px;
+  }
+  .hero {
+    padding: 24px;
+  }
+}
+@media (max-width: 430px) {
+  .container {
+    padding-inline: 16px;
+  }
+  .header {
+    gap: 12px;
+  }
+  .business {
+    gap: 9px;
+  }
+  .businessMark {
+    flex-basis: 36px;
+    height: 36px;
+  }
+  .business strong {
+    font-size: 12px;
+  }
+  .business > div > span {
+    font-size: 10px;
+  }
+  .powered > span:last-child {
+    font-size: 13px;
+  }
+  .hero {
+    padding: 20px;
+  }
+  .heroMeta {
+    gap: 16px 24px;
+  }
+  .panelHeader {
+    padding: 16px;
+  }
+  .panelTitle {
+    font-size: 15px;
+  }
+  .specs {
+    gap: 14px;
+  }
+}
