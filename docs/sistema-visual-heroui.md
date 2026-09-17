@@ -2694,3 +2694,18 @@ MFA del login usa la presentación de acceso existente y contempla plataforma.
 Validación: 47 pruebas de API, TypeScript web/API, ESLint, CSS Guard y revisión
 Chrome en escritorio, 390 y 320 px. No se añadieron estilos globales. Detalle
 funcional y despliegue en `docs/perfil-usuario-mfa.md`.
+
+## Producción — aviso de OT finalizada — 17 de septiembre de 2026
+
+`OrdenFinalizadaDialog` compone `FormDialog`, `ActionButton` y `ActionLink`
+con tema de marca claro explícito, también en el portal. Número y cliente en
+grafito, tabla compacta de productos/cantidades y fecha de entrega opcional.
+El cuerpo desplaza su contenido en pantallas pequeñas; cabecera y acciones
+permanecen visibles. Foco inicial en Entendido, cierre con Escape o la cruz
+y enlace Ver OT sujeto a permisos. CSS Module local, sin estilos globales nuevos.
+
+El aviso surge de la respuesta confirmada al completar el último paso de toda
+la orden, aunque el Tablero esté filtrado. Cerrar el aviso conserva Finalizada.
+Recorrido real con fixture local y revisión visual a escritorio, 390 y 320 px;
+68 pruebas entre API/frontend, TypeScript, ESLint y CSS Guard. Contrato y alcance
+en `docs/tablero-produccion-conexion-diseno.md`.

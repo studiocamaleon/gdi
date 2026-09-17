@@ -1,0 +1,135 @@
+.dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+}
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.title svg {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+  color: var(--success);
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.body > * {
+  flex-shrink: 0;
+}
+.identity {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 8px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  overflow-wrap: anywhere;
+}
+.identity > span {
+  font: 10px var(--brand-mono);
+  letter-spacing: 0.06em;
+  color: var(--brand-muted-on-graphite);
+}
+.identity strong {
+  font: 500 21px var(--brand-mono);
+  letter-spacing: -0.04em;
+}
+.identity p {
+  margin: 0;
+  font-size: 14px;
+}
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  font-size: 13px;
+}
+.table th {
+  padding: 11px 14px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font: 10px var(--brand-mono);
+  text-align: left;
+}
+.table td {
+  padding: 13px 14px;
+  border-top: 1px solid var(--border);
+}
+.table td:first-child {
+  overflow-wrap: anywhere;
+}
+.table :is(th, td):last-child {
+  width: 35%;
+  text-align: right;
+}
+.table td:last-child {
+  font-family: var(--brand-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.table td span {
+  color: var(--muted-text);
+}
+.delivery {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 12px;
+}
+.delivery > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--muted-text);
+  flex-shrink: 0;
+}
+.delivery > div {
+  display: grid;
+  gap: 4px;
+}
+.delivery span {
+  color: var(--muted-text);
+}
+.delivery time {
+  font-weight: 500;
+}
+.footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 560px) {
+  .body {
+    padding: 18px 16px;
+    gap: 16px;
+  }
+  .identity {
+    padding: 16px;
+  }
+  .identity strong {
+    font-size: 19px;
+  }
+  .table :is(th, td) {
+    padding: 11px 10px;
+  }
+  .footer {
+    padding: 16px;
+  }
+}

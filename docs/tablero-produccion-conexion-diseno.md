@@ -1,5 +1,34 @@
 # Tablero de producción — conexión con órdenes reales
 
+## Actualización 2026-09-17: aviso de OT finalizada
+
+Al completar la tarea que termina todos los pasos de una OT, el Tablero abre
+**Producción finalizada** para quien hizo esa acción. El aviso muestra número,
+cliente, productos con cantidades y entrega comprometida cuando está informada.
+**Entendido** vuelve al tablero; **Ver OT** abre la ficha cuando el usuario tiene
+permiso para consultarla. El aviso no registra una entrega.
+
+El `PATCH` individual de ejecución conserva el item reproyectado y agrega
+`avisoFinalizacion`, con valor `null` cuando esa acción no cerró la orden.
+El resumen se captura dentro de la transacción y bajo el mismo bloqueo de la OT,
+con productos raíz para evitar duplicar componentes y lotes. Contiene sólo datos
+operativos, sin costos, precios ni contactos. La fecha de entrega es calendario
+(`YYYY-MM-DD`) y no se desplaza por zona horaria.
+
+La UI consume esa respuesta desde `useProduccionOperativa`: cierra el detalle del
+trabajo antes de abrir `OrdenFinalizadaDialog`. No deduce la finalización de las
+filas visibles ni de eventos de otros usuarios, polling, SSE o recargas. Reabrir
+y volver a terminar una OT produce un aviso nuevo para esa nueva finalización.
+El diálogo se comparte entre Lista y Kanban; no cambia sus filas ni columnas.
+
+Validación: 31 pruebas de API (transacción, seguridad, cierre parcial/completo,
+componentes, reapertura y concurrencia) y 37 de frontend. TypeScript web/API,
+ESLint y CSS Guard. Recorrido en Chrome con una OT temporal de dos productos:
+primer trabajo sin aviso, último con el resumen completo, cierre con Entendido
+y recarga sin repetición. Comprobación visual a escritorio, 390 y 320 px; scroll
+interno con acciones siempre visibles. La OT se conserva finalizada al cerrar,
+sin fecha de entrega efectiva. La fixture local se retira después de probar.
+
 ## Actualización 2026-09-14: Lista operativa y consulta de terminados
 
 El tablero tiene dos pestañas, **Lista** y **Kanban**. Lista reemplaza Por items

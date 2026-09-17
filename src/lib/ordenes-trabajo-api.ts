@@ -262,6 +262,11 @@ export function avisarTramosCambiaron() {
 }
 
 /** Acción de ejecución sobre un paso; devuelve el item re-proyectado. */
+export type { AvisoFinalizacionOrden } from '../../apps/api/src/ordenes-trabajo/aviso-finalizacion-orden';
+export type RespuestaAccionPasoProduccion = TableroItemData & {
+  avisoFinalizacion?: import('../../apps/api/src/ordenes-trabajo/aviso-finalizacion-orden').AvisoFinalizacionOrden | null;
+};
+
 export async function accionPasoProduccion(
   ordenId: string,
   itemId: string,
@@ -276,8 +281,8 @@ export async function accionPasoProduccion(
     tiempoDeclaradoMin?: number;
     sinTiempoConfirmado?: boolean;
   },
-): Promise<TableroItemData> {
-  const item = await apiRequest<TableroItemData>(
+): Promise<RespuestaAccionPasoProduccion> {
+  const item = await apiRequest<RespuestaAccionPasoProduccion>(
     `/ordenes-trabajo/${ordenId}/items/${itemId}/pasos/${pasoId}`,
     { method: "PATCH", body: JSON.stringify(payload) },
   );

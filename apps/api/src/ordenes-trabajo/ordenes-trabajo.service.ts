@@ -6313,8 +6313,7 @@ export class OrdenesTrabajoService {
     return this.tableroItemActualizado(auth, paso.itemId);
   }
 
-  /** La acción individual del Tablero usa el mismo núcleo transaccional que
-   * la futura ejecución conjunta. La respuesta pública no cambia. */
+  /** Conserva el item y agrega el aviso sólo si ESTA acción finalizó la OT. */
   async accionPaso(
     auth: CurrentAuth,
     ordenId: string,
@@ -6323,10 +6322,13 @@ export class OrdenesTrabajoService {
     payload: AccionPasoOrdenTrabajoDto,
     interno?: { tiempoLoteMin?: number; autoPausa?: boolean },
   ) {
-    await this.accionesPasos(auth, [
+    const [resultado] = await this.accionesPasos(auth, [
       { ordenId, itemId, pasoId, payload, interno },
     ]);
-    return this.tableroItemActualizado(auth, itemId);
+    return {
+      ...await this.tableroItemActualizado(auth, itemId),
+      avisoFinalizacion: resultado.avisoFinalizacion,
+    };
   }
 
   async accionTrabajoCola(
@@ -7093,6 +7095,43 @@ export class OrdenesTrabajoService {
       itemId,
       pasoId,
       ordenFinalizada: nuevoEstadoOrden === 'finalizada',
+      avisoFinalizacion: nuevoEstadoOrden === 'finalizada'
+        ? await this.resumenFinalizacion(tx, auth.tenantId, ordenId, ahora)
+        : null,
+    };
+  }
+
+  /** Se captura bajo el mismo cerrojo que el cierre, antes del commit.
+   * Incluye productos completos aunque el tablero esté filtrado. Los lotes
+   * y componentes ya forman parte de sus raíces y no se cuentan dos veces. */
+  private async resumenFinalizacion(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    ordenId: string,
+    ahora: Date,
+  ): Promise<import('./aviso-finalizacion-orden').AvisoFinalizacionOrden> {
+    const orden = await tx.ordenTrabajo.findFirstOrThrow({
+      where: { id: ordenId, tenantId },
+      select: {
+        id: true, numero: true, fechaEntrega: true,
+        cliente: { select: { nombre: true } },
+        items: {
+          where: { tenantId, parentItemId: null },
+          orderBy: [{ ordenIndice: 'asc' }, { id: 'asc' }],
+          select: { id: true, nombre: true, cantidad: true, cantidadUnidad: true },
+        },
+      },
+    });
+    return {
+      ordenId: orden.id,
+      ordenNumero: orden.numero,
+      clienteNombre: orden.cliente?.nombre ?? 'Sin cliente',
+      fechaEntrega: orden.fechaEntrega?.toISOString().slice(0, 10) ?? null,
+      finalizadaEl: ahora.toISOString(),
+      trabajos: orden.items.map((item) => ({
+        id: item.id, nombre: item.nombre,
+        cantidad: Number(item.cantidad), unidad: item.cantidadUnidad,
+      })),
     };
   }
 
