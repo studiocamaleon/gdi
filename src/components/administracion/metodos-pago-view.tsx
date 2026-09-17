@@ -1,4 +1,11 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+} from "@/components/configuracion/configuracion-workspace";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormSheet } from "@/components/design-system/form-sheet";
+import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
 
 import * as React from "react";
 import {
@@ -9,7 +16,6 @@ import {
   PlusIcon,
   SearchIcon,
   ShieldCheckIcon,
-  XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,17 +95,28 @@ function FilaMetodo({
         onClick={onToggleAbierto}
       >
         <span>
-          <svg
-            className="apm-chev"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <button
+            type="button"
+            className={configStyles.expandButton}
+            aria-label={`Ver detalle de ${metodo.nombre}`}
+            aria-expanded={abierto}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleAbierto();
+            }}
           >
-            <path d="m9 6 6 6-6 6" />
-          </svg>
+            <svg
+              className="apm-chev"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </button>
         </span>
         <span className="apm-name">
           <span className="nm">
@@ -238,174 +255,25 @@ function SheetMetodo({
   const esNuevo = !draft.id;
 
   return (
-    <>
-      <div className="apm-backdrop show" onClick={onClose} />
-      <div className="apm-sheet show" role="dialog" aria-modal="true">
-        <div className="apm-sheet-head">
-          <button
-            type="button"
-            className="apm-sheet-x"
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            <XIcon />
-          </button>
-          <div className="k">{esNuevo ? "Nuevo método" : "Editar método"}</div>
-          <h2>{form.nombre || "Método de pago"}</h2>
-        </div>
-        <div className="apm-sheet-body">
-          <div className="apm-field">
-            <label>Nombre</label>
-            <input
-              value={form.nombre}
-              onChange={(e) => set("nombre", e.target.value)}
-              placeholder="Ej. Transferencia bancaria"
-            />
-          </div>
-          <div className="apm-field">
-            <label>Tipo</label>
-            <select
-              value={form.tipo}
-              onChange={(e) =>
-                seleccionarTipo(e.target.value as MetodoPagoTipo)
-              }
-            >
-              {METODO_PAGO_TIPOS.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {METODO_PAGO_TIPO_LABELS[tipo]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="apm-field-row">
-            <div className="apm-field">
-              <label>Comisión</label>
-              <div className="apm-suffix">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.comisionPct}
-                  onChange={(e) => set("comisionPct", +e.target.value || 0)}
-                />
-                <span className="s">%</span>
-              </div>
-            </div>
-            <div className="apm-field">
-              <label>IVA s/ comisión</label>
-              <div className="apm-suffix">
-                <input
-                  type="number"
-                  min="0"
-                  value={form.ivaComisionPct}
-                  onChange={(e) => set("ivaComisionPct", +e.target.value || 0)}
-                />
-                <span className="s">%</span>
-              </div>
-            </div>
-          </div>
-          <div className="apm-field-row">
-            <div className="apm-field">
-              <label>Plazo de acreditación</label>
-              <div className="apm-suffix">
-                <input
-                  type="number"
-                  min="0"
-                  value={form.plazoAcreditacionDias}
-                  onChange={(e) =>
-                    set("plazoAcreditacionDias", +e.target.value || 0)
-                  }
-                />
-                <span className="s">días</span>
-              </div>
-            </div>
-            <div className="apm-field">
-              <label>Cuenta destino</label>
-              {esCheque ? (
-                <input
-                  value="Se elige al depositar el valor"
-                  disabled
-                  aria-label="La cuenta destino se elige al depositar"
-                />
-              ) : (
-                <select
-                  value={form.cuentaDestinoId ?? ""}
-                  onChange={(e) =>
-                    set("cuentaDestinoId", e.target.value || null)
-                  }
-                >
-                  <option value="">Sin cuenta destino</option>
-                  {cuentas.map((cuenta) => (
-                    <option key={cuenta.id} value={cuenta.id}>
-                      {cuenta.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
-          <div className="apm-toggle-field">
-            <div>
-              <div className="t">Sufre retención</div>
-              <div className="s">
-                SIRCREB, IIBB, ganancias u otros regímenes.
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`apm-sw ${form.sufreRetencion ? "on" : ""}`}
-              onClick={() => set("sufreRetencion", !form.sufreRetencion)}
-              aria-label="Sufre retención"
-            />
-          </div>
-          <div className="apm-toggle-field">
-            <div>
-              <div className="t">Método activo</div>
-              <div className="s">Disponible al registrar cobros.</div>
-            </div>
-            <button
-              type="button"
-              className={`apm-sw ${form.activo ? "on" : ""}`}
-              onClick={() => set("activo", !form.activo)}
-              aria-label="Método activo"
-            />
-          </div>
-          <div className="apm-sheet-calc">
-            <div className="cl">Simulación sobre {fmt(BASE_SIMULACION)}</div>
-            <div className="apm-sc-row">
-              <span className="l">Bruto cobrado</span>
-              <span className="v">{fmt(sim.base)}</span>
-            </div>
-            {sim.comision > 0 ? (
-              <div className="apm-sc-row neg">
-                <span className="l">− Comisión ({form.comisionPct}%)</span>
-                <span className="v">−{fmt(sim.comision)}</span>
-              </div>
-            ) : null}
-            {sim.ivaComision > 0 ? (
-              <div className="apm-sc-row neg">
-                <span className="l">− IVA sobre comisión</span>
-                <span className="v">−{fmt(sim.ivaComision)}</span>
-              </div>
-            ) : null}
-            <div className="apm-sc-row total">
-              <span className="l">
-                Neto acreditado ·{" "}
-                {plazoAcreditacionLabel(form.plazoAcreditacionDias)}
-              </span>
-              <span className="v">{fmt(sim.neto)}</span>
-            </div>
-          </div>
-        </div>
+    <FormSheet
+      title={esNuevo ? "Nuevo método de pago" : "Editar método de pago"}
+      description="Comisiones, acreditación y cuenta de destino."
+      onClose={onClose}
+      busy={guardando}
+      className={configStyles.paymentSheet}
+      footer={
         <div className="apm-sheet-foot">
-          <button type="button" className="btn" onClick={onClose}>
+          <ActionButton
+            variant="outline"
+            isDisabled={guardando}
+            onPress={onClose}
+          >
             Cancelar
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={guardando || !form.nombre.trim()}
-            onClick={() => onSave(form)}
+          </ActionButton>
+          <ActionButton
+            variant="primary"
+            isDisabled={guardando || !form.nombre.trim()}
+            onPress={() => onSave(form)}
           >
             <CheckIcon />
             {guardando
@@ -413,10 +281,162 @@ function SheetMetodo({
               : esNuevo
                 ? "Crear método"
                 : "Guardar cambios"}
-          </button>
+          </ActionButton>
+        </div>
+      }
+    >
+      <div className="apm-sheet-body">
+        <div className="apm-field">
+          <label htmlFor="metodo-nombre">Nombre</label>
+          <input
+            id="metodo-nombre"
+            value={form.nombre}
+            onChange={(e) => set("nombre", e.target.value)}
+            placeholder="Ej. Transferencia bancaria"
+          />
+        </div>
+        <div className="apm-field">
+          <label htmlFor="metodo-tipo">Tipo</label>
+          <select
+            id="metodo-tipo"
+            value={form.tipo}
+            onChange={(e) => seleccionarTipo(e.target.value as MetodoPagoTipo)}
+          >
+            {METODO_PAGO_TIPOS.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {METODO_PAGO_TIPO_LABELS[tipo]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="apm-field-row">
+          <div className="apm-field">
+            <label htmlFor="metodo-comisionPct">Comisión</label>
+            <div className="apm-suffix">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                id="metodo-comisionPct"
+                value={form.comisionPct}
+                onChange={(e) => set("comisionPct", +e.target.value || 0)}
+              />
+              <span className="s">%</span>
+            </div>
+          </div>
+          <div className="apm-field">
+            <label htmlFor="metodo-ivaComisionPct">IVA s/ comisión</label>
+            <div className="apm-suffix">
+              <input
+                type="number"
+                min="0"
+                id="metodo-ivaComisionPct"
+                value={form.ivaComisionPct}
+                onChange={(e) => set("ivaComisionPct", +e.target.value || 0)}
+              />
+              <span className="s">%</span>
+            </div>
+          </div>
+        </div>
+        <div className="apm-field-row">
+          <div className="apm-field">
+            <label htmlFor="metodo-plazoAcreditacionDias">
+              Plazo de acreditación
+            </label>
+            <div className="apm-suffix">
+              <input
+                type="number"
+                min="0"
+                id="metodo-plazoAcreditacionDias"
+                value={form.plazoAcreditacionDias}
+                onChange={(e) =>
+                  set("plazoAcreditacionDias", +e.target.value || 0)
+                }
+              />
+              <span className="s">días</span>
+            </div>
+          </div>
+          <div className="apm-field">
+            <label htmlFor="metodo-cuentaDestinoId">Cuenta destino</label>
+            {esCheque ? (
+              <input
+                id="metodo-cuentaDestinoId"
+                value="Se elige al depositar el valor"
+                disabled
+                aria-label="La cuenta destino se elige al depositar"
+              />
+            ) : (
+              <select
+                id="metodo-cuentaDestinoId"
+                value={form.cuentaDestinoId ?? ""}
+                onChange={(e) => set("cuentaDestinoId", e.target.value || null)}
+              >
+                <option value="">Sin cuenta destino</option>
+                {cuentas.map((cuenta) => (
+                  <option key={cuenta.id} value={cuenta.id}>
+                    {cuenta.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="apm-toggle-field">
+          <div>
+            <div className="t">Sufre retención</div>
+            <div className="s">SIRCREB, IIBB, ganancias u otros regímenes.</div>
+          </div>
+          <button
+            type="button"
+            className={`apm-sw ${form.sufreRetencion ? "on" : ""}`}
+            onClick={() => set("sufreRetencion", !form.sufreRetencion)}
+            role="switch"
+            aria-checked={form.sufreRetencion}
+            aria-label="Sufre retención"
+          />
+        </div>
+        <div className="apm-toggle-field">
+          <div>
+            <div className="t">Método activo</div>
+            <div className="s">Disponible al registrar cobros.</div>
+          </div>
+          <button
+            type="button"
+            className={`apm-sw ${form.activo ? "on" : ""}`}
+            onClick={() => set("activo", !form.activo)}
+            role="switch"
+            aria-checked={form.activo}
+            aria-label="Método activo"
+          />
+        </div>
+        <div className="apm-sheet-calc">
+          <div className="cl">Simulación sobre {fmt(BASE_SIMULACION)}</div>
+          <div className="apm-sc-row">
+            <span className="l">Bruto cobrado</span>
+            <span className="v">{fmt(sim.base)}</span>
+          </div>
+          {sim.comision > 0 ? (
+            <div className="apm-sc-row neg">
+              <span className="l">− Comisión ({form.comisionPct}%)</span>
+              <span className="v">−{fmt(sim.comision)}</span>
+            </div>
+          ) : null}
+          {sim.ivaComision > 0 ? (
+            <div className="apm-sc-row neg">
+              <span className="l">− IVA sobre comisión</span>
+              <span className="v">−{fmt(sim.ivaComision)}</span>
+            </div>
+          ) : null}
+          <div className="apm-sc-row total">
+            <span className="l">
+              Neto acreditado ·{" "}
+              {plazoAcreditacionLabel(form.plazoAcreditacionDias)}
+            </span>
+            <span className="v">{fmt(sim.neto)}</span>
+          </div>
         </div>
       </div>
-    </>
+    </FormSheet>
   );
 }
 
@@ -513,25 +533,12 @@ export function MetodosPagoView({
   };
 
   return (
-    <div
-      className="apm-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "36px 32px 80px",
-      }}
-    >
+    <ConfiguracionPage>
       <div className="apm-wrap">
-        <div className="apm-head">
-          <div>
-            <h1>Métodos de pago</h1>
-            <div className="sub">
-              Cómo entra la plata: comisiones, plazos de acreditación y
-              retenciones por método.
-            </div>
-          </div>
-          <div className="right">
+        <ConfiguracionHeader
+          titulo="Métodos de pago"
+          descripcion="Medios de cobro, comisiones y plazos de acreditación."
+          acciones={
             <button
               type="button"
               className="btn btn-primary"
@@ -540,8 +547,8 @@ export function MetodosPagoView({
               <PlusIcon />
               Nuevo método
             </button>
-          </div>
-        </div>
+          }
+        />
 
         <div className="apm-concept">
           <div className="c">
@@ -555,7 +562,10 @@ export function MetodosPagoView({
           </div>
           <div className="c">
             <div className="n">
-              <span className="dot" style={{ background: "#1d4ed8" }} />
+              <span
+                className="dot"
+                style={{ background: "var(--accent-soft-foreground)" }}
+              />
               Neto acreditado
             </div>
             <div className="d">
@@ -611,6 +621,7 @@ export function MetodosPagoView({
                 <SearchIcon />
                 <input
                   placeholder="Buscar método, tipo o cuenta…"
+                  aria-label="Buscar método, tipo o cuenta"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                 />
@@ -673,6 +684,6 @@ export function MetodosPagoView({
           />
         ) : null}
       </div>
-    </div>
+    </ConfiguracionPage>
   );
 }

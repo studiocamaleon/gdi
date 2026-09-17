@@ -6,7 +6,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
-import { Membership, Prisma, RolPlataforma, RolSistema } from '@prisma/client';
+import {
+  Membership,
+  Prisma,
+  RolPlataforma,
+  RolSistema,
+  type User,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -19,6 +25,8 @@ import { CurrentAuth, JwtPayload } from './auth.types';
 import { ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
+import { bloquearIdentidad, MfaService } from './mfa.service';
+import { VerificarMfaDto } from './dto/perfil.dto';
 
 // Hash dummy para igualar el tiempo de respuesta del login cuando el usuario
 // no existe (evita enumeración de usuarios por timing). Se calcula una vez.
@@ -39,6 +47,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly sessionCache: SessionCacheService,
+    private readonly mfa: MfaService,
   ) {}
 
   private readonly logger = new Logger(AuthService.name);
@@ -108,14 +117,30 @@ export class AuthService {
       throw new UnauthorizedException('El usuario no tiene empresas activas.');
     }
 
-    return this.createSessionResponse(
-      user.id,
-      user.email,
-      membership,
-      this.prisma,
-      user.nombreCompleto ?? null,
-      user.rolPlataforma ?? null,
-    );
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, user.id);
+      const vigente = await tx.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      if (!vigente.activo || vigente.passwordHash !== user.passwordHash)
+        throw new UnauthorizedException('Volvé a iniciar sesión.');
+      const challenge = await this.mfa.desafiar(
+        tx,
+        user.id,
+        user.passwordHash,
+        'tenant',
+        membership.id,
+      );
+      if (challenge) return challenge;
+      return this.createSessionResponse(
+        user.id,
+        user.email,
+        membership,
+        tx,
+        vigente.nombreCompleto,
+        vigente.rolPlataforma,
+      );
+    });
   }
 
   /**
@@ -194,7 +219,33 @@ export class AuthService {
       );
     }
 
-    const session = await this.prisma.authSession.create({
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, user.id);
+      const vigente = await tx.user.findUniqueOrThrow({
+        where: { id: user.id },
+      });
+      if (
+        !vigente.activo ||
+        !vigente.rolPlataforma ||
+        vigente.passwordHash !== user.passwordHash
+      )
+        throw new UnauthorizedException('Volvé a iniciar sesión.');
+      const challenge = await this.mfa.desafiar(
+        tx,
+        user.id,
+        user.passwordHash,
+        'plataforma',
+      );
+      if (challenge) return challenge;
+      return this.createPlatformSession(vigente, tx);
+    });
+  }
+
+  private async createPlatformSession(
+    user: Pick<User, 'id' | 'email' | 'nombreCompleto' | 'rolPlataforma'>,
+    db: Prisma.TransactionClient,
+  ) {
+    const session = await db.authSession.create({
       data: {
         userId: user.id,
         currentTenantId: null,
@@ -221,6 +272,45 @@ export class AuthService {
         rolPlataforma: user.rolPlataforma,
       },
     };
+  }
+
+  async verificarMfa(payload: VerificarMfaDto, ip = '') {
+    return this.mfa.verificarDesafio<
+      | Awaited<ReturnType<AuthService['createSessionResponse']>>
+      | Awaited<ReturnType<AuthService['createPlatformSession']>>
+    >(payload.challengeToken, payload.codigo, async (challenge, tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: challenge.userId },
+      });
+      if (challenge.destination === 'plataforma') {
+        if (!user.rolPlataforma)
+          throw new UnauthorizedException(
+            'Esta cuenta ya no tiene acceso al equipo de Grafo.',
+          );
+        return this.createPlatformSession(user, tx);
+      }
+      const membership = await tx.membership.findFirst({
+        where: {
+          id: challenge.membershipId ?? '',
+          userId: user.id,
+          activa: true,
+          tenant: { activo: true },
+        },
+        include: { tenant: true },
+      });
+      if (!membership || !ipPermitida(ip, membership.ipsPermitidas))
+        throw new UnauthorizedException(
+          'No podés ingresar a esta empresa desde la red actual.',
+        );
+      return this.createSessionResponse(
+        user.id,
+        user.email,
+        membership,
+        tx,
+        user.nombreCompleto,
+        user.rolPlataforma,
+      );
+    });
   }
 
   /**
@@ -462,6 +552,14 @@ export class AuthService {
           userId: user.id,
         },
       });
+
+      await bloquearIdentidad(tx, user.id);
+      const mfa = await tx.userMfa.findUnique({
+        where: { userId: user.id },
+        select: { activatedAt: true },
+      });
+      if (mfa?.activatedAt)
+        return { requiereLogin: true as const, accessToken: null };
 
       return this.createSessionResponse(
         user.id,
@@ -995,7 +1093,7 @@ export class AuthService {
         : Promise.resolve(null),
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { debeCambiarPassword: true },
+        select: { debeCambiarPassword: true, fotoPerfilVersion: true },
       }),
       this.regionalDe(currentMembership.tenant.id),
     ]);
@@ -1018,6 +1116,7 @@ export class AuthService {
         id: userId,
         email,
         nombreCompleto,
+        fotoPerfilVersion: usuario?.fotoPerfilVersion ?? null,
         // Sólo para que la UI muestre (o no) el acceso a /plataforma. La
         // autorización real la hace PlataformaGuard contra la base.
         rolPlataforma,

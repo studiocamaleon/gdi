@@ -1,3 +1,5 @@
+import { MfaService } from '../mfa.service';
+import { SecretosService } from '../../integraciones/cripto/secretos.service';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
@@ -22,6 +24,11 @@ describe('Suscripción en el contexto de sesión', () => {
     prisma as unknown as PrismaService,
     new JwtService({ secret: process.env.JWT_SECRET }),
     new SessionCacheService(),
+    new MfaService(
+      prisma as unknown as PrismaService,
+      new SecretosService(),
+      new SessionCacheService(),
+    ),
   );
 
   const tenantIds: string[] = [];
@@ -49,7 +56,12 @@ describe('Suscripción en el contexto de sesión', () => {
     userIds.push(user.id);
 
     const membership = await prisma.membership.create({
-      data: { userId: user.id, tenantId: tenant.id, rol: 'ADMINISTRADOR', activa: true },
+      data: {
+        userId: user.id,
+        tenantId: tenant.id,
+        rol: 'ADMINISTRADOR',
+        activa: true,
+      },
       select: { id: true },
     });
     const sesion = await prisma.authSession.create({

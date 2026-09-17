@@ -18,6 +18,8 @@ const MODELOS_EXENTOS = new Set<string>([
   'WebhookWhatsappCrudo',
   'User',
   'AuthSession',
+  'UserMfa',
+  'MfaChallenge',
   'Membership',
   'Invitation',
   // Se resuelve por tokenHash único global ANTES de que exista contexto de

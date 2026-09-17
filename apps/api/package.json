@@ -64,6 +64,7 @@
     "libphonenumber-js": "^1.13.9",
     "maxrects-packer": "^2.7.3",
     "nestjs-pino": "^4.6.1",
+    "otpauth": "^9.5.2",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "polygon-clipping": "^0.15.7",
@@ -72,6 +73,7 @@
     "reflect-metadata": "^0.2.2",
     "resend": "^6.24.0",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.5",
     "svgpath": "^2.6.0",
     "zod": "^4.4.3"
   },

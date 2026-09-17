@@ -40,6 +40,12 @@ export class SessionCacheService {
     this.cache.delete(sessionId);
   }
 
+  invalidarUsuario(userId: string): void {
+    for (const [sessionId, entry] of this.cache) {
+      if (entry.auth.userId === userId) this.cache.delete(sessionId);
+    }
+  }
+
   /**
    * Tira las sesiones cacheadas de un tenant. Se llama al tocar un rol o el rol
    * de alguien: sin esto, quitarle un permiso a un usuario tardaría hasta el

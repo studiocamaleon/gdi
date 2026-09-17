@@ -4,6 +4,11 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SessionCacheService } from './session-cache.service';
 import { SesionesScheduler } from './sesiones.scheduler';
+import { MfaService } from './mfa.service';
+import { PerfilService } from './perfil.service';
+import { PerfilController } from './perfil.controller';
+import { StorageModule } from '../archivos/storage/storage.module';
+import { SecretosService } from '../integraciones/cripto/secretos.service';
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
@@ -21,12 +26,20 @@ if (
 
 @Module({
   imports: [
+    StorageModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, SessionCacheService, SesionesScheduler],
+  controllers: [AuthController, PerfilController],
+  providers: [
+    AuthService,
+    SessionCacheService,
+    SesionesScheduler,
+    MfaService,
+    PerfilService,
+    SecretosService,
+  ],
   exports: [AuthService, SessionCacheService, JwtModule],
 })
 export class AuthModule {}

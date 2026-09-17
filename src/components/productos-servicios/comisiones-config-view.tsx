@@ -1,4 +1,8 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+} from "@/components/configuracion/configuracion-workspace";
 
 /**
  * <ComisionesConfigView /> — el "librito" de comisiones (Fase A).
@@ -170,16 +174,11 @@ export function ComisionesConfigView({ initialItems }: Props) {
   );
 
   return (
-    <div className={s.wrap}>
-      <div className={s.head}>
-        <div className={s.headRow}>
-          <span className={s.headTitle}>Comisiones</span>
-        </div>
-        <p className={s.sub}>
-          Los costos de venta que el sistema mete en el precio. Se configuran
-          una vez y casi no se tocan.
-        </p>
-      </div>
+    <ConfiguracionPage className={s.wrap}>
+      <ConfiguracionHeader
+        titulo="Comisiones"
+        descripcion="Configurá las comisiones de venta que forman parte del precio."
+      />
 
       {/* ── Pasarela de pago (tenant) ── */}
       <section className={s.seccion}>
@@ -273,7 +272,9 @@ export function ComisionesConfigView({ initialItems }: Props) {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder={
-                  seccion === "pasarela" ? "Pasarela de pago" : "Comisión vendedor"
+                  seccion === "pasarela"
+                    ? "Pasarela de pago"
+                    : "Comisión vendedor"
                 }
               />
             </div>
@@ -322,6 +323,6 @@ export function ComisionesConfigView({ initialItems }: Props) {
         accionLabel="Eliminar"
         onConfirmar={ejecutarBorrado}
       />
-    </div>
+    </ConfiguracionPage>
   );
 }

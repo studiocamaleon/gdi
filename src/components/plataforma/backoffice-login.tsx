@@ -4,7 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { loginPlataforma } from "@/lib/auth";
+import { loginPlataforma, type MfaChallenge } from "@/lib/auth";
+import { MfaLoginForm } from "@/components/auth/mfa-login-form";
 import { setSessionToken } from "@/lib/session";
 import { BIco } from "@/components/plataforma/kit";
 
@@ -19,6 +20,7 @@ export function BackofficeLogin() {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [enviando, setEnviando] = React.useState(false);
+  const [challenge, setChallenge] = React.useState<MfaChallenge | null>(null);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +29,12 @@ export function BackofficeLogin() {
     setError(null);
     try {
       const r = await loginPlataforma(email.trim(), password);
+      if ("requiereMfa" in r) {
+        setChallenge(r);
+        setPassword("");
+        setEnviando(false);
+        return;
+      }
       if (r.accessToken) await setSessionToken(r.accessToken);
       router.replace("/plataforma");
       router.refresh();
@@ -37,6 +45,24 @@ export function BackofficeLogin() {
       setEnviando(false);
     }
   };
+
+  if (challenge)
+    return (
+      <div className="bo-login-page">
+        <div className="bo-login">
+          <MfaLoginForm
+            backoffice
+            challenge={challenge}
+            onSuccess={async (token) => {
+              await setSessionToken(token);
+              router.replace("/plataforma");
+              router.refresh();
+            }}
+            onBack={() => setChallenge(null)}
+          />
+        </div>
+      </div>
+    );
 
   return (
     <div className="bo-login-page">

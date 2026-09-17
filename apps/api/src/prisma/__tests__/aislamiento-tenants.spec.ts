@@ -58,6 +58,8 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   'EventoCobro',
   'User',
   'AuthSession',
+  'UserMfa',
+  'MfaChallenge',
   // Catálogo compartido: mismos datos para todos los tenants.
   'MaterialPreset',
   'Plan',
@@ -115,6 +117,8 @@ const MODELOS_EXENTOS = new Set([
   'RegistroTenant',
   'User',
   'AuthSession',
+  'UserMfa',
+  'MfaChallenge',
   'Membership',
   'Invitation',
   'MaterialPreset',

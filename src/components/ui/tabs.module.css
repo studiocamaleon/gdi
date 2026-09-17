@@ -1,0 +1,42 @@
+.graphite.graphite {
+  width: 100%;
+  height: auto;
+  min-height: 52px;
+  flex-shrink: 0;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  overflow-x: auto;
+  background: var(--brand-graphite, #101214);
+  border: 1px solid var(--brand-graphite-line, #303437);
+  border-radius: 8px;
+}
+.graphite [data-slot="tabs-trigger"] {
+  flex: 1 0 auto;
+  min-height: 50px;
+  padding: 14px 18px;
+  border: 0;
+  border-right: 1px solid var(--brand-graphite-line, #303437);
+  border-radius: 0;
+  color: var(--brand-muted-on-graphite, #b9bdbe);
+  font-size: 12px;
+  font-weight: 500;
+}
+.graphite [data-slot="tabs-trigger"]:last-child {
+  border-right: 0;
+}
+.graphite [data-slot="tabs-trigger"][data-active] {
+  background: color-mix(
+    in srgb,
+    var(--accent) 8%,
+    var(--brand-graphite, #101214)
+  );
+  color: var(--brand-on-graphite, #f3f2ee);
+  box-shadow: inset 0 -2px var(--accent);
+}
+.graphite [data-slot="tabs-trigger"]::after {
+  display: none;
+}
+.graphite [data-slot="tabs-trigger"]:focus-visible {
+  outline-offset: -3px;
+}

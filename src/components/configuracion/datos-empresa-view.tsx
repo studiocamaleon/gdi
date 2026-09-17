@@ -1,9 +1,15 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+  GuardarConfiguracion,
+} from "@/components/configuracion/configuracion-workspace";
+import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
 import { TipoCambioEmpresa } from "@/components/comercial/tipo-cambio-panel";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { InfoIcon, SaveIcon } from "lucide-react";
+import { InfoIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { LogoTenantCard } from "@/components/archivos/logo-tenant-card";
@@ -104,6 +110,10 @@ export function DatosEmpresaView({
     estadoInicial(initial),
   );
   const [guardando, setGuardando] = React.useState(false);
+  const [guardado, setGuardado] = React.useState(() => estadoInicial(initial));
+  const cambios = (Object.keys(form) as (keyof FormState)[]).filter(
+    (key) => form[key] !== guardado[key],
+  ).length;
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -137,6 +147,7 @@ export function DatosEmpresaView({
         redondeoPrecio: form.redondeoPrecio || undefined,
       });
       toast.success("Datos de la empresa guardados.");
+      setGuardado({ ...form });
       router.refresh();
     } catch (error) {
       toast.error(
@@ -150,42 +161,29 @@ export function DatosEmpresaView({
   };
 
   return (
-    <div
-      className="apm-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "32px 28px 80px",
-      }}
-    >
+    <ConfiguracionPage>
       <div className="apm-wrap">
-        <div className="apm-head">
-          <div>
-            <h1>Empresa</h1>
-            <div className="sub">
-              Cómo se presenta el negocio: es lo que sale en los presupuestos,
-              los recibos y el seguimiento que ve el cliente.
-            </div>
-          </div>
-          <div className="right">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void guardar()}
-              disabled={guardando}
-            >
-              <SaveIcon />
-              {guardando ? "Guardando…" : "Guardar cambios"}
-            </button>
-          </div>
-        </div>
+        <ConfiguracionHeader
+          titulo="Empresa"
+          descripcion="La identidad, el contacto y la configuración regional de tu negocio."
+          acciones={
+            <GuardarConfiguracion
+              cambios={cambios}
+              guardando={guardando}
+              onGuardar={() => void guardar()}
+            />
+          }
+        />
 
-        <TipoCambioEmpresa />
-        <div className="arc-page" style={{ display: "block" }}>
-          <div className="arc-card" style={{ marginBottom: 20 }}>
+        <div className={configStyles.formGrid}>
+          <div className="arc-card">
             <div className="arc-card-sec">
-              <div className="arc-sec-t">Identidad</div>
+              <h2 className="arc-sec-t">
+                <span className={configStyles.sectionNumber} aria-hidden="true">
+                  01
+                </span>
+                Identidad
+              </h2>
               {/*
                 El nombre y el logo son la misma cosa —la marca— y se leen
                 juntos: apilados, la pantalla arrancaba con tres bloques
@@ -194,8 +192,9 @@ export function DatosEmpresaView({
               */}
               <div className="emp-identidad">
                 <div className="arc-field">
-                  <label>Nombre comercial</label>
+                  <label htmlFor="empresa-nombre">Nombre comercial</label>
                   <input
+                    id="empresa-nombre"
                     value={form.nombre}
                     onChange={(e) => set("nombre", e.target.value)}
                     placeholder="Ej. Gráfica Corporearte"
@@ -215,13 +214,19 @@ export function DatosEmpresaView({
             </div>
           </div>
 
-          <div className="arc-card" style={{ marginBottom: 20 }}>
+          <div className="arc-card">
             <div className="arc-card-sec">
-              <div className="arc-sec-t">Contacto</div>
+              <h2 className="arc-sec-t">
+                <span className={configStyles.sectionNumber} aria-hidden="true">
+                  02
+                </span>
+                Contacto
+              </h2>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>País</label>
+                  <label htmlFor="empresa-paisCodigo">País</label>
                   <select
+                    id="empresa-paisCodigo"
                     value={form.paisCodigo}
                     onChange={(e) => {
                       const pais = e.target.value;
@@ -246,10 +251,11 @@ export function DatosEmpresaView({
                   </select>
                 </div>
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-email">
                     Email <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-email"
                     value={form.email}
                     onChange={(e) => set("email", e.target.value)}
                     placeholder="ventas@ejemplo.com.ar"
@@ -258,11 +264,12 @@ export function DatosEmpresaView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-telefonoNumero">
                     Teléfono <span className="opt">(opcional)</span>
                   </label>
                   <div className="emp-tel">
                     <select
+                      aria-label="Código de país del teléfono"
                       value={form.telefonoCodigo}
                       onChange={(e) => set("telefonoCodigo", e.target.value)}
                       style={ANCHO_CODIGO}
@@ -274,6 +281,7 @@ export function DatosEmpresaView({
                       ))}
                     </select>
                     <input
+                      id="empresa-telefonoNumero"
                       value={form.telefonoNumero}
                       onChange={(e) => set("telefonoNumero", e.target.value)}
                       placeholder="3415551840"
@@ -283,11 +291,12 @@ export function DatosEmpresaView({
                   <div className="arc-hint">Sin el código de país.</div>
                 </div>
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-whatsappNumero">
                     WhatsApp <span className="opt">(si es otro número)</span>
                   </label>
                   <div className="emp-tel">
                     <select
+                      aria-label="Código de país de WhatsApp"
                       value={form.whatsappCodigo || form.telefonoCodigo}
                       onChange={(e) => set("whatsappCodigo", e.target.value)}
                       style={ANCHO_CODIGO}
@@ -299,6 +308,7 @@ export function DatosEmpresaView({
                       ))}
                     </select>
                     <input
+                      id="empresa-whatsappNumero"
                       value={form.whatsappNumero}
                       onChange={(e) => set("whatsappNumero", e.target.value)}
                       placeholder="Vacío = el mismo teléfono"
@@ -309,10 +319,11 @@ export function DatosEmpresaView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-sitioWeb">
                     Sitio web <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-sitioWeb"
                     value={form.sitioWeb}
                     onChange={(e) => set("sitioWeb", e.target.value)}
                     placeholder="www.ejemplo.com.ar"
@@ -322,15 +333,21 @@ export function DatosEmpresaView({
             </div>
           </div>
 
-          <div className="arc-card" style={{ marginBottom: 20 }}>
+          <div className="arc-card">
             <div className="arc-card-sec">
-              <div className="arc-sec-t">Dónde atendés</div>
+              <h2 className="arc-sec-t">
+                <span className={configStyles.sectionNumber} aria-hidden="true">
+                  03
+                </span>
+                Dónde atendés
+              </h2>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-domicilioComercial">
                     Domicilio comercial <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-domicilioComercial"
                     value={form.domicilioComercial}
                     onChange={(e) => set("domicilioComercial", e.target.value)}
                     placeholder="Calle 123"
@@ -340,10 +357,11 @@ export function DatosEmpresaView({
                   </div>
                 </div>
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-horarioAtencion">
                     Horario de atención <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-horarioAtencion"
                     value={form.horarioAtencion}
                     onChange={(e) => set("horarioAtencion", e.target.value)}
                     placeholder="Lunes a viernes de 9 a 18"
@@ -352,20 +370,22 @@ export function DatosEmpresaView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-localidad">
                     Localidad <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-localidad"
                     value={form.localidad}
                     onChange={(e) => set("localidad", e.target.value)}
                     placeholder="Rosario"
                   />
                 </div>
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-provincia">
                     Provincia <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-provincia"
                     value={form.provincia}
                     onChange={(e) => set("provincia", e.target.value)}
                     placeholder="Santa Fe"
@@ -374,11 +394,12 @@ export function DatosEmpresaView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-urlPerfilGoogle">
                     URL de tu perfil de Google{" "}
                     <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-urlPerfilGoogle"
                     value={form.urlPerfilGoogle}
                     onChange={(e) => set("urlPerfilGoogle", e.target.value)}
                     placeholder="https://maps.app.goo.gl/…"
@@ -393,13 +414,19 @@ export function DatosEmpresaView({
             </div>
           </div>
 
-          <div className="arc-card" style={{ marginBottom: 20 }}>
+          <div className="arc-card">
             <div className="arc-card-sec">
-              <div className="arc-sec-t">Regional</div>
+              <h2 className="arc-sec-t">
+                <span className={configStyles.sectionNumber} aria-hidden="true">
+                  04
+                </span>
+                Regional
+              </h2>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>Moneda</label>
+                  <label htmlFor="empresa-monedaCodigo">Moneda</label>
                   <select
+                    id="empresa-monedaCodigo"
                     value={form.monedaCodigo}
                     onChange={(e) => set("monedaCodigo", e.target.value)}
                   >
@@ -414,8 +441,9 @@ export function DatosEmpresaView({
                   </div>
                 </div>
                 <div className="arc-field">
-                  <label>Zona horaria</label>
+                  <label htmlFor="empresa-zonaHoraria">Zona horaria</label>
                   <select
+                    id="empresa-zonaHoraria"
                     value={form.zonaHoraria}
                     onChange={(e) => set("zonaHoraria", e.target.value)}
                   >
@@ -441,8 +469,11 @@ export function DatosEmpresaView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>Redondeo de precios</label>
+                  <label htmlFor="empresa-redondeoPrecio">
+                    Redondeo de precios
+                  </label>
                   <select
+                    id="empresa-redondeoPrecio"
                     value={form.redondeoPrecio}
                     onChange={(e) => set("redondeoPrecio", e.target.value)}
                   >
@@ -459,7 +490,8 @@ export function DatosEmpresaView({
                   </div>
                 </div>
               </div>
-              {form.monedaCodigo !== (initial.monedaCodigo || MONEDA_DEFAULT) && (
+              {form.monedaCodigo !==
+                (initial.monedaCodigo || MONEDA_DEFAULT) && (
                 <div className="arc-variant-note" style={{ marginTop: 4 }}>
                   <InfoIcon />
                   <span>
@@ -475,14 +507,20 @@ export function DatosEmpresaView({
 
           <div className="arc-card">
             <div className="arc-card-sec">
-              <div className="arc-sec-t">Reseñas</div>
+              <h2 className="arc-sec-t">
+                <span className={configStyles.sectionNumber} aria-hidden="true">
+                  05
+                </span>
+                Reseñas
+              </h2>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="empresa-urlResenas">
                     Link para dejar una reseña{" "}
                     <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="empresa-urlResenas"
                     value={form.urlResenas}
                     onChange={(e) => set("urlResenas", e.target.value)}
                     placeholder="https://g.page/r/…/review"
@@ -500,7 +538,8 @@ export function DatosEmpresaView({
             </div>
           </div>
         </div>
+        <TipoCambioEmpresa />
       </div>
-    </div>
+    </ConfiguracionPage>
   );
 }

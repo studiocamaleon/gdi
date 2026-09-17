@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
@@ -32,7 +33,7 @@ export class SesionesScheduler {
 
   @Cron('30 4 * * *', { name: 'higiene-sesiones' })
   async higiene(): Promise<void> {
-        // TTL holgado: el barrido es un par de queries, pero con muchos tenants
+    // TTL holgado: el barrido es un par de queries, pero con muchos tenants
     // la conservación de la última por tenant hace N lecturas.
     await conLockDeCron(this.prisma, 'higiene-sesiones', 300, async () => {
       const borradas = await this.purgar();
@@ -44,6 +45,18 @@ export class SesionesScheduler {
 
   /** Expuesto para poder correrlo a mano y para los tests. */
   async purgar(ahora = new Date()): Promise<number> {
+    await this.prisma.mfaChallenge.deleteMany({
+      where: { expiresAt: { lt: ahora } },
+    });
+    await this.prisma.userMfa.updateMany({
+      where: { activatedAt: null, pendingExpiresAt: { lt: ahora } },
+      data: {
+        pendingSecret: Prisma.DbNull,
+        pendingId: null,
+        pendingSessionId: null,
+        pendingExpiresAt: null,
+      },
+    });
     const corte = new Date(
       ahora.getTime() - RETENCION_DIAS * 24 * 60 * 60 * 1000,
     );

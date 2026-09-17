@@ -1,0 +1,36 @@
+.form {
+  display: grid;
+  gap: 20px;
+}
+.form > div:first-child {
+  padding-bottom: 0;
+}
+.form .links {
+  margin-top: 0;
+}
+.links button {
+  cursor: pointer;
+  color: var(--reg-ink);
+  font-size: 12px;
+}
+.links button:hover {
+  color: var(--reg-orange-ink);
+}
+.links button:focus-visible {
+  outline: 2px solid var(--reg-orange);
+  outline-offset: 4px;
+}
+.links button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.backoffice {
+  --reg-paper: #131318;
+  --reg-surface: #0d0d11;
+  --reg-ink: #f4f3f0;
+  --reg-muted: #a9a9b2;
+  --reg-line: #30303b;
+  --reg-orange: #ff7546;
+  --reg-orange-ink: #ff9876;
+  --reg-error: #ac352d;
+}

@@ -20,7 +20,8 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { login } from "@/lib/auth";
+import { login, type MfaChallenge } from "@/lib/auth";
+import { MfaLoginForm } from "./mfa-login-form";
 import { setSessionToken } from "@/lib/session";
 import shared from "@/components/registro/registro-premium.module.css";
 import s from "./login-premium.module.css";
@@ -40,6 +41,16 @@ export function LoginForm() {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const submitting = React.useRef(false);
+  const [challenge, setChallenge] = React.useState<MfaChallenge | null>(null);
+  const ingresar = async (token: string) => {
+    await setSessionToken(token);
+    router.replace(
+      registroToken
+        ? `/registro/verificar?token=${encodeURIComponent(registroToken)}`
+        : "/",
+    );
+    router.refresh();
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -50,13 +61,14 @@ export function LoginForm() {
 
     try {
       const response = await login(email.trim(), password);
-      if (response.accessToken) await setSessionToken(response.accessToken);
-      router.replace(
-        registroToken
-          ? `/registro/verificar?token=${encodeURIComponent(registroToken)}`
-          : "/",
-      );
-      router.refresh();
+      if ("requiereMfa" in response) {
+        setChallenge(response);
+        setPassword("");
+        setIsSubmitting(false);
+        submitting.current = false;
+        return;
+      }
+      if (response.accessToken) await ingresar(response.accessToken);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "No se pudo iniciar sesión.",
@@ -65,6 +77,18 @@ export function LoginForm() {
       setIsSubmitting(false);
     }
   };
+
+  if (challenge)
+    return (
+      <MfaLoginForm
+        challenge={challenge}
+        onSuccess={ingresar}
+        onBack={() => {
+          setChallenge(null);
+          setErrorMessage(null);
+        }}
+      />
+    );
 
   return (
     <form

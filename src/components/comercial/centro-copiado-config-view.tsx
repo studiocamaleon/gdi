@@ -1,4 +1,10 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+  GuardarConfiguracion,
+} from "@/components/configuracion/configuracion-workspace";
+import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
@@ -312,6 +318,14 @@ export function CentroCopiadoConfigView() {
     ],
   );
   const hayCambios = !!cfg && firmaActual !== firmaBase;
+  const cantidadCambios = React.useMemo(() => {
+    if (!firmaBase) return 0;
+    const actual = JSON.parse(firmaActual) as Record<string, unknown>;
+    const base = JSON.parse(firmaBase) as Record<string, unknown>;
+    return Object.keys(actual).filter(
+      (key) => JSON.stringify(actual[key]) !== JSON.stringify(base[key]),
+    ).length;
+  }, [firmaActual, firmaBase]);
   React.useEffect(() => {
     const advertir = (event: BeforeUnloadEvent) => {
       if (hayCambios) event.preventDefault();
@@ -577,39 +591,44 @@ export function CentroCopiadoConfigView() {
     const porPlan = errorCarga?.status === 403;
     const requiereInicio = errorCarga?.status === 409;
     return (
-      <div className="flex min-h-72 items-center justify-center p-6">
-        {errorCarga ? (
-          <Alert className="max-w-xl">
-            <AlertTitle>
-              {porPlan
-                ? "Centro de Copiado no incluido"
-                : requiereInicio
-                  ? "El Centro de Copiado necesita configuración"
-                  : "No se pudo cargar el Centro de Copiado"}
-            </AlertTitle>
-            <AlertDescription>{errorCarga.mensaje}</AlertDescription>
-            {!porPlan ? (
-              <AlertAction>
-                <Button
-                  size="sm"
-                  loading={inicializando}
-                  loadingText="Inicializando…"
-                  onClick={() =>
-                    void (requiereInicio ? inicializar() : cargarRemoto())
-                  }
-                >
-                  {requiereInicio ? "Inicializar módulo" : "Reintentar"}
-                </Button>
-              </AlertAction>
-            ) : null}
-          </Alert>
-        ) : (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <GdiSpinner /> Cargando
-            configuración…
-          </div>
-        )}
-      </div>
+      <ConfiguracionPage>
+        <ConfiguracionHeader
+          titulo="Centro de copiado"
+          descripcion="Precios, materiales y producción para las ventas de mostrador."
+        />
+        <div className="flex min-h-72 items-center justify-center">
+          {errorCarga ? (
+            <Alert className="max-w-xl">
+              <AlertTitle>
+                {porPlan
+                  ? "Centro de Copiado no incluido"
+                  : requiereInicio
+                    ? "El Centro de Copiado necesita configuración"
+                    : "No se pudo cargar el Centro de Copiado"}
+              </AlertTitle>
+              <AlertDescription>{errorCarga.mensaje}</AlertDescription>
+              {!porPlan ? (
+                <AlertAction>
+                  <Button
+                    size="sm"
+                    loading={inicializando}
+                    loadingText="Inicializando…"
+                    onClick={() =>
+                      void (requiereInicio ? inicializar() : cargarRemoto())
+                    }
+                  >
+                    {requiereInicio ? "Inicializar módulo" : "Reintentar"}
+                  </Button>
+                </AlertAction>
+              ) : null}
+            </Alert>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <GdiSpinner /> Cargando configuración…
+            </div>
+          )}
+        </div>
+      </ConfiguracionPage>
     );
   }
 
@@ -625,29 +644,32 @@ export function CentroCopiadoConfigView() {
         ? "default"
         : "secondary";
   return (
-    <div className="mx-auto flex min-h-0 min-w-0 max-w-6xl flex-1 flex-col gap-5 overflow-y-auto px-4 pb-24 pt-5 sm:px-6">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-        <div>
-          <div className="flex items-center gap-2">
-            <Printer className="size-5" />
-            <h1 className="text-xl font-semibold tracking-tight">
-              Centro de copiado
-            </h1>
-          </div>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Configurá la oferta express sin salir del motor universal de costos,
-            materiales y producción.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={activo ? "default" : "outline"}>
-            {activo ? "Activo" : "Pausado"}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            v{cfg.version} · {fechaCorta(cfg.actualizadoEl)}
-          </span>
-        </div>
-      </div>
+    <ConfiguracionPage className={configStyles.copyPage}>
+      <ConfiguracionHeader
+        titulo="Centro de copiado"
+        descripcion="Precios, materiales y producción para las ventas de mostrador."
+        detalle={
+          <Badge variant="outline">{activo ? "Activo" : "Pausado"}</Badge>
+        }
+        acciones={
+          <>
+            {hayCambios && (
+              <Button
+                variant="outline"
+                disabled={guardando}
+                onClick={() => cargarFormulario(cfg)}
+              >
+                Descartar
+              </Button>
+            )}
+            <GuardarConfiguracion
+              cambios={cantidadCambios}
+              guardando={guardando}
+              onGuardar={() => void guardar()}
+            />
+          </>
+        }
+      />
 
       <Card className="shrink-0">
         <CardHeader>
@@ -723,7 +745,10 @@ export function CentroCopiadoConfigView() {
       </Card>
 
       <Tabs defaultValue="general" className="shrink-0">
-        <TabsList variant="line" className="max-w-full overflow-x-auto">
+        <TabsList
+          variant="graphite"
+          aria-label="Configuración del centro de copiado"
+        >
           <TabsTrigger value="general">
             <Settings2 /> General
           </TabsTrigger>
@@ -735,7 +760,10 @@ export function CentroCopiadoConfigView() {
             <History /> Historial
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="general" className="grid gap-4 pt-3 lg:grid-cols-2">
+        <TabsContent
+          value="general"
+          className={`${configStyles.copyColumns} grid gap-4 pt-3 lg:grid-cols-2`}
+        >
           <Card>
             <CardHeader>
               <CardTitle>Disponibilidad</CardTitle>
@@ -1326,32 +1354,7 @@ export function CentroCopiadoConfigView() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {hayCambios ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 shadow-lg backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4">
-            <div>
-              <div className="text-sm font-medium">Hay cambios sin guardar</div>
-              <div className="text-xs text-muted-foreground">
-                La versión publicada sigue siendo la {cfg.version}.
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => cargarFormulario(cfg)}>
-                Descartar
-              </Button>
-              <Button
-                loading={guardando}
-                loadingText="Guardando…"
-                onClick={() => void guardar()}
-              >
-                Guardar cambios
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </ConfiguracionPage>
   );
 }
 
@@ -1384,12 +1387,14 @@ function SelectorMaquina({
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={AUTO}>Automática</SelectItem>
-          {opciones.map((o) => (
-            <SelectItem key={o.id} value={o.id}>
-              {o.nombre}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            <SelectItem value={AUTO}>Automática</SelectItem>
+            {opciones.map((o) => (
+              <SelectItem key={o.id} value={o.id}>
+                {o.nombre}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
     </Field>

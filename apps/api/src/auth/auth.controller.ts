@@ -7,6 +7,7 @@ import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CambiarPasswordDto } from './dto/cambiar-password.dto';
 import { ipDeRequest } from './ip';
 import { LoginDto } from './dto/login.dto';
+import { VerificarMfaDto } from './dto/perfil.dto';
 import { SwitchTenantDto } from './dto/switch-tenant.dto';
 import { Public } from './public.decorator';
 import { SoloAutenticado } from './permiso.decorator';
@@ -42,6 +43,13 @@ export class AuthController {
   @Post('login-plataforma')
   loginPlataforma(@Body() payload: LoginDto) {
     return this.authService.loginPlataforma(payload);
+  }
+
+  @Public()
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Post('mfa/verificar')
+  verificarMfa(@Body() payload: VerificarMfaDto, @Req() req: Request) {
+    return this.authService.verificarMfa(payload, ipDeRequest(req));
   }
 
   // @SinTenant: el logout no necesita contexto de tenant (revoca la AuthSession

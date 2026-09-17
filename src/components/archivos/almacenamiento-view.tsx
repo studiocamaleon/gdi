@@ -1,4 +1,9 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+} from "@/components/configuracion/configuracion-workspace";
+import configStyles from "@/components/configuracion/configuracion-workspace.module.css";
 
 import * as React from "react";
 import Link from "next/link";
@@ -74,23 +79,16 @@ export function AlmacenamientoView() {
   const alerta = uso?.porcentaje != null && uso.porcentaje >= 85;
 
   return (
-    <div
-      style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "32px 28px 80px" }}
-    >
+    <ConfiguracionPage>
       <div className="apm-wrap">
-        <div className="apm-head">
-          <div>
-            <h1>Almacenamiento</h1>
-            <div className="sub">
-              El espacio que ocupan los archivos de tu cuenta y cuánto te queda.
-              Cuando se llena, las subidas se rechazan.
-            </div>
-          </div>
-        </div>
+        <ConfiguracionHeader
+          titulo="Almacenamiento"
+          descripcion="Consultá el espacio disponible y cómo se distribuyen tus archivos."
+        />
 
         <div className="arc-page" style={{ display: "block" }}>
           <div className="arc-card">
-            <div className="arc-card-sec">
+            <div className={configStyles.storageCard}>
               {error ? (
                 <div className="arch-vacio">
                   No se pudo leer el uso de espacio.
@@ -120,7 +118,11 @@ export function AlmacenamientoView() {
 
                   {uso.porcentaje !== null ? (
                     <div className={`arch-uso-bar${alerta ? " alerta" : ""}`}>
-                      <i style={{ width: `${Math.max(2, uso.porcentaje)}%` }} />
+                      <i
+                        style={{
+                          width: `${Math.min(100, Math.max(0, uso.porcentaje))}%`,
+                        }}
+                      />
                     </div>
                   ) : null}
 
@@ -151,7 +153,7 @@ export function AlmacenamientoView() {
 
             {uso && !error ? (
               <div className="arc-card-sec">
-                <div className="arc-sec-t">En qué se va</div>
+                <div className="arc-sec-t">Distribución del almacenamiento</div>
                 {uso.porScope.length > 0 ? (
                   <div className="arch-uso-detalle">
                     {uso.porScope.map((s) => (
@@ -189,6 +191,6 @@ export function AlmacenamientoView() {
           </div>
         </div>
       </div>
-    </div>
+    </ConfiguracionPage>
   );
 }
