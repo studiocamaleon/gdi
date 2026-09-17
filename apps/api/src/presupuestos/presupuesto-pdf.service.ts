@@ -93,6 +93,7 @@ function iniciales(nombre: string): string {
 }
 
 export type PresupuestoPdfDatos = {
+  borrador?: boolean;
   numero: string;
   negocio: string;
   /**

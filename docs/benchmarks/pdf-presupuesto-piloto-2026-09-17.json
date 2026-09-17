@@ -1,0 +1,88 @@
+{
+  "fecha": "2026-09-17T20:25:06.964Z",
+  "plantilla": "presupuesto-marca-v1",
+  "entorno": {
+    "plataforma": "darwin",
+    "arquitectura": "arm64",
+    "node": "v23.11.0",
+    "rendererCpu": 2,
+    "rendererLimiteMiB": 1024,
+    "rendererConcurrencia": 2
+  },
+  "primeraLlamada": {
+    "jsPdfMs": 192,
+    "htmlMs": 583,
+    "chromiumPreiniciado": true
+  },
+  "bytes": {
+    "jsPdf": 49633,
+    "html": 58748
+  },
+  "memoriaRenderer": {
+    "antes": {
+      "actualMiB": 472.3,
+      "picoMiB": 609.3
+    },
+    "despues": {
+      "actualMiB": 486.6,
+      "picoMiB": 613.7
+    }
+  },
+  "escenarios": [
+    {
+      "nombre": "jsPDF corto",
+      "solicitudes": 20,
+      "concurrencia": 1,
+      "errores": 0,
+      "totalMs": 2564,
+      "p50Ms": 130,
+      "p95Ms": 138
+    },
+    {
+      "nombre": "HTML corto",
+      "solicitudes": 20,
+      "concurrencia": 1,
+      "errores": 0,
+      "totalMs": 3076,
+      "p50Ms": 135,
+      "p95Ms": 210
+    },
+    {
+      "nombre": "HTML ráfaga corto",
+      "solicitudes": 20,
+      "concurrencia": 4,
+      "errores": 0,
+      "totalMs": 3136,
+      "p50Ms": 570,
+      "p95Ms": 776
+    },
+    {
+      "nombre": "jsPDF 24 productos",
+      "solicitudes": 5,
+      "concurrencia": 1,
+      "errores": 0,
+      "totalMs": 692,
+      "p50Ms": 134,
+      "p95Ms": 171
+    },
+    {
+      "nombre": "HTML 24 productos",
+      "solicitudes": 5,
+      "concurrencia": 1,
+      "errores": 0,
+      "totalMs": 906,
+      "p50Ms": 158,
+      "p95Ms": 279
+    },
+    {
+      "nombre": "HTML caché caliente",
+      "solicitudes": 20,
+      "concurrencia": 4,
+      "errores": 0,
+      "totalMs": 9,
+      "p50Ms": 2,
+      "p95Ms": 2
+    }
+  ],
+  "limites": "Medición local de render; no incluye consultas a BD, subida a storage ni descarga del navegador. No es una prueba de capacidad de producción. La ráfaga envía 4 pedidos a Chromium con 2 slots. Caché medida en proceso, sin HTTP. Memoria del contenedor incluye Chromium, Gotenberg y page cache."
+}

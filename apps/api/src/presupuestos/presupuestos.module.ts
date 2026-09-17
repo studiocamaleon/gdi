@@ -7,9 +7,13 @@ import { CuponesModule } from '../cupones/cupones.module';
 import { PresupuestosController } from './presupuestos.controller';
 import { PresupuestosService } from './presupuestos.service';
 import { PresupuestoPdfService } from './presupuesto-pdf.service';
+import { PresupuestoRenderService } from './pdf-piloto/presupuesto-render.service';
+import { PresupuestoPilotoService } from './pdf-piloto/presupuesto-piloto.service';
+import { DocumentosPdfModule } from '../documentos-pdf/documentos-pdf.module';
 
 @Module({
   imports: [
+    DocumentosPdfModule,
     OrdenesTrabajoModule,
     ArchivosModule,
     EnlacesPublicosModule,
@@ -17,6 +21,11 @@ import { PresupuestoPdfService } from './presupuesto-pdf.service';
     CuponesModule,
   ],
   controllers: [PresupuestosController],
-  providers: [PresupuestosService, PresupuestoPdfService],
+  providers: [
+    PresupuestosService,
+    PresupuestoPdfService,
+    PresupuestoRenderService,
+    PresupuestoPilotoService,
+  ],
 })
 export class PresupuestosModule {}

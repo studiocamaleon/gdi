@@ -19,6 +19,8 @@
     "worker:start": "nest start --entryFile workers/worker-main",
     "worker:dev": "nest start --entryFile workers/worker-main --watch",
     "worker:prod": "node dist/src/workers/worker-main.js",
+    "worker:pdf:dev": "ts-node --transpile-only src/documentos-pdf/documentos-worker-main.ts",
+    "worker:pdf:prod": "node dist/src/documentos-pdf/documentos-worker-main.js",
     "worker:smoke": "ts-node --project tsconfig.json src/workers/smoke-geometria.ts",
     "worker:smoke:opennest": "ts-node --project tsconfig.json src/workers/smoke-opennest.ts",
     "worker:smoke:estado": "ts-node --project tsconfig.json src/workers/smoke-estado-geometria.ts",

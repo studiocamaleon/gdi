@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -31,6 +32,8 @@ import {
 } from './dto/presupuestos.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
+import { PresupuestoPilotoService } from './pdf-piloto/presupuesto-piloto.service';
+import { pilotoPdfHabilitado } from './pdf-piloto/presupuesto-render.service';
 
 @OcultaMargenes()
 @Permiso('comercial.ver')
@@ -41,6 +44,7 @@ export class PresupuestosController {
     private readonly pdf: PresupuestoPdfService,
     private readonly prisma: PrismaService,
     private readonly archivos: ArchivosService,
+    private readonly piloto: PresupuestoPilotoService,
   ) {}
 
   // ── Link público (sin sesión; el token es la credencial) ───────────
@@ -158,10 +162,29 @@ export class PresupuestosController {
     return this.service.convertir(auth, id, dto);
   }
 
+  /** Vista previa interna: no reemplaza ni publica el documento emitido. */
+  @Get(':id/pdf-piloto')
+  async pdfPiloto(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    if (!pilotoPdfHabilitado())
+      throw new NotFoundException('PDF piloto no habilitado.');
+    const datos = await this.service.datosPdf(auth, id);
+    const contenido = await this.piloto.generar(auth.tenantId, id, datos);
+    const nombre = `${datos.numero.replace(/[^a-zA-Z0-9_-]/g, '_')}-piloto.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${nombre}"`,
+      'Cache-Control': 'private, no-store',
+    });
+    res.send(contenido);
+  }
+
   /**
-   * El PDF del presupuesto. Sale del storage: se genera una vez (al emitir, o
-   * en el primer pedido si el presupuesto es anterior a esto) y después es un
-   * 302 a una URL firmada. Antes se lanzaba Chrome headless en cada request.
+   * Compatibilidad para consumidores directos: 202 mientras se prepara,
+   * 302 al archivo guardado. La UI consulta /pdf/estado antes de abrirlo.
    */
   @Get(':id/pdf')
   async pdfPresupuesto(
@@ -169,7 +192,28 @@ export class PresupuestosController {
     @Param('id', ParseUUIDPipe) id: string,
     @Res() res: Response,
   ): Promise<void> {
-    const archivo = await this.service.pdfDe(auth, id);
-    res.redirect(302, await this.archivos.urlDeDescarga(archivo.id));
+    const estado = await this.service.estadoPdf(auth, id);
+    res.set('Cache-Control', 'private, no-store');
+    if (estado.estado === 'listo') res.redirect(302, estado.url);
+    else res.status(202).set('Retry-After', '2').json(estado);
+  }
+
+  @Get(':id/pdf/estado')
+  async estadoPdf(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    res
+      .set('Cache-Control', 'private, no-store')
+      .json(await this.service.estadoPdf(auth, id));
+  }
+
+  @Post(':id/pdf/reintentar')
+  async reintentarPdf(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.reintentarPdf(auth, id);
   }
 }

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { Archivo, ArchivoEstado, ArchivoScope, Prisma } from '@prisma/client';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -414,7 +414,20 @@ export class ArchivosService {
     });
     await this.storage.subir(key, params.contenido, params.mimeType);
 
-    const anterior = await this.generadoDe(params.scope, params.entidadId);
+    // Los generadores históricos sólo reemplazan sus propios archivos; nunca
+    // una versión inmutable publicada por el worker de documentos.
+    const archivoHistorico = {
+      tenantId: params.tenantId,
+      scope: params.scope,
+      [campo]: params.entidadId,
+      generado: true,
+      estado: ArchivoEstado.LISTO,
+      documentoPdfId: null,
+    };
+    const anterior = await this.prisma.archivo.findFirst({
+      where: archivoHistorico,
+      orderBy: { createdAt: 'desc' },
+    });
     const bytes = BigInt(params.contenido.length);
 
     let fila: Archivo;
@@ -447,7 +460,10 @@ export class ArchivosService {
       // vigentes y el perdedor se filtraba en el bucket para siempre.
       if (esConflictoDeUnicidad(error)) {
         await this.storage.borrar(key).catch(() => undefined);
-        const ganador = await this.generadoDe(params.scope, params.entidadId);
+        const ganador = await this.prisma.archivo.findFirst({
+          where: archivoHistorico,
+          orderBy: { createdAt: 'desc' },
+        });
         if (ganador) return ganador;
       }
       throw error;
@@ -486,6 +502,98 @@ export class ArchivosService {
         [campo]: entidadId,
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Publicación única de una versión PDF. Un proceso viejo nunca pisa al ganador. */
+  async materializarVersionPdf(params: {
+    tenantId: string;
+    documentoId: string;
+    leaseToken: string;
+    contenido: Buffer;
+  }): Promise<Archivo> {
+    const doc = await this.prisma.documentoPdf.findFirst({
+      where: {
+        id: params.documentoId,
+        tenantId: params.tenantId,
+        estado: 'PROCESANDO',
+        leaseToken: params.leaseToken,
+        leaseHasta: { gt: new Date() },
+      },
+    });
+    if (!doc) throw new Error('PDF_LEASE_PERDIDO');
+    const datos = doc.datosJson as { numero?: string };
+    const nombre = `${String(datos.numero ?? 'presupuesto').replace(/[^a-zA-Z0-9_-]/g, '_')}${doc.revision === 1 ? '-borrador' : ''}.pdf`;
+    const archivoId = randomUUID();
+    const key = construirKey({
+      tenantId: params.tenantId,
+      scope: ArchivoScope.COTIZACION,
+      entidadId: doc.cotizacionId,
+      archivoId,
+      ext: 'pdf',
+    });
+    const bytes = BigInt(params.contenido.length);
+    const cuota = await this.cuotaEfectiva(params.tenantId);
+    // Se registra antes del PUT. Si el proceso muere, el barrido de pendientes
+    // conoce la clave y limpia el objeto; nunca queda una subida sin rastro.
+    await this.prisma.archivo.create({
+      data: {
+        id: archivoId,
+        tenantId: params.tenantId,
+        scope: ArchivoScope.COTIZACION,
+        cotizacionId: doc.cotizacionId,
+        key,
+        nombreOriginal: nombre,
+        mimeType: 'application/pdf',
+        bytes,
+        estado: ArchivoEstado.PENDIENTE,
+        generado: true,
+        autogeneradoPor: `pdf:${doc.id}`,
+      },
+    });
+    await this.storage.subir(key, params.contenido, 'application/pdf');
+    return this.prisma.$transaction(async (tx) => {
+      const publicado = await tx.documentoPdf.updateMany({
+        where: {
+          id: doc.id,
+          tenantId: params.tenantId,
+          estado: 'PROCESANDO',
+          leaseToken: params.leaseToken,
+          leaseHasta: { gt: new Date() },
+        },
+        data: {
+          estado: 'LISTO',
+          generadoEl: new Date(),
+          contenidoHash: createHash('sha256')
+            .update(params.contenido)
+            .digest('hex'),
+          leaseToken: null,
+          leaseHasta: null,
+          errorCodigo: null,
+          errorMensaje: null,
+        },
+      });
+      if (publicado.count !== 1) throw new Error('PDF_LEASE_PERDIDO');
+      // El UPDATE condicionado hace atómica la cuota entre múltiples workers.
+      const contado = await tx.tenant.updateMany({
+        where: {
+          id: params.tenantId,
+          ...(cuota.bytes !== null
+            ? {
+                bytesArchivos: { lte: BigInt(Math.floor(cuota.bytes)) - bytes },
+              }
+            : {}),
+        },
+        data: { bytesArchivos: { increment: bytes } },
+      });
+      if (contado.count !== 1)
+        throw new ForbiddenException(
+          'No hay espacio disponible para guardar el PDF. Liberá espacio o ampliá el plan y reintentá.',
+        );
+      return tx.archivo.update({
+        where: { id: archivoId, tenantId: params.tenantId },
+        data: { estado: ArchivoEstado.LISTO, documentoPdfId: doc.id },
+      });
     });
   }
 
