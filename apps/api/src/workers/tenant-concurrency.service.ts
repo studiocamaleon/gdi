@@ -20,7 +20,7 @@ export class TenantConcurrencyService implements OnApplicationShutdown {
 
   async adquirir(input: {
     tenantId: string;
-    categoria: 'cotizacion' | 'geometria' | 'geometria-intensiva';
+    categoria: 'cotizacion' | 'geometria' | 'geometria-intensiva' | 'pdf';
     jobId: string;
     limite: number;
     duracionMs: number;

@@ -77,6 +77,7 @@ function escenario(actualizadas = 1) {
         snapshot: {},
       }),
     } as never,
+    {} as never,
   );
   jest
     .spyOn(service, 'enviar')

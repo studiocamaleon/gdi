@@ -812,6 +812,7 @@ model Tenant {
   cotizacionesV2Items                              CotizacionItem[]
   cotizacionContadores                             CotizacionContador[]
   cotizacionEventos                                CotizacionEvento[]
+  documentosPdf                                    DocumentoPdf[]
   configuracionPresupuestos                        ConfiguracionPresupuestos?
   productosPreciosEspecialesClientesV2             ProductoPrecioEspecialClienteV2[]
   productosImpuestosAplicados                      ProductoImpuestoAplicado[]
@@ -3521,6 +3522,7 @@ model Cotizacion {
   ordenesTrabajo               OrdenTrabajo[]
   eventos                      CotizacionEvento[]
   archivos                     Archivo[]
+  documentosPdf                DocumentoPdf[]
   cuponRedenciones             CuponRedencion[]
   reservasFidelizacion         FidelizacionReserva[]
 
@@ -3530,6 +3532,38 @@ model Cotizacion {
   @@index([tenantId, clienteId])
   @@index([tenantId, proyectoCampanaId])
   @@index([tenantId, fechaEnvio])
+}
+
+/// Snapshot inmutable y bandeja durable de generación de presupuestos.
+model DocumentoPdf {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @db.Uuid
+  cotizacionId       String    @db.Uuid
+  /// 1: vista previa persistida. 2: documento congelado al enviar.
+  revision           Int
+  plantillaVersion   String
+  datosHash          String
+  datosJson          Json
+  estado             String    @default("PENDIENTE")
+  intentos           Int       @default(0)
+  ronda              Int       @default(0)
+  proximoIntentoEl   DateTime  @default(now())
+  encoladoEl         DateTime?
+  leaseToken         String?   @db.Uuid
+  leaseHasta         DateTime?
+  errorCodigo        String?
+  errorMensaje       String?
+  contenidoHash      String?
+  generadoEl         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  tenant             Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion         Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  archivo            Archivo?
+
+  @@unique([tenantId, cotizacionId, revision])
+  @@index([estado, proximoIntentoEl, encoladoEl])
+  @@index([estado, leaseHasta])
 }
 
 /// Numeración de presupuestos por tenant y año (patrón OrdenTrabajoContador).
@@ -5210,6 +5244,8 @@ model PagoContador {
 /// seteada, según `scope` (ninguna para TENANT_BRANDING).
 /// Ver docs/archivos-r2-diseno.md
 model Archivo {
+  documentoPdfId String? @unique @db.Uuid
+  documentoPdf DocumentoPdf? @relation(fields: [documentoPdfId], references: [id], onDelete: Restrict)
   geometriasProducto GeometriaProducto[]
   id                String        @id @default(uuid()) @db.Uuid
   tenantId          String        @db.Uuid

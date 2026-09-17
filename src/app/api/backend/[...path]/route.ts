@@ -70,6 +70,8 @@ async function handler(
   }
 
   const responseHeaders = new Headers();
+  const cacheControl = response.headers.get("cache-control");
+  if (cacheControl) responseHeaders.set("cache-control", cacheControl);
   const retryAfter = response.headers.get("retry-after");
   if (retryAfter) responseHeaders.set("retry-after", retryAfter);
   const respContentType = response.headers.get("content-type");

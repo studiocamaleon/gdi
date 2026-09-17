@@ -77,6 +77,11 @@ const button = (html: string, label: string) =>
   )?.[0];
 
 describe("acciones y datos de la ficha de presupuesto", () => {
+  it("ofrece una única descarga con preparación asíncrona", () => {
+    const html = render();
+    expect(html).not.toContain("PDF piloto");
+    expect(html).toContain('href="/comercial/presupuestos/presupuesto-1/pdf"');
+  });
   it("mantiene el detalle comercial y los descuentos del snapshot", () => {
     const html = render();
     for (const value of [
@@ -91,7 +96,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
       expect(html).toContain(value);
     }
     expect(html).toContain("1.089");
-    expect(html).toContain("/api/backend/presupuestos/presupuesto-1/pdf");
+    expect(html).toContain("/comercial/presupuestos/presupuesto-1/pdf");
   });
 
   it("un enviado permite registrar la decisión del cliente y todavía no convertir", () => {

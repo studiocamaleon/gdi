@@ -16,6 +16,13 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { PresupuestoPdfService } from './presupuesto-pdf.service';
+import type { PresupuestoPdfDatos } from './presupuesto-pdf.service';
+import {
+  DocumentosPdfService,
+  pdfAsincronoHabilitado,
+  REVISION_BORRADOR,
+  REVISION_EMITIDA,
+} from '../documentos-pdf/documentos-pdf.service';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import type { CrearOrdenTrabajoItemDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
@@ -104,6 +111,7 @@ export class PresupuestosService {
     private readonly empresa: DatosEmpresaService,
     private readonly cupones: CuponesService,
     private readonly fidelizacion: FidelizacionService,
+    private readonly documentos: DocumentosPdfService,
   ) {}
 
   /**
@@ -330,7 +338,11 @@ export class PresupuestosService {
               tipo: 'cotizacion',
               documentoId: dto.cotizacionId,
             },
-            origen: auth.impersonacion ? 'soporte' : auth.mcp ? 'api' : 'usuario',
+            origen: auth.impersonacion
+              ? 'soporte'
+              : auth.mcp
+                ? 'api'
+                : 'usuario',
           },
         });
       }
@@ -365,29 +377,91 @@ export class PresupuestosService {
   // ── PDF ────────────────────────────────────────────────────────────
 
   /**
-   * Devuelve el PDF ya guardado, y si todavía no existe lo genera y lo
-   * guarda. Antes se renderizaba con Chrome headless en CADA request: cada
-   * vez que el cliente abría el link público del presupuesto se levantaba un
-   * navegador. Ahora es un render por presupuesto.
-   *
-   * Nota de comportamiento: el PDF pasa a ser una FOTO del documento. Los
-   * items y los totales ya venían congelados en `emisionJson`, así que eso no
-   * cambia; lo que sí queda fijo ahora son el nombre del negocio, el texto de
-   * condiciones y el logo vigentes al emitir. Para un documento comercial que
-   * el cliente aprueba, congelarlos es lo correcto: si mañana cambian las
-   * condiciones de pago, el presupuesto que ya se mandó no debería mutar.
+   * Consulta la versión apropiada y firma su descarga cuando ya está guardada.
+   * Si falta, registra el snapshot para el worker. Los documentos históricos
+   * conservan su archivo y los reintentos nunca reconstruyen datos actuales.
    */
-  async pdfDe(auth: CurrentAuth, id: string): Promise<Archivo> {
-    const existente = await this.archivos.generadoDe(
-      ArchivoScope.COTIZACION,
-      id,
-    );
-    if (existente) return existente;
-    return this.materializarPdf(auth, id);
+  async estadoPdf(auth: CurrentAuth, id: string) {
+    const c = await this.prisma.cotizacion.findFirst({
+      where: { id, tenantId: auth.tenantId, numero: { not: null } },
+      select: { id: true, estado: true, fechaEnvio: true },
+    });
+    if (!c) throw new NotFoundException('El presupuesto no existe.');
+    const revision =
+      c.fechaEnvio || !['borrador', 'pendiente_aprobacion'].includes(c.estado)
+        ? REVISION_EMITIDA
+        : REVISION_BORRADOR;
+    let doc = await this.documentos.buscar(auth.tenantId, id, revision);
+    if (!doc) {
+      const historico = await this.pdfHistorico(auth.tenantId, id);
+      if (historico)
+        return {
+          estado: 'listo' as const,
+          url: await this.archivos.urlDeDescarga(historico.id),
+        };
+      if (!pdfAsincronoHabilitado()) {
+        const archivo = await this.materializarPdf(auth, id);
+        return {
+          estado: 'listo' as const,
+          url: await this.archivos.urlDeDescarga(archivo.id),
+        };
+      }
+      const datos = await this.datosPdf(auth, id);
+      if (revision === REVISION_BORRADOR) datos.borrador = true;
+      const entrada = this.documentos.preparar(
+        auth.tenantId,
+        id,
+        revision,
+        datos,
+      );
+      await this.prisma.$transaction((tx) =>
+        this.documentos.registrar(tx, entrada),
+      );
+      doc = await this.documentos.buscar(auth.tenantId, id, revision);
+    }
+    if (!doc) throw new NotFoundException('El documento no existe.');
+    if (doc.estado === 'LISTO' && doc.archivo?.estado === 'LISTO') {
+      return {
+        estado: 'listo' as const,
+        url: await this.archivos.urlDeDescarga(doc.archivo.id),
+        revision: doc.revision,
+      };
+    }
+    return {
+      estado:
+        doc.estado === 'FALLIDO'
+          ? ('fallido' as const)
+          : ('preparando' as const),
+      documentoId: doc.id,
+      revision: doc.revision,
+      reintentarEnMs: 2000,
+      error: doc.estado === 'FALLIDO' ? doc.errorMensaje : null,
+    };
   }
 
-  /** Rehace el PDF y reemplaza el anterior. */
-  async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
+  async reintentarPdf(auth: CurrentAuth, id: string) {
+    const estado = await this.estadoPdf(auth, id); // Valida pertenencia antes de cualquier escritura.
+    if (estado.estado === 'fallido')
+      await this.documentos.reintentar(auth.tenantId, id, estado.revision);
+    return this.estadoPdf(auth, id);
+  }
+
+  private pdfHistorico(tenantId: string, id: string) {
+    return this.prisma.archivo.findFirst({
+      where: {
+        tenantId,
+        cotizacionId: id,
+        scope: ArchivoScope.COTIZACION,
+        generado: true,
+        estado: 'LISTO',
+        documentoPdfId: null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /** Proyección común: ambos motores imprimen los mismos importes guardados. */
+  async datosPdf(auth: CurrentAuth, id: string): Promise<PresupuestoPdfDatos> {
     const [detalle, cfg, negocio, logoDataUri, empresa] = await Promise.all([
       this.detalle(auth, id),
       this.config(auth.tenantId),
@@ -396,7 +470,7 @@ export class PresupuestosService {
       this.empresa.paraDocumentos(auth.tenantId),
     ]);
 
-    const contenido = await this.pdf.generar({
+    return {
       numero: detalle.numero!,
       negocio,
       empresa,
@@ -417,13 +491,21 @@ export class PresupuestosService {
       fidelizacionCanjePuntos: detalle.fidelizacion.canjePuntos,
       fidelizacionCanjeMonto: detalle.fidelizacion.canjeMonto,
       items: detalle.items,
-    });
+    };
+  }
+
+  /** Generador anterior para despliegues sin worker; conserva el histórico. */
+  async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
+    const existente = await this.pdfHistorico(auth.tenantId, id);
+    if (existente) return existente;
+    const datos = await this.datosPdf(auth, id);
+    const contenido = await this.pdf.generar(datos);
 
     return this.archivos.materializar({
       tenantId: auth.tenantId,
       scope: ArchivoScope.COTIZACION,
       entidadId: id,
-      nombre: `${detalle.numero}.pdf`,
+      nombre: `${datos.numero}.pdf`,
       mimeType: 'application/pdf',
       contenido,
     });
@@ -787,6 +869,22 @@ export class PresupuestosService {
         emision.validezDias ??
           (await this.config(auth.tenantId)).validezDiasDefault,
       ));
+    let documento: ReturnType<DocumentosPdfService['preparar']> | undefined;
+    if (
+      pdfAsincronoHabilitado() &&
+      !(await this.pdfHistorico(auth.tenantId, c.id)) &&
+      !(await this.documentos.buscar(auth.tenantId, c.id, REVISION_EMITIDA))
+    ) {
+      const datos = await this.datosPdf(auth, c.id);
+      const regional = await this.empresa.regional(auth.tenantId);
+      datos.fechaValidez = claveFechaEnZona(fechaValidez, regional.zonaHoraria);
+      documento = this.documentos.preparar(
+        auth.tenantId,
+        c.id,
+        REVISION_EMITIDA,
+        datos,
+      );
+    }
     await this.prisma.$transaction(async (tx) => {
       await this.cupones.reservarParaPresupuesto(
         tx,
@@ -835,6 +933,7 @@ export class PresupuestosService {
         entidadId: c.id,
         token,
       });
+      if (documento) await this.documentos.registrar(tx, documento);
     });
     await this.evento(auth, c.id, {
       tipo: 'enviado',
@@ -844,11 +943,12 @@ export class PresupuestosService {
           ? 'Presupuesto reenviado al cliente.'
           : 'Presupuesto enviado al cliente.'),
     });
-    await this.materializarPdf(auth, c.id).catch((error: unknown) => {
-      this.logger.warn(
-        `No pude materializar el PDF del presupuesto ${c.id}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    });
+    if (!pdfAsincronoHabilitado())
+      await this.materializarPdf(auth, c.id).catch((error: unknown) => {
+        this.logger.warn(
+          `No pude materializar el PDF del presupuesto ${c.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
     return this.detalle(auth, c.id);
   }
 
@@ -1503,7 +1603,8 @@ export class PresupuestosService {
         usuarioId: auth.userId,
         usuarioNombre: await this.nombreDe(auth),
         datosJson: (e.datosJson ?? undefined) as
-          Prisma.InputJsonValue | undefined,
+          | Prisma.InputJsonValue
+          | undefined,
       },
     });
   }
@@ -1527,7 +1628,8 @@ export class PresupuestosService {
         usuarioNombre: e.origen === 'cliente' ? 'Cliente' : 'Sistema',
         origen: e.origen ?? 'sistema',
         datosJson: (e.datosJson ?? undefined) as
-          Prisma.InputJsonValue | undefined,
+          | Prisma.InputJsonValue
+          | undefined,
       },
     });
   }

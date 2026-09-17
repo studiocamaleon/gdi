@@ -331,9 +331,27 @@ export function decidirPresupuestoPublico(
   );
 }
 
-/** El PDF sale por el proxy BFF (cookie httpOnly). */
+/** La pantalla consulta el estado y abre el archivo guardado cuando está listo. */
 export function presupuestoPdfUrl(id: string): string {
-  return `/api/backend/presupuestos/${id}/pdf`;
+  return `/comercial/presupuestos/${id}/pdf`;
+}
+
+export type EstadoPdfPresupuesto =
+  | { estado: "listo"; url: string }
+  | { estado: "preparando"; reintentarEnMs: number }
+  | { estado: "fallido"; error: string | null };
+
+export function getEstadoPdfPresupuesto(id: string, signal?: AbortSignal) {
+  return apiRequest<EstadoPdfPresupuesto>(`/presupuestos/${id}/pdf/estado`, {
+    signal,
+  });
+}
+
+export function reintentarPdfPresupuesto(id: string, signal?: AbortSignal) {
+  return apiRequest<EstadoPdfPresupuesto>(
+    `/presupuestos/${id}/pdf/reintentar`,
+    { method: "POST", signal },
+  );
 }
 
 /** Ruta pública del presupuesto: /p/<token>. */

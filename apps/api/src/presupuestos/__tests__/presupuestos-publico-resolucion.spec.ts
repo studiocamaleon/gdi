@@ -70,6 +70,7 @@ function escenario(estado = 'enviado', fechaValidez = new Date('2099-09-30')) {
     empresa as never,
     cupones as never,
     fidelizacion as never,
+    {} as never,
   );
   jest
     .spyOn(service, 'detalle')
