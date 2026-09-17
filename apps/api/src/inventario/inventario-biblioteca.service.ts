@@ -1,3 +1,4 @@
+import { regionalDelTenant } from '../common/regional';
 import {
   BadRequestException,
   ConflictException,
@@ -67,6 +68,7 @@ export class InventarioBibliotecaService {
     key: string,
     payload: InstallMaterialPresetDto,
   ) {
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const preset = await this.prisma.materialPreset.findUnique({
       where: { key },
       include: {
@@ -216,7 +218,7 @@ export class InventarioBibliotecaService {
               unidadStock: variant.unidadStock,
               unidadCompra: variant.unidadCompra,
               precioReferencia: variant.precioReferencia,
-              moneda: variant.moneda,
+              moneda: variant.moneda || regional.moneda.codigo,
             },
           });
         }

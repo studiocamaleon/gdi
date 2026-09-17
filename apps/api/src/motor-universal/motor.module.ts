@@ -9,6 +9,7 @@ import { ProductosServiciosModule } from '../productos-servicios/productos-servi
 import { GeometriaJobsModule } from '../workers/geometria/geometria-jobs.module';
 import { AnalisisVectorialAsyncService } from './geometria-vectorial/analisis-vectorial-async.service';
 import { CotizacionJobsModule } from '../workers/cotizacion/cotizacion-jobs.module';
+import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
 
 /**
  * MotorUniversalModule importa PrecioModule para que MotorUniversalService pueda
@@ -23,6 +24,7 @@ import { CotizacionJobsModule } from '../workers/cotizacion/cotizacion-jobs.modu
     ProductosServiciosModule,
     GeometriaJobsModule,
     CotizacionJobsModule,
+    CotizacionesModule,
   ],
   controllers: [MotorUniversalController],
   providers: [

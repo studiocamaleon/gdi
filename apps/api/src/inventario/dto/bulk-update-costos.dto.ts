@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -8,9 +9,13 @@ import {
   IsUUID,
   Length,
   Min,
+  IsPositive,
   ValidateNested,
 } from 'class-validator';
-import { UnidadMateriaPrimaDto } from './upsert-materia-prima.dto';
+import {
+  EquivalenciaMaterialDto,
+  UnidadMateriaPrimaDto,
+} from './upsert-materia-prima.dto';
 
 const toDecimalNumber = ({ value }: { value: unknown }) => {
   if (typeof value === 'string') {
@@ -18,10 +23,31 @@ const toDecimalNumber = ({ value }: { value: unknown }) => {
     if (!normalized) return Number.NaN;
     return Number(normalized);
   }
-  return value as unknown;
+  return value;
 };
 
 export class BulkCostoVarianteDto {
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidadUso?: UnidadMateriaPrimaDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => EquivalenciaMaterialDto)
+  equivalencias?: EquivalenciaMaterialDto[];
+
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidadPrecio?: UnidadMateriaPrimaDto | null;
+
+  @IsOptional()
+  @Transform(toDecimalNumber)
+  @IsNumber()
+  @IsPositive()
+  equivalenciaCompra?: number | null;
+
   @IsUUID()
   id: string;
 
@@ -46,6 +72,10 @@ export class BulkCostoVarianteDto {
 }
 
 export class BulkCostoMaterialDto {
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidadUso?: UnidadMateriaPrimaDto;
+
   @IsUUID()
   id: string;
 

@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Etapa D — agregar-a-orden: persiste la representación canónica de la carga
  * (un renglón por suelto y uno por tomo compuesto) en una cotización borrador.
@@ -15,6 +16,7 @@ const prisma = new PrismaClient();
 let tenantId: string;
 let service: CentroCopiadoService;
 let papel: string;
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 function dtoBoceto() {
   return {
@@ -70,6 +72,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   const motor = new MotorUniversalService(
     prisma as never,
@@ -88,6 +91,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

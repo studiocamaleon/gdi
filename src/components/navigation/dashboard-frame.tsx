@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { LogoutButton } from "@/components/logout-button";
 import { NotificacionesBell } from "@/components/notificaciones/notificaciones-bell";
+import { TipoCambioIndicator } from "./tipo-cambio-indicator";
 import { cn } from "@/lib/utils";
 import s from "./dashboard-frame.module.css";
 
@@ -34,6 +35,7 @@ export function DashboardTopbar() {
   return (
     <header className={cn("topbar", s.topbar)} data-appearance="light">
       <SidebarTrigger className={cn("icon-btn", s.trigger)} />
+      <TipoCambioIndicator />
       <div className="ml-auto flex items-center gap-2">
         <NotificacionesBell triggerClassName={s.trigger} />
         <LogoutButton className={s.logout} />

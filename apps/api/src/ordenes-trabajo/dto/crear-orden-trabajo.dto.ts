@@ -287,6 +287,10 @@ export class EditarOrdenTrabajoItemLoteDto extends CrearOrdenTrabajoItemDto {
  * conjunto final completo (altas, cambios, bajas y orden incluidos).
  */
 export class EditarOrdenTrabajoLoteDto extends EditarOrdenTrabajoDto {
+  @IsOptional()
+  @IsUUID()
+  tipoCambioId?: string;
+
   @IsISO8601()
   expectedVersion: string;
 

@@ -14,6 +14,7 @@
 
 /** Costos: lo que a la imprenta le sale producirlo. */
 const COSTOS = [
+  'costosMaterialesMoneda',
   'costo',
   'costos',
   'costoTotal',

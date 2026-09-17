@@ -1,3 +1,4 @@
+import { monedaCotizacionContext } from '../cotizaciones/material-moneda-context';
 import { Prisma } from '@prisma/client';
 import { CC_PRODUCTO_CODIGO, CC_RUTA_CODIGO } from './provisionar-plantilla';
 
@@ -44,6 +45,12 @@ export function dataCotizacionItemTomo(args: {
     cantidad: String(tomo.juegos),
     jobContextJson: tomo.jobContext as Prisma.InputJsonValue,
     snapshotJson: {
+      tipoCambio:
+        (monedaCotizacionContext.getStore()
+          ?.cambio as unknown as Prisma.InputJsonValue) ?? null,
+      costosMaterialesMoneda: [
+        ...(monedaCotizacionContext.getStore()?.materiales.values() ?? []),
+      ] as unknown as Prisma.InputJsonValue,
       producto: {
         id: args.productoId,
         codigo: CC_PRODUCTO_CODIGO,

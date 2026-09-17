@@ -1,3 +1,4 @@
+import { UnidadMateriaPrimaDto } from './upsert-materia-prima.dto';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -25,6 +26,17 @@ export enum OrigenMovimientoStockMateriaPrimaDto {
 }
 
 export class RegistrarMovimientoStockDto {
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidad?: UnidadMateriaPrimaDto;
+
+  /** Cantidad efectivamente recibida en stock, sólo para ingresos por peso. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 8 })
+  @Min(0.00000001)
+  cantidadStock?: number;
+
   @IsUUID()
   varianteId: string;
 
@@ -39,7 +51,7 @@ export class RegistrarMovimientoStockDto {
 
   @Type(() => Number)
   @IsNumber()
-  @Min(0.0001)
+  @Min(0.00000001)
   cantidad: number;
 
   @IsOptional()

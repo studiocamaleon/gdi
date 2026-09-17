@@ -56,6 +56,7 @@ import { CampanasModule } from './campanas/campanas.module';
 import { DesarrolloDocumentalModule } from './desarrollo-documental/desarrollo-documental.module';
 import { EventosSistemaModule } from './eventos-sistema/eventos-sistema.module';
 import { GeometriaJobsModule } from './workers/geometria/geometria-jobs.module';
+import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
 
 @Module({
   imports: [
@@ -134,6 +135,7 @@ import { GeometriaJobsModule } from './workers/geometria/geometria-jobs.module';
     ProvisionamientoModule,
     RegistroModule,
     GeometriaJobsModule,
+    CotizacionesModule,
   ],
   controllers: [AppController],
   providers: [

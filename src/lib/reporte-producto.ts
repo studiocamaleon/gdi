@@ -42,7 +42,9 @@ export function prepararMixProducto(puntos: PuntoMixPanel[], limite = 6) {
 
 const UNIDADES: Record<string, [string, string]> = {
   unidad: ["unidad", "unidades"],
+  botella: ["botella", "botellas"],
   hoja: ["hoja", "hojas"],
+  placa: ["placa", "placas"],
   pliego: ["pliego", "pliegos"],
   m2: ["m²", "m²"],
   metro_lineal: ["m lineal", "m lineales"],

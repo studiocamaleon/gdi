@@ -1,5 +1,14 @@
 "use client";
 
+import {
+  StockConversionFields,
+  stockUnitLabel,
+} from "./stock-conversion-fields";
+import {
+  normalizeMaterialUnit,
+  type MaterialUnitContext,
+} from "@/lib/material-units";
+
 import * as React from "react";
 import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -45,6 +54,9 @@ const ORIGEN_ITEMS: Array<{ value: OrigenMovimientoStockMateriaPrima; label: str
   { value: "otro", label: "Otro" },
 ];
 const UMBRAL_VARIACION_COSTO_ABS = 0.1;
+const quantityFormatter = new Intl.NumberFormat("es-AR", {
+  maximumFractionDigits: 8,
+});
 const number2Formatter = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -79,8 +91,15 @@ export function CentroStockPanel({
   const [rowSelected, setRowSelected] = React.useState<StockMateriaPrimaItem | null>(null);
   const [movimientoModo, setMovimientoModo] = React.useState<"libre" | "ingreso">("libre");
 
-  const [tipo, setTipo] = React.useState<"ingreso" | "egreso" | "ajuste_entrada" | "ajuste_salida">("ingreso");
-  const [origen, setOrigen] = React.useState<OrigenMovimientoStockMateriaPrima>("compra");
+  const [tipo, setTipo] = React.useState<
+    "ingreso" | "egreso" | "ajuste_entrada" | "ajuste_salida"
+  >("ingreso");
+  const [origen, setOrigen] =
+    React.useState<OrigenMovimientoStockMateriaPrima>("compra");
+  const [unidadMovimiento, setUnidadMovimiento] = React.useState("");
+  const [cantidadRealStock, setCantidadRealStock] = React.useState("");
+  const [unidadIngreso, setUnidadIngreso] = React.useState("");
+  const [cantidadRealIngreso, setCantidadRealIngreso] = React.useState("");
   const [cantidad, setCantidad] = React.useState("1");
   const [costoUnitario, setCostoUnitario] = React.useState("");
   const [referenciaId, setReferenciaId] = React.useState("");
@@ -179,16 +198,38 @@ export function CentroStockPanel({
         varianteNombre: string;
         precioReferencia: number | null;
         moneda: string;
+        puedeActualizarReferencia: boolean;
+        unidades: MaterialUnitContext;
       }
     >();
 
     for (const materiaPrima of materiasPrimas) {
       for (const variante of materiaPrima.variantes) {
         map.set(variante.id, {
+          unidades: {
+            unidadStock: variante.unidadStock ?? materiaPrima.unidadStock,
+            unidadCompra: variante.unidadCompra ?? materiaPrima.unidadCompra,
+            unidadUso:
+              variante.unidadUso ??
+              materiaPrima.unidadUso ??
+              variante.unidadStock ??
+              materiaPrima.unidadStock,
+            unidadPrecio: variante.unidadPrecio,
+            equivalenciaCompra: variante.equivalenciaCompra,
+            equivalencias: variante.equivalencias,
+            templateId: materiaPrima.templateId,
+            atributos: variante.atributosVariante,
+          },
           materiaPrimaNombre: materiaPrima.nombre,
           varianteNombre: getVarianteDisplayName(materiaPrima, variante, {
             maxDimensiones: 5,
           }),
+          puedeActualizarReferencia:
+            (!variante.moneda || variante.moneda === moneda.codigo) &&
+            (variante.unidadPrecio ??
+              variante.unidadCompra ??
+              materiaPrima.unidadCompra) ===
+              (variante.unidadStock ?? materiaPrima.unidadStock),
           precioReferencia: variante.precioReferencia ?? null,
           moneda: (variante.moneda || "ARS").trim().toUpperCase(),
         });
@@ -196,13 +237,20 @@ export function CentroStockPanel({
     }
 
     return map;
-  }, [materiasPrimas]);
+  }, [materiasPrimas, moneda.codigo]);
+
+  const unidadesMovimiento = rowSelected
+    ? varianteMetaById.get(rowSelected.varianteId)?.unidades
+    : undefined;
+  const unidadesIngreso = varianteMetaById.get(
+    ingresoInicialVarianteId,
+  )?.unidades;
 
   const maybeActualizarPrecioReferencia = React.useCallback(
     async (varianteId: string, costoUnitario: number | undefined) => {
       if (costoUnitario === undefined) return;
       const meta = varianteMetaById.get(varianteId);
-      if (!meta) return;
+      if (!meta || !meta.puedeActualizarReferencia) return;
 
       const etiqueta = `${meta.materiaPrimaNombre} - ${meta.varianteNombre}`;
       const precioReferencia = meta.precioReferencia;
@@ -266,9 +314,18 @@ export function CentroStockPanel({
         return { cost: parsed, usedReferencia: false, missingReferenciaForZero: false };
       }
 
-      const precioReferencia = varianteMetaById.get(varianteId)?.precioReferencia ?? null;
-      if (typeof precioReferencia === "number" && Number.isFinite(precioReferencia) && precioReferencia > 0) {
-        return { cost: precioReferencia, usedReferencia: true, missingReferenciaForZero: false };
+      const precioReferencia =
+        varianteMetaById.get(varianteId)?.precioReferencia ?? null;
+      if (
+        typeof precioReferencia === "number" &&
+        Number.isFinite(precioReferencia) &&
+        precioReferencia > 0
+      ) {
+        return {
+          cost: undefined,
+          usedReferencia: true,
+          missingReferenciaForZero: false,
+        };
       }
 
       return { cost: 0, usedReferencia: false, missingReferenciaForZero: true };
@@ -317,6 +374,10 @@ export function CentroStockPanel({
     setMovimientoModo("libre");
     setTipo("ingreso");
     setOrigen("compra");
+    setUnidadMovimiento(
+      varianteMetaById.get(row.varianteId)?.unidades.unidadStock ?? "",
+    );
+    setCantidadRealStock("");
     setCantidad("1");
     setCostoUnitario("");
     setReferenciaId("");
@@ -342,6 +403,8 @@ export function CentroStockPanel({
       return;
     }
 
+    setUnidadIngreso("");
+    setCantidadRealIngreso("");
     setIngresoInicialAlmacenId(initialAlmacenes[0]?.id ?? "");
     setIngresoInicialVarianteId("");
     setIngresoInicialVarianteQuery("");
@@ -399,6 +462,11 @@ export function CentroStockPanel({
         tipo,
         origen,
         cantidad: qty,
+        unidad: unidadMovimiento || unidadesMovimiento?.unidadStock,
+        cantidadStock:
+          cantidadRealStock && ["ingreso", "ajuste_entrada"].includes(tipo)
+            ? Number(cantidadRealStock)
+            : undefined,
         costoUnitario: cost,
         referenciaTipo: "manual",
         referenciaId: referenciaId.trim() || undefined,
@@ -407,7 +475,13 @@ export function CentroStockPanel({
         if (usedReferencia) {
           toast.message("Se aplicó automáticamente el precio de referencia de la materia prima.");
         }
-        await maybeActualizarPrecioReferencia(rowSelected.varianteId, cost);
+        if (
+          !cantidadRealStock &&
+          normalizeMaterialUnit(
+            unidadMovimiento || unidadesMovimiento?.unidadStock || "",
+          ) === normalizeMaterialUnit(unidadesMovimiento?.unidadStock || "")
+        )
+          await maybeActualizarPrecioReferencia(rowSelected.varianteId, cost);
       }
       toast.success("Movimiento registrado.");
       setMovOpen(false);
@@ -503,6 +577,10 @@ export function CentroStockPanel({
         tipo: "ingreso",
         origen: ingresoInicialOrigen,
         cantidad: qty,
+        unidad: unidadIngreso || unidadesIngreso?.unidadCompra,
+        cantidadStock: cantidadRealIngreso
+          ? Number(cantidadRealIngreso)
+          : undefined,
         costoUnitario: cost,
         referenciaTipo: "manual",
         referenciaId: ingresoInicialReferenciaId.trim() || undefined,
@@ -510,7 +588,13 @@ export function CentroStockPanel({
       if (usedReferencia) {
         toast.message("Se aplicó automáticamente el precio de referencia de la materia prima.");
       }
-      await maybeActualizarPrecioReferencia(ingresoInicialVarianteId, cost);
+      if (
+        !cantidadRealIngreso &&
+        normalizeMaterialUnit(
+          unidadIngreso || unidadesIngreso?.unidadCompra || "",
+        ) === normalizeMaterialUnit(unidadesIngreso?.unidadStock || "")
+      )
+        await maybeActualizarPrecioReferencia(ingresoInicialVarianteId, cost);
       toast.success("Ingreso registrado.");
       setIngresoInicialOpen(false);
       router.refresh();
@@ -619,9 +703,23 @@ export function CentroStockPanel({
                       {varianteMetaById.get(row.varianteId)?.varianteNombre ?? row.varianteSku}
                     </TableCell>
                     <TableCell>{row.varianteSku}</TableCell>
-                    <TableCell className="text-right">{number2Formatter.format(row.cantidadDisponible)}</TableCell>
-                    <TableCell className="text-right">{number2Formatter.format(row.costoPromedio)}</TableCell>
-                    <TableCell className="text-right">{formatearMoneda(row.valorStock, moneda, { decimales: 2 })}</TableCell>
+                    <TableCell className="text-right">
+                      {quantityFormatter.format(row.cantidadDisponible)}{" "}
+                      {stockUnitLabel(
+                        row.unidadStock ??
+                          varianteMetaById.get(row.varianteId)?.unidades
+                            .unidadStock ??
+                          "",
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {number2Formatter.format(row.costoPromedio)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatearMoneda(row.valorStock, moneda, {
+                        decimales: 2,
+                      })}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={() => openMovimiento(row)}>
@@ -722,15 +820,39 @@ export function CentroStockPanel({
               </Field>
               <Field>
                 <FieldLabel>Cantidad</FieldLabel>
-                <Input value={cantidad} onChange={(e) => setCantidad(e.target.value)} type="number" min="0" />
+                <Input
+                  value={cantidad}
+                  onChange={(e) => setCantidad(e.target.value)}
+                  type="number"
+                  min="0"
+                  step="any"
+                />
               </Field>
+              <StockConversionFields
+                context={unidadesMovimiento}
+                unidad={unidadMovimiento}
+                onUnidad={setUnidadMovimiento}
+                cantidad={cantidad}
+                cantidadStock={cantidadRealStock}
+                onCantidadStock={setCantidadRealStock}
+                ingreso={["ingreso", "ajuste_entrada"].includes(tipo)}
+              />
               <Field>
-                <FieldLabel>Costo unitario (opcional)</FieldLabel>
+                <FieldLabel>
+                  Costo por{" "}
+                  {stockUnitLabel(
+                    unidadMovimiento ||
+                      unidadesMovimiento?.unidadStock ||
+                      "unidad",
+                  )}{" "}
+                  en {moneda.codigo} (opcional)
+                </FieldLabel>
                 <Input
                   value={costoUnitario}
                   onChange={(e) => setCostoUnitario(e.target.value)}
                   type="number"
                   min="0"
+                  step="any"
                 />
               </Field>
               <Field>
@@ -784,10 +906,12 @@ export function CentroStockPanel({
               <Field>
                 <FieldLabel>Cantidad</FieldLabel>
                 <Input
+                  aria-label="Cantidad a transferir en unidad de stock"
                   value={cantidadTransfer}
                   onChange={(e) => setCantidadTransfer(e.target.value)}
                   type="number"
                   min="0"
+                  step="any"
                 />
               </Field>
             </div>
@@ -849,6 +973,11 @@ export function CentroStockPanel({
                           className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
                           onClick={() => {
                             setIngresoInicialVarianteId(item.varianteId);
+                            setUnidadIngreso(
+                              varianteMetaById.get(item.varianteId)?.unidades
+                                .unidadCompra ?? "",
+                            );
+                            setCantidadRealIngreso("");
                             setIngresoInicialVarianteQuery(item.label);
                             setIngresoInicialVarianteOpen(false);
                           }}
@@ -882,15 +1011,32 @@ export function CentroStockPanel({
                 onChange={(e) => setIngresoInicialCantidad(e.target.value)}
                 type="number"
                 min="0"
+                step="any"
               />
             </Field>
+            <StockConversionFields
+              context={unidadesIngreso}
+              unidad={unidadIngreso || unidadesIngreso?.unidadCompra || ""}
+              onUnidad={setUnidadIngreso}
+              cantidad={ingresoInicialCantidad}
+              cantidadStock={cantidadRealIngreso}
+              onCantidadStock={setCantidadRealIngreso}
+              ingreso
+            />
             <Field>
-              <FieldLabel>Costo unitario (opcional)</FieldLabel>
+              <FieldLabel>
+                Costo por{" "}
+                {stockUnitLabel(
+                  unidadIngreso || unidadesIngreso?.unidadCompra || "unidad",
+                )}{" "}
+                en {moneda.codigo} (opcional)
+              </FieldLabel>
               <Input
                 value={ingresoInicialCostoUnitario}
                 onChange={(e) => setIngresoInicialCostoUnitario(e.target.value)}
                 type="number"
                 min="0"
+                step="any"
               />
             </Field>
             <Field>

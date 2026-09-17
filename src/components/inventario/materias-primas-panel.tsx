@@ -310,7 +310,7 @@ export function MateriasPrimasPanel({
               className={`${listPage.searchGroup} ${focus.singleBorder}`}
             >
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Buscar por nombre, código o SKU…" />
+              <SearchField.Input placeholder="Buscar materiales y variantes…" />
             </SearchField.Group>
           </SearchField>
           <div className={styles.toolbarEnd}>

@@ -95,74 +95,90 @@ describe('InventarioBibliotecaService', () => {
     });
   });
 
-  it('instala sustrato hoja con unidades y atributos tecnicos del template', async () => {
-    const createMateriaPrima = jest.fn().mockResolvedValue({ id: 'mp-1' });
-    const createVariante = jest.fn().mockResolvedValue({});
-    const prisma = {
-      materialPreset: {
-        findUnique: jest.fn().mockResolvedValue(sheetPreset),
-      },
-      materiaPrima: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findFirst: jest.fn().mockResolvedValue(null),
-      },
-      materiaPrimaVariante: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findFirst: jest.fn().mockResolvedValue(null),
-      },
-      $transaction: jest.fn(async (callback) =>
-        callback({
-          materiaPrima: { create: createMateriaPrima },
-          materiaPrimaVariante: { create: createVariante },
-        }),
-      ),
-    };
-    const service = new InventarioBibliotecaService(prisma as never);
+  it.each([
+    ['ARS', 'ARS'],
+    ['USD', 'USD'],
+    [null, 'CLP'],
+  ])(
+    'instala sustrato hoja con unidades del template y moneda %s → %s',
+    async (moneda, monedaEsperada) => {
+      const createMateriaPrima = jest.fn().mockResolvedValue({ id: 'mp-1' });
+      const createVariante = jest.fn().mockResolvedValue({});
+      const prisma = {
+        datosEmpresa: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ monedaCodigo: 'CLP', paisCodigo: 'CL' }),
+        },
+        materialPreset: {
+          findUnique: jest.fn().mockResolvedValue({
+            ...sheetPreset,
+            variantes: [{ ...sheetVariant, moneda }],
+          }),
+        },
+        materiaPrima: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        materiaPrimaVariante: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        $transaction: jest.fn(async (callback) =>
+          callback({
+            materiaPrima: { create: createMateriaPrima },
+            materiaPrimaVariante: { create: createVariante },
+          }),
+        ),
+      };
+      const service = new InventarioBibliotecaService(prisma as never);
 
-    await service.instalar(auth, 'PAPEL_OBRA', {
-      visibleName: 'Papel obra',
-      codigo: 'PAPEL_OBRA',
-      descripcion: 'Papel blanco no estucado.',
-      aliasUsado: 'Bond',
-      variantPresetIds: [sheetVariant.id],
-      customVariants: [],
-      modoDuplicado: ModoDuplicadoMaterialPresetDto.crear_separado,
-    });
+      await service.instalar(auth, 'PAPEL_OBRA', {
+        visibleName: 'Papel obra',
+        codigo: 'PAPEL_OBRA',
+        descripcion: 'Papel blanco no estucado.',
+        aliasUsado: 'Bond',
+        variantPresetIds: [sheetVariant.id],
+        customVariants: [],
+        modoDuplicado: ModoDuplicadoMaterialPresetDto.crear_separado,
+      });
 
-    expect(createMateriaPrima).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          subfamilia: SubfamiliaMateriaPrima.SUSTRATO_HOJA,
-          templateId: 'sustrato_hoja_v1',
-          esConsumible: false,
-          unidadStock: UnidadMateriaPrima.HOJA,
-          unidadCompra: UnidadMateriaPrima.RESMA,
-          atributosTecnicosJson: expect.objectContaining({
-            formatoComercial: 'A4',
-            ancho: 21,
-            alto: 29.7,
-            gramaje: 80,
-            anchoMm: 210,
-            altoMm: 297,
-            largoMm: 297,
-            gramajeGr: 80,
+      expect(createMateriaPrima).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            subfamilia: SubfamiliaMateriaPrima.SUSTRATO_HOJA,
+            templateId: 'sustrato_hoja_v1',
+            esConsumible: false,
+            unidadStock: UnidadMateriaPrima.HOJA,
+            unidadCompra: UnidadMateriaPrima.RESMA,
+            atributosTecnicosJson: expect.objectContaining({
+              formatoComercial: 'A4',
+              ancho: 21,
+              alto: 29.7,
+              gramaje: 80,
+              anchoMm: 210,
+              altoMm: 297,
+              largoMm: 297,
+              gramajeGr: 80,
+            }),
           }),
         }),
-      }),
-    );
-    expect(createVariante).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          sku: 'OBRA-A4-80-M',
-          unidadStock: UnidadMateriaPrima.HOJA,
-          unidadCompra: UnidadMateriaPrima.RESMA,
-          atributosVarianteJson: expect.objectContaining({
-            gramajeGr: 80,
+      );
+      expect(createVariante).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            sku: 'OBRA-A4-80-M',
+            moneda: monedaEsperada,
+            unidadStock: UnidadMateriaPrima.HOJA,
+            unidadCompra: UnidadMateriaPrima.RESMA,
+            atributosVarianteJson: expect.objectContaining({
+              gramajeGr: 80,
+            }),
           }),
         }),
-      }),
-    );
-  });
+      );
+    },
+  );
 
   it('marca esConsumible al instalar tintas/toner (familia TINTA_COLORANTE)', async () => {
     const createMateriaPrima = jest.fn().mockResolvedValue({ id: 'mp-tinta' });
@@ -183,6 +199,7 @@ describe('InventarioBibliotecaService', () => {
       variantes: [tintaVariant],
     };
     const prisma = {
+      datosEmpresa: { findUnique: jest.fn().mockResolvedValue(null) },
       materialPreset: {
         findUnique: jest.fn().mockResolvedValue(tintaPreset),
       },
@@ -234,6 +251,7 @@ describe('InventarioBibliotecaService', () => {
       .mockResolvedValueOnce({ id: 'var-existente' })
       .mockResolvedValue(null);
     const prisma = {
+      datosEmpresa: { findUnique: jest.fn().mockResolvedValue(null) },
       materialPreset: {
         findUnique: jest.fn().mockResolvedValue(sheetPreset),
       },

@@ -1,3 +1,13 @@
+import { TipoCambioService } from '../cotizaciones/tipo-cambio.service';
+import {
+  monedaCotizacionContext,
+  precioMaterialEnMonedaCotizacion,
+} from '../cotizaciones/material-moneda-context';
+import {
+  materialUnitConversion,
+  materialPriceContext,
+  type MaterialUnitContext,
+} from '../inventario/material-units';
 import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
 import { demandaDesdeTiempo, combinarDemandas, leerModoOperacionMaquina } from '../eta/motor/demanda-humana';
 import { lineasDesgasteCorte } from './repartir-operaciones-corte';
@@ -375,6 +385,7 @@ const UNIDADES_CONVERTIBLES: Record<string, UnidadConvertible> = {
   UNIDAD: { familia: 'unidad', factorBase: 1 },
   PIEZA: { familia: 'unidad', factorBase: 1 },
   HOJA: { familia: 'unidad', factorBase: 1 },
+  PLACA: { familia: 'unidad', factorBase: 1 },
   PLIEGO: { familia: 'unidad', factorBase: 1 },
   PAGINA: { familia: 'unidad', factorBase: 1 },
   A4_EQUIV: { familia: 'unidad', factorBase: 1 },
@@ -413,7 +424,16 @@ function precioPorUnidadDeConsumo(
   unidadStock: string | null | undefined,
   unidadConsumo: string | null | undefined,
   rendimientoEstimado: number | null | undefined,
+  contextoUnidades?: MaterialUnitContext,
 ): number {
+  if (contextoUnidades && unidadStock && unidadConsumo) {
+    const conversion = materialUnitConversion(
+      contextoUnidades,
+      unidadStock,
+      unidadConsumo,
+    );
+    if (conversion.ok) return precioReferencia / conversion.factor;
+  }
   const stock = normalizarUnidad(unidadStock);
   const consumo = normalizarUnidad(unidadConsumo);
   const stockConv = stock ? UNIDADES_CONVERTIBLES[stock] : undefined;
@@ -472,7 +492,23 @@ function precioMaterialPorUnidadDeConsumo(
   unidadStock: string | null | undefined,
   unidadConsumo: string | null | undefined,
   attrs: Record<string, unknown> | null | undefined,
+  templateId?: string | null,
+  contextoUnidades?: MaterialUnitContext,
 ): number {
+  if (unidadStock && unidadConsumo) {
+    const conversion = materialUnitConversion(
+      contextoUnidades ?? {
+        unidadStock,
+        unidadCompra: unidadStock,
+        templateId,
+        atributos: attrs,
+      },
+      unidadStock,
+      unidadConsumo,
+    );
+    if (conversion.ok) return precioReferencia / conversion.factor;
+    if (contextoUnidades) return Number.NaN;
+  }
   const stock = normalizarUnidad(unidadStock);
   const consumo = normalizarUnidad(unidadConsumo);
   const precioConvertido = precioPorUnidadDeConsumo(
@@ -556,6 +592,7 @@ export class MotorUniversalService {
     private readonly recetasProducto?: RecetasProductoService,
     @Optional()
     private readonly analisisVectorialAsync?: AnalisisVectorialAsyncService,
+    @Optional() private readonly tipoCambio?: TipoCambioService,
   ) {}
 
   private opcionesNesting(tenantId: string): NestingDispatchOpts {
@@ -706,6 +743,34 @@ export class MotorUniversalService {
     return JSON.stringify(value);
   }
 
+  get usaTipoCambio(): boolean {
+    return Boolean(this.tipoCambio);
+  }
+
+  /** Extiende la misma captura a todos los segmentos de Centro de copiado. */
+  async conTipoCambio<T>(
+    tenantId: string,
+    id: string | undefined,
+    accion: () => Promise<T>,
+  ): Promise<T> {
+    const actual = monedaCotizacionContext.getStore();
+    if (actual) {
+      if (actual.tenantId !== tenantId || (id && id !== actual.cambio.id))
+        throw new BadRequestException(
+          'El tipo de cambio no coincide con el del documento.',
+        );
+      return accion();
+    }
+    if (!this.tipoCambio) return accion();
+    const cambio = id
+      ? await this.tipoCambio.obtenerParaCotizar(tenantId, id)
+      : await this.tipoCambio.crear(tenantId, null);
+    return monedaCotizacionContext.run(
+      { tenantId, cambio, materiales: new Map() },
+      accion,
+    );
+  }
+
   async cotizar(
     input: CotizarInput,
     opciones?: {
@@ -722,6 +787,27 @@ export class MotorUniversalService {
       productoPrecargado?: ProductoCargado;
     },
   ): Promise<CotizarOutput> {
+    if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
+      const cambio = input.tipoCambioId
+        ? await this.tipoCambio.obtenerParaCotizar(
+            input.tenantId,
+            input.tipoCambioId,
+          )
+        : await this.tipoCambio.resolver(input.tenantId, input.usuarioId);
+      return monedaCotizacionContext.run(
+        { tenantId: input.tenantId, cambio, materiales: new Map() },
+        () => this.cotizar(input, opciones),
+      );
+    }
+    const contextoCambio = monedaCotizacionContext.getStore();
+    if (
+      contextoCambio &&
+      (contextoCambio.tenantId !== input.tenantId ||
+        (input.tipoCambioId && input.tipoCambioId !== contextoCambio.cambio.id))
+    )
+      throw new BadRequestException(
+        'El contexto monetario no coincide con la cotización.',
+      );
     const quoteRunId = randomUUID();
     const startedAt = Date.now();
     const errores: ErrorMotor[] = [];
@@ -2122,7 +2208,14 @@ export class MotorUniversalService {
         })
       : undefined;
 
+    const contextoMoneda = monedaCotizacionContext.getStore();
     const cotizacion: CotizacionResultado = {
+      ...(contextoMoneda
+        ? {
+            tipoCambio: contextoMoneda.cambio,
+            costosMaterialesMoneda: [...contextoMoneda.materiales.values()],
+          }
+        : {}),
       productoId: producto.productoId,
       productoNombre: producto.productoNombre,
       rutaAlternativaId: producto.rutaAlternativaId,
@@ -2310,6 +2403,29 @@ export class MotorUniversalService {
     cotizacionId?: string;
     cotizacionItemId?: string;
   }> {
+    if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
+      let id = input.tipoCambioId;
+      if (input.cotizacionId) {
+        const padre = await this.prisma.cotizacion.findFirst({
+          where: { id: input.cotizacionId, tenantId: input.tenantId },
+          select: { tipoCambioId: true },
+        });
+        if (!padre)
+          throw new NotFoundException('No se encontró la cotización.');
+        if (padre.tipoCambioId && id && id !== padre.tipoCambioId)
+          throw new BadRequestException(
+            'El tipo de cambio debe ser el mismo para todos los ítems. Recotizá el documento completo para cambiarlo.',
+          );
+        id = padre.tipoCambioId ?? id;
+      }
+      const cambio = id
+        ? await this.tipoCambio.obtenerParaCotizar(input.tenantId, id)
+        : await this.tipoCambio.crear(input.tenantId, input.usuarioId ?? null);
+      return monedaCotizacionContext.run(
+        { tenantId: input.tenantId, cambio, materiales: new Map() },
+        () => this.cotizarYGuardar({ ...input, tipoCambioId: cambio.id }),
+      );
+    }
     // Cargamos el producto una sola vez y lo reutilizamos tanto para cotizar
     // como para el snapshot (A2: evita recargar el "include gigante"). Si la
     // carga falla, dejamos que cotizar produzca el error estándar.
@@ -2365,7 +2481,7 @@ export class MotorUniversalService {
           // (evita IDOR de escritura cross-tenant).
           const existente = await tx.cotizacion.findFirst({
             where: { id: cid, tenantId: input.tenantId },
-            select: { id: true, estado: true },
+            select: { id: true, estado: true, tipoCambioId: true },
           });
           if (!existente) {
             throw new NotFoundException('No se encontró la cotización.');
@@ -2375,6 +2491,15 @@ export class MotorUniversalService {
               'Solo se pueden agregar items a una cotización en borrador.',
             );
           }
+          const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
+          if (
+            existente.tipoCambioId &&
+            cambioId &&
+            existente.tipoCambioId !== cambioId
+          )
+            throw new BadRequestException(
+              'La cotización tiene otro tipo de cambio. Recargá el documento antes de guardar.',
+            );
           // Toma un lock de escritura sobre el borrador hasta insertar el
           // item. Si otro proceso lo emitió entre el SELECT y este punto, el
           // predicado se reevalúa al obtener el lock y no se persiste nada.
@@ -2383,8 +2508,12 @@ export class MotorUniversalService {
               id: cid,
               tenantId: input.tenantId,
               estado: 'borrador',
+              tipoCambioId: existente.tipoCambioId,
             },
-            data: { updatedAt: new Date() },
+            data: {
+              updatedAt: new Date(),
+              ...(cambioId ? { tipoCambioId: cambioId } : {}),
+            },
           });
           if (lock.count !== 1) {
             throw new BadRequestException(
@@ -2406,6 +2535,7 @@ export class MotorUniversalService {
             data: {
               tenantId: input.tenantId,
               clienteId: input.clienteId ?? null,
+              tipoCambioId: monedaCotizacionContext.getStore()?.cambio.id,
               estado: 'borrador',
             },
           });
@@ -2427,6 +2557,8 @@ export class MotorUniversalService {
   async recotizarItem(input: {
     tenantId: string;
     cotizacionItemId: string;
+    tipoCambioId?: string;
+    usuarioId?: string;
     rutaAlternativaId?: string | null;
     jobContext: JobContext;
     clienteId?: string | null;
@@ -2440,7 +2572,14 @@ export class MotorUniversalService {
     const item = await this.prisma.cotizacionItem.findFirst({
       where: { id: input.cotizacionItemId, tenantId: input.tenantId },
       include: {
-        cotizacion: { select: { id: true, estado: true, clienteId: true } },
+        cotizacion: {
+          select: {
+            id: true,
+            estado: true,
+            clienteId: true,
+            tipoCambioId: true,
+          },
+        },
       },
     });
     if (!item) {
@@ -2452,6 +2591,20 @@ export class MotorUniversalService {
       );
     }
 
+    if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
+      const id = input.tipoCambioId ?? item.cotizacion.tipoCambioId;
+      if (item.cotizacion.tipoCambioId && id !== item.cotizacion.tipoCambioId)
+        throw new BadRequestException(
+          'Para cambiar el tipo de cambio recotizá todos los ítems del documento.',
+        );
+      const cambio = id
+        ? await this.tipoCambio.obtenerParaCotizar(input.tenantId, id)
+        : await this.tipoCambio.crear(input.tenantId, input.usuarioId ?? null);
+      return monedaCotizacionContext.run(
+        { tenantId: input.tenantId, cambio, materiales: new Map() },
+        () => this.recotizarItem({ ...input, tipoCambioId: cambio.id }),
+      );
+    }
     const rutaAlternativaId =
       input.rutaAlternativaId ?? item.rutaAlternativaId ?? null;
     let producto: ProductoCargado | null = null;
@@ -2516,7 +2669,12 @@ export class MotorUniversalService {
           tenantId: input.tenantId,
           estado: 'borrador',
         },
-        data: { updatedAt: new Date() },
+        data: {
+          updatedAt: new Date(),
+          ...(monedaCotizacionContext.getStore()
+            ? { tipoCambioId: monedaCotizacionContext.getStore()!.cambio.id }
+            : {}),
+        },
       });
       if (lock.count !== 1) {
         throw new BadRequestException(
@@ -2585,6 +2743,8 @@ export class MotorUniversalService {
       cantidad: args.cotizacion.cantidadComercialReal.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
+        tipoCambio: args.cotizacion.tipoCambio ?? null,
+        costosMaterialesMoneda: args.cotizacion.costosMaterialesMoneda ?? [],
         motor: {
           contractVersion: MOTOR_CONTRACT_VERSION,
           buildSha:
@@ -6477,6 +6637,20 @@ export class MotorUniversalService {
           nestingDispatch,
           materialParaCantidad,
         );
+        // El nesting de rollo entrega metros lineales, no la unidad de uso
+        // del material. Convertir antes de aplicar merma y precio evita
+        // costear 1 m lineal como 1 m² (o como un rollo completo).
+        if (
+          paso.mecanismoCantidad === 'CALCULADO_POR_PASO' &&
+          slot === paso.slots[0] &&
+          nestingDispatch?.unidad === 'm_lineales'
+        ) {
+          cantidad = this.convertirCantidadRolloAUnidadMaterial(
+            cantidad,
+            nestingDispatch,
+            materialResuelto,
+          );
+        }
         cantidad = this.ajustarCantidadSustratoComprado(
           paso,
           slot.slotCodigo,
@@ -6592,7 +6766,7 @@ export class MotorUniversalService {
           rutaPasoId: paso.rutaPasoId,
           rutaPasoOrden: paso.rutaPasoOrden,
           familiaCodigo: paso.familiaCodigo,
-          mensaje: `El material ${materialResuelto.sku} no tiene un precio de referencia válido.`,
+          mensaje: `El material ${materialResuelto.sku} necesita un precio válido y su unidad confirmada en la ficha de materiales.`,
           contexto: {
             materialVarianteId: materialResuelto.id,
             slotCodigo: slot.slotCodigo,
@@ -6602,11 +6776,13 @@ export class MotorUniversalService {
         });
         continue;
       }
-      const precioUnitario = precioMaterialPorUnidadDeConsumo(
+      let precioUnitario = precioMaterialPorUnidadDeConsumo(
         precioReferencia,
         materialResuelto.unidadStock,
         unidadConsumo,
         materialResuelto.atributosVarianteJson,
+        materialResuelto.materiaPrimaTemplateId,
+        materialResuelto.contextoUnidades,
       );
       if (
         !Number.isFinite(cantidad) ||
@@ -6634,13 +6810,19 @@ export class MotorUniversalService {
       }
       const costeoNesting = this.calcularCosteoNestingMaterial(
         this.resolverEstrategiaCosteoNesting(paso),
-        precioUnitario,
+        precioReferencia,
         jobContext,
         nestingDispatch,
         paso,
+        materialResuelto.unidadStock,
+        materialResuelto.contextoUnidades,
       );
       let costoTotal: number;
       if (costeoNesting && precioUnitario > 0) {
+        // El precio de catálogo está expresado en la unidad de stock. El
+        // nesting recibe precio por placa; la línea debe usar esa misma base
+        // (o precio/m² para área exacta) antes de derivar el consumo.
+        precioUnitario = costeoNesting.precioUnidadLinea;
         // 'simple' consume unidades ENTERAS: la cantidad es el conteo exacto
         // (dividir el costo redondeado metía 250.0000008 hojas en la línea).
         cantidadTrabajoAntesDeMerma =
@@ -6668,7 +6850,8 @@ export class MotorUniversalService {
       // quedó expresada en hojas/placas — etiquetarla con la unidad de stock
       // mentía: "1 m²" para una hoja de 2,98 m². La unidad honesta sale de la
       // presentación de la variante (hoja) o de la unidad del nesting. La
-      // estrategia m2-exact sí deja la cantidad en m² y conserva su unidad.
+      // estrategia m2-exact deja siempre cantidad y precio en m², incluso
+      // cuando el catálogo tiene el precio por hoja.
       const presentacionVariante =
         materialResuelto.atributosVarianteJson &&
         typeof materialResuelto.atributosVarianteJson.presentacion === 'string'
@@ -6676,11 +6859,22 @@ export class MotorUniversalService {
               .trim()
               .toLowerCase()
           : '';
-      const unidadLinea =
-        costeoNesting && costeoNesting.strategy !== 'm2-exact'
-          ? presentacionVariante ||
+      const usaPlacas = [
+        unidadConsumo,
+        materialResuelto.contextoUnidades?.unidadStock,
+        materialResuelto.contextoUnidades?.unidadCompra,
+        materialResuelto.contextoUnidades?.unidadPrecio,
+      ].some((unit) => normalizarUnidad(unit) === 'PLACA');
+      const presentacionSustrato =
+        usaPlacas && ['', 'hoja', 'pliego', 'placa'].includes(presentacionVariante)
+          ? 'placa'
+          : presentacionVariante;
+      const unidadLinea = costeoNesting
+        ? costeoNesting.strategy === 'm2-exact'
+          ? 'm2'
+          : presentacionSustrato ||
             (nestingDispatch?.unidad === 'pliegos' ? 'pliego' : unidadConsumo)
-          : unidadConsumo;
+        : unidadConsumo;
       const opcionesNestingRollo = await this.resolverOpcionesNestingRollo({
         tenantId,
         paso,
@@ -6902,6 +7096,42 @@ export class MotorUniversalService {
     return dup as JobContext;
   }
 
+  private convertirCantidadRolloAUnidadMaterial(
+    metrosLineales: number,
+    nesting: NestingDispatchResult,
+    material: {
+      unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
+      materiaPrimaTemplateId?: string | null;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    },
+  ): number {
+    const rollo = nesting.substrates[0];
+    if (rollo?.kind !== 'roll') return Number.NaN;
+    const unidad = normalizarUnidad(material.unidadStock) ?? '';
+    const conversion = materialUnitConversion(
+      {
+        ...material.contextoUnidades,
+        unidadStock: unidad,
+        unidadCompra: unidad,
+        templateId:
+          material.materiaPrimaTemplateId ?? 'sustrato_rollo_flexible_v1',
+        atributos: {
+          ...material.atributosVarianteJson,
+          // El ancho físico del acomodo incluye los bordes desperdiciados.
+          // No usar el ancho imprimible ni el área comercial de las piezas.
+          ancho: undefined,
+          anchoMm: rollo.widthMm,
+        },
+      },
+      'METRO_LINEAL',
+      unidad,
+    );
+    // La validación de costeo rechaza la línea si falta la equivalencia;
+    // nunca interpretar silenciosamente metros como rollos o unidades.
+    return conversion.ok ? metrosLineales * conversion.factor : Number.NaN;
+  }
+
   /** Despacha el gancho `compraSustrato` declarado; sin declaración la
    *  cantidad de consumo ES la de compra. [P2: era la conversión
    *  pliegos→hojas propia de impresión por hoja] */
@@ -6913,6 +7143,7 @@ export class MotorUniversalService {
     nestingDispatch: NestingDispatchResult | null,
     materialResuelto: {
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson?: Record<string, unknown> | null;
     },
   ): number {
@@ -6986,14 +7217,17 @@ export class MotorUniversalService {
 
   private calcularCosteoNestingMaterial(
     estrategiaCosto: string,
-    precioUnitario: number,
+    precioReferencia: number,
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null,
     paso: PasoCargado,
+    unidadPrecio: string | null | undefined,
+    contextoUnidades?: MaterialUnitContext,
   ) {
-    if (!nestingDispatch || precioUnitario <= 0) return null;
+    if (!nestingDispatch || precioReferencia <= 0) return null;
     if (!isNestingCostingStrategy(estrategiaCosto)) return null;
-    if (nestingDispatch.substrates[0]?.kind !== 'sheet') return null;
+    const sustrato = nestingDispatch.substrates[0];
+    if (sustrato?.kind !== 'sheet') return null;
     // 'simple' vía nesting sólo cuando la unidad NESTEADA es la unidad
     // COMPRADA (placa, chapa, sustrato de montaje). Donde la familia declara
     // el gancho `compraSustrato` (impresión por hoja: los pliegos de
@@ -7022,7 +7256,34 @@ export class MotorUniversalService {
         return acc + sub.count;
       }, 0) || Math.ceil(nestingDispatch.cantidadCalculada);
 
-    return applyCostingStrategy({
+    // Todas las estrategias de placa esperan el precio de UNA placa física,
+    // también m2-exact (que internamente lo divide por el área). Un material
+    // cotizado por m² no vale lo mismo que su placa: PVC 1,22 × 2,44 consume
+    // 2,9768 m² por placa. Usamos la geometría que efectivamente se anidó.
+    const areaSustratoM2 = (sustrato.widthMm * sustrato.heightMm) / 1_000_000;
+    let precioPlaca =
+      normalizarUnidad(unidadPrecio) === 'M2'
+        ? precioReferencia * areaSustratoM2
+        : precioReferencia;
+    if (
+      contextoUnidades &&
+      unidadPrecio &&
+      !['M2', 'HOJA', 'PLACA', 'PLIEGO', 'UNIDAD', 'PIEZA'].includes(
+        normalizarUnidad(unidadPrecio) ?? '',
+      )
+    ) {
+      const conversion = materialUnitConversion(
+        contextoUnidades,
+        unidadPrecio,
+        'hoja',
+      );
+      if (!conversion.ok)
+        throw new BadRequestException(
+          `No se puede costear la placa: ${conversion.mensaje}`,
+        );
+      precioPlaca = precioReferencia / conversion.factor;
+    }
+    const costeo = applyCostingStrategy({
       strategy: estrategiaCosto,
       nesting: {
         algorithm: nestingDispatch.algorithm,
@@ -7030,13 +7291,21 @@ export class MotorUniversalService {
         placements: nestingDispatch.placements,
         metrics: nestingDispatch.metricasRaw,
       },
-      unitPrice: precioUnitario,
+      unitPrice: precioPlaca,
       totalPieces,
       unitsNeeded,
       pieceWidthMm: jobContext.medidaCustomMm?.anchoMm,
       pieceHeightMm: jobContext.medidaCustomMm?.altoMm,
       segmentSteps,
     });
+    return {
+      ...costeo,
+      // No usar breakdown.pricePerM2 aquí: está redondeado para el desglose.
+      precioUnidadLinea:
+        estrategiaCosto === 'm2-exact'
+          ? precioPlaca / areaSustratoM2
+          : precioPlaca,
+    };
   }
 
   /**
@@ -7122,6 +7391,7 @@ export class MotorUniversalService {
       id: string;
       atributosVarianteJson?: Record<string, unknown> | null;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       subfamilia?: string | null;
     } | null,
   ): MaterialEjecutado[] {
@@ -7287,6 +7557,7 @@ export class MotorUniversalService {
       id: string;
       atributosVarianteJson?: Record<string, unknown> | null;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       subfamilia?: string | null;
     } | null,
   ): MaterialEjecutado[] {
@@ -7444,12 +7715,12 @@ export class MotorUniversalService {
         errores.push({
           codigo: 'consumible_maquina_sin_precio',
           severidad: 'ERROR',
-          mensaje: `La variante ${consumible.materialVariante.sku} no tiene precio de referencia.`,
+          mensaje: `La variante ${consumible.materialVariante.sku} necesita un precio válido y su unidad confirmada en la ficha de materiales.`,
           rutaPasoId: paso.rutaPasoId,
           rutaPasoOrden: paso.rutaPasoOrden,
           familiaCodigo: paso.familiaCodigo,
           sugerencia:
-            'Completar el precio de referencia de la variante de materia prima.',
+            'Completar el precio, su unidad y la equivalencia de compra y uso en la ficha del material.',
         });
         continue;
       }
@@ -7462,6 +7733,7 @@ export class MotorUniversalService {
         consumible.materialVariante.unidadStock,
         consumible.unidad,
         consumible.rendimientoEstimado,
+        consumible.materialVariante.contextoUnidades,
       );
       const costoTotal = cantidad * precioUnitario;
 
@@ -7546,7 +7818,7 @@ export class MotorUniversalService {
           errores.push({
             codigo: 'consumible_maquina_master_sin_precio',
             severidad: 'ERROR',
-            mensaje: `La variante ${master.materialVariante.sku} no tiene precio de referencia.`,
+            mensaje: `La variante ${master.materialVariante.sku} necesita un precio válido y su unidad confirmada en la ficha de materiales.`,
             rutaPasoId: paso.rutaPasoId,
             rutaPasoOrden: paso.rutaPasoOrden,
             familiaCodigo: paso.familiaCodigo,
@@ -7666,6 +7938,7 @@ export class MotorUniversalService {
     materialPreliminar: {
       id: string;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson?: Record<string, unknown> | null;
       subfamilia?: string | null;
     } | null,
@@ -7800,6 +8073,7 @@ export class MotorUniversalService {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     subfamilia?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
@@ -7893,9 +8167,26 @@ export class MotorUniversalService {
         (capacidadDefault ? 'MENOR_CAPACIDAD_QUE_CUMPLA' : 'MENOR_COSTO');
 
       if (criterio === 'MENOR_COSTO') {
-        return validos.sort(
-          (a, b) => Number(a.precioReferencia) - Number(b.precioReferencia),
-        )[0];
+        // Comparar importes en una misma unidad: 50/caja puede ser más barato
+        // que 6/unidad cuando cada caja contiene 10 unidades.
+        const unidadComparable = unidadEfectivaDeFormula(
+          slot.formula ?? 'fijo',
+          validos[0].unidadStock,
+        );
+        return validos
+          .map((variante) => ({
+            variante,
+            precio: precioMaterialPorUnidadDeConsumo(
+              Number(variante.precioReferencia),
+              variante.unidadStock,
+              unidadComparable,
+              variante.atributosVarianteJson,
+              variante.materiaPrimaTemplateId,
+              variante.contextoUnidades,
+            ),
+          }))
+          .filter((item) => Number.isFinite(item.precio) && item.precio > 0)
+          .sort((a, b) => a.precio - b.precio)[0]?.variante ?? null;
       }
 
       if (criterio === 'MAYOR_APROVECHAMIENTO') {
@@ -8037,6 +8328,8 @@ export class MotorUniversalService {
           variante.unidadStock,
           args.unidadConsumo,
           variante.atributosVarianteJson,
+          variante.materiaPrimaTemplateId,
+          variante.contextoUnidades,
         );
         if (
           !(anchoMm > 0) ||
@@ -8139,7 +8432,7 @@ export class MotorUniversalService {
         codigo: 'material_hardcoded_no_disponible',
         mensaje: `El material fijo ${slotLabel} del paso ${paso.rutaPasoOrden} no existe, está inactivo o no tiene precio.`,
         sugerencia:
-          'Elegir una variante activa con precio de referencia mayor a cero.',
+          'Elegir una variante activa con precio, unidad del precio confirmada y equivalencias configuradas.',
       };
     }
 
@@ -8149,15 +8442,18 @@ export class MotorUniversalService {
         codigo: 'material_auto_no_resoluble',
         mensaje: `El motor no encontró un material activo y con precio para ${slotLabel} en el paso ${paso.rutaPasoOrden}.`,
         sugerencia:
-          'Revisar los candidatos del slot, sus precios y el criterio de selección automática.',
+          'Revisar precios, unidad del precio y equivalencias en la ficha de los materiales candidatos.',
       };
     }
 
     return {
       ...base,
       codigo: 'material_comercial_requerido',
-      mensaje: `El paso ${paso.rutaPasoOrden} requiere elegir el material ${slotLabel}.`,
-      sugerencia: 'Seleccionar un material antes de cotizar.',
+      mensaje: eleccion
+        ? `El material ${slotLabel} seleccionado necesita un precio y su unidad confirmada en la ficha de materiales.`
+        : `El paso ${paso.rutaPasoOrden} requiere elegir el material ${slotLabel}.`,
+      sugerencia:
+        'Seleccionar un material y confirmar la unidad del precio y su equivalencia en la ficha.',
     };
   }
 
@@ -8176,8 +8472,9 @@ export class MotorUniversalService {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     anchoMm?: number;
-    /** G-M9: unidad de stock heredada (PLIEGO, METRO_LINEAL, etc.). */
+    /** Base del precio: unidad de consumo. El nombre del campo es legado. */
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     /** Formato del sustrato (SUSTRATO_ROLLO_FLEXIBLE, _HOJA, _RIGIDO…) para
      *  rutear rollo vs pliego/placa sin sniffing de atributos. */
     subfamilia?: string | null;
@@ -8201,6 +8498,8 @@ export class MotorUniversalService {
             canonicalMaterialKey: true,
             activo: true,
             unidadStock: true,
+            unidadUso: true,
+            unidadCompra: true,
             subfamilia: true,
             templateId: true,
             tipoTecnico: true,
@@ -8208,7 +8507,7 @@ export class MotorUniversalService {
         },
       },
     });
-    if (!v) return null;
+    if (!v || precioMaterialEnMonedaCotizacion(v) == null) return null;
     const attrs = v.atributosVarianteJson as Record<string, unknown> | null;
     return {
       id: v.id,
@@ -8219,10 +8518,11 @@ export class MotorUniversalService {
       canonicalMaterialKey: v.materiaPrima?.canonicalMaterialKey ?? null,
       materiaPrimaTemplateId: v.materiaPrima?.templateId ?? null,
       materiaPrimaTipoTecnico: v.materiaPrima?.tipoTecnico ?? null,
-      precioReferencia: v.precioReferencia ? Number(v.precioReferencia) : null,
+      precioReferencia: precioMaterialEnMonedaCotizacion(v),
       anchoMm: typeof attrs?.anchoMm === 'number' ? attrs.anchoMm : undefined,
       // Variante puede tener override; sino hereda de la materia prima padre.
-      unidadStock: v.unidadStock ?? v.materiaPrima?.unidadStock ?? null,
+      unidadStock: materialPriceContext(v).unidadUso,
+      contextoUnidades: materialPriceContext(v),
       // Formato del sustrato (rollo/hoja/rígido) para el ruteo de nesting.
       subfamilia: v.materiaPrima?.subfamilia ?? null,
       atributosVarianteJson: attrs,
@@ -8317,6 +8617,7 @@ export class MotorUniversalService {
       materiaPrimaTemplateId?: string | null;
       materiaPrimaTipoTecnico?: string | null;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson?: Record<string, unknown> | null;
     } | null,
     jobContext: JobContext,
@@ -9894,7 +10195,22 @@ export class MotorUniversalService {
       sku: string;
       activo: boolean;
       precioReferencia: unknown;
-      materiaPrima?: { activo: boolean } | null;
+      moneda?: string | null;
+      unidadPrecio?: string | null;
+      unidadCompra?: string | null;
+      unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
+      equivalenciaCompra?: unknown;
+      unidadUso?: string | null;
+      equivalenciasJson?: unknown;
+      atributosVarianteJson?: unknown;
+      materiaPrima?: {
+        activo: boolean;
+        unidadCompra?: string;
+        unidadUso?: string | null;
+        unidadStock?: string;
+        templateId?: string;
+      } | null;
     } | null;
   }): ComponenteDesgasteCargado {
     return {
@@ -9920,10 +10236,9 @@ export class MotorUniversalService {
             activo: componente.materiaPrimaVariante.activo,
             materiaPrimaActiva:
               componente.materiaPrimaVariante.materiaPrima?.activo ?? false,
-            precioReferencia:
-              componente.materiaPrimaVariante.precioReferencia == null
-                ? null
-                : Number(componente.materiaPrimaVariante.precioReferencia),
+            precioReferencia: precioMaterialEnMonedaCotizacion(
+              componente.materiaPrimaVariante,
+            ),
           }
         : null,
     };
@@ -9946,12 +10261,21 @@ export class MotorUniversalService {
       activo: boolean;
       nombreVariante?: string | null;
       precioReferencia: unknown;
+      moneda?: string | null;
+      unidadPrecio?: string | null;
+      unidadCompra?: string | null;
+      equivalenciaCompra?: unknown;
+      unidadUso?: string | null;
+      equivalenciasJson?: unknown;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson: unknown;
       materiaPrima?: {
         nombre: string;
         activo: boolean;
         unidadStock: string;
+        unidadCompra?: string;
+        unidadUso?: string | null;
         templateId: string;
         tipoTecnico: string;
       };
@@ -9985,14 +10309,12 @@ export class MotorUniversalService {
           consumible.materiaPrimaVariante.materiaPrima?.templateId ?? null,
         materiaPrimaTipoTecnico:
           consumible.materiaPrimaVariante.materiaPrima?.tipoTecnico ?? null,
-        precioReferencia:
-          consumible.materiaPrimaVariante.precioReferencia == null
-            ? null
-            : Number(consumible.materiaPrimaVariante.precioReferencia),
-        unidadStock:
-          consumible.materiaPrimaVariante.unidadStock ??
-          consumible.materiaPrimaVariante.materiaPrima?.unidadStock ??
-          null,
+        precioReferencia: precioMaterialEnMonedaCotizacion(
+          consumible.materiaPrimaVariante,
+        ),
+        unidadStock: materialPriceContext(consumible.materiaPrimaVariante)
+          .unidadUso,
+        contextoUnidades: materialPriceContext(consumible.materiaPrimaVariante),
         atributosVarianteJson: consumible.materiaPrimaVariante
           .atributosVarianteJson as Record<string, unknown> | null,
       },
@@ -10030,7 +10352,15 @@ export class MotorUniversalService {
                       include: {
                         materiaPrimaVariante: {
                           include: {
-                            materiaPrima: { select: { activo: true } },
+                            materiaPrima: {
+                              select: {
+                                activo: true,
+                                unidadStock: true,
+                                unidadUso: true,
+                                unidadCompra: true,
+                                templateId: true,
+                              },
+                            },
                           },
                         },
                       },
@@ -10045,6 +10375,8 @@ export class MotorUniversalService {
                                 nombre: true,
                                 activo: true,
                                 unidadStock: true,
+                                unidadUso: true,
+                                unidadCompra: true,
                                 templateId: true,
                                 tipoTecnico: true,
                               },
@@ -10069,6 +10401,8 @@ export class MotorUniversalService {
                             canonicalMaterialKey: true,
                             activo: true,
                             unidadStock: true,
+                            unidadUso: true,
+                            unidadCompra: true,
                             subfamilia: true,
                             templateId: true,
                             tipoTecnico: true,
@@ -10106,6 +10440,8 @@ export class MotorUniversalService {
                                     nombre: true,
                                     activo: true,
                                     unidadStock: true,
+                                    unidadUso: true,
+                                    unidadCompra: true,
                                     templateId: true,
                                     tipoTecnico: true,
                                   },
@@ -10134,7 +10470,15 @@ export class MotorUniversalService {
                           include: {
                             materiaPrimaVariante: {
                               include: {
-                                materiaPrima: { select: { activo: true } },
+                                materiaPrima: {
+                                  select: {
+                                    activo: true,
+                                    unidadStock: true,
+                                    unidadUso: true,
+                                    unidadCompra: true,
+                                    templateId: true,
+                                  },
+                                },
                               },
                             },
                           },
@@ -10149,6 +10493,8 @@ export class MotorUniversalService {
                                     nombre: true,
                                     activo: true,
                                     unidadStock: true,
+                                    unidadUso: true,
+                                    unidadCompra: true,
                                     templateId: true,
                                     tipoTecnico: true,
                                   },
@@ -10528,15 +10874,13 @@ export class MotorUniversalService {
                   s.materialVariante.materiaPrima?.templateId ?? null,
                 materiaPrimaTipoTecnico:
                   s.materialVariante.materiaPrima?.tipoTecnico ?? null,
-                precioReferencia: s.materialVariante.precioReferencia
-                  ? Number(s.materialVariante.precioReferencia)
-                  : null,
+                precioReferencia: precioMaterialEnMonedaCotizacion(
+                  s.materialVariante,
+                ),
                 atributosVarianteJson: s.materialVariante
                   .atributosVarianteJson as Record<string, unknown> | null,
-                unidadStock:
-                  s.materialVariante.unidadStock ??
-                  s.materialVariante.materiaPrima?.unidadStock ??
-                  null,
+                unidadStock: materialPriceContext(s.materialVariante).unidadUso,
+                contextoUnidades: materialPriceContext(s.materialVariante),
                 subfamilia: s.materialVariante.materiaPrima?.subfamilia ?? null,
               }
             : undefined,
@@ -10735,7 +11079,17 @@ export class MotorUniversalService {
               where: { activo: true },
               include: {
                 materiaPrimaVariante: {
-                  include: { materiaPrima: { select: { activo: true } } },
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        activo: true,
+                        unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
+                        templateId: true,
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -10749,6 +11103,8 @@ export class MotorUniversalService {
                         nombre: true,
                         activo: true,
                         unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
                         templateId: true,
                         tipoTecnico: true,
                       },
@@ -10805,7 +11161,17 @@ export class MotorUniversalService {
               where: { activo: true },
               include: {
                 materiaPrimaVariante: {
-                  include: { materiaPrima: { select: { activo: true } } },
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        activo: true,
+                        unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
+                        templateId: true,
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -10819,6 +11185,8 @@ export class MotorUniversalService {
                         nombre: true,
                         activo: true,
                         unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
                         templateId: true,
                         tipoTecnico: true,
                       },
@@ -10907,7 +11275,15 @@ export class MotorUniversalService {
               include: {
                 materiaPrimaVariante: {
                   include: {
-                    materiaPrima: { select: { activo: true } };
+                    materiaPrima: {
+                      select: {
+                        activo: true;
+                        unidadStock: true;
+                        unidadUso: true;
+                        unidadCompra: true;
+                        templateId: true;
+                      };
+                    };
                   };
                 };
               };
@@ -10921,6 +11297,7 @@ export class MotorUniversalService {
                         nombre: true;
                         activo: true;
                         unidadStock: true;
+                        unidadUso: true;
                         templateId: true;
                         tipoTecnico: true;
                       };
@@ -10957,7 +11334,15 @@ export class MotorUniversalService {
             include: {
               materiaPrimaVariante: {
                 include: {
-                  materiaPrima: { select: { activo: true } };
+                  materiaPrima: {
+                    select: {
+                      activo: true;
+                      unidadStock: true;
+                      unidadUso: true;
+                      unidadCompra: true;
+                      templateId: true;
+                    };
+                  };
                 };
               };
             };
@@ -10971,6 +11356,7 @@ export class MotorUniversalService {
                       nombre: true;
                       activo: true;
                       unidadStock: true;
+                      unidadUso: true;
                       templateId: true;
                       tipoTecnico: true;
                     };
@@ -11146,7 +11532,17 @@ export class MotorUniversalService {
         where: { activo: true },
         include: {
           materiaPrimaVariante: {
-            include: { materiaPrima: { select: { activo: true } } },
+            include: {
+              materiaPrima: {
+                select: {
+                  activo: true,
+                  unidadStock: true,
+                  unidadUso: true,
+                  unidadCompra: true,
+                  templateId: true,
+                },
+              },
+            },
           },
         },
       },
@@ -11160,6 +11556,8 @@ export class MotorUniversalService {
                   nombre: true,
                   activo: true,
                   unidadStock: true,
+                  unidadUso: true,
+                  unidadCompra: true,
                   templateId: true,
                   tipoTecnico: true,
                 },
@@ -11356,7 +11754,15 @@ export class MotorUniversalService {
             include: {
               materiaPrimaVariante: {
                 include: {
-                  materiaPrima: { select: { activo: true } };
+                  materiaPrima: {
+                    select: {
+                      activo: true;
+                      unidadStock: true;
+                      unidadUso: true;
+                      unidadCompra: true;
+                      templateId: true;
+                    };
+                  };
                 };
               };
             };
@@ -11370,6 +11776,7 @@ export class MotorUniversalService {
                       nombre: true;
                       activo: true;
                       unidadStock: true;
+                      unidadUso: true;
                       templateId: true;
                       tipoTecnico: true;
                     };

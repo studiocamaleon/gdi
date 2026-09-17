@@ -1,3 +1,4 @@
+import type { MaterialEquivalence } from "./material-units";
 export type FamiliaMateriaPrima =
   | "sustrato"
   | "tinta_colorante"
@@ -73,8 +74,11 @@ export type UnidadMateriaPrima =
   | "unidad"
   | "pack"
   | "caja"
+  | "pallet"
+  | "botella"
   | "kit"
   | "hoja"
+  | "placa"
   /** Alias legado aceptado desde datos antiguos; las altas nuevas usan "hoja". */
   | "pliego"
   | "resma"
@@ -103,7 +107,11 @@ export type MateriaPrimaVariante = {
   atributosVariante: Record<string, unknown>;
   unidadStock: UnidadMateriaPrima | null;
   unidadCompra: UnidadMateriaPrima | null;
+  unidadUso?: UnidadMateriaPrima | null;
   precioReferencia: number | null;
+  unidadPrecio?: UnidadMateriaPrima | null;
+  equivalenciaCompra?: number | null;
+  equivalencias?: MaterialEquivalence[];
   moneda: string;
   proveedorReferenciaId: string | null;
   proveedorReferenciaNombre: string;
@@ -124,6 +132,7 @@ export type MateriaPrima = {
   templateId: string;
   unidadStock: UnidadMateriaPrima;
   unidadCompra: UnidadMateriaPrima;
+  unidadUso?: UnidadMateriaPrima | null;
   esConsumible: boolean;
   esRepuesto: boolean;
   /** true = blank comprado para reventa/decoración (taza, remera), no insumo. */
@@ -145,6 +154,7 @@ export type MateriaPrimaPayload = {
   templateId: string;
   unidadStock: UnidadMateriaPrima;
   unidadCompra: UnidadMateriaPrima;
+  unidadUso?: UnidadMateriaPrima | null;
   esConsumible: boolean;
   esRepuesto: boolean;
   esProductoBase?: boolean;
@@ -157,7 +167,11 @@ export type MateriaPrimaPayload = {
     atributosVariante: Record<string, unknown>;
     unidadStock?: UnidadMateriaPrima;
     unidadCompra?: UnidadMateriaPrima;
+    unidadUso?: UnidadMateriaPrima;
     precioReferencia?: number;
+    unidadPrecio?: UnidadMateriaPrima | null;
+    equivalenciaCompra?: number | null;
+    equivalencias?: MaterialEquivalence[];
     moneda?: string;
     proveedorReferenciaId?: string;
   }>;
@@ -200,8 +214,11 @@ export const unidadMateriaPrimaItems: Array<{
   { value: "unidad", label: "Unidad" },
   { value: "pack", label: "Pack" },
   { value: "caja", label: "Caja" },
+  { value: "pallet", label: "Pallet" },
+  { value: "botella", label: "Botella" },
   { value: "kit", label: "Kit" },
   { value: "hoja", label: "Hoja" },
+  { value: "placa", label: "Placa" },
   { value: "resma", label: "Resma" },
   { value: "rollo", label: "Rollo" },
   { value: "metro_lineal", label: "Metro lineal" },

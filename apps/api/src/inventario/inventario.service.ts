@@ -1,7 +1,12 @@
 import {
+  TipoCambioService,
+  factorCambioMaterial,
+} from '../cotizaciones/tipo-cambio.service';
+import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Optional,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -13,13 +18,12 @@ import {
   UnidadMateriaPrima,
 } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { regionalDelTenant } from '../common/regional';
+import { monedas } from '../common/monedas';
 import { randomUUID } from 'crypto';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  PaginationDto,
-  paginatedResponse,
-} from '../common/dto/pagination.dto';
+import { PaginationDto, paginatedResponse } from '../common/dto/pagination.dto';
 import { BulkUpdateCostosDto } from './dto/bulk-update-costos.dto';
 import { GetKardexQueryDto } from './dto/get-kardex-query.dto';
 import { GetStockQueryDto } from './dto/get-stock-query.dto';
@@ -32,15 +36,16 @@ import { UpdateVariantePrecioReferenciaDto } from './dto/update-variante-precio-
 import { UpsertAlmacenDto } from './dto/upsert-almacen.dto';
 import { UpsertMateriaPrimaDto } from './dto/upsert-materia-prima.dto';
 import { UpsertUbicacionDto } from './dto/upsert-ubicacion.dto';
+import { type UnitCode } from './unidades-canonicas';
 import {
-  convertUnitPrice,
-  unitsAreCompatible,
-  type UnitCode,
-} from './unidades-canonicas';
-import {
-  canUseFlexibleRollDerivedUnits,
-  convertFlexibleRollUnitPrice,
-} from './unidades-derivadas';
+  materialPriceContext,
+  materialPriceInStockUnit,
+  materialUnitConversion,
+  readMaterialEquivalences,
+  materialEquivalences,
+  normalizeMaterialUnit,
+  validateMaterialUnits,
+} from './material-units';
 
 type MateriaPrimaEntity = Prisma.MateriaPrimaGetPayload<{
   include: {
@@ -57,7 +62,10 @@ type MateriaPrimaEntity = Prisma.MateriaPrimaGetPayload<{
 
 @Injectable()
 export class InventarioService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly tipoCambio?: TipoCambioService,
+  ) {}
 
   async findAllMateriasPrimas(
     auth: CurrentAuth,
@@ -136,7 +144,14 @@ export class InventarioService {
   }
 
   async createMateriaPrima(auth: CurrentAuth, payload: UpsertMateriaPrimaDto) {
-    const normalized = this.normalizePayload(payload);
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const normalized = this.normalizePayload({
+      ...payload,
+      variantes: payload.variantes.map((v) => ({
+        ...v,
+        moneda: v.moneda || regional.moneda.codigo,
+      })),
+    });
 
     try {
       const created = await this.prisma.$transaction(async (tx) => {
@@ -163,6 +178,9 @@ export class InventarioService {
             templateId: normalized.templateId,
             unidadStock: this.toPrismaEnum<UnidadMateriaPrima>(
               normalized.unidadStock,
+            ),
+            unidadUso: this.toPrismaEnum<UnidadMateriaPrima>(
+              normalized.unidadUso,
             ),
             unidadCompra: this.toPrismaEnum<UnidadMateriaPrima>(
               normalized.unidadCompra,
@@ -201,7 +219,25 @@ export class InventarioService {
                         variante.unidadCompra,
                       )
                     : null,
+                  unidadUso: variante.unidadUso
+                    ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadUso)
+                    : null,
+                  equivalenciasJson:
+                    variante.equivalencias == null
+                      ? Prisma.DbNull
+                      : variante.equivalencias.map((relation) => ({
+                          ...relation,
+                        })),
                   precioReferencia: variante.precioReferencia,
+                  unidadPrecio: variante.unidadPrecio
+                    ? this.toPrismaEnum<UnidadMateriaPrima>(
+                        variante.unidadPrecio,
+                      )
+                    : null,
+                  equivalenciaCompra:
+                    variante.equivalenciaCompra == null
+                      ? null
+                      : this.toDecimal(variante.equivalenciaCompra),
                   moneda: variante.moneda,
                   proveedorReferenciaId: variante.proveedorReferenciaId,
                 },
@@ -229,12 +265,62 @@ export class InventarioService {
     id: string,
     payload: UpsertMateriaPrimaDto,
   ) {
-    await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
-    const normalized = this.normalizePayload(payload);
+    const previous = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
+    const regional = await regionalDelTenant(this.prisma, auth.tenantId);
+    const normalized = this.normalizePayload({
+      ...payload,
+      unidadUso:
+        payload.unidadUso ??
+        (this.toApiEnum(
+          previous.unidadUso ?? previous.unidadStock,
+        ) as UpsertMateriaPrimaDto['unidadUso']),
+      variantes: payload.variantes.map((v) => {
+        const old = previous.variantes.find((item) => item.sku === v.sku);
+        return {
+          ...v,
+          moneda: v.moneda || old?.moneda || regional.moneda.codigo,
+          unidadUso:
+            v.unidadUso ??
+            ((payload.unidadUso &&
+            payload.unidadUso !==
+              (previous.unidadUso ?? previous.unidadStock).toLowerCase()
+              ? undefined
+              : old?.unidadUso?.toLowerCase()) as UpsertMateriaPrimaDto['variantes'][number]['unidadUso']),
+          equivalencias:
+            v.equivalencias ??
+            (v.equivalenciaCompra === undefined
+              ? ((readMaterialEquivalences(old?.equivalenciasJson) ??
+                  undefined) as UpsertMateriaPrimaDto['variantes'][number]['equivalencias'])
+              : undefined),
+          unidadPrecio:
+            v.unidadPrecio === undefined
+              ? ((old?.unidadPrecio?.toLowerCase() as typeof v.unidadPrecio) ??
+                null)
+              : v.unidadPrecio,
+          equivalenciaCompra:
+            v.equivalenciaCompra === undefined
+              ? old?.equivalenciaCompra == null
+                ? null
+                : Number(old.equivalenciaCompra)
+              : v.equivalenciaCompra,
+        };
+      }),
+    });
 
     try {
       await this.prisma.$transaction(async (tx) => {
         await this.assertProveedoresDelTenant(auth, normalized.variantes, tx);
+        for (const old of previous.variantes) {
+          const incoming = normalized.variantes.find((v) => v.sku === old.sku);
+          if (incoming)
+            await this.assertStockUnitChange(
+              auth,
+              old.id,
+              old.unidadStock ?? previous.unidadStock,
+              incoming.unidadStock ?? normalized.unidadStock,
+              tx,
+            );
+        }
         await tx.materiaPrima.update({
           where: { id },
           data: {
@@ -249,6 +335,9 @@ export class InventarioService {
             templateId: normalized.templateId,
             unidadStock: this.toPrismaEnum<UnidadMateriaPrima>(
               normalized.unidadStock,
+            ),
+            unidadUso: this.toPrismaEnum<UnidadMateriaPrima>(
+              normalized.unidadUso,
             ),
             unidadCompra: this.toPrismaEnum<UnidadMateriaPrima>(
               normalized.unidadCompra,
@@ -298,7 +387,23 @@ export class InventarioService {
                 unidadCompra: variante.unidadCompra
                   ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadCompra)
                   : null,
+                unidadUso: variante.unidadUso
+                  ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadUso)
+                  : null,
+                equivalenciasJson:
+                  variante.equivalencias == null
+                    ? Prisma.DbNull
+                    : variante.equivalencias.map((relation) => ({
+                        ...relation,
+                      })),
                 precioReferencia: variante.precioReferencia,
+                unidadPrecio: variante.unidadPrecio
+                  ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadPrecio)
+                  : null,
+                equivalenciaCompra:
+                  variante.equivalenciaCompra == null
+                    ? null
+                    : this.toDecimal(variante.equivalenciaCompra),
                 moneda: variante.moneda,
                 proveedorReferenciaId: variante.proveedorReferenciaId,
               };
@@ -357,13 +462,14 @@ export class InventarioService {
     payload: UpdateVariantePrecioReferenciaDto,
   ) {
     await this.findVarianteOrThrow(auth, varianteId, this.prisma);
+    if (payload.moneda) this.validarMoneda(payload.moneda);
 
     try {
       const updated = await this.prisma.materiaPrimaVariante.update({
         where: { id: varianteId },
         data: {
           precioReferencia: this.toDecimal(
-            this.roundToScale(payload.precioReferencia),
+            this.roundToScale(payload.precioReferencia, 6),
           ),
           ...(payload.moneda?.trim()
             ? { moneda: payload.moneda.trim().toUpperCase() }
@@ -395,6 +501,9 @@ export class InventarioService {
    */
   async bulkUpdateCostos(auth: CurrentAuth, payload: BulkUpdateCostosDto) {
     const variantes = payload.variantes ?? [];
+    variantes.forEach((v) => {
+      if (v.moneda) this.validarMoneda(v.moneda);
+    });
     const materiales = payload.materiales ?? [];
     if (variantes.length === 0 && materiales.length === 0) {
       return { variantesActualizadas: 0, materialesActualizados: 0 };
@@ -414,6 +523,14 @@ export class InventarioService {
       }
     }
     const materialIds = Array.from(new Set(materiales.map((item) => item.id)));
+    if (
+      materiales.length > 0 &&
+      variantes.some((v) => v.unidadStock || v.unidadCompra)
+    ) {
+      throw new BadRequestException(
+        'Actualizá unidades por material o por variante en operaciones separadas.',
+      );
+    }
     if (materialIds.length > 0) {
       const owned = await this.prisma.materiaPrima.findMany({
         where: { tenantId: auth.tenantId, id: { in: materialIds } },
@@ -428,12 +545,124 @@ export class InventarioService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        const unitEdits =
+          variantes.some(
+            (v) =>
+              v.unidadUso !== undefined ||
+              v.equivalencias !== undefined ||
+              v.unidadStock !== undefined ||
+              v.unidadCompra !== undefined ||
+              v.equivalenciaCompra !== undefined ||
+              v.unidadPrecio !== undefined,
+          ) || materiales.length > 0;
+        if (unitEdits) {
+          const records = await tx.materiaPrimaVariante.findMany({
+            where: {
+              tenantId: auth.tenantId,
+              OR: [
+                { id: { in: varianteIds } },
+                { materiaPrimaId: { in: materialIds } },
+              ],
+            },
+            include: { materiaPrima: true },
+          });
+          for (const record of records) {
+            const edit = variantes.find((v) => v.id === record.id);
+            const materialEdit = materiales.find(
+              (m) => m.id === record.materiaPrimaId,
+            );
+            const stock =
+              edit?.unidadStock ??
+              materialEdit?.unidadStock ??
+              record.unidadStock ??
+              record.materiaPrima.unidadStock;
+            const compra =
+              edit?.unidadCompra ??
+              materialEdit?.unidadCompra ??
+              record.unidadCompra ??
+              record.materiaPrima.unidadCompra;
+            await this.assertStockUnitChange(
+              auth,
+              record.id,
+              record.unidadStock ?? record.materiaPrima.unidadStock,
+              stock,
+              tx,
+            );
+            const factor =
+              edit?.equivalenciaCompra === undefined
+                ? record.equivalenciaCompra == null
+                  ? null
+                  : Number(record.equivalenciaCompra)
+                : edit.equivalenciaCompra;
+            const error = validateMaterialUnits({
+              unidadStock: stock,
+              unidadCompra: compra,
+              unidadUso:
+                edit?.unidadUso ??
+                materialEdit?.unidadUso ??
+                record.unidadUso ??
+                record.materiaPrima.unidadUso ??
+                stock,
+              equivalencias:
+                edit?.equivalencias ??
+                (edit?.equivalenciaCompra !== undefined
+                  ? null
+                  : readMaterialEquivalences(record.equivalenciasJson)),
+              equivalenciaCompra: factor,
+              templateId: record.materiaPrima.templateId,
+              atributos: record.atributosVarianteJson as Record<
+                string,
+                unknown
+              >,
+            });
+            if (error) throw new BadRequestException(`${record.sku}: ${error}`);
+            if (
+              factor != null &&
+              edit?.equivalencias === undefined &&
+              record.equivalenciasJson == null &&
+              edit?.equivalenciaCompra === undefined &&
+              (stock.toLowerCase() !==
+                (
+                  record.unidadStock ?? record.materiaPrima.unidadStock
+                ).toLowerCase() ||
+                compra.toLowerCase() !==
+                  (
+                    record.unidadCompra ?? record.materiaPrima.unidadCompra
+                  ).toLowerCase())
+            )
+              throw new BadRequestException(
+                `${record.sku}: actualizá también el contenido al cambiar las unidades.`,
+              );
+          }
+        }
         for (const variante of variantes) {
           const data: Prisma.MateriaPrimaVarianteUpdateInput = {};
           if (variante.precioReferencia !== undefined) {
             data.precioReferencia = this.toDecimal(
-              this.roundToScale(variante.precioReferencia),
+              this.roundToScale(variante.precioReferencia, 6),
             );
+          }
+          if (variante.unidadUso)
+            data.unidadUso = this.toPrismaEnum<UnidadMateriaPrima>(
+              variante.unidadUso,
+            );
+          if (variante.equivalencias !== undefined) {
+            data.equivalenciasJson = variante.equivalencias.map((relation) => ({
+              ...relation,
+            }));
+            data.equivalenciaCompra = null;
+          } else if (variante.equivalenciaCompra !== undefined)
+            data.equivalenciasJson = Prisma.DbNull;
+          if (variante.unidadPrecio !== undefined) {
+            data.unidadPrecio = variante.unidadPrecio
+              ? this.toPrismaEnum<UnidadMateriaPrima>(variante.unidadPrecio)
+              : null;
+          }
+          if (variante.equivalenciaCompra !== undefined) {
+            data.equivalenciaCompra =
+              variante.equivalenciaCompra == null
+                ? null
+                : this.toDecimal(variante.equivalenciaCompra);
           }
           if (variante.moneda?.trim()) {
             data.moneda = variante.moneda.trim().toUpperCase();
@@ -457,6 +686,10 @@ export class InventarioService {
 
         for (const material of materiales) {
           const data: Prisma.MateriaPrimaUpdateInput = {};
+          if (material.unidadUso)
+            data.unidadUso = this.toPrismaEnum<UnidadMateriaPrima>(
+              material.unidadUso,
+            );
           if (material.unidadStock) {
             data.unidadStock = this.toPrismaEnum<UnidadMateriaPrima>(
               material.unidadStock,
@@ -471,6 +704,15 @@ export class InventarioService {
           await tx.materiaPrima.update({
             where: { id: material.id },
             data,
+          });
+          // Editar la unidad del material aplica a todas sus variantes.
+          await tx.materiaPrimaVariante.updateMany({
+            where: { tenantId: auth.tenantId, materiaPrimaId: material.id },
+            data: {
+              ...(material.unidadUso ? { unidadUso: null } : {}),
+              ...(material.unidadStock ? { unidadStock: null } : {}),
+              ...(material.unidadCompra ? { unidadCompra: null } : {}),
+            },
           });
         }
       });
@@ -674,14 +916,106 @@ export class InventarioService {
       );
     }
 
+    // El costo de stock se expresa en la moneda de la empresa. Resolver fuera
+    // de la transacción evita sostener locks durante una consulta al proveedor.
+    const usaReferencia =
+      (!payload.costoUnitario || payload.costoUnitario <= 0) &&
+      ['ingreso', 'ajuste_entrada'].includes(payload.tipo);
+    const cambioStock =
+      usaReferencia && this.tipoCambio
+        ? await this.tipoCambio.resolver(auth.tenantId, auth.userId)
+        : null;
+
     return this.prisma.$transaction(async (tx) => {
-      const cantidadNumber = this.roundToScale(payload.cantidad);
-      const cantidad = this.toDecimal(cantidadNumber);
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${auth.tenantId}:${payload.varianteId}`}, 0))::text`;
       const variante = await this.findVarianteOrThrow(
         auth,
         payload.varianteId,
         tx,
       );
+      const contextoUnidades = materialPriceContext(variante);
+      const unidadOriginal = normalizeMaterialUnit(
+        payload.unidad ?? contextoUnidades.unidadStock,
+      );
+      const conversion = materialUnitConversion(
+        contextoUnidades,
+        unidadOriginal,
+        contextoUnidades.unidadStock,
+      );
+      const ingreso = ['ingreso', 'ajuste_entrada'].includes(payload.tipo);
+      const pesoReal = payload.cantidadStock != null;
+      if (
+        pesoReal &&
+        (!ingreso ||
+          !['kg', 'gramo'].includes(unidadOriginal) ||
+          !['hoja', 'placa', 'unidad'].includes(
+            normalizeMaterialUnit(contextoUnidades.unidadStock),
+          ))
+      ) {
+        throw new BadRequestException(
+          'La cantidad real de stock sólo se puede indicar al recibir por peso placas o unidades.',
+        );
+      }
+      if (!pesoReal && !conversion.ok)
+        throw new BadRequestException(conversion.mensaje);
+      const factor = pesoReal
+        ? payload.cantidadStock! / payload.cantidad
+        : conversion.ok
+          ? conversion.factor
+          : 0;
+      const cantidadNumber = new Prisma.Decimal(payload.cantidad)
+        .mul(factor)
+        .toDecimalPlaces(8)
+        .toNumber();
+      if (
+        !Number.isFinite(cantidadNumber) ||
+        cantidadNumber <= 0 ||
+        cantidadNumber >= 1e12
+      )
+        throw new BadRequestException(
+          'La cantidad convertida excede la precisión de stock.',
+        );
+      const cantidad = this.toDecimal(cantidadNumber);
+      const conversionSnapshot = {
+        version: 1,
+        unidadOriginal,
+        cantidadOriginal: payload.cantidad,
+        unidadStock: normalizeMaterialUnit(contextoUnidades.unidadStock),
+        cantidadStock: cantidadNumber,
+        unidadUso: normalizeMaterialUnit(
+          contextoUnidades.unidadUso ?? contextoUnidades.unidadStock,
+        ),
+        factor,
+        origen: pesoReal
+          ? 'recepcion_real'
+          : conversion.ok
+            ? conversion.origen
+            : 'manual',
+        pasos: pesoReal
+          ? [
+              {
+                origen: unidadOriginal,
+                destino: normalizeMaterialUnit(contextoUnidades.unidadStock),
+                factor,
+                origenFactor: 'recepcion_real',
+              },
+            ]
+          : conversion.ok
+            ? conversion.pasos
+            : [],
+        equivalencias: materialEquivalences(contextoUnidades),
+        costoOriginal: usaReferencia
+          ? variante.precioReferencia == null
+            ? null
+            : Number(variante.precioReferencia)
+          : (payload.costoUnitario ?? null),
+        unidadCostoOriginal:
+          payload.costoUnitario != null && payload.costoUnitario > 0
+            ? unidadOriginal
+            : contextoUnidades.unidadPrecio,
+        monedaCostoOriginal: usaReferencia ? variante.moneda : null,
+        tipoCambio: cambioStock,
+      };
       const ubicacion = await this.findUbicacionOrThrow(
         auth,
         payload.ubicacionId,
@@ -710,7 +1044,10 @@ export class InventarioService {
       let unitCost =
         payload.costoUnitario === undefined || payload.costoUnitario === null
           ? null
-          : this.roundToScale(payload.costoUnitario);
+          : new Prisma.Decimal(payload.costoUnitario)
+              .div(factor)
+              .toDecimalPlaces(6)
+              .toNumber();
       const stockPrevio = stockActual
         ? this.decimalToNumber(stockActual.cantidadDisponible)
         : 0;
@@ -722,14 +1059,35 @@ export class InventarioService {
         tipo === TipoMovimientoStockMateriaPrima.INGRESO ||
         tipo === TipoMovimientoStockMateriaPrima.AJUSTE_ENTRADA
       ) {
-        const precioReferenciaVariante =
-          this.resolvePrecioReferenciaPorUnidadStock(variante);
-        if (
-          (unitCost === null || unitCost <= 0) &&
-          precioReferenciaVariante &&
-          precioReferenciaVariante > 0
-        ) {
-          unitCost = precioReferenciaVariante;
+        if (unitCost === null || unitCost <= 0) {
+          const precioReferenciaVariante =
+            pesoReal &&
+            contextoUnidades.unidadPrecio &&
+            variante.precioReferencia != null
+              ? (() => {
+                  const precioAOrigen = materialUnitConversion(
+                    contextoUnidades,
+                    contextoUnidades.unidadPrecio!,
+                    unidadOriginal,
+                  );
+                  if (!precioAOrigen.ok)
+                    throw new BadRequestException(precioAOrigen.mensaje);
+                  return new Prisma.Decimal(variante.precioReferencia)
+                    .div(precioAOrigen.factor)
+                    .div(factor)
+                    .toNumber();
+                })()
+              : this.resolvePrecioReferenciaPorUnidadStock(variante);
+          if (
+            precioReferenciaVariante != null &&
+            precioReferenciaVariante > 0
+          ) {
+            unitCost = cambioStock
+              ? new Prisma.Decimal(precioReferenciaVariante)
+                  .mul(factorCambioMaterial(variante.moneda, cambioStock))
+                  .toNumber()
+              : precioReferenciaVariante;
+          }
         }
 
         const nextQty = stockPrevio + cantidadNumber;
@@ -740,18 +1098,21 @@ export class InventarioService {
               nextQty
             : 0;
 
-        saldoPosterior = this.roundToScale(nextQty);
-        costoPromedioPosterior = this.roundToScale(newAvg);
+        saldoPosterior = this.roundToScale(nextQty, 8);
+        costoPromedioPosterior = this.roundToScale(newAvg, 6);
       } else {
-        const nextQty = stockPrevio - cantidadNumber;
+        const nextQty = new Prisma.Decimal(stockPrevio)
+          .minus(cantidadNumber)
+          .toDecimalPlaces(8)
+          .toNumber();
         if (nextQty < 0) {
           throw new BadRequestException(
             `Stock insuficiente para ${variante.sku} en ${ubicacion.nombre}.`,
           );
         }
 
-        saldoPosterior = this.roundToScale(nextQty);
-        costoPromedioPosterior = this.roundToScale(costoPromedioPrevio);
+        saldoPosterior = this.roundToScale(nextQty, 8);
+        costoPromedioPosterior = this.roundToScale(costoPromedioPrevio, 6);
       }
 
       const upsertedStock = await tx.stockMateriaPrimaVariante.upsert({
@@ -783,6 +1144,8 @@ export class InventarioService {
           tipo,
           origen,
           cantidad,
+          conversionSnapshotJson:
+            conversionSnapshot as unknown as Prisma.InputJsonObject,
           costoUnitario: unitCost === null ? null : this.toDecimal(unitCost),
           saldoPosterior: upsertedStock.cantidadDisponible,
           costoPromedioPost: upsertedStock.costoPromedio,
@@ -805,7 +1168,8 @@ export class InventarioService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const qtyTransfer = this.roundToScale(payload.cantidad);
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${auth.tenantId}:${payload.varianteId}`}, 0))::text`;
+      const qtyTransfer = this.roundToScale(payload.cantidad, 8);
       const cantidad = this.toDecimal(qtyTransfer);
       const transferenciaId = randomUUID();
       const variante = await this.findVarianteOrThrow(
@@ -835,7 +1199,7 @@ export class InventarioService {
       const costPromOrigen = stockOrigen
         ? this.decimalToNumber(stockOrigen.costoPromedio)
         : 0;
-      const saldoOrigenPost = this.roundToScale(qtyOrigen - qtyTransfer);
+      const saldoOrigenPost = this.roundToScale(qtyOrigen - qtyTransfer, 8);
 
       const stockOrigenPost = await tx.stockMateriaPrimaVariante.upsert({
         where: {
@@ -866,7 +1230,7 @@ export class InventarioService {
           tipo: TipoMovimientoStockMateriaPrima.TRANSFERENCIA_SALIDA,
           origen: OrigenMovimientoStockMateriaPrima.TRANSFERENCIA,
           cantidad,
-          costoUnitario: this.toDecimal(this.roundToScale(costPromOrigen)),
+          costoUnitario: this.toDecimal(this.roundToScale(costPromOrigen, 6)),
           saldoPosterior: stockOrigenPost.cantidadDisponible,
           costoPromedioPost: stockOrigenPost.costoPromedio,
           referenciaTipo: payload.referenciaTipo?.trim() || 'transferencia',
@@ -889,12 +1253,13 @@ export class InventarioService {
       const costPromDestino = stockDestino
         ? this.decimalToNumber(stockDestino.costoPromedio)
         : 0;
-      const saldoDestinoPost = this.roundToScale(qtyDestino + qtyTransfer);
+      const saldoDestinoPost = this.roundToScale(qtyDestino + qtyTransfer, 8);
       const costPromDestinoPost =
         saldoDestinoPost > 0
           ? this.roundToScale(
               (qtyDestino * costPromDestino + qtyTransfer * costPromOrigen) /
                 saldoDestinoPost,
+              6,
             )
           : 0;
 
@@ -927,7 +1292,7 @@ export class InventarioService {
           tipo: TipoMovimientoStockMateriaPrima.TRANSFERENCIA_ENTRADA,
           origen: OrigenMovimientoStockMateriaPrima.TRANSFERENCIA,
           cantidad,
-          costoUnitario: this.toDecimal(this.roundToScale(costPromOrigen)),
+          costoUnitario: this.toDecimal(this.roundToScale(costPromOrigen, 6)),
           saldoPosterior: stockDestinoPost.cantidadDisponible,
           costoPromedioPost: stockDestinoPost.costoPromedio,
           referenciaTipo: payload.referenciaTipo?.trim() || 'transferencia',
@@ -989,6 +1354,15 @@ export class InventarioService {
         almacenId: row.ubicacion.almacenId,
         almacenNombre: row.ubicacion.almacen.nombre,
         cantidadDisponible: cantidad,
+        unidadStock: normalizeMaterialUnit(
+          row.variante.unidadStock ?? row.variante.materiaPrima.unidadStock,
+        ),
+        unidadUso: normalizeMaterialUnit(
+          row.variante.unidadUso ??
+            row.variante.materiaPrima.unidadUso ??
+            row.variante.unidadStock ??
+            row.variante.materiaPrima.unidadStock,
+        ),
         costoPromedio: costo,
         valorStock: this.roundToScale(cantidad * costo),
         updatedAt: row.updatedAt.toISOString(),
@@ -1121,6 +1495,11 @@ export class InventarioService {
         id: true,
         sku: true,
         precioReferencia: true,
+        moneda: true,
+        unidadPrecio: true,
+        equivalenciaCompra: true,
+        equivalenciasJson: true,
+        unidadUso: true,
         atributosVarianteJson: true,
         unidadStock: true,
         unidadCompra: true,
@@ -1130,6 +1509,7 @@ export class InventarioService {
             subfamilia: true,
             templateId: true,
             unidadStock: true,
+            unidadUso: true,
             unidadCompra: true,
           },
         },
@@ -1168,11 +1548,13 @@ export class InventarioService {
     }
     const normalized = this.normalizeInventoryUnit(value.trim().toLowerCase());
     const supported: UnitCode[] = [
+      'pallet',
       'unidad',
       'pack',
       'caja',
       'kit',
       'hoja',
+      'placa',
       'resma',
       'rollo',
       'pieza',
@@ -1187,68 +1569,57 @@ export class InventarioService {
       'kg',
       'gramo',
     ];
-    return supported.includes(normalized as UnitCode)
-      ? (normalized as UnitCode)
-      : null;
+    return supported.includes(normalized) ? normalized : null;
   }
 
   private normalizeInventoryUnit(value: string): UnitCode {
     const normalized = value.trim().toLowerCase();
-    const canonical = normalized === 'pliego' || normalized === 'pliegos'
-      ? 'hoja'
-      : normalized;
+    const canonical =
+      normalized === 'pliego' || normalized === 'pliegos' ? 'hoja' : normalized;
     return canonical as UnitCode;
   }
 
-  private resolvePrecioReferenciaPorUnidadStock(variante: {
-    precioReferencia: Prisma.Decimal | null;
-    atributosVarianteJson?: Prisma.JsonValue | null;
-    unidadStock: UnidadMateriaPrima | null;
-    unidadCompra: UnidadMateriaPrima | null;
-    materiaPrima: {
-      subfamilia?: string | null;
-      templateId?: string | null;
-      unidadStock: UnidadMateriaPrima;
-      unidadCompra: UnidadMateriaPrima;
-    };
-  }) {
-    const precio = variante.precioReferencia
-      ? this.roundToScale(this.decimalToNumber(variante.precioReferencia), 6)
-      : null;
-    if (!precio || precio <= 0) {
-      return null;
-    }
-    const sourceUnit =
-      this.toCanonicalUnitCode(variante.unidadCompra) ??
-      this.toCanonicalUnitCode(variante.unidadStock) ??
-      this.toCanonicalUnitCode(variante.materiaPrima.unidadCompra) ??
-      this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
-    const targetUnit =
-      this.toCanonicalUnitCode(variante.unidadStock) ??
-      this.toCanonicalUnitCode(variante.materiaPrima.unidadStock);
+  private resolvePrecioReferenciaPorUnidadStock(
+    variante: Parameters<typeof materialPriceContext>[0],
+  ) {
+    if (variante.precioReferencia == null) return null;
+    const result = materialPriceInStockUnit(
+      materialPriceContext(variante),
+      Number(variante.precioReferencia),
+    );
+    if (!result.ok) throw new BadRequestException(result.mensaje);
+    return result.precio;
+  }
 
-    if (!sourceUnit || !targetUnit) {
-      return precio;
-    }
-
-    if (unitsAreCompatible(sourceUnit, targetUnit)) {
-      return this.roundToScale(
-        convertUnitPrice(precio, sourceUnit, targetUnit),
-        6,
-      );
-    }
-
-    const derived = convertFlexibleRollUnitPrice({
-      pricePerFromUnit: precio,
-      from: sourceUnit,
-      to: targetUnit,
-      subfamilia: String(variante.materiaPrima.subfamilia ?? ''),
-      attributes: variante.atributosVarianteJson,
+  private async assertStockUnitChange(
+    auth: CurrentAuth,
+    varianteId: string,
+    previous: string,
+    next: string,
+    db: Prisma.TransactionClient,
+  ) {
+    const previousUnit = this.normalizeInventoryUnit(previous);
+    const nextUnit = this.normalizeInventoryUnit(next);
+    if (
+      previousUnit === nextUnit ||
+      [previousUnit, nextUnit].every((unit) => ['hoja', 'placa'].includes(unit))
+    )
+      return;
+    const movements = await db.movimientoStockMateriaPrima.count({
+      where: { tenantId: auth.tenantId, varianteId },
     });
-    if (derived != null) {
-      return this.roundToScale(derived, 6);
-    }
-    return precio;
+    const balance = await db.stockMateriaPrimaVariante.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        varianteId,
+        cantidadDisponible: { not: 0 },
+      },
+      select: { id: true },
+    });
+    if (movements > 0 || balance)
+      throw new BadRequestException(
+        'Esta variante tiene stock o movimientos. No se puede cambiar su unidad de stock sin convertir el historial.',
+      );
   }
 
   private roundToScale(value: number, scale = 2) {
@@ -1263,6 +1634,7 @@ export class InventarioService {
     origen: OrigenMovimientoStockMateriaPrima;
     cantidad: Prisma.Decimal;
     costoUnitario: Prisma.Decimal | null;
+    conversionSnapshotJson?: Prisma.JsonValue | null;
     saldoPosterior: Prisma.Decimal;
     costoPromedioPost: Prisma.Decimal;
     referenciaTipo: string | null;
@@ -1277,15 +1649,18 @@ export class InventarioService {
       ubicacionId: item.ubicacionId,
       tipo: this.toApiEnum(item.tipo),
       origen: this.toApiEnum(item.origen),
-      cantidad: this.roundToScale(this.decimalToNumber(item.cantidad)),
+      cantidad: this.roundToScale(this.decimalToNumber(item.cantidad), 8),
+      conversionSnapshot: item.conversionSnapshotJson ?? null,
       costoUnitario: item.costoUnitario
-        ? this.roundToScale(this.decimalToNumber(item.costoUnitario))
+        ? this.roundToScale(this.decimalToNumber(item.costoUnitario), 6)
         : null,
       saldoPosterior: this.roundToScale(
         this.decimalToNumber(item.saldoPosterior),
+        8,
       ),
       costoPromedioPost: this.roundToScale(
         this.decimalToNumber(item.costoPromedioPost),
+        6,
       ),
       referenciaTipo: item.referenciaTipo,
       referenciaId: item.referenciaId,
@@ -1325,48 +1700,47 @@ export class InventarioService {
   private normalizePayload(payload: UpsertMateriaPrimaDto) {
     const unidadStock = this.normalizeInventoryUnit(payload.unidadStock);
     const unidadCompra = this.normalizeInventoryUnit(payload.unidadCompra);
-    const canUseCanonicalUnits = unitsAreCompatible(
-      unidadStock,
-      unidadCompra,
+    const unidadUso = this.normalizeInventoryUnit(
+      payload.unidadUso ?? unidadStock,
     );
-    const canUseDerivedUnits =
-      canUseFlexibleRollDerivedUnits({
-        subfamilia: payload.subfamilia,
-        from: unidadCompra,
-        to: unidadStock,
-        attributes: payload.variantes[0]?.atributosVariante,
-      }) &&
-      payload.variantes.every((variante) =>
-        canUseFlexibleRollDerivedUnits({
-          subfamilia: payload.subfamilia,
-          from: this.normalizeInventoryUnit(
-            variante.unidadCompra ?? payload.unidadCompra,
-          ),
-          to: this.normalizeInventoryUnit(
-            variante.unidadStock ?? payload.unidadStock,
-          ),
-          attributes: variante.atributosVariante,
-        }),
-      );
-
-    if (!canUseCanonicalUnits && !canUseDerivedUnits) {
-      throw new BadRequestException(
-        'Unidad de uso y unidad de compra deben ser compatibles para conversión. En sustrato rollo flexible también se permite rollo, m2 o metro lineal si cada variante tiene ancho y largo válidos.',
-      );
+    for (const variante of payload.variantes) {
+      const error = validateMaterialUnits({
+        unidadStock: variante.unidadStock ?? unidadStock,
+        unidadCompra: variante.unidadCompra ?? unidadCompra,
+        unidadUso: variante.unidadUso ?? unidadUso,
+        equivalencias: variante.equivalencias,
+        equivalenciaCompra: variante.equivalenciaCompra,
+        templateId: payload.templateId,
+        atributos: variante.atributosVariante,
+      });
+      if (error) throw new BadRequestException(`${variante.sku}: ${error}`);
     }
-
     const variantes = payload.variantes.map((variante) => ({
       ...variante,
       sku: variante.sku.trim(),
       nombreVariante: variante.nombreVariante?.trim() || null,
-      unidadStock: null,
-      unidadCompra: null,
+      unidadStock: variante.unidadStock ?? null,
+      unidadUso: variante.unidadUso ?? null,
+      equivalencias:
+        variante.equivalencias?.map((r) => ({
+          origen: this.normalizeInventoryUnit(r.origen),
+          destino: this.normalizeInventoryUnit(r.destino),
+          factor: r.factor,
+        })) ?? null,
+      unidadCompra: variante.unidadCompra ?? null,
+      unidadPrecio:
+        variante.unidadPrecio ??
+        ((variante.unidadStock ?? unidadStock) ===
+        (variante.unidadCompra ?? unidadCompra)
+          ? (variante.unidadStock ?? unidadStock)
+          : null),
+      equivalenciaCompra: variante.equivalenciaCompra ?? null,
       precioReferencia:
         variante.precioReferencia === undefined ||
         variante.precioReferencia === null
           ? null
           : this.toDecimal(this.roundToScale(variante.precioReferencia, 6)),
-      moneda: variante.moneda?.trim().toUpperCase() || null,
+      moneda: variante.moneda ? this.validarMoneda(variante.moneda) : null,
       proveedorReferenciaId: variante.proveedorReferenciaId || null,
     }));
 
@@ -1379,6 +1753,7 @@ export class InventarioService {
       tipoTecnico: payload.tipoTecnico.trim(),
       templateId: payload.templateId.trim(),
       unidadStock,
+      unidadUso,
       unidadCompra,
       esConsumible: payload.esConsumible,
       esRepuesto: payload.esRepuesto,
@@ -1387,6 +1762,13 @@ export class InventarioService {
       atributosTecnicos: payload.atributosTecnicos,
       variantes,
     };
+  }
+
+  private validarMoneda(value: string): string {
+    const codigo = value.trim().toUpperCase();
+    if (!monedas.some((m) => m.codigo === codigo))
+      throw new BadRequestException('La moneda del costo no es válida.');
+    return codigo;
   }
 
   private toResponse(item: MateriaPrimaEntity) {
@@ -1403,8 +1785,15 @@ export class InventarioService {
       subfamilia: this.toApiEnum(item.subfamilia),
       tipoTecnico: item.tipoTecnico,
       templateId: item.templateId,
-      unidadStock: this.normalizeInventoryUnit(this.toApiEnum(item.unidadStock)),
-      unidadCompra: this.normalizeInventoryUnit(this.toApiEnum(item.unidadCompra)),
+      unidadStock: this.normalizeInventoryUnit(
+        this.toApiEnum(item.unidadStock),
+      ),
+      unidadCompra: this.normalizeInventoryUnit(
+        this.toApiEnum(item.unidadCompra),
+      ),
+      unidadUso: this.normalizeInventoryUnit(
+        item.unidadUso ?? item.unidadStock,
+      ),
       esConsumible: item.esConsumible,
       esRepuesto: item.esRepuesto,
       esProductoBase: item.esProductoBase,
@@ -1417,8 +1806,30 @@ export class InventarioService {
         materialPresetVarianteId: variante.materialPresetVarianteId ?? null,
         activo: variante.activo,
         atributosVariante: variante.atributosVarianteJson,
-        unidadStock: null,
-        unidadCompra: null,
+        unidadStock: variante.unidadStock
+          ? this.normalizeInventoryUnit(this.toApiEnum(variante.unidadStock))
+          : null,
+        unidadCompra: variante.unidadCompra
+          ? this.normalizeInventoryUnit(this.toApiEnum(variante.unidadCompra))
+          : null,
+        unidadPrecio: variante.unidadPrecio
+          ? this.normalizeInventoryUnit(this.toApiEnum(variante.unidadPrecio))
+          : (variante.unidadStock ?? item.unidadStock) ===
+              (variante.unidadCompra ?? item.unidadCompra)
+            ? this.normalizeInventoryUnit(
+                variante.unidadStock ?? item.unidadStock,
+              )
+            : null,
+        unidadUso: variante.unidadUso
+          ? this.normalizeInventoryUnit(variante.unidadUso)
+          : null,
+        equivalencias: materialEquivalences(
+          materialPriceContext({ ...variante, materiaPrima: item }),
+        ),
+        equivalenciaCompra:
+          variante.equivalenciaCompra == null
+            ? null
+            : Number(variante.equivalenciaCompra),
         precioReferencia: variante.precioReferencia
           ? this.decimalToNumber(variante.precioReferencia)
           : null,

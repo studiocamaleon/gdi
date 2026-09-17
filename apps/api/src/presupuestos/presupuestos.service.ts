@@ -1,3 +1,4 @@
+import { cambioDelSnapshot } from '../cotizaciones/validar-moneda-documento';
 import {
   BadRequestException,
   Injectable,
@@ -590,6 +591,7 @@ export class PresupuestosService {
         items: {
           select: {
             id: true,
+            snapshotJson: true,
             ordenTrabajoItems: {
               select: {
                 orden: { select: { id: true, numero: true } },
@@ -667,6 +669,9 @@ export class PresupuestosService {
             : 'PENDIENTES_DE_ACREDITACION',
       },
       cargosDirectos: emision.cargosDirectos ?? 0,
+      tipoCambio:
+        c.items.map((i) => cambioDelSnapshot(i.snapshotJson)).find(Boolean) ??
+        null,
       fechaEntrega: emision.fechaEntrega ?? null,
       publicToken: c.publicToken,
       ordenConvertida: ordenConvertida?.numero ?? null,

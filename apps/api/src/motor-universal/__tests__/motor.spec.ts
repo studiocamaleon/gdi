@@ -34,6 +34,7 @@ const prisma = new PrismaClient();
 let tenantId: string | null = null;
 let motorService: MotorUniversalService;
 const tarifaHoraManual = 6000;
+let restaurarUnidadesPrecio: (() => Promise<void>) | undefined;
 let restaurarFixtureTarjetas: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
@@ -53,6 +54,23 @@ beforeAll(async () => {
     preciosEspeciales,
   );
   if (tenantId) {
+    // Los precios de los fixtures históricos de esta suite están expresados
+    // por unidad de uso. Ahora se declara esa unidad, sin alterar importes.
+    const pendientes = await prisma.materiaPrimaVariante.findMany({
+      where: { tenantId, unidadPrecio: null },
+      include: { materiaPrima: true },
+    });
+    for (const v of pendientes)
+      await prisma.materiaPrimaVariante.update({
+        where: { id: v.id },
+        data: { unidadPrecio: v.unidadStock ?? v.materiaPrima.unidadStock },
+      });
+    restaurarUnidadesPrecio = async () => {
+      await prisma.materiaPrimaVariante.updateMany({
+        where: { id: { in: pendientes.map((v) => v.id) } },
+        data: { unidadPrecio: null },
+      });
+    };
     await ensureCentrosManualesDemo(tenantId);
     restaurarFixtureTarjetas = await prepararFixtureTarjetas(tenantId);
   }
@@ -67,6 +85,7 @@ afterEach(async () => {
 afterAll(async () => {
   try {
     await restaurarFixtureTarjetas?.();
+    await restaurarUnidadesPrecio?.();
   } finally {
     await prisma.$disconnect();
   }

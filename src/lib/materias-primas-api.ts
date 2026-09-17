@@ -1,3 +1,4 @@
+import type { MaterialEquivalence } from "./material-units";
 import { apiRequest, ApiError } from "@/lib/api";
 import type {
   InstallMaterialPresetPayload,
@@ -108,14 +109,19 @@ export interface BulkUpdateCostosPayload {
   variantes?: Array<{
     id: string;
     precioReferencia?: number;
+    unidadPrecio?: UnidadMateriaPrima | null;
+    equivalenciaCompra?: number | null;
+    equivalencias?: MaterialEquivalence[];
     moneda?: string;
     unidadStock?: UnidadMateriaPrima;
     unidadCompra?: UnidadMateriaPrima;
+    unidadUso?: UnidadMateriaPrima;
   }>;
   materiales?: Array<{
     id: string;
     unidadStock?: UnidadMateriaPrima;
     unidadCompra?: UnidadMateriaPrima;
+    unidadUso?: UnidadMateriaPrima;
   }>;
 }
 

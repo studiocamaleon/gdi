@@ -495,6 +495,10 @@ export class JobContextDto {
 }
 
 export class CotizarDto {
+  @IsOptional()
+  @IsUUID()
+  tipoCambioId?: string;
+
   @IsUUID()
   productoId!: string;
 
@@ -540,6 +544,10 @@ export class CotizarAsincronoDto extends CotizarDto {
 
 /** DTO concreto: los tipos utilitarios de TypeScript no existen en runtime. */
 export class RecotizarItemDto {
+  @IsOptional()
+  @IsUUID()
+  tipoCambioId?: string;
+
   @IsOptional()
   @IsUUID()
   rutaAlternativaId?: string | null;
