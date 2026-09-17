@@ -22,11 +22,14 @@ import {
   PrinterIcon,
   ReceiptTextIcon,
   UsersIcon,
+  Settings2Icon,
 } from "lucide-react";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { usePuedeFn } from "@/components/navigation/permisos-provider";
 import { seccionesConfigVisibles } from "@/components/configuracion/configuracion-secciones";
+
+import s from "./configuracion-workspace.module.css";
 
 type IconCmp = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
@@ -51,27 +54,47 @@ export function ConfiguracionNav() {
     [puede, paisCodigo],
   );
 
+  const grupos = [
+    { label: "Organización", keys: ["empresa", "usuarios"] },
+    {
+      label: "Finanzas",
+      keys: ["datos-fiscales", "metodos-pago", "impuestos", "comisiones"],
+    },
+    {
+      label: "Operación",
+      keys: ["centro-copiado", "almacenamiento", "integraciones"],
+    },
+  ];
+
   return (
-    <nav className="cfgnav" aria-label="Configuración">
-      <div className="cfgnav-t">Ajustes</div>
-      {visibles.map((s) => {
-        const Icon = ICONOS[s.key];
-        const on = pathname === s.href;
+    <nav className={s.nav} aria-label="Configuración">
+      <div className={s.navHeading}>
+        <Settings2Icon aria-hidden="true" />
+        Configuración
+      </div>
+      {grupos.map((grupo) => {
+        const secciones = visibles.filter((item) =>
+          grupo.keys.includes(item.key),
+        );
+        if (!secciones.length) return null;
         return (
-          <Link
-            key={s.href}
-            href={s.href}
-            className={`cfgnav-item ${on ? "on" : ""}`}
-            aria-current={on ? "page" : undefined}
-          >
-            <span className="cfgnav-ico">
-              {Icon ? <Icon width={16} height={16} /> : null}
-            </span>
-            <span className="cfgnav-txt">
-              <span className="cfgnav-label">{s.label}</span>
-              <span className="cfgnav-det">{s.detalle}</span>
-            </span>
-          </Link>
+          <div className={s.navGroup} key={grupo.label}>
+            <span className={s.navGroupTitle}>{grupo.label}</span>
+            {secciones.map((item) => {
+              const Icon = ICONOS[item.key];
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={s.navLink}
+                  aria-current={pathname === item.href ? "page" : undefined}
+                >
+                  {Icon && <Icon aria-hidden="true" />}
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
         );
       })}
     </nav>

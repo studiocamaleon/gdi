@@ -1,6 +1,12 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+  useConfiguracionInicio,
+} from "@/components/configuracion/configuracion-workspace";
 
 import * as React from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { toast } from "sonner";
 
@@ -39,7 +45,10 @@ import {
   type EstadoIntegraciones,
 } from "@/lib/integraciones-api";
 import { AfipDetalle } from "@/components/integraciones/afip-detalle";
-import { McpCard, McpDetalle } from "@/components/integraciones/credenciales-mcp";
+import {
+  McpCard,
+  McpDetalle,
+} from "@/components/integraciones/credenciales-mcp";
 import {
   getCredencialesMcp,
   type CredencialMcp,
@@ -64,7 +73,12 @@ const Ico = {
         strokeLinejoin="round"
         strokeLinecap="round"
       />
-      <path d="M12 21v-7M20 21v-7" stroke="#0066b2" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M12 21v-7M20 21v-7"
+        stroke="#0066b2"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   ),
   MP: () => (
@@ -77,47 +91,116 @@ const Ico = {
     </svg>
   ),
   Arr: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   ),
   Back: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M19 12H5M11 6l-6 6 6 6" />
     </svg>
   ),
   Check: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M5 12l4 4 10-10" />
     </svg>
   ),
   Copy: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="9" y="9" width="11" height="11" rx="2" />
       <path d="M5 15V5a2 2 0 0 1 2-2h10" />
     </svg>
   ),
   Refresh: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 12a9 9 0 0 1 15.7-6M21 5v5h-5M21 12a9 9 0 0 1-15.7 6M3 19v-5h5" />
     </svg>
   ),
   External: () => (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M15 3h6v6" />
       <path d="M10 14 21 3" />
       <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
     </svg>
   ),
   Alerta: () => (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <circle cx="12" cy="12" r="9" />
       <path d="M12 8v5M12 16.5v.01" />
     </svg>
   ),
 };
 
-function Logo({ proveedor, size = 44 }: { proveedor: ProveedorIntegracion; size?: number }) {
+function Logo({
+  proveedor,
+  size = 44,
+}: {
+  proveedor: ProveedorIntegracion;
+  size?: number;
+}) {
   const item = itemDe(proveedor);
   const glifo = {
     WATI: <Ico.Wa />,
@@ -125,7 +208,10 @@ function Logo({ proveedor, size = 44 }: { proveedor: ProveedorIntegracion; size?
     MERCADOPAGO: <Ico.MP />,
   }[proveedor];
   return (
-    <div className="int-logo" style={{ width: size, height: size, background: item.color }}>
+    <div
+      className="int-logo"
+      style={{ width: size, height: size, background: item.color }}
+    >
       {glifo}
     </div>
   );
@@ -146,10 +232,13 @@ export function IntegracionesView({
   mcp?: { inicial: CredencialMcp[]; mcpUrl: string };
 }) {
   const [datos, setDatos] = React.useState(inicial);
-  const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(null);
+  const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(
+    null,
+  );
   const [afip, setAfip] = React.useState<AfipIntegracion | null>(null);
   // MCP va aparte del union de proveedores: no es una IntegracionTenant.
   const [mcpAbierto, setMcpAbierto] = React.useState(false);
+  useConfiguracionInicio(mcpAbierto ? "mcp" : (abierta ?? "lista"));
   const [credencialesMcp, setCredencialesMcp] = React.useState<CredencialMcp[]>(
     mcp?.inicial ?? [],
   );
@@ -188,7 +277,8 @@ export function IntegracionesView({
   }, []);
 
   const estadoDe = (p: ProveedorIntegracion): EstadoIntegracion =>
-    datos.integraciones.find((i) => i.proveedor === p)?.estado ?? "DESCONECTADA";
+    datos.integraciones.find((i) => i.proveedor === p)?.estado ??
+    "DESCONECTADA";
 
   if (mcpAbierto && mcp) {
     return (
@@ -204,7 +294,9 @@ export function IntegracionesView({
   if (abierta === "WATI") {
     return (
       <WatiDetalle
-        integracion={datos.integraciones.find((i) => i.proveedor === "WATI") ?? null}
+        integracion={
+          datos.integraciones.find((i) => i.proveedor === "WATI") ?? null
+        }
         cifradoDisponible={datos.cifradoDisponible}
         onVolver={() => {
           setAbierta(null);
@@ -228,20 +320,17 @@ export function IntegracionesView({
     );
   }
 
-  const conectadas = CATALOGO.filter((c) => estadoDe(c.proveedor) === "CONECTADA");
+  const conectadas = CATALOGO.filter(
+    (c) => estadoDe(c.proveedor) === "CONECTADA",
+  );
   const resto = CATALOGO.filter((c) => estadoDe(c.proveedor) !== "CONECTADA");
 
   return (
-    <div className="int-page">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Integraciones</h1>
-          <div className="sub">
-            Conectá Grafoprint con las herramientas que ya usás. Las credenciales
-            son de tu empresa: cada una administra las suyas.
-          </div>
-        </div>
-      </div>
+    <ConfiguracionPage>
+      <ConfiguracionHeader
+        titulo="Integraciones"
+        descripcion="Conectá tu empresa con las herramientas y servicios que usás cada día."
+      />
 
       {!datos.cifradoDisponible && (
         <div className="int-info-box" style={{ marginBottom: 18 }}>
@@ -260,7 +349,9 @@ export function IntegracionesView({
             <Card
               key={c.proveedor}
               item={c}
-              integracion={datos.integraciones.find((i) => i.proveedor === c.proveedor)}
+              integracion={datos.integraciones.find(
+                (i) => i.proveedor === c.proveedor,
+              )}
               onAbrir={abrir}
             />
           ))}
@@ -272,7 +363,9 @@ export function IntegracionesView({
           <Card
             key={c.proveedor}
             item={c}
-            integracion={datos.integraciones.find((i) => i.proveedor === c.proveedor)}
+            integracion={datos.integraciones.find(
+              (i) => i.proveedor === c.proveedor,
+            )}
             onAbrir={abrir}
           />
         ))}
@@ -286,7 +379,7 @@ export function IntegracionesView({
           />
         </Seccion>
       ) : null}
-    </div>
+    </ConfiguracionPage>
   );
 }
 
@@ -353,8 +446,12 @@ function Card({
             Conectada
           </span>
         )}
-        {estado === "ERROR" && <span className="int-status muted">Con problemas</span>}
-        {!item.disponible && <span className="int-status muted">Próximamente</span>}
+        {estado === "ERROR" && (
+          <span className="int-status muted">Con problemas</span>
+        )}
+        {!item.disponible && (
+          <span className="int-status muted">Próximamente</span>
+        )}
       </div>
       <div className="int-card-desc">{item.descripcion}</div>
       <div className="int-card-foot">
@@ -433,69 +530,39 @@ function WatiDetalle({
         </div>
       </div>
 
-      <nav className="int-tabs">
-        <button
-          className={tab === "credenciales" ? "on" : ""}
-          onClick={() => setTab("credenciales")}
-        >
-          Credenciales
-        </button>
-        <button
-          className={tab === "plantillas" ? "on" : ""}
-          onClick={() => setTab("plantillas")}
-          disabled={!conectada}
-          title={
-            conectada ? undefined : "Conectá la integración para ver las plantillas"
-          }
-          style={conectada ? undefined : { opacity: 0.45, cursor: "not-allowed" }}
-        >
-          Plantillas
-        </button>
-        <button
-          className={tab === "notificaciones" ? "on" : ""}
-          onClick={() => setTab("notificaciones")}
-          disabled={!conectada}
-          title={
-            conectada
-              ? undefined
-              : "Conectá la integración para configurar los avisos"
-          }
-          style={conectada ? undefined : { opacity: 0.45, cursor: "not-allowed" }}
-        >
-          Notificaciones
-        </button>
-        <button
-          className={tab === "mensajes" ? "on" : ""}
-          onClick={() => setTab("mensajes")}
-          disabled={!conectada}
-          title={
-            conectada
-              ? undefined
-              : "Conectá la integración para ver los mensajes"
-          }
-          style={conectada ? undefined : { opacity: 0.45, cursor: "not-allowed" }}
-        >
-          Mensajes
-        </button>
-      </nav>
-
-      {tab === "credenciales" ? (
-        <CredencialesTab
-          integracion={actual}
-          cifradoDisponible={cifradoDisponible}
-          conectada={conectada}
-          onActualizada={async (i) => {
-            setActual(i);
-            await onCambio();
-          }}
-        />
-      ) : tab === "plantillas" ? (
-        <PlantillasTab />
-      ) : tab === "notificaciones" ? (
-        <NotificacionesTab />
-      ) : (
-        <MensajesTab />
-      )}
+      <Tabs value={tab} onValueChange={(value) => setTab(value as typeof tab)}>
+        <TabsList variant="graphite" aria-label="Configuración de WhatsApp">
+          <TabsTrigger value="credenciales">Credenciales</TabsTrigger>
+          <TabsTrigger value="plantillas" disabled={!conectada}>
+            Plantillas
+          </TabsTrigger>
+          <TabsTrigger value="notificaciones" disabled={!conectada}>
+            Notificaciones
+          </TabsTrigger>
+          <TabsTrigger value="mensajes" disabled={!conectada}>
+            Mensajes
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value={tab} className="pt-4">
+          {tab === "credenciales" ? (
+            <CredencialesTab
+              integracion={actual}
+              cifradoDisponible={cifradoDisponible}
+              conectada={conectada}
+              onActualizada={async (i) => {
+                setActual(i);
+                await onCambio();
+              }}
+            />
+          ) : tab === "plantillas" ? (
+            <PlantillasTab />
+          ) : tab === "notificaciones" ? (
+            <NotificacionesTab />
+          ) : (
+            <MensajesTab />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -519,7 +586,9 @@ function PlantillasTab() {
     try {
       setDatos(await getPlantillasWati());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudieron leer las plantillas.");
+      setError(
+        e instanceof Error ? e.message : "No se pudieron leer las plantillas.",
+      );
     } finally {
       setCargando(false);
     }
@@ -530,7 +599,11 @@ function PlantillasTab() {
   }, [cargar]);
 
   if (cargando) {
-    return <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Consultando Wati…</p>;
+    return (
+      <p style={{ color: "var(--muted-text)", fontSize: 13 }}>
+        Consultando Wati…
+      </p>
+    );
   }
   if (error || !datos) {
     return (
@@ -594,10 +667,14 @@ function PlantillasTab() {
 
       {r.recategorizadas > 0 && (
         <div className="int-info-box" style={{ marginBottom: 16 }}>
-          <strong>Meta cambió la categoría de {r.recategorizadas} plantilla(s).</strong>{" "}
-          Pedimos UTILITY y quedaron como MARKETING: significa que el texto se
-          leyó como promocional. Siguen funcionando, pero cuestan más por
-          conversación.
+          <div>
+            <strong>
+              Meta cambió la categoría de {r.recategorizadas} plantilla(s).
+            </strong>{" "}
+            Pedimos UTILITY y quedaron como MARKETING: significa que el texto se
+            leyó como promocional. Siguen funcionando, pero cuestan más por
+            conversación.
+          </div>
         </div>
       )}
       <div className="int-tpl-list" style={{ marginBottom: 26 }}>
@@ -774,7 +851,10 @@ function FilaGestionada({ p }: { p: PlantillaGestionada }) {
         <div className="int-tpl-nm">{p.titulo}</div>
         <div className="int-tpl-cuando">{p.cuando}</div>
         <div className="int-tpl-cod">{p.codigo}</div>
-        <button className="int-tpl-toggle" onClick={() => setAbierta((v) => !v)}>
+        <button
+          className="int-tpl-toggle"
+          onClick={() => setAbierta((v) => !v)}
+        >
           {abierta ? "Ocultar el mensaje" : "Ver el mensaje"}
         </button>
         {abierta && (
@@ -783,7 +863,9 @@ function FilaGestionada({ p }: { p: PlantillaGestionada }) {
               const nombre = p.parametros[Number(n) - 1];
               return nombre ? `[${nombre}]` : `{{${n}}}`;
             })}
-            <span className="int-tpl-footer">Tecnología desarrollada por Grafoprint</span>
+            <span className="int-tpl-footer">
+              Tecnología desarrollada por Grafoprint
+            </span>
           </div>
         )}
       </div>
@@ -796,7 +878,9 @@ function FilaGestionada({ p }: { p: PlantillaGestionada }) {
             {p.categoriaAsignada} ≠ {p.categoriaPedida}
           </span>
         ) : (
-          <span className="int-pill">{p.categoriaAsignada ?? p.categoriaPedida}</span>
+          <span className="int-pill">
+            {p.categoriaAsignada ?? p.categoriaPedida}
+          </span>
         )}
         {p.calidad && <span className="int-pill">{p.calidad}</span>}
         <span className={`int-pill ${est.clase}`}>{est.texto}</span>
@@ -819,7 +903,10 @@ function FilaPropia({ p }: { p: PlantillaPropia }) {
         </div>
         {p.cuerpo && (
           <>
-            <button className="int-tpl-toggle" onClick={() => setAbierta((v) => !v)}>
+            <button
+              className="int-tpl-toggle"
+              onClick={() => setAbierta((v) => !v)}
+            >
               {abierta ? "Ocultar el mensaje" : "Ver el mensaje"}
             </button>
             {abierta && (
@@ -898,7 +985,9 @@ function CredencialesTab({
       }
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "No se pudo conectar con Wati.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo conectar con Wati.",
       );
     } finally {
       setGuardando(false);
@@ -913,7 +1002,9 @@ function CredencialesTab({
       if (r.estado === "CONECTADA") toast.success("La conexión responde bien.");
       else toast.error(r.ultimoErrorTexto ?? "La conexión no responde.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo probar.");
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo probar.",
+      );
     } finally {
       setProbando(false);
     }
@@ -946,7 +1037,8 @@ function CredencialesTab({
         <div className="int-info-box" style={{ marginBottom: 18 }}>
           <Ico.Alerta />
           <div>
-            <strong>La última conexión falló.</strong> {integracion.ultimoErrorTexto}
+            <strong>La última conexión falló.</strong>{" "}
+            {integracion.ultimoErrorTexto}
           </div>
         </div>
       )}
@@ -966,14 +1058,16 @@ function CredencialesTab({
           <div className="cred-label">
             <span className="lbl">API Endpoint</span>
             <span className="hint">
-              URL del servidor de Wati de tu región. Si la pegás con el Tenant ID
-              incluido, también sirve.
+              URL del servidor de Wati de tu región. Si la pegás con el Tenant
+              ID incluido, también sirve.
             </span>
           </div>
           <div className="cred-value">
             <input
               value={form.endpoint}
-              onChange={(e) => setForm((f) => ({ ...f, endpoint: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, endpoint: e.target.value }))
+              }
               placeholder="https://live-mt-server.wati.io"
               spellCheck={false}
             />
@@ -988,7 +1082,9 @@ function CredencialesTab({
           <div className="cred-value">
             <input
               value={form.tenantId}
-              onChange={(e) => setForm((f) => ({ ...f, tenantId: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, tenantId: e.target.value }))
+              }
               placeholder="313754"
               inputMode="numeric"
               spellCheck={false}
@@ -1000,15 +1096,17 @@ function CredencialesTab({
           <div className="cred-label">
             <span className="lbl">Access Token</span>
             <span className="hint">
-              Pegalo sin el prefijo &quot;Bearer &quot;. Se guarda cifrado y no se
-              puede volver a leer desde acá.
+              Pegalo sin el prefijo &quot;Bearer &quot;. Se guarda cifrado y no
+              se puede volver a leer desde acá.
             </span>
           </div>
           <div className="cred-value">
             <input
               type="password"
               value={form.token}
-              onChange={(e) => setForm((f) => ({ ...f, token: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, token: e.target.value }))
+              }
               placeholder={
                 integracion?.pista
                   ? `Cargado (${integracion.pista}) · pegá uno nuevo para reemplazarlo`
@@ -1063,7 +1161,11 @@ function CredencialesTab({
               : "Conectar"}
         </button>
         {conectada && (
-          <button className="btn" onClick={() => void probar()} disabled={probando}>
+          <button
+            className="btn"
+            onClick={() => void probar()}
+            disabled={probando}
+          >
             <Ico.Refresh /> {probando ? "Probando…" : "Probar conexión"}
           </button>
         )}
@@ -1071,7 +1173,13 @@ function CredencialesTab({
           <button
             className="btn"
             onClick={() =>
-              copiar("ep", String((integracion?.metadata as { endpoint?: string })?.endpoint ?? ""))
+              copiar(
+                "ep",
+                String(
+                  (integracion?.metadata as { endpoint?: string })?.endpoint ??
+                    "",
+                ),
+              )
             }
           >
             {copiado === "ep" ? <Ico.Check /> : <Ico.Copy />}
@@ -1079,7 +1187,10 @@ function CredencialesTab({
           </button>
         )}
         {integracion && integracion.estado !== "DESCONECTADA" && (
-          <button className="btn danger" onClick={() => setConfirmarDesconectar(true)}>
+          <button
+            className="btn danger"
+            onClick={() => setConfirmarDesconectar(true)}
+          >
             Desconectar Wati
           </button>
         )}
@@ -1088,10 +1199,11 @@ function CredencialesTab({
       <div className="int-info-box" style={{ marginTop: 20 }}>
         <Ico.External />
         <div>
-          Al conectar, Grafoprint <strong>prueba las credenciales antes de
-          guardarlas</strong>: si no funcionan, no se guarda nada. El siguiente
-          paso —enviar automáticamente las plantillas de mensajes a aprobación de
-          Meta— todavía no está disponible.
+          Al conectar, Grafoprint{" "}
+          <strong>prueba las credenciales antes de guardarlas</strong>: si no
+          funcionan, no se guarda nada. El siguiente paso —enviar
+          automáticamente las plantillas de mensajes a aprobación de Meta—
+          todavía no está disponible.
         </div>
       </div>
 
@@ -1144,7 +1256,10 @@ function NotificacionesTab() {
     if (!datos) return;
     // Optimista: el switch tiene que responder al toque. Si falla se revierte
     // recargando, que además trae lo que haya cambiado por otro lado.
-    setDatos({ ...datos, configuracion: { ...datos.configuracion, ...cambios } });
+    setDatos({
+      ...datos,
+      configuracion: { ...datos.configuracion, ...cambios },
+    });
     setGuardando(true);
     try {
       await guardarConfigNotificaciones(cambios);
@@ -1173,7 +1288,9 @@ function NotificacionesTab() {
   };
 
   if (cargando) {
-    return <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Cargando…</p>;
+    return (
+      <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Cargando…</p>
+    );
   }
   if (error || !datos) {
     return (
@@ -1187,9 +1304,7 @@ function NotificacionesTab() {
   }
 
   const { configuracion: cfg, consentimiento: cons } = datos;
-  const dias = new Set(
-    cfg.diasAtencion.split(",").filter(Boolean).map(Number),
-  );
+  const dias = new Set(cfg.diasAtencion.split(",").filter(Boolean).map(Number));
 
   const alternarDia = (iso: number) => {
     const nuevo = new Set(dias);
@@ -1215,6 +1330,7 @@ function NotificacionesTab() {
             </div>
           </div>
           <Switch
+            aria-label="Activar avisos de WhatsApp"
             checked={!cfg.pausado}
             disabled={guardando}
             onCheckedChange={(v) => void guardar({ pausado: !v })}
@@ -1233,6 +1349,7 @@ function NotificacionesTab() {
             <input
               className="int-nt-hora"
               type="time"
+              aria-label="Hora de inicio de los envíos"
               value={cfg.horaDesde}
               onChange={(e) => void guardar({ horaDesde: e.target.value })}
             />
@@ -1240,6 +1357,7 @@ function NotificacionesTab() {
             <input
               className="int-nt-hora"
               type="time"
+              aria-label="Hora de fin de los envíos"
               value={cfg.horaHasta}
               onChange={(e) => void guardar({ horaHasta: e.target.value })}
             />
@@ -1261,6 +1379,7 @@ function NotificacionesTab() {
               <button
                 key={d.iso}
                 className={`int-nt-dia${dias.has(d.iso) ? " on" : ""}`}
+                aria-pressed={dias.has(d.iso)}
                 onClick={() => alternarDia(d.iso)}
                 disabled={guardando}
               >
@@ -1285,6 +1404,7 @@ function NotificacionesTab() {
             <input
               className="int-nt-hora"
               type="number"
+              aria-label="Días después de la entrega para pedir la reseña"
               min={0}
               max={30}
               style={{ width: 72 }}
@@ -1295,7 +1415,12 @@ function NotificacionesTab() {
               // noche salga con el plazo equivocado.
               onBlur={(e) => {
                 const n = Number(e.target.value);
-                if (Number.isInteger(n) && n >= 0 && n <= 30 && n !== cfg.resenaDiasDespues) {
+                if (
+                  Number.isInteger(n) &&
+                  n >= 0 &&
+                  n <= 30 &&
+                  n !== cfg.resenaDiasDespues
+                ) {
                   void guardar({ resenaDiasDespues: n });
                 }
               }}
@@ -1341,6 +1466,7 @@ function NotificacionesTab() {
                 que nunca van a salir.
               */}
               <Switch
+                aria-label={`Activar aviso: ${e.titulo}`}
                 checked={e.activo && e.cableado}
                 disabled={cfg.pausado || !e.cableado}
                 onCheckedChange={(v) => void cambiarEvento(e.evento, v)}
@@ -1440,7 +1566,9 @@ function MensajesTab() {
   );
 
   if (cargando && log.length === 0) {
-    return <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Cargando…</p>;
+    return (
+      <p style={{ color: "var(--muted-text)", fontSize: 13 }}>Cargando…</p>
+    );
   }
   if (error) {
     return (
@@ -1529,9 +1657,7 @@ function MensajesTab() {
         ) : (
           visibles.map((l) => (
             <div className="int-nt-log-fila" key={l.id}>
-              <span className="int-nt-log-fecha">
-                {fechaHora(l.createdAt)}
-              </span>
+              <span className="int-nt-log-fecha">{fechaHora(l.createdAt)}</span>
               <div>
                 <div>
                   {l.titulo}
@@ -1551,7 +1677,9 @@ function MensajesTab() {
                     : ""}
                 </div>
               </div>
-              <span className={`int-pill ${pillLog(l.estado)}`}>{l.estado}</span>
+              <span className={`int-pill ${pillLog(l.estado)}`}>
+                {l.estado}
+              </span>
             </div>
           ))
         )}
@@ -1559,22 +1687,23 @@ function MensajesTab() {
 
       {/* Sólo si la tanda vino completa: si trajo menos que el límite, ya no
           hay más para traer y el botón mentiría. */}
-      {log.length >= limite && limite < PASOS_LIMITE[PASOS_LIMITE.length - 1] && (
-        <div className="int-msg-mas">
-          <button
-            className="btn ghost"
-            onClick={() =>
-              setLimite(
-                PASOS_LIMITE.find((n) => n > limite) ??
-                  PASOS_LIMITE[PASOS_LIMITE.length - 1],
-              )
-            }
-            disabled={cargando}
-          >
-            Ver más mensajes
-          </button>
-        </div>
-      )}
+      {log.length >= limite &&
+        limite < PASOS_LIMITE[PASOS_LIMITE.length - 1] && (
+          <div className="int-msg-mas">
+            <button
+              className="btn ghost"
+              onClick={() =>
+                setLimite(
+                  PASOS_LIMITE.find((n) => n > limite) ??
+                    PASOS_LIMITE[PASOS_LIMITE.length - 1],
+                )
+              }
+              disabled={cargando}
+            >
+              Ver más mensajes
+            </button>
+          </div>
+        )}
     </div>
   );
 }

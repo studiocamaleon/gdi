@@ -8,7 +8,7 @@
   border: 1px solid var(--border, #e3e3e0);
   border-radius: var(--r-3, 12px);
   background: var(--surface, #fff);
-  padding: 18px 20px;
+  padding: 24px;
 }
 
 .formCrear {
@@ -34,9 +34,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 16px;
   border: 1px solid var(--border, #e8e8e5);
-  border-radius: 10px;
+  border-radius: 7px;
   font-size: 13px;
 }
 
@@ -67,9 +67,9 @@
 /* El token recién creado: la ÚNICA vez que se ve. */
 .tokenBox {
   margin: 12px 0 16px;
-  border: 1px dashed var(--warning, #d9a514);
+  border: 1px solid var(--warning, #d9a514);
   background: var(--warning-soft, #fdf6e3);
-  border-radius: 10px;
+  border-radius: 7px;
   padding: 12px 14px;
 }
 
@@ -113,4 +113,14 @@
   font-size: 13px;
   color: var(--muted-foreground, #6b6b68);
   padding: 8px 0;
+}
+
+@media (max-width: 680px) {
+  .panel {
+    padding: 18px;
+  }
+  .fila,
+  .tokenAcciones {
+    flex-wrap: wrap;
+  }
 }

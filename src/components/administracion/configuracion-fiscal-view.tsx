@@ -1,4 +1,9 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+  GuardarConfiguracion,
+} from "@/components/configuracion/configuracion-workspace";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -7,7 +12,6 @@ import {
   CheckIcon,
   InfoIcon,
   PlusIcon,
-  SaveIcon,
   Trash2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -72,6 +76,12 @@ export function ConfiguracionFiscalView({
     estadoInicial(initialConfig),
   );
   const [guardando, setGuardando] = React.useState(false);
+  const [guardado, setGuardado] = React.useState(() =>
+    estadoInicial(initialConfig),
+  );
+  const cambios = (Object.keys(form) as (keyof FormState)[]).filter(
+    (key) => form[key] !== guardado[key],
+  ).length;
   const [pvNuevo, setPvNuevo] = React.useState<{
     numero: string;
     nombre: string;
@@ -104,6 +114,7 @@ export function ConfiguracionFiscalView({
         proveedorFacturacion: form.proveedorFacturacion,
       });
       toast.success("Datos fiscales guardados.");
+      setGuardado({ ...form });
       router.refresh();
     } catch (error) {
       toast.error(
@@ -164,36 +175,19 @@ export function ConfiguracionFiscalView({
   };
 
   return (
-    <div
-      className="apm-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "32px 28px 80px",
-      }}
-    >
+    <ConfiguracionPage>
       <div className="apm-wrap">
-        <div className="apm-head">
-          <div>
-            <h1>Datos fiscales</h1>
-            <div className="sub">
-              Quién emite los comprobantes. Junto con la condición del cliente
-              define la letra de cada factura.
-            </div>
-          </div>
-          <div className="right">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void guardar()}
-              disabled={guardando}
-            >
-              <SaveIcon />
-              {guardando ? "Guardando…" : "Guardar cambios"}
-            </button>
-          </div>
-        </div>
+        <ConfiguracionHeader
+          titulo="Datos fiscales"
+          descripcion="Datos del emisor, comprobantes y puntos de venta."
+          acciones={
+            <GuardarConfiguracion
+              cambios={cambios}
+              guardando={guardando}
+              onGuardar={() => void guardar()}
+            />
+          }
+        />
 
         {!configurado ? (
           <div className="arc-page">
@@ -212,19 +206,21 @@ export function ConfiguracionFiscalView({
         <div className="arc-page" style={{ display: "block" }}>
           <div className="arc-card" style={{ marginBottom: 20 }}>
             <div className="arc-card-sec">
-              <div className="arc-sec-t">Emisor</div>
+              <h2 className="arc-sec-t">Emisor</h2>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>Razón social</label>
+                  <label htmlFor="fiscal-razonSocial">Razón social</label>
                   <input
+                    id="fiscal-razonSocial"
                     value={form.razonSocial}
                     onChange={(e) => set("razonSocial", e.target.value)}
                     placeholder="Ej. Grafoprint S.A."
                   />
                 </div>
                 <div className="arc-field">
-                  <label>CUIT</label>
+                  <label htmlFor="fiscal-cuit">CUIT</label>
                   <input
+                    id="fiscal-cuit"
                     value={form.cuit}
                     onChange={(e) => set("cuit", e.target.value)}
                     placeholder="30-71234567-1"
@@ -233,8 +229,11 @@ export function ConfiguracionFiscalView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>Condición fiscal</label>
+                  <label htmlFor="fiscal-condicionFiscal">
+                    Condición fiscal
+                  </label>
                   <select
+                    id="fiscal-condicionFiscal"
                     value={form.condicionFiscal}
                     onChange={(e) =>
                       set(
@@ -251,10 +250,11 @@ export function ConfiguracionFiscalView({
                   </select>
                 </div>
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="fiscal-ingresosBrutos">
                     Ingresos Brutos <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="fiscal-ingresosBrutos"
                     value={form.ingresosBrutos}
                     onChange={(e) => set("ingresosBrutos", e.target.value)}
                     placeholder="Nº de inscripción o convenio multilateral"
@@ -263,20 +263,23 @@ export function ConfiguracionFiscalView({
               </div>
               <div className="arc-frow">
                 <div className="arc-field">
-                  <label>
+                  <label htmlFor="fiscal-domicilioFiscal">
                     Domicilio fiscal <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="fiscal-domicilioFiscal"
                     value={form.domicilioFiscal}
                     onChange={(e) => set("domicilioFiscal", e.target.value)}
                     placeholder="Calle 123, Ciudad"
                   />
                 </div>
                 <div className="arc-field">
-                  <label>
-                    Inicio de actividades <span className="opt">(opcional)</span>
+                  <label htmlFor="fiscal-inicioActividades">
+                    Inicio de actividades{" "}
+                    <span className="opt">(opcional)</span>
                   </label>
                   <input
+                    id="fiscal-inicioActividades"
                     type="date"
                     value={form.inicioActividades}
                     onChange={(e) => set("inicioActividades", e.target.value)}
@@ -287,10 +290,10 @@ export function ConfiguracionFiscalView({
 
             {esRI ? (
               <div className="arc-card-sec">
-                <div className="arc-sec-t">
+                <h2 className="arc-sec-t">
                   Leyenda en las facturas A{" "}
                   <span className="n">sólo si ARCA te la asignó</span>
-                </div>
+                </h2>
                 <div className="arc-auto-note">
                   <InfoIcon />
                   Reemplaza a la vieja factura M, eliminada por la RG 5762/2025:
@@ -298,6 +301,7 @@ export function ConfiguracionFiscalView({
                 </div>
                 <div className="arc-field" style={{ marginBottom: 0 }}>
                   <select
+                    aria-label="Leyenda en las facturas A"
                     value={form.leyendaFacturaA}
                     onChange={(e) =>
                       set("leyendaFacturaA", e.target.value as LeyendaA | "")
@@ -315,10 +319,10 @@ export function ConfiguracionFiscalView({
             ) : null}
 
             <div className="arc-card-sec">
-              <div className="arc-sec-t">
+              <h2 className="arc-sec-t">
                 Qué letra vas a emitir{" "}
                 <span className="n">según la condición de cada cliente</span>
-              </div>
+              </h2>
               <div className="apm-letras">
                 {CONDICIONES_FISCALES.map((receptor) => {
                   const r = letraComprobante(
@@ -350,14 +354,14 @@ export function ConfiguracionFiscalView({
 
           <div className="arc-card">
             <div className="arc-card-sec">
-              <div className="arc-sec-t">
+              <h2 className="arc-sec-t">
                 Puntos de venta
                 <span className="n">
                   {puntosVenta.length === 0
                     ? "ninguno todavía"
                     : `${puntosVenta.length} habilitado${puntosVenta.length === 1 ? "" : "s"}`}
                 </span>
-              </div>
+              </h2>
 
               {!configurado ? (
                 <div className="arc-auto-note" style={{ marginBottom: 0 }}>
@@ -411,9 +415,13 @@ export function ConfiguracionFiscalView({
                   {pvNuevo ? (
                     <div className="arc-ret-line">
                       <div className="arc-frow3" style={{ marginBottom: 10 }}>
-                        <div className="arc-field sm" style={{ marginBottom: 0 }}>
-                          <label>Número</label>
+                        <div
+                          className="arc-field sm"
+                          style={{ marginBottom: 0 }}
+                        >
+                          <label htmlFor="fiscal-pvNumero">Número</label>
                           <input
+                            id="fiscal-pvNumero"
                             type="number"
                             value={pvNuevo.numero}
                             onChange={(e) =>
@@ -422,9 +430,13 @@ export function ConfiguracionFiscalView({
                             placeholder="1"
                           />
                         </div>
-                        <div className="arc-field sm" style={{ marginBottom: 0 }}>
-                          <label>Nombre</label>
+                        <div
+                          className="arc-field sm"
+                          style={{ marginBottom: 0 }}
+                        >
+                          <label htmlFor="fiscal-pv-nombre">Nombre</label>
                           <input
+                            id="fiscal-pv-nombre"
                             value={pvNuevo.nombre}
                             onChange={(e) =>
                               setPvNuevo({ ...pvNuevo, nombre: e.target.value })
@@ -432,14 +444,19 @@ export function ConfiguracionFiscalView({
                             placeholder="Casa central"
                           />
                         </div>
-                        <div className="arc-field sm" style={{ marginBottom: 0 }}>
-                          <label>Modalidad</label>
+                        <div
+                          className="arc-field sm"
+                          style={{ marginBottom: 0 }}
+                        >
+                          <label htmlFor="fiscal-pv-modalidad">Modalidad</label>
                           <select
+                            id="fiscal-pv-modalidad"
                             value={pvNuevo.modalidad}
                             onChange={(e) =>
                               setPvNuevo({
                                 ...pvNuevo,
-                                modalidad: e.target.value as ModalidadPuntoVenta,
+                                modalidad: e.target
+                                  .value as ModalidadPuntoVenta,
                               })
                             }
                           >
@@ -490,16 +507,17 @@ export function ConfiguracionFiscalView({
             </div>
 
             <div className="arc-card-sec">
-              <div className="arc-sec-t">
+              <h2 className="arc-sec-t">
                 Cómo se pide el CAE
                 <span className="n">
                   {initialConfig?.proveedorFacturacion === "afipsdk"
                     ? "automático"
                     : "a mano"}
                 </span>
-              </div>
+              </h2>
               <div className="arc-field" style={{ marginBottom: 12 }}>
                 <select
+                  aria-label="Proveedor de facturación"
                   value={form.proveedorFacturacion}
                   onChange={(e) =>
                     set(
@@ -554,6 +572,6 @@ export function ConfiguracionFiscalView({
         accionLabel="Quitar punto de venta"
         onConfirmar={() => borrarPv()}
       />
-    </div>
+    </ConfiguracionPage>
   );
 }

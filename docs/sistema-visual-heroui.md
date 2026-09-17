@@ -2647,3 +2647,32 @@ Revisión en Chrome de ambas vistas, escritorio y móvil, ancho mínimo de 320 p
 sin desborde horizontal, logo real, acordeones, apertura y cancelación de
 confirmaciones públicas y del comercial. La aprobación efectiva se verificó
 en pruebas aisladas, sin resolver el presupuesto de desarrollo usado en la UI.
+
+## Configuración — 17 de septiembre de 2026
+
+Las nueve secciones comparten `ConfiguracionWorkspace`: tema de marca claro
+explícito, papel cálido, grafito y naranja; navegación por Organización,
+Finanzas y Operación, y un único contenedor de scroll. Los permisos y la
+disponibilidad por país siguen definidos en `configuracion-secciones.ts`.
+La navegación pasa a horizontal en pantallas pequeñas y cada detalle de
+Integraciones abre desde su encabezado.
+
+- Empresa, Datos fiscales y Centro de copiado usan una cabecera compartida
+  con guardado deshabilitado sin cambios y contador dentro del botón.
+- Usuarios conserva sus cinco apartados, con pestañas accesibles grafito,
+  incluido el editor de roles, seguridad, sesiones y registro de actividad.
+- Métodos de pago usa `FormSheet` para edición, con foco contenido, acciones
+  visibles y bloqueo de cierre mientras guarda. Mantiene simulación y reglas.
+- Impuestos, Comisiones, Almacenamiento y todas las vistas de Integraciones
+  adoptan las mismas superficies, tipografía, controles y espacios. Wati
+  conserva credenciales, plantillas, notificaciones e historial; ARCA y MCP
+  mantienen sus flujos y permisos existentes.
+- El tema acompaña a los portales mediante el proveedor compartido. La carga
+  usa `ModulePageSkeleton`, integrado al indicador global. Los ajustes están
+  aislados en módulos CSS; `globals.css` permanece sin cambios.
+
+Validación: TypeScript, ESLint, CSS Guard, nueve pruebas existentes de
+secciones/permisos y API de Centro de copiado, y `git diff --check`. Revisión
+en Chrome de las nueve secciones y formularios, con comprobación móvil a
+390 px. Se probaron borradores y cancelación sin guardar configuraciones,
+emitir mensajes, crear credenciales ni modificar permisos.

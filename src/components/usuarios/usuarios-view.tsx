@@ -1,6 +1,11 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+} from "@/components/configuracion/configuracion-workspace";
 
 import * as React from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { toast } from "sonner";
 
@@ -27,12 +32,7 @@ import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiv
 
 type EmpleadoOpcion = { id: string; nombreCompleto: string };
 
-type TabUsuarios =
-  | "usuarios"
-  | "roles"
-  | "seguridad"
-  | "sesiones"
-  | "logs";
+type TabUsuarios = "usuarios" | "roles" | "seguridad" | "sesiones" | "logs";
 
 /**
  * Una pregunta por pestaña. Antes era un scroll largo con todo apilado y había
@@ -144,7 +144,9 @@ export function UsuariosView({
       );
       await recargar();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el rol.");
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo cambiar el rol.",
+      );
     } finally {
       setGuardando(null);
     }
@@ -168,306 +170,295 @@ export function UsuariosView({
     }
   };
 
-  const sinCupo =
-    datos.limite !== null && datos.enUso >= datos.limite;
+  const sinCupo = datos.limite !== null && datos.enUso >= datos.limite;
 
   return (
-    <div className="int-page">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Usuarios</h1>
-          <div className="sub">
-            Quién entra al sistema y qué puede hacer. Dar acceso no es lo mismo
-            que cargar un empleado: acá viven las cuentas, en Empleados los
-            legajos.
-          </div>
-        </div>
-        {/* Sólo donde significa algo: en Roles o en el registro, un botón de
-            alta de usuarios es ruido. */}
-        {tab === "usuarios" && (
-          <button
-            className="btn primary"
-            onClick={() => setInvitando(true)}
-            disabled={invitando || sinCupo}
-            title={
-              sinCupo
-                ? `Tu plan incluye ${datos.limite} usuarios y ya los estás usando.`
-                : undefined
-            }
-          >
-            Dar acceso a alguien
-          </button>
-        )}
-      </div>
-
-      <nav className="int-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={tab === t.key ? "on" : ""}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      {tab === "usuarios" && (
-      <>
-      {datos.limite !== null && (
-        <div className="usr-cupo">
-          <strong>
-            {datos.enUso} de {datos.limite}
-          </strong>{" "}
-          usuarios con acceso en tu plan.
-          {sinCupo
-            ? " Para sumar otro, desactivá uno o pasá a un plan mayor."
-            : ""}
-        </div>
-      )}
-
-      {provisoria && (
-        <div className="usr-form">
-          <div className="int-section-intro">
-            <h3>Clave provisoria de {provisoria.email}</h3>
-            <p>
-              Dictásela o pasásela por donde puedas. Cuando entre con ella, el
-              sistema le va a pedir que elija una propia — vos no vas a saber
-              cuál. No se muestra de nuevo: si se pierde, generá otra.
-            </p>
-          </div>
-          <code className="usr-link">{provisoria.clave}</code>
-          <div className="usr-form-acciones">
+    <ConfiguracionPage>
+      <ConfiguracionHeader
+        titulo="Usuarios"
+        descripcion="Administrá los accesos, roles y la seguridad de tu equipo."
+        acciones={
+          tab === "usuarios" && (
             <button
-              className="btn ghost"
-              onClick={() => {
-                void navigator.clipboard?.writeText(provisoria.clave);
-                toast.success("Copiada.");
-              }}
-            >
-              Copiar
-            </button>
-            <button className="btn primary" onClick={() => setProvisoria(null)}>
-              Listo
-            </button>
-          </div>
-        </div>
-      )}
-
-      {invitando && (
-        <FormularioInvitacion
-          roles={roles}
-          empleados={empleados}
-          onCancelar={() => setInvitando(false)}
-          /**
-           * Refresca el listado pero NO cierra la ficha: la cierra el "Listo"
-           * de la pantalla de la clave (que es `onCancelar`). Cerrarla acá
-           * dejaba esa pantalla como código muerto y la clave provisoria vivía
-           * sólo en el portapapeles — si el navegador no lo permitía, no la
-           * veía nadie y había que generar otra.
-           */
-          onCreado={recargar}
-        />
-      )}
-
-      <div className="int-tpl-list" style={{ marginBottom: 26 }}>
-        {datos.usuarios.map((u) => (
-          <div className="usr-fila" key={u.id}>
-            <div className="usr-quien">
-              <div className="usr-nombre">
-                {nombreDe(u)}
-                {u.esYo ? <span className="int-pill">VOS</span> : null}
-              </div>
-              <div className="usr-mail">{u.email}</div>
-              {u.empleado ? (
-                <div className="usr-legajo">
-                  Legajo: {u.empleado.nombreCompleto}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="usr-estado">
-              <PillEstado usuario={u} />
-            </div>
-
-            <select
-              className="usr-rol"
-              value={u.rolId ?? ""}
-              disabled={u.esYo || !u.activa || guardando === u.id}
-              onChange={(e) => void cambiarRol(u, e.target.value)}
+              className="btn primary"
+              onClick={() => setInvitando(true)}
+              disabled={invitando || sinCupo}
               title={
-                u.esYo
-                  ? "No podés cambiarte el rol a vos mismo."
+                sinCupo
+                  ? `Tu plan incluye ${datos.limite} usuarios y ya los estás usando.`
                   : undefined
               }
             >
-              {u.rolId === null && (
-                <option value="">{u.rolNombre} (sin rol asignado)</option>
-              )}
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.nombre}
-                </option>
-              ))}
-            </select>
+              Dar acceso a alguien
+            </button>
+          )
+        }
+      />
 
-            <div className="usr-acciones">
-              {/* Vale para los dos casos: al que nunca entró se le DA una
+      <Tabs value={tab} onValueChange={(value) => setTab(value as TabUsuarios)}>
+        <TabsList variant="graphite" aria-label="Administración de usuarios">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.key} value={t.key}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value="usuarios" className="pt-4">
+          {datos.limite !== null && (
+            <div className="usr-cupo">
+              <strong>
+                {datos.enUso} de {datos.limite}
+              </strong>{" "}
+              usuarios con acceso en tu plan.
+              {sinCupo
+                ? " Para sumar otro, desactivá uno o pasá a un plan mayor."
+                : ""}
+            </div>
+          )}
+
+          {provisoria && (
+            <div className="usr-form">
+              <div className="int-section-intro">
+                <h3>Clave provisoria de {provisoria.email}</h3>
+                <p>
+                  Dictásela o pasásela por donde puedas. Cuando entre con ella,
+                  el sistema le va a pedir que elija una propia — vos no vas a
+                  saber cuál. No se muestra de nuevo: si se pierde, generá otra.
+                </p>
+              </div>
+              <code className="usr-link">{provisoria.clave}</code>
+              <div className="usr-form-acciones">
+                <button
+                  className="btn ghost"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(provisoria.clave);
+                    toast.success("Copiada.");
+                  }}
+                >
+                  Copiar
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => setProvisoria(null)}
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          )}
+
+          {invitando && (
+            <FormularioInvitacion
+              roles={roles}
+              empleados={empleados}
+              onCancelar={() => setInvitando(false)}
+              /**
+               * Refresca el listado pero NO cierra la ficha: la cierra el "Listo"
+               * de la pantalla de la clave (que es `onCancelar`). Cerrarla acá
+               * dejaba esa pantalla como código muerto y la clave provisoria vivía
+               * sólo en el portapapeles — si el navegador no lo permitía, no la
+               * veía nadie y había que generar otra.
+               */
+              onCreado={recargar}
+            />
+          )}
+
+          <div className="int-tpl-list" style={{ marginBottom: 26 }}>
+            {datos.usuarios.map((u) => (
+              <div className="usr-fila" key={u.id}>
+                <div className="usr-quien">
+                  <div className="usr-nombre">
+                    {nombreDe(u)}
+                    {u.esYo ? <span className="int-pill">VOS</span> : null}
+                  </div>
+                  <div className="usr-mail">{u.email}</div>
+                  {u.empleado ? (
+                    <div className="usr-legajo">
+                      Legajo: {u.empleado.nombreCompleto}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="usr-estado">
+                  <PillEstado usuario={u} />
+                </div>
+
+                <select
+                  className="usr-rol"
+                  value={u.rolId ?? ""}
+                  disabled={u.esYo || !u.activa || guardando === u.id}
+                  onChange={(e) => void cambiarRol(u, e.target.value)}
+                  title={
+                    u.esYo
+                      ? "No podés cambiarte el rol a vos mismo."
+                      : undefined
+                  }
+                >
+                  {u.rolId === null && (
+                    <option value="">{u.rolNombre} (sin rol asignado)</option>
+                  )}
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nombre}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="usr-acciones">
+                  {/* Vale para los dos casos: al que nunca entró se le DA una
                   clave (si el link no le llegó o no lo abre) y al que la
                   olvidó se le RESTABLECE. Es la misma operación. */}
-              {u.activa ? (
-                <button
-                  className="btn ghost"
-                  disabled={guardando === u.id}
-                  onClick={() => void restablecer(u)}
-                  title="Le genera una clave para dictarle. La cambia al entrar."
-                >
-                  {u.estado === "pendiente" ? "Darle una clave" : "Restablecer clave"}
-                </button>
-              ) : null}
-              {u.activa ? (
-                <button
-                  className="btn ghost"
-                  disabled={u.esYo || guardando === u.id}
-                  onClick={() => setADesactivar(u)}
-                >
-                  Quitar acceso
-                </button>
-              ) : (
-                <button
-                  className="btn ghost"
-                  disabled={guardando === u.id}
-                  onClick={() => void cambiarAcceso(u, true)}
-                >
-                  Devolver acceso
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      </>
-      )}
-
-      {tab === "roles" && (
-      <>
-      <div className="int-section-intro">
-        <h3>Roles</h3>
-        <p>
-          Cada rol junta los permisos de los módulos que puede usar. Los cinco
-          de fábrica cubren una imprenta típica; si te falta uno, duplicá el que
-          más se parezca y ajustalo.
-        </p>
-      </div>
-
-      {editando && catalogo ? (
-        <RolEditor
-          rol={editando.rol}
-          catalogo={catalogo}
-          onCerrar={() => setEditando(null)}
-          onGuardado={recargar}
-        />
-      ) : (
-        <div className="usr-roles-top">
-          <button
-            className="btn ghost"
-            onClick={() => setEditando({ rol: null })}
-            disabled={!catalogo}
-            title={
-              catalogo
-                ? undefined
-                : "No se pudo cargar el catálogo de permisos."
-            }
-          >
-            Crear un rol
-          </button>
-        </div>
-      )}
-
-      <div className="int-tpl-list">
-        {roles.map((r) => (
-          <div className="usr-rol-fila" key={r.id}>
-            <div>
-              <div className="usr-nombre">
-                {r.nombre}
-                {r.esDelSistema ? (
-                  <span className="int-pill">DE FÁBRICA</span>
-                ) : null}
+                  {u.activa ? (
+                    <button
+                      className="btn ghost"
+                      disabled={guardando === u.id}
+                      onClick={() => void restablecer(u)}
+                      title="Le genera una clave para dictarle. La cambia al entrar."
+                    >
+                      {u.estado === "pendiente"
+                        ? "Darle una clave"
+                        : "Restablecer clave"}
+                    </button>
+                  ) : null}
+                  {u.activa ? (
+                    <button
+                      className="btn ghost"
+                      disabled={u.esYo || guardando === u.id}
+                      onClick={() => setADesactivar(u)}
+                    >
+                      Quitar acceso
+                    </button>
+                  ) : (
+                    <button
+                      className="btn ghost"
+                      disabled={guardando === u.id}
+                      onClick={() => void cambiarAcceso(u, true)}
+                    >
+                      Devolver acceso
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="usr-mail">{r.descripcion}</div>
-            </div>
-            <div className="usr-rol-cuenta">
-              {r.usuarios === 0
-                ? "Sin usuarios"
-                : r.usuarios === 1
-                  ? "1 usuario"
-                  : `${r.usuarios} usuarios`}
-            </div>
-            <div className="usr-acciones">
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="roles" className="pt-4">
+          <div className="int-section-intro">
+            <h3>Roles</h3>
+            <p>
+              Cada rol junta los permisos de los módulos que puede usar. Los
+              cinco de fábrica cubren una imprenta típica; si te falta uno,
+              duplicá el que más se parezca y ajustalo.
+            </p>
+          </div>
+
+          {editando && catalogo ? (
+            <RolEditor
+              rol={editando.rol}
+              catalogo={catalogo}
+              onCerrar={() => setEditando(null)}
+              onGuardado={recargar}
+            />
+          ) : (
+            <div className="usr-roles-top">
               <button
                 className="btn ghost"
+                onClick={() => setEditando({ rol: null })}
                 disabled={!catalogo}
-                onClick={() => setEditando({ rol: r })}
+                title={
+                  catalogo
+                    ? undefined
+                    : "No se pudo cargar el catálogo de permisos."
+                }
               >
-                {r.esDelSistema ? "Ajustar permisos" : "Editar"}
+                Crear un rol
               </button>
-              {!r.esDelSistema && (
-                <button className="btn ghost" onClick={() => setABorrar(r)}>
-                  Eliminar
-                </button>
-              )}
             </div>
+          )}
+
+          <div className="int-tpl-list">
+            {roles.map((r) => (
+              <div className="usr-rol-fila" key={r.id}>
+                <div>
+                  <div className="usr-nombre">
+                    {r.nombre}
+                    {r.esDelSistema ? (
+                      <span className="int-pill">DE FÁBRICA</span>
+                    ) : null}
+                  </div>
+                  <div className="usr-mail">{r.descripcion}</div>
+                </div>
+                <div className="usr-rol-cuenta">
+                  {r.usuarios === 0
+                    ? "Sin usuarios"
+                    : r.usuarios === 1
+                      ? "1 usuario"
+                      : `${r.usuarios} usuarios`}
+                </div>
+                <div className="usr-acciones">
+                  <button
+                    className="btn ghost"
+                    disabled={!catalogo}
+                    onClick={() => setEditando({ rol: r })}
+                  >
+                    {r.esDelSistema ? "Ajustar permisos" : "Editar"}
+                  </button>
+                  {!r.esDelSistema && (
+                    <button className="btn ghost" onClick={() => setABorrar(r)}>
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </TabsContent>
 
-      </>
-      )}
+        <TabsContent value="seguridad" className="pt-4">
+          <TabSeguridad usuarios={datos.usuarios} onCambio={recargar} />
+        </TabsContent>
 
-      {tab === "seguridad" && (
-        <TabSeguridad usuarios={datos.usuarios} onCambio={recargar} />
-      )}
+        <TabsContent value="sesiones" className="pt-4">
+          <TabSesiones onCambio={recargar} />
+        </TabsContent>
 
-      {tab === "sesiones" && <TabSesiones onCambio={recargar} />}
-
-      {tab === "logs" && (
-      <>
-      <div className="int-section-intro">
-        <h3>Qué pasó con los accesos</h3>
-        <p>
-          Quién le dio, le cambió o le quitó el acceso a quién, y cuándo. Es la
-          respuesta a &ldquo;¿quién lo habilitó?&rdquo;, que hasta ahora no la
-          tenía nadie.
-        </p>
-      </div>
-      <div className="int-tpl-list" style={{ marginBottom: 26 }}>
-        {historial.length === 0 ? (
-          <div className="int-nt-vacio">
-            Todavía no se registró ningún cambio de acceso.
+        <TabsContent value="logs" className="pt-4">
+          <div className="int-section-intro">
+            <h3>Qué pasó con los accesos</h3>
+            <p>
+              Quién le dio, le cambió o le quitó el acceso a quién, y cuándo. Es
+              la respuesta a &ldquo;¿quién lo habilitó?&rdquo;, que hasta ahora
+              no la tenía nadie.
+            </p>
           </div>
-        ) : (
-          historial.map((e) => (
-            <div className="int-nt-log-fila" key={e.id}>
-              {/* Sin `suppressHydrationWarning`: el helper formatea en la zona
+          <div className="int-tpl-list" style={{ marginBottom: 26 }}>
+            {historial.length === 0 ? (
+              <div className="int-nt-vacio">
+                Todavía no se registró ningún cambio de acceso.
+              </div>
+            ) : (
+              historial.map((e) => (
+                <div className="int-nt-log-fila" key={e.id}>
+                  {/* Sin `suppressHydrationWarning`: el helper formatea en la zona
                   del tenant de los dos lados, así que ya no hay diferencia que
                   tapar. Taparla escondía además cualquier OTRA discrepancia
                   que apareciera en este span. */}
-              <span className="int-nt-log-fecha">
-                {fechaHoraCorta(e.createdAt)}
-              </span>
-              <div>
-                <div>{e.descripcion}</div>
-                <div className="int-nt-log-motivo">{e.actorNombre}</div>
-              </div>
-              <span className="int-pill">{e.tipo.replace(/_/g, " ")}</span>
-            </div>
-          ))
-        )}
-      </div>
-
-      </>
-      )}
+                  <span className="int-nt-log-fecha">
+                    {fechaHoraCorta(e.createdAt)}
+                  </span>
+                  <div>
+                    <div>{e.descripcion}</div>
+                    <div className="int-nt-log-motivo">{e.actorNombre}</div>
+                  </div>
+                  <span className="int-pill">{e.tipo.replace(/_/g, " ")}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Borrar un rol con gente adentro exige decir a dónde van: dejarlos sin
           rol los tiraría al fallback del enum, que es un permiso distinto del
@@ -533,9 +524,9 @@ export function UsuariosView({
             : ""
         }
         impacto={[
-          'Sus sesiones abiertas se cierran en el momento',
-          'Su historial queda intacto: lo que produjo, cotizó o cobró no se toca',
-          'Se le puede devolver el acceso cuando quieras',
+          "Sus sesiones abiertas se cierran en el momento",
+          "Su historial queda intacto: lo que produjo, cotizó o cobró no se toca",
+          "Se le puede devolver el acceso cuando quieras",
         ]}
         nombreItem={aDesactivar ? nombreDe(aDesactivar) : undefined}
         // Sin copy-name: es reversible de un click y el diálogo ya explica todo.
@@ -546,7 +537,7 @@ export function UsuariosView({
           if (aDesactivar) await cambiarAcceso(aDesactivar, false);
         }}
       />
-    </div>
+    </ConfiguracionPage>
   );
 }
 
@@ -692,9 +683,9 @@ function FormularioInvitacion({
         </label>
       </div>
       <p className="usr-ayuda">
-        Al crear el acceso el sistema genera una clave provisoria para
-        dictarle. La cambia al entrar, así que la definitiva no la sabe nadie
-        más que la persona.
+        Al crear el acceso el sistema genera una clave provisoria para dictarle.
+        La cambia al entrar, así que la definitiva no la sabe nadie más que la
+        persona.
       </p>
 
       <p className="usr-ayuda">
@@ -705,7 +696,11 @@ function FormularioInvitacion({
         <button className="btn ghost" onClick={onCancelar} disabled={enviando}>
           Cancelar
         </button>
-        <button className="btn primary" onClick={() => void enviar()} disabled={enviando}>
+        <button
+          className="btn primary"
+          onClick={() => void enviar()}
+          disabled={enviando}
+        >
           {enviando ? "Creando…" : "Crear acceso"}
         </button>
       </div>

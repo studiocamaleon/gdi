@@ -1,4 +1,8 @@
 "use client";
+import {
+  ConfiguracionPage,
+  ConfiguracionHeader,
+} from "@/components/configuracion/configuracion-workspace";
 
 /**
  * <ImpuestosConfigView /> — el "librito" de impuestos del país (Fase 2.5).
@@ -229,19 +233,16 @@ export function ImpuestosConfigView({ initialItems }: Props) {
   const esEmpresa = kind === "empresa-nuevo" || kind === "empresa-edit";
 
   return (
-    <div className={s.wrap}>
-      <div className={s.head}>
-        <div className={s.headRow}>
-          <span className={s.headTitle}>Impuestos</span>
+    <ConfiguracionPage className={s.wrap}>
+      <ConfiguracionHeader
+        titulo="Impuestos"
+        descripcion="Definí los tributos que se aplican a tus ventas y a los costos de tu empresa."
+        detalle={
           <span className={s.paisChip}>
             {perfil.bandera} {perfil.nombre}
           </span>
-        </div>
-        <p className={s.sub}>
-          Cómo se calculan los impuestos de tus ventas. Se configura una vez y
-          casi no se toca.
-        </p>
-      </div>
+        }
+      />
 
       {/* ── IVA ── */}
       <section className={`${s.seccion} ${cobraIva ? "" : s.apagado}`}>
@@ -259,9 +260,7 @@ export function ImpuestosConfigView({ initialItems }: Props) {
           {perfil.usaCondicionFiscal ? (
             <>
               <div className={s.regimenTexto}>
-                <span
-                  className={`${s.dot} ${cobraIva ? s.dotOn : s.dotOff}`}
-                />
+                <span className={`${s.dot} ${cobraIva ? s.dotOn : s.dotOff}`} />
                 {condicion === "desconocida" ? (
                   <span>
                     Definí tu condición fiscal para saber si cobrás{" "}
@@ -343,63 +342,67 @@ export function ImpuestosConfigView({ initialItems }: Props) {
 
       {/* ── Impuestos de empresa (según el país) ── */}
       {mostrarEmpresa && (
-      <section className={s.seccion}>
-        <div className={s.seccionHead}>
-          <div>
-            <div className={s.seccionTitulo}>Impuestos de tu empresa</div>
-            <div className={s.seccionSub}>
-              Son un costo tuyo y van incluidos dentro del precio — el cliente
-              no los ve. Se aplican solos a todo lo que cotizás.
+        <section className={s.seccion}>
+          <div className={s.seccionHead}>
+            <div>
+              <div className={s.seccionTitulo}>Impuestos de tu empresa</div>
+              <div className={s.seccionSub}>
+                Son un costo tuyo y van incluidos dentro del precio — el cliente
+                no los ve. Se aplican solos a todo lo que cotizás.
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className={s.filas}>
-          {empresaRows.length === 0 ? (
-            <div className={s.vacio}>
-              No tenés impuestos de empresa cargados (ej. Ingresos Brutos).
-            </div>
-          ) : (
-            empresaRows.map((row) => (
-              <div key={row.id} className={s.fila}>
-                <div className={s.filaBody}>
-                  <div className={s.filaNombre}>{row.nombre}</div>
-                  <div className={s.filaNota}>
-                    {row.baseCalculo === "BRUTO_COBRADO"
-                      ? "Sobre lo que cobrás"
-                      : "Sobre lo que vendés"}
+          <div className={s.filas}>
+            {empresaRows.length === 0 ? (
+              <div className={s.vacio}>
+                No tenés impuestos de empresa cargados (ej. Ingresos Brutos).
+              </div>
+            ) : (
+              empresaRows.map((row) => (
+                <div key={row.id} className={s.fila}>
+                  <div className={s.filaBody}>
+                    <div className={s.filaNombre}>{row.nombre}</div>
+                    <div className={s.filaNota}>
+                      {row.baseCalculo === "BRUTO_COBRADO"
+                        ? "Sobre lo que cobrás"
+                        : "Sobre lo que vendés"}
+                    </div>
+                  </div>
+                  <span className={s.pct}>{row.porcentaje.toFixed(2)}%</span>
+                  <div className={s.filaAcciones}>
+                    <button
+                      type="button"
+                      className={s.iconBtn}
+                      onClick={() => abrirEditarEmpresa(row)}
+                      aria-label={`Editar ${row.nombre}`}
+                    >
+                      <PencilIcon className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className={`${s.iconBtn} ${s.iconBtnDanger}`}
+                      onClick={() => setABorrar(row)}
+                      aria-label={`Eliminar ${row.nombre}`}
+                    >
+                      <Trash2Icon className="size-4" />
+                    </button>
                   </div>
                 </div>
-                <span className={s.pct}>{row.porcentaje.toFixed(2)}%</span>
-                <div className={s.filaAcciones}>
-                  <button
-                    type="button"
-                    className={s.iconBtn}
-                    onClick={() => abrirEditarEmpresa(row)}
-                    aria-label={`Editar ${row.nombre}`}
-                  >
-                    <PencilIcon className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    className={`${s.iconBtn} ${s.iconBtnDanger}`}
-                    onClick={() => setABorrar(row)}
-                    aria-label={`Eliminar ${row.nombre}`}
-                  >
-                    <Trash2Icon className="size-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-        <div className={s.addRow}>
-          <button type="button" className={s.addBtn} onClick={abrirNuevaEmpresa}>
-            <PlusIcon className="size-4" />
-            Agregar impuesto de empresa
-          </button>
-        </div>
-      </section>
+              ))
+            )}
+          </div>
+          <div className={s.addRow}>
+            <button
+              type="button"
+              className={s.addBtn}
+              onClick={abrirNuevaEmpresa}
+            >
+              <PlusIcon className="size-4" />
+              Agregar impuesto de empresa
+            </button>
+          </div>
+        </section>
       )}
 
       {/* ── Sheet de edición ── */}
@@ -501,6 +504,6 @@ export function ImpuestosConfigView({ initialItems }: Props) {
         accionLabel="Eliminar"
         onConfirmar={ejecutarBorrado}
       />
-    </div>
+    </ConfiguracionPage>
   );
 }
