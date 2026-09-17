@@ -1,11 +1,14 @@
 export type UnitDimension = 'count' | 'length' | 'area' | 'volume' | 'mass';
 
 export type UnitCode =
+  | 'pallet'
+  | 'botella'
   | 'unidad'
   | 'pack'
   | 'caja'
   | 'kit'
   | 'hoja'
+  | 'placa'
   | 'pliego'
   | 'resma'
   | 'rollo'
@@ -25,11 +28,14 @@ export const CANONICAL_UNITS: Record<
   UnitCode,
   { dimension: UnitDimension; baseCode: UnitCode; factorToBase: number }
 > = {
+  botella: { dimension: 'count', baseCode: 'botella', factorToBase: 1 },
+  pallet: { dimension: 'count', baseCode: 'pallet', factorToBase: 1 },
   unidad: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   pack: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   caja: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   kit: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   hoja: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
+  placa: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   // Alias legado: inventario debe guardar y mostrar "hoja"; se conserva para convertir datos antiguos.
   pliego: { dimension: 'count', baseCode: 'unidad', factorToBase: 1 },
   resma: { dimension: 'count', baseCode: 'unidad', factorToBase: 500 },

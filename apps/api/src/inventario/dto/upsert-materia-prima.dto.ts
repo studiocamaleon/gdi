@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
   IsBoolean,
   IsEnum,
   IsNumber,
@@ -10,6 +11,7 @@ import {
   IsUUID,
   Min,
   MinLength,
+  IsPositive,
   ValidateNested,
 } from 'class-validator';
 
@@ -87,11 +89,14 @@ export enum SubfamiliaMateriaPrimaDto {
 }
 
 export enum UnidadMateriaPrimaDto {
+  pallet = 'pallet',
+  botella = 'botella',
   unidad = 'unidad',
   pack = 'pack',
   caja = 'caja',
   kit = 'kit',
   hoja = 'hoja',
+  placa = 'placa',
   pliego = 'pliego',
   resma = 'resma',
   rollo = 'rollo',
@@ -108,7 +113,42 @@ export enum UnidadMateriaPrimaDto {
   par = 'par',
 }
 
+/** 1 unidad de origen equivale a factor unidades de destino. */
+export class EquivalenciaMaterialDto {
+  @IsEnum(UnidadMateriaPrimaDto)
+  origen: UnidadMateriaPrimaDto;
+
+  @IsEnum(UnidadMateriaPrimaDto)
+  destino: UnidadMateriaPrimaDto;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 8 })
+  @IsPositive()
+  factor: number;
+}
+
 export class MateriaPrimaVarianteItemDto {
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidadUso?: UnidadMateriaPrimaDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => EquivalenciaMaterialDto)
+  equivalencias?: EquivalenciaMaterialDto[];
+
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidadPrecio?: UnidadMateriaPrimaDto | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @IsPositive()
+  equivalenciaCompra?: number | null;
+
   @IsString()
   @MinLength(1)
   sku: string;
@@ -157,6 +197,10 @@ export class MateriaPrimaVarianteItemDto {
 }
 
 export class UpsertMateriaPrimaDto {
+  @IsOptional()
+  @IsEnum(UnidadMateriaPrimaDto)
+  unidadUso?: UnidadMateriaPrimaDto;
+
   @IsString()
   @MinLength(1)
   codigo: string;

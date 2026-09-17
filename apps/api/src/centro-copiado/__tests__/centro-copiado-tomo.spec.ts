@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Tomo compuesto (Tomo-A): un tomo anillado = UN CotizacionItem sintético que
  * agrega la impresión de sus sub-documentos (costos/precio sumados, pasos
@@ -14,6 +15,7 @@ const prisma = new PrismaClient();
 let tenantId: string;
 let service: CentroCopiadoService;
 let papel: string;
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 const dtoTomo = () => ({
   documentos: [
@@ -68,6 +70,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
   const motor = new MotorUniversalService(
     prisma as never,
     new AplicarPrecioService(),
@@ -82,6 +85,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

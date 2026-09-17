@@ -1,3 +1,21 @@
+import type {
+  MaterialEquivalence,
+  MaterialConversionStep,
+} from "./material-units";
+
+export type StockConversionSnapshot = {
+  version: 1;
+  unidadOriginal: string;
+  cantidadOriginal: number;
+  unidadStock: string;
+  cantidadStock: number;
+  unidadUso: string;
+  factor: number;
+  origen: string;
+  equivalencias: MaterialEquivalence[];
+  pasos: MaterialConversionStep[];
+};
+
 export type TipoMovimientoStockMateriaPrima =
   | "ingreso"
   | "egreso"
@@ -62,6 +80,8 @@ export type RegistrarMovimientoStockPayload = {
   tipo: "ingreso" | "egreso" | "ajuste_entrada" | "ajuste_salida";
   origen: OrigenMovimientoStockMateriaPrima;
   cantidad: number;
+  unidad?: string;
+  cantidadStock?: number;
   costoUnitario?: number;
   referenciaTipo?: string;
   referenciaId?: string;
@@ -80,6 +100,7 @@ export type RegistrarTransferenciaStockPayload = {
 
 export type MovimientoStockMateriaPrima = {
   movimientoId: string;
+  conversionSnapshot?: StockConversionSnapshot | null;
   varianteId: string;
   varianteSku?: string;
   materiaPrimaNombre?: string;
@@ -109,6 +130,8 @@ export type StockMateriaPrimaItem = {
   almacenId: string;
   almacenNombre: string;
   cantidadDisponible: number;
+  unidadStock?: string;
+  unidadUso?: string;
   costoPromedio: number;
   valorStock: number;
   updatedAt: string;

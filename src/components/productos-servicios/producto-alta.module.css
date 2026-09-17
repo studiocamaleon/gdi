@@ -50,7 +50,9 @@
   flex-direction: column;
   gap: 16px;
 }
-.card {
+/* Base sin especificidad: el layout de cada ficha prevalece en cualquier orden
+ * de carga (navegación, HMR y compilación de producción). */
+:where(.card) {
   min-width: 0;
   padding: 0;
   gap: 0;

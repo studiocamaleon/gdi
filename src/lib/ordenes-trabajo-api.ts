@@ -146,6 +146,7 @@ export async function editarOrdenTrabajo(
 }
 
 export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
+  tipoCambioId?: string;
   expectedVersion: string;
   /** Conjunto final completo; con `id` actualiza, sin `id` crea. */
   items?: Array<

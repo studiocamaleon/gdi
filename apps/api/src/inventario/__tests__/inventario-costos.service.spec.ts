@@ -27,7 +27,11 @@ describe('InventarioService.bulkUpdateCostos', () => {
       },
       $transaction: jest.fn(async (cb) =>
         cb({
-          materiaPrimaVariante: { update: varianteUpdate },
+          materiaPrimaVariante: {
+            update: varianteUpdate,
+            updateMany: jest.fn(),
+            findMany: jest.fn().mockResolvedValue([]),
+          },
           materiaPrima: { update: materiaUpdate },
         }),
       ),
@@ -42,7 +46,10 @@ describe('InventarioService.bulkUpdateCostos', () => {
       materiales: [{ id: 'mat-1', unidadStock: 'litro' as never }],
     });
 
-    expect(res).toEqual({ variantesActualizadas: 2, materialesActualizados: 1 });
+    expect(res).toEqual({
+      variantesActualizadas: 2,
+      materialesActualizados: 1,
+    });
     expect(varianteUpdate).toHaveBeenCalledWith({
       where: { id: 'var-1' },
       data: expect.objectContaining({ moneda: 'USD' }),
@@ -84,7 +91,10 @@ describe('InventarioService.bulkUpdateCostos', () => {
     const service = new InventarioService(prisma as never);
 
     const res = await service.bulkUpdateCostos(auth, {});
-    expect(res).toEqual({ variantesActualizadas: 0, materialesActualizados: 0 });
+    expect(res).toEqual({
+      variantesActualizadas: 0,
+      materialesActualizados: 0,
+    });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

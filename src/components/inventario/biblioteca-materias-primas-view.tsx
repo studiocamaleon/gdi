@@ -1551,9 +1551,6 @@ function CanonicalRecap({ item }: { item: MaterialPresetListItem }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="lbl">Nombre de biblioteca</div>
         <div className="v">{item.nombreCanonico}</div>
-        <div className="meta">
-          {item.canonicalKey} · {item.templateId}
-        </div>
       </div>
       <span className={s.canonicalPill}>
         <span className="ic">
@@ -1625,7 +1622,7 @@ function StepNombre({
               <span className={s.modeTitle}>Instalar copia separada</span>
               <span className={s.modeSub}>
                 Crea otra materia prima independiente (otro precio, proveedor o
-                máquina). El código y los SKU se ajustan para no repetirse.
+                máquina).
               </span>
             </ActionButton>
           </div>
@@ -1684,7 +1681,6 @@ function StepNombre({
               <BIco.Library /> Nombre de biblioteca
             </div>
             <div className="v">{item.nombreCanonico}</div>
-            <div className="meta">{item.canonicalKey}</div>
           </div>
           <div className="arrow">
             <BIco.Arrow />
@@ -1709,38 +1705,23 @@ function StepNombre({
       </div>
       <div className={s.section}>
         <div className={s.sectionHead}>
-          <div className="ttl">Código y descripción</div>
+          <div className="ttl">Descripción</div>
           <div className="sub">
-            Opcional. Se autogeneran a partir del canónico.
+            Opcional. Podés ajustar la descripción de la biblioteca.
           </div>
         </div>
-        <div className={s.twoCols}>
-          <div className={s.field}>
-            <label htmlFor="biblioteca-codigo">
-              Código <span className="opt">interno</span>
-            </label>
-            <Input
-              id="biblioteca-codigo"
-              className={s.input}
-              value={draft.codigo}
-              onChange={(event) =>
-                setDraft((d) => ({ ...d, codigo: event.target.value }))
-              }
-            />
-          </div>
-          <div className={s.field}>
-            <label htmlFor="biblioteca-descripcion">
-              Descripción <span className="opt">corta</span>
-            </label>
-            <Input
-              id="biblioteca-descripcion"
-              className={s.input}
-              value={draft.descripcion}
-              onChange={(event) =>
-                setDraft((d) => ({ ...d, descripcion: event.target.value }))
-              }
-            />
-          </div>
+        <div className={s.field}>
+          <label htmlFor="biblioteca-descripcion">
+            Descripción <span className="opt">corta</span>
+          </label>
+          <Input
+            id="biblioteca-descripcion"
+            className={s.input}
+            value={draft.descripcion}
+            onChange={(event) =>
+              setDraft((d) => ({ ...d, descripcion: event.target.value }))
+            }
+          />
         </div>
       </div>
     </>
@@ -1870,9 +1851,6 @@ function StepVariantes({
                           <span className="rec">recom.</span>
                         )}
                       </div>
-                      <div className="sub">
-                        SKU sugerido · {variant.skuSugerido}
-                      </div>
                     </div>
                     {bloqueada ? (
                       <span className={s.variantInstalledTag}>
@@ -1944,14 +1922,14 @@ function StepPreview({
           <div style={{ flex: 1 }}>
             <h3>{draft.visibleName || "—"}</h3>
             <div className={s.previewMeta}>
-              {draft.codigo} · {selectedVariants.length} variantes nuevas
+              {selectedVariants.length} variantes nuevas
             </div>
           </div>
           <span className={s.canonicalPill}>
             <span className="ic">
               <BIco.Sparkles />
             </span>
-            {item.canonicalKey}
+            Biblioteca
           </span>
         </div>
         <div className={s.previewRow}>
@@ -1968,10 +1946,6 @@ function StepPreview({
         <div className={s.previewRow}>
           <span className="k">Familia</span>
           <span className="v muted">{familyLine(item)}</span>
-        </div>
-        <div className={s.previewRow}>
-          <span className="k">Plantilla</span>
-          <span className="v mono">{item.templateId}</span>
         </div>
       </div>
       <div className={s.previewCard}>
@@ -1992,7 +1966,6 @@ function StepPreview({
               <span className="nm">
                 {variant.formato} · {variantDescriptor(item, variant)}
               </span>
-              <span className="sku">{variant.skuSugerido}</span>
             </div>
           ))}
         </div>
@@ -2010,8 +1983,7 @@ function StepPreview({
               </strong>
               <div>
                 Comparten el material canónico {item.nombreCanonico}, pero esta
-                copia tiene su propio código, SKU y precios. Los SKU se ajustan
-                con un sufijo para no repetirse.
+                copia tiene sus propias variantes, precios y proveedores.
               </div>
             </div>
           </div>

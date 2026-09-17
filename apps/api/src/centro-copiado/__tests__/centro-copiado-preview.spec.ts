@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Etapa C — preview del TPV Centro de copiado.
  * Cotiza varios documentos (sueltos + un tomo) y verifica la aritmética del
@@ -20,6 +21,7 @@ const prisma = new PrismaClient();
 let tenantId: string;
 let service: CentroCopiadoService;
 let papel: string;
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
   const tenant = await prisma.tenant.findUnique({
@@ -27,6 +29,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   const motor = new MotorUniversalService(
     prisma as never,
@@ -45,6 +48,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

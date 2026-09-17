@@ -1,5 +1,7 @@
 "use client";
 
+import type { MaterialEquivalence } from "@/lib/material-units";
+
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,16 +44,10 @@ import {
   getReplacementComponentOptionsForTemplates,
 } from "@/lib/materia-prima-templates";
 import { getPlantillaMaquinariaLabel } from "@/lib/maquinaria-templates";
-import {
-  areUnitsCompatible,
-  convertUnitPrice,
-  getUnitDefinition,
-  type UnitCode,
-} from "@/lib/unidades";
-import { convertFlexibleRollUnitPrice } from "@/lib/unidades-derivadas";
+import { getUnitDefinition, type UnitCode } from "@/lib/unidades";
+import { MaterialConversionFields } from "./material-conversion-fields";
 import type { ProveedorOpcion } from "@/lib/proveedores";
 import {
-  Chip,
   Input,
   Switch,
   Tabs,
@@ -59,6 +55,7 @@ import {
   Tooltip,
 } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
+import { Badge } from "@/components/ui/badge";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { SelectField } from "@/components/design-system/select-field";
 import { ListMetric } from "@/components/design-system/list-metric";
@@ -76,6 +73,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatearMoneda, numeroMoneda, type Moneda } from "@/lib/moneda";
+import { monedaDe } from "@/lib/monedas";
 import { MoneyInput } from "@/components/ui/money-input";
 import {
   useConfigRegional,
@@ -83,8 +81,8 @@ import {
 } from "@/components/navigation/config-regional-provider";
 
 const number2Formatter = new Intl.NumberFormat("es-AR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 8,
 });
 
 const subfamiliaMateriaPrimaItems: Array<{
@@ -156,18 +154,16 @@ function getLabel<T extends string>(
   return items.find((item) => item.value === value)?.label ?? fallback;
 }
 
-function formatCurrencyUnit(value: number, unitLabel: string, moneda: Moneda) {
-  return `${formatearMoneda(value, moneda, { decimales: 2 })} por ${unitLabel}`;
-}
-
 function resolveVarianteUnits(
-  _variante: LocalVariante,
+  variante: LocalVariante,
   fallbackStock: UnidadMateriaPrima,
   fallbackCompra: UnidadMateriaPrima,
+  fallbackUso: UnidadMateriaPrima,
 ) {
   return {
-    unidadStock: fallbackStock,
-    unidadCompra: fallbackCompra,
+    unidadStock: variante.unidadStock ?? fallbackStock,
+    unidadUso: variante.unidadUso ?? fallbackUso,
+    unidadCompra: variante.unidadCompra ?? fallbackCompra,
   };
 }
 
@@ -178,7 +174,12 @@ type LocalVariante = {
   atributosVarianteTexto: string;
   unidadStock?: UnidadMateriaPrima;
   unidadCompra?: UnidadMateriaPrima;
+  unidadUso?: UnidadMateriaPrima;
   precioReferencia?: number;
+  moneda?: string;
+  unidadPrecio?: UnidadMateriaPrima | null;
+  equivalenciaCompra?: number | null;
+  equivalencias?: MaterialEquivalence[];
   /**
    * Lo que se ve en el MoneyInput. Va aparte del número porque mientras se
    * tipea el texto puede no parsear ("1234," a mitad de camino) y el input
@@ -198,6 +199,7 @@ type FormState = {
   templateId: string;
   unidadStock: UnidadMateriaPrima;
   unidadCompra: UnidadMateriaPrima;
+  unidadUso: UnidadMateriaPrima;
   esConsumible: boolean;
   esRepuesto: boolean;
   esProductoBase: boolean;
@@ -467,6 +469,7 @@ function mapMateriaPrimaToForm(
     tipoTecnico: materiaPrima.tipoTecnico,
     templateId: materiaPrima.templateId,
     unidadStock: materiaPrima.unidadStock,
+    unidadUso: materiaPrima.unidadUso ?? materiaPrima.unidadStock,
     unidadCompra: materiaPrima.unidadCompra,
     esConsumible: materiaPrima.esConsumible,
     esRepuesto: materiaPrima.esRepuesto,
@@ -491,12 +494,20 @@ function mapMateriaPrimaToForm(
               null,
               2,
             ),
-            unidadStock: undefined,
-            unidadCompra: undefined,
+            unidadStock: variante.unidadStock ?? undefined,
+            unidadUso: variante.unidadUso ?? undefined,
+            equivalencias: variante.equivalencias,
+            unidadCompra: variante.unidadCompra ?? undefined,
+            unidadPrecio: variante.unidadPrecio ?? null,
+            equivalenciaCompra: variante.equivalenciaCompra ?? null,
             precioReferencia: variante.precioReferencia ?? undefined,
+            moneda: variante.moneda || moneda.codigo,
             precioReferenciaTexto:
               variante.precioReferencia != null
-                ? numeroMoneda(variante.precioReferencia, moneda)
+                ? numeroMoneda(
+                    variante.precioReferencia,
+                    monedaDe(variante.moneda || moneda.codigo),
+                  )
                 : "",
             proveedorReferenciaId: variante.proveedorReferenciaId ?? undefined,
           }))
@@ -590,6 +601,7 @@ function buildPayload(
     tipoTecnico: form.tipoTecnico,
     templateId: getMateriaPrimaTemplate(form.templateId)?.id ?? form.templateId,
     unidadStock: form.unidadStock,
+    unidadUso: form.unidadUso,
     unidadCompra: form.unidadCompra,
     esConsumible: form.esConsumible,
     esRepuesto: form.esRepuesto,
@@ -615,9 +627,17 @@ function buildPayload(
           sku: variante.sku.trim() || generatedSku,
           activo: variante.activo,
           atributosVariante: attrs,
-          unidadStock: undefined,
-          unidadCompra: undefined,
+          unidadStock: variante.unidadStock,
+          unidadUso: variante.unidadUso,
+          equivalencias: variante.equivalencias,
+          unidadCompra: variante.unidadCompra,
+          unidadPrecio:
+            variante.unidadPrecio === undefined
+              ? (variante.unidadCompra ?? form.unidadCompra)
+              : variante.unidadPrecio,
+          equivalenciaCompra: variante.equivalenciaCompra ?? null,
           precioReferencia: variante.precioReferencia,
+          moneda: variante.moneda,
           proveedorReferenciaId: variante.proveedorReferenciaId,
         };
       })
@@ -740,12 +760,6 @@ export function MateriaPrimaFicha({
     () => new Map(templateFields.map((field) => [field.key, field])),
     [templateFields],
   );
-  const familiaLabel = getLabel(familiaMateriaPrimaItems, form.familia);
-  const subfamiliaLabel = getLabel(
-    subfamiliaMateriaPrimaItems,
-    form.subfamilia,
-  );
-  const unidadStockLabel = getLabel(unidadMateriaPrimaItems, form.unidadStock);
   const maquinaLabelById = React.useMemo(
     () => new Map(maquinas.map((maquina) => [maquina.id, maquina.nombre])),
     [maquinas],
@@ -765,7 +779,27 @@ export function MateriaPrimaFicha({
     [],
   );
   const currentSnapshot = React.useMemo(() => createFormSnapshot(form), [form]);
-  const hasChanges = currentSnapshot !== savedSnapshot;
+  const pendingChanges = React.useMemo(() => {
+    if (currentSnapshot === savedSnapshot) return 0;
+    const { variantes: currentVariants = [], ...currentFields } = JSON.parse(currentSnapshot) as MateriaPrimaPayload;
+    const { variantes: savedVariants = [], ...savedFields } = JSON.parse(savedSnapshot) as MateriaPrimaPayload;
+    // Un cambio por campo general o variante modificada; editar varias veces
+    // el mismo valor no suma cambios y restaurarlo al original lo descuenta.
+    const fieldKeys = new Set([...Object.keys(currentFields), ...Object.keys(savedFields)]);
+    const currentValues = currentFields as Record<string, unknown>;
+    const savedValues = savedFields as Record<string, unknown>;
+    const fieldChanges = [...fieldKeys].filter((key) =>
+      JSON.stringify(currentValues[key]) !== JSON.stringify(savedValues[key]),
+    ).length;
+    const currentBySku = new Map(currentVariants.map((variant) => [variant.sku, variant]));
+    const savedBySku = new Map(savedVariants.map((variant) => [variant.sku, variant]));
+    const variantKeys = new Set([...currentBySku.keys(), ...savedBySku.keys()]);
+    const variantChanges = [...variantKeys].filter((sku) =>
+      JSON.stringify(currentBySku.get(sku)) !== JSON.stringify(savedBySku.get(sku)),
+    ).length;
+    return fieldChanges + variantChanges;
+  }, [currentSnapshot, savedSnapshot]);
+  const hasChanges = pendingChanges > 0;
 
   React.useEffect(() => {
     const nextForm = mapMateriaPrimaToForm(materiaPrima, moneda);
@@ -862,10 +896,7 @@ export function MateriaPrimaFicha({
               (acc, item) => acc + item.valorStock,
               0,
             );
-            const costoPromedio =
-              stockTotal > 0
-                ? valorStock / stockTotal
-                : (variante.precioReferencia ?? 0);
+            const costoPromedio = stockTotal > 0 ? valorStock / stockTotal : 0;
 
             return {
               varianteId: variante.id,
@@ -1094,8 +1125,8 @@ export function MateriaPrimaFicha({
     if (!hasChanges) {
       return;
     }
-    if (!form.codigo.trim() || !form.nombre.trim()) {
-      toast.error("Completá código y nombre antes de guardar.");
+    if (!form.nombre.trim()) {
+      toast.error("Completá el nombre antes de guardar.");
       return;
     }
 
@@ -1132,19 +1163,6 @@ export function MateriaPrimaFicha({
         <div>
           <p className={styles.eyebrow}>Inventario · Ficha del material</p>
           <h1>{form.nombre || "Materia prima"}<span className={styles.titleDot}>.</span></h1>
-          <p className={listPage.subtitle}>
-            Canónico:{" "}
-            {materiaPrima.canonicalMaterialName ?? "Material propio"}
-          </p>
-          <div className={styles.metadata}>
-            <span>{form.codigo}</span>
-            <Chip size="sm" variant="soft">
-              {familiaLabel}
-            </Chip>
-            <Chip size="sm" variant="soft">
-              {subfamiliaLabel}
-            </Chip>
-          </div>
         </div>
         <div className={styles.headerActions}>
           <div className={styles.activeToggle}>
@@ -1164,16 +1182,21 @@ export function MateriaPrimaFicha({
               </Switch.Content>
             </Switch>
           </div>
-          {hasChanges && (
-            <span className={styles.unsaved}>Cambios sin guardar</span>
-          )}
           <ActionButton
             onPress={save}
             isPending={isSaving}
             isDisabled={!hasChanges || isSaving}
+            aria-label={isSaving ? "Guardando cambios" : hasChanges
+              ? `Guardar cambios, ${pendingChanges} ${pendingChanges === 1 ? "cambio pendiente" : "cambios pendientes"}`
+              : "Guardar cambios"}
           >
             <SaveIcon size={16} />
             {isSaving ? "Guardando…" : "Guardar cambios"}
+            {hasChanges && (
+              <Badge variant="secondary" className="min-w-5 px-1 tabular-nums" aria-hidden="true">
+                {pendingChanges}
+              </Badge>
+            )}
           </ActionButton>
         </div>
       </header>
@@ -1204,8 +1227,8 @@ export function MateriaPrimaFicha({
               },
               {
                 id: "precios",
-                label: "Precios",
-                description: "Costos y proveedores",
+                label: "Compra y costos",
+                description: "Coeficientes y precios",
                 icon: <DollarSignIcon size={16} />,
               },
               {
@@ -1235,34 +1258,19 @@ export function MateriaPrimaFicha({
                 </div>
               </div>
               <FieldGroup className={styles.formFields}>
-                <div className={styles.formGrid}>
-                  <Field>
-                    <FieldLabel htmlFor="material-codigo">Código</FieldLabel>
-                    <Input
-                      id="material-codigo"
-                      value={form.codigo}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          codigo: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="material-nombre">Nombre</FieldLabel>
-                    <Input
-                      id="material-nombre"
-                      value={form.nombre}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          nombre: event.target.value,
-                        }))
-                      }
-                    />
-                  </Field>
-                </div>
+                <Field>
+                  <FieldLabel htmlFor="material-nombre">Nombre</FieldLabel>
+                  <Input
+                    id="material-nombre"
+                    value={form.nombre}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        nombre: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
 
                 <Field>
                   <FieldLabel htmlFor="material-descripcion">
@@ -1323,21 +1331,7 @@ export function MateriaPrimaFicha({
                   </Field>
                 </div>
 
-                <div className={styles.formGrid}>
-                  <Field>
-                    <FieldLabel>Unidad de uso</FieldLabel>
-                    <SelectField
-                      value={form.unidadStock}
-                      onChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          unidadStock: value as UnidadMateriaPrima,
-                        }))
-                      }
-                      aria-label="Unidad de uso"
-                      options={unidadMateriaPrimaItems}
-                    />
-                  </Field>
+                <div className="grid gap-4 md:grid-cols-3">
                   <Field>
                     <FieldLabel>Unidad de compra</FieldLabel>
                     <SelectField
@@ -1346,14 +1340,69 @@ export function MateriaPrimaFicha({
                         setForm((prev) => ({
                           ...prev,
                           unidadCompra: value as UnidadMateriaPrima,
+                          variantes: prev.variantes.map((v) => ({
+                            ...v,
+                            unidadCompra: undefined,
+                            unidadPrecio: value as UnidadMateriaPrima,
+                            equivalenciaCompra: null,
+                          })),
                         }))
                       }
                       aria-label="Unidad de compra"
                       options={unidadMateriaPrimaItems}
                     />
                   </Field>
+                  <Field>
+                    <FieldLabel>Unidad de stock</FieldLabel>
+                    <SelectField
+                      value={form.unidadStock}
+                      onChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          unidadStock: value as UnidadMateriaPrima,
+                          variantes: prev.variantes.map((v) => ({
+                            ...v,
+                            unidadStock: undefined,
+                            equivalenciaCompra: null,
+                          })),
+                        }))
+                      }
+                      aria-label="Unidad de stock"
+                      options={unidadMateriaPrimaItems}
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel>Unidad de consumo</FieldLabel>
+                    <SelectField
+                      value={form.unidadUso}
+                      aria-label="Unidad de consumo"
+                      options={unidadMateriaPrimaItems}
+                      onChange={(value) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          unidadUso: value as UnidadMateriaPrima,
+                          variantes: prev.variantes.map((v) => ({
+                            ...v,
+                            unidadUso: undefined,
+                          })),
+                        }))
+                      }
+                    />
+                  </Field>
                 </div>
 
+                <p className="text-sm text-muted-foreground">
+                  Estas unidades se aplican a todas las variantes al cambiarlas.
+                  El stock lleva las existencias; el consumo se usa para
+                  cotizar. Los coeficientes de cada variante se configuran en
+                  Compra y costos.
+                </p>
+                <ActionButton
+                  variant="secondary"
+                  onPress={() => setActiveTab("precios")}
+                >
+                  Configurar coeficientes ↗
+                </ActionButton>
               </FieldGroup>
             </section>
             <section className={styles.formSection}>
@@ -1825,8 +1874,12 @@ export function MateriaPrimaFicha({
             <div className={styles.sectionHeading}>
               <span className={styles.sectionSymbol}><DollarSignIcon size={20} aria-hidden /></span>
               <div>
-                <h2>Precios de referencia</h2>
-                <p>Costos por variante y por unidad de uso ({unidadStockLabel}).</p>
+                <h2>Compra, uso y costos</h2>
+                <p>
+                  Cargá el precio por unidad de compra. Si el consumo es
+                  diferente, calculamos su costo con los coeficientes del
+                  material.
+                </p>
               </div>
             </div>
             <div className={styles.tableFrame}>
@@ -1902,99 +1955,82 @@ export function MateriaPrimaFicha({
                           </div>
                         </TableCell>
                         <TableCell>
-                          {(() => {
-                            const { unidadStock, unidadCompra } =
-                              resolveVarianteUnits(
+                          <MaterialConversionFields
+                            context={{
+                              ...resolveVarianteUnits(
                                 variante,
                                 form.unidadStock,
                                 form.unidadCompra,
-                              );
-                            const unidadCompraLabelVariante = getLabel(
-                              unidadMateriaPrimaItems,
-                              unidadCompra,
-                            );
-                            const unidadStockLabelVariante = getLabel(
-                              unidadMateriaPrimaItems,
-                              unidadStock,
-                            );
-                            const precioReferencia =
-                              variante.precioReferencia ?? null;
-                            const canConvert =
-                              typeof precioReferencia === "number" &&
-                              Number.isFinite(precioReferencia) &&
-                              precioReferencia > 0;
-                            const precioPorStock = canConvert
-                              ? areUnitsCompatible(unidadCompra, unidadStock)
-                                ? convertUnitPrice(
-                                    precioReferencia as number,
-                                    unidadCompra,
-                                    unidadStock,
-                                  )
-                                : convertFlexibleRollUnitPrice({
-                                    pricePerFromUnit:
-                                      precioReferencia as number,
-                                    from: unidadCompra,
-                                    to: unidadStock,
-                                    subfamilia: form.subfamilia,
-                                    attributes: parseJsonField(
-                                      variante.atributosVarianteTexto,
-                                      {},
+                                form.unidadUso,
+                              ),
+                              unidadPrecio:
+                                variante.unidadPrecio === undefined
+                                  ? (variante.unidadCompra ?? form.unidadCompra)
+                                  : variante.unidadPrecio,
+                              equivalenciaCompra: variante.equivalenciaCompra,
+                              equivalencias: variante.equivalencias,
+                              templateId: template?.id ?? form.templateId,
+                              atributos: getVarianteAtributos(variante),
+                            }}
+                            price={variante.precioReferencia}
+                            moneda={monedaDe(variante.moneda || moneda.codigo)}
+                            onChange={(patch) =>
+                              setVariante(variante.id, patch)
+                            }
+                          >
+                            <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+                              <SelectField
+                                aria-label="Moneda del costo"
+                                value={variante.moneda || moneda.codigo}
+                                options={Array.from(
+                                  new Set(
+                                    [
+                                      moneda.codigo,
+                                      "USD",
+                                      variante.moneda,
+                                    ].filter((value): value is string =>
+                                      Boolean(value),
                                     ),
-                                  })
-                              : null;
-
-                            return (
-                              <div className="flex flex-col gap-1">
-                                <div className="relative max-w-[260px]">
-                                  <MoneyInput
-                                    inputClassName="pr-20"
-                                    value={
-                                      variante.precioReferenciaTexto ??
-                                      (variante.precioReferencia != null
-                                        ? numeroMoneda(
+                                  ),
+                                ).map((value) => ({ value, label: value }))}
+                                onChange={(value) =>
+                                  setVariante(variante.id, {
+                                    moneda: value,
+                                    precioReferenciaTexto:
+                                      variante.precioReferencia == null
+                                        ? ""
+                                        : numeroMoneda(
                                             variante.precioReferencia,
-                                            moneda,
-                                          )
-                                        : "")
-                                    }
-                                    moneda={moneda}
-                                    ariaLabel="Precio de costo por unidad de compra"
-                                    onValueChange={(texto, numero) =>
-                                      setVariante(variante.id, {
-                                        precioReferenciaTexto: texto,
-                                        precioReferencia: numero ?? undefined,
-                                      })
-                                    }
-                                  />
-                                  <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs text-muted-foreground">
-                                    {unidadCompraLabelVariante}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  Precio cargado:{" "}
-                                  {typeof precioReferencia === "number" &&
-                                  Number.isFinite(precioReferencia)
-                                    ? formatCurrencyUnit(
-                                        precioReferencia,
-                                        unidadCompraLabelVariante,
-                                        moneda,
+                                            monedaDe(value),
+                                          ),
+                                  })
+                                }
+                              />
+                              <MoneyInput
+                                value={
+                                  variante.precioReferenciaTexto ??
+                                  (variante.precioReferencia != null
+                                    ? numeroMoneda(
+                                        variante.precioReferencia,
+                                        monedaDe(
+                                          variante.moneda || moneda.codigo,
+                                        ),
                                       )
-                                    : `Sin definir por ${unidadCompraLabelVariante}`}
-                                </p>
-                                {precioPorStock !== null &&
-                                unidadCompra !== unidadStock ? (
-                                  <p className="text-xs text-muted-foreground">
-                                    Valor interno normalizado:{" "}
-                                    {formatCurrencyUnit(
-                                      precioPorStock,
-                                      unidadStockLabelVariante,
-                                      moneda,
-                                    )}
-                                  </p>
-                                ) : null}
-                              </div>
-                            );
-                          })()}
+                                    : "")
+                                }
+                                moneda={monedaDe(
+                                  variante.moneda || moneda.codigo,
+                                )}
+                                ariaLabel="Precio de referencia"
+                                onValueChange={(texto, numero) =>
+                                  setVariante(variante.id, {
+                                    precioReferenciaTexto: texto,
+                                    precioReferencia: numero ?? undefined,
+                                  })
+                                }
+                              />
+                            </div>
+                          </MaterialConversionFields>
                         </TableCell>
                         <TableCell>
                           <SelectField
@@ -2096,7 +2132,12 @@ export function MateriaPrimaFicha({
                       <TableRow key={item.varianteId}>
                         <TableCell>{item.varianteLabel}</TableCell>
                         <TableCell className="text-right">
-                          {number2Formatter.format(item.stockTotal)}
+                          {number2Formatter.format(item.stockTotal)}{" "}
+                          {getLabel(
+                            unidadMateriaPrimaItems,
+                            form.variantes.find((v) => v.id === item.varianteId)
+                              ?.unidadStock ?? form.unidadStock,
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           {formatearMoneda(item.costoPromedio, moneda, {

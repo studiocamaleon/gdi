@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { apiRequest } from "@/lib/api";
-import { cotizarYGuardar } from "@/lib/productos-servicios-api";
+import type { cotizarYGuardar } from "@/lib/productos-servicios-api";
+import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 import type { PropuestaItem } from "@/lib/propuestas";
 import {
   huellaEntradaPlan,
@@ -49,6 +50,7 @@ const ruta = (id: string) => `/cotizaciones/items/${id}/planificacion-entregas`;
 export function useEntregasPrevias(
   entradaPara: (item: PropuestaItem) => Entrada,
 ) {
+  const { cotizarYGuardar } = useMotorConTipoCambio();
   const preparadas = React.useRef(new Map<string, Preparada>());
   const pendientes = React.useRef(new Map<string, Promise<Preparada>>());
   const [, actualizar] = React.useReducer((n: number) => n + 1, 0);

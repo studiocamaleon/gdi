@@ -126,6 +126,10 @@ export class GrupoCentroCopiadoDto {
 }
 
 export class CotizarCentroCopiadoDto {
+  @IsOptional()
+  @IsUUID()
+  tipoCambioId?: string;
+
   /** Cliente de la cotización. Permite al motor aplicar su precio especial. */
   @IsOptional()
   @IsUUID()

@@ -889,6 +889,16 @@ function ResumenFinanciero({ d }: { d: PresupuestoDetalle }) {
           {d.items.length} {d.items.length === 1 ? "producto" : "productos"} ·
           Presupuesto
         </p>
+        {d.tipoCambio?.tasa != null && (
+          <p className={s.summaryCount}>
+            Tipo de cambio guardado: 1 USD ={" "}
+            {d.tipoCambio.tasa.toLocaleString(moneda.locale)}{" "}
+            {d.tipoCambio.monedaDestino}
+            <br />
+            {d.tipoCambio.referencia} ·{" "}
+            {new Date(d.tipoCambio.capturadoEn).toLocaleString(moneda.locale)}
+          </p>
+        )}
         <dl className={s.amounts}>
           <div>
             <dt>

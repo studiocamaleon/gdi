@@ -1,3 +1,7 @@
+import type {
+  TipoCambioSnapshot,
+  CostoMaterialMoneda,
+} from "@/lib/tipo-cambio-api";
 /**
  * Cliente API del módulo Productos & Servicios — Modelo Universal V2.
  *
@@ -2065,6 +2069,7 @@ export interface OperacionInternaCosteadaInput {
 }
 
 export interface CotizarRequest {
+  tipoCambioId?: string;
   productoId: string;
   rutaAlternativaId?: string | null;
   /** Cliente de la OT: habilita el override de precios especiales por cliente. */
@@ -2120,6 +2125,8 @@ export interface CotizarResponse {
     sugerencia?: string;
   }>;
   cotizacion?: {
+    tipoCambio?: TipoCambioSnapshot;
+    costosMaterialesMoneda?: CostoMaterialMoneda[];
     productoId: string;
     productoNombre: string;
     rutaAlternativaId?: string | null;

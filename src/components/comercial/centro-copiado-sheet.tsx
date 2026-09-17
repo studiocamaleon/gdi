@@ -1,4 +1,5 @@
 "use client";
+import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 
@@ -16,8 +17,6 @@ import {
 } from "@/components/ui/select";
 import type { PropuestaItem } from "@/lib/propuestas";
 import {
-  cotizarCentroCopiado,
-  construirItemsCentroCopiado,
   opcionesCentroCopiado,
   itemConstruidoAPropuestaItem,
   tamanosProducibles,
@@ -223,6 +222,8 @@ export default function CentroCopiadoSheet({
   clienteId,
   editItems,
 }: Props) {
+  const { cotizarCentroCopiado, construirItemsCentroCopiado } =
+    useMotorConTipoCambio();
   const designScope = useDesignScope();
   const designClass = useDesignTheme();
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
@@ -517,7 +518,7 @@ export default function CentroCopiadoSheet({
         });
     }, 350);
     return () => clearTimeout(handle);
-  }, [open, docs, grupos, clienteId]);
+  }, [open, docs, grupos, clienteId, cotizarCentroCopiado]);
 
   const agregarDocs = React.useCallback(
     (
@@ -805,7 +806,14 @@ export default function CentroCopiadoSheet({
     } finally {
       setGuardando(false);
     }
-  }, [docs, grupos, clienteId, onAgregar, onOpenChange]);
+  }, [
+    docs,
+    grupos,
+    clienteId,
+    onAgregar,
+    onOpenChange,
+    construirItemsCentroCopiado,
+  ]);
 
   if (!open) return null;
 

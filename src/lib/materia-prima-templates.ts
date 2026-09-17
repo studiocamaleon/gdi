@@ -1414,6 +1414,20 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
     unidadCompra: "pack",
     camposTecnicos: [
       { key: "material", label: "Material", type: "text", required: true },
+      {
+        key: "ancho",
+        label: "Ancho",
+        type: "number",
+        unit: "cm",
+        optional: true,
+      },
+      {
+        key: "alto",
+        label: "Alto",
+        type: "number",
+        unit: "cm",
+        optional: true,
+      },
     ],
     dimensionesVariante: ["formatoComercial", "ancho", "alto", "color"],
     requiredAtributos: ["material"],

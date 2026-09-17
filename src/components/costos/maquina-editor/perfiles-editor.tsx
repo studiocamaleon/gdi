@@ -129,7 +129,7 @@ export function MaterialesPerfilPicker({
         value: material.id,
         label: material.nombre,
         grupo: FAMILIAS_MATERIAL[material.familia] ?? "Otros materiales",
-        detalle: `${material.codigo} · ${variantesActivas} ${variantesActivas === 1 ? "variante" : "variantes"}`,
+        detalle: `${variantesActivas} ${variantesActivas === 1 ? "variante" : "variantes"}`,
       };
     });
 

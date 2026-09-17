@@ -1,5 +1,7 @@
 "use client";
 
+import { stockUnitLabel } from "./stock-conversion-fields";
+
 import * as React from "react";
 import { toast } from "sonner";
 
@@ -27,6 +29,9 @@ type HistorialPanelProps = {
 const AUTO_REFRESH_MS = 15000;
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const quantityFormatter = new Intl.NumberFormat("es-AR", {
+  maximumFractionDigits: 8,
+});
 const number2Formatter = new Intl.NumberFormat("es-AR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -348,11 +353,46 @@ export function MovimientosKardexPanel({ materiasPrimas }: HistorialPanelProps) 
                           {tipoLabels[item.tipo] ?? item.tipo}
                         </Chip>
                       </TableCell>
-                      <TableCell>{origenLabels[item.origen] ?? item.origen}</TableCell>
-                      <TableCell className={styles.number}>{number2Formatter.format(item.cantidad)}</TableCell>
-                      <TableCell className={styles.number}>{number2Formatter.format(item.saldoPosterior)}</TableCell>
-                      <TableCell className={styles.number}>{number2Formatter.format(item.costoPromedioPost)}</TableCell>
-                      <TableCell><span className={styles.reference}>{item.referenciaId ?? "—"}</span></TableCell>
+                      <TableCell>
+                        {origenLabels[item.origen] ?? item.origen}
+                      </TableCell>
+                      <TableCell className={styles.number}>
+                        {quantityFormatter.format(item.cantidad)}{" "}
+                        {item.conversionSnapshot
+                          ? stockUnitLabel(item.conversionSnapshot.unidadStock)
+                          : ""}
+                        {item.conversionSnapshot &&
+                          item.conversionSnapshot.unidadOriginal !==
+                            item.conversionSnapshot.unidadStock && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {quantityFormatter.format(
+                                item.conversionSnapshot.cantidadOriginal,
+                              )}{" "}
+                              {stockUnitLabel(
+                                item.conversionSnapshot.unidadOriginal,
+                              )}{" "}
+                              ·{" "}
+                              {item.conversionSnapshot.origen ===
+                              "recepcion_real"
+                                ? "Recepción real"
+                                : "Equivalencia guardada"}
+                            </div>
+                          )}
+                      </TableCell>
+                      <TableCell className={styles.number}>
+                        {quantityFormatter.format(item.saldoPosterior)}{" "}
+                        {item.conversionSnapshot
+                          ? stockUnitLabel(item.conversionSnapshot.unidadStock)
+                          : ""}
+                      </TableCell>
+                      <TableCell className={styles.number}>
+                        {number2Formatter.format(item.costoPromedioPost)}
+                      </TableCell>
+                      <TableCell>
+                        <span className={styles.reference}>
+                          {item.referenciaId ?? "—"}
+                        </span>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

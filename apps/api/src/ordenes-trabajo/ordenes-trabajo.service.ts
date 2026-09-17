@@ -1,3 +1,7 @@
+import {
+  cambioDelSnapshot,
+  validarMonedaDocumento,
+} from '../cotizaciones/validar-moneda-documento';
 import { proyectarPlanReferencia } from '../produccion/plan-referencia-paso';
 import { leerAsignacionPersonal, proyectarAsignacionPersonal, personalFijoDelPaso } from '../produccion/asignacion-personal';
 import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
@@ -1388,6 +1392,7 @@ export class OrdenesTrabajoService {
     }
     const decimales =
       regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    validarMonedaDocumento(encontrados);
     const snapshots = new Map(encontrados.map((item) => [item.id, item]));
     let items = payload.items.map((item) => {
       const snapshot = snapshots.get(item.cotizacionItemId);
@@ -1973,6 +1978,7 @@ export class OrdenesTrabajoService {
         'Algún item no existe o no pertenece a esta cotización.',
       );
     }
+    validarMonedaDocumento(encontrados);
     const porId = new Map(encontrados.map((item) => [item.id, item]));
     const decimales =
       regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
@@ -2178,15 +2184,56 @@ export class OrdenesTrabajoService {
           'Algún producto no tiene una cotización válida en este negocio.',
         );
       }
+      // Las líneas previas a la incorporación de USD conservan sus importes
+      // mientras sigan vinculadas al mismo producto de esta OT. Toda línea
+      // nueva o recalculada debe compartir la captura actual del documento.
+      const historicosSinCambio = new Set(
+        payload.items
+          .filter(
+            (item) =>
+              item.id &&
+              orden.items.some(
+                (anterior) =>
+                  anterior.id === item.id &&
+                  anterior.cotizacionItemId === item.cotizacionItemId,
+              ),
+          )
+          .map((item) => item.cotizacionItemId),
+      );
+      validarMonedaDocumento(
+        snapshots.filter(
+          (snapshot) =>
+            !(
+              historicosSinCambio.has(snapshot.id) &&
+              !cambioDelSnapshot(snapshot.snapshotJson)
+            ),
+        ),
+        payload.tipoCambioId,
+      );
       if (
         orden.cotizacionId &&
         snapshots.some(
           (snapshot) => snapshot.cotizacionId !== orden.cotizacionId,
         )
       ) {
-        throw new BadRequestException(
-          'Algún producto no pertenece a la cotización de la orden.',
-        );
+        if (!payload.tipoCambioId)
+          throw new BadRequestException(
+            'Algún producto no pertenece a la cotización de la orden.',
+          );
+        // Una revisión monetaria crea snapshots nuevos y conserva intacta la
+        // cotización de origen (incluido un presupuesto convertido).
+        const usadoEnOtraOrden = await this.prisma.ordenTrabajoItem.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            cotizacionItemId: { in: cotizacionIds },
+            ordenId: { not: orden.id },
+          },
+          select: { id: true },
+        });
+        if (usadoEnOtraOrden)
+          throw new BadRequestException(
+            'Una cotización ya se utiliza en otra orden. Volvé a cotizar los productos.',
+          );
       }
       const porId = new Map(
         snapshots.map((snapshot) => [snapshot.id, snapshot]),

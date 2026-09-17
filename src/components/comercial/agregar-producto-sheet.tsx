@@ -1,4 +1,5 @@
 "use client";
+import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import brandStyles from "./orden-configurador.module.css";
@@ -117,8 +118,6 @@ import {
   type AnalisisSvgFabricacion,
   type AccionErrorCotizacion,
   type ConfiguracionCapasVectoriales,
-  cotizar,
-  cotizarEnSegundoPlano,
   CotizacionAsincronaError,
   getCatalogoFamilias,
   getProductoById,
@@ -9611,6 +9610,7 @@ export function AgregarProductoSheet({
   onSaveItem,
   clienteId = null,
 }: AgregarProductoSheetProps) {
+  const { cotizar, cotizarEnSegundoPlano } = useMotorConTipoCambio();
   const designScope = useDesignScope();
   const designClass = useDesignTheme();
   const { moneda } = useConfigRegional();
@@ -10234,6 +10234,8 @@ export function AgregarProductoSheet({
     }
   }, [
     clienteId,
+    cotizar,
+    cotizarEnSegundoPlano,
     geometriasComerciales,
     motorConfig,
     product,

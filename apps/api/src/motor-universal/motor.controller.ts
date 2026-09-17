@@ -313,6 +313,8 @@ export class MotorUniversalController {
 
     return this.motor.cotizar({
       tenantId,
+      tipoCambioId: dto.tipoCambioId,
+      usuarioId: req.auth?.userId,
       productoId: dto.productoId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
       jobContext: dto.jobContext as never,
@@ -342,6 +344,8 @@ export class MotorUniversalController {
       claveSolicitud: dto.claveSolicitud,
       cotizacion: {
         tenantId,
+        tipoCambioId: dto.tipoCambioId,
+        usuarioId: req.auth?.userId,
         productoId: dto.productoId,
         rutaAlternativaId: dto.rutaAlternativaId ?? null,
         jobContext: dto.jobContext as never,
@@ -384,6 +388,8 @@ export class MotorUniversalController {
 
     return this.motor.cotizarYGuardar({
       tenantId,
+      tipoCambioId: dto.tipoCambioId,
+      usuarioId: req.auth?.userId,
       productoId: dto.productoId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
       jobContext: dto.jobContext as never,
@@ -411,6 +417,8 @@ export class MotorUniversalController {
     return this.motor.recotizarItem({
       tenantId,
       cotizacionItemId: id,
+      tipoCambioId: dto.tipoCambioId,
+      usuarioId: req.auth?.userId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
       jobContext: dto.jobContext as never,
       clienteId: dto.clienteId ?? null,

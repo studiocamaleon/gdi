@@ -1,3 +1,4 @@
+import type { MaterialUnitContext } from '../inventario/material-units';
 /**
  * Tipos del Motor Universal por Pasos.
  *
@@ -24,6 +25,8 @@ import type { ResultadoCommonLineTrabajo } from '../workers/colas';
 // ============================================================================
 
 export interface CotizarInput {
+  tipoCambioId?: string;
+  usuarioId?: string;
   /** ID del tenant (multi-tenant). */
   tenantId: string;
   /** ID del producto a cotizar. */
@@ -456,6 +459,8 @@ export interface AnalisisNestingCompuestoShadow {
 }
 
 export interface CotizacionResultado {
+  tipoCambio?: import('../cotizaciones/tipo-cambio.types').TipoCambioSnapshot;
+  costosMaterialesMoneda?: import('../cotizaciones/tipo-cambio.types').CostoMaterialMoneda[];
   /** Producto cotizado. */
   productoId: string;
   productoNombre: string;
@@ -1557,6 +1562,7 @@ export interface ConsumibleMaquinaCargado {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     atributosVarianteJson?: Record<string, unknown> | null;
   };
 }
@@ -1612,6 +1618,7 @@ export interface SlotCargado {
     atributosVarianteJson?: Record<string, unknown> | null;
     /** G-M9: unidad de stock heredada de la materia prima padre. */
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     /** Formato del sustrato (subfamilia de la MP padre) para rutear nesting. */
     subfamilia?: string | null;
   };

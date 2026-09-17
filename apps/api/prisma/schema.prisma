@@ -348,11 +348,14 @@ enum SubfamiliaMateriaPrima {
 }
 
 enum UnidadMateriaPrima {
+  PALLET
+  BOTELLA
   UNIDAD
   PACK
   CAJA
   KIT
   HOJA
+  PLACA
   PLIEGO
   RESMA
   ROLLO
@@ -675,6 +678,7 @@ model NotificacionWhatsapp {
 }
 
 model Tenant {
+  tiposCambioCotizacion TipoCambioCotizacion[]
   planesEntregaItems PlanEntregaItem[]
   planesEntregaRevisiones PlanEntregaRevision[]
   planesEntregaSolicitudes PlanEntregaSolicitud[]
@@ -2051,6 +2055,8 @@ model GastoFijoEstructura {
 ///
 /// Ver docs/datos-de-empresa-diseno.md
 model DatosEmpresa {
+  /// Preferencia de conversión de costos: modo, referencia y tasa manual con su par.
+  tipoCambioConfig Json?
   id                 String   @id @default(uuid()) @db.Uuid
   tenantId           String   @unique @db.Uuid
   /// Partido en tres columnas como el resto del sistema (ver
@@ -2291,6 +2297,7 @@ model MateriaPrima {
   tipoTecnico                              String
   templateId                               String
   unidadStock                              UnidadMateriaPrima
+  unidadUso                                UnidadMateriaPrima?
   unidadCompra                             UnidadMateriaPrima
   esConsumible                             Boolean                                   @default(false)
   esRepuesto                               Boolean                                   @default(false)
@@ -2324,8 +2331,12 @@ model MateriaPrimaVariante {
   activo                         Boolean                                           @default(true)
   atributosVarianteJson          Json
   unidadStock                    UnidadMateriaPrima?
+  unidadUso                      UnidadMateriaPrima?
+  equivalenciasJson              Json?
   unidadCompra                   UnidadMateriaPrima?
   precioReferencia               Decimal?                                          @db.Decimal(14, 6)
+  unidadPrecio                   UnidadMateriaPrima?
+  equivalenciaCompra             Decimal?                                          @db.Decimal(20, 8)
   moneda                         String?                                           @db.VarChar(3)
   proveedorReferenciaId          String?                                           @db.Uuid
   createdAt                      DateTime                                          @default(now())
@@ -2439,7 +2450,7 @@ model StockMateriaPrimaVariante {
   tenantId           String                       @db.Uuid
   varianteId         String                       @db.Uuid
   ubicacionId        String                       @db.Uuid
-  cantidadDisponible Decimal                      @db.Decimal(14, 4)
+  cantidadDisponible Decimal                      @db.Decimal(20, 8)
   costoPromedio      Decimal                      @db.Decimal(14, 6)
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
@@ -2459,9 +2470,10 @@ model MovimientoStockMateriaPrima {
   ubicacionId       String                            @db.Uuid
   tipo              TipoMovimientoStockMateriaPrima
   origen            OrigenMovimientoStockMateriaPrima
-  cantidad          Decimal                           @db.Decimal(14, 4)
+  cantidad          Decimal                           @db.Decimal(20, 8)
+  conversionSnapshotJson Json?
   costoUnitario     Decimal?                          @db.Decimal(14, 6)
-  saldoPosterior    Decimal                           @db.Decimal(14, 4)
+  saldoPosterior    Decimal                           @db.Decimal(20, 8)
   costoPromedioPost Decimal                           @db.Decimal(14, 6)
   referenciaTipo    String?
   referenciaId      String?
@@ -3447,6 +3459,8 @@ model ProyectoCampanaContador {
 // === COTIZACIONES V2 ===
 
 model Cotizacion {
+  tipoCambioId String? @db.Uuid
+  tipoCambio TipoCambioCotizacion? @relation(fields: [tipoCambioId], references: [id], onDelete: Restrict)
   id                           String                @id @default(uuid()) @db.Uuid
   tenantId                     String                @db.Uuid
   /// PRES-AAAA-NNNN (CotizacionContador). Null = contenedor de snapshots
@@ -6079,4 +6093,15 @@ model PreparacionNestingProducto {
 
   @@unique([tenantId, productoId, rutaClave, cantidad])
   @@index([tenantId, productoId])
+}
+
+/// Tipos de cambio inmutables compartidos por todos los ítems de una cotización.
+model TipoCambioCotizacion {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  snapshotJson Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizaciones Cotizacion[]
+  @@index([tenantId, createdAt])
 }

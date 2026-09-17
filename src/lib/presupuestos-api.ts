@@ -78,6 +78,7 @@ export type PresupuestoEventoPanel = {
 };
 
 export type PresupuestoDetalle = {
+  tipoCambio?: import("@/lib/tipo-cambio-api").TipoCambioSnapshot | null;
   id: string;
   numero: string | null;
   estado: PresupuestoEstado;

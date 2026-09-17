@@ -1,11 +1,11 @@
 .table {
-  min-width: 880px;
+  min-width: 1120px;
 }
 .table th:first-child {
-  width: 40%;
+  width: 28%;
 }
 .table th:last-child {
-  width: 280px;
+  width: 440px;
 }
 .saveHint {
   display: flex;
@@ -45,7 +45,8 @@
   letter-spacing: -.025em;
 }
 .unitSelect {
-  width: 175px;
+  width: 140px;
+  max-width: 100%;
 }
 .unitSelect > button {
   height: 36px;
@@ -60,13 +61,15 @@
   color: var(--muted-text);
 }
 .priceField {
-  display: flex;
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 .priceInput {
-  width: 130px;
+  width: 100%;
+  min-width: 0;
   height: 36px;
   font: 13px / 1.5 var(--brand-mono);
   background: var(--surface);

@@ -1,3 +1,4 @@
+import { monedaCotizacionContext } from '../cotizaciones/material-moneda-context';
 import {
   BadRequestException,
   ConflictException,
@@ -1853,12 +1854,40 @@ export class CentroCopiadoService {
     return parts.length ? parts.join(' · ') : null;
   }
 
+  private async cambioParaDto(
+    tenantId: string,
+    dto: CotizarCentroCopiadoDto & { cotizacionId?: string },
+  ) {
+    if (!dto.cotizacionId) return dto.tipoCambioId;
+    const cotizacion = await this.prisma.cotizacion.findFirst({
+      where: { id: dto.cotizacionId, tenantId },
+      select: { tipoCambioId: true },
+    });
+    if (!cotizacion)
+      throw new NotFoundException('No se encontró la cotización.');
+    if (
+      cotizacion.tipoCambioId &&
+      dto.tipoCambioId &&
+      cotizacion.tipoCambioId !== dto.tipoCambioId
+    )
+      throw new BadRequestException(
+        'El tomo debe usar el mismo tipo de cambio que los demás productos.',
+      );
+    return cotizacion.tipoCambioId ?? dto.tipoCambioId;
+  }
+
   async cotizar(
     tenantId: string,
     dto: CotizarCentroCopiadoDto,
     /** Período de tarifas; null = mes actual (lo usa el endpoint en vivo). */
     periodo: string | null = null,
   ): Promise<CotizarCentroCopiadoResultado> {
+    if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
+      return this.motor.conTipoCambio(
+        tenantId,
+        await this.cambioParaDto(tenantId, dto),
+        () => this.cotizar(tenantId, dto, periodo),
+      );
     const ctx = await this.contexto(tenantId);
     await this.validarOperacion(tenantId, dto, ctx);
     const gruposById = new Map((dto.grupos ?? []).map((g) => [g.id, g]));
@@ -1977,6 +2006,12 @@ export class CentroCopiadoService {
     dto: AgregarAOrdenCentroCopiadoDto,
     periodo: string | null = null,
   ): Promise<AgregarAOrdenResultado> {
+    if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
+      return this.motor.conTipoCambio(
+        tenantId,
+        await this.cambioParaDto(tenantId, dto),
+        () => this.agregarAOrden(tenantId, dto, periodo),
+      );
     if (this.idempotencia && dto.idempotencyKey) {
       return this.idempotencia.ejecutar({
         tenantId,
@@ -2111,7 +2146,12 @@ export class CentroCopiadoService {
       }
     }
     const nueva = await this.prisma.cotizacion.create({
-      data: { tenantId, clienteId: clienteId ?? null, estado: 'borrador' },
+      data: {
+        tenantId,
+        clienteId: clienteId ?? null,
+        estado: 'borrador',
+        tipoCambioId: monedaCotizacionContext.getStore()?.cambio.id,
+      },
     });
     return nueva.id;
   }
@@ -2320,6 +2360,12 @@ export class CentroCopiadoService {
     dto: AgregarAOrdenCentroCopiadoDto,
     periodo: string | null = null,
   ): Promise<ConstruirItemsResultado> {
+    if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
+      return this.motor.conTipoCambio(
+        tenantId,
+        await this.cambioParaDto(tenantId, dto),
+        () => this.construirItems(tenantId, dto, periodo),
+      );
     const ctx = await this.contexto(tenantId);
     await this.validarOperacion(tenantId, dto, ctx);
     const grupoCargaId = dto.grupoCargaId ?? randomUUID();
@@ -2744,6 +2790,11 @@ export class CentroCopiadoService {
     const cotizacionSintetica = base
       ? ({
           ...base,
+          tipoCambio:
+            monedaCotizacionContext.getStore()?.cambio ?? base.tipoCambio,
+          costosMaterialesMoneda: [
+            ...(monedaCotizacionContext.getStore()?.materiales.values() ?? []),
+          ],
           // Pricing del tomo como 1 unidad: precioBase/comisiones ya son totales.
           cantidadComercialPricing: 1,
           cantidadEfectiva: 1,
@@ -2850,6 +2901,12 @@ export class CentroCopiadoService {
     total: number;
     error: string | null;
   }> {
+    if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
+      return this.motor.conTipoCambio(
+        tenantId,
+        await this.cambioParaDto(tenantId, dto),
+        () => this.guardarTomo(tenantId, dto, periodo),
+      );
     if (this.idempotencia && dto.idempotencyKey) {
       return this.idempotencia.ejecutar({
         tenantId,
@@ -2912,7 +2969,7 @@ export class CentroCopiadoService {
       if (cotizacionId) {
         const existente = await tx.cotizacion.findFirst({
           where: { id: cotizacionId, tenantId },
-          select: { id: true, estado: true },
+          select: { id: true, estado: true, tipoCambioId: true },
         });
         if (!existente) {
           throw new NotFoundException('No se encontró la cotización.');
@@ -2921,6 +2978,26 @@ export class CentroCopiadoService {
           throw new BadRequestException(
             'Solo se pueden agregar items a una cotización en borrador.',
           );
+        }
+        const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
+        if (cambioId) {
+          if (existente.tipoCambioId && existente.tipoCambioId !== cambioId)
+            throw new BadRequestException(
+              'El tipo de cambio del tomo no coincide con la cotización.',
+            );
+          const lock = await tx.cotizacion.updateMany({
+            where: {
+              id: cotizacionId,
+              tenantId,
+              estado: 'borrador',
+              tipoCambioId: existente.tipoCambioId,
+            },
+            data: { tipoCambioId: cambioId, updatedAt: new Date() },
+          });
+          if (lock.count !== 1)
+            throw new BadRequestException(
+              'La cotización cambió durante el cálculo del tomo. Volvé a intentarlo.',
+            );
         }
       } else {
         if (dto.clienteId) {
@@ -2936,6 +3013,7 @@ export class CentroCopiadoService {
           data: {
             tenantId,
             clienteId: dto.clienteId ?? null,
+            tipoCambioId: monedaCotizacionContext.getStore()?.cambio.id,
             estado: 'borrador',
           },
           select: { id: true },

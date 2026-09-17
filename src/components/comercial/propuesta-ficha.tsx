@@ -1,5 +1,13 @@
 "use client";
 
+import { TipoCambioPanel } from "./tipo-cambio-panel";
+import type { TipoCambioSnapshot } from "@/lib/tipo-cambio-api";
+import {
+  useMotorConTipoCambio,
+  useTipoCambioDocumento,
+  TipoCambioDocumentoProvider,
+} from "./tipo-cambio-documento";
+
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   fechaFinalDistribucion,
@@ -114,12 +122,7 @@ import type {
   CargoDirectoCatalogo,
   ProductoListItem,
 } from "@/lib/productos-servicios";
-import {
-  cotizar,
-  cotizarYGuardar,
-  recotizarCotizacionItem,
-  type NestingViewerInput,
-} from "@/lib/productos-servicios-api";
+import { type NestingViewerInput } from "@/lib/productos-servicios-api";
 import {
   cambiarEstadoOrdenTrabajo,
   cancelarOrdenTrabajo,
@@ -233,7 +236,6 @@ import { briefDisenoTieneContenido, leerBriefDiseno } from "@/lib/brief-diseno";
 import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
 import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
 import {
-  guardarTomoCentroCopiado,
   cantidadLibrosCentroCopiado,
   dimsDeFormato,
   estadoCentroCopiado,
@@ -1281,7 +1283,9 @@ function formatUnidadCosto(unidad: string, cantidad = 1) {
   const isSingular = Math.abs(cantidad) === 1;
   const pluralizable: Record<string, { singular: string; plural: string }> = {
     gramo: { singular: "gramo", plural: "gramos" },
+    botella: { singular: "botella", plural: "botellas" },
     hoja: { singular: "hoja", plural: "hojas" },
+    placa: { singular: "placa", plural: "placas" },
     pliego: { singular: "hoja", plural: "hojas" },
     rollo: { singular: "rollo", plural: "rollos" },
     caja: { singular: "caja", plural: "cajas" },
@@ -1774,7 +1778,13 @@ function acomodadoDeLinea(
   return layout;
 }
 
-function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
+function MaterialesPasoTable({
+  materiales,
+  costosMoneda,
+}: {
+  materiales: MaterialCosteo[];
+  costosMoneda: CotizacionPropuestaSnapshot["costosMaterialesMoneda"];
+}) {
   const { moneda } = useConfigRegional();
   const visibles = materiales.filter((material) => material.costoTotal > 0);
   if (visibles.length === 0) {
@@ -1793,6 +1803,7 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
             <th>Material</th>
             <th>Tipo</th>
             <th className="num">Cantidad</th>
+            <th className="num">Tipo de cambio USD</th>
             <th className="num">Costo unit.</th>
             <th className="num">Costo</th>
           </tr>
@@ -1800,6 +1811,11 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
         <tbody>
           {visibles.map((material, index) => {
             const key = `${material.slotCodigo}-${material.materialVarianteId}-${index}`;
+            const conversion = costosMoneda?.find(
+              (costo) =>
+                costo.varianteId === material.materialVarianteId &&
+                costo.monedaOrigen === "USD",
+            );
             return (
               <tr key={key}>
                 <td>
@@ -1812,6 +1828,11 @@ function MaterialesPasoTable({ materiales }: { materiales: MaterialCosteo[] }) {
                 </td>
                 <td className="num">
                   {formatCantidadCosto(material.cantidad, material.unidad)}
+                </td>
+                <td className="num">
+                  {conversion
+                    ? `${conversion.monedaDestino} ${conversion.factorCambio.toLocaleString(moneda.locale, { maximumFractionDigits: 8 })}`
+                    : "—"}
                 </td>
                 <td className="num">
                   {formatCostoUnitarioMaterial(
@@ -3143,7 +3164,10 @@ function PasoCostDetail({
             ? "Materiales del paso"
             : "Materiales de la operación"}
         </div>
-        <MaterialesPasoTable materiales={materiales} />
+        <MaterialesPasoTable
+          materiales={materiales}
+          costosMoneda={cotizacion.costosMaterialesMoneda}
+        />
       </div>
 
       <DesgloseOperacionesCorte valor={paso.tiempo?.procesamientoCorte} />
@@ -4528,7 +4552,38 @@ function vendedorOrdenNombre(orden: OrdenTrabajoDetalle) {
  * Nota badge NUEVA: vive en el LISTADO (ordenes-trabajo-view, 24h+pendiente).
  * En el detalle, "RECIÉN EMITIDA" es de sesión: sólo al llegar de emitir.
  */
+function solicitudTomo(
+  meta: NonNullable<ReturnType<typeof metaCentroCopiado>>,
+  clienteId: string,
+) {
+  return {
+    clienteId: clienteId || undefined,
+    documentos: (meta.segmentos ?? []).map((segmento, indice) => ({
+      ...segmento,
+      id: `s${indice}`,
+      nombre: segmento.nombre ?? undefined,
+      copias: 1,
+      tamanoAnchoMm:
+        segmento.tamanoAnchoMm ?? dimsDeFormato(segmento.tamano).anchoMm,
+      tamanoAltoMm:
+        segmento.tamanoAltoMm ?? dimsDeFormato(segmento.tamano).altoMm,
+      grupoId: "T",
+    })),
+    grupos: [
+      {
+        id: "T",
+        juegos: meta.juegos ?? 1,
+        nombre: meta.tomoNombre ?? undefined,
+        terminaciones: meta.terminaciones ?? [],
+        tipoAnillo: meta.tipoAnillo ?? undefined,
+      },
+    ],
+  };
+}
+
 type SnapshotResumenOrden = {
+  tipoCambio?: import("@/lib/tipo-cambio-api").TipoCambioSnapshot;
+  costosMaterialesMoneda?: import("@/lib/tipo-cambio-api").CostoMaterialMoneda[];
   producto?: { id?: string; codigo?: string; nombre?: string };
   ruta?: { nombre?: string; alternativa?: string | null };
   ejecucion?: {
@@ -4629,6 +4684,8 @@ function rehidratarOrdenItem(
     Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
 
   const cotizacion = {
+    tipoCambio: resumen?.tipoCambio,
+    costosMaterialesMoneda: resumen?.costosMaterialesMoneda,
     productoId: snap?.productoId ?? producto.codigo,
     productoNombre: producto.nombre,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
@@ -4753,7 +4810,25 @@ function rehidratarOrdenItem(
   };
 }
 
-export function PropuestaFicha({
+export function PropuestaFicha(props: PropuestaFichaProps) {
+  const inicial = props.orden?.productos
+    .map(
+      (p) =>
+        (
+          p.snapshot?.resumen as {
+            tipoCambio?: import("@/lib/tipo-cambio-api").TipoCambioSnapshot;
+          } | null
+        )?.tipoCambio,
+    )
+    .find(Boolean);
+  return (
+    <TipoCambioDocumentoProvider inicial={inicial}>
+      <PropuestaFichaContenido {...props} />
+    </TipoCambioDocumentoProvider>
+  );
+}
+
+function PropuestaFichaContenido({
   initialClientes = [],
   initialProductos = [],
   initialCargosDirectos = [],
@@ -4764,6 +4839,14 @@ export function PropuestaFicha({
   recienConvertida = false,
   initialDocumentos = null,
 }: PropuestaFichaProps) {
+  const {
+    cotizar,
+    cotizarYGuardar,
+    recotizarCotizacionItem,
+    guardarTomoCentroCopiado,
+    construirItemsCentroCopiado,
+  } = useMotorConTipoCambio();
+  const cambioDocumento = useTipoCambioDocumento();
   const { moneda, zonaHoraria } = useConfigRegional();
   const formatEventoFecha = useFormatEventoFecha();
   // La OT vive en estado local (inicializada desde el prop del server) para
@@ -5087,6 +5170,8 @@ export function PropuestaFicha({
 
   const entregasPrevias = useEntregasPrevias((item) => ({
     productoId: item.motorCodigo!,
+    tipoCambioId:
+      item.cotizacion?.tipoCambio?.id ?? cambioDocumento?.cambio?.id,
     rutaAlternativaId: item.rutaAlternativaId ?? null,
     jobContext: { ...item.jobContext, cantidad: item.cantidad } as never,
     clienteId: clienteId || null,
@@ -5680,10 +5765,8 @@ export function PropuestaFicha({
   );
 
   /**
-   * Persiste alta/edición de un item: primero el snapshot del cotizador
-   * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
-   * de origen si es nuevo), después la proyección. Lanza en error — el
-   * guardado en lote decide qué reportar.
+   * Prepara snapshots nuevos para las altas y ediciones sin sobrescribir los
+   * históricos. El guardado en lote aplica después toda la proyección.
    */
   const prepararItemOrden = React.useCallback(
     async (item: PropuestaItem) => {
@@ -5693,6 +5776,24 @@ export function PropuestaFicha({
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
         );
       }
+      const meta = metaCentroCopiado(item.jobContext);
+      if (meta?.esTomo) {
+        const huella = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(meta)}`;
+        const key =
+          tomosIdempotencyRef.current.get(huella) ?? crypto.randomUUID();
+        tomosIdempotencyRef.current.set(huella, key);
+        const guardado = await guardarTomoCentroCopiado({
+          ...solicitudTomo(meta, clienteId),
+          idempotencyKey: key,
+        });
+        if (guardado.error || !guardado.cotizacionItemId)
+          throw new Error(guardado.error || "No se pudo guardar el tomo.");
+        return {
+          item,
+          cotizacionItemId: guardado.cotizacionItemId,
+          payload: itemToOrdenItemPayload(item, guardado.cotizacionItemId),
+        };
+      }
       const request = {
         rutaAlternativaId: item.rutaAlternativaId ?? null,
         jobContext: item.jobContext as never,
@@ -5700,36 +5801,23 @@ export function PropuestaFicha({
         periodo: getCurrentPeriodo(),
         descuento: descuentoParaMotor(item.descuentoInput),
       };
-      let cotizacionItemId = item.cotizacionItemId;
-      if (cotizacionItemId) {
-        const respuesta = await recotizarCotizacionItem(
-          cotizacionItemId,
-          request,
+      // Una edición prepara una revisión nueva; la OT sólo cambia al confirmar
+      // el lote y la cotización anterior queda disponible para trazabilidad.
+      const respuesta = await cotizarYGuardar({
+        productoId: item.motorCodigo,
+        ...request,
+      });
+      if (!respuesta.result.exitoso) {
+        throw new Error(
+          respuesta.result.errores?.[0]?.mensaje ??
+            `No se pudo guardar la cotización de "${item.productoNombre}".`,
         );
-        if (!respuesta.result.exitoso) {
-          throw new Error(
-            respuesta.result.errores?.[0]?.mensaje ??
-              `No se pudo recotizar "${item.productoNombre}".`,
-          );
-        }
-      } else {
-        const respuesta = await cotizarYGuardar({
-          productoId: item.motorCodigo,
-          ...request,
-          cotizacionId: orden.cotizacionId ?? undefined,
-        });
-        if (!respuesta.result.exitoso) {
-          throw new Error(
-            respuesta.result.errores?.[0]?.mensaje ??
-              `No se pudo guardar la cotización de "${item.productoNombre}".`,
-          );
-        }
-        cotizacionItemId = respuesta.cotizacionItemId;
       }
+      const cotizacionItemId = respuesta.cotizacionItemId;
       const payload = itemToOrdenItemPayload(item, cotizacionItemId);
       return { item, cotizacionItemId, payload };
     },
-    [orden, clienteId],
+    [orden, clienteId, cotizarYGuardar, guardarTomoCentroCopiado],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -5758,9 +5846,17 @@ export function PropuestaFicha({
       orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
     );
     setItems(orden.productos.map(rehidratarOrdenItem));
+    cambioDocumento?.establecer(
+      orden.productos
+        .map(
+          (p) =>
+            (p.snapshot?.resumen as SnapshotResumenOrden | null)?.tipoCambio,
+        )
+        .find(Boolean) ?? null,
+    );
     setEditadosIds(new Set());
     setEditandoOrden(false);
-  }, [orden, togglingFiscal, cancelando]);
+  }, [orden, togglingFiscal, cancelando, cambioDocumento]);
 
   /**
    * Commit atómico del staging. Los snapshots se recalculan primero y luego
@@ -5784,6 +5880,9 @@ export function PropuestaFicha({
       setGuardandoEdicion(true);
       try {
         const tocados = [...cambiosItems.editados, ...cambiosItems.agregados];
+        const cambioAlGuardar = tocados.length
+          ? await cambioDocumento?.resolver()
+          : cambioDocumento?.cambio;
         const preparados = [];
         for (const item of tocados) {
           preparados.push(await prepararItemOrden(item));
@@ -5814,6 +5913,7 @@ export function PropuestaFicha({
             : undefined;
         const detalle = await editarOrdenTrabajoLote(orden.id, {
           expectedVersion: orden.version,
+          tipoCambioId: cambioAlGuardar?.id,
           ...cambiosFields,
           items: itemsFinales,
         });
@@ -5878,6 +5978,7 @@ export function PropuestaFicha({
     },
     [
       orden,
+      cambioDocumento,
       validarCanalVenta,
       cambiosSinGuardar,
       cambiosItems,
@@ -6096,7 +6197,7 @@ export function PropuestaFicha({
       // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
       const metaTomo = metaCentroCopiado(item.jobContext);
       if (metaTomo?.esTomo) {
-        const huellaTomo = `${item.id}:${JSON.stringify(metaTomo)}`;
+        const huellaTomo = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(metaTomo)}`;
         const idempotencyKey =
           tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
         tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
@@ -6177,7 +6278,15 @@ export function PropuestaFicha({
         ? undefined
         : cotizacionId,
     };
-  }, [items, clienteId, orden, ordenTipo, entregasPrevias]);
+  }, [
+    items,
+    clienteId,
+    orden,
+    ordenTipo,
+    entregasPrevias,
+    cotizarYGuardar,
+    guardarTomoCentroCopiado,
+  ]);
 
   /**
    * Emitir OT: snapshots + OrdenTrabajo en `pendiente`. El overlay muestra
@@ -6589,7 +6698,7 @@ export function PropuestaFicha({
         );
       }
     },
-    [],
+    [cotizar, recotizarCotizacionItem],
   );
 
   // ── Descuento comercial (F1) ──────────────────────────────────────────────
@@ -6639,7 +6748,7 @@ export function PropuestaFicha({
         cotizacionItemId: response.cotizacionItemId ?? item.cotizacionItemId,
       };
     },
-    [clienteId],
+    [clienteId, cotizar, recotizarCotizacionItem],
   );
 
   // Umbral de aprobación por descuento del tenant (F3): se busca una sola vez
@@ -7115,6 +7224,80 @@ export function PropuestaFicha({
     }
   }
 
+  async function aplicarTipoCambio(cambio: TipoCambioSnapshot) {
+    if (!puedeModificarProductos)
+      throw new Error("Activá la edición para cambiar el tipo de cambio.");
+    const anteriores = itemsRef.current;
+    const nuevos: PropuestaItem[] = [];
+    // Staging completo: si falla una línea, no se modifica ninguna.
+    for (const item of anteriores) {
+      if (!item.jobContext || !item.motorCodigo)
+        throw new Error(
+          `Volvé a configurar "${item.productoNombre}" antes de actualizar el cambio.`,
+        );
+      const meta = metaCentroCopiado(item.jobContext);
+      let resultado: CotizacionPropuestaSnapshot | undefined;
+      if (meta?.esTomo) {
+        const construido = await construirItemsCentroCopiado({
+          tipoCambioId: cambio.id,
+          clienteId: clienteId || undefined,
+          documentos: (meta.segmentos ?? []).map((segmento, indice) => ({
+            ...segmento,
+            id: `s${indice}`,
+            nombre: segmento.nombre ?? undefined,
+            copias: 1,
+            tamanoAnchoMm:
+              segmento.tamanoAnchoMm ?? dimsDeFormato(segmento.tamano).anchoMm,
+            tamanoAltoMm:
+              segmento.tamanoAltoMm ?? dimsDeFormato(segmento.tamano).altoMm,
+            grupoId: "T",
+          })),
+          grupos: [
+            {
+              id: "T",
+              juegos: meta.juegos ?? 1,
+              nombre: meta.tomoNombre ?? undefined,
+              terminaciones: meta.terminaciones ?? [],
+              tipoAnillo: meta.tipoAnillo ?? undefined,
+            },
+          ],
+        });
+        resultado = construido.items[0]?.cotizacion ?? undefined;
+      } else {
+        const respuesta = await cotizar({
+          tipoCambioId: cambio.id,
+          productoId: item.motorCodigo,
+          rutaAlternativaId: item.rutaAlternativaId ?? null,
+          jobContext: { ...item.jobContext, tipoCambioId: cambio.id } as never,
+          clienteId: clienteId || null,
+          periodo: getCurrentPeriodo(),
+          descuento: descuentoParaMotor(item.descuentoInput),
+        });
+        if (!respuesta.exitoso)
+          throw new Error(
+            respuesta.errores?.[0]?.mensaje ||
+              `No se pudo cotizar ${item.productoNombre}.`,
+          );
+        resultado = respuesta.cotizacion;
+      }
+      if (!resultado)
+        throw new Error(`No se pudo actualizar ${item.productoNombre}.`);
+      nuevos.push({
+        ...applyCotizacionToItem(item, resultado, {
+          ...item.jobContext,
+          tipoCambioId: cambio.id,
+        }),
+        cotizacionItemId: undefined,
+      });
+    }
+    if (itemsRef.current !== anteriores)
+      throw new Error(
+        "Los productos cambiaron durante el cálculo. Volvé a aplicar el tipo de cambio.",
+      );
+    setItems(nuevos);
+    setEditadosIds(new Set(nuevos.map((item) => item.id)));
+  }
+
   return (
     <DesignSystemProvider appearance="light" theme="brand">
       <section
@@ -7182,6 +7365,10 @@ export function PropuestaFicha({
                 }
                 onShowData={puedeEditarOrden ? () => setTab("datos") : undefined}
               >
+                <TipoCambioPanel
+                  editable={puedeModificarProductos}
+                  onAplicar={aplicarTipoCambio}
+                />
                 <OrdenFinancialActions
                   empty={items.length === 0}
                   emitiendo={emitiendo || emitiendoPresupuesto}

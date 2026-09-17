@@ -14,7 +14,8 @@
   border-radius: 7px;
   overflow: auto;
   scrollbar-width: thin;
-  overscroll-behavior: contain;
+  /* Si el dibujo cabe (o llegamos al borde), el scroll continúa en la página. */
+  overscroll-behavior: auto;
 }
 .canvasSvg {
   width: 100%;
