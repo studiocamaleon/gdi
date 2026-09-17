@@ -94,12 +94,29 @@ describe("acciones y datos de la ficha de presupuesto", () => {
     expect(html).toContain("/api/backend/presupuestos/presupuesto-1/pdf");
   });
 
-  it("un enviado permite registrar rechazo y todavía no convertir", () => {
+  it("un enviado permite registrar la decisión del cliente y todavía no convertir", () => {
     const html = render();
     expect(button(html, "Registrar rechazo")).toBeDefined();
+    expect(button(html, "Registrar aprobación")).toBeDefined();
     expect(button(html, "Convertir en orden")).toBeUndefined();
     expect(button(html, "Enviar al cliente")).toBeUndefined();
   });
+
+  it.each([
+    "borrador",
+    "pendiente_aprobacion",
+    "aprobado",
+    "rechazado",
+    "vencido",
+    "convertido",
+  ] as const)(
+    "no ofrece registrar aprobación del cliente en estado %s",
+    (estado) => {
+      expect(
+        button(render({ estado }), "Registrar aprobación"),
+      ).toBeUndefined();
+    },
+  );
 
   it("la aprobación interna sólo ofrece acciones a administrador y supervisor", () => {
     const pendiente: Partial<PresupuestoDetalle> = {

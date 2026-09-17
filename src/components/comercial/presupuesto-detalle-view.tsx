@@ -127,6 +127,8 @@ function PresupuestoDetalleContent({
   const [d, setD] = React.useState<PresupuestoDetalle>(inicial);
   const [tab, setTab] = React.useState<Tab>("productos");
   const [trabajando, setTrabajando] = React.useState(false);
+  const accionEnCurso = React.useRef(false);
+  const [aprobacionAbierta, setAprobacionAbierta] = React.useState(false);
   const [rechazoAbierto, setRechazoAbierto] = React.useState(false);
   const [devolucionAbierta, setDevolucionAbierta] = React.useState(false);
   const [motivo, setMotivo] = React.useState(MOTIVOS_PERDIDA[0].v);
@@ -162,6 +164,7 @@ function PresupuestoDetalleContent({
       if (
         document.visibilityState === "visible" &&
         !trabajando &&
+        !aprobacionAbierta &&
         !rechazoAbierto &&
         !devolucionAbierta
       ) {
@@ -169,9 +172,17 @@ function PresupuestoDetalleContent({
       }
     }, 10_000);
     return () => clearInterval(timer);
-  }, [cargar, trabajando, rechazoAbierto, devolucionAbierta]);
+  }, [
+    cargar,
+    trabajando,
+    aprobacionAbierta,
+    rechazoAbierto,
+    devolucionAbierta,
+  ]);
 
   const accion = async (fn: () => Promise<unknown>, ok: string) => {
+    if (accionEnCurso.current) return;
+    accionEnCurso.current = true;
     setTrabajando(true);
     try {
       await fn();
@@ -183,6 +194,7 @@ function PresupuestoDetalleContent({
         e instanceof Error ? e.message : "No se pudo completar la acción.",
       );
     } finally {
+      accionEnCurso.current = false;
       setTrabajando(false);
     }
   };
@@ -378,6 +390,7 @@ function PresupuestoDetalleContent({
         }
         onAbrirDevolucion={() => setDevolucionAbierta(true)}
         onAbrirRechazo={() => setRechazoAbierto(true)}
+        onRegistrarAprobacion={() => setAprobacionAbierta(true)}
         onConvertir={() => void convertir()}
         parcial={parcial}
         seleccionadas={seleccion.size}
@@ -434,6 +447,47 @@ function PresupuestoDetalleContent({
         <ResumenFinanciero d={d} />
       </div>
 
+      <FormDialog
+        isOpen={aprobacionAbierta}
+        onOpenChange={setAprobacionAbierta}
+        isDismissable={!trabajando}
+        title="Registrar aprobación"
+        description="Confirmá que el cliente aceptó este presupuesto por otro canal. La aprobación quedará registrada con tu usuario y la fecha."
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void accion(async () => {
+              await resolverPresupuesto(id, { resultado: "aprobado" });
+              setAprobacionAbierta(false);
+            }, "Aprobación del cliente registrada.");
+          }}
+        >
+          <div className={s.formBody}>
+            <p>
+              <strong>{d.numero}</strong> quedará aprobado y podrás convertirlo
+              en una orden de trabajo.
+            </p>
+          </div>
+          <div className={s.formActions}>
+            <ActionButton
+              variant="outline"
+              autoFocus
+              isDisabled={trabajando}
+              onPress={() => setAprobacionAbierta(false)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              isPending={trabajando}
+              isDisabled={trabajando}
+            >
+              <CheckIcon /> Confirmar aprobación
+            </ActionButton>
+          </div>
+        </form>
+      </FormDialog>
       <FormDialog
         isOpen={devolucionAbierta}
         onOpenChange={setDevolucionAbierta}
@@ -606,6 +660,7 @@ function AccionesEstado({
   onAprobar,
   onAbrirDevolucion,
   onAbrirRechazo,
+  onRegistrarAprobacion,
   onConvertir,
   parcial,
   seleccionadas,
@@ -618,6 +673,7 @@ function AccionesEstado({
   onAprobar: () => void;
   onAbrirDevolucion: () => void;
   onAbrirRechazo: () => void;
+  onRegistrarAprobacion: () => void;
   onConvertir: () => void;
   parcial: boolean;
   seleccionadas: number;
@@ -637,11 +693,7 @@ function AccionesEstado({
         </div>
         <div className={s.actionButtons}>
           {d.ordenesConvertidas.map((orden) => (
-            <ActionLink
-              key={orden.id}
-
-              href={`/produccion/ordenes/${orden.id}`}
-            >
+            <ActionLink key={orden.id} href={`/produccion/ordenes/${orden.id}`}>
               Ver {orden.numero}
             </ActionLink>
           ))}
@@ -659,12 +711,7 @@ function AccionesEstado({
             Al enviarlo se genera el link para que el cliente lo apruebe.
           </div>
         </div>
-        <ActionButton
-          type="button"
-
-          isDisabled={trabajando}
-          onPress={onEnviar}
-        >
+        <ActionButton type="button" isDisabled={trabajando} onPress={onEnviar}>
           <SendIcon /> Enviar al cliente
         </ActionButton>
       </div>
@@ -694,7 +741,6 @@ function AccionesEstado({
             </ActionButton>
             <ActionButton
               type="button"
-
               isDisabled={trabajando}
               onPress={onAprobar}
             >
@@ -721,14 +767,23 @@ function AccionesEstado({
               : "Todavía no lo abrió. Compartile el link."}
           </div>
         </div>
-        <ActionButton
-          type="button"
-          variant="outline"
-          isDisabled={trabajando}
-          onPress={onAbrirRechazo}
-        >
-          Registrar rechazo
-        </ActionButton>
+        <div className={s.actionButtons}>
+          <ActionButton
+            type="button"
+            variant="outline"
+            isDisabled={trabajando}
+            onPress={onAbrirRechazo}
+          >
+            Registrar rechazo
+          </ActionButton>
+          <ActionButton
+            type="button"
+            isDisabled={trabajando}
+            onPress={onRegistrarAprobacion}
+          >
+            <CheckIcon /> Registrar aprobación
+          </ActionButton>
+        </div>
       </div>
     );
   }
@@ -746,7 +801,6 @@ function AccionesEstado({
         </div>
         <ActionButton
           type="button"
-
           isDisabled={trabajando || seleccionadas === 0}
           onPress={onConvertir}
         >

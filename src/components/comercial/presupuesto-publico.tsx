@@ -1,67 +1,45 @@
 "use client";
 
-/**
- * Página pública del presupuesto — portada del rediseño DesignSync
- * "Presupuesto (rediseño).html" (vista 2 · Online): brand co-branded,
- * card con chips de specs, totales con total destacado, condiciones y
- * decisión en un tap. Clases pp-* en globals.css.
- */
-
 import * as React from "react";
+import { Chip, Label, Modal, TextArea, TextField } from "@heroui/react";
+import {
+  CheckIcon,
+  CircleCheckIcon,
+  Clock3Icon,
+  FileTextIcon,
+  LockKeyholeIcon,
+  MessageSquareIcon,
+  ReceiptTextIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+  XIcon,
+} from "lucide-react";
 import {
   decidirPresupuestoPublico,
   type PresupuestoPublico,
 } from "@/lib/presupuestos-api";
 import { formatearMonedaDoc, monedaDe, type Moneda } from "@/lib/moneda";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  DocumentoNoEncontrado,
+  DocumentoPublico,
+  EstadoPublico,
+  SeccionPublica,
+} from "@/components/publico/documento-publico";
+import p from "@/components/publico/documento-publico.module.css";
+import s from "./presupuesto-publico.module.css";
 
-// Documento que cruza fronteras: símbolo desambiguado y sin decimales (como antes).
 const fmtMoneda = (n: number, moneda: Moneda) =>
   formatearMonedaDoc(n, moneda, { decimales: 0 });
 const fmtFecha = (iso: string | null) => {
-  if (!iso) return "—";
+  if (!iso) return "Sin indicar";
   const [y, m, d] = iso.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 };
-const inicialesDe = (nombre: string) =>
-  nombre
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
 
-function diasHastaVencer(iso: string | null): number | null {
-  if (!iso) return null;
-  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  const hoy = new Date();
-  const hoyMid = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  return Math.round(
-    (new Date(y, m - 1, d).getTime() - hoyMid.getTime()) / 86_400_000,
-  );
-}
-
-const IconoReloj = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
-const IconoEscudo = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z" />
-  </svg>
-);
-const IconoCheck = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-    <path d="M20 6L9 17l-5-5" />
-  </svg>
-);
-const IconoCandado = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-    <rect x="4" y="11" width="16" height="10" rx="2" />
-    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-  </svg>
-);
+type Decision = "aprobado" | "rechazado";
 
 export function PresupuestoPublicoView({
   token,
@@ -71,353 +49,404 @@ export function PresupuestoPublicoView({
   initial: PresupuestoPublico | null;
 }) {
   const [d, setD] = React.useState(initial);
+  const [confirmacion, setConfirmacion] = React.useState<Decision | null>(null);
   const [decidiendo, setDecidiendo] = React.useState(false);
+  const enviando = React.useRef(false);
   const [comentario, setComentario] = React.useState("");
-  const [rechazando, setRechazando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  const decidir = async (decision: "aprobado" | "rechazado") => {
+  const abrirConfirmacion = (decision: Decision) => {
+    setError(null);
+    setConfirmacion(decision);
+  };
+  const decidir = async () => {
+    if (!confirmacion || enviando.current) return;
+    enviando.current = true;
     setDecidiendo(true);
     setError(null);
     try {
       await decidirPresupuestoPublico(token, {
-        decision,
-        comentario: comentario.trim() || undefined,
+        decision: confirmacion,
+        comentario:
+          confirmacion === "rechazado"
+            ? comentario.trim() || undefined
+            : undefined,
       });
-      setD((prev) => (prev ? { ...prev, estado: decision } : prev));
-      setRechazando(false);
+      setD((prev) => (prev ? { ...prev, estado: confirmacion } : prev));
+      setConfirmacion(null);
+      setComentario("");
     } catch (e) {
       setError(
-        e instanceof Error ? e.message : "No se pudo registrar tu decisión.",
+        e instanceof Error
+          ? e.message
+          : "No se pudo registrar tu decisión. Volvé a intentarlo.",
       );
     } finally {
+      enviando.current = false;
       setDecidiendo(false);
     }
   };
 
-  if (!d) {
-    return (
-      <div className="pp-online-bg">
-        <div className="pp-olcard">
-          <div
-            className="pp-ol-sheet"
-            style={{ padding: 24, fontSize: 14, color: "var(--muted-text)" }}
-          >
-            No encontramos este presupuesto. Verificá el link o pedile uno nuevo
-            a tu proveedor.
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!d) return <DocumentoNoEncontrado tipo="presupuesto" />;
 
   const vigente = d.estado === "enviado";
-  const dias = diasHastaVencer(d.fechaValidez);
+  const aprobado = d.estado === "aprobado" || d.estado === "convertido";
   const moneda = monedaDe(d.monedaCodigo);
+  const fmt = (valor: number) => fmtMoneda(valor, moneda);
+  const estado = aprobado
+    ? "Aprobado"
+    : d.estado === "rechazado"
+      ? "No aceptado"
+      : d.estado === "vencido"
+        ? "Vencido"
+        : vigente
+          ? "Pendiente de tu aprobación"
+          : "No disponible para aprobar";
 
   return (
-    <div className="pp-online-bg">
-      <div className="pp-olcard">
-        <div className="pp-ol-brand">
-          <div className="pp-tlogo">{inicialesDe(d.negocio)}</div>
-          <div>
-            <div className="tn">{d.negocio}</div>
-            <div className="tsub">Presupuesto para vos</div>
-          </div>
-          <div className="powered">
-            <span className="pp-gmark">G</span>con tecnología Grafo
-          </div>
+    <DocumentoPublico
+      negocio={d.negocio}
+      descripcion="Presupuesto para vos"
+      logo={
+        d.tieneLogo
+          ? `/api/backend/presupuestos/track/${encodeURIComponent(token)}/logo`
+          : undefined
+      }
+    >
+      <section className={p.hero} aria-labelledby="presupuesto-titulo">
+        <div className={p.heroTop}>
+          <span className={p.eyebrow}>Una propuesta para vos</span>
+          <EstadoPublico
+            tone={aprobado ? "success" : vigente ? "accent" : "default"}
+          >
+            {estado}
+          </EstadoPublico>
         </div>
+        <h1 id="presupuesto-titulo" className={p.heroTitle}>
+          Tu presupuesto<span className={s.period}>.</span>
+        </h1>
+        <p className={p.heroDescription}>
+          {d.cliente ? (
+            <>
+              Preparado para <strong>{d.cliente}</strong>.{" "}
+            </>
+          ) : null}
+          Revisá el detalle y contanos si avanzamos.
+        </p>
+        <dl className={p.heroMeta}>
+          <div>
+            <dt>Presupuesto</dt>
+            <dd>
+              <code>{d.numero}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>Emisión</dt>
+            <dd>{fmtFecha(d.fechaEmision)}</dd>
+          </div>
+          <div>
+            <dt>Válido hasta</dt>
+            <dd>
+              {d.fechaValidez ? fmtFecha(d.fechaValidez) : "Sin vencimiento"}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
-        <div className="pp-ol-sheet">
-          <div className="pp-ol-head">
-            <div className="lbl">Presupuesto</div>
-            <div className="row">
-              <span className="num">{d.numero}</span>
-              {vigente && dias != null ? (
-                <span className="pp-ol-valid">
-                  <IconoReloj />
-                  {dias <= 0
-                    ? "Vence hoy"
-                    : `Vence en ${dias} día${dias === 1 ? "" : "s"}`}
-                </span>
-              ) : null}
+      {aprobado ? (
+        <Alert role="status" className={p.notice} data-tone="success">
+          <CircleCheckIcon />
+          <AlertTitle>Presupuesto aprobado</AlertTitle>
+          <AlertDescription>
+            ¡Gracias! {d.negocio} se va a contactar para coordinar el trabajo.
+          </AlertDescription>
+        </Alert>
+      ) : d.estado === "vencido" ? (
+        <Alert role="status" className={p.notice}>
+          <Clock3Icon />
+          <AlertTitle>La validez de esta propuesta terminó</AlertTitle>
+          <AlertDescription>
+            Pedile a {d.negocio} una actualización para continuar. Los precios
+            pueden haber cambiado.
+          </AlertDescription>
+        </Alert>
+      ) : d.estado === "rechazado" ? (
+        <Alert role="status" className={p.notice}>
+          <MessageSquareIcon />
+          <AlertTitle>Tu decisión quedó registrada</AlertTitle>
+          <AlertDescription>
+            Nos avisaste que no vas a avanzar con este presupuesto. Gracias por
+            responder.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className={p.columns}>
+        <div className={p.stack}>
+          <SeccionPublica
+            titulo="Detalle del trabajo"
+            icon={FileTextIcon}
+            detalle={`${d.items.length} ${d.items.length === 1 ? "producto" : "productos"}`}
+          >
+            <div className={s.items}>
+              {d.items.map((item, idx) => (
+                <article key={idx} className={s.item}>
+                  <div className={s.itemHead}>
+                    <span className={s.itemNumber}>
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className={s.itemIdentity}>
+                      <h3>{item.nombre}</h3>
+                      <p>
+                        {item.cantidad.toLocaleString("es-AR")}{" "}
+                        {item.cantidadUnidad}
+                      </p>
+                    </div>
+                    <div className={s.itemPrice}>
+                      {item.descuentoMonto && item.totalLista ? (
+                        <del>{fmt(item.totalLista)}</del>
+                      ) : null}
+                      <strong>{fmt(item.total)}</strong>
+                      {item.descuentoMonto ? (
+                        <span className={s.saving}>
+                          −
+                          {(item.descuentoPct ?? 0).toLocaleString("es-AR", {
+                            maximumFractionDigits: 1,
+                          })}
+                          %
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  {item.specs.length ? (
+                    <dl className={p.specs}>
+                      {item.specs.map((spec, i) => (
+                        <div key={`${spec.etiqueta}-${i}`}>
+                          <dt>{spec.etiqueta}</dt>
+                          <dd>{spec.valor}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                  {item.adicionales.length ? (
+                    <div className={s.extras}>
+                      <span>Opcionales incluidos</span>
+                      <div>
+                        {item.adicionales.map((extra, i) => (
+                          <Chip size="sm" variant="soft" key={`${extra}-${i}`}>
+                            <CheckIcon aria-hidden />
+                            {extra}
+                          </Chip>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
             </div>
-            <div className="for">
-              {d.cliente ? (
+          </SeccionPublica>
+          {d.observaciones ||
+          (d.senaSugeridaPct ?? 0) > 0 ||
+          d.fidelizacion.puntosEstimados > 0 ? (
+            <SeccionPublica
+              titulo="Para tener en cuenta"
+              icon={ShieldCheckIcon}
+            >
+              <div className={s.conditions}>
+                {(d.senaSugeridaPct ?? 0) > 0 ? (
+                  <div>
+                    <ShieldCheckIcon aria-hidden />
+                    <p>
+                      Seña del{" "}
+                      <strong>
+                        {d.senaSugeridaPct!.toLocaleString("es-AR")}%
+                      </strong>{" "}
+                      para iniciar el trabajo. El saldo se abona contra entrega.
+                    </p>
+                  </div>
+                ) : null}
+                {d.observaciones ? (
+                  <div>
+                    <MessageSquareIcon aria-hidden />
+                    <p>{d.observaciones}</p>
+                  </div>
+                ) : null}
+                {d.fidelizacion.puntosEstimados > 0 ? (
+                  <div>
+                    <SparklesIcon aria-hidden />
+                    <p>
+                      Esta compra suma aproximadamente{" "}
+                      <strong>{d.fidelizacion.puntosEstimados} puntos</strong>;{" "}
+                      {d.fidelizacion.condicion.toLocaleLowerCase()}.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </SeccionPublica>
+          ) : null}
+        </div>
+        <aside
+          className={s.summary}
+          aria-label="Resumen y decisión del presupuesto"
+        >
+          <SeccionPublica titulo="Resumen" icon={ReceiptTextIcon}>
+            <dl className={s.totals}>
+              {d.descuentoTotal > 0 ? (
                 <>
-                  Para <b>{d.cliente}</b> ·{" "}
+                  <div>
+                    <dt>Subtotal de lista</dt>
+                    <dd>{fmt(d.subtotal + d.descuentoTotal)}</dd>
+                  </div>
+                  <div className={s.saving}>
+                    <dt>Descuento</dt>
+                    <dd>−{fmt(d.descuentoTotal)}</dd>
+                  </div>
                 </>
               ) : null}
-              emitido {fmtFecha(d.fechaEmision)}
-            </div>
-          </div>
-
-          {d.estado === "vencido" ? (
-            <div
-              className="pp-ol-aviso"
-              style={{
-                background: "rgba(20,20,26,.05)",
-                color: "var(--muted-text)",
-              }}
-            >
-              Este presupuesto venció. Pedile a {d.negocio} una actualización —
-              los precios pueden haber cambiado.
-            </div>
-          ) : null}
-          {d.estado === "aprobado" || d.estado === "convertido" ? (
-            <div
-              className="pp-ol-aviso"
-              style={{ background: "var(--ok-bg)", color: "var(--ok)" }}
-            >
-              ¡Gracias! El presupuesto quedó aprobado. {d.negocio} se va a
-              contactar para coordinar el trabajo.
-            </div>
-          ) : null}
-          {d.estado === "rechazado" ? (
-            <div
-              className="pp-ol-aviso"
-              style={{ background: "#fef2f2", color: "#b91c1c" }}
-            >
-              Registramos que no vas a avanzar con este presupuesto. ¡Gracias
-              por avisar!
-            </div>
-          ) : null}
-
-          {d.items.map((i, idx) => (
-            <div key={idx} className="pp-ol-item">
-              <div className="it-top">
+              <div>
+                <dt>Subtotal</dt>
+                <dd>{fmt(d.subtotal)}</dd>
+              </div>
+              {d.cargosDirectos > 0 ? (
                 <div>
-                  <div className="it-nm">{i.nombre}</div>
-                  <div className="it-qty">
-                    {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
-                  </div>
-                </div>
-                {/* Con descuento: lista tachada arriba, precio final + badge
-                    verde (para el cliente es un beneficio). */}
-                {i.descuentoMonto && i.totalLista ? (
-                  <div style={{ textAlign: "right" }}>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "var(--muted, #6e6e76)",
-                        textDecoration: "line-through",
-                      }}
-                    >
-                      {fmtMoneda(i.totalLista, moneda)}
-                    </div>
-                    <div className="it-price">
-                      {fmtMoneda(i.total, moneda)}{" "}
-                      <span
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: "var(--ok, #15803d)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        −
-                        {(i.descuentoPct ?? 0).toLocaleString("es-AR", {
-                          maximumFractionDigits: 1,
-                        })}
-                        %
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="it-price">{fmtMoneda(i.total, moneda)}</div>
-                )}
-              </div>
-              {i.specs.length ? (
-                <div className="pp-chips" style={{ marginTop: 13 }}>
-                  {i.specs.map((s) => (
-                    <span key={s.etiqueta} className="pp-chip">
-                      <span className="k">{s.etiqueta}</span>
-                      {s.valor}
-                    </span>
-                  ))}
+                  <dt>Cargos</dt>
+                  <dd>{fmt(d.cargosDirectos)}</dd>
                 </div>
               ) : null}
-              {i.adicionales.length ? (
-                <div className="pp-opt">
-                  <div className="pp-opt-lbl">Opcionales incluidos</div>
-                  <div className="pp-chips">
-                    {i.adicionales.map((a) => (
-                      <span key={a} className="pp-chip opt">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                        >
-                          <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                        {a}
-                      </span>
-                    ))}
-                  </div>
+              <div>
+                <dt>Impuestos</dt>
+                <dd>{fmt(d.impuestos)}</dd>
+              </div>
+              {d.fidelizacion.canjePuntos > 0 ? (
+                <div className={s.saving}>
+                  <dt>Canje · {d.fidelizacion.canjePuntos} puntos</dt>
+                  <dd>−{fmt(d.fidelizacion.canjeMonto)}</dd>
                 </div>
               ) : null}
-            </div>
-          ))}
-
-          <div className="pp-ol-tot">
-            {/* Con descuento el desglose cuenta la historia: lista → descuento
-                → subtotal. Sin descuento, como siempre. */}
-            {d.descuentoTotal > 0 ? (
-              <>
-                <div className="tr">
-                  <span>Subtotal de lista</span>
-                  <span className="v">
-                    {fmtMoneda(d.subtotal + d.descuentoTotal, moneda)}
-                  </span>
-                </div>
-                <div className="tr">
-                  <span>Descuento</span>
-                  <span className="v" style={{ color: "var(--ok, #15803d)" }}>
-                    −{fmtMoneda(d.descuentoTotal, moneda)}
-                  </span>
-                </div>
-                <div className="tr">
-                  <span>Subtotal con descuento</span>
-                  <span className="v">{fmtMoneda(d.subtotal, moneda)}</span>
-                </div>
-              </>
-            ) : (
-              <div className="tr">
-                <span>Subtotal</span>
-                <span className="v">{fmtMoneda(d.subtotal, moneda)}</span>
+              <div className={s.total}>
+                <dt>Total del presupuesto</dt>
+                <dd>{fmt(d.total)}</dd>
               </div>
-            )}
-            {d.cargosDirectos > 0 ? (
-              <div className="tr">
-                <span>Cargos</span>
-                <span className="v">{fmtMoneda(d.cargosDirectos, moneda)}</span>
+            </dl>
+            {vigente ? (
+              <div className={s.actions}>
+                <ActionButton
+                  size="lg"
+                  onPress={() => abrirConfirmacion("aprobado")}
+                >
+                  <CheckIcon aria-hidden />
+                  Aprobar presupuesto
+                </ActionButton>
+                <ActionButton
+                  size="lg"
+                  variant="outline"
+                  onPress={() => abrirConfirmacion("rechazado")}
+                >
+                  No avanzar
+                </ActionButton>
+                <p>
+                  <LockKeyholeIcon aria-hidden />
+                  Tu decisión queda registrada con fecha y hora.
+                </p>
               </div>
             ) : null}
-            <div className="tr">
-              <span>Impuestos</span>
-              <span className="v">{fmtMoneda(d.impuestos, moneda)}</span>
-            </div>
-            {d.fidelizacion.canjePuntos > 0 ? (
-              <div className="tr">
-                <span>Canje · {d.fidelizacion.canjePuntos} puntos</span>
-                <span className="v" style={{ color: "var(--ok, #15803d)" }}>
-                  −{fmtMoneda(d.fidelizacion.canjeMonto, moneda)}
-                </span>
-              </div>
-            ) : null}
-            <div className="tr grand">
-              <span className="l">Total</span>
-              <span className="v">{fmtMoneda(d.total, moneda)}</span>
-            </div>
-          </div>
-
-          {d.fidelizacion.puntosEstimados > 0 ? (
-            <div className="pp-ol-cond">
-              <IconoEscudo />
-              <span>
-                Esta compra suma aproximadamente{" "}
-                {d.fidelizacion.puntosEstimados} puntos;{" "}
-                {d.fidelizacion.condicion.toLocaleLowerCase()}
-              </span>
-            </div>
+          </SeccionPublica>
+          {d.vendedor ? (
+            <p className={s.advisor}>
+              Tu asesor comercial <strong>{d.vendedor}</strong>
+            </p>
           ) : null}
-
-          {d.senaSugeridaPct != null && d.senaSugeridaPct > 0 ? (
-            <div className="pp-ol-cond">
-              <IconoEscudo />
-              <span>
-                Seña del {d.senaSugeridaPct.toLocaleString("es-AR")}% para
-                iniciar el trabajo, saldo contra entrega.
-              </span>
-            </div>
-          ) : null}
-          {d.observaciones ? (
-            <div className="pp-ol-cond">
-              <span style={{ width: 14 }} />
-              <span>{d.observaciones}</span>
-            </div>
-          ) : null}
-
-          {vigente ? (
-            <>
-              {rechazando ? (
-                <div style={{ padding: "6px 22px 0" }}>
-                  <textarea
-                    className="pp-ol-textarea"
-                    placeholder="Contanos por qué (opcional): ¿precio, plazo, otra cosa?"
-                    value={comentario}
-                    onChange={(e) => setComentario(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              ) : null}
-              <div className="pp-ol-actions">
-                {rechazando ? (
-                  <>
-                    <button
-                      type="button"
-                      className="pp-ol-btn"
-                      style={{
-                        background: "#b91c1c",
-                        color: "#fff",
-                        borderColor: "#b91c1c",
-                      }}
-                      onClick={() => void decidir("rechazado")}
-                      disabled={decidiendo}
-                    >
-                      {decidiendo ? "Enviando…" : "Confirmar rechazo"}
-                    </button>
-                    <button
-                      type="button"
-                      className="pp-ol-btn"
-                      onClick={() => setRechazando(false)}
-                      disabled={decidiendo}
-                    >
-                      Volver
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="pp-ol-btn approve"
-                      onClick={() => void decidir("aprobado")}
-                      disabled={decidiendo}
-                    >
-                      <IconoCheck />
-                      {decidiendo ? "Enviando…" : "Aprobar presupuesto"}
-                    </button>
-                    <button
-                      type="button"
-                      className="pp-ol-btn"
-                      onClick={() => setRechazando(true)}
-                      disabled={decidiendo}
-                    >
-                      No avanzar
-                    </button>
-                  </>
-                )}
-              </div>
-              <div className="pp-ol-foot">
-                <IconoCandado />
-                Tu decisión queda registrada con fecha y hora.
-              </div>
-            </>
-          ) : (
-            <div style={{ height: 18 }} />
-          )}
-
-          {error ? (
-            <div
-              style={{ padding: "0 22px 16px", fontSize: 13, color: "#b91c1c" }}
-            >
-              {error}
-            </div>
-          ) : null}
-        </div>
+        </aside>
       </div>
-    </div>
+
+      {confirmacion ? (
+        <FormDialog
+          isOpen
+          isDismissable={!decidiendo}
+          onOpenChange={(open) => {
+            if (!open && !enviando.current) setConfirmacion(null);
+          }}
+          title={
+            confirmacion === "aprobado"
+              ? "¿Avanzamos con tu trabajo?"
+              : "¿No vas a avanzar?"
+          }
+          description={
+            confirmacion === "aprobado"
+              ? `Vas a aprobar este presupuesto de ${d.negocio}.`
+              : "Le avisaremos a la imprenta que no aceptás esta propuesta."
+          }
+          className={s.dialog}
+        >
+          <Modal.Body className={s.dialogBody}>
+            <dl className={s.confirmationSummary}>
+              <div>
+                <dt>Presupuesto</dt>
+                <dd>{d.numero}</dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>{fmt(d.total)}</dd>
+              </div>
+            </dl>
+            {confirmacion === "aprobado" && (d.senaSugeridaPct ?? 0) > 0 ? (
+              <p className={s.dialogHint}>
+                Seña del {d.senaSugeridaPct}% para iniciar el trabajo, saldo
+                contra entrega.
+              </p>
+            ) : null}
+            {confirmacion === "rechazado" ? (
+              <TextField
+                className={s.commentField}
+                value={comentario}
+                onChange={setComentario}
+                isDisabled={decidiendo}
+              >
+                <Label>Comentario (opcional)</Label>
+                <TextArea
+                  className={s.commentInput}
+                  rows={3}
+                  placeholder="Podés contarnos el motivo o qué necesitás cambiar."
+                />
+              </TextField>
+            ) : null}
+            {error ? (
+              <Alert variant="destructive">
+                <AlertTitle>No pudimos registrar tu decisión</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+          </Modal.Body>
+          <Modal.Footer className={s.dialogFooter}>
+            <ActionButton
+              size="md"
+              variant="outline"
+              autoFocus
+              isDisabled={decidiendo}
+              onPress={() => setConfirmacion(null)}
+            >
+              Volver
+            </ActionButton>
+            <ActionButton
+              size="md"
+              variant={confirmacion === "aprobado" ? "primary" : "danger"}
+              isPending={decidiendo}
+              isDisabled={decidiendo}
+              onPress={() => void decidir()}
+            >
+              {confirmacion === "aprobado" ? (
+                <CheckIcon aria-hidden />
+              ) : (
+                <XIcon aria-hidden />
+              )}
+              {decidiendo
+                ? "Registrando…"
+                : confirmacion === "aprobado"
+                  ? "Confirmar aprobación"
+                  : "Confirmar que no avanzo"}
+            </ActionButton>
+          </Modal.Footer>
+        </FormDialog>
+      ) : null}
+    </DocumentoPublico>
   );
 }

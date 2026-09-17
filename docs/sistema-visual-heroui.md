@@ -2605,3 +2605,45 @@ civil y vacío. TypeScript, ESLint, CSS Guard y revisión de whitespace.
 Confirmación previa: revisada en navegador con una orden, dos facturas por orden
 y una agrupada; totales y cantidades correctos. Cancelar y Escape conservan la
 selección. Modal verificado también a 390 px, sin emitir comprobantes de prueba.
+
+## Presupuesto y seguimiento públicos — 17 de septiembre de 2026
+
+`/p/[token]` y `/t/[token]` comparten `DocumentoPublico`: tema de marca claro,
+cabecera con identidad del tenant y Grafoprint, fondo cálido, presentación en
+grafito, naranja de marca, paneles de bordes finos y módulos CSS locales.
+En escritorio se organizan en contenido y resumen lateral; en móvil, en una
+columna. Se mantienen los aliases de enlaces anteriores.
+
+- Presupuesto: detalle de productos, especificaciones, descuentos, condiciones,
+  canje e importes del snapshot. La aprobación y el rechazo públicos requieren
+  confirmación; el rechazo permite comentario. Un error conserva el formulario
+  y permite reintentar. Se bloquea el doble envío y el cierre mientras se guarda.
+- La cabecera del presupuesto carga el logo mediante
+  `GET /presupuestos/track/:token/logo`. Se valida el token de tipo presupuesto,
+  se obtiene el tenant del enlace y se firma su logo privado. Sin logo o ante
+  error de imagen, se muestran iniciales. El payload expone `tieneLogo`.
+- Seguimiento: conserva estados de producción, pasos, archivos autorizados por
+  token, actividad, entrega, contacto comercial y QR de retiro sólo cuando el
+  trabajo está finalizado. Se mantiene el refresco cada 15 segundos, pausado en
+  segundo plano, con indicación de reconexión ante un fallo de consulta.
+- En la ficha interna, un presupuesto enviado ofrece «Registrar aprobación»
+  junto a «Registrar rechazo». La confirmación usa la resolución autenticada
+  existente y registra usuario, fecha y origen comercial por otro canal.
+  La conversión en orden continúa siendo una acción posterior. No sustituye
+  la aprobación interna de descuentos/márgenes, reservada a sus roles actuales.
+- La resolución manual valida vigencia y estado también al actualizar: si el
+  cliente ya respondió o el presupuesto venció, no sobrescribe esa decisión ni
+  genera un evento de aprobación. El rechazo mantiene liberación de reservas.
+
+Se retiraron 1.251 líneas de CSS anterior, sin modificar reglas de otras vistas:
+la línea base baja a 32.871 líneas y 1.106 clases globales (52 menos).
+
+Validación: 43 pruebas de frontend y 29 de presupuestos en API; TypeScript web
+y API con `tsconfig.build.json`; ESLint de los componentes editados; compilación
+web de producción; CSS Guard y `git diff --check`. La ejecución amplia de
+TypeScript de API incluyendo todos los tests detecta errores previos en mocks
+de otros módulos; la configuración de producción y las suites afectadas pasan.
+Revisión en Chrome de ambas vistas, escritorio y móvil, ancho mínimo de 320 px
+sin desborde horizontal, logo real, acordeones, apertura y cancelación de
+confirmaciones públicas y del comercial. La aprobación efectiva se verificó
+en pruebas aisladas, sin resolver el presupuesto de desarrollo usado en la UI.

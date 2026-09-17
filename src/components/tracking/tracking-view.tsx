@@ -1,7 +1,25 @@
 "use client";
 
 import * as React from "react";
-
+import {
+  ArrowDownToLineIcon,
+  ArrowUpRightIcon,
+  CalendarDaysIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  CircleCheckIcon,
+  Clock3Icon,
+  FileTextIcon,
+  HistoryIcon,
+  ImageIcon,
+  MapPinIcon,
+  MessageCircleIcon,
+  PackageIcon,
+  PhoneIcon,
+  QrCodeIcon,
+  SparklesIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import {
   copyDePaso,
   estadoNarrativo,
@@ -13,306 +31,116 @@ import {
   urlArchivoTracking,
   type TrackingArchivo,
   type TrackingItem,
-  type TrackingPaso,
   type TrackingPublico,
 } from "@/lib/tracking";
 import { formatBytes } from "@/lib/archivos";
-import sQr from "./tracking-qr.module.css";
+import { ActionLink } from "@/components/design-system/action-link";
+import {
+  DocumentoPublico,
+  EstadoPublico,
+  SeccionPublica,
+} from "@/components/publico/documento-publico";
+import { cn } from "@/lib/utils";
+import p from "@/components/publico/documento-publico.module.css";
+import s from "./tracking-view.module.css";
 
-/** Cada cuánto se sincroniza el avance con la planta (sin recargar). */
 const POLL_MS = 15000;
 
-// ── Iconos (set mínimo, calcado del diseño) ──────────────────────────────
-
-const IcoCheck = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="14"
-    height="14"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 12l4 4 10-10" />
-  </svg>
-);
-const IcoCheckCircle = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="18"
-    height="18"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-    <path d="M22 4 12 14.01l-3-3" />
-  </svg>
-);
-const IcoPhone = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="16"
-    height="16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
-  </svg>
-);
-const IcoWa = () => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-    <path d="M17.5 14.4c-.3-.2-1.7-.8-2-.9-.3-.1-.5-.2-.7.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6 0-.3-.2-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6.1-.1.3-.4.4-.5.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5-.1-.2-.7-1.6-.9-2.2-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.4 0 1.4 1 2.7 1.2 2.9.2.2 2 3.1 4.8 4.2.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.5-.1 1.7-.7 2-1.4.2-.7.2-1.2.2-1.3 0-.1-.3-.2-.6-.4Z M12 2C6.5 2 2 6.5 2 12c0 1.7.4 3.4 1.3 4.8L2 22l5.3-1.3c1.4.8 3 1.2 4.7 1.2 5.5 0 10-4.5 10-10S17.5 2 12 2Zm6 16-.2.2c-1.5 1.5-3.6 2.4-5.8 2.4-1.5 0-2.9-.4-4.2-1.1l-.3-.2-3.2.8.8-3.1-.2-.3c-.8-1.3-1.2-2.8-1.2-4.4 0-4.6 3.7-8.3 8.3-8.3 2.2 0 4.3.9 5.9 2.4 1.6 1.6 2.4 3.7 2.4 5.9 0 2.2-.9 4.3-2.3 5.7Z" />
-  </svg>
-);
-const IcoPin = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="15"
-    height="15"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-    <circle cx="12" cy="10" r="3" />
-  </svg>
-);
-const IcoClock = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="15"
-    height="15"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
-const IcoDoc = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="15"
-    height="15"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <path d="M14 2v6h6" />
-  </svg>
-);
-const IcoImagen = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="15"
-    height="15"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="3" width="18" height="18" rx="2" />
-    <circle cx="9" cy="9" r="1.6" />
-    <path d="m21 15-4.5-4.5L7 20" />
-  </svg>
-);
-const IcoChevron = ({ open }: { open: boolean }) => (
-  <svg
-    viewBox="0 0 24 24"
-    width="16"
-    height="16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{
-      transform: open ? "rotate(180deg)" : "none",
-      transition: "transform .2s ease",
-    }}
-  >
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
-
-// ── Confetti (al llegar a listo/entregado) ───────────────────────────────
-
-function Confetti() {
-  const colors = [
-    "#14141a",
-    "#06b6d4",
-    "#d946ef",
-    "#eab308",
-    "#16794a",
-    "#c2410c",
-  ];
-  const pieces = React.useMemo(
-    () =>
-      Array.from({ length: 28 }, (_, i) => ({
-        id: i,
-        color: colors[i % colors.length],
-        left: 30 + ((i * 37) % 40),
-        dx: (i % 2 === 0 ? -1 : 1) * (40 + ((i * 53) % 220)),
-        dy: 140 + ((i * 71) % 160),
-        r: (i % 2 === 0 ? -1 : 1) * (200 + ((i * 90) % 500)),
-        delay: ((i * 17) % 20) / 100,
-        w: 5 + (i % 5),
-        h: 8 + (i % 6),
-      })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-  return (
-    <div className="t-confetti-layer">
-      {pieces.map((p) => (
-        <span
-          key={p.id}
-          className="t-confetti"
-          style={{
-            left: `${p.left}%`,
-            background: p.color,
-            width: p.w,
-            height: p.h,
-            ["--dx" as string]: `${p.dx}px`,
-            ["--dy" as string]: `${p.dy}px`,
-            ["--r" as string]: `${p.r}deg`,
-            animationDelay: `${p.delay}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ── Timeline de un item ──────────────────────────────────────────────────
-
-/**
- * ¿El paso está REALMENTE en la máquina? Sólo `en_curso`/`pausado` cuentan.
- * "Pendiente" es el próximo de la fila, no algo que esté pasando: tratarlo como
- * activo hacía que un paso sin iniciar dijera "En curso" entre dos pasos
- * (uno hecho, el siguiente sin arrancar).
- */
-function pasoEnProduccion(p: TrackingPaso): boolean {
-  return p.estado === "en_curso" || p.estado === "pausado";
-}
-
-function pasoEstadoVisual(
-  pasos: TrackingPaso[],
-  i: number,
-): "done" | "current" | "pending" {
-  const p = pasos[i];
-  if (p.estado === "hecho") return "done";
-  if (pasoEnProduccion(p)) return "current";
-  return "pending";
-}
-
-function ItemTimeline({ item }: { item: TrackingItem }) {
-  return (
-    <div className="t-timeline">
-      {item.pasos.map((paso, i) => {
-        const state = pasoEstadoVisual(item.pasos, i);
-        const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
-        return (
-          <div key={paso.indice} className={`t-step ${state}`}>
-            <span className="t-step-dot">
-              {state === "done" ? <IcoCheck /> : i + 1}
-            </span>
-            <div className="t-step-body">
-              {/* Sólo el nombre cliente-facing; el técnico ("Impresión por
-                  hoja CMYK") no le dice nada a quien recibe el link. */}
-              <div className="simple">{copy.simple}</div>
-              {state !== "pending" ? (
-                <div className="desc">{copy.desc}</div>
-              ) : null}
-              {state === "done" && paso.completadoEl ? (
-                <span className="ts ok">
-                  <IcoCheck />
-                  {fmtMomento(paso.completadoEl)}
-                </span>
-              ) : null}
-              {state === "current" ? (
-                <span className="ts live">
-                  <span className="dot" />
-                  En curso
-                </span>
-              ) : null}
-              {state === "pending" ? (
-                <div
-                  className="desc"
-                  style={{ color: "var(--t-muted-2)", fontSize: 12 }}
-                >
-                  Pendiente
-                </div>
-              ) : null}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** "16/07 · 14:32" para timestamps de pasos completados. */
 function fmtMomento(iso: string): string {
   const f = new Date(iso);
   if (Number.isNaN(f.getTime())) return "";
-  const dd = String(f.getDate()).padStart(2, "0");
-  const mm = String(f.getMonth() + 1).padStart(2, "0");
-  const hh = String(f.getHours()).padStart(2, "0");
-  const mi = String(f.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm} · ${hh}:${mi}`;
+  return `${String(f.getDate()).padStart(2, "0")}/${String(f.getMonth() + 1).padStart(2, "0")} · ${String(f.getHours()).padStart(2, "0")}:${String(f.getMinutes()).padStart(2, "0")}`;
 }
 
-// ── Panel de acordeón por item ───────────────────────────────────────────
+function ItemTimeline({ item }: { item: TrackingItem }) {
+  if (!item.pasos.length)
+    return (
+      <p className={s.noSteps}>Estamos preparando el detalle de tu trabajo.</p>
+    );
+  return (
+    <ol className={s.timeline} aria-label={`Avance de ${item.nombre}`}>
+      {item.pasos.map((paso, i) => {
+        // Pendiente no es en curso: conserva el estado real de producción.
+        const state =
+          paso.estado === "hecho"
+            ? "done"
+            : paso.estado === "en_curso" || paso.estado === "pausado"
+              ? "current"
+              : "pending";
+        const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
+        return (
+          <li key={`${paso.indice}-${i}`} className={s.step} data-state={state}>
+            <span className={s.stepDot} aria-hidden>
+              {state === "done" ? (
+                <CheckIcon />
+              ) : (
+                String(i + 1).padStart(2, "0")
+              )}
+            </span>
+            <div className={s.stepBody}>
+              <strong>{copy.simple}</strong>
+              {state !== "pending" ? <p>{copy.desc}</p> : null}
+              <span className={s.stepState}>
+                {state === "done" ? (
+                  <>
+                    <CheckIcon aria-hidden />
+                    Completado
+                    {paso.completadoEl ? (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <time dateTime={paso.completadoEl}>
+                          {fmtMomento(paso.completadoEl)}
+                        </time>
+                      </>
+                    ) : null}
+                  </>
+                ) : state === "current" ? (
+                  "En curso"
+                ) : (
+                  "Pendiente"
+                )}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
-/**
- * Adjuntos que la imprenta compartió con el cliente: prueba de color, foto
- * del trabajo terminado, lo que haya marcado como visible. La descarga la
- * autoriza el token de la orden — el bucket es privado y acá no hay sesión.
- */
 function ArchivosCliente({
   archivos,
   token,
-  compacto = false,
 }: {
   archivos: TrackingArchivo[];
   token: string;
-  compacto?: boolean;
 }) {
-  if (archivos.length === 0) return null;
+  if (!archivos.length) return null;
   return (
-    <div className={`t-archivos${compacto ? " compacto" : ""}`}>
-      {archivos.map((a) => (
-        <a
-          key={a.id}
-          className="t-archivo"
-          href={urlArchivoTracking(token, a.id)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="ico">{a.esImagen ? <IcoImagen /> : <IcoDoc />}</span>
-          <span className="nm">{a.nombre}</span>
-          <span className="sz">{formatBytes(a.bytes)}</span>
-        </a>
+    <ul className={s.files} aria-label="Archivos compartidos">
+      {archivos.map((archivo) => (
+        <li key={archivo.id}>
+          <a
+            href={urlArchivoTracking(token, archivo.id)}
+            target="_blank"
+            rel="noreferrer"
+            className={s.file}
+          >
+            {archivo.esImagen ? (
+              <ImageIcon aria-hidden />
+            ) : (
+              <FileTextIcon aria-hidden />
+            )}
+            <span>
+              <strong>{archivo.nombre}</strong>
+              <small>{formatBytes(archivo.bytes)}</small>
+            </span>
+            <ArrowDownToLineIcon aria-hidden />
+          </a>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -329,112 +157,112 @@ function ItemPanel({
   onToggle: () => void;
   token: string;
 }) {
-  const listo = item.progresoPct === 100;
-  // Las specs (material, archivo, tamaño…) arrancan colapsadas: son el detalle
-  // fino que el cliente casi nunca necesita y que, abierto, empuja la tarjeta.
+  const id = React.useId();
   const [verSpecs, setVerSpecs] = React.useState(false);
+  const listo = item.progresoPct === 100;
+  const actual = item.pasos.find((paso) => paso.estado !== "hecho");
   return (
-    <div className={`t-item-panel ${open ? "open" : ""}`}>
-      <button
-        type="button"
-        className="t-item-head"
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <span className="idx">{index + 1}</span>
-        <div className="meta">
-          <div className="nm">{item.nombre}</div>
-          <div className="sub">
-            {listo
-              ? "Completado"
-              : item.pasoActual
-                ? copyDePaso(
-                    pasoFamilia(item).codigo,
-                    pasoFamilia(item).plantilla,
-                  ).simple
-                : "Por iniciar"}
-          </div>
-        </div>
-        <span className="chev">
-          <IcoChevron open={open} />
-        </span>
-      </button>
-      {open ? (
-        <div className="t-item-body">
-          <ItemTimeline item={item} />
-          {item.specs.length > 0 ? (
-            <div style={{ marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={() => setVerSpecs((v) => !v)}
-                aria-expanded={verSpecs}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  width: "100%",
-                  padding: "9px 12px",
-                  border: "1px solid var(--t-hairline)",
-                  borderRadius: "var(--t-r-3)",
-                  background: verSpecs ? "var(--t-surface-2)" : "transparent",
-                  color: "var(--t-muted)",
-                  font: "inherit",
-                  fontSize: 12.5,
-                  fontWeight: 500,
-                  letterSpacing: "0.01em",
-                  cursor: "pointer",
-                }}
-              >
-                <span>
-                  {verSpecs ? "Ocultar detalle" : "Detalle del producto"}
-                </span>
-                <IcoChevron open={verSpecs} />
-              </button>
-              {verSpecs ? (
-                <div className="t-specs t-specs-inline">
-                  {item.specs.map((spec, i) => (
-                    // min-width:0 deja que la celda del grid se achique; sin
-                    // esto un nombre de archivo largo estira toda la tabla.
-                    <div key={i} className="spec" style={{ minWidth: 0 }}>
-                      <div className="lbl">{spec.etiqueta}</div>
-                      <div
-                        className="v"
-                        style={{
-                          minWidth: 0,
-                          overflowWrap: "anywhere",
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {spec.valor}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+    <article className={s.item}>
+      <h3 className={s.itemHeading}>
+        <button
+          type="button"
+          id={`${id}-titulo`}
+          className={s.itemTrigger}
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={`${id}-contenido`}
+        >
+          <span className={s.itemIndex}>
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <span className={s.itemIdentity}>
+            <strong>{item.nombre}</strong>
+            <span>
+              {listo
+                ? "Completado"
+                : item.pasoActual && actual
+                  ? copyDePaso(actual.familiaCodigo, actual.plantillaCodigo)
+                      .simple
+                  : "Por iniciar"}
+            </span>
+          </span>
+          {listo ? (
+            <CircleCheckIcon className={s.readyIcon} aria-hidden />
           ) : null}
-          <ArchivosCliente archivos={item.archivos} token={token} compacto />
-        </div>
+          <ChevronDownIcon aria-hidden className={s.chevron} data-open={open} />
+        </button>
+      </h3>
+      <div
+        id={`${id}-contenido`}
+        hidden={!open}
+        aria-labelledby={`${id}-titulo`}
+        className={s.itemBody}
+      >
+        <ItemTimeline item={item} />
+        {item.specs.length ? (
+          <div className={s.detail}>
+            <button
+              type="button"
+              className={s.detailTrigger}
+              onClick={() => setVerSpecs((value) => !value)}
+              aria-expanded={verSpecs}
+              aria-controls={`${id}-specs`}
+            >
+              <span>Detalle del producto</span>
+              <ChevronDownIcon
+                aria-hidden
+                className={s.chevron}
+                data-open={verSpecs}
+              />
+            </button>
+            <div id={`${id}-specs`} hidden={!verSpecs}>
+              <dl className={p.specs}>
+                {item.specs.map((spec, i) => (
+                  <div key={i}>
+                    <dt>{spec.etiqueta}</dt>
+                    <dd>{spec.valor}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
+        ) : null}
+        <ArchivosCliente archivos={item.archivos} token={token} />
+      </div>
+    </article>
+  );
+}
+
+function ContactoAcciones({
+  telefono,
+  whatsapp,
+}: {
+  telefono: string | null;
+  whatsapp: string | null;
+}) {
+  return (
+    <div className={s.contactActions}>
+      {whatsapp ? (
+        <ActionLink
+          size="md"
+          variant="outline"
+          href={`https://wa.me/${whatsapp}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <MessageCircleIcon aria-hidden />
+          WhatsApp
+        </ActionLink>
+      ) : null}
+      {telefono ? (
+        <ActionLink size="md" variant="outline" href={`tel:${telefono}`}>
+          <PhoneIcon aria-hidden />
+          Llamar
+        </ActionLink>
       ) : null}
     </div>
   );
 }
-
-/** El paso en curso, con su plantilla — para que el copy público de un paso
- *  propio del tenant caiga al de la familia de la que hereda. */
-function pasoFamilia(item: TrackingItem): {
-  codigo: string;
-  plantilla?: string | null;
-} {
-  const actual = item.pasos.find((p) => p.estado !== "hecho");
-  return {
-    codigo: actual?.familiaCodigo ?? "trabajo_manual",
-    plantilla: actual?.plantillaCodigo ?? null,
-  };
-}
-
-// ── Vista principal ──────────────────────────────────────────────────────
 
 export function TrackingView({
   token,
@@ -443,27 +271,31 @@ export function TrackingView({
   token: string;
   initialData: TrackingPublico;
 }) {
-  // Avance EN VIVO: re-consulta la planta cada POLL_MS sin recargar. Se pausa
-  // con la pestaña oculta y refresca al volver al foco. Ante error de red
-  // conserva el último estado (no parpadea la página).
   const [data, setData] = React.useState(initialData);
   const [sincronizando, setSincronizando] = React.useState(false);
-
+  const [conectado, setConectado] = React.useState(true);
   React.useEffect(() => {
     let vivo = true;
+    let pendiente = false;
     const refrescar = async () => {
-      if (document.hidden) return;
+      if (document.hidden || pendiente) return;
+      pendiente = true;
       setSincronizando(true);
       try {
         const fresh = await getTrackingPublico(token);
-        if (vivo) setData(fresh);
+        if (vivo) {
+          setData(fresh);
+          setConectado(true);
+        }
       } catch {
-        // Se conserva el último estado.
+        // Un error no borra los últimos datos ni anuncia una conexión inexistente.
+        if (vivo) setConectado(false);
       } finally {
+        pendiente = false;
         if (vivo) setSincronizando(false);
       }
     };
-    const id = window.setInterval(refrescar, POLL_MS);
+    const interval = window.setInterval(refrescar, POLL_MS);
     const onFocus = () => {
       if (!document.hidden) void refrescar();
     };
@@ -471,363 +303,254 @@ export function TrackingView({
     window.addEventListener("focus", onFocus);
     return () => {
       vivo = false;
-      window.clearInterval(id);
+      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
     };
   }, [token]);
 
-  const unItem = data.items.length === 1;
-  // Abrimos el item en producción; si no hay, el primero.
-  const abiertoInicial = React.useMemo(() => {
-    const enProd = data.items.findIndex(
-      (i) => i.progresoPct != null && i.progresoPct > 0 && i.progresoPct < 100,
-    );
-    return new Set<string>(
-      [data.items[enProd >= 0 ? enProd : 0]?.id].filter(Boolean) as string[],
-    );
-  }, [data.items]);
-  const [abiertos, setAbiertos] = React.useState<Set<string>>(abiertoInicial);
-  // Acordeón de uno por vez: abrir un item cierra el que estaba abierto. En
-  // un celular tener varios paneles abiertos hace perder el hilo del scroll.
-  const toggle = (id: string) =>
-    setAbiertos((cur) => (cur.has(id) ? new Set() : new Set([id])));
-
+  const [abierto, setAbierto] = React.useState<string | null>(
+    () =>
+      (
+        initialData.items.find(
+          (item) =>
+            item.progresoPct != null &&
+            item.progresoPct > 0 &&
+            item.progresoPct < 100,
+        ) ?? initialData.items[0]
+      )?.id ?? null,
+  );
   const pill = estadoPill(data.estado);
   const entrega = fechaLarga(data.fechaEntrega);
-  const celebra = data.estado === "finalizada" || data.estado === "entregada";
   const ultimaAct = data.actividad[0]?.fecha;
-  // Puede venir sin `contacto` si el navegador tiene cacheada la respuesta
-  // vieja: la página se re-consulta sola y no vale la pena romperla por eso.
-  const contacto = data.imprenta.contacto ?? {
-    telefono: null,
-    whatsapp: null,
-    domicilio: null,
-    horario: null,
-    sitioWeb: null,
-    urlPerfilGoogle: null,
-  };
-  // "Ver mapa" abre la ficha de Google del negocio si la cargó; si no, cae a
-  // buscar el domicilio en Google Maps como hasta ahora.
-  const urlMapa = contacto.domicilio
+  const contacto = data.imprenta.contacto;
+  const urlMapa = contacto?.domicilio
     ? (contacto.urlPerfilGoogle ??
       `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(contacto.domicilio)}`)
     : null;
   const hayContacto = Boolean(
-    contacto.domicilio ||
-    contacto.horario ||
-    contacto.telefono ||
-    contacto.whatsapp,
+    contacto?.domicilio ||
+    contacto?.horario ||
+    contacto?.telefono ||
+    contacto?.whatsapp,
   );
 
   return (
-    <div className="t-app t-mobile">
-      {/* Marca de la imprenta */}
-      <div className="t-brandbar">
-        <div className="imprenta-logo">
-          {data.imprenta.tieneLogo ? (
-            // Va por el proxy BFF, que reenvía el 302 a la URL firmada. El
-            // endpoint es @Public: acá el cliente no tiene sesión.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              className="mark mark-img"
-              src={`/api/backend/ordenes-trabajo/track/${token}/logo`}
-              alt={data.imprenta.nombre}
-            />
-          ) : (
-            <span className="mark">{data.imprenta.iniciales}</span>
-          )}
+    <DocumentoPublico
+      negocio={data.imprenta.nombre}
+      descripcion="Seguimiento de tu pedido"
+      logo={
+        data.imprenta.tieneLogo
+          ? `/api/backend/ordenes-trabajo/track/${encodeURIComponent(token)}/logo`
+          : undefined
+      }
+    >
+      <section className={p.hero} aria-labelledby="seguimiento-titulo">
+        <div className={p.heroTop}>
+          <span className={p.eyebrow}>Hola, {data.cliente.nombre}</span>
+          <EstadoPublico
+            tone={
+              pill.tone === "ok"
+                ? "success"
+                : pill.tone === "warm"
+                  ? "accent"
+                  : "default"
+            }
+          >
+            {pill.label}
+          </EstadoPublico>
+        </div>
+        <h1 id="seguimiento-titulo" className={cn(p.heroTitle, s.heroTitle)}>
+          Tu pedido está <strong>{estadoNarrativo(data.estado)}.</strong>
+        </h1>
+        <p className={p.heroDescription}>
+          {resumenEstadoTracking(data.estado)}
+        </p>
+        <dl className={p.heroMeta}>
           <div>
-            <div className="nm">{data.imprenta.nombre}</div>
-            <div className="sub">Seguimiento de tu pedido</div>
+            <dt>Orden de trabajo</dt>
+            <dd>
+              <code>{data.numero}</code>
+            </dd>
           </div>
-        </div>
-        <div className="powered">
-          <span>Powered by</span>
-          <span className="gp">Grafoprint</span>
-        </div>
-      </div>
-
-      {/* Los dos textos hablan de cosas distintas y hay que decirlo: a la
-          izquierda la CONEXIÓN (la página se re-consulta sola cada POLL_MS), a
-          la derecha la última novedad del PEDIDO. Sin nombrar el sujeto se leía
-          como una contradicción ("en vivo" al lado de "act. hace 13 h"). */}
-      <div className="t-live-strip">
-        <span className="live-dot" />
-        <span>{sincronizando ? "Sincronizando…" : "En vivo desde planta"}</span>
-        <span className="upd">
+          <div>
+            <dt>Recibida</dt>
+            <dd>{fechaLarga(data.creadaEl)?.dia ?? "Sin fecha"}</dd>
+          </div>
+          <div>
+            <dt>Tu pedido</dt>
+            <dd>
+              {data.items.length}{" "}
+              {data.items.length === 1 ? "producto" : "productos"}
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <div className={s.liveStrip}>
+        <span className={s.liveStatus} data-connected={conectado} role="status">
+          <span aria-hidden />
+          {sincronizando
+            ? "Actualizando seguimiento…"
+            : conectado
+              ? "En vivo desde planta"
+              : "Reintentando conexión"}
+        </span>
+        <span>
           {ultimaAct
-            ? `última novedad ${haceCuanto(ultimaAct)}`
-            : "sin novedades todavía"}
+            ? `Última novedad ${haceCuanto(ultimaAct)}`
+            : "Sin novedades todavía"}
         </span>
       </div>
 
-      <div className="t-body">
-        {/* Saludo */}
-        <div className="t-eyebrow">
-          <span className="code">{data.numero}</span>
-          <span className="sep">·</span>
-          <span>recibida {fechaLarga(data.creadaEl)?.dia ?? ""}</span>
-          <span
-            style={{
-              marginLeft: "auto",
-              // "En cola" es neutro: fondo apagado y sin el naranja de
-              // "producción", que sugería trabajo en curso donde no lo hay.
-              ...(pill.tone === "wait"
-                ? {
-                    background: "var(--t-surface-2)",
-                    color: "var(--t-muted)",
-                    borderColor: "var(--t-border)",
-                  }
-                : {}),
-            }}
-            className={`t-status-pill ${pill.tone === "ok" ? "ok" : ""}`}
-          >
-            <span
-              className="dot"
-              // Sin pulso cuando está en cola: nada está pasando todavía.
-              style={
-                pill.tone === "wait"
-                  ? { animation: "none", boxShadow: "none" }
-                  : undefined
-              }
-            />
-            {pill.label}
-          </span>
-        </div>
-        <h1 className="t-hero-title">
-          Hola {data.cliente.nombre},<br />
-          tu pedido está{" "}
-          <strong className={`t-hero-estado${pill.tone === "ok" ? " ok" : ""}`}>
-            {estadoNarrativo(data.estado)}
-          </strong>
-          .
-        </h1>
-        <div className="t-hero-sub">
-          {resumenEstadoTracking(data.estado)}
-        </div>
-
-        {data.fidelizacion.puntos > 0 ? (
-          <div className="t-card" style={{ padding: 18, marginBottom: 16 }}>
-            <div className="t-card-head" style={{ padding: 0, border: 0 }}>
-              <span className="ttl">Puntos de esta operación</span>
-              <span className="sub">
-                {data.fidelizacion.estado.toLocaleLowerCase()}
-              </span>
-            </div>
-            <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700 }}>
-              {data.fidelizacion.tipo === "CANJE" ? "−" : "+"}
-              {data.fidelizacion.puntos} puntos
-            </div>
-          </div>
-        ) : null}
-
-        {/* QR de retiro: sólo cuando el trabajo está listo. Es el respaldo del
-            que va por WhatsApp — acá siempre está a mano, aunque hayan borrado
-            el mensaje. Ya entregada no hace falta. */}
-        {data.estado === "finalizada" ? (
-          <div className={sQr.card}>
-            <div className={sQr.titulo}>
-              <IcoCheckCircle />
-              ¡Listo para retirar!
-            </div>
-            <div className={sQr.bajada}>
-              Mostrá este QR en el mostrador y te entregamos el pedido.
-            </div>
-            <div className={sQr.qr}>
+      {data.estado === "finalizada" ? (
+        <SeccionPublica titulo="¡Listo para retirar!" icon={QrCodeIcon}>
+          <div className={s.pickup}>
+            <div className={s.qr}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/api/backend/ordenes-trabajo/track/${token}/qr-retiro.png`}
+                src={`/api/backend/ordenes-trabajo/track/${encodeURIComponent(token)}/qr-retiro.png`}
                 alt={`QR de retiro de la orden ${data.numero}`}
               />
             </div>
-            <div className={sQr.numero}>{data.numero}</div>
-          </div>
-        ) : null}
-
-        {/* Fecha de entrega, sin métricas internas de producción. */}
-        <div className="t-deliver">
-          <div className="cal">
-            <span className="m">{entrega?.mes ?? "—"}</span>
-            <span className="d">{entrega?.num ?? "?"}</span>
-          </div>
-          <div className="body">
-            <div className="lbl">Entrega estimada</div>
-            <div className="v">{entrega?.dia ?? "A confirmar"}</div>
-            <div className="sub">
-              {data.items.length}{" "}
-              {data.items.length === 1 ? "producto" : "productos"}
+            <div>
+              <h3>Tu pedido te está esperando.</h3>
+              <p>Mostrá este QR en el mostrador para retirar tu trabajo.</p>
+              <code>{data.numero}</code>
             </div>
           </div>
-        </div>
+        </SeccionPublica>
+      ) : null}
 
-        {/* Acordeón de items */}
-        <div className="t-card">
-          <div className="t-card-head">
-            <span className="ttl">Seguimiento por producto</span>
-            <span className="sub">
-              {data.items.length} {data.items.length === 1 ? "item" : "items"}
-            </span>
-          </div>
-          <div className="t-items">
-            {data.items.map((item, i) => (
-              <ItemPanel
-                key={item.id}
-                item={item}
-                index={i}
-                open={unItem || abiertos.has(item.id)}
-                onToggle={() => toggle(item.id)}
-                token={token}
-              />
-            ))}
-          </div>
+      <div className={p.columns}>
+        <div className={p.stack}>
+          <SeccionPublica
+            titulo="Seguimiento por producto"
+            icon={PackageIcon}
+            detalle={String(data.items.length).padStart(2, "0")}
+          >
+            {data.items.length ? (
+              data.items.map((item, i) => (
+                <ItemPanel
+                  key={item.id}
+                  item={item}
+                  index={i}
+                  open={abierto === item.id}
+                  onToggle={() =>
+                    setAbierto((prev) => (prev === item.id ? null : item.id))
+                  }
+                  token={token}
+                />
+              ))
+            ) : (
+              <p className={s.noSteps}>
+                Pronto vas a ver el detalle de tu pedido acá.
+              </p>
+            )}
+          </SeccionPublica>
+          {data.archivos.length ? (
+            <SeccionPublica
+              titulo="Archivos compartidos"
+              icon={FileTextIcon}
+              detalle={String(data.archivos.length).padStart(2, "0")}
+            >
+              <ArchivosCliente archivos={data.archivos} token={token} />
+            </SeccionPublica>
+          ) : null}
+          {data.actividad.length ? (
+            <SeccionPublica titulo="Últimas novedades" icon={HistoryIcon}>
+              <ol className={s.activity}>
+                {data.actividad.map((actividad, i) => (
+                  <li key={`${actividad.fecha}-${i}`}>
+                    <span className={s.activityDot} aria-hidden />
+                    <p>{actividad.texto}</p>
+                    <time
+                      dateTime={actividad.fecha}
+                      title={fmtMomento(actividad.fecha)}
+                    >
+                      {haceCuanto(actividad.fecha)}
+                    </time>
+                  </li>
+                ))}
+              </ol>
+            </SeccionPublica>
+          ) : null}
         </div>
-
-        {/* Vendedor */}
-        {data.vendedor ? (
-          <div className="t-contact">
-            <span className="av">{data.vendedor.iniciales}</span>
-            <div className="body">
-              <div className="lbl">Tu asesor comercial</div>
-              <div className="nm">{data.vendedor.nombre}</div>
-              <div className="role">Cualquier duda, escribinos.</div>
+        <aside className={p.stack} aria-label="Entrega y contacto">
+          <SeccionPublica titulo="Entrega estimada" icon={CalendarDaysIcon}>
+            <div className={s.delivery}>
+              <div className={s.calendar} aria-hidden>
+                <span>{entrega?.mes ?? "—"}</span>
+                <strong>{entrega?.num ?? "—"}</strong>
+              </div>
+              <div>
+                <strong>{entrega?.dia ?? "A confirmar"}</strong>
+                <p>
+                  {entrega
+                    ? "Fecha prevista para tu pedido."
+                    : "Te avisaremos cuando tengamos una fecha."}
+                </p>
+              </div>
             </div>
-            {/* El canal de contacto es el de la EMPRESA (configurado en
-                Configuración › Empresa), no el celular personal del vendedor:
-                es el número que la imprenta monitorea. El vendedor es la cara. */}
-            {contacto.telefono || contacto.whatsapp ? (
-              <div className="t-contact-actions">
-                {contacto.telefono ? (
-                  <a
-                    className="ic-btn"
-                    title="Llamar"
-                    href={`tel:${contacto.telefono}`}
-                  >
-                    <IcoPhone />
+          </SeccionPublica>
+          {data.vendedor ? (
+            <SeccionPublica titulo="Tu asesor comercial" icon={UserRoundIcon}>
+              <div className={s.advisor}>
+                <span className={s.avatar}>{data.vendedor.iniciales}</span>
+                <div>
+                  <strong>{data.vendedor.nombre}</strong>
+                  <p>Estamos para ayudarte.</p>
+                </div>
+              </div>
+              {contacto && (contacto.telefono || contacto.whatsapp) ? (
+                <ContactoAcciones
+                  telefono={contacto.telefono}
+                  whatsapp={contacto.whatsapp}
+                />
+              ) : null}
+            </SeccionPublica>
+          ) : null}
+          {hayContacto && contacto ? (
+            <SeccionPublica titulo="Dónde encontrarnos" icon={MapPinIcon}>
+              <div className={s.shop}>
+                {contacto.domicilio && urlMapa ? (
+                  <a href={urlMapa} target="_blank" rel="noreferrer">
+                    <MapPinIcon aria-hidden />
+                    <span>
+                      {contacto.domicilio}
+                      <small>
+                        Ver mapa <ArrowUpRightIcon aria-hidden />
+                      </small>
+                    </span>
                   </a>
                 ) : null}
-                {contacto.whatsapp ? (
-                  <a
-                    className="ic-btn wa"
-                    title="WhatsApp"
-                    href={`https://wa.me/${contacto.whatsapp}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <IcoWa />
-                  </a>
+                {contacto.horario ? (
+                  <div>
+                    <Clock3Icon aria-hidden />
+                    <span>{contacto.horario}</span>
+                  </div>
                 ) : null}
               </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Dónde queda la imprenta y hasta qué hora atiende. El cliente que
-            abre este link ya sabe CUÁNDO va a estar listo; lo que no tenía era
-            adónde ir a buscarlo ni a quién preguntarle si el vendedor no
-            cargó teléfono. Si el negocio no cargó nada, la tarjeta no existe. */}
-        {hayContacto ? (
-          <div className="t-card">
-            <div className="t-card-head">
-              <span className="ttl">{data.imprenta.nombre}</span>
-              <span className="sub">dónde estamos</span>
-            </div>
-            <div className="t-shop">
-              {contacto.domicilio && urlMapa ? (
-                <a
-                  className="row"
-                  href={urlMapa}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className="ico">
-                    <IcoPin />
-                  </span>
-                  <span className="txt">{contacto.domicilio}</span>
-                  <span className="cta">Ver mapa</span>
-                </a>
-              ) : null}
-              {contacto.horario ? (
-                <div className="row">
-                  <span className="ico">
-                    <IcoClock />
-                  </span>
-                  <span className="txt">{contacto.horario}</span>
-                </div>
-              ) : null}
-              {/* Sólo si no hay card de asesor: esa ya ofrece el contacto de la
-                  empresa, y dos pares de teléfonos en pantalla hacen dudar. */}
               {!data.vendedor && (contacto.telefono || contacto.whatsapp) ? (
-                <div className="t-contact-actions" style={{ marginTop: 4 }}>
-                  {contacto.telefono ? (
-                    <a
-                      className="ic-btn"
-                      title="Llamar"
-                      href={`tel:${contacto.telefono}`}
-                    >
-                      <IcoPhone />
-                    </a>
-                  ) : null}
-                  {contacto.whatsapp ? (
-                    <a
-                      className="ic-btn wa"
-                      title="WhatsApp"
-                      href={`https://wa.me/${contacto.whatsapp}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <IcoWa />
-                    </a>
-                  ) : null}
-                </div>
+                <ContactoAcciones
+                  telefono={contacto.telefono}
+                  whatsapp={contacto.whatsapp}
+                />
               ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Archivos compartidos por la imprenta */}
-        {data.archivos.length > 0 ? (
-          <div className="t-card">
-            <div className="t-card-head">
-              <span className="ttl">Archivos</span>
-              <span className="sub">
-                {data.archivos.length === 1
-                  ? "1 archivo"
-                  : `${data.archivos.length} archivos`}
-              </span>
-            </div>
-            <ArchivosCliente archivos={data.archivos} token={token} />
-          </div>
-        ) : null}
-
-        {/* Actividad */}
-        {data.actividad.length > 0 ? (
-          <div className="t-card">
-            <div className="t-card-head">
-              <span className="ttl">Actividad reciente</span>
-              <span className="sub">en vivo</span>
-            </div>
-            <div className="t-activity">
-              {data.actividad.map((a, i) => (
-                <div key={i} className={`row ${i === 0 ? "new" : ""}`}>
-                  <span className="when">{haceCuanto(a.fecha)}</span>
-                  <span className="what">{a.texto}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+            </SeccionPublica>
+          ) : null}
+          {data.fidelizacion.puntos > 0 ? (
+            <SeccionPublica titulo="Puntos de este pedido" icon={SparklesIcon}>
+              <div className={s.points}>
+                <strong>
+                  {data.fidelizacion.tipo === "CANJE" ? "−" : "+"}
+                  {data.fidelizacion.puntos} puntos
+                </strong>
+                <span>{data.fidelizacion.estado.toLocaleLowerCase()}</span>
+              </div>
+            </SeccionPublica>
+          ) : null}
+        </aside>
       </div>
-
-      <div className="t-share">
-        Este link es privado. Compartilo solo con quien necesite ver el pedido.
-        <div className="gp-tag">
-          <span className="gp-mark">G</span>
-          Hecho con Grafoprint
-        </div>
-      </div>
-
-      {celebra ? <Confetti /> : null}
-    </div>
+    </DocumentoPublico>
   );
 }

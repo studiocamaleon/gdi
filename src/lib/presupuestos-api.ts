@@ -154,6 +154,7 @@ export type PresupuestoPublico = {
   numero: string;
   estado: PresupuestoEstado;
   negocio: string;
+  tieneLogo?: boolean;
   /** ISO 4217 de la moneda del tenant; ausente en payloads viejos = ARS. */
   monedaCodigo?: string;
   cliente: string | null;
