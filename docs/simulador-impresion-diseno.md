@@ -1,5 +1,7 @@
 # Simulador de impresión con datos reales — diseño
 
+> **Retirado el 11/09/2026 por decisión del usuario.** Este documento conserva el diseño histórico; sus pantallas y API ya no están disponibles. El [análisis de colas, tandas y operarios](produccion-colas-tandas-y-operarios-analisis-2026-09-11.md) describe el retiro y las alternativas todavía en evaluación.
+
 > 2026-07-17, rama `feat/simulador-real`. El v1 mock ya definió la UX
 > (tecnología → material → nesting client-side con sugerencia de ancho);
 > esta fase lo conecta a la cola real y agrega el completar en LOTE.

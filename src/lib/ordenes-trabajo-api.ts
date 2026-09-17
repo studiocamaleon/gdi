@@ -17,7 +17,9 @@ import type {
  */
 
 export type CrearOrdenTrabajoItemPayload = {
+  fechaEntrega?: string;
   cotizacionItemId?: string;
+  planEntrega?: import("./planificacion-entregas").VinculoPlanEntrega;
   /**
    * Descuento comercial de la línea (F1 descuentos). `tipo`/`valor` = lo que
    * pidió el vendedor; `monto` = lo que resolvió el motor (ya restado dentro de
@@ -49,11 +51,12 @@ export type CrearOrdenTrabajoPayload = {
   clienteId?: string;
   vendedorEmpleadoId?: string;
   cotizacionId?: string;
+  proyectoCampanaId?: string;
   /** borrador (guardar) o pendiente (emitir al taller). */
   estado?: "borrador" | "pendiente";
   /** ISO date (YYYY-MM-DD). */
   fechaEntrega?: string;
-  canalVenta?: string;
+  canalVenta: string;
   observaciones?: string;
   /** Sólo compatibilidad con presupuestos históricos; una OT nueva usa `cargos`. */
   cargosDirectos?: number;
@@ -88,6 +91,8 @@ export async function getOrdenesTrabajo(params?: {
   estado?: string;
   urgencia?: "atrasadas";
   q?: string;
+  clienteId?: string;
+  proyectoCampanaId?: string;
   page?: number;
   limit?: number;
 }): Promise<OrdenesTrabajoListado> {
@@ -95,6 +100,9 @@ export async function getOrdenesTrabajo(params?: {
   if (params?.estado) search.set("estado", params.estado);
   if (params?.urgencia) search.set("urgencia", params.urgencia);
   if (params?.q) search.set("q", params.q);
+  if (params?.clienteId) search.set("clienteId", params.clienteId);
+  if (params?.proyectoCampanaId)
+    search.set("proyectoCampanaId", params.proyectoCampanaId);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
   const query = search.toString();
@@ -138,6 +146,7 @@ export async function editarOrdenTrabajo(
 }
 
 export type EditarOrdenTrabajoLotePayload = EditarOrdenTrabajoPayload & {
+  tipoCambioId?: string;
   expectedVersion: string;
   /** Conjunto final completo; con `id` actualiza, sin `id` crea. */
   items?: Array<
@@ -208,8 +217,26 @@ export async function quitarOrdenItem(
 }
 
 /** Dataset autorizado del Tablero: items activos visibles para el perfil. */
-export async function getTableroProduccion(): Promise<TableroProduccionData> {
-  return apiRequest<TableroProduccionData>("/ordenes-trabajo/tablero");
+export async function getTableroProduccion({ soloPendientes = false }: { soloPendientes?: boolean } = {}): Promise<TableroProduccionData> {
+  return apiRequest<TableroProduccionData>(`/ordenes-trabajo/tablero${soloPendientes ? "?vista=activos" : ""}`);
+}
+
+export type PaginaTerminadosTablero = {
+  items: TableroItemData[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
+};
+export async function getTerminadosTablero(query: {
+  page: number; q?: string; desde?: string; hasta?: string;
+}): Promise<PaginaTerminadosTablero> {
+  const params = new URLSearchParams({ page: String(query.page), limit: "25" });
+  for (const key of ["q", "desde", "hasta"] as const)
+    if (query[key]) params.set(key, query[key]);
+  return apiRequest(`/ordenes-trabajo/tablero/terminados?${params}`);
+}
+export async function getItemTablero(itemId: string): Promise<TableroItemData> {
+  return apiRequest(`/ordenes-trabajo/tablero/items/${encodeURIComponent(itemId)}`);
 }
 
 /** Pasos materializados de UNA orden (tab Producción del detalle de OT). */
@@ -228,7 +255,7 @@ export async function getOrdenPasos(
  */
 export const TRAMOS_CAMBIARON_EVENT = "gdi:tramos-cambiaron";
 
-function avisarTramosCambiaron() {
+export function avisarTramosCambiaron() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(TRAMOS_CAMBIARON_EVENT));
   }
@@ -247,6 +274,7 @@ export async function accionPasoProduccion(
     motivoDetalle?: string;
     /** Completar con tiempo medido inválido: cuánto llevó aprox (D8). */
     tiempoDeclaradoMin?: number;
+    sinTiempoConfirmado?: boolean;
   },
 ): Promise<TableroItemData> {
   const item = await apiRequest<TableroItemData>(
@@ -271,41 +299,18 @@ export async function avanzarCompraProduccion(
   });
 }
 
-/**
- * Completar varios pasos de una (simulador de impresión): resultado
- * PARCIAL honesto — los que no pudieron, con su motivo. `duracionTandaMin`
- * (opcional) prorratea la duración real de la tanda entre los pasos (D11).
- */
-/**
- * Ahorro de material concretado al consolidar la tanda (simulador gran
- * formato): se persiste como valor generado por el sistema y alimenta el
- * acumulado de Reportes.
- */
-export type AhorroConsolidacionPayload = {
-  varianteId: string;
-  anchoMm: number;
-};
-
-export async function completarPasosLote(
-  pasoIds: string[],
-  duracionTandaMin?: number,
-  ahorro?: AhorroConsolidacionPayload,
-  validarCompatibilidadLaser?: boolean,
-) {
-  const resultado = await apiRequest<{
-    completados: number;
-    errores: Array<{ pasoId: string; motivo: string }>;
-  }>("/ordenes-trabajo/tablero/pasos/completar-lote", {
-    method: "POST",
-    body: JSON.stringify({
-      pasoIds,
-      duracionTandaMin,
-      ahorro,
-      validarCompatibilidadLaser,
-    }),
+export async function resolverGatePasoProduccion(
+  pasoId: string,
+  payload: {
+    tipo: "MATERIAL" | "CALIDAD";
+    estado: "CUMPLIDO" | "PENDIENTE";
+    detalle?: string;
+  },
+): Promise<void> {
+  await apiRequest(`/ordenes-trabajo/tablero/pasos/${pasoId}/gate`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
-  avisarTramosCambiaron();
-  return resultado;
 }
 
 /** Tramos de trabajo abiertos del usuario (widget flotante "En curso"). */

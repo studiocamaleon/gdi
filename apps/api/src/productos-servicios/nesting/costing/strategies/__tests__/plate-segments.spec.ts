@@ -103,14 +103,73 @@ describe('costingPlateSegments', () => {
     });
 
     expect(result.breakdown.units).toEqual([
-      { index: 0, occupationPct: 90, segmentApplied: 90, cost: 900 },
+      { index: 0, occupationPct: 93.08, segmentApplied: 100, cost: 1000 },
       {
         index: 1,
-        occupationPct: 45.56,
+        occupationPct: 46.92,
         segmentApplied: 60,
         cost: 600,
       },
     ]);
-    expect(result.totalCost).toBe(1500);
+    expect(result.totalCost).toBe(1600);
+  });
+
+  it('da el mismo escalón al invertir la declaración de los lados de la placa', () => {
+    const cotizar = (
+      widthMm: number,
+      heightMm: number,
+      placement: {
+        xMm: number;
+        yMm: number;
+        widthMm: number;
+        heightMm: number;
+      },
+    ) =>
+      costingPlateSegments({
+        strategy: 'plate-segments',
+        unitPrice: 1000,
+        totalPieces: 1,
+        unitsNeeded: 1,
+        segmentSteps: [15, 30, 45, 60, 75, 90, 100],
+        nesting: {
+          algorithm: 'grid-2d-multi',
+          substrates: [{ kind: 'sheet', count: 1, widthMm, heightMm }],
+          placements: [
+            {
+              pieceId: 'pieza',
+              substrateIndex: 0,
+              ...placement,
+              rotated: false,
+            },
+          ],
+          metrics: {
+            trailingMarginMm: 5,
+            aprovechamientoPct: 0,
+            areaUtilMm2: placement.widthMm * placement.heightMm,
+            areaTotalMm2: widthMm * heightMm,
+          },
+        },
+      });
+
+    const apaisada = cotizar(1300, 900, {
+      xMm: 5,
+      yMm: 5,
+      widthMm: 500,
+      heightMm: 700,
+    });
+    const vertical = cotizar(900, 1300, {
+      xMm: 5,
+      yMm: 5,
+      widthMm: 700,
+      heightMm: 500,
+    });
+
+    expect(apaisada.breakdown.units[0]).toEqual({
+      index: 0,
+      occupationPct: 39.23,
+      segmentApplied: 45,
+      cost: 450,
+    });
+    expect(vertical.breakdown.units).toEqual(apaisada.breakdown.units);
   });
 });

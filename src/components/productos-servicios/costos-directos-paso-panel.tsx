@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  ArrowUpRightIcon,
   CheckIcon,
   CircleDollarSignIcon,
   PencilIcon,
@@ -13,10 +14,9 @@ import { toast } from "sonner";
 
 import { RuleBuilder } from "@/components/productos-servicios/rule-builder";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { HumanSelect } from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
+import { Badge, Button, HumanSelect, Input, useNodosVisual } from "./nodos-ui";
+import nodeStyles from "./nodos-editor.module.css";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
 import { Label } from "@/components/ui/label";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -29,7 +29,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from "@/components/ui/sheet";
+} from "./nodos-sheet";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import {
   actualizarCargoPaso,
@@ -125,6 +125,7 @@ export function CostosDirectosPasoPanel({
   niveles = null,
   onBeforeMutate,
 }: Props) {
+  const nodosVisual = useNodosVisual();
   const router = useRouter();
   const cargosExtra = React.useMemo(
     () => leerCargosExtra(pasoExtra?.configCargosDirectosJson),
@@ -441,8 +442,10 @@ export function CostosDirectosPasoPanel({
     : [];
 
   return (
-    <section className="mt-6 flex flex-col gap-2.5">
-      <div className="px-0.5">
+    <section
+      className={`mt-6 flex flex-col gap-2.5 ${nodosVisual ? nodeStyles.costPanel : ""}`}
+    >
+      <div className={`px-0.5 ${nodosVisual ? nodeStyles.costHeader : ""}`}>
         <div className="flex items-center gap-2 text-[15px] font-semibold">
           <span
             aria-hidden
@@ -458,7 +461,9 @@ export function CostosDirectosPasoPanel({
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border bg-background p-4">
+      <div
+        className={`flex flex-col gap-3 rounded-xl border bg-background p-4 ${nodosVisual ? nodeStyles.costContent : ""}`}
+      >
         {!destinoListo ? (
           <Empty className="min-h-0 items-start gap-0 border p-4 text-left">
             <EmptyDescription>
@@ -579,7 +584,10 @@ export function CostosDirectosPasoPanel({
       </div>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="overflow-y-auto sm:max-w-xl">
+        <SheetContent
+          className="overflow-y-auto sm:max-w-xl"
+          brandClassName={nodeStyles.costSheet}
+        >
           <SheetHeader>
             <SheetTitle>
               {editando ? "Editar costo directo" : "Asociar costo directo"}
@@ -599,7 +607,11 @@ export function CostosDirectosPasoPanel({
                 : `Se aplicará dentro de este ${pasoExtra ? "paso extra" : "paso"} y quedará identificado en el desglose de costos.`}
             </SheetDescription>
           </SheetHeader>
-          <div className="space-y-5 px-4">
+          <div
+            className={
+              nodosVisual ? nodeStyles.costSheetBody : "space-y-5 px-4"
+            }
+          >
             <div className="space-y-2">
               <Label>Costo del catálogo</Label>
               <HumanSelect
@@ -650,25 +662,49 @@ export function CostosDirectosPasoPanel({
 
                 <Field>
                   <FieldLabel>Tratamiento del margen</FieldLabel>
-                  <ToggleGroup
-                    multiple={false}
-                    value={[tratamientoMargen]}
-                    onValueChange={(value) => {
-                      const selected = value.at(-1);
-                      if (selected)
-                        setTratamientoMargen(selected as TratamientoMargen);
-                    }}
-                    variant="outline"
-                    className="grid w-full grid-cols-3"
-                  >
-                    <ToggleGroupItem value="HEREDAR">Heredar</ToggleGroupItem>
-                    <ToggleGroupItem value="CON_MARGEN">
-                      Con margen
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="SIN_MARGEN">
-                      Sin margen
-                    </ToggleGroupItem>
-                  </ToggleGroup>
+                  {nodosVisual ? (
+                    <SegmentedControl
+                      tone="graphite"
+                      aria-label="Tratamiento del margen"
+                      value={tratamientoMargen}
+                      options={[
+                        { value: "HEREDAR", label: "Heredar", icon: null },
+                        {
+                          value: "CON_MARGEN",
+                          label: "Con margen",
+                          icon: null,
+                        },
+                        {
+                          value: "SIN_MARGEN",
+                          label: "Sin margen",
+                          icon: null,
+                        },
+                      ]}
+                      onChange={(value) =>
+                        setTratamientoMargen(value as TratamientoMargen)
+                      }
+                    />
+                  ) : (
+                    <ToggleGroup
+                      multiple={false}
+                      value={[tratamientoMargen]}
+                      onValueChange={(value) => {
+                        const selected = value.at(-1);
+                        if (selected)
+                          setTratamientoMargen(selected as TratamientoMargen);
+                      }}
+                      variant="outline"
+                      className="grid w-full grid-cols-3"
+                    >
+                      <ToggleGroupItem value="HEREDAR">Heredar</ToggleGroupItem>
+                      <ToggleGroupItem value="CON_MARGEN">
+                        Con margen
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="SIN_MARGEN">
+                        Sin margen
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  )}
                   <FieldDescription>
                     {tratamientoMargen === "HEREDAR"
                       ? `Usa la política del catálogo: ${cargoSeleccionado.aplicaMargen ? "aplicar margen" : "trasladar sin margen"}.`
@@ -737,6 +773,7 @@ export function CostosDirectosPasoPanel({
               disabled={guardando || !cargoSeleccionado}
             >
               {guardando ? "Guardando..." : "Guardar costo"}
+              {nodosVisual ? <ArrowUpRightIcon data-icon="inline-end" /> : null}
             </Button>
           </SheetFooter>
         </SheetContent>

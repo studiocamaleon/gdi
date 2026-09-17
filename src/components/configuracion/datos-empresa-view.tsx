@@ -1,4 +1,5 @@
 "use client";
+import { TipoCambioEmpresa } from "@/components/comercial/tipo-cambio-panel";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -180,6 +181,7 @@ export function DatosEmpresaView({
           </div>
         </div>
 
+        <TipoCambioEmpresa />
         <div className="arc-page" style={{ display: "block" }}>
           <div className="arc-card" style={{ marginBottom: 20 }}>
             <div className="arc-card-sec">

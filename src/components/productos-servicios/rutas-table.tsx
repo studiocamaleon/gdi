@@ -1,21 +1,37 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { Card, Chip, Input, Modal, SearchField, Tooltip } from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ListMetric } from "@/components/design-system/list-metric";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import styles from "./flujos.module.css";
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRightIcon,
+  ArrowUpRightIcon,
   BookOpenIcon,
+  BoxesIcon,
   CircleDotIcon,
+  CircleCheckIcon,
   CopyIcon,
   FactoryIcon,
   GitBranchIcon,
   LayersIcon,
   LayoutDashboardIcon,
-  Loader2Icon,
+  Layers3Icon,
   PackageIcon,
   PaintbrushIcon,
-  PlusIcon,
   PrinterIcon,
   RouteIcon,
   ScissorsIcon,
@@ -28,26 +44,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { EstadoVacio } from "@/components/ui/estado-vacio";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import type { FamiliaListItem, RutaListItem } from "@/lib/productos-servicios";
 import {
   duplicarRuta,
@@ -80,56 +76,77 @@ function getStepIcon(icono?: string | null) {
 }
 
 function RoutePreview({
-  pasos,
+  ruta,
   familiaLabel,
-  rutaNombre,
 }: {
-  pasos: RutaListItem["pasos"];
+  ruta: RutaListItem;
   familiaLabel: (codigo: string) => string;
-  rutaNombre: string;
 }) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
+  const nodos =
+    ruta.workflow?.nodos.slice().sort((a, b) => a.orden - b.orden) ??
+    ruta.pasos.map((paso, index) => ({
+      clave: paso.id,
+      tipo: "PASO" as const,
+      orden: index,
+      familiaCodigo: paso.familiaCodigo,
+      nombreVisible: paso.nombreVisible,
+      icono: paso.icono,
+    }));
+  const topologia = ruta.workflow?.topologia ?? "LINEAL";
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props) => (
-          <Button
-            {...props}
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label={`Ver recorrido de ${rutaNombre}: ${pasos.length} ${pasos.length === 1 ? "paso" : "pasos"}`}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <RouteIcon data-icon="inline-start" />
-            {pasos.length} {pasos.length === 1 ? "paso" : "pasos"}
-          </Button>
-        )}
-      />
-      <TooltipContent
-        side="bottom"
-        align="start"
-        className="block w-80 max-w-[calc(100vw-2rem)] p-3"
+    <Tooltip delay={200}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-label={`Ver flujo de producción de ${ruta.nombre}: ${nodos.length} ${nodos.length === 1 ? "nodo" : "nodos"}`}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
       >
-        <p className="mb-2 font-medium">Recorrido de producción</p>
-        <ol className="grid gap-1.5">
-          {pasos.map((paso, index) => {
-            const StepIcon = getStepIcon(paso.icono);
+        <RouteIcon data-icon="inline-start" />
+        {nodos.length} {nodos.length === 1 ? "nodo" : "nodos"} ·{" "}
+        {topologia === "DAG" ? "Paralelos" : "Lineal"}
+      </Button>
+      <Tooltip.Content
+        {...scope}
+        placement="bottom start"
+        className={`${theme} ${styles.preview}`}
+      >
+        <p className={styles.previewTitle}>Recorrido de producción</p>
+        <ol className={styles.previewSteps}>
+          {nodos.map((nodo, index) => {
+            const StepIcon =
+              nodo.tipo === "COMPONENTE"
+                ? BoxesIcon
+                : nodo.tipo === "ETAPA"
+                  ? Layers3Icon
+                  : getStepIcon(nodo.icono);
+            const nombre =
+              nodo.tipo === "COMPONENTE"
+                ? nodo.nombre
+                : nodo.nombreVisible?.trim() ||
+                  familiaLabel(nodo.familiaCodigo);
             return (
-              <li key={paso.id} className="flex min-w-0 items-center gap-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
-                  {index + 1}
+              <li key={nodo.clave}>
+                <span className={styles.previewIndex}>
+                  {String(index + 1).padStart(2, "0")}
                 </span>
                 <StepIcon className="size-3.5 shrink-0 opacity-75" />
-                <span className="min-w-0 truncate">
-                  {paso.nombreVisible?.trim() ||
-                    familiaLabel(paso.familiaCodigo)}
-                </span>
+                <span className="min-w-0 truncate">{nombre}</span>
+                <small>
+                  {nodo.tipo === "COMPONENTE"
+                    ? "Componente"
+                    : nodo.tipo === "ETAPA"
+                      ? "Compuesto"
+                      : "Simple"}
+                </small>
               </li>
             );
           })}
         </ol>
-      </TooltipContent>
+      </Tooltip.Content>
     </Tooltip>
   );
 }
@@ -143,6 +160,8 @@ export function RutasTable({
   initialRutas: RutaListItem[];
   puedeGestionar: boolean;
 }) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const rutas = initialRutas;
   const [familias, setFamilias] = React.useState<FamiliaListItem[]>([]);
@@ -175,11 +194,15 @@ export function RutasTable({
       if (estadoFiltro === "activas" && !r.activo) return false;
       if (estadoFiltro === "inactivas" && r.activo) return false;
       if (!term) return true;
-      const nombresPasos = r.pasos
-        .map((p) => familiaLabel(p.familiaCodigo).toLowerCase())
+      const nombresNodos = (r.workflow?.nodos ?? r.pasos)
+        .map((nodo) =>
+          "tipo" in nodo && nodo.tipo === "COMPONENTE"
+            ? nodo.nombre.toLowerCase()
+            : familiaLabel(nodo.familiaCodigo).toLowerCase(),
+        )
         .join(" ");
       const haystack =
-        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresPasos}`.toLowerCase();
+        `${r.codigo} ${r.nombre} ${r.descripcion ?? ""} ${nombresNodos}`.toLowerCase();
       return haystack.includes(term);
     });
   }, [rutas, search, familiaLabel, estadoFiltro]);
@@ -188,10 +211,7 @@ export function RutasTable({
     router.push(`/productos-servicios/rutas/${id}`);
   };
 
-  const abrirDuplicarRuta = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    ruta: RutaListItem,
-  ) => {
+  const abrirDuplicarRuta = (event: React.MouseEvent, ruta: RutaListItem) => {
     event.stopPropagation();
     if (duplicandoId) return;
     setRutaADuplicar(ruta);
@@ -211,14 +231,14 @@ export function RutasTable({
     setDuplicandoId(rutaADuplicar.id);
     try {
       const duplicada = await duplicarRuta(rutaADuplicar.id, { nombre });
-      toast.success(`Ruta "${rutaADuplicar.nombre}" duplicada`);
+      toast.success(`Flujo "${rutaADuplicar.nombre}" duplicado`);
       setRutaADuplicar(null);
       setNombreCopia("");
       router.refresh();
       router.push(`/productos-servicios/rutas/${duplicada.id}`);
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "No se pudo duplicar la ruta",
+        err instanceof Error ? err.message : "No se pudo duplicar el flujo",
       );
     } finally {
       setDuplicandoId(null);
@@ -226,100 +246,121 @@ export function RutasTable({
   };
 
   return (
-    <div className="content">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Rutas de producción</h1>
-          <div className="sub">
-            {rutas.length} rutas reusables. Cada ruta es un esqueleto de pasos
-            que los productos pueden referenciar.
-          </div>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page}`}
+    >
+      <header className={listPage.header}>
+        <div>
+          <span className={brand.eyebrow}>Costos · Recorridos del taller</span>
+          <h1>
+            Flujos de producción<span className={brand.titleDot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
+            Organizá nodos, componentes y secuencias para fabricar tus
+            productos.
+          </p>
         </div>
-        {puedeGestionar ? (
-          <Link
-            href="/productos-servicios/rutas/nueva"
-            className="btn btn-primary"
-          >
-            <PlusIcon size={14} />
-            Nueva ruta
-          </Link>
-        ) : null}
-      </div>
-
-      {rutas.length === 0 ? (
-        <EstadoVacio
-          titulo="Sin rutas cargadas"
-          descripcion="Las rutas son los caminos de producción reusables. Empezá creando una desde cero o ejecutá el seed."
-          cta={
-            puedeGestionar
-              ? {
-                  label: "Crear ruta",
-                  href: "/productos-servicios/rutas/nueva",
-                  icon: PlusIcon,
-                }
-              : undefined
-          }
+        {puedeGestionar && (
+          <ActionLink href="/productos-servicios/rutas/nueva">
+            <ArrowUpRightIcon />
+            Nuevo flujo
+          </ActionLink>
+        )}
+      </header>
+      <section className={brand.metrics} aria-label="Resumen de flujos">
+        <ListMetric
+          label="Flujos"
+          value={rutas.length}
+          hint="Recorridos reutilizables del catálogo"
+          icon={RouteIcon}
         />
-      ) : (
-        <div className="card">
-          <div className="search-card-head">
-            <div className="ttl-block">
-              <span className="title">Rutas</span>
-              <span className="count">
-                {rutasFiltradas.length} de {rutas.length}
-              </span>
-            </div>
-            <ToggleGroup
-              variant="outline"
-              size="sm"
-              spacing={1}
-              value={[estadoFiltro]}
-              onValueChange={(values) => {
-                const value = values[0] as EstadoFiltro | undefined;
-                if (value) setEstadoFiltro(value);
-              }}
-              aria-label="Filtrar rutas por estado"
-            >
-              <ToggleGroupItem value="activas">Activas</ToggleGroupItem>
-              <ToggleGroupItem value="inactivas">Inactivas</ToggleGroupItem>
-              <ToggleGroupItem value="todas">Todas</ToggleGroupItem>
-            </ToggleGroup>
-            <label className="search-inline">
-              <SearchIcon size={14} />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar ruta o paso..."
-              />
-              <span className="kbd">/</span>
-            </label>
+        <ListMetric
+          label="Activos"
+          value={rutas.filter((ruta) => ruta.activo).length}
+          hint="Disponibles para tus productos"
+          icon={CircleCheckIcon}
+        />
+        <ListMetric
+          label="En uso"
+          value={
+            rutas.filter((ruta) => ruta._count.productosAlternativas > 0).length
+          }
+          hint="Flujos vinculados a productos"
+          icon={GitBranchIcon}
+        />
+      </section>
+      <Card className={listPage.results}>
+        {rutas.length === 0 ? (
+          <div className={listPage.empty}>
+            <RouteIcon className="size-7" />
+            <h2>Sin flujos cargados</h2>
+            <p>
+              Los flujos organizan la producción y se pueden reutilizar. Empezá
+              creando uno desde cero.
+            </p>
+            {puedeGestionar && (
+              <ActionLink href="/productos-servicios/rutas/nueva">
+                <ArrowUpRightIcon />
+                Crear flujo
+              </ActionLink>
+            )}
           </div>
-
-          {rutasFiltradas.length === 0 ? (
-            <div className="p-8">
-              <EstadoVacio
-                variant="compacto"
-                titulo="Ninguna ruta coincide"
-                descripcion="Probá con otros términos de búsqueda."
+        ) : (
+          <>
+            <div className={listPage.toolbar}>
+              <div className={styles.listTitle}>
+                <span className={styles.directoryIcon} aria-hidden>
+                  <RouteIcon />
+                </span>
+                <strong>Catálogo de flujos</strong>
+                <span>
+                  {rutasFiltradas.length} de {rutas.length}
+                </span>
+              </div>
+              <SegmentedControl
+                tone="graphite"
+                aria-label="Filtrar flujos por estado"
+                value={estadoFiltro}
+                options={[
+                  { value: "activas", label: "Activos", icon: null },
+                  { value: "inactivas", label: "Inactivos", icon: null },
+                  { value: "todas", label: "Todos", icon: null },
+                ]}
+                onChange={(value) => setEstadoFiltro(value as EstadoFiltro)}
               />
+              <SearchField
+                className={styles.search}
+                aria-label="Buscar flujo o nodo"
+                value={search}
+                onChange={setSearch}
+              >
+                <SearchField.Group className={focus.singleBorder}>
+                  <SearchField.SearchIcon>
+                    <SearchIcon />
+                  </SearchField.SearchIcon>
+                  <SearchField.Input placeholder="Buscar flujo o nodo..." />
+                  <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+                </SearchField.Group>
+              </SearchField>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <TooltipProvider delay={200}>
-                <table className="tbl">
+            {rutasFiltradas.length === 0 ? (
+              <div className={listPage.empty}>
+                <SearchIcon className="size-6" />
+                <h2>Ningún flujo coincide</h2>
+                <p>Probá con otros términos o cambiá el filtro de estado.</p>
+              </div>
+            ) : (
+              <div className={styles.tableScroll}>
+                <table className={styles.table}>
                   <thead>
                     <tr>
                       <th>Nombre</th>
-                      <th style={{ width: 140 }}>Recorrido</th>
-                      <th className="right" style={{ width: 90 }}>
-                        Versión
-                      </th>
-                      <th className="right" style={{ width: 150 }}>
-                        Productos que la usan
-                      </th>
-                      <th className="right" style={{ width: 110 }}>
-                        Acciones
-                      </th>
+                      <th>Recorrido</th>
+                      <th className={styles.numeric}>Versión</th>
+                      <th className={styles.numeric}>Productos que lo usan</th>
+                      <th className={styles.numeric}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -340,70 +381,78 @@ export function RutasTable({
                         }}
                       >
                         <td>
-                          <div className="flex items-center gap-2">
-                            <div className="name">{ruta.nombre}</div>
-                            {!ruta.activo ? (
-                              <Badge variant="secondary">Inactiva</Badge>
-                            ) : null}
+                          <div className={styles.routeIdentity}>
+                            <span className={styles.routeIcon} aria-hidden>
+                              <RouteIcon />
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className={styles.name}>
+                                  {ruta.nombre}
+                                </span>
+                                {!ruta.activo && (
+                                  <Chip size="sm" variant="soft">
+                                    Inactiva
+                                  </Chip>
+                                )}
+                              </div>
+                              {ruta.descripcion && (
+                                <p className={styles.description}>
+                                  {ruta.descripcion}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          {ruta.descripcion ? (
-                            <div className="desc">{ruta.descripcion}</div>
-                          ) : null}
                         </td>
                         <td>
                           <RoutePreview
-                            pasos={ruta.pasos}
+                            ruta={ruta}
                             familiaLabel={familiaLabel}
-                            rutaNombre={ruta.nombre}
                           />
                         </td>
-                        <td className="right">
-                          <span className="tag version">
+                        <td className={styles.numeric}>
+                          <Chip size="sm" variant="soft">
                             v{ruta.versionActual}
-                          </span>
+                          </Chip>
                         </td>
-                        <td className="right">
-                          <span
-                            className={`tag usage ${ruta._count.productosAlternativas === 0 ? "zero" : ""}`}
-                          >
-                            <GitBranchIcon size={12} />
+                        <td className={styles.numeric}>
+                          <span className={styles.usage}>
+                            <GitBranchIcon className="size-3.5" />
                             {ruta._count.productosAlternativas}
                           </span>
                         </td>
-                        <td className="right">
+                        <td className={styles.numeric}>
                           {puedeGestionar ? (
-                            <span className="actions">
-                              <button
-                                type="button"
-                                className="link-action"
+                            <div className={styles.actions}>
+                              <Button
+                                variant="ghost"
+                                isIconOnly
                                 aria-label={`Duplicar ${ruta.nombre}`}
                                 title="Duplicar"
-                                disabled={duplicandoId === ruta.id}
+                                isDisabled={duplicandoId === ruta.id}
                                 onClick={(event) =>
                                   abrirDuplicarRuta(event, ruta)
                                 }
                               >
                                 {duplicandoId === ruta.id ? (
-                                  <Loader2Icon
-                                    size={13}
-                                    className="animate-spin"
-                                  />
+                                  <GdiSpinner size={13} className="size-4" />
                                 ) : (
-                                  <CopyIcon size={13} />
+                                  <CopyIcon />
                                 )}
-                              </button>
-                              <Link
+                              </Button>
+                              <ActionLink
+                                variant="outline"
+                                className={styles.iconLink}
                                 href={`/productos-servicios/rutas/${ruta.id}`}
-                                className="link-action"
                                 aria-label={`Ver detalle de ${ruta.nombre}`}
                                 title="Ver detalle"
                                 onClick={(event) => event.stopPropagation()}
                               >
-                                <ArrowRightIcon className="size-3.5" />
-                              </Link>
-                            </span>
+                                <ArrowUpRightIcon />
+                              </ActionLink>
+                            </div>
                           ) : (
-                            <span className="text-muted-foreground text-xs">
+                            <span className={styles.description}>
                               Solo lectura
                             </span>
                           )}
@@ -412,14 +461,15 @@ export function RutasTable({
                     ))}
                   </tbody>
                 </table>
-              </TooltipProvider>
-            </div>
-          )}
-        </div>
-      )}
-
-      <AlertDialog
-        open={Boolean(rutaADuplicar)}
+              </div>
+            )}
+          </>
+        )}
+      </Card>
+      <FormDialog
+        className={brand.dialog}
+        isOpen={Boolean(rutaADuplicar)}
+        isDismissable={!duplicandoId}
         onOpenChange={(open) => {
           if (duplicandoId) return;
           if (!open) {
@@ -427,52 +477,50 @@ export function RutasTable({
             setNombreCopia("");
           }
         }}
+        title="Duplicar flujo de producción"
+        description="Definí el nombre de la copia. Se copiará el flujo de producción completo de la versión actual, incluidos sus nodos compuestos, componentes y paralelismos, para que puedas revisarlo antes de usarlo."
       >
-        <AlertDialogContent>
-          <form onSubmit={handleDuplicarRuta}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Duplicar ruta de producción</AlertDialogTitle>
-              <AlertDialogDescription>
-                Definí el nombre de la copia. Se copiarán los pasos de la
-                versión actual para que puedas revisarla antes de usarla.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="mt-4 grid gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="nombre-copia-ruta">Nombre de la copia</Label>
+        <form onSubmit={handleDuplicarRuta} className={styles.dialogForm}>
+          <Modal.Body className={styles.dialogBody}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="nombre-copia-ruta">
+                  Nombre de la copia
+                </FieldLabel>
                 <Input
+                  className={focus.singleBorder}
                   id="nombre-copia-ruta"
                   autoFocus
                   value={nombreCopia}
                   onChange={(event) => setNombreCopia(event.target.value)}
-                  placeholder="Nombre de la nueva ruta"
+                  placeholder="Nombre del nuevo flujo"
                   disabled={Boolean(duplicandoId)}
                 />
-              </div>
-            </div>
-            <AlertDialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={Boolean(duplicandoId)}
-                onClick={() => {
-                  setRutaADuplicar(null);
-                  setNombreCopia("");
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                loading={Boolean(duplicandoId)}
-                disabled={!nombreCopia.trim()}
-              >
-                Duplicar ruta
-              </Button>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+              </Field>
+            </FieldGroup>
+          </Modal.Body>
+          <Modal.Footer className={styles.dialogFooter}>
+            <Button
+              variant="outline"
+              isDisabled={Boolean(duplicandoId)}
+              onPress={() => {
+                setRutaADuplicar(null);
+                setNombreCopia("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              isPending={Boolean(duplicandoId)}
+              isDisabled={!nombreCopia.trim() || Boolean(duplicandoId)}
+            >
+              <ArrowUpRightIcon />
+              Duplicar flujo
+            </Button>
+          </Modal.Footer>
+        </form>
+      </FormDialog>
+    </main>
   );
 }

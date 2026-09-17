@@ -18,11 +18,34 @@ import { EtaService } from './eta.service';
 export class EtaSnapshotScheduler {
   private readonly logger = new Logger(EtaSnapshotScheduler.name);
   private corriendo = false;
+  private asignando = false;
 
   constructor(
     private readonly eta: EtaService,
     private readonly prisma: PrismaService,
   ) {}
+
+  /** Reconciliación automática también sin navegadores abiertos. Incluye cambios
+   * de calendarios, dotación, usuarios y acciones de otros módulos. */
+  @Cron('*/30 * * * * *', { name: 'produccion-asignacion-personal' })
+  async asignarPersonal() {
+    if (this.asignando) return;
+    this.asignando = true;
+    try {
+      for (const tenantId of await this.eta.tenantsConActividad()) {
+        try {
+          await this.eta.sincronizarAsignaciones(tenantId);
+        } catch (error) {
+          this.logger.error(
+            `No se pudo actualizar la asignación de producción del tenant ${tenantId}.`,
+            error,
+          );
+        }
+      }
+    } finally {
+      this.asignando = false;
+    }
+  }
 
   @Cron('0 9 * * *', { name: 'eta-snapshot-diario' })
   async snapshotDiario() {

@@ -1855,6 +1855,40 @@ const presets = [
       },
     ),
   },
+  {
+    key: 'TORNILLO_AUTOPERFORANTE_T1',
+    nombreCanonico: 'Tornillo autoperforante T1',
+    descripcionCorta:
+      'Tornillo T1 punta mecha para cartelería, bastidores, chapas y estructuras metálicas livianas.',
+    iconKind: 'objeto',
+    aliasDisponibles: [
+      'Tornillo T1',
+      'T1 punta mecha',
+      'Autoperforante T1',
+      'Tornillo cabeza tanque',
+      'Tornillo cabeza flangeada',
+      'Tornillo para bastidor',
+    ],
+    usosRecomendados: [
+      'carteleria',
+      'cajas_luz',
+      'estructuras_metalicas',
+      'pop_signage',
+    ],
+    procesosCompatibles: [
+      'fabricacion_bastidor',
+      'ensamble_estructural',
+      'montaje_carteleria',
+    ],
+    advertencias: [
+      'La cantidad por caja varía según fabricante y proveedor. Confirmar la presentación comercial al asociar la variante a un proveedor.',
+    ],
+    familia: FamiliaMateriaPrima.MAGNETICO_FIJACION,
+    subfamilia: SubfamiliaMateriaPrima.FIJACION_AUXILIAR,
+    tipoTecnico: 'tornillo_autoperforante',
+    templateId: 'fijacion_auxiliar_v1',
+    variantes: tornilloAutoperforanteT1Variants(),
+  },
   tintaPreset({
     key: 'TINTA_ECOSOLVENTE_CMYK',
     nombreCanonico: 'Tinta ecosolvente CMYK',
@@ -5016,6 +5050,52 @@ function ganchoEmblocadoVariants() {
         largoMm,
         unidadesPorCaja: 1000,
         material: 'Alambre metálico',
+      },
+      unidadStock: UnidadMateriaPrima.UNIDAD,
+      unidadCompra: UnidadMateriaPrima.CAJA,
+      precioReferencia: null,
+      moneda: 'ARS',
+    };
+  });
+}
+
+// Presentaciones mayoristas de referencia. El consumo productivo siempre se
+// expresa por unidad; la cantidad por caja se conserva como dato editable de
+// compra porque cambia entre fabricantes y distribuidores.
+function tornilloAutoperforanteT1Variants() {
+  const medidas = [
+    [8, '1/2', 12.7, 10000],
+    [8, '3/4', 19.05, 5000],
+    [10, '1', 25.4, 2500],
+    [10, '1 1/2', 38.1, 2000],
+  ];
+
+  return medidas.map(([calibre, largoPulgadas, largoMm, unidadesPorCaja]) => {
+    const medidaNominal = `#${calibre} × ${largoPulgadas}\"`;
+    const largoSku = String(largoPulgadas)
+      .replaceAll(' ', '-')
+      .replace('/', 'D');
+    return {
+      skuSugerido: `T1-PM-${calibre}X${largoSku}-X${unidadesPorCaja}`,
+      nombreVarianteSugerido: `T1 ${medidaNominal} · caja de referencia x ${unidadesPorCaja}`,
+      formato: medidaNominal,
+      espesor: null,
+      color: 'Zincado',
+      recomendada: true,
+      atributosVarianteJson: {
+        tipoFijacion: 'Tornillo autoperforante',
+        linea: 'T1',
+        tipoPunta: 'Mecha',
+        tipoCabeza: 'Tanque / flangeada',
+        encastre: 'Phillips #2',
+        material: 'Acero zincado',
+        calibre,
+        largo: largoMm,
+        largoMm,
+        largoPulgadas,
+        medidaNominal,
+        unidadesPorCaja,
+        presentacionReferencia: true,
       },
       unidadStock: UnidadMateriaPrima.UNIDAD,
       unidadCompra: UnidadMateriaPrima.CAJA,

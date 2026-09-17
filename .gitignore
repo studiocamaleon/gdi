@@ -1,9 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
-/apps/api/node_modules
-/apps/marketing/node_modules
+node_modules/
+/apps/api/.venv-opennest/
+/apps/api/.native/
 /.pnp
 .pnp.*
 .yarn/*
@@ -25,6 +25,7 @@
 
 # NestJS API build artifacts (never commit compiled output)
 /apps/api/dist/
+/apps/forma-studio/dist/
 
 # Storage local de archivos (driver de dev, sin R2). Son archivos de los
 # tenants: nunca al repo.
@@ -58,8 +59,15 @@ dev.db
 
 # local runtime artifacts / scratch
 .tmp/
+/tmp/
+/output/
+/apps/forma-studio/tmp/
 .claude/
 apps/api/output.lp
 apps/api/*.lp
 backups/
 apps/api/scripts/*.baseline.json
+
+# Cache del lector CAD de Python
+__pycache__/
+*.pyc

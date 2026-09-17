@@ -74,9 +74,20 @@ export class ProductoValidacionService {
         if (config.modoActivacion === 'NO_EJECUTAR') continue;
 
         // Paso tercerizado: lo compra un proveedor. No requiere máquina ni
-        // material; sólo validamos que tenga una fuente de costo válida.
+        // material; validamos que el proveedor tenga costo y plazo utilizables.
         if (config.tercerizado) {
           const fuentesOk = ['tarifa_magnitud', 'matriz', 'fijo', 'manual'];
+          if (
+            config.plazoProveedorDias == null ||
+            config.plazoProveedorDias < 0
+          ) {
+            errores.push({
+              severidad: 'ERROR',
+              codigo: 'tercerizado_sin_plazo_proveedor',
+              mensaje: `Paso ${paso.orden} (${familia.nombre}): indicá el plazo de entrega del proveedor para poder calcular el ETA y sus dependencias.`,
+              ubicacion: { rutaAltId: ra.id, rutaPasoId: paso.id },
+            });
+          }
           if (
             !config.fuenteCostoTercerizado ||
             !fuentesOk.includes(config.fuenteCostoTercerizado)

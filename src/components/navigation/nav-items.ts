@@ -78,6 +78,11 @@ export const NAV: NavItem[] = [
         label: "Presupuestos",
         href: "/comercial/presupuestos",
       },
+      {
+        key: "campanas",
+        label: "Campañas",
+        href: "/comercial/campanas",
+      },
       // Vive en Comercial (sigue el flujo propuesta → presupuesto → OT) aunque
       // la ruta siga bajo /produccion/ordenes.
       {
@@ -122,12 +127,12 @@ export const NAV: NavItem[] = [
       { key: "maquinaria", label: "Maquinaria", href: "/costos/maquinaria" },
       {
         key: "pasos",
-        label: "Pasos de producción",
+        label: "Nodos de producción",
         href: "/productos-servicios/pasos",
       },
       {
         key: "rutas",
-        label: "Rutas de producción",
+        label: "Flujos de producción",
         href: "/productos-servicios/rutas",
       },
       {
@@ -156,20 +161,19 @@ export const NAV: NavItem[] = [
         href: "/produccion/tablero",
       },
       {
-        key: "simulador",
-        label: "Simulador gran formato",
-        href: "/produccion/simulador",
+        key: "planificacion-produccion",
+        label: "Planificación",
+        href: "/produccion/planificacion",
       },
       {
-        key: "simulador-laser",
-        label: "Simulador impresión láser",
-        href: "/produccion/simulador-laser",
+        key: "colas-produccion",
+        label: "Colas de trabajo",
+        href: "/produccion/colas",
       },
       {
         key: "estaciones",
         label: "Estaciones",
         href: "/produccion/estaciones",
-        permiso: "produccion.configurar",
       },
     ],
   },
@@ -254,7 +258,7 @@ export const NAV: NavItem[] = [
   // deciden la tira (reportes-shell.tsx) y el gate de cada página.
   {
     key: "reportes",
-    label: "Reportes",
+    label: "Centro de análisis",
     icon: "Chart",
     permiso: "reportes.ver",
     href: "/reportes",

@@ -1,0 +1,114 @@
+/* Controles de Planificación: marca clara, precisión y densidad de trabajo. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex: none;
+  container: planificacion-metrics / inline-size;
+}
+.stats > :first-child {
+  --surface: var(--brand-graphite);
+  --surface-secondary: var(--brand-graphite-line);
+  --foreground: var(--brand-on-graphite);
+  --muted-text: var(--brand-muted-on-graphite);
+  --border: var(--brand-graphite-line);
+}
+.viewControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex: none;
+}
+.periodControls,
+.periodNavigation,
+.toolbarActions,
+.zoomControls,
+.rowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.periodControls {
+  flex-wrap: wrap;
+}
+.periodNavigation {
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+}
+.periodLabel {
+  font: 11px / 1.5 var(--brand-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.periodControls .periodSelect {
+  width: 132px;
+}
+.toolbar {
+  --accent-foreground: var(--action-primary-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  background: var(--surface);
+}
+.search {
+  width: 320px;
+  max-width: 100%;
+  min-width: 0;
+}
+.toolbarActions {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.switchLabel {
+  gap: 7px;
+  white-space: nowrap;
+}
+.switchLabel > :global([data-slot="label"]) {
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.zoomControls {
+  gap: 3px;
+}
+.zoomControls > span {
+  color: var(--muted-text);
+  font-size: 11px;
+  margin-right: 3px;
+}
+.zoomControls .zoomSlider {
+  width: clamp(96px, 8vw, 128px);
+  flex: none;
+  margin-inline: 5px;
+}
+.zoomValue {
+  min-width: 39px;
+  text-align: right;
+  font: 11px / 1.5 var(--brand-mono);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 720px) {
+  .stats { gap: 8px; }
+  .toolbar { padding: 12px; }
+  .toolbarActions { width: 100%; justify-content: space-between; }
+  .zoomControls { margin-left: auto; }
+  .zoomControls .zoomSlider { width: 80px; }
+  .search { width: 100%; }
+}
+@media (max-width: 480px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats > :last-child { grid-column: 1 / -1; }
+  .periodControls { gap: 8px; width: 100%; }
+  .periodNavigation { flex: 1; justify-content: space-between; }
+  .periodControls .periodSelect { width: 100%; }
+}

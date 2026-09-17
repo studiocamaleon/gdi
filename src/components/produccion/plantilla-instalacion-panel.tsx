@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import Image from "next/image";
 import {
@@ -35,12 +36,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  descargaArchivoInstalacionHref,
-  descargaPlantillaInstalacionHref,
+  descargaArchivoInstalacionHref as apiArchivoInstalacionHref,
+  descargaPlantillaInstalacionHref as apiPlantillaInstalacionHref,
   getPlantillaInstalacion,
   type ConfiguracionPlantillaInstalacion,
   type PlantillaInstalacion,
+  type SeleccionRecorrido,
 } from "@/lib/recorridos-vectoriales-api";
 
 const DEFAULT_CONFIG: ConfiguracionPlantillaInstalacion = {
@@ -50,7 +53,7 @@ const DEFAULT_CONFIG: ConfiguracionPlantillaInstalacion = {
   solapeMm: 20,
 };
 
-export function PlantillaInstalacionPanel({ itemId }: { itemId: string }) {
+export function PlantillaInstalacionPanel({ itemId, seleccion }: { itemId: string; seleccion?: SeleccionRecorrido }) {
   const [draft, setDraft] = React.useState(() => ({
     bordeMm: "50",
     anchoPanelMm: "1200",
@@ -63,11 +66,11 @@ export function PlantillaInstalacionPanel({ itemId }: { itemId: string }) {
   const [error, setError] = React.useState("");
 
   const load = React.useCallback(
-    async (next: ConfiguracionPlantillaInstalacion) => {
+    async (next: ConfiguracionPlantillaInstalacion, fuenteId = data?.fuenteId) => {
       setLoading(true);
       setError("");
       try {
-        setData(await getPlantillaInstalacion(itemId, next));
+        setData(await getPlantillaInstalacion(itemId, next, { ...seleccion, fuenteId }));
         setConfig(next);
       } catch (cause) {
         setError(
@@ -79,12 +82,12 @@ export function PlantillaInstalacionPanel({ itemId }: { itemId: string }) {
         setLoading(false);
       }
     },
-    [itemId],
+    [itemId, seleccion, data?.fuenteId],
   );
 
   React.useEffect(() => {
     let cancelled = false;
-    getPlantillaInstalacion(itemId, DEFAULT_CONFIG)
+    getPlantillaInstalacion(itemId, DEFAULT_CONFIG, seleccion)
       .then((result) => {
         if (!cancelled) setData(result);
       })
@@ -102,7 +105,13 @@ export function PlantillaInstalacionPanel({ itemId }: { itemId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [itemId]);
+  }, [itemId, seleccion]);
+
+  const seleccionActiva = { ...seleccion, fuenteId: data?.fuenteId };
+  const descargaArchivoInstalacionHref: typeof apiArchivoInstalacionHref = (id, conf, formato, panel) =>
+    apiArchivoInstalacionHref(id, conf, formato, panel, seleccionActiva);
+  const descargaPlantillaInstalacionHref: typeof apiPlantillaInstalacionHref = (id, conf, panel) =>
+    apiPlantillaInstalacionHref(id, conf, panel, seleccionActiva);
 
   const apply = () => {
     const next = {
@@ -150,6 +159,19 @@ export function PlantillaInstalacionPanel({ itemId }: { itemId: string }) {
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
+        {data && data.fuentes.length > 1 ? (
+          <Field>
+            <FieldLabel htmlFor={`${itemId}-installation-source`}>Diseño de instalación</FieldLabel>
+            <Select value={data.fuenteId} items={data.fuentes.map((f) => ({ value: f.id, label: f.nombre }))}
+              disabled={loading} onValueChange={(value) => { if (value) void load(config, value); }}>
+              <SelectTrigger id={`${itemId}-installation-source`} className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectGroup>
+                {data.fuentes.map((f) => <SelectItem key={f.id} value={f.id}>{f.nombre}</SelectItem>)}
+              </SelectGroup></SelectContent>
+            </Select>
+            <FieldDescription>Cada archivo conserva su composición original para la colocación.</FieldDescription>
+          </Field>
+        ) : null}
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>No se pudo preparar la plantilla</AlertTitle>
@@ -198,10 +220,7 @@ export function PlantillaInstalacionPanel({ itemId }: { itemId: string }) {
             disabled={loading}
             onClick={apply}
           >
-            <RefreshCwIcon
-              data-icon="inline-start"
-              className={loading ? "animate-spin" : undefined}
-            />
+            {loading ? <GdiSpinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
             Actualizar paneles
           </Button>
         </div>

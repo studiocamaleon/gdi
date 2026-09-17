@@ -1,5 +1,6 @@
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 /**
  * Puerta del módulo. El sidebar ya lo esconde para quien no lo tiene, pero una
@@ -15,5 +16,9 @@ export default async function Layout({
   if (!(await tienePermiso("registros.ver"))) {
     return <SinPermiso modulo="Empleados" />;
   }
-  return <>{children}</>;
+  return (
+    <DesignSystemProvider theme="brand" appearance="light">
+      {children}
+    </DesignSystemProvider>
+  );
 }

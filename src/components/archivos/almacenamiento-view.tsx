@@ -12,6 +12,7 @@ import {
 
 const ETIQUETA_SCOPE: Record<ArchivoScope, string> = {
   TENANT_BRANDING: "Identidad visual",
+  CAMPANA: "Campañas",
   CLIENTE: "Clientes",
   ORDEN: "Órdenes",
   ORDEN_ITEM: "Arte de producción",

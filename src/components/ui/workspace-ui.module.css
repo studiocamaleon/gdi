@@ -1,0 +1,13 @@
+/* Composición compartida y optativa: no altera los defaults de las primitivas. */
+.sectionTitle { font-size: 21px; font-weight: 600; line-height: 1.3; letter-spacing: -.03em; }
+.dataTable th { height: 42px; background: var(--card); color: var(--muted-foreground); font-size: 11px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.dataTable tr { border-color: var(--border); }
+.dataTable th, .dataTable td { padding-left: 16px; padding-right: 16px; }
+.dataTable th:first-child, .dataTable td:first-child { padding-left: 24px; }
+.dataTable th:last-child, .dataTable td:last-child { padding-right: 20px; }
+.dataTable td { padding-top: 18px; padding-bottom: 18px; vertical-align: top; }
+.dataTable .groupRow { background: var(--muted); }
+.dataTable .groupRow td { padding-top: 10px; padding-bottom: 10px; white-space: normal; }
+@media (max-width: 760px) {
+  .sectionTitle { font-size: 18px; }
+}

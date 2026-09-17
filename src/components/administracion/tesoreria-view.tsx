@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownIcon,
+  ArrowUpRightIcon,
   ArrowLeftRightIcon,
   BanknoteIcon,
   CheckCircle2Icon,
@@ -39,14 +40,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { TesoreriaDialog } from "./tesoreria-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  useDesignScope,
+  useLegacyDesignScope,
+} from "@/components/design-system/appearance";
 import {
   Empty,
   EmptyContent,
@@ -63,14 +61,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectField } from "@/components/design-system/select-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -169,23 +160,12 @@ function selector(
   ariaLabel: string,
 ) {
   return (
-    <Select value={value} onValueChange={(next) => onValueChange(next ?? "")}>
-      <SelectTrigger className="w-full" aria-label={ariaLabel}>
-        <SelectValue>
-          {opciones.find((opcion) => opcion.value === value)?.label ??
-            "Seleccionar"}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {opciones.map((opcion) => (
-            <SelectItem key={opcion.value} value={opcion.value}>
-              {opcion.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+    <SelectField
+      value={value}
+      onChange={onValueChange}
+      options={opciones}
+      aria-label={ariaLabel}
+    />
   );
 }
 
@@ -224,142 +204,137 @@ function CuentaDialog({
   const invalido = !nombre.trim();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="gp-modal sm:max-w-lg"
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader>
-          <DialogTitle>{cuenta ? "Editar cuenta" : "Nueva cuenta"}</DialogTitle>
-          <DialogDescription>
-            {cuenta
-              ? "Actualizá los datos operativos. La moneda no cambia después del primer movimiento."
-              : "Registrá la cuenta con su moneda y, si corresponde, el saldo con el que comienza."}
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
+    <TesoreriaDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={cuenta ? "Editar cuenta" : "Nueva cuenta"}
+      description={
+        <>
+          {cuenta
+            ? "Actualizá los datos operativos. La moneda no cambia después del primer movimiento."
+            : "Registrá la cuenta con su moneda y, si corresponde, el saldo con el que comienza."}
+        </>
+      }
+    >
+      <FieldGroup className={styles.formBody}>
+        <Field>
+          <FieldLabel htmlFor="tes-cuenta-tipo">Tipo</FieldLabel>
+          {selector(
+            tipo,
+            setTipo,
+            [
+              { value: "caja", label: "Caja de efectivo" },
+              { value: "banco", label: "Cuenta bancaria" },
+              { value: "billetera", label: "Billetera virtual" },
+            ],
+            "Tipo de cuenta",
+          )}
+        </Field>
+        <Field data-invalid={invalido || undefined}>
+          <FieldLabel htmlFor="tes-cuenta-nombre">Nombre</FieldLabel>
+          <Input
+            id="tes-cuenta-nombre"
+            value={nombre}
+            onChange={(event) => setNombre(event.target.value)}
+            placeholder="Ej. Banco Galicia · cuenta corriente"
+            aria-invalid={invalido || undefined}
+          />
+          {invalido ? <FieldError>Ingresá un nombre.</FieldError> : null}
+        </Field>
+        <div className={styles.formGrid}>
           <Field>
-            <FieldLabel htmlFor="tes-cuenta-tipo">Tipo</FieldLabel>
+            <FieldLabel htmlFor="tes-cuenta-banco">Banco / detalle</FieldLabel>
+            <Input
+              id="tes-cuenta-banco"
+              value={banco}
+              onChange={(event) => setBanco(event.target.value)}
+              placeholder="Opcional"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="tes-cuenta-alias">CBU / alias</FieldLabel>
+            <Input
+              id="tes-cuenta-alias"
+              value={alias}
+              onChange={(event) => setAlias(event.target.value)}
+              placeholder="Opcional"
+            />
+          </Field>
+        </div>
+        <div className={styles.formGrid}>
+          <Field>
+            <FieldLabel htmlFor="tes-cuenta-moneda">Moneda</FieldLabel>
             {selector(
-              tipo,
-              setTipo,
-              [
-                { value: "caja", label: "Caja de efectivo" },
-                { value: "banco", label: "Cuenta bancaria" },
-                { value: "billetera", label: "Billetera virtual" },
-              ],
-              "Tipo de cuenta",
+              moneda,
+              setMoneda,
+              monedas.map((item) => ({
+                value: item.codigo,
+                label: `${item.codigo} · ${item.nombre}`,
+              })),
+              "Moneda de la cuenta",
             )}
           </Field>
-          <Field data-invalid={invalido || undefined}>
-            <FieldLabel htmlFor="tes-cuenta-nombre">Nombre</FieldLabel>
-            <Input
-              id="tes-cuenta-nombre"
-              value={nombre}
-              onChange={(event) => setNombre(event.target.value)}
-              placeholder="Ej. Banco Galicia · cuenta corriente"
-              aria-invalid={invalido || undefined}
-            />
-            {invalido ? <FieldError>Ingresá un nombre.</FieldError> : null}
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          {!cuenta ? (
             <Field>
-              <FieldLabel htmlFor="tes-cuenta-banco">
-                Banco / detalle
-              </FieldLabel>
+              <FieldLabel htmlFor="tes-cuenta-saldo">Saldo inicial</FieldLabel>
               <Input
-                id="tes-cuenta-banco"
-                value={banco}
-                onChange={(event) => setBanco(event.target.value)}
-                placeholder="Opcional"
+                id="tes-cuenta-saldo"
+                type="number"
+                min={0}
+                value={saldoInicial}
+                onChange={(event) => setSaldoInicial(event.target.value)}
+                placeholder="0"
               />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="tes-cuenta-alias">CBU / alias</FieldLabel>
-              <Input
-                id="tes-cuenta-alias"
-                value={alias}
-                onChange={(event) => setAlias(event.target.value)}
-                placeholder="Opcional"
-              />
-            </Field>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="tes-cuenta-moneda">Moneda</FieldLabel>
-              {selector(
-                moneda,
-                setMoneda,
-                monedas.map((item) => ({
-                  value: item.codigo,
-                  label: `${item.codigo} · ${item.nombre}`,
-                })),
-                "Moneda de la cuenta",
-              )}
-            </Field>
-            {!cuenta ? (
-              <Field>
-                <FieldLabel htmlFor="tes-cuenta-saldo">
-                  Saldo inicial
-                </FieldLabel>
-                <Input
-                  id="tes-cuenta-saldo"
-                  type="number"
-                  min={0}
-                  value={saldoInicial}
-                  onChange={(event) => setSaldoInicial(event.target.value)}
-                  placeholder="0"
-                />
-                <FieldDescription>
-                  Se registra como movimiento conciliado.
-                </FieldDescription>
-              </Field>
-            ) : null}
-          </div>
-          <Field orientation="horizontal">
-            <Checkbox
-              id="tes-cuenta-negativo"
-              checked={negativo}
-              onCheckedChange={(checked) => setNegativo(checked === true)}
-            />
-            <div>
-              <FieldLabel htmlFor="tes-cuenta-negativo">
-                Permitir saldo negativo
-              </FieldLabel>
               <FieldDescription>
-                Usalo únicamente si la cuenta tiene descubierto autorizado.
+                Se registra como movimiento conciliado.
               </FieldDescription>
-            </div>
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            loading={ocupado}
-            loadingText="Guardando…"
-            disabled={invalido}
-            onClick={() =>
-              onGuardar({
-                tipo,
-                nombre: nombre.trim(),
-                banco: banco.trim() || undefined,
-                cbuAlias: alias.trim() || undefined,
-                moneda,
-                saldoInicial:
-                  saldoInicial && Number(saldoInicial) > 0
-                    ? Number(saldoInicial)
-                    : undefined,
-                permiteSaldoNegativo: negativo,
-              })
-            }
-          >
-            Guardar cuenta
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            </Field>
+          ) : null}
+        </div>
+        <Field orientation="horizontal" className={styles.formOption}>
+          <Checkbox
+            id="tes-cuenta-negativo"
+            aria-label="Permitir saldo negativo"
+            checked={negativo}
+            onCheckedChange={(checked) => setNegativo(checked === true)}
+          />
+          <div>
+            <FieldLabel htmlFor="tes-cuenta-negativo">
+              Permitir saldo negativo
+            </FieldLabel>
+            <FieldDescription>
+              Usalo únicamente si la cuenta tiene descubierto autorizado.
+            </FieldDescription>
+          </div>
+        </Field>
+      </FieldGroup>
+      <footer className={styles.formFooter}>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button
+          loading={ocupado}
+          loadingText="Guardando…"
+          disabled={invalido}
+          onClick={() =>
+            onGuardar({
+              tipo,
+              nombre: nombre.trim(),
+              banco: banco.trim() || undefined,
+              cbuAlias: alias.trim() || undefined,
+              moneda,
+              saldoInicial:
+                saldoInicial && Number(saldoInicial) > 0
+                  ? Number(saldoInicial)
+                  : undefined,
+              permiteSaldoNegativo: negativo,
+            })
+          }
+        >
+          Guardar cuenta
+        </Button>
+      </footer>
+    </TesoreriaDialog>
   );
 }
 
@@ -403,131 +378,125 @@ function TransferenciaDialog({
     (!origen.permiteSaldoNegativo && valor > origen.saldo);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="gp-modal sm:max-w-lg"
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader>
-          <DialogTitle>Transferencia entre cuentas</DialogTitle>
-          <DialogDescription>
-            Genera dos movimientos espejo y no afecta el resultado del negocio.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
-          <Field>
-            <FieldLabel>Desde</FieldLabel>
-            {selector(
-              desde,
-              setDesde,
-              cuentas.map((cuenta) => ({
-                value: cuenta.id,
-                label: `${cuenta.nombre} · ${formatearMoneda(cuenta.saldo, monedaDe(cuenta.moneda))}`,
-              })),
-              "Cuenta de origen",
-            )}
-          </Field>
-          <div className="flex justify-center text-muted-foreground">
-            <ArrowDownIcon />
-          </div>
-          <Field>
-            <FieldLabel>Hacia</FieldLabel>
-            {selector(
-              hacia,
-              setHacia,
-              cuentas
-                .filter((cuenta) => cuenta.id !== desde)
-                .map((cuenta) => ({ value: cuenta.id, label: cuenta.nombre })),
-              "Cuenta de destino",
-            )}
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field
-              data-invalid={
-                (Boolean(origen) &&
-                  !origen?.permiteSaldoNegativo &&
-                  valor > (origen?.saldo ?? 0)) ||
-                undefined
-              }
-            >
-              <FieldLabel htmlFor="tes-transfer-monto">
-                Sale ({origen?.moneda ?? "—"})
-              </FieldLabel>
-              <Input
-                id="tes-transfer-monto"
-                type="number"
-                min={0}
-                value={monto}
-                onChange={(event) => setMonto(event.target.value)}
-              />
-              {origen &&
-              !origen.permiteSaldoNegativo &&
-              valor > origen.saldo ? (
-                <FieldError>El saldo disponible es insuficiente.</FieldError>
-              ) : null}
-            </Field>
-            {cruzada ? (
-              <Field>
-                <FieldLabel htmlFor="tes-transfer-destino">
-                  Llega ({destino?.moneda})
-                </FieldLabel>
-                <Input
-                  id="tes-transfer-destino"
-                  type="number"
-                  min={0}
-                  value={montoDestino}
-                  onChange={(event) => setMontoDestino(event.target.value)}
-                />
-                <FieldDescription>
-                  Se guarda el tipo de cambio implícito.
-                </FieldDescription>
-              </Field>
-            ) : null}
-          </div>
-          <Field>
-            <FieldLabel htmlFor="tes-transfer-ref">Referencia</FieldLabel>
-            <Input
-              id="tes-transfer-ref"
-              value={referencia}
-              onChange={(event) => setReferencia(event.target.value)}
-              placeholder="N° de operación bancaria"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="tes-transfer-notas">Notas</FieldLabel>
-            <Textarea
-              id="tes-transfer-notas"
-              value={notas}
-              onChange={(event) => setNotas(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            loading={ocupado}
-            loadingText="Transfiriendo…"
-            disabled={invalido}
-            onClick={() =>
-              onGuardar({
-                desdeCuentaId: desde,
-                haciaCuentaId: hacia,
-                monto: valor,
-                montoDestino: cruzada ? Number(montoDestino) : undefined,
-                idempotencyKey: crypto.randomUUID(),
-                referencia: referencia.trim() || undefined,
-                notas: notas.trim() || undefined,
-              })
+    <TesoreriaDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Transferencia entre cuentas"
+      description={
+        <>Genera dos movimientos espejo y no afecta el resultado del negocio.</>
+      }
+    >
+      <FieldGroup className={styles.formBody}>
+        <Field>
+          <FieldLabel>Desde</FieldLabel>
+          {selector(
+            desde,
+            setDesde,
+            cuentas.map((cuenta) => ({
+              value: cuenta.id,
+              label: `${cuenta.nombre} · ${formatearMoneda(cuenta.saldo, monedaDe(cuenta.moneda))}`,
+            })),
+            "Cuenta de origen",
+          )}
+        </Field>
+        <div className={styles.transferDirection}>
+          <ArrowDownIcon />
+        </div>
+        <Field>
+          <FieldLabel>Hacia</FieldLabel>
+          {selector(
+            hacia,
+            setHacia,
+            cuentas
+              .filter((cuenta) => cuenta.id !== desde)
+              .map((cuenta) => ({ value: cuenta.id, label: cuenta.nombre })),
+            "Cuenta de destino",
+          )}
+        </Field>
+        <div className={styles.formGrid}>
+          <Field
+            data-invalid={
+              (Boolean(origen) &&
+                !origen?.permiteSaldoNegativo &&
+                valor > (origen?.saldo ?? 0)) ||
+              undefined
             }
           >
-            <ArrowLeftRightIcon data-icon="inline-start" />
-            Transferir
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <FieldLabel htmlFor="tes-transfer-monto">
+              Sale ({origen?.moneda ?? "—"})
+            </FieldLabel>
+            <Input
+              id="tes-transfer-monto"
+              type="number"
+              min={0}
+              value={monto}
+              onChange={(event) => setMonto(event.target.value)}
+            />
+            {origen && !origen.permiteSaldoNegativo && valor > origen.saldo ? (
+              <FieldError>El saldo disponible es insuficiente.</FieldError>
+            ) : null}
+          </Field>
+          {cruzada ? (
+            <Field>
+              <FieldLabel htmlFor="tes-transfer-destino">
+                Llega ({destino?.moneda})
+              </FieldLabel>
+              <Input
+                id="tes-transfer-destino"
+                type="number"
+                min={0}
+                value={montoDestino}
+                onChange={(event) => setMontoDestino(event.target.value)}
+              />
+              <FieldDescription>
+                Se guarda el tipo de cambio implícito.
+              </FieldDescription>
+            </Field>
+          ) : null}
+        </div>
+        <Field>
+          <FieldLabel htmlFor="tes-transfer-ref">Referencia</FieldLabel>
+          <Input
+            id="tes-transfer-ref"
+            value={referencia}
+            onChange={(event) => setReferencia(event.target.value)}
+            placeholder="N° de operación bancaria"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="tes-transfer-notas">Notas</FieldLabel>
+          <Textarea
+            id="tes-transfer-notas"
+            value={notas}
+            onChange={(event) => setNotas(event.target.value)}
+          />
+        </Field>
+      </FieldGroup>
+      <footer className={styles.formFooter}>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button
+          loading={ocupado}
+          loadingText="Transfiriendo…"
+          disabled={invalido}
+          onClick={() =>
+            onGuardar({
+              desdeCuentaId: desde,
+              haciaCuentaId: hacia,
+              monto: valor,
+              montoDestino: cruzada ? Number(montoDestino) : undefined,
+              idempotencyKey: crypto.randomUUID(),
+              referencia: referencia.trim() || undefined,
+              notas: notas.trim() || undefined,
+            })
+          }
+        >
+          <ArrowLeftRightIcon data-icon="inline-start" />
+          Transferir
+        </Button>
+      </footer>
+    </TesoreriaDialog>
   );
 }
 
@@ -558,111 +527,106 @@ function AjusteDialog({
     Number(monto) > cuenta.saldo;
   const invalido = Number(monto) <= 0 || concepto.trim().length < 3 || excede;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="gp-modal sm:max-w-lg"
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader>
-          <DialogTitle>Ajuste de fondos</DialogTitle>
-          <DialogDescription>
-            {cuenta.nombre}. Usalo para comisiones bancarias, intereses o
-            correcciones respaldadas; el movimiento queda marcado para
-            conciliar.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel>Movimiento</FieldLabel>
-              {selector(
-                tipo,
-                (value) => setTipo(value as "entrada" | "salida"),
-                [
-                  { value: "entrada", label: "Entrada" },
-                  { value: "salida", label: "Salida" },
-                ],
-                "Tipo de ajuste",
-              )}
-            </Field>
-            <Field data-invalid={excede || undefined}>
-              <FieldLabel htmlFor="tes-ajuste-monto">
-                Monto ({cuenta.moneda})
-              </FieldLabel>
-              <Input
-                id="tes-ajuste-monto"
-                type="number"
-                min={0}
-                value={monto}
-                onChange={(event) => setMonto(event.target.value)}
-                aria-invalid={excede || undefined}
-              />
-              {excede ? <FieldError>Saldo insuficiente.</FieldError> : null}
-            </Field>
-          </div>
+    <TesoreriaDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Ajuste de fondos"
+      description={
+        <>
+          {cuenta.nombre}. Usalo para comisiones bancarias, intereses o
+          correcciones respaldadas; el movimiento queda marcado para conciliar.
+        </>
+      }
+    >
+      <FieldGroup className={styles.formBody}>
+        <div className={styles.formGrid}>
           <Field>
-            <FieldLabel htmlFor="tes-ajuste-fecha">Fecha</FieldLabel>
+            <FieldLabel>Movimiento</FieldLabel>
+            {selector(
+              tipo,
+              (value) => setTipo(value as "entrada" | "salida"),
+              [
+                { value: "entrada", label: "Entrada" },
+                { value: "salida", label: "Salida" },
+              ],
+              "Tipo de ajuste",
+            )}
+          </Field>
+          <Field data-invalid={excede || undefined}>
+            <FieldLabel htmlFor="tes-ajuste-monto">
+              Monto ({cuenta.moneda})
+            </FieldLabel>
             <Input
-              id="tes-ajuste-fecha"
-              type="date"
-              value={fecha}
-              onChange={(event) => setFecha(event.target.value)}
+              id="tes-ajuste-monto"
+              type="number"
+              min={0}
+              value={monto}
+              onChange={(event) => setMonto(event.target.value)}
+              aria-invalid={excede || undefined}
             />
+            {excede ? <FieldError>Saldo insuficiente.</FieldError> : null}
           </Field>
-          <Field
-            data-invalid={concepto.length > 0 && concepto.trim().length < 3}
-          >
-            <FieldLabel htmlFor="tes-ajuste-concepto">Concepto</FieldLabel>
-            <Input
-              id="tes-ajuste-concepto"
-              value={concepto}
-              onChange={(event) => setConcepto(event.target.value)}
-              placeholder="Ej. Comisión mantenimiento bancario"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="tes-ajuste-ref">Referencia</FieldLabel>
-            <Input
-              id="tes-ajuste-ref"
-              value={referencia}
-              onChange={(event) => setReferencia(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="tes-ajuste-notas">Justificación</FieldLabel>
-            <Textarea
-              id="tes-ajuste-notas"
-              value={notas}
-              onChange={(event) => setNotas(event.target.value)}
-              placeholder="Detalle y respaldo de la corrección"
-            />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            loading={ocupado}
-            loadingText="Registrando…"
-            disabled={invalido}
-            onClick={() =>
-              onGuardar({
-                tipo,
-                monto: Number(monto),
-                fecha,
-                concepto: concepto.trim(),
-                idempotencyKey: crypto.randomUUID(),
-                referencia: referencia.trim() || undefined,
-                notas: notas.trim() || undefined,
-              })
-            }
-          >
-            Registrar ajuste
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+        <Field>
+          <FieldLabel htmlFor="tes-ajuste-fecha">Fecha</FieldLabel>
+          <Input
+            id="tes-ajuste-fecha"
+            type="date"
+            value={fecha}
+            onChange={(event) => setFecha(event.target.value)}
+          />
+        </Field>
+        <Field data-invalid={concepto.length > 0 && concepto.trim().length < 3}>
+          <FieldLabel htmlFor="tes-ajuste-concepto">Concepto</FieldLabel>
+          <Input
+            id="tes-ajuste-concepto"
+            value={concepto}
+            onChange={(event) => setConcepto(event.target.value)}
+            placeholder="Ej. Comisión mantenimiento bancario"
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="tes-ajuste-ref">Referencia</FieldLabel>
+          <Input
+            id="tes-ajuste-ref"
+            value={referencia}
+            onChange={(event) => setReferencia(event.target.value)}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="tes-ajuste-notas">Justificación</FieldLabel>
+          <Textarea
+            id="tes-ajuste-notas"
+            value={notas}
+            onChange={(event) => setNotas(event.target.value)}
+            placeholder="Detalle y respaldo de la corrección"
+          />
+        </Field>
+      </FieldGroup>
+      <footer className={styles.formFooter}>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button
+          loading={ocupado}
+          loadingText="Registrando…"
+          disabled={invalido}
+          onClick={() =>
+            onGuardar({
+              tipo,
+              monto: Number(monto),
+              fecha,
+              concepto: concepto.trim(),
+              idempotencyKey: crypto.randomUUID(),
+              referencia: referencia.trim() || undefined,
+              notas: notas.trim() || undefined,
+            })
+          }
+        >
+          Registrar ajuste
+        </Button>
+      </footer>
+    </TesoreriaDialog>
   );
 }
 
@@ -683,76 +647,68 @@ function ArqueoDialog({
   const [notas, setNotas] = React.useState("");
   const diferencia = contado === "" ? null : Number(contado) - cuenta.saldo;
   const fmt = (valor: number) =>
-    formatearMoneda(valor, monedaDe(cuenta.moneda), { decimales: 0 });
+    formatearMoneda(valor, monedaDe(cuenta.moneda));
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="gp-modal gp-modal-compact"
-        overlayClassName="gp-modal-overlay"
-      >
-        <DialogHeader>
-          <DialogTitle>Arqueo de caja</DialogTitle>
-          <DialogDescription>
-            Compará lo contado físicamente con el saldo de {cuenta.nombre}.
-          </DialogDescription>
-        </DialogHeader>
-        <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="tes-arqueo-contado">
-              Efectivo contado
-            </FieldLabel>
-            <Input
-              id="tes-arqueo-contado"
-              type="number"
-              min={0}
-              autoFocus
-              value={contado}
-              onChange={(event) => setContado(event.target.value)}
-            />
-          </Field>
-          <Card size="sm">
-            <CardContent className="grid gap-2">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Según sistema</span>
-                <span className="font-medium">{fmt(cuenta.saldo)}</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Diferencia</span>
-                <span className="font-medium">
-                  {diferencia === null
-                    ? "—"
-                    : `${diferencia > 0 ? "+" : ""}${fmt(diferencia)}`}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-          <Field>
-            <FieldLabel htmlFor="tes-arqueo-notas">Observación</FieldLabel>
-            <Textarea
-              id="tes-arqueo-notas"
-              value={notas}
-              onChange={(event) => setNotas(event.target.value)}
-            />
-          </Field>
-        </FieldGroup>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button
-            loading={ocupado}
-            loadingText="Cerrando…"
-            disabled={contado === "" || Number(contado) < 0}
-            onClick={() =>
-              onGuardar(Number(contado), notas.trim() || undefined)
-            }
-          >
-            <ClipboardCheckIcon data-icon="inline-start" />
-            Cerrar arqueo
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TesoreriaDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Arqueo de caja"
+      description={
+        <>Compará lo contado físicamente con el saldo de {cuenta.nombre}.</>
+      }
+    >
+      <FieldGroup className={styles.formBody}>
+        <Field>
+          <FieldLabel htmlFor="tes-arqueo-contado">Efectivo contado</FieldLabel>
+          <Input
+            id="tes-arqueo-contado"
+            type="number"
+            min={0}
+            autoFocus
+            value={contado}
+            onChange={(event) => setContado(event.target.value)}
+          />
+        </Field>
+        <Card size="sm" className={styles.balancePreview}>
+          <CardContent className="grid gap-2">
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Según sistema</span>
+              <span className="font-medium">{fmt(cuenta.saldo)}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-muted-foreground">Diferencia</span>
+              <span className="font-medium">
+                {diferencia === null
+                  ? "—"
+                  : `${diferencia > 0 ? "+" : ""}${fmt(diferencia)}`}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+        <Field>
+          <FieldLabel htmlFor="tes-arqueo-notas">Observación</FieldLabel>
+          <Textarea
+            id="tes-arqueo-notas"
+            value={notas}
+            onChange={(event) => setNotas(event.target.value)}
+          />
+        </Field>
+      </FieldGroup>
+      <footer className={styles.formFooter}>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancelar
+        </Button>
+        <Button
+          loading={ocupado}
+          loadingText="Cerrando…"
+          disabled={contado === "" || Number(contado) < 0}
+          onClick={() => onGuardar(Number(contado), notas.trim() || undefined)}
+        >
+          <ClipboardCheckIcon data-icon="inline-start" />
+          Cerrar arqueo
+        </Button>
+      </footer>
+    </TesoreriaDialog>
   );
 }
 
@@ -766,6 +722,8 @@ export function TesoreriaView({
   monedaLocal: string;
 }) {
   const router = useRouter();
+  const scope = useLegacyDesignScope();
+  const designScope = useDesignScope();
   const puedeGestionar = usePuede("administracion.gestionar");
   const { moneda, zonaHoraria } = useConfigRegional();
   const { fechaHora, fechaNumerica } = useFecha();
@@ -800,10 +758,9 @@ export function TesoreriaView({
     seleccion;
   const monedaMovimientos = cuentaMovimientos?.moneda ?? monedaLocal;
   const activas = initialCuentas.filter((cuenta) => cuenta.activo);
-  const fmtLocal = (valor: number) =>
-    formatearMoneda(valor, moneda, { decimales: 0 });
+  const fmtLocal = (valor: number) => formatearMoneda(valor, moneda);
   const fmtCuenta = (valor: number, codigo: string) =>
-    formatearMoneda(valor, monedaDe(codigo), { decimales: 0 });
+    formatearMoneda(valor, monedaDe(codigo));
 
   React.useEffect(() => {
     if (!seleccionId) {
@@ -956,11 +913,17 @@ export function TesoreriaView({
   };
 
   return (
-    <main className={styles.pagina}>
+    <main
+      {...designScope}
+      {...scope}
+      className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
+    >
       <header className={styles.encabezado}>
         <div>
-          <span className={styles.eyebrow}>Administración financiera</span>
-          <h1>Tesorería</h1>
+          <span className={styles.eyebrow}>Administración · Fondos</span>
+          <h1>
+            Tesorería<span aria-hidden="true">.</span>
+          </h1>
           <p>Posición real, cuentas, valores y conciliación de fondos.</p>
         </div>
         {puedeGestionar ? (
@@ -1017,7 +980,10 @@ export function TesoreriaView({
           <div className={styles.kpiTexto}>
             <span>Efectivo en cajas</span>
             <strong>{fmtLocal(initialKpis.efectivo)}</strong>
-            <small>{initialKpis.cajasActivas} cajas activas</small>
+            <small>
+              {initialKpis.cajasActivas}{" "}
+              {initialKpis.cajasActivas === 1 ? "caja activa" : "cajas activas"}
+            </small>
           </div>
         </article>
 
@@ -1029,7 +995,9 @@ export function TesoreriaView({
             <span>Bancos y billeteras</span>
             <strong>{fmtLocal(initialKpis.bancos)}</strong>
             <small>
-              {initialKpis.cuentasLocales} cuentas en {monedaLocal}
+              {initialKpis.cuentasLocales}{" "}
+              {initialKpis.cuentasLocales === 1 ? "cuenta" : "cuentas"} en{" "}
+              {monedaLocal}
             </small>
           </div>
         </article>
@@ -1042,7 +1010,7 @@ export function TesoreriaView({
             href="/administracion/tesoreria/acreditaciones"
             className={styles.accesoAcreditaciones}
           >
-            <ArrowLeftRightIcon />
+            <ArrowUpRightIcon />
             <span className="sr-only">Abrir acreditaciones y valores</span>
           </Link>
           <div className={styles.kpiTexto}>
@@ -1088,6 +1056,7 @@ export function TesoreriaView({
                 <button
                   key={cuenta.id}
                   type="button"
+                  aria-pressed={seleccionId === cuenta.id}
                   className={cn(
                     styles.cuenta,
                     seleccionId === cuenta.id && styles.cuentaSeleccionada,
@@ -1106,6 +1075,7 @@ export function TesoreriaView({
                     <small>
                       {TIPOS_CUENTA[cuenta.tipo] ?? "Otra cuenta"} ·{" "}
                       {cuenta.moneda}
+                      {!cuenta.activo ? " · Inactiva" : ""}
                     </small>
                   </span>
                   <strong className={styles.cuentaSaldo}>
@@ -1231,7 +1201,7 @@ export function TesoreriaView({
                     {movimientos.total === 1 ? "registro" : "registros"}
                   </small>
                 </div>
-                <Field className="min-w-56 flex-[1_1_20rem]">
+                <Field className={styles.searchField}>
                   <FieldLabel htmlFor="tes-buscar">Buscar</FieldLabel>
                   <div className="relative">
                     <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -1249,7 +1219,7 @@ export function TesoreriaView({
                     />
                   </div>
                 </Field>
-                <Field className="w-full sm:w-44">
+                <Field>
                   <FieldLabel>Origen</FieldLabel>
                   {selector(
                     filtros.origenTipo,
@@ -1268,7 +1238,7 @@ export function TesoreriaView({
                     "Filtrar por origen",
                   )}
                 </Field>
-                <Field className="w-full sm:w-44">
+                <Field>
                   <FieldLabel>Conciliación</FieldLabel>
                   {selector(
                     filtros.estadoConciliacion,
@@ -1286,7 +1256,7 @@ export function TesoreriaView({
                     "Filtrar por conciliación",
                   )}
                 </Field>
-                <Field className="w-full sm:w-40">
+                <Field>
                   <FieldLabel htmlFor="tes-desde">Desde</FieldLabel>
                   <Input
                     id="tes-desde"
@@ -1300,7 +1270,7 @@ export function TesoreriaView({
                     }
                   />
                 </Field>
-                <Field className="w-full sm:w-40">
+                <Field>
                   <FieldLabel htmlFor="tes-hasta">Hasta</FieldLabel>
                   <Input
                     id="tes-hasta"
@@ -1317,7 +1287,7 @@ export function TesoreriaView({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full sm:w-auto"
+                  className={styles.exportar}
                   onClick={() => void exportar()}
                 >
                   <DownloadIcon data-icon="inline-start" />
@@ -1347,7 +1317,10 @@ export function TesoreriaView({
                 ) : movimientos.items.length > 0 ? (
                   <>
                     <div className={`${styles.tablaMarco} hidden lg:block`}>
-                      <Table className={styles.tabla}>
+                      <Table
+                        className={styles.tabla}
+                        aria-label="Movimientos de la cuenta"
+                      >
                         <TableHeader>
                           <TableRow>
                             <TableHead>Fecha</TableHead>

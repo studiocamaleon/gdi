@@ -5,6 +5,7 @@
 
 export const ARCHIVO_SCOPES = [
   "TENANT_BRANDING",
+  "CAMPANA",
   "CLIENTE",
   "ORDEN",
   "ORDEN_ITEM",

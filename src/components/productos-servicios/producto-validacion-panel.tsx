@@ -9,19 +9,46 @@ import {
   XCircleIcon,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "./producto-ui";
+import { Button } from "./producto-ui";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
-import { validarProducto, type ValidacionProducto } from "@/lib/productos-servicios-api";
+import { Popover as HeroPopover } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 
-export function ProductoValidacionPanel({ productoId }: { productoId: string }) {
-  const [resultado, setResultado] = React.useState<ValidacionProducto | null>(null);
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  validarProducto,
+  type ValidacionProducto,
+} from "@/lib/productos-servicios-api";
+
+type ProductoValidacionPanelProps = {
+  productoId: string;
+  variante?: "panel" | "compacta";
+};
+
+export function ProductoValidacionPanel({
+  productoId,
+  variante = "panel",
+}: ProductoValidacionPanelProps) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
+  const [resultado, setResultado] = React.useState<ValidacionProducto | null>(
+    null,
+  );
   const [cargando, setCargando] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [detallesAbiertos, setDetallesAbiertos] = React.useState(false);
@@ -35,7 +62,9 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
       setResultado(r);
     } catch (err) {
       setResultado(null);
-      setError(err instanceof Error ? err.message : "No se pudo validar el producto.");
+      setError(
+        err instanceof Error ? err.message : "No se pudo validar el producto.",
+      );
     } finally {
       setCargando(false);
     }
@@ -45,6 +74,87 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
     void ejecutar();
   }, [ejecutar]);
 
+  if (variante === "compacta") {
+    if (cargando) return null;
+
+    const errores =
+      resultado?.errores.filter((item) => item.severidad === "ERROR") ?? [];
+    const warnings =
+      resultado?.errores.filter((item) => item.severidad === "WARNING") ?? [];
+    const problemas = [...errores, ...warnings];
+
+    if (!error && resultado?.exitoso && warnings.length === 0) return null;
+
+    const cantidadPendiente = problemas.length;
+    const tieneErrores = Boolean(error) || errores.length > 0;
+
+    return (
+      <div className="relative ml-auto shrink-0">
+        <HeroPopover
+          isOpen={detallesAbiertos}
+          onOpenChange={setDetallesAbiertos}
+        >
+          <ActionButton
+            variant={tieneErrores ? "danger-soft" : "outline"}
+            aria-label="Ver estado de configuración"
+          >
+            {tieneErrores ? <XCircleIcon /> : <AlertTriangleIcon />}
+            {error
+              ? "Validación no disponible"
+              : `${cantidadPendiente} ${cantidadPendiente === 1 ? "pendiente" : "pendientes"}`}
+            <ChevronDownIcon
+              className={`transition-transform ${detallesAbiertos ? "rotate-180" : ""}`}
+            />
+          </ActionButton>
+
+          <HeroPopover.Content
+            {...scope}
+            className={theme}
+            placement="bottom end"
+          >
+            <HeroPopover.Dialog className="w-[min(420px,calc(100vw-52px))] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <HeroPopover.Heading className="text-sm font-semibold text-foreground">
+                    {error
+                      ? "No se pudo validar el producto"
+                      : tieneErrores
+                        ? "Configuración incompleta"
+                        : "Configuración para revisar"}
+                  </HeroPopover.Heading>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {error
+                      ? error
+                      : tieneErrores
+                        ? "Completá estos ajustes antes de utilizar el producto en una cotización."
+                        : "El producto puede cotizarse, pero tiene recomendaciones pendientes."}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={ejecutar}
+                  aria-label="Revalidar producto"
+                >
+                  <RefreshCwIcon />
+                </Button>
+              </div>
+              {problemas.length > 0 ? (
+                <ul className="mt-3 flex list-disc flex-col gap-1.5 border-t border-border pt-3 pl-5 text-xs leading-5 text-foreground">
+                  {problemas.map((problema, idx) => (
+                    <li key={`${problema.severidad}-${idx}`}>
+                      {problema.mensaje}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </HeroPopover.Dialog>
+          </HeroPopover.Content>
+        </HeroPopover>
+      </div>
+    );
+  }
+
   if (cargando) return <Skeleton className="mb-4 h-14 w-full" />;
   if (error || !resultado) {
     return (
@@ -52,7 +162,11 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
         <XCircleIcon />
         <AlertTitle>No se pudo validar el producto</AlertTitle>
         <AlertDescription>{error ?? "Intentá nuevamente."}</AlertDescription>
-        <AlertAction><Button variant="outline" size="sm" onClick={ejecutar}>Reintentar</Button></AlertAction>
+        <AlertAction>
+          <Button variant="outline" size="sm" onClick={ejecutar}>
+            Reintentar
+          </Button>
+        </AlertAction>
       </Alert>
     );
   }
@@ -65,13 +179,25 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
       <Alert className="mb-4">
         <CheckCircle2Icon />
         <AlertTitle>Listo para cotizar</AlertTitle>
-        <AlertDescription>La configuración del producto está completa.</AlertDescription>
-        <AlertAction><Button variant="ghost" size="icon-sm" onClick={ejecutar} aria-label="Revalidar producto"><RefreshCwIcon /></Button></AlertAction>
+        <AlertDescription>
+          La configuración del producto está completa.
+        </AlertDescription>
+        <AlertAction>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={ejecutar}
+            aria-label="Revalidar producto"
+          >
+            <RefreshCwIcon />
+          </Button>
+        </AlertAction>
       </Alert>
     );
   }
 
-  const cantidadPendiente = errores.length > 0 ? errores.length : warnings.length;
+  const cantidadPendiente =
+    errores.length > 0 ? errores.length : warnings.length;
   const problemas = [...errores, ...warnings];
 
   return (
@@ -84,9 +210,12 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
         )}
         <AlertTitle>
           <span className="flex flex-wrap items-center gap-2">
-            {errores.length > 0 ? "Configuración incompleta" : "Configuración para revisar"}
+            {errores.length > 0
+              ? "Configuración incompleta"
+              : "Configuración para revisar"}
             <Badge variant={errores.length > 0 ? "destructive" : "secondary"}>
-              {cantidadPendiente} {cantidadPendiente === 1 ? "pendiente" : "pendientes"}
+              {cantidadPendiente}{" "}
+              {cantidadPendiente === 1 ? "pendiente" : "pendientes"}
             </Badge>
           </span>
         </AlertTitle>
@@ -97,9 +226,7 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
               : "El producto puede cotizarse, pero conviene revisar estas recomendaciones."}
           </p>
           <CollapsibleTrigger
-            render={
-              <Button variant="ghost" size="sm" className="mt-1 -ml-2" />
-            }
+            render={<Button variant="ghost" size="sm" className="mt-1 -ml-2" />}
           >
             <ChevronDownIcon data-icon="inline-start" />
             {detallesAbiertos ? "Ocultar detalles" : "Ver detalles"}
@@ -112,13 +239,20 @@ export function ProductoValidacionPanel({ productoId }: { productoId: string }) 
             </ul>
             {errores.length > 0 && warnings.length > 0 ? (
               <p className="mt-2 text-xs">
-                También hay {warnings.length} {warnings.length === 1 ? "recomendación" : "recomendaciones"} para revisar.
+                También hay {warnings.length}{" "}
+                {warnings.length === 1 ? "recomendación" : "recomendaciones"}{" "}
+                para revisar.
               </p>
             ) : null}
           </CollapsibleContent>
         </AlertDescription>
         <AlertAction>
-          <Button variant="ghost" size="icon-sm" onClick={ejecutar} aria-label="Revalidar producto">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={ejecutar}
+            aria-label="Revalidar producto"
+          >
             <RefreshCwIcon />
           </Button>
         </AlertAction>

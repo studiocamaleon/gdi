@@ -1,0 +1,292 @@
+.metrics.metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.metrics > :first-child {
+  grid-row: auto;
+  grid-column: auto;
+}
+.scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.cohortSummary {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+.cohortSummary > strong {
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+}
+.cohortSummary > span {
+  font-size: 12px;
+}
+.cohortSummary small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.stages {
+  margin: 0;
+  padding: 0 22px;
+  list-style: none;
+}
+.stage {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) minmax(170px, auto);
+  gap: 14px 16px;
+  padding: 25px 0;
+  border-bottom: 1px solid var(--border);
+}
+.stage:last-child {
+  border-bottom: 0;
+}
+.stageIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted-text);
+  background: var(--canvas-background);
+}
+.stageIcon svg {
+  width: 19px;
+  height: 19px;
+}
+.stage[data-stage="entregadas"] .stageIcon {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}
+.stageHeading {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: start;
+  gap: 5px 10px;
+}
+.stageIndex {
+  color: var(--muted-text);
+  font: 10px/22px var(--brand-mono);
+}
+.stageHeading h4 {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.stageHeading p {
+  grid-column: 2;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted-text);
+  margin: 0;
+}
+.stageValue {
+  text-align: right;
+  min-width: 0;
+}
+.stageValue strong {
+  display: block;
+  font-size: 25px;
+  line-height: 1.2;
+  font-weight: 550;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.stageValue small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.stage[data-stage="entregadas"] .stageValue strong {
+  color: var(--accent-soft-foreground);
+}
+.stageProgress {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.track {
+  flex: 1;
+  background: var(--surface-secondary);
+  height: 7px;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-graphite);
+}
+.stage[data-stage="entregadas"] .track > span {
+  background: var(--accent);
+}
+.stageProgress > span {
+  flex-shrink: 0;
+  color: var(--muted-text);
+  font: 10px/1.6 var(--brand-mono);
+  min-width: 130px;
+  text-align: right;
+}
+.conversion {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  color: var(--muted-text);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.conversion svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.conversion strong {
+  color: var(--foreground);
+  font-family: var(--brand-mono);
+  font-weight: 500;
+}
+.notes,
+.note {
+  padding: 14px 22px;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: var(--canvas-background);
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.notes p {
+  margin: 0;
+}
+.notes p + p {
+  margin-top: 6px;
+}
+.breakdownSummary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.breakdownSummary > strong {
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.breakdownSummary > div {
+  font-size: 12px;
+}
+.breakdownSummary small {
+  display: block;
+  color: var(--muted-text);
+  font: 11px/1.6 var(--brand-mono);
+  margin-top: 5px;
+}
+.lossTable tbody th {
+  width: 100%;
+}
+.lossTable th strong,
+.speedTable th strong {
+  font-weight: 500;
+}
+.lossTrack {
+  margin-top: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-secondary);
+  overflow: hidden;
+}
+.lossTrack > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.lossTrack[data-pending="true"] > span {
+  background: var(--muted-text);
+}
+.speedTable tbody th {
+  width: 100%;
+}
+.speedTable th small {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.speedTable td {
+  font-size: 16px;
+}
+.noSample {
+  display: block;
+  max-width: 115px;
+  white-space: normal;
+  font: 10px/1.7 var(--font-sans);
+  color: var(--muted-text);
+}
+@container reporte (max-width: 1120px) {
+  .metrics.metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container reporte (max-width: 650px) {
+  .stage {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .stageIcon {
+    width: 32px;
+    height: 32px;
+  }
+  .stageValue {
+    grid-column: 2;
+    text-align: left;
+  }
+  .stageProgress {
+    grid-column: 1 / -1;
+  }
+  .conversion {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .stageHeading h4 {
+    font-size: 14px;
+  }
+  .stageHeading p {
+    grid-column: 1 / -1;
+  }
+  .stageProgress > span {
+    min-width: 0;
+  }
+  .stages {
+    padding-inline: 16px;
+  }
+  .toolbar {
+    padding: 18px 16px;
+  }
+  .notes,
+  .note {
+    padding-inline: 16px;
+  }
+}

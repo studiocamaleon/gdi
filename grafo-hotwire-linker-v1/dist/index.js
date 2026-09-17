@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+export const HOTWIRE_ENGINE_VERSION = "1.0.1";
 const EPS = 1e-7;
 const LOCATION_EPS = 1e-5;
 export const CORPOREARTE_POLIFAN_PROFILE = {
@@ -908,6 +909,28 @@ function selectExternalMst(parsed, origin, blockedBridges = []) {
     if (roots.length === 0)
         throw new Error("No se encontraron contornos exteriores para vincular");
     const nodes = ["__origin__", ...roots.map((contour) => contour.id)];
+    const contourById = new Map(parsed.contours.map((contour) => [contour.id, contour]));
+    const rootByContour = new Map();
+    for (const contour of parsed.contours) {
+        let root = contour;
+        while (root.parentContourId)
+            root = contourById.get(root.parentContourId);
+        rootByContour.set(contour.id, root.id);
+    }
+    // Los huecos ya están conectados a su propio exterior por uniones internas.
+    // Para seleccionar el árbol, cada jerarquía es un componente; los anclajes
+    // geométricos conservan el contorno real (incluidos huecos). Así una pieza
+    // alojada en un hueco puede alcanzarse desde ese hueco sin cortar el aro.
+    const contracted = (candidate) => ({
+        ...candidate,
+        aNodeId: rootByContour.get(candidate.aNodeId) ?? candidate.aNodeId,
+        bNodeId: rootByContour.get(candidate.bNodeId) ?? candidate.bNodeId,
+    });
+    const expanded = (bridge) => ({
+        ...bridge,
+        aNodeId: bridge.a?.contourId ?? "__origin__",
+        bNodeId: bridge.b.contourId,
+    });
     const originCandidates = roots
         // Una composición conservada suele dejar las piezas más separadas que un
         // nesting optimizado. Retener más alternativas evita que una conexión
@@ -917,9 +940,12 @@ function selectExternalMst(parsed, origin, blockedBridges = []) {
         .sort((a, b) => a.score - b.score)
         .slice(0, 32);
     const pairCandidates = [];
-    for (let i = 0; i < roots.length; i += 1) {
-        for (let j = i + 1; j < roots.length; j += 1) {
-            pairCandidates.push(...generateContourPairCandidates(roots[i], roots[j], "external", parsed, undefined, 24));
+    for (let i = 0; i < parsed.contours.length; i += 1) {
+        for (let j = i + 1; j < parsed.contours.length; j += 1) {
+            const a = parsed.contours[i], b = parsed.contours[j];
+            if (rootByContour.get(a.id) === rootByContour.get(b.id))
+                continue;
+            pairCandidates.push(...generateContourPairCandidates(a, b, "external", parsed, undefined, 24).map(contracted));
         }
     }
     pairCandidates.sort((a, b) => a.score - b.score);
@@ -952,7 +978,7 @@ function selectExternalMst(parsed, origin, blockedBridges = []) {
             const recovered = searchExternalTree(nodes, { ...originCandidate, id: "bridge-origin-1" }, pairCandidates, blockedBridges);
             if (recovered) {
                 return recovered.map((bridge, index) => ({
-                    ...bridge,
+                    ...expanded(bridge),
                     id: index === 0 ? "bridge-origin-1" : `bridge-external-${index}`,
                 }));
             }
@@ -960,7 +986,7 @@ function selectExternalMst(parsed, origin, blockedBridges = []) {
         throw new Error("No se pudo conectar todo el nesting al origen inferior sin atravesar piezas ni uniones internas. " +
             "Revise el nesting o habilite una corrección manual de vínculos.");
     }
-    return best.bridges;
+    return best.bridges.map(expanded);
 }
 function selectInternalBridges(parsed) {
     const selected = [];
@@ -1498,7 +1524,7 @@ function formatFeed(value) {
 function makeReport(parsed, bridges, routeSvg, routeMachine, metrics, profile, originSvg, sourceName, warnings) {
     const machineBounds = boundsOfPoints(routeMachine);
     return {
-        version: "1.0.0",
+        version: HOTWIRE_ENGINE_VERSION,
         status: warnings.length === 0 ? "POSTPROCESSOR_CALIBRATED_DRY_RUN_REQUIRED" : "GENERATED_WITH_WARNINGS",
         source: sourceName,
         svgWorkArea: { widthMm: parsed.widthMm, heightMm: parsed.heightMm, yAxis: "down" },
@@ -1627,7 +1653,7 @@ function main() {
     fs.writeFileSync(path.join(options.outputDir, tapName), job.tap, "ascii");
     fs.writeFileSync(path.join(options.outputDir, reportName), JSON.stringify(job.report, null, 2));
     fs.writeFileSync(path.join(options.outputDir, routeName), JSON.stringify({
-        version: "1.0.0",
+        version: HOTWIRE_ENGINE_VERSION,
         profile: job.profile,
         originSvg: job.originSvg,
         bridges: job.bridges,

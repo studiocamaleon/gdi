@@ -1,0 +1,182 @@
+/* Sólo alternativas del laboratorio. Las opciones aprobadas usan las primitivas compartidas. */
+.tabs {
+  min-width: 0;
+  width: 100%;
+}
+
+.tabsContainer {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tab {
+  height: 32px;
+  gap: 6px;
+  padding-inline: 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tab svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.count {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-left: 3px;
+}
+.panel {
+  margin: 0;
+  padding: 12px 0 0;
+}
+
+.tabs:is([data-look="3"], [data-look="4"]) .tabsContainer {
+  background: transparent;
+  border-radius: 10px;
+}
+.tabs:is([data-look="3"], [data-look="4"]) .tabsList {
+  gap: 4px;
+  padding: 2px;
+}
+.tabs:is([data-look="3"], [data-look="4"]) .tab {
+  border-radius: 8px;
+}
+.tabs:is([data-look="3"], [data-look="4"]) .indicator {
+  border-radius: 8px;
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+.tabs:is([data-look="3"], [data-look="4"]) .tab[data-selected="true"] {
+  color: var(--accent-soft-foreground);
+}
+.tabs[data-look="4"] .tab {
+  border: 1px solid var(--border);
+}
+.tabs[data-look="4"] .tab[data-selected="true"] {
+  border-color: var(--accent-soft-foreground);
+}
+.tabs[data-look="4"] .indicator {
+  background: var(--surface);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+.avatarFallback {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+.avatar[data-look="2"] {
+  border-radius: var(--action-radius);
+}
+.avatar[data-look="4"] {
+  border: 1px solid var(--border);
+}
+.avatar[data-look="4"] .avatarFallback {
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.secondary[data-look="3"] {
+  --button-bg: var(--accent-soft);
+  --button-bg-hover: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --button-bg-pressed: var(--button-bg-hover);
+  --button-fg: var(--accent-soft-foreground);
+}
+.secondary[data-look="4"] {
+  --button-bg: transparent;
+  --button-bg-hover: var(--accent-soft);
+  --button-bg-pressed: var(--accent-soft);
+  --button-fg: var(--accent-soft-foreground);
+}
+
+.segmented {
+  max-width: 100%;
+}
+.segmented .choice,
+.channels .choice {
+  --toggle-button-bg-selected-hover: color-mix(
+    in srgb,
+    var(--accent) 16%,
+    var(--surface)
+  );
+  --toggle-button-bg-selected-pressed: var(--toggle-button-bg-selected-hover);
+  height: 32px;
+  font-size: 13px;
+  gap: 6px;
+  padding-inline: 12px;
+}
+.segmented[data-look="1"] .choice {
+  border-radius: 0;
+}
+.segmented[data-look="1"] .choice:first-child {
+  border-radius: 999px 0 0 999px;
+}
+.segmented[data-look="1"] .choice:last-child {
+  border-radius: 0 999px 999px 0;
+}
+.segmented:not([data-look="1"]) {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--default);
+}
+.segmented:not([data-look="1"]) .choice {
+  --toggle-button-bg: transparent;
+  border-radius: 9px;
+}
+.segmented[data-look="2"] .choice,
+.channels[data-look="3"] .choice {
+  --toggle-button-bg-selected: var(--surface);
+  --toggle-button-bg-selected-hover: var(--surface);
+  --toggle-button-fg-selected: var(--foreground);
+}
+.segmented[data-look="3"] {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.channels[data-look="4"] .choice[data-selected="true"] {
+  background: var(--action-primary-gradient);
+  color: var(--action-primary-foreground);
+}
+
+.channels {
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+}
+.channels .choice {
+  width: 32px;
+  padding: 0;
+  border-radius: 50%;
+}
+.channels[data-look="3"] {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--default);
+}
+.channels[data-look="3"] .choice {
+  --toggle-button-bg: transparent;
+  border-radius: 8px;
+}
+.channels[data-look="4"] .choice {
+  width: auto;
+  padding-inline: 10px;
+  border-radius: 10px;
+}
+
+/* Un solo foco visible dentro del control, sin anillos exteriores duplicados. */
+.tab:is(:focus-visible, [data-focus-visible="true"]),
+.choice:is(:focus-visible, [data-focus-visible="true"]) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  box-shadow: none;
+}

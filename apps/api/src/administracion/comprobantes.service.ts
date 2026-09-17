@@ -55,7 +55,7 @@ import {
   calcularTotales,
   type ItemCalculo,
 } from './invoicing/totales-comprobante';
-import { renglonesDetalladosOrden } from './invoicing/items-orden-descuento';
+import { renglonesDetalladosOrden, itemsOrdenConDescuento } from './invoicing/items-orden-descuento';
 
 /** Lo que guardamos en itemsJson: el ítem que calcula + su descripción. */
 type ItemPersistido = ItemCalculo & { descripcion: string };
@@ -839,6 +839,7 @@ export class ComprobantesService {
         descuentoTotal: true,
         tratamientoFiscal: true,
         items: {
+          where: { parentItemId: null },
           orderBy: { ordenIndice: 'asc' },
           select: {
             nombre: true,
@@ -1217,6 +1218,7 @@ export class ComprobantesService {
       facturadoTotal: Prisma.Decimal | number;
       descuentoTotal: Prisma.Decimal | number | null;
       items: Array<{
+        parentItemId?: string | null;
         nombre: string;
         cantidad: Prisma.Decimal | number;
         subtotal: Prisma.Decimal | number;
@@ -1235,7 +1237,7 @@ export class ComprobantesService {
       saldo,
       facturadoTotal: Number(orden.facturadoTotal),
       descuentoTotal: Number(orden.descuentoTotal ?? 0),
-      items: orden.items.map((item) => ({
+      items: orden.items.filter(item => item.parentItemId == null).map((item) => ({
         nombre: item.nombre,
         cantidad: Number(item.cantidad),
         subtotal: Number(item.subtotal),
@@ -1314,27 +1316,17 @@ export class ComprobantesService {
       vinculos.push({ ordenId: orden.id, monto: 0 }); // monto = total, se fija en crear()
       clienteId = clienteId ?? orden.clienteId;
       if (items.length === 0) {
-        // Los ítems de la OT ya traen el precio con impuestos calculados por
-        // el motor. Acá se factura el subtotal (neto): el IVA lo recalcula
-        // el comprobante según su letra. Una línea con descuento comercial se
-        // expresa como precio de LISTA + bonificación — misma base, el
-        // descuento se hace visible en el comprobante (F5 descuentos). El pct
-        // va sin redondear para que la bonificación aterrice en el subtotal
-        // persistido al centavo.
-        items = orden.items.map((it) => {
-          const subtotal = Number(it.subtotal);
-          const descuento = Math.max(0, Number(it.descuentoMonto ?? 0));
-          const lista = subtotal + descuento;
-          const pct = lista > 0 ? (descuento / lista) * 100 : 0;
-          const cantidad = Number(it.cantidad) > 0 ? Number(it.cantidad) : 1;
-          return {
-            descripcion: it.nombre,
-            cantidad,
-            precioUnitarioSinIva: lista / cantidad,
-            alicuotaIva: 21,
-            ...(pct > 0 ? { bonificacionPct: pct } : {}),
-          };
-        }) as ItemCalculo[];
+        // El precio de entrada depende de la letra: neto en A, final en
+        // B/C/E. Comparte la preparación de la facturación desde la orden.
+        const letra = await this.letraParaCliente(auth, clienteId);
+        items = itemsOrdenConDescuento(letra, orden.items.map(it => ({
+          nombre: it.nombre,
+          cantidad: Number(it.cantidad),
+          subtotal: Number(it.subtotal),
+          total: Number(it.total),
+          descuentoMonto: Number(it.descuentoMonto ?? 0),
+        })));
+
       }
     }
 
@@ -1389,7 +1381,7 @@ export class ComprobantesService {
   private async validarOrdenFacturable(auth: CurrentAuth, ordenId: string) {
     const orden = await this.prisma.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId: auth.tenantId },
-      include: { items: true },
+      include: { items: { where: { parentItemId: null } } },
     });
     if (!orden) throw new BadRequestException('La orden no existe.');
     if (orden.estado === 'borrador') {

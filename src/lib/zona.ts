@@ -29,6 +29,16 @@ export type PartesZona = {
 /** Un formatter por zona: crearlos es caro y el motor llama esto en loops. */
 const FORMATOS = new Map<string, Intl.DateTimeFormat>();
 
+// Sólo funciones puras de fecha/zona: no contiene calendarios ni datos de tenant.
+// Límite global para que procesos largos no acumulen fechas indefinidamente.
+const MAX_FECHAS_CACHE = 16_384;
+const PARTES_CACHE = new Map<string, PartesZona>();
+const INSTANTES_CACHE = new Map<string, number>();
+function recordar<K, V>(cache: Map<K, V>, clave: K, valor: V): void {
+  if (cache.size >= MAX_FECHAS_CACHE) cache.clear();
+  cache.set(clave, valor);
+}
+
 function formato(zona: string): Intl.DateTimeFormat {
   let f = FORMATOS.get(zona);
   if (!f) {
@@ -48,12 +58,15 @@ function formato(zona: string): Intl.DateTimeFormat {
 
 /** Qué hora de pared es `instante` en `zona`. */
 export function partesEnZona(instante: Date, zona: string): PartesZona {
+  const clave = `${zona}|${instante.getTime()}`;
+  const existente = PARTES_CACHE.get(clave);
+  if (existente) return { ...existente };
   const p = Object.fromEntries(
     formato(zona)
       .formatToParts(instante)
       .map((x) => [x.type, x.value]),
   ) as Record<string, string>;
-  return {
+  const resultado = {
     y: Number(p.year),
     m: Number(p.month),
     d: Number(p.day),
@@ -61,6 +74,8 @@ export function partesEnZona(instante: Date, zona: string): PartesZona {
     hh: Number(p.hour) % 24,
     mm: Number(p.minute),
   };
+  recordar(PARTES_CACHE, clave, resultado);
+  return { ...resultado };
 }
 
 /** "YYYY-MM-DD" del día de pared: la clave de feriados y snapshots. */
@@ -99,6 +114,9 @@ export function sumarDiasAClave(clave: string, dias: number): string {
  * corrido al offset nuevo — el taller "abre" cuando el reloj llega.
  */
 export function instanteDe(clave: string, hora: string, zona: string): Date {
+  const claveCache = `${zona}|${clave}|${hora}`;
+  const existente = INSTANTES_CACHE.get(claveCache);
+  if (existente !== undefined) return new Date(existente);
   const [y, m, d] = clave.split("-").map(Number);
   const [hh, mm] = hora.split(":").map(Number);
   const objetivo = Date.UTC(y, m - 1, d, hh, mm);
@@ -110,5 +128,26 @@ export function instanteDe(clave: string, hora: string, zona: string): Date {
     if (pared === objetivo) break;
     t -= pared - objetivo;
   }
+  if (Number.isFinite(t)) recordar(INSTANTES_CACHE, claveCache, t);
   return new Date(t);
+}
+
+/** Valida una fecha de calendario sin convertirla a un instante local. */
+export function esFechaCalendario(clave: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clave)) return false;
+  const fecha = new Date(`${clave}T00:00:00.000Z`);
+  return (
+    Number.isFinite(fecha.getTime()) &&
+    fecha.toISOString().slice(0, 10) === clave
+  );
+}
+
+/** Diferencia de días de calendario; no cambia con el DST ni la zona del proceso. */
+export function diasEntreClaves(desde: string, hasta: string): number | null {
+  if (!esFechaCalendario(desde) || !esFechaCalendario(hasta)) return null;
+  return (
+    (Date.parse(`${hasta}T00:00:00.000Z`) -
+      Date.parse(`${desde}T00:00:00.000Z`)) /
+    86400000
+  );
 }

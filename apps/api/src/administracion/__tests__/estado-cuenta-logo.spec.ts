@@ -29,10 +29,12 @@ const CC = {
   },
   saldo: 120000,
   comprobantesPendientes: 1,
+  anticipoDisponible: 0,
+  sinVencimiento: 0,
   usoLimitePct: null,
   excedido: false,
   excedente: 0,
-  aging: [],
+  aging: { a_vencer: 120000, d0_30: 0, d31_60: 0, d61_90: 0, d90_mas: 0 },
   agingTotal: 0,
   movimientos: [],
 } as never;

@@ -22,9 +22,11 @@ const LABEL: Record<string, string> = {
 export function PanelComprasOt({
   items,
   onChanged,
+  soloLectura = false,
 }: {
   items: TableroItemData[];
   onChanged: () => void;
+  soloLectura?: boolean;
 }) {
   const [saving, setSaving] = React.useState<string | null>(null);
 
@@ -46,6 +48,7 @@ export function PanelComprasOt({
   if (compras.length === 0) return null;
 
   const avanzar = async (pasoId: string, estado: string) => {
+    if (soloLectura) return;
     setSaving(pasoId);
     try {
       await avanzarCompraProduccion(pasoId, estado);
@@ -66,7 +69,10 @@ export function PanelComprasOt({
         <span className="ttl">
           Compras / Tercerizados <span className="ct">{compras.length}</span>
         </span>
-        <span className="sub">Pasos que compramos a un proveedor (fuera del tablero)</span>
+        <span className="sub">
+          Se gestionan como compras y bloquean el flujo de producción hasta su
+          recepción
+        </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column" }}>
         {compras.map(({ paso, item, esperandoA }) => {
@@ -114,6 +120,7 @@ export function PanelComprasOt({
                   const activo = i <= idxActual;
                   // Volver a "pendiente" siempre se permite (es deshacer).
                   const deshabilitado =
+                    soloLectura ||
                     saving === paso.id ||
                     estado === actual ||
                     (bloqueada && estado !== "pendiente");

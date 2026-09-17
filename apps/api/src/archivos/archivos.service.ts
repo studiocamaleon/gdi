@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Archivo, ArchivoEstado, ArchivoScope, Prisma } from '@prisma/client';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import { randomUUID } from 'node:crypto';
 
 import type { CurrentAuth } from '../auth/auth.types';
@@ -51,6 +52,7 @@ const DIAS_DE_PAPELERA = 30;
 /** Campo FK de `Archivo` que corresponde a cada scope. */
 const CAMPO_POR_SCOPE: Record<ArchivoScope, keyof Archivo | null> = {
   TENANT_BRANDING: null,
+  CAMPANA: 'proyectoCampanaId',
   CLIENTE: 'clienteId',
   ORDEN: 'ordenId',
   ORDEN_ITEM: 'ordenItemId',
@@ -126,6 +128,7 @@ export class ArchivosService {
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
     private readonly suscripciones: SuscripcionesService,
+    private readonly eventos: EventosSistemaService,
   ) {}
 
   /**
@@ -242,6 +245,7 @@ export class ArchivosService {
         publico: dto.publico ?? false,
         descripcion: dto.descripcion ?? null,
         autogeneradoPor: dto.autogeneradoPor ?? null,
+        hash: dto.hash?.toLowerCase() ?? null,
         // Se guarda igual quién tenía la sesión: el arte lo produjo el sistema,
         // pero fue porque esta persona guardó la orden.
         subidoPorId: auth.userId,
@@ -332,21 +336,42 @@ export class ArchivosService {
     }
 
     const bytes = BigInt(meta.bytes);
-    const [actualizado] = await this.prisma.$transaction([
-      this.prisma.archivo.update({
-        where: { id: archivo.id },
+    const actualizado = await this.prisma.$transaction(async (tx) => {
+      // Sólo quien confirma PENDIENTE → LISTO contabiliza y publica. Reintentar
+      // una confirmación no duplica bytes ni actividad, incluso concurrentemente.
+      const cambio = await tx.archivo.updateMany({
+        where: { id: archivo.id, tenantId: auth.tenantId, estado: ArchivoEstado.PENDIENTE },
         data: { estado: ArchivoEstado.LISTO, bytes },
-        include: {
-          subidoPor: { select: { nombreCompleto: true, email: true } },
-        },
-      }),
-      // Contador denormalizado en la MISMA transacción — mismo patrón que
-      // Comprobante.saldoPendiente y OrdenTrabajo.facturadoTotal.
-      this.prisma.tenant.update({
+      });
+      const listo = await tx.archivo.findFirstOrThrow({
+        where: { id: archivo.id, tenantId: auth.tenantId },
+        include: { subidoPor: { select: { nombreCompleto: true, email: true } } },
+      });
+      if (!cambio.count) {
+        if (listo.estado !== ArchivoEstado.LISTO) throw new NotFoundException('El archivo fue eliminado.');
+        return listo;
+      }
+      await tx.tenant.update({
         where: { id: auth.tenantId },
         data: { bytesArchivos: { increment: bytes } },
-      }),
-    ]);
+      });
+      const item = archivo.ordenItemId ? await tx.ordenTrabajoItem.findFirst({
+        where: { id: archivo.ordenItemId, tenantId: auth.tenantId }, select: { ordenId: true },
+      }) : null;
+      const ordenId = archivo.ordenId ?? item?.ordenId;
+      const entidad = ordenId ? { tipo: 'orden', id: ordenId, ruta: '/produccion/ordenes/' }
+        : archivo.clienteId ? { tipo: 'cliente', id: archivo.clienteId, ruta: '/comercial/clientes/' }
+        : archivo.proyectoCampanaId ? { tipo: 'campana', id: archivo.proyectoCampanaId, ruta: '/comercial/campanas/' }
+        : null;
+      if (entidad) {
+        await this.eventos.publicarDesdeAuth(auth, {
+          tipo: `archivo.${entidad.tipo}_confirmado`, entidadTipo: 'archivo', entidadId: archivo.id,
+          titulo: 'Archivo subido', mensaje: archivo.nombreOriginal,
+          href: `${entidad.ruta}${entidad.id}`, topicos: ['archivos', 'panel-general'],
+        }, tx);
+      }
+      return listo;
+    });
     return this.aDto(actualizado);
   }
 
@@ -714,6 +739,15 @@ export class ArchivosService {
         'Ese documento lo genera el sistema y no se borra a mano.',
       );
     }
+    const referenciasDocumentales = await this.prisma.archivoRevision.count({
+      where: { archivoId: archivo.id },
+    });
+    const geometriasProducto = await this.prisma.geometriaProducto.count({ where: { archivoId: archivo.id } });
+    if (referenciasDocumentales > 0 || geometriasProducto > 0) {
+      throw new BadRequestException(
+        'El archivo forma parte de una revisión controlada y debe conservarse en el historial.',
+      );
+    }
 
     const eraListo = archivo.estado === ArchivoEstado.LISTO;
     await this.prisma.$transaction([
@@ -998,6 +1032,8 @@ export class ArchivosService {
     const where = { where: { id: entidadId }, select: { id: true } };
     const existe = await (async () => {
       switch (scope) {
+        case ArchivoScope.CAMPANA:
+          return this.prisma.proyectoCampana.findFirst(where);
         case ArchivoScope.CLIENTE:
           return this.prisma.cliente.findFirst(where);
         case ArchivoScope.ORDEN:

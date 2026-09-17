@@ -12,8 +12,8 @@ export class RegistrarTransferenciaStockDto {
   ubicacionDestinoId: string;
 
   @Type(() => Number)
-  @IsNumber()
-  @Min(0.0001)
+  @IsNumber({ maxDecimalPlaces: 8 })
+  @Min(0.00000001)
   cantidad: number;
 
   @IsOptional()

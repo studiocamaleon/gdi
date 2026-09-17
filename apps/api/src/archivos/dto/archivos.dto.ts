@@ -9,6 +9,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  Matches,
   Min,
   ValidateIf,
   ValidateNested,
@@ -60,6 +61,12 @@ export class IniciarSubidaDto {
   @IsString()
   @MaxLength(40)
   autogeneradoPor?: string;
+
+  /** SHA-256 hexadecimal calculado por el cliente para control documental. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/i)
+  hash?: string;
 }
 
 export class ParteSubidaDto {

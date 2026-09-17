@@ -1,3 +1,4 @@
+import { claveFechaEnZona, sumarDiasAClave, ZONA_DEFAULT } from "./zona";
 import type {
   AnalisisSvgFabricacion,
   CotizarResponse,
@@ -43,6 +44,7 @@ export type PropuestaItem = {
   impuestoMonto: number;
   total: number;
   fechaEntrega?: string;
+  distribucionEntregas?: import("./planificacion-entregas").ResumenDistribucion | null;
   /**
    * TRANSITORIO (no se serializa ni se guarda): los PDF que se adjuntaron al
    * medir con el lector de planos. Se suben como Archivos del ítem al guardar
@@ -125,17 +127,14 @@ export type PropuestaResumen = {
   cantidadItems: number;
 };
 
-export const CANALES_VENTA = [
-  { value: "mostrador", label: "Mostrador" },
-  { value: "web", label: "Web" },
-  { value: "vendedor_externo", label: "Vendedor externo" },
-  { value: "telefono", label: "Telefono" },
-];
+export { CANALES_VENTA } from "./canales-venta";
 
-export function offsetDate(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+export function offsetDate(
+  days: number,
+  zona = ZONA_DEFAULT,
+  ahora = new Date(),
+) {
+  return sumarDiasAClave(claveFechaEnZona(ahora, zona), days);
 }
 
 export function formatCurrency(value: number, moneda: Moneda) {

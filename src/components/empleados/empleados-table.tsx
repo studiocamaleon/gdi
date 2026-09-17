@@ -4,10 +4,18 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  UsersRoundIcon,
   DownloadIcon,
   FileSpreadsheetIcon,
   PencilIcon,
-  PlusIcon,
+  ArrowUpRightIcon,
+  BriefcaseBusinessIcon,
+  MailIcon,
+  MapPinIcon,
+  ShieldCheckIcon,
+  UserRoundIcon,
   SearchXIcon,
   UploadIcon,
   UserCheckIcon,
@@ -28,35 +36,32 @@ import {
   downloadEmpleadosImportTemplate,
   parseEmpleadosImportCsv,
 } from "@/lib/empleados-importacion";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+  Checkbox,
+  Chip,
+  Dropdown,
+  Label,
+  Modal,
+  SearchField,
+  Switch,
+} from "@heroui/react";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ListMetric } from "@/components/design-system/list-metric";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
 import {
   Empty,
-  EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
+  EmptyDescription,
 } from "@/components/ui/empty";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -65,7 +70,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TablePagination } from "@/components/ui/table-pagination";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import styles from "./empleados.module.css";
 
 type EmpleadosTableProps = {
   initialResponse: EmpleadosListResponse;
@@ -78,7 +86,15 @@ function safeSpreadsheetCell(value: string) {
 
 function buildCsv(empleados: EmpleadoResumen[]) {
   const rows = [
-    ["Nombre completo", "Sector", "Ocupación", "Email", "Ciudad", "Acceso", "Estado"],
+    [
+      "Nombre completo",
+      "Sector",
+      "Ocupación",
+      "Email",
+      "Ciudad",
+      "Acceso",
+      "Estado",
+    ],
     ...empleados.map((empleado) => [
       empleado.nombreCompleto,
       empleado.sector,
@@ -102,6 +118,8 @@ export function EmpleadosTable({
   initialResponse,
   canManage,
 }: EmpleadosTableProps) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [response, setResponse] = React.useState(initialResponse);
@@ -151,7 +169,11 @@ export function EmpleadosTable({
       })
       .catch((error) => {
         if (active) {
-          toast.error(error instanceof Error ? error.message : "No se pudo actualizar la lista.");
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "No se pudo actualizar la lista.",
+          );
         }
       })
       .finally(() => active && setIsLoading(false));
@@ -161,9 +183,13 @@ export function EmpleadosTable({
   }, [debouncedSearch, initialResponse.limit, page, verInactivos]);
 
   const empleados = response.data;
-  const selectedRows = empleados.filter((empleado) => selected.has(empleado.id));
+  const pages = Math.max(1, Math.ceil(response.total / response.limit));
+  const selectedRows = empleados.filter((empleado) =>
+    selected.has(empleado.id),
+  );
   const allSelected =
-    empleados.length > 0 && empleados.every((empleado) => selected.has(empleado.id));
+    empleados.length > 0 &&
+    empleados.every((empleado) => selected.has(empleado.id));
 
   const handleSelect = (id: string, checked: boolean) => {
     setSelected((current) => {
@@ -205,7 +231,11 @@ export function EmpleadosTable({
             : `${ids.length} empleado(s) dado(s) de baja.`,
         );
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo cambiar el estado.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo cambiar el estado.",
+        );
       }
     });
   };
@@ -218,144 +248,248 @@ export function EmpleadosTable({
         if (parsed.fatalError) throw new Error(parsed.fatalError);
         const invalid = parsed.rows.find((row) => row.errors.length > 0);
         if (invalid) {
-          throw new Error(`Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`);
+          throw new Error(
+            `Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`,
+          );
         }
-        const payloads = parsed.rows.flatMap((row) => (row.payload ? [row.payload] : []));
-        if (payloads.length === 0) throw new Error("No hay empleados válidos para importar.");
+        const payloads = parsed.rows.flatMap((row) =>
+          row.payload ? [row.payload] : [],
+        );
+        if (payloads.length === 0)
+          throw new Error("No hay empleados válidos para importar.");
         const result = await importarEmpleados(payloads);
         await refresh();
         router.refresh();
         toast.success(`Se importaron ${result.total} empleado(s).`);
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "No se pudo importar el archivo.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "No se pudo importar el archivo.",
+        );
       }
     });
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4 border-b border-border/70">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl">
-              <CardTitle>Empleados</CardTitle>
-              <CardDescription>
-                Legajos activos e históricos. Dar de baja conserva ventas,
-                producción y egresos asociados.
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Input
-                placeholder="Buscar por nombre, sector, email o ciudad..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full sm:w-80"
-              />
-              <Field orientation="horizontal" className="w-fit">
-                <Switch
-                  id="empleados-inactivos"
-                  checked={verInactivos}
-                  onCheckedChange={(checked) => {
-                    setVerInactivos(checked);
-                    setPage(1);
-                  }}
-                />
-                <FieldLabel htmlFor="empleados-inactivos">Mostrar bajas</FieldLabel>
-              </Field>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  handleImportFile(file);
-                }}
-              />
-              <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="sidebar" className="w-full sm:w-auto" />}>
-                  {selected.size > 0 ? `Acciones (${selected.size})` : "Acciones"}
-                  <ChevronDownIcon data-icon="inline-end" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {canManage ? (
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem onClick={downloadEmpleadosImportTemplate}>
-                        <FileSpreadsheetIcon />
-                        Descargar plantilla
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={isImporting}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <UploadIcon />
-                        {isImporting ? "Importando..." : "Importar empleados"}
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  ) : null}
-                  {canManage ? <DropdownMenuSeparator /> : null}
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      disabled={selectedRows.length !== 1}
-                      onClick={handleOpenSelection}
-                    >
-                      <PencilIcon />
-                      {canManage ? "Editar selección" : "Ver ficha"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={selectedRows.length === 0} onClick={handleExport}>
-                      <DownloadIcon />
-                      Exportar selección
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  {canManage && selectedRows.length > 0 ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      {selectedRows.every((item) => !item.activo) ? (
-                        <DropdownMenuItem
-                          disabled={isChangingState}
-                          onClick={() => cambiarEstado(selectedRows.map((item) => item.id), true)}
-                        >
-                          <UserCheckIcon />
-                          Reactivar selección
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={isChangingState}
-                          onClick={() => setConfirmandoBaja(true)}
-                        >
-                          <UserMinusIcon />
-                          Dar de baja selección
-                        </DropdownMenuItem>
-                      )}
-                    </>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              {canManage ? (
-                <NavLink
-                  href="/empleados/nuevo"
-                  className={buttonVariants({
-                    variant: "brand",
-                    className: "w-full sm:w-auto",
-                  })}
+    <section
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page} ${styles.page}`}
+    >
+      <header className={listPage.header}>
+        <div>
+          <p className={brand.eyebrow}>Registros · Personas y equipo</p>
+          <h1>
+            Empleados<span className={brand.titleDot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
+            El equipo detrás de cada trabajo. Legajos, contacto y datos
+            laborales en un solo lugar.
+          </p>
+        </div>
+        <div className={styles.actions}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              handleImportFile(file);
+            }}
+          />
+          <Dropdown>
+            <ActionButton variant="outline">
+              {isImporting && <GdiSpinner />}
+              {selected.size > 0 ? `Acciones (${selected.size})` : "Acciones"}
+              <ChevronDownIcon />
+            </ActionButton>
+            <Dropdown.Popover
+              {...scope}
+              className={`${theme} ${styles.menu}`}
+              placement="bottom end"
+            >
+              <Dropdown.Menu aria-label="Acciones de empleados">
+                {canManage && (
+                  <Dropdown.Item
+                    id="plantilla"
+                    textValue="Descargar plantilla"
+                    onAction={downloadEmpleadosImportTemplate}
+                  >
+                    <FileSpreadsheetIcon /> Descargar plantilla
+                  </Dropdown.Item>
+                )}
+                {canManage && (
+                  <Dropdown.Item
+                    id="importar"
+                    textValue="Importar empleados"
+                    isDisabled={isImporting}
+                    onAction={() => fileInputRef.current?.click()}
+                  >
+                    <UploadIcon />{" "}
+                    {isImporting ? "Importando…" : "Importar empleados"}
+                  </Dropdown.Item>
+                )}
+                <Dropdown.Item
+                  id="editar"
+                  textValue={canManage ? "Editar selección" : "Ver ficha"}
+                  isDisabled={selectedRows.length !== 1}
+                  onAction={handleOpenSelection}
                 >
-                  <PlusIcon data-icon="inline-start" />
-                  Nuevo empleado
-                </NavLink>
-              ) : null}
+                  <PencilIcon /> {canManage ? "Editar selección" : "Ver ficha"}
+                </Dropdown.Item>
+                <Dropdown.Item
+                  id="exportar"
+                  textValue="Exportar selección"
+                  isDisabled={selectedRows.length === 0}
+                  onAction={handleExport}
+                >
+                  <DownloadIcon /> Exportar selección
+                </Dropdown.Item>
+                {canManage &&
+                  selectedRows.length > 0 &&
+                  (selectedRows.every((item) => !item.activo) ? (
+                    <Dropdown.Item
+                      id="reactivar"
+                      textValue="Reactivar selección"
+                      isDisabled={isChangingState}
+                      onAction={() =>
+                        cambiarEstado(
+                          selectedRows.map((item) => item.id),
+                          true,
+                        )
+                      }
+                    >
+                      <UserCheckIcon /> Reactivar selección
+                    </Dropdown.Item>
+                  ) : (
+                    <Dropdown.Item
+                      id="baja"
+                      textValue="Dar de baja selección"
+                      variant="danger"
+                      isDisabled={isChangingState}
+                      onAction={() => setConfirmandoBaja(true)}
+                    >
+                      <UserMinusIcon /> Dar de baja selección
+                    </Dropdown.Item>
+                  ))}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+          {canManage && (
+            <ActionLink href="/empleados/nuevo">
+              <ArrowUpRightIcon /> Nuevo empleado
+            </ActionLink>
+          )}
+        </div>
+      </header>
+      <div className={brand.metrics} aria-label="Resumen del listado">
+        <ListMetric
+          label="Legajos"
+          value={response.total}
+          hint={
+            verInactivos ? "Incluye activos y bajas" : "Activos en el listado"
+          }
+          icon={UsersRoundIcon}
+        />
+        <ListMetric
+          label="Sectores"
+          value={
+            new Set(empleados.map((item) => item.sector).filter(Boolean)).size
+          }
+          hint="En esta página"
+          icon={BriefcaseBusinessIcon}
+        />
+        <ListMetric
+          label="Con acceso"
+          value={empleados.filter((item) => item.usuarioSistema).length}
+          hint="En esta página"
+          icon={ShieldCheckIcon}
+        />
+      </div>
+      <Card className={listPage.results}>
+        <Card.Header className={brand.directoryHeader}>
+          <div className={brand.directoryTitle}>
+            <span className={brand.directoryIcon} aria-hidden="true">
+              <UsersRoundIcon />
+            </span>
+            <div>
+              <Card.Title className={brand.directoryHeading}>
+                Directorio del equipo
+              </Card.Title>
+              <Card.Description>
+                Consultá cada legajo y su estado. Las bajas conservan el
+                historial.
+              </Card.Description>
             </div>
           </div>
-        </CardHeader>
-
-        <CardContent className="px-0">
+        </Card.Header>
+        <div className={listPage.toolbar}>
+          <SearchField
+            aria-label="Buscar empleados"
+            value={search}
+            onChange={setSearch}
+            className={styles.search}
+          >
+            <SearchField.Group
+              className={`${listPage.searchGroup} ${focus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Nombre, sector, email o ciudad" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={styles.toolbarEnd}>
+            <span className={styles.resultCount} role="status">
+              {isLoading ? (
+                <>
+                  <GdiSpinner /> Actualizando…
+                </>
+              ) : (
+                <>
+                  <UsersRoundIcon size={15} />
+                  {response.total}{" "}
+                  {response.total === 1 ? "empleado" : "empleados"}
+                </>
+              )}
+            </span>
+            <Switch
+              size="sm"
+              isSelected={verInactivos}
+              onChange={(checked) => {
+                setVerInactivos(checked);
+                setPage(1);
+              }}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>Mostrar bajas</Label>
+              </Switch.Content>
+            </Switch>
+          </div>
+        </div>
+        {selectedRows.length > 0 && (
+          <div className={styles.selection}>
+            <span>{selectedRows.length} empleado(s) seleccionado(s)</span>
+            <ActionButton
+              variant="ghost"
+              onPress={() => setSelected(new Set())}
+            >
+              Limpiar selección
+            </ActionButton>
+          </div>
+        )}
+        <div aria-busy={isLoading}>
           {empleados.length === 0 ? (
-            <Empty className="border-0 py-14">
+            <Empty className={brand.empty}>
               <EmptyHeader>
-                <EmptyMedia variant="icon"><SearchXIcon /></EmptyMedia>
+                <EmptyMedia variant="icon">
+                  <SearchXIcon />
+                </EmptyMedia>
                 <EmptyTitle>No encontramos empleados</EmptyTitle>
                 <EmptyDescription>
                   {search || verInactivos
@@ -365,17 +499,30 @@ export function EmpleadosTable({
               </EmptyHeader>
             </Empty>
           ) : (
-            <Table>
+            <Table
+              className={`${styles.table} ${brand.table} ${styles.employeesTable}`}
+            >
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10 px-4">
+                  <TableHead className={styles.checkCell}>
                     <Checkbox
                       aria-label="Seleccionar todos los empleados visibles"
-                      checked={allSelected}
-                      onCheckedChange={(checked) =>
-                        setSelected(checked ? new Set(empleados.map((item) => item.id)) : new Set())
+                      isSelected={allSelected}
+                      isIndeterminate={!allSelected && selectedRows.length > 0}
+                      onChange={(checked) =>
+                        setSelected(
+                          checked
+                            ? new Set(empleados.map((item) => item.id))
+                            : new Set(),
+                        )
                       }
-                    />
+                    >
+                      <Checkbox.Content>
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox.Content>
+                    </Checkbox>
                   </TableHead>
                   <TableHead>Empleado</TableHead>
                   <TableHead>Sector</TableHead>
@@ -386,61 +533,146 @@ export function EmpleadosTable({
                   <TableHead>Estado</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className={isLoading ? "opacity-60" : undefined}>
+              <TableBody>
                 {empleados.map((empleado) => (
-                  <TableRow key={empleado.id} data-state={selected.has(empleado.id) ? "selected" : undefined}>
-                    <TableCell className="px-4">
+                  <TableRow
+                    key={empleado.id}
+                    data-state={
+                      selected.has(empleado.id) ? "selected" : undefined
+                    }
+                  >
+                    <TableCell className={styles.checkCell}>
                       <Checkbox
                         aria-label={`Seleccionar a ${empleado.nombreCompleto}`}
-                        checked={selected.has(empleado.id)}
-                        onCheckedChange={(checked) => handleSelect(empleado.id, checked === true)}
-                      />
+                        isSelected={selected.has(empleado.id)}
+                        onChange={(checked) =>
+                          handleSelect(empleado.id, checked)
+                        }
+                      >
+                        <Checkbox.Content>
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox.Content>
+                      </Checkbox>
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <NavLink href={`/empleados/${empleado.id}`} className="underline-offset-4 hover:underline">
-                        {empleado.nombreCompleto}
+                    <TableCell>
+                      <NavLink
+                        href={`/empleados/${empleado.id}`}
+                        className={styles.employeeName}
+                      >
+                        <span className={brand.identityIcon} aria-hidden="true">
+                          <UserRoundIcon />
+                        </span>
+                        <strong>{empleado.nombreCompleto}</strong>
+                        <ArrowUpRightIcon
+                          className={brand.rowArrow}
+                          aria-hidden="true"
+                        />
                       </NavLink>
                     </TableCell>
                     <TableCell>{empleado.sector}</TableCell>
                     <TableCell>{empleado.ocupacion || "-"}</TableCell>
-                    <TableCell>{empleado.email}</TableCell>
-                    <TableCell>{empleado.ciudad || "-"}</TableCell>
                     <TableCell>
-                      <Badge variant={empleado.usuarioSistema ? "secondary" : "outline"}>
-                        {empleado.usuarioSistema ? "Habilitado" : "Sin acceso"}
-                      </Badge>
+                      <span className={brand.contactText}>
+                        <MailIcon aria-hidden="true" />
+                        {empleado.email}
+                      </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={empleado.activo ? "secondary" : "destructive"}>
+                      <span className={brand.contactText}>
+                        {empleado.ciudad && <MapPinIcon aria-hidden="true" />}
+                        {empleado.ciudad || "—"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="sm"
+                        color={empleado.usuarioSistema ? "success" : "default"}
+                        variant={empleado.usuarioSistema ? "soft" : "secondary"}
+                      >
+                        {empleado.usuarioSistema ? "Habilitado" : "Sin acceso"}
+                      </Chip>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="sm"
+                        color={empleado.activo ? "success" : "danger"}
+                        variant="soft"
+                      >
+                        <span className={styles.statusDot} />
                         {empleado.activo ? "Activo" : "Baja"}
-                      </Badge>
+                      </Chip>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           )}
-          <TablePagination
-            total={response.total}
-            page={response.page}
-            pageSize={response.limit}
-            onPageChange={setPage}
-          />
-        </CardContent>
+        </div>
+        {pages > 1 && (
+          <footer className={listPage.pager}>
+            <span>
+              {(response.page - 1) * response.limit + 1}–
+              {Math.min(response.page * response.limit, response.total)} de{" "}
+              {response.total}
+            </span>
+            <div className={styles.actions}>
+              <ActionButton
+                variant="outline"
+                isIconOnly
+                aria-label="Página anterior"
+                isDisabled={response.page <= 1}
+                onPress={() => setPage(response.page - 1)}
+              >
+                <ChevronLeftIcon />
+              </ActionButton>
+              <span>
+                {response.page} / {pages}
+              </span>
+              <ActionButton
+                variant="outline"
+                isIconOnly
+                aria-label="Página siguiente"
+                isDisabled={response.page >= pages}
+                onPress={() => setPage(response.page + 1)}
+              >
+                <ChevronRightIcon />
+              </ActionButton>
+            </div>
+          </footer>
+        )}
       </Card>
-
-      <ConfirmacionDestructiva
-        open={confirmandoBaja}
+      <FormDialog
+        className={brand.dialog}
+        isOpen={confirmandoBaja}
         onOpenChange={(open) => !open && setConfirmandoBaja(false)}
-        titulo="Dar de baja empleados"
-        descripcion={`Se darán de baja ${selectedRows.filter((item) => item.activo).length} empleado(s). Sus ventas, trabajos y egresos se conservarán; si tenían acceso, se revocará.`}
-        requiereTipear={false}
-        accionLabel="Dar de baja"
-        onConfirmar={() => {
-          setConfirmandoBaja(false);
-          cambiarEstado(selectedRows.filter((item) => item.activo).map((item) => item.id), false);
-        }}
-      />
-    </div>
+        title="Dar de baja empleados"
+        description={`Se darán de baja ${selectedRows.filter((item) => item.activo).length} empleado(s). Sus ventas, trabajos y egresos se conservarán; si tenían acceso, se revocará.`}
+      >
+        <Modal.Footer className={styles.dialogFooter}>
+          <ActionButton
+            variant="outline"
+            onPress={() => setConfirmandoBaja(false)}
+          >
+            Cancelar
+          </ActionButton>
+          <ActionButton
+            variant="danger"
+            onPress={() => {
+              setConfirmandoBaja(false);
+              cambiarEstado(
+                selectedRows
+                  .filter((item) => item.activo)
+                  .map((item) => item.id),
+                false,
+              );
+            }}
+          >
+            <UserMinusIcon /> Dar de baja
+          </ActionButton>
+        </Modal.Footer>
+      </FormDialog>
+    </section>
   );
 }

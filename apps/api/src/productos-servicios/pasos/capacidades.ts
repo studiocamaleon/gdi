@@ -177,6 +177,7 @@ export const ALIAS_LEGACY: Record<string, AliasLegacy> = {
   piezas_laminadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas laminadas' },
   metros_lineales_film: { capacidad: 'metros_lineales', etiqueta: 'metros de film' },
   piezas_pintadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas pintadas' },
+  piezas_terminadas: { capacidad: 'unidades_procesadas', etiqueta: 'piezas terminadas' },
 
   // ── encuadernado / armado ───────────────────────────────────────────
   libros_anillados: { capacidad: 'unidades_procesadas', etiqueta: 'libros anillados' },
@@ -209,6 +210,9 @@ export const KEYS_INTERNAS: ReadonlySet<string> = new Set<string>([
   // Configuración que el paso original deja a las capas siguientes del
   // talonario. No es una magnitud heredable ni debe aparecer en la UI.
   'talonario_modo_incompleto',
+  // Plano físico compartido entre impresión y corte. Es trazabilidad técnica
+  // del nesting, no una magnitud seleccionable ni heredable por el usuario.
+  'layout_produccion',
 ]);
 
 /**

@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Grafo · WhatsApp",
+  "description": "El contacto y sus últimas órdenes de Grafo junto a tu chat de WhatsApp Web.",
+  "version": "0.3.1",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "storage", "scripting", "alarms"],
+  "host_permissions": ["https://web.whatsapp.com/*"],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_title": "Abrir Grafo junto a WhatsApp"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["src/whatsapp-dom.js", "src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+  }
+}

@@ -8,20 +8,34 @@
 
 import {
   EstadoTarifaCentroCostoPeriodo,
+  EstructuraProducto,
+  EtapaDesarrolloDocumento,
+  FamiliaMateriaPrima,
   Prisma,
   PrismaClient,
+  SubfamiliaMateriaPrima,
   TipoCentroCosto,
+  TipoAprobacionDocumento,
+  UnidadMateriaPrima,
+  PropositoArchivoMaestro,
 } from '@prisma/client';
 import { MotorUniversalService } from '../motor.service';
 import { runNestingForPaso } from '../nesting-dispatcher';
 import { AplicarPrecioService } from '../../productos-servicios/precio/aplicar-precio.service';
 import { PreciosEspecialesClientesService } from '../../productos-servicios/precio/precios-especiales-clientes/precios-especiales-clientes.service';
+import { ProductosService } from '../../productos-servicios/productos.service';
+import { ProductoValidacionService } from '../../productos-servicios/producto-validacion.service';
+import { RecetasProductoService } from '../../productos-servicios/recetas-producto.service';
+import { OrdenesTrabajoService } from '../../ordenes-trabajo/ordenes-trabajo.service';
+import { emitirCotizacionF4, ejecutarOrdenF4 } from '../../../test/soporte-recorridos-f4';
 
 const prisma = new PrismaClient();
 
 let tenantId: string | null = null;
 let motorService: MotorUniversalService;
 const tarifaHoraManual = 6000;
+let restaurarUnidadesPrecio: (() => Promise<void>) | undefined;
+let restaurarFixtureTarjetas: (() => Promise<void>) | undefined;
 
 beforeAll(async () => {
   const tenant = await prisma.tenant.findUnique({
@@ -40,7 +54,25 @@ beforeAll(async () => {
     preciosEspeciales,
   );
   if (tenantId) {
+    // Los precios de los fixtures históricos de esta suite están expresados
+    // por unidad de uso. Ahora se declara esa unidad, sin alterar importes.
+    const pendientes = await prisma.materiaPrimaVariante.findMany({
+      where: { tenantId, unidadPrecio: null },
+      include: { materiaPrima: true },
+    });
+    for (const v of pendientes)
+      await prisma.materiaPrimaVariante.update({
+        where: { id: v.id },
+        data: { unidadPrecio: v.unidadStock ?? v.materiaPrima.unidadStock },
+      });
+    restaurarUnidadesPrecio = async () => {
+      await prisma.materiaPrimaVariante.updateMany({
+        where: { id: { in: pendientes.map((v) => v.id) } },
+        data: { unidadPrecio: null },
+      });
+    };
     await ensureCentrosManualesDemo(tenantId);
+    restaurarFixtureTarjetas = await prepararFixtureTarjetas(tenantId);
   }
 });
 
@@ -51,8 +83,46 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  try {
+    await restaurarFixtureTarjetas?.();
+    await restaurarUnidadesPrecio?.();
+  } finally {
+    await prisma.$disconnect();
+  }
 });
+
+/** Los ejemplos nuevos del seed no deben cambiar los supuestos de estas pruebas:
+ * A4, preprensa opcional y laminado sobre los pliegos que imprime el paso anterior.
+ * Se restaura la configuración al terminar, incluso si falla una aserción.
+ */
+async function prepararFixtureTarjetas(tenantId: string) {
+  const originales = await prisma.productoConfigPaso.findMany({
+    where: {
+      tenantId,
+      productoRutaAlternativa: { producto: { codigo: 'TARJ-PREMIUM-300' } },
+      rutaPaso: { familiaCodigo: { in: ['pre_prensa', 'impresion_por_hoja', 'laminado'] } },
+    },
+    include: { rutaPaso: true },
+  });
+  await prisma.$transaction(originales.map((config) => prisma.productoConfigPaso.update({
+    where: { id: config.id },
+    data: config.rutaPaso.familiaCodigo === 'pre_prensa'
+      ? { modoActivacion: 'OPCIONAL' }
+      : config.rutaPaso.familiaCodigo === 'laminado'
+        ? { mecanismoCantidad: 'HEREDAR_DEL_OUTPUT_CANONICO' }
+        : { paramsPasoJson: { nestingConfig: { pliegoImpresion: { preset: 'A4', anchoMm: 210, altoMm: 297 } } } },
+  })));
+  return async () => {
+    await prisma.$transaction(originales.map((config) => prisma.productoConfigPaso.update({
+      where: { id: config.id },
+      data: {
+        modoActivacion: config.modoActivacion,
+        mecanismoCantidad: config.mecanismoCantidad,
+        paramsPasoJson: config.paramsPasoJson === null ? Prisma.DbNull : config.paramsPasoJson as Prisma.InputJsonValue,
+      },
+    })));
+  };
+}
 
 /**
  * El centro que costea los pasos manuales. En el seed es PRE-001, el mismo
@@ -424,7 +494,9 @@ describe('MotorUniversalService — smoke tests', () => {
     const cmyk = consumibles.filter(
       (m) => m.materialSku !== 'TINTA-UV-MIMAKI-W',
     );
-    expect(cmyk.every((m) => m.cantidad > 10)).toBe(true);
+    // 500 × 300 mm = 0,15 m² impresos. Cada canal consume 8 ml/m²:
+    // la tinta sigue el área de las piezas, no la superficie vacía del pliego.
+    expect(cmyk.every((m) => Math.abs(m.cantidad - 1.2) < 1e-6)).toBe(true);
   });
 
   it('Talonario duplicado tipoCopia=2: capa 1 + capa 2 se activan, capa 3 NO (CONDICIONAL JsonLogic)', async () => {
@@ -1085,7 +1157,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(e!.mensaje.toLowerCase()).toContain('cantidad');
     expect(result.metadata).toMatchObject({
       quoteRunId: expect.any(String),
-      motorVersion: 'motor-universal-v4',
+      motorVersion: 'motor-universal-v5',
       durationMs: expect.any(Number),
     });
   });
@@ -1868,7 +1940,7 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(snap).toHaveProperty('ejecucion');
     expect(snap).toMatchObject({
       motor: {
-        contractVersion: 'motor-universal-v4',
+        contractVersion: 'motor-universal-v5',
         inputHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         periodoTarifario: '2026-06',
       },
@@ -4239,7 +4311,1061 @@ describe('MotorUniversalService — smoke tests', () => {
     expect(c.tiempoTotal).toEqual(expect.any(Number));
     expect(c.materialesTotal).toEqual(expect.any(Number));
     expect(c.cargosDirectosTotal).toEqual(expect.any(Number));
+    expect(c.componentesFabricadosTotal).toEqual(expect.any(Number));
     expect(c.total).toEqual(expect.any(Number));
     expect(c.unitario).toEqual(expect.any(Number));
   });
+
+  // Incluye tres OT completas, con hasta 30 s por transacción, además de
+  // preparar, cotizar y limpiar la matriz GENERAL/MIXTO/POR_COMPONENTE.
+  it('F4.2/F4.3/F4.4.2: valida pricing y nesting consolidable de un compuesto', async () => {
+    if (!tenantId) return;
+    const ejecutarGuardada = async (guardada: Awaited<ReturnType<MotorUniversalService['cotizarYGuardar']>>) => {
+      const rollback = new Error('rollback ejecución compuesto');
+      await expect(prisma.$transaction(async (tx) => {
+        const { orden, ordenes, auth: actor } = await emitirCotizacionF4(tx, guardada);
+        const items = await tx.ordenTrabajoItem.findMany({ where: { ordenId: orden.id }, include: { pasos: true } });
+        expect(items.filter((item) => !item.parentItemId)).toHaveLength(1);
+        expect(items.filter((item) => item.parentItemId)).toHaveLength(3);
+        // El material de este fixture usa fórmula independiente: el motor
+        // rechaza su ahorro y la OT debe conservar todas las operaciones.
+        expect(items.some((item) => item.pasos.some((paso) => paso.nestingLoteRol === 'OPERATIVO'))).toBe(false);
+        const { orden: terminada } = await ejecutarOrdenF4(tx, ordenes, actor, orden.id);
+        expect(Number(terminada.total)).toBe(guardada.result.cotizacion!.precio!.precioTotal);
+        const tracking = await ordenes.trackingPublico(terminada.publicToken!);
+        expect(tracking!.items).toHaveLength(1);
+        expect(tracking!.progresoPct).toBe(100);
+        throw rollback;
+      }, { timeout: 30000 })).rejects.toBe(rollback);
+    };
+    const productos = new ProductosService(prisma as never);
+    const recetas = new RecetasProductoService(
+      prisma as never,
+      productos,
+      new ProductoValidacionService(productos),
+      { publicar: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    const auth = {
+      tenantId,
+      userId: '00000000-0000-0000-0000-000000000001',
+      email: 'qa-fase-3@grafoprint.local',
+    } as never;
+    const [rigidoInicial, tarjetas] = await Promise.all([
+      productos.obtenerProducto(
+        tenantId,
+        (
+          await prisma.producto.findFirstOrThrow({
+            where: { tenantId, codigo: 'RIGIDO-CUSTOM' },
+            select: { id: true },
+          })
+        ).id,
+      ),
+      productos.obtenerProducto(
+        tenantId,
+        (
+          await prisma.producto.findFirstOrThrow({
+            where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
+            select: { id: true },
+          })
+        ).id,
+      ),
+    ]);
+    const rutaRigidoInicial =
+      rigidoInicial.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+      rigidoInicial.rutasAlternativas[0];
+    const pinturaMaterial = await prisma.materiaPrima.upsert({
+      where: { tenantId_codigo: { tenantId, codigo: 'QA-F3-PINTURA' } },
+      update: { activo: true },
+      create: {
+        tenantId,
+        codigo: 'QA-F3-PINTURA',
+        nombre: 'Pintura blanca para exhibidor',
+        familia: FamiliaMateriaPrima.PINTURA_RECUBRIMIENTO,
+        subfamilia: SubfamiliaMateriaPrima.PINTURA_CARTELERIA,
+        tipoTecnico: 'pintura_exhibidor',
+        templateId: 'pintura_carteleria_v1',
+        unidadStock: UnidadMateriaPrima.LITRO,
+        unidadCompra: UnidadMateriaPrima.LITRO,
+        atributosTecnicosJson: {},
+      },
+    });
+    const pintura = await prisma.materiaPrimaVariante.upsert({
+      where: { tenantId_sku: { tenantId, sku: 'QA-F3-PINT-BLA' } },
+      update: { activo: true, precioReferencia: 8000 },
+      create: {
+        tenantId,
+        materiaPrimaId: pinturaMaterial.id,
+        sku: 'QA-F3-PINT-BLA',
+        nombreVariante: 'Pintura blanca · 1 litro',
+        atributosVarianteJson: {},
+        unidadStock: UnidadMateriaPrima.LITRO,
+        unidadCompra: UnidadMateriaPrima.LITRO,
+        precioReferencia: 8000,
+        moneda: 'ARS',
+      },
+    });
+    const packaging = await prisma.materiaPrima.upsert({
+      where: { tenantId_codigo: { tenantId, codigo: 'QA-F3-PACKAGING' } },
+      update: { activo: true },
+      create: {
+        tenantId,
+        codigo: 'QA-F3-PACKAGING',
+        nombre: 'Caja corrugada para exhibidor',
+        familia: FamiliaMateriaPrima.PACKING_INSTALACION,
+        subfamilia: SubfamiliaMateriaPrima.EMBALAJE_PROTECCION,
+        tipoTecnico: 'caja_corrugada_exhibidor',
+        templateId: 'embalaje_proteccion_v1',
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        atributosTecnicosJson: { uso: 'exhibidor' },
+      },
+    });
+    const packagingVariante = await prisma.materiaPrimaVariante.upsert({
+      where: { tenantId_sku: { tenantId, sku: 'QA-F3-CAJA-EXH' } },
+      update: { activo: true, precioReferencia: 2400 },
+      create: {
+        tenantId,
+        materiaPrimaId: packaging.id,
+        sku: 'QA-F3-CAJA-EXH',
+        nombreVariante: 'Caja exhibidor 60 × 180 cm',
+        atributosVarianteJson: { anchoMm: 600, altoMm: 1800 },
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        precioReferencia: 2400,
+        moneda: 'ARS',
+      },
+    });
+    const accesorio = await prisma.materiaPrima.upsert({
+      where: { tenantId_codigo: { tenantId, codigo: 'QA-F3-ACCESORIO' } },
+      update: { activo: true },
+      create: {
+        tenantId,
+        codigo: 'QA-F3-ACCESORIO',
+        nombre: 'Escuadra metálica para exhibidor',
+        familia: FamiliaMateriaPrima.HERRAJE_ACCESORIO,
+        subfamilia: SubfamiliaMateriaPrima.ACCESORIO_MONTAJE_POP,
+        tipoTecnico: 'escuadra_exhibidor',
+        templateId: 'accesorio_montaje_pop_v1',
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        atributosTecnicosJson: { uso: 'refuerzo' },
+      },
+    });
+    const accesorioVariante = await prisma.materiaPrimaVariante.upsert({
+      where: { tenantId_sku: { tenantId, sku: 'QA-F3-ESCUADRA' } },
+      update: { activo: true, precioReferencia: 350 },
+      create: {
+        tenantId,
+        materiaPrimaId: accesorio.id,
+        sku: 'QA-F3-ESCUADRA',
+        nombreVariante: 'Escuadra metálica reforzada',
+        atributosVarianteJson: {},
+        unidadStock: UnidadMateriaPrima.UNIDAD,
+        unidadCompra: UnidadMateriaPrima.UNIDAD,
+        precioReferencia: 350,
+        moneda: 'ARS',
+      },
+    });
+    const configPintura = rutaRigidoInicial.configPasos.find(
+      (paso) => paso.rutaPaso.familiaCodigo === 'pintura_superficial',
+    )!;
+    const configEmbalaje = rutaRigidoInicial.configPasos.find(
+      (paso) => paso.rutaPaso.familiaCodigo === 'embalaje',
+    )!;
+    const estacionQa = await prisma.estacion.upsert({
+      where: {
+        tenantId_nombre: { tenantId, nombre: 'QA F3 · Impresión rígida' },
+      },
+      update: { activo: true },
+      create: {
+        tenantId,
+        nombre: 'QA F3 · Impresión rígida',
+        etapa: 'impresion',
+        capacidadConcurrente: 1,
+      },
+    });
+    await prisma.estacionRegla.upsert({
+      where: {
+        estacionId_tipo_valor: {
+          estacionId: estacionQa.id,
+          tipo: 'familia',
+          valor: 'impresion_por_area',
+        },
+      },
+      update: {},
+      create: {
+        tenantId,
+        estacionId: estacionQa.id,
+        tipo: 'familia',
+        valor: 'impresion_por_area',
+      },
+    });
+    await prisma.productoConfigPasoSlotMaterial.createMany({
+      data: [
+        {
+          tenantId,
+          productoConfigPasoId: configPintura.id,
+          slotCodigo: 'pintura',
+          slotNombre: 'Pintura / laca',
+          slotRol: 'CONSUMIBLE',
+          modoSeleccion: 'HARDCODED',
+          materialVarianteId: pintura.id,
+          formula: 'por_unidad_productiva',
+          cantidadFactor: 0.15,
+        },
+        {
+          tenantId,
+          productoConfigPasoId: configEmbalaje.id,
+          slotCodigo: 'caja',
+          slotNombre: 'Caja corrugada',
+          slotRol: 'PACKAGING',
+          modoSeleccion: 'HARDCODED',
+          materialVarianteId: packagingVariante.id,
+          formula: 'por_pieza',
+          cantidadFactor: 1,
+        },
+        {
+          tenantId,
+          productoConfigPasoId: configEmbalaje.id,
+          slotCodigo: 'escuadras',
+          slotNombre: 'Escuadras de refuerzo',
+          slotRol: 'COMPONENTE',
+          modoSeleccion: 'HARDCODED',
+          materialVarianteId: accesorioVariante.id,
+          formula: 'por_pieza',
+          cantidadFactor: 4,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    await prisma.productoConfigPasoSlotMaterial.updateMany({
+      where: {
+        tenantId,
+        productoConfigPasoId: {
+          in: rutaRigidoInicial.configPasos.map((paso) => paso.id),
+        },
+        slotCodigo: 'sustrato_principal',
+      },
+      data: { slotRol: 'SUSTRATO' },
+    });
+    const rigido = await productos.obtenerProducto(tenantId, rigidoInicial.id);
+    const estructuraRigidoOriginal = rigido.estructuraProducto;
+    const preciosOriginales = await prisma.producto.findMany({
+      where: { tenantId, id: { in: [rigido.id, tarjetas.id] } },
+      select: {
+        id: true,
+        precioConfigJson: true,
+        atributosComercialesJson: true,
+      },
+    });
+    const pricingPadreGeneral = {
+      metodoCalculo: 'por_margen',
+      detalle: { marginPct: 25 },
+    } satisfies Prisma.InputJsonObject;
+    const pricingHijoNoAplicado = {
+      metodoCalculo: 'por_margen',
+      detalle: { marginPct: 35 },
+    } satisfies Prisma.InputJsonObject;
+    const pricingOverride = {
+      metodoCalculo: 'por_margen',
+      detalle: { marginPct: 55 },
+    } satisfies Prisma.InputJsonObject;
+
+    await prisma.productoReceta.deleteMany({
+      where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },
+    });
+    await prisma.$transaction([
+      prisma.producto.update({
+        where: { id: rigido.id },
+        data: {
+          estructuraProducto: EstructuraProducto.COMPUESTO,
+          precioConfigJson: pricingPadreGeneral,
+          atributosComercialesJson: {
+            nestingCompuesto: {
+              version: 1,
+              politica: 'CONSOLIDAR_COMPATIBLES',
+            },
+          },
+        },
+      }),
+      prisma.producto.update({
+        where: { id: tarjetas.id },
+        data: { precioConfigJson: pricingHijoNoAplicado },
+      }),
+    ]);
+    try {
+      const rutaTarjetas =
+        tarjetas.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+        tarjetas.rutasAlternativas[0];
+      const borradorTarjetas = await recetas.guardarBorrador(
+        auth,
+        tarjetas.id,
+        { rutaAlternativaId: rutaTarjetas.id, componentes: [] },
+      );
+      await recetas.publicar(auth, borradorTarjetas.id, {
+        expectedUpdatedAt: borradorTarjetas.updatedAt.toISOString(),
+      });
+
+      const rutaRigido =
+        rigido.rutasAlternativas.find((ruta) => ruta.esPreferida) ??
+        rigido.rutasAlternativas[0];
+      const pasoIncorporacionRigido = rutaRigido.configPasos.find(
+        (paso) => paso.modoActivacion === 'OBLIGATORIO',
+      )!;
+      const borradorRigido = await recetas.guardarBorrador(auth, rigido.id, {
+        rutaAlternativaId: rutaRigido.id,
+        documentos: [
+          {
+            codigo: 'ARTE-FINAL-EXHIBIDOR',
+            nombre: 'Arte final aprobado del exhibidor',
+            proposito: PropositoArchivoMaestro.PRINT,
+            etapa: EtapaDesarrolloDocumento.PRODUCCION,
+            tipoAprobacion: TipoAprobacionDocumento.CLIENTE,
+            requerido: true,
+          },
+        ],
+        componentes: [
+          {
+            productoComponenteId: tarjetas.id,
+            codigo: tarjetas.codigo,
+            nombre: tarjetas.nombre,
+            cantidad: 1000,
+            formula: 'por_unidad',
+            unidad: 'unidad',
+            requerido: true,
+            orden: 0,
+            nodoIncorporacionClave: `ruta:${pasoIncorporacionRigido.rutaPasoId}`,
+            configuracionJson: {
+              version: 2,
+              pricing: {
+                version: 1,
+                modo: 'USAR_PRODUCTO_HIJO',
+              },
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  etiqueta: 'Cantidad',
+                  tipoDato: 'number',
+                  origen: 'FORMULA',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'cantidad',
+                    operador: 'MULTIPLICAR',
+                    valor: 1000,
+                    fuente: { tipo: 'PADRE', campo: 'cantidad' },
+                  },
+                },
+              ],
+              operacionesIncorporacion: [
+                {
+                  codigo: 'cargar_tarjetas',
+                  nombre: 'Cargar tarjetas en el exhibidor',
+                  modoTiempo: 'FIJO',
+                  minutosFijos: 12,
+                  dotacionOperarios: 1,
+                  orden: 0,
+                },
+              ],
+            },
+          },
+          {
+            productoComponenteId: tarjetas.id,
+            codigo: `${tarjetas.codigo}-HEREDADO`,
+            nombre: `${tarjetas.nombre} heredadas`,
+            cantidad: 250,
+            formula: 'por_unidad',
+            unidad: 'unidad',
+            requerido: true,
+            orden: 1,
+            nodoIncorporacionClave: `ruta:${pasoIncorporacionRigido.rutaPasoId}`,
+            configuracionJson: {
+              version: 2,
+              pricing: {
+                version: 1,
+                modo: 'HEREDAR_PADRE',
+              },
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  etiqueta: 'Cantidad',
+                  tipoDato: 'number',
+                  origen: 'FORMULA',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'cantidad',
+                    operador: 'MULTIPLICAR',
+                    valor: 250,
+                    fuente: { tipo: 'PADRE', campo: 'cantidad' },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            productoComponenteId: tarjetas.id,
+            codigo: `${tarjetas.codigo}-OVERRIDE`,
+            nombre: `${tarjetas.nombre} con regla específica`,
+            cantidad: 100,
+            formula: 'por_unidad',
+            unidad: 'unidad',
+            requerido: true,
+            orden: 2,
+            nodoIncorporacionClave: `ruta:${pasoIncorporacionRigido.rutaPasoId}`,
+            configuracionJson: {
+              version: 2,
+              pricing: {
+                version: 1,
+                modo: 'OVERRIDE',
+                precioConfigOverride: pricingOverride,
+              },
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  etiqueta: 'Cantidad',
+                  tipoDato: 'number',
+                  origen: 'FORMULA',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'cantidad',
+                    operador: 'MULTIPLICAR',
+                    valor: 100,
+                    fuente: { tipo: 'PADRE', campo: 'cantidad' },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            productoComponenteId: tarjetas.id,
+            codigo: `${tarjetas.codigo}-OMITIDO`,
+            nombre: `${tarjetas.nombre} opcionales`,
+            cantidad: 5000,
+            formula: 'por_unidad',
+            unidad: 'unidad',
+            requerido: false,
+            orden: 3,
+            nodoIncorporacionClave: `ruta:${pasoIncorporacionRigido.rutaPasoId}`,
+            configuracionJson: {
+              version: 2,
+              pricing: {
+                version: 1,
+                modo: 'OVERRIDE',
+                precioConfigOverride: {
+                  metodoCalculo: 'por_margen',
+                  detalle: { marginPct: 80 },
+                },
+              },
+              bindings: [
+                {
+                  clave: 'cantidad',
+                  etiqueta: 'Cantidad',
+                  tipoDato: 'number',
+                  origen: 'FORMULA',
+                  requerido: true,
+                  regla: {
+                    campoPadre: 'cantidad',
+                    operador: 'MULTIPLICAR',
+                    valor: 5000,
+                    fuente: { tipo: 'PADRE', campo: 'cantidad' },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+      const publicadaRigido = await recetas.publicar(auth, borradorRigido.id, {
+        expectedUpdatedAt: borradorRigido.updatedAt.toISOString(),
+      });
+      expect(publicadaRigido.componentes[0].configuracionJson).toEqual(
+        expect.objectContaining({
+          pricing: {
+            version: 1,
+            modo: 'USAR_PRODUCTO_HIJO',
+            precioConfigSnapshot: pricingHijoNoAplicado,
+          },
+        }),
+      );
+      expect(publicadaRigido.componentes).toHaveLength(4);
+      expect(publicadaRigido.componentes[1].configuracionJson).toEqual(
+        expect.objectContaining({
+          pricing: {
+            version: 1,
+            modo: 'HEREDAR_PADRE',
+          },
+        }),
+      );
+      expect(publicadaRigido.componentes[2].configuracionJson).toEqual(
+        expect.objectContaining({
+          pricing: {
+            version: 1,
+            modo: 'OVERRIDE',
+            precioConfigOverride: pricingOverride,
+            precioConfigSnapshot: pricingOverride,
+          },
+        }),
+      );
+      await prisma.producto.update({
+        where: { id: tarjetas.id },
+        data: {
+          precioConfigJson: {
+            metodoCalculo: 'por_margen',
+            detalle: { marginPct: 60 },
+          },
+        },
+      });
+      const motorConRecetas = new MotorUniversalService(
+        prisma as never,
+        new AplicarPrecioService(),
+        new PreciosEspecialesClientesService(prisma as never),
+        undefined,
+        undefined,
+        recetas,
+      );
+      const pasoMaterialRigido = rutaRigido.configPasos.find((paso) =>
+        paso.slotsMateriales.some(
+          (slot) => slot.modoSeleccion === 'COMERCIAL_ELIGE',
+        ),
+      )!;
+      const slotRigido = pasoMaterialRigido.slotsMateriales.find(
+        (slot) => slot.modoSeleccion === 'COMERCIAL_ELIGE',
+      )!;
+      const materialRigido = slotRigido.candidatos[0].defaultVarianteId!;
+      const resultado = await motorConRecetas.cotizar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+
+      expect(resultado.exitoso).toBe(true);
+      expect(
+        resultado.cotizacion?.componentesFabricados?.[0]
+          .especificacionesEfectivas,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            clave: 'cantidad',
+            etiqueta: 'Cantidad',
+            valor: 1000,
+            origen: 'FORMULA',
+          }),
+        ]),
+      );
+      expect(
+        (publicadaRigido.componentes[0].configuracionJson as Prisma.JsonObject)
+          .pricing,
+      ).toEqual(
+        expect.objectContaining({
+          precioConfigSnapshot: pricingHijoNoAplicado,
+        }),
+      );
+      // Golden master previo a F4.3: el motor valoriza el costo consolidado
+      // con la regla del padre; la configuración comercial del hijo no se
+      // propaga todavía al compuesto.
+      expect(resultado.cotizacion?.desglosePrecio?.precioConfig).toEqual(
+        pricingPadreGeneral,
+      );
+      expect(resultado.cotizacion?.precio).toEqual(
+        expect.objectContaining({
+          metodoUsado: 'por_margen',
+          margenAplicadoPct: 25,
+        }),
+      );
+      expect(resultado.cotizacion?.desgloseCostosPricingCompuesto).toEqual(
+        expect.objectContaining({
+          version: 1,
+          estrategia: 'GENERAL',
+          bloqueGeneral: {
+            costoTotal: resultado.cotizacion?.costos.total,
+          },
+          componentes: expect.arrayContaining([
+            expect.objectContaining({
+              productoId: tarjetas.id,
+              codigo: tarjetas.codigo,
+              incluidoEnBloqueGeneral: true,
+              politica: expect.objectContaining({
+                modo: 'USAR_PRODUCTO_HIJO',
+                precioConfigSnapshot: pricingHijoNoAplicado,
+              }),
+            }),
+            expect.objectContaining({
+              codigo: `${tarjetas.codigo}-HEREDADO`,
+              incluidoEnBloqueGeneral: true,
+              politica: expect.objectContaining({
+                modo: 'HEREDAR_PADRE',
+              }),
+            }),
+            expect.objectContaining({
+              codigo: `${tarjetas.codigo}-OVERRIDE`,
+              incluidoEnBloqueGeneral: true,
+              politica: expect.objectContaining({
+                modo: 'OVERRIDE',
+                precioConfigSnapshot: pricingOverride,
+              }),
+            }),
+          ]),
+          costoTotalAsignado: resultado.cotizacion?.costos.total,
+        }),
+      );
+      expect(
+        resultado.cotizacion?.desgloseCostosPricingCompuesto?.componentes,
+      ).toHaveLength(3);
+      expect(
+        resultado.cotizacion?.desgloseCostosPricingCompuesto?.componentes,
+      ).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            codigo: `${tarjetas.codigo}-OMITIDO`,
+          }),
+        ]),
+      );
+      expect(publicadaRigido.materiales.map((item) => item.rol)).toEqual(
+        expect.arrayContaining([
+          'SUSTRATO',
+          'CONSUMIBLE',
+          'PACKAGING',
+          'COMPONENTE',
+        ]),
+      );
+      expect(publicadaRigido.recursos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            familiaCodigo: 'impresion_por_area',
+            estacionId: estacionQa.id,
+            capacidadesSnapshotJson: expect.anything(),
+          }),
+        ]),
+      );
+      expect(
+        resultado.cotizacion?.costos.componentesFabricadosTotal,
+      ).toBeGreaterThan(0);
+      expect(resultado.cotizacion?.componentesFabricados).toHaveLength(3);
+      expect(resultado.cotizacion?.componentesFabricados).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            productoId: tarjetas.id,
+            codigo: tarjetas.codigo,
+            cantidad: 1000,
+            recetaVersion: 1,
+            costoTotal: expect.any(Number),
+            operacionesIncorporacion: [
+              expect.objectContaining({
+                codigo: 'cargar_tarjetas',
+                duracionMin: 12,
+                costo: expect.any(Number),
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            codigo: `${tarjetas.codigo}-HEREDADO`,
+            cantidad: 250,
+          }),
+          expect.objectContaining({
+            codigo: `${tarjetas.codigo}-OVERRIDE`,
+            cantidad: 100,
+          }),
+        ]),
+      );
+      expect(resultado.cotizacion?.componentesFabricados).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            codigo: `${tarjetas.codigo}-OMITIDO`,
+          }),
+        ]),
+      );
+      expect(
+        resultado.cotizacion?.componentesFabricados?.every(
+          (componente) =>
+            !('precio' in componente) && !('desglosePrecio' in componente),
+        ),
+      ).toBe(true);
+      expect(
+        resultado.cotizacion?.costos.incorporacionComponentesTotal,
+      ).toBeGreaterThan(0);
+      expect(resultado.cotizacion?.pasos).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operacionesIncorporacion: [
+              expect.objectContaining({
+                codigo: 'cargar_tarjetas',
+                duracionMin: 12,
+              }),
+            ],
+          }),
+        ]),
+      );
+      expect(resultado.cotizacion?.costos.total).toBeGreaterThan(
+        resultado.cotizacion?.costos.componentesFabricadosTotal ?? 0,
+      );
+      // F4.4.2 intenta aplicar el lote. Este fixture usa un consumo calculado
+      // por fórmula (no directamente por nesting), por lo que cae de forma
+      // segura al cálculo independiente y deja la causa trazada.
+      expect(resultado.cotizacion?.analisisNestingCompuesto).toEqual(
+        expect.objectContaining({
+          version: 1,
+          modo: 'APLICADO',
+          politica: 'CONSOLIDAR_COMPATIBLES',
+          aplicadoACostos: false,
+          grupos: expect.arrayContaining([
+            expect.objectContaining({
+              aplicacion: expect.objectContaining({
+                aplicado: false,
+                motivoNoAplicado: expect.stringContaining(
+                  'no está costeado directamente por el nesting',
+                ),
+              }),
+              participantes: expect.arrayContaining([
+                expect.objectContaining({ componenteCodigo: tarjetas.codigo }),
+                expect.objectContaining({
+                  componenteCodigo: `${tarjetas.codigo}-HEREDADO`,
+                }),
+                expect.objectContaining({
+                  componenteCodigo: `${tarjetas.codigo}-OVERRIDE`,
+                }),
+              ]),
+              independiente: expect.objectContaining({
+                sustratos: expect.any(Number),
+              }),
+              consolidado: expect.objectContaining({
+                algoritmo: 'grid-2d-multi',
+                sustratos: expect.any(Number),
+              }),
+            }),
+          ]),
+        }),
+      );
+      expect(
+        resultado.cotizacion?.analisisNestingCompuesto?.grupos.flatMap(
+          (grupo) =>
+            grupo.participantes.map(
+              (participante) => participante.componenteCodigo,
+            ),
+        ),
+      ).not.toContain(`${tarjetas.codigo}-OMITIDO`);
+      const guardada = await motorConRecetas.cotizarYGuardar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+      expect(guardada.result.exitoso).toBe(true);
+      const itemGuardado = await prisma.cotizacionItem.findUniqueOrThrow({
+        where: { id: guardada.cotizacionItemId! },
+      });
+      expect(itemGuardado.recetaRevisionId).toBe(publicadaRigido.id);
+      expect(itemGuardado.recetaHuella).toBe(
+        publicadaRigido.huellaConfiguracion,
+      );
+      expect(itemGuardado.precioConfigSnapshotJson).toEqual(
+        pricingPadreGeneral,
+      );
+      expect(itemGuardado.trazabilidadJson).toEqual(
+        expect.objectContaining({
+          componentesFabricados: expect.arrayContaining([
+            expect.objectContaining({ productoId: tarjetas.id }),
+          ]),
+          desgloseCostosPricingCompuesto: expect.objectContaining({
+            estrategia: 'GENERAL',
+          }),
+          analisisNestingCompuesto: expect.objectContaining({
+            modo: 'APLICADO',
+            aplicadoACostos: false,
+          }),
+        }),
+      );
+      const ordenes = new OrdenesTrabajoService(
+        prisma as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+      );
+      const itemAutorizado = (
+        await ordenes.autorizarItemsCotizados(auth, guardada.cotizacionId!, [
+          {
+            cotizacionItemId: guardada.cotizacionItemId!,
+            codigo: rigido.codigo,
+            nombre: rigido.nombre,
+            familia: 'Exhibidor POP',
+            cantidad: 1,
+            cantidadUnidad: 'unidad',
+            subtotal: 0,
+            impuestos: 0,
+            total: 0,
+          },
+        ])
+      )[0] as unknown as Record<string, unknown>;
+      expect(itemAutorizado).toEqual(
+        expect.objectContaining({
+          recetaRevisionId: publicadaRigido.id,
+          recetaVersion: publicadaRigido.numero,
+          recetaHuella: publicadaRigido.huellaConfiguracion,
+          recetaSnapshotJson: expect.objectContaining({
+            componentes: expect.any(Array),
+          }),
+        }),
+      );
+      await ejecutarGuardada(guardada);
+      await prisma.cotizacion.delete({ where: { id: guardada.cotizacionId! } });
+
+      await prisma.producto.update({
+        where: { id: rigido.id },
+        data: {
+          precioConfigJson: {
+            ...pricingPadreGeneral,
+            compuesto: { version: 1, estrategia: 'MIXTO' },
+          },
+        },
+      });
+      const resultadoMixto = await motorConRecetas.cotizar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+      expect(resultadoMixto.exitoso).toBe(true);
+      expect(resultadoMixto.cotizacion?.desglosePricingCompuesto).toEqual(
+        expect.objectContaining({
+          version: 1,
+          estrategia: 'MIXTO',
+          bloques: [
+            expect.objectContaining({ codigo: 'GENERAL' }),
+            expect.objectContaining({
+              codigo: tarjetas.codigo,
+              precioConfigSnapshot: pricingHijoNoAplicado,
+            }),
+            expect.objectContaining({
+              codigo: `${tarjetas.codigo}-OVERRIDE`,
+              precioConfigSnapshot: pricingOverride,
+            }),
+          ],
+        }),
+      );
+      expect(
+        resultadoMixto.cotizacion?.desglosePricingCompuesto?.bloques,
+      ).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            codigo: `${tarjetas.codigo}-OMITIDO`,
+          }),
+        ]),
+      );
+      expect(
+        resultadoMixto.cotizacion?.desglosePricingCompuesto?.bloques.reduce(
+          (total, bloque) => total + bloque.costoTotal,
+          0,
+        ),
+      ).toBeCloseTo(resultadoMixto.cotizacion?.costos.total ?? 0);
+      expect(resultadoMixto.cotizacion?.precio?.precioTotal).toBeGreaterThan(
+        resultado.cotizacion?.precio?.precioTotal ?? 0,
+      );
+      const guardadaMixta = await motorConRecetas.cotizarYGuardar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+      const itemMixto = await prisma.cotizacionItem.findUniqueOrThrow({
+        where: { id: guardadaMixta.cotizacionItemId! },
+      });
+      expect(itemMixto.precioConfigSnapshotJson).toEqual(
+        expect.objectContaining({
+          compuesto: { version: 1, estrategia: 'MIXTO' },
+        }),
+      );
+      expect(itemMixto.trazabilidadJson).toEqual(
+        expect.objectContaining({
+          desglosePricingCompuesto: expect.objectContaining({
+            estrategia: 'MIXTO',
+            bloques: expect.arrayContaining([
+              expect.objectContaining({ codigo: tarjetas.codigo }),
+            ]),
+          }),
+        }),
+      );
+      await ejecutarGuardada(guardadaMixta);
+      await prisma.cotizacion.delete({
+        where: { id: guardadaMixta.cotizacionId! },
+      });
+
+      await prisma.producto.update({
+        where: { id: rigido.id },
+        data: {
+          precioConfigJson: {
+            ...pricingPadreGeneral,
+            compuesto: { version: 1, estrategia: 'POR_COMPONENTE' },
+          },
+        },
+      });
+      const resultadoPorComponente = await motorConRecetas.cotizar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+      expect(resultadoPorComponente.exitoso).toBe(true);
+      expect(
+        resultadoPorComponente.cotizacion?.desglosePricingCompuesto,
+      ).toEqual(
+        expect.objectContaining({
+          version: 1,
+          estrategia: 'POR_COMPONENTE',
+          bloques: [
+            expect.objectContaining({ codigo: 'GENERAL' }),
+            expect.objectContaining({
+              codigo: tarjetas.codigo,
+              precioConfigSnapshot: pricingHijoNoAplicado,
+            }),
+            expect.objectContaining({
+              codigo: `${tarjetas.codigo}-OVERRIDE`,
+              precioConfigSnapshot: pricingOverride,
+            }),
+          ],
+        }),
+      );
+      expect(
+        resultadoPorComponente.cotizacion?.desglosePricingCompuesto?.bloques.reduce(
+          (total, bloque) => total + bloque.costoTotal,
+          0,
+        ),
+      ).toBeCloseTo(resultadoPorComponente.cotizacion?.costos.total ?? 0);
+      expect(
+        resultadoPorComponente.cotizacion?.precio?.precioTotal,
+      ).toBeCloseTo(resultadoMixto.cotizacion?.precio?.precioTotal ?? 0);
+      const guardadaPorComponente = await motorConRecetas.cotizarYGuardar({
+        tenantId,
+        productoId: rigido.id,
+        jobContext: {
+          cantidad: 1,
+          medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+          [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+            materialRigido,
+        },
+      });
+      const itemPorComponente = await prisma.cotizacionItem.findUniqueOrThrow({
+        where: { id: guardadaPorComponente.cotizacionItemId! },
+      });
+      expect(itemPorComponente.precioConfigSnapshotJson).toEqual(
+        expect.objectContaining({
+          compuesto: { version: 1, estrategia: 'POR_COMPONENTE' },
+        }),
+      );
+      expect(itemPorComponente.trazabilidadJson).toEqual(
+        expect.objectContaining({
+          desglosePricingCompuesto: expect.objectContaining({
+            estrategia: 'POR_COMPONENTE',
+            bloques: expect.arrayContaining([
+              expect.objectContaining({ codigo: tarjetas.codigo }),
+              expect.objectContaining({
+                codigo: `${tarjetas.codigo}-OVERRIDE`,
+              }),
+            ]),
+          }),
+        }),
+      );
+      await ejecutarGuardada(guardadaPorComponente);
+      await prisma.cotizacion.delete({
+        where: { id: guardadaPorComponente.cotizacionId! },
+      });
+
+      const borradorTarjetasV2 = await recetas.guardarBorrador(
+        auth,
+        tarjetas.id,
+        {
+          rutaAlternativaId: rutaTarjetas.id,
+          componentes: [],
+          cambios: 'Ajuste técnico del componente fabricado',
+        },
+      );
+      await recetas.publicar(auth, borradorTarjetasV2.id, {
+        expectedUpdatedAt: borradorTarjetasV2.updatedAt.toISOString(),
+      });
+      await expect(
+        motorConRecetas.cotizar({
+          tenantId,
+          productoId: rigido.id,
+          jobContext: {
+            cantidad: 1,
+            medidaCustomMm: { anchoMm: 600, altoMm: 1800 },
+            [`slotMaterial_${pasoMaterialRigido.id}_${slotRigido.slotCodigo}`]:
+              materialRigido,
+          },
+        }),
+      ).resolves.toMatchObject({ exitoso: true });
+    } finally {
+      await prisma.productoReceta.deleteMany({
+        where: { tenantId, productoId: { in: [rigido.id, tarjetas.id] } },
+      });
+      await prisma.$transaction(
+        preciosOriginales.map((producto) =>
+          prisma.producto.update({
+            where: { id: producto.id },
+            data: {
+              ...(producto.id === rigido.id
+                ? { estructuraProducto: estructuraRigidoOriginal }
+                : {}),
+              precioConfigJson:
+                producto.precioConfigJson === null
+                  ? Prisma.JsonNull
+                  : (producto.precioConfigJson as Prisma.InputJsonValue),
+              atributosComercialesJson:
+                producto.atributosComercialesJson === null
+                  ? Prisma.JsonNull
+                  : (producto.atributosComercialesJson as Prisma.InputJsonValue),
+            },
+          }),
+        ),
+      );
+      await prisma.productoConfigPasoSlotMaterial.deleteMany({
+        where: {
+          tenantId,
+          OR: [
+            { productoConfigPasoId: configPintura.id, slotCodigo: 'pintura' },
+            {
+              productoConfigPasoId: configEmbalaje.id,
+              slotCodigo: { in: ['caja', 'escuadras'] },
+            },
+          ],
+        },
+      });
+      await prisma.materiaPrima.deleteMany({
+        where: {
+          tenantId,
+          codigo: {
+            in: ['QA-F3-PINTURA', 'QA-F3-PACKAGING', 'QA-F3-ACCESORIO'],
+          },
+        },
+      });
+      await prisma.estacion.deleteMany({
+        where: { id: estacionQa.id, tenantId },
+      });
+    }
+  }, 120_000);
 });

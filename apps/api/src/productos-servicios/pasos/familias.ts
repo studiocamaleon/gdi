@@ -580,6 +580,13 @@ const impresion_3d: DefinicionFamilia = {
 
 const aplicacion_transfer: DefinicionFamilia = {
   codigo: 'aplicacion_transfer',
+  // Una aplicación se repite por transfer, no necesariamente por producto
+  // padre. En un compuesto, `cantidad_montaje` recibe la suma de piezas de
+  // todos los componentes vinculados (frente, espalda, manga, etc.).
+  ritmoDefault: {
+    modoCalculo: 'productivity',
+    fuenteCantidad: 'cantidad_montaje',
+  },
   // Renombrada 2026-08-07 (pedido del usuario): el nombre viejo ("Aplicación
   // DTF UV manual") ataba la familia a UNA técnica; aplica a cualquier
   // transfer colocado a mano. El par con la hermana queda simétrico:
@@ -623,6 +630,7 @@ const aplicacion_transfer: DefinicionFamilia = {
   ],
   permiteSlotsAdicionales: false,
   plantillasCompatibles: [],
+  magnitudTiempoDefault: 'cantidad_montaje',
   inputsRequeridos: ['cantidad'],
   outputsCanonicos: ['piezas_aplicadas'],
   validaciones: [],
@@ -632,6 +640,10 @@ const aplicacion_transfer: DefinicionFamilia = {
 
 const aplicacion_transfer_textil: DefinicionFamilia = {
   codigo: 'aplicacion_transfer_textil',
+  // La plancha cuenta bajadas/estampas. Cuando el paso pertenece al padre de
+  // un producto compuesto, esta magnitud agrega las piezas de los componentes
+  // vinculados y también sus ocurrencias creadas durante la cotización.
+  magnitudTiempoDefault: 'cantidad_montaje',
   nombre: 'Aplicación de transfer textil',
   categoria: 'produccion_impresion',
   descripcion:
@@ -890,13 +902,16 @@ const corte_laser: DefinicionFamilia = {
   validaciones: [],
   editorParamsGenerico: true,
   paramsPasoSchema: [
+    { campo: 'cotizarOperacionesVectoriales', etiqueta: 'Cotizar operaciones del archivo por herramienta',
+      tipo: 'boolean', default: false,
+      descripcion: 'Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas.' },
     {
       campo: 'usarDisenoVectorial',
       etiqueta: 'Archivo vectorial para cotizar y preparar',
       tipo: 'boolean',
       default: false,
       descripcion:
-        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción.',
+        'Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción.',
     },
     {
       campo: 'permitirIngresoPorMedidas',
@@ -904,36 +919,32 @@ const corte_laser: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       descripcion:
-        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+        'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
+    },
+    {
+      campo: 'usarCommonLine',
+      etiqueta: 'Optimizar líneas de corte compartidas',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado.',
     },
   ],
   productosTipicos: ['Letras de acrílico', 'Cortes complejos en MDF/madera'],
 };
 
 const troquelado_digital: DefinicionFamilia = {
+  ...corte_laser,
   codigo: 'troquelado_digital',
-  // [Etapa F3] Antes: switch defaultOutputParaHeredar en motor.service.
-  outputHeredadoDefault: 'pliegos_impresos',
-  nombre: 'Troquelado digital',
-  categoria: 'corte_y_formado',
-  descripcion: 'Mesa de corte digital tipo Esko/Zund. Sustrato en hoja.',
-  relacionMaquinaSoportada: ['M-1'],
-  modosTiempoSoportados: ['T-3'],
-  mecanismosCantidadSoportados: ['DIRECT_FROM_JOBCONTEXT'],
-  modosActivacionSoportados: ['OBLIGATORIO', 'OPCIONAL'],
-  modoActivacionDefault: 'OPCIONAL',
-  multiplicadoresSoportados: [],
-  slotsRequeridos: [],
-  permiteSlotsAdicionales: false,
+  nombre: 'Mesa de corte digital',
+  descripcion: 'Procesa piezas en placa con herramientas y perfiles por operación.',
   plantillasCompatibles: ['MESA_DE_CORTE'],
-  inputsRequeridos: ['cantidad'],
-  outputsCanonicos: ['piezas_troqueladas'],
-  validaciones: [],
-  paramsPasoSchema: [],
-  productosTipicos: [
-    'Cajas con forma especial',
-    'Stickers troquelados grandes',
-  ],
+  // Los nodos anteriores conservan la base de productividad genérica. La
+  // modalidad por herramienta se activa explícitamente en la receta.
+  magnitudTiempoDefault: undefined,
+  outputHeredadoDefault: 'pliegos_impresos',
+  outputsCanonicos: ['piezas_troqueladas', 'tiempo_real_corte'],
+  productosTipicos: ['Exhibidores', 'Packaging', 'Piezas con corte e hendido'],
 };
 
 const cnc: DefinicionFamilia = {
@@ -982,13 +993,16 @@ const cnc: DefinicionFamilia = {
   validaciones: [],
   editorParamsGenerico: true,
   paramsPasoSchema: [
+    { campo: 'cotizarOperacionesVectoriales', etiqueta: 'Cotizar operaciones del archivo por herramienta',
+      tipo: 'boolean', default: false,
+      descripcion: 'Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas.' },
     {
       campo: 'usarDisenoVectorial',
       etiqueta: 'Archivo vectorial para cotizar y preparar',
       tipo: 'boolean',
       default: false,
       descripcion:
-        'Permite cargar un SVG, hacer nesting irregular y generar SVG/DXF por placa para producción. El CAM/G-code continúa en el software de la CNC.',
+        'Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción. El CAM/G-code continúa en el software de la CNC.',
     },
     {
       campo: 'permitirIngresoPorMedidas',
@@ -996,7 +1010,15 @@ const cnc: DefinicionFamilia = {
       tipo: 'boolean',
       default: true,
       descripcion:
-        'El vendedor podrá elegir entre medidas rectangulares, SVG o una estimación manual por placas.',
+        'El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto.',
+    },
+    {
+      campo: 'usarCommonLine',
+      etiqueta: 'Optimizar líneas de corte compartidas',
+      tipo: 'boolean',
+      default: false,
+      descripcion:
+        'Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado.',
     },
   ],
   productosTipicos: ['Letras corpóreas MDF', 'Carteles rígidos con forma'],
@@ -1083,7 +1105,7 @@ const corte_manual: DefinicionFamilia = {
 };
 
 /** Corte de piezas corpóreas a partir de contornos vectoriales sobre placas.
- * El SVG y su nesting son requisitos del PROCESO: cualquier producto cuya
+ * La fuente vectorial y su nesting son requisitos del PROCESO: cualquier producto cuya
  * ruta use esta familia obtiene el configurador vectorial sin activar una
  * herramienta particular en atributos comerciales. */
 const corte_hilo_caliente: DefinicionFamilia = {
@@ -1314,6 +1336,30 @@ const pintura_superficial: DefinicionFamilia = {
       requerido: false,
     },
   ],
+};
+
+const lijado_canteado: DefinicionFamilia = {
+  codigo: 'lijado_canteado',
+  nombre: 'Lijado y canteado',
+  categoria: 'terminaciones',
+  descripcion:
+    'Terminación manual de bordes y superficies en piezas rígidas cortadas.',
+  relacionMaquinaSoportada: ['M-0'],
+  modosTiempoSoportados: ['T-1', 'T-2'],
+  mecanismosCantidadSoportados: [
+    'DIRECT_FROM_JOBCONTEXT',
+    'HEREDAR_DEL_OUTPUT_CANONICO',
+  ],
+  modosActivacionSoportados: ['OPCIONAL'],
+  modoActivacionDefault: 'OPCIONAL',
+  multiplicadoresSoportados: [],
+  slotsRequeridos: [],
+  permiteSlotsAdicionales: true,
+  plantillasCompatibles: [],
+  inputsRequeridos: ['cantidad'],
+  outputsCanonicos: ['piezas_terminadas'],
+  validaciones: [],
+  paramsPasoSchema: [],
 };
 
 // ============================================================================
@@ -2301,6 +2347,7 @@ export const FAMILIAS: Record<FamiliaCodigo, DefinicionFamilia> = {
   laminado,
   plastificado_pouch,
   pintura_superficial,
+  lijado_canteado,
   abrochado_caballete,
   encuadernado_anillado,
   engomado_emblocado,
@@ -2553,9 +2600,8 @@ export function fallbackSinLayoutDeFamilia(
 /**
  * Cola de consolidación donde entra un ítem cuyo paso FRONTERA (primer paso
  * no hecho) es de esta familia: impresión sobre material continuo
- * (`segun_material`) → simulador de gran formato; impresión sobre pliego →
- * simulador láser. Derivado de `esImpresion` + superficie declarada.
- * [Tanda A: los simuladores preguntaban por familiaCodigo]
+ * (`segun_material`) → gran formato; impresión sobre pliego →
+ * impresión por hoja. Derivado de `esImpresion` + superficie declarada.
  */
 export function colaConsolidacionDeFamilia(
   codigo: string,

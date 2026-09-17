@@ -253,7 +253,7 @@ export function ProductoRutasEditorView({
                 </div>
                 <div className="flex items-center gap-2 pt-2">
                   <Link
-                    href={`/productos-servicios/${producto.id}?tab=pasos&rutaAltId=${ra.id}`}
+                    href={`/productos-servicios/${producto.id}?tab=produccion&vista=operaciones&rutaAltId=${ra.id}`}
                     className={buttonVariants({
                       variant: "default",
                       size: "sm",

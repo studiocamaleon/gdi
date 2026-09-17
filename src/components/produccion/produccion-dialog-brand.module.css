@@ -1,0 +1,26 @@
+/* Formularios operativos compartidos: sólo se aplica con el tema de marca. */
+.dialog {
+  width: min(540px, calc(100vw - 32px));
+  max-width: min(540px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 28px;
+  gap: 22px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+  scrollbar-width: thin;
+}
+.overlay { composes: theme from "../design-system/brand-theme.module.css"; background: var(--backdrop); backdrop-filter: blur(4px); }
+.dialog :global([data-slot="dialog-header"]) { gap: 12px; padding-right: 12px; }
+.dialog :global([data-slot="dialog-title"]) { font-size: 25px; font-weight: 500; line-height: 1.2; letter-spacing: -.045em; }
+.dialog :global([data-slot="dialog-description"]) { font-size: 12px; line-height: 1.7; color: var(--muted-text); }
+.dialog :global([data-slot="field-label"]) { font-size: 12px; font-weight: 500; }
+.dialog :global([data-slot="input"]) { min-height: 36px; border-radius: var(--field-radius); background: var(--canvas-background); box-shadow: none; }
+.dialog :global([data-slot="button"]),
+.dialog :global([data-slot="toggle-group-item"]) { min-height: 32px; height: auto; border-radius: var(--action-radius); font-size: 12px; padding: 7px 12px; box-shadow: none; }
+.dialog :global([data-slot="toggle-group-item"][data-pressed]) { color: var(--accent-soft-foreground); background: var(--accent-soft); border-color: var(--accent); }
+@media (max-width: 560px) {
+  .dialog { padding: 24px 20px; }
+}

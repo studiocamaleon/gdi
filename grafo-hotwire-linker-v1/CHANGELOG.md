@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+- Conecta piezas alojadas por OpenNest en huecos de otras piezas, conservando
+  identidades y roles de los contornos originales. El árbol externo incorpora
+  anclajes en huecos y se expande sobre las conexiones internas existentes.
+- Mantiene validaciones de cruces, material y límites, además del recorrido
+  único de cada contorno y el retorno de cada puente.
+- Agrega regresiones para piezas anidadas, anidación en dos niveles y las dos
+  placas reales del Puma de 200 cm (incluida la R dentro del círculo).
+
 ## 1.0.0
 
 - Postprocesador calibrado con `andina.tap` real de VectorLinker.

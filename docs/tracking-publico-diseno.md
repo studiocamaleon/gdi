@@ -1,5 +1,18 @@
 # Seguimiento público de OT (cliente) — diseño
 
+## Ajuste de presentación — 2026-09-14
+
+La vista pública muestra el seguimiento de producción mediante los pasos de
+cada producto y su estado. Se retiraron los bloques de avance global y del
+producto, las barras, todos los porcentajes del saludo/entrega/acordeón y la
+animación que repetía el paso actual. Los pasos muestran su estado y fecha de
+finalización, sin duraciones estimadas internas. Se conservan los datos de
+entrega, retiro, contacto, detalle comercial y archivos compartidos. Los cálculos
+y las vistas internas de producción no cambian. Los estilos exclusivos de los
+elementos retirados se eliminaron de `globals.css`.
+
+El diseño original se conserva a continuación como antecedente.
+
 > Análisis 2026-07-17 (rama `feat/tablero-ordenes-reales`). Diseño de origen:
 > claude.ai/design proyecto Grafoprint, `tracking/` (Order Tracking.html +
 > tracking.css + tracking-mobile.jsx). Vista PÚBLICA, mobile-first, accesible

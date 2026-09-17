@@ -88,7 +88,7 @@ export class ClientesService {
         FROM "OrdenTrabajoItem" oti
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "Cliente" c ON c.id = ot."clienteId"
-        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."clienteId" IS NOT NULL AND ot."fechaEmision" IS NOT NULL
         GROUP BY ot."clienteId", c.nombre
       `,
@@ -119,7 +119,7 @@ export class ClientesService {
                  SUM(oti.subtotal) AS total
           FROM "OrdenTrabajoItem" oti
           JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
-          WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+          WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
             AND ot."clienteId" IS NOT NULL AND ot."fechaEmision" IS NOT NULL
           GROUP BY ot.id, ot."clienteId", ot."fechaEmision"
         ), marcada AS (
@@ -161,7 +161,7 @@ export class ClientesService {
         JOIN "OrdenTrabajo" ot ON ot.id = oti."ordenId"
         LEFT JOIN "CotizacionItem" ci ON ci.id = oti."cotizacionItemId"
         LEFT JOIN "Cliente" c ON c.id = ot."clienteId"
-        WHERE oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
+        WHERE oti."parentItemId" IS NULL AND oti."tenantId" = ${tenantId}::uuid AND ot.estado NOT IN ('borrador', 'cancelada')
           AND ot."fechaEmision" >= ${rango.desde} AND ot."fechaEmision" < ${hastaExcl}
         GROUP BY ot."clienteId", c.nombre
         ORDER BY ventas DESC

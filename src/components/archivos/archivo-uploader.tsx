@@ -62,6 +62,8 @@ export type ArchivoUploaderProps = {
    * o en la ficha de un producto no tiene sentido.
    */
   permitirPublico?: boolean;
+  /** Calcula y persiste SHA-256 para que el archivo pueda ser una revisión controlada. */
+  calcularHash?: boolean;
   /** Texto del vacío. Sin esto, un tab sin archivos no dice nada. */
   vacio?: string;
 };
@@ -88,6 +90,7 @@ export function ArchivoUploader({
   soloLectura = false,
   sinLista = false,
   permitirPublico = false,
+  calcularHash = false,
   vacio,
 }: ArchivoUploaderProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -104,11 +107,23 @@ export function ArchivoUploader({
     [],
   );
 
+  const soloLecturaRef = React.useRef(soloLectura);
+  React.useLayoutEffect(() => {
+    soloLecturaRef.current = soloLectura;
+    if (!soloLectura) return;
+    enCursoRef.current.forEach((s) => s.abort.abort());
+    setABorrar(null);
+    setDentro(false);
+  }, [soloLectura]);
+
   const procesar = React.useCallback(
     async (files: File[]) => {
+      if (soloLecturaRef.current) return;
       const elegidos = unico ? files.slice(0, 1) : files;
+      let acumulados = archivos;
 
       for (const original of elegidos) {
+        if (soloLecturaRef.current) break;
         // Se valida el ORIGINAL: es lo que el usuario eligió y sobre lo que
         // tiene que leer el error si no sirve.
         const invalido = validarArchivo(original, { extensiones });
@@ -118,6 +133,7 @@ export function ArchivoUploader({
         }
 
         const file = transformar ? await transformar(original) : original;
+        if (soloLecturaRef.current) break;
 
         const clave = `${file.name}-${file.size}-${Date.now()}`;
         const abort = new AbortController();
@@ -129,7 +145,7 @@ export function ArchivoUploader({
         try {
           const subido = await subirArchivo(
             file,
-            { scope, entidadId },
+            { scope, entidadId, calcularHash },
             (pct) =>
               setEnCurso((s) =>
                 s.map((x) => (x.clave === clave ? { ...x, progreso: pct } : x)),
@@ -137,7 +153,8 @@ export function ArchivoUploader({
             abort.signal,
           );
           setEnCurso((s) => s.filter((x) => x.clave !== clave));
-          onCambio(unico ? [subido] : [subido, ...archivos]);
+          acumulados = unico ? [subido] : [subido, ...acumulados];
+          onCambio(acumulados);
           toast.success(`${file.name} subido.`);
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
@@ -153,10 +170,20 @@ export function ArchivoUploader({
         }
       }
     },
-    [archivos, entidadId, extensiones, onCambio, scope, transformar, unico],
+    [
+      archivos,
+      calcularHash,
+      entidadId,
+      extensiones,
+      onCambio,
+      scope,
+      transformar,
+      unico,
+    ],
   );
 
   const cambiarVisibilidad = async (archivo: Archivo, publico: boolean) => {
+    if (soloLecturaRef.current) return;
     // Optimista: el switch tiene que responder al toque, no medio segundo
     // después. Si el PATCH falla se revierte y se avisa.
     onCambio(
@@ -175,7 +202,7 @@ export function ArchivoUploader({
   };
 
   const borrar = async () => {
-    if (!aBorrar) return;
+    if (soloLecturaRef.current || !aBorrar) return;
     try {
       await eliminarArchivo(aBorrar.id);
       onCambio(archivos.filter((a) => a.id !== aBorrar.id));
@@ -251,7 +278,8 @@ export function ArchivoUploader({
               <div className="arch-nom">
                 <b>{s.nombre}</b>
                 <span>
-                  {formatBytes(s.bytes)} · {s.error ? "error" : `${s.progreso}%`}
+                  {formatBytes(s.bytes)} ·{" "}
+                  {s.error ? "error" : `${s.progreso}%`}
                 </span>
                 {s.error ? (
                   <div className="arch-error">{s.error}</div>
@@ -337,7 +365,7 @@ export function ArchivoUploader({
       ) : null}
 
       <ConfirmacionDestructiva
-        open={aBorrar !== null}
+        open={!soloLectura && aBorrar !== null}
         onOpenChange={(v) => {
           if (!v) setABorrar(null);
         }}

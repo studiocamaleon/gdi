@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Verificación de la Etapa A del TPV Centro de copiado: el producto plantilla
  * "Impresión de documento" cotiza correctamente contra el motor real, con la
@@ -17,6 +18,7 @@ import {
 } from '../provisionar-plantilla';
 
 const prisma = new PrismaClient();
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 let tenantId: string;
 let motor: MotorUniversalService;
@@ -36,6 +38,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   motor = new MotorUniversalService(
     prisma as never,
@@ -92,6 +95,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

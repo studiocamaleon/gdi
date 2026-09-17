@@ -3,11 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpRightIcon,
+  MailIcon,
+  MapPinIcon,
   ChevronDownIcon,
   DownloadIcon,
   FileSpreadsheetIcon,
   PencilIcon,
-  PlusIcon,
   SearchXIcon,
   Trash2Icon,
   UploadIcon,
@@ -28,35 +30,37 @@ import {
   downloadContactImportTemplate,
   parseContactImportCsv,
 } from "@/lib/contactos-importacion";
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Checkbox,
+  Chip,
+  Dropdown,
+  Label,
+  Modal,
+  SearchField,
+  Switch,
+} from "@heroui/react";
+import { ChevronLeftIcon, ChevronRightIcon, TruckIcon } from "lucide-react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ListMetric } from "@/components/design-system/list-metric";
 import {
   Empty,
-  EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
+  EmptyDescription,
 } from "@/components/ui/empty";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import styles from "./proveedores.module.css";
 import {
   Table,
   TableBody,
@@ -65,7 +69,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TablePagination } from "@/components/ui/table-pagination";
 
 type ProveedoresTableProps = {
   initialResponse: ProveedoresListResponse;
@@ -93,7 +96,7 @@ function buildCsv(proveedores: ProveedorDetalle[]) {
     .map((row) =>
       row
         .map((cell) => `"${safeSpreadsheetCell(cell).replaceAll('"', '""')}"`)
-        .join(","),
+        .join(",")
     )
     .join("\n")}`;
 }
@@ -102,6 +105,8 @@ export function ProveedoresTable({
   initialResponse,
   canManage,
 }: ProveedoresTableProps) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const router = useRouter();
   const { startNavigation } = useNavigationFeedback();
   const [response, setResponse] = React.useState(initialResponse);
@@ -143,7 +148,7 @@ export function ProveedoresTable({
           toast.error(
             error instanceof Error
               ? error.message
-              : "No se pudo actualizar la lista.",
+              : "No se pudo actualizar la lista."
           );
         }
       })
@@ -155,7 +160,7 @@ export function ProveedoresTable({
 
   const proveedores = response.data;
   const selectedRows = proveedores.filter((proveedor) =>
-    selected.has(proveedor.id),
+    selected.has(proveedor.id)
   );
   const allSelected =
     proveedores.length > 0 &&
@@ -206,7 +211,7 @@ export function ProveedoresTable({
       try {
         const actualizado = await setProveedorActivo(
           proveedor.id,
-          !proveedor.activo,
+          !proveedor.activo
         );
         if (!verInactivos && !actualizado.activo) {
           await refreshCurrentPage();
@@ -214,7 +219,7 @@ export function ProveedoresTable({
           setResponse((current) => ({
             ...current,
             data: current.data.map((item) =>
-              item.id === actualizado.id ? actualizado : item,
+              item.id === actualizado.id ? actualizado : item
             ),
           }));
           setSelected((current) => {
@@ -226,13 +231,13 @@ export function ProveedoresTable({
         toast.success(
           actualizado.activo
             ? `${actualizado.nombre} vuelve a estar activo.`
-            : `${actualizado.nombre} quedó inhabilitado.`,
+            : `${actualizado.nombre} quedó inhabilitado.`
         );
       } catch (error) {
         toast.error(
           error instanceof Error
             ? error.message
-            : "No se pudo cambiar el estado.",
+            : "No se pudo cambiar el estado."
         );
       }
     });
@@ -242,14 +247,14 @@ export function ProveedoresTable({
     setConfirmandoEliminar(false);
     startDeleteTransition(async () => {
       const resultados = await Promise.allSettled(
-        selectedRows.map((proveedor) => deleteProveedor(proveedor.id)),
+        selectedRows.map((proveedor) => deleteProveedor(proveedor.id))
       );
       const borrados = resultados.filter(
-        (resultado) => resultado.status === "fulfilled",
+        (resultado) => resultado.status === "fulfilled"
       ).length;
       const error = resultados.find(
         (resultado): resultado is PromiseRejectedResult =>
-          resultado.status === "rejected",
+          resultado.status === "rejected"
       );
       await refreshCurrentPage();
       if (borrados > 0)
@@ -258,7 +263,7 @@ export function ProveedoresTable({
         toast.error(
           error.reason instanceof Error
             ? error.reason.message
-            : "No se pudo eliminar un proveedor.",
+            : "No se pudo eliminar un proveedor."
         );
       }
     });
@@ -275,12 +280,14 @@ export function ProveedoresTable({
       const invalid = parsed.rows.find((row) => row.errors.length > 0);
       if (invalid) {
         toast.error(
-          `No se importó el archivo. Fila ${invalid.rowNumber}: ${invalid.errors.join(" ")}`,
+          `No se importó el archivo. Fila ${
+            invalid.rowNumber
+          }: ${invalid.errors.join(" ")}`
         );
         return;
       }
       const payloads = parsed.rows.flatMap((row) =>
-        row.payload ? [row.payload] : [],
+        row.payload ? [row.payload] : []
       );
       try {
         const result = await importarProveedores(payloads);
@@ -288,145 +295,229 @@ export function ProveedoresTable({
         toast.success(`Se importaron ${result.total} proveedor(es).`);
       } catch (error) {
         toast.error(
-          `No se importó ninguna fila. ${error instanceof Error ? error.message : "Revisá el archivo."}`,
+          `No se importó ninguna fila. ${
+            error instanceof Error ? error.message : "Revisá el archivo."
+          }`
         );
       }
     });
   };
 
+  const pages = Math.ceil(response.total / response.limit);
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-      <Card className="rounded-2xl border-border/70 shadow-sm">
-        <CardHeader className="gap-4 border-b border-border/70">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-2xl">
-              <CardTitle role="heading" aria-level={1}>
-                Proveedores
-              </CardTitle>
-              <CardDescription>
-                Administrá los datos comerciales, fiscales y de pago de tus
-                proveedores.
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-              <Field className="min-w-0 lg:w-80">
-                <FieldLabel htmlFor="proveedores-search" className="sr-only">
-                  Buscar proveedores
-                </FieldLabel>
-                <Input
-                  id="proveedores-search"
-                  placeholder="Nombre, CUIT, teléfono, email o ciudad"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </Field>
-              <Field orientation="horizontal" className="w-auto">
-                <Switch
-                  id="proveedores-inactivos"
-                  aria-label="Mostrar también proveedores inhabilitados"
-                  checked={verInactivos}
-                  onCheckedChange={(checked) => {
-                    setVerInactivos(checked);
-                    setPage(1);
-                  }}
-                />
-                <FieldLabel
-                  htmlFor="proveedores-inactivos"
-                  className="font-normal whitespace-nowrap"
-                >
-                  Ver inhabilitados
-                </FieldLabel>
-              </Field>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = "";
-                    handleImportFile(file);
-                  }}
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button variant="sidebar" />}>
-                    {selectedRows.length > 0
-                      ? `Acciones (${selectedRows.length})`
-                      : "Acciones"}
-                    <ChevronDownIcon data-icon="inline-end" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {canManage ? (
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          onClick={() =>
-                            downloadContactImportTemplate("proveedores")
-                          }
-                        >
-                          <FileSpreadsheetIcon />
-                          Descargar plantilla
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={isImporting}
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <UploadIcon />
-                          {isImporting ? "Importando…" : "Importar proveedores"}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    ) : null}
-                    {canManage ? <DropdownMenuSeparator /> : null}
-                    <DropdownMenuGroup>
-                      {canManage ? (
-                        <DropdownMenuItem
-                          disabled={selectedRows.length !== 1}
-                          onClick={handleEditSelection}
-                        >
-                          <PencilIcon />
-                          Editar selección
-                        </DropdownMenuItem>
-                      ) : null}
-                      <DropdownMenuItem
-                        disabled={selectedRows.length === 0}
-                        onClick={handleExportSelection}
-                      >
-                        <DownloadIcon />
-                        Exportar selección
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                    {canManage ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={selectedRows.length === 0 || isDeleting}
-                          onClick={() => setConfirmandoEliminar(true)}
-                        >
-                          <Trash2Icon />
-                          Eliminar selección
-                        </DropdownMenuItem>
-                      </>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {canManage ? (
-                  <NavLink
-                    href="/proveedores/nuevo"
-                    className={buttonVariants({ variant: "brand" })}
+    <section
+      data-visual="brand"
+      {...scope}
+      className={`${theme} ${listPage.page} ${brand.workspace} ${styles.page}`}
+    >
+      <header className={listPage.header}>
+        <div>
+          <p className={brand.eyebrow}>Registros · Relaciones comerciales</p>
+          <h1>
+            Proveedores<span className={brand.titleDot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
+            Administrá los datos comerciales, fiscales y de pago de tus
+            proveedores.
+          </p>
+        </div>
+        <div className={styles.actions}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              handleImportFile(file);
+            }}
+          />
+          <Dropdown>
+            <ActionButton variant="outline">
+              {isImporting && <GdiSpinner />}
+              {selectedRows.length > 0
+                ? `Acciones (${selectedRows.length})`
+                : "Acciones"}
+              <ChevronDownIcon />
+            </ActionButton>
+            <Dropdown.Popover
+              {...scope}
+              className={`${theme} ${styles.menu}`}
+              placement="bottom end"
+            >
+              <Dropdown.Menu aria-label="Acciones de proveedores">
+                {canManage && (
+                  <Dropdown.Item
+                    id="plantilla"
+                    textValue="Descargar plantilla"
+                    onAction={() =>
+                      downloadContactImportTemplate("proveedores")
+                    }
                   >
-                    <PlusIcon data-icon="inline-start" />
-                    Nuevo proveedor
-                  </NavLink>
-                ) : null}
-              </div>
+                    <FileSpreadsheetIcon />
+                    Descargar plantilla
+                  </Dropdown.Item>
+                )}
+                {canManage && (
+                  <Dropdown.Item
+                    id="importar"
+                    textValue="Importar proveedores"
+                    isDisabled={isImporting}
+                    onAction={() => fileInputRef.current?.click()}
+                  >
+                    <UploadIcon />
+                    {isImporting ? "Importando…" : "Importar proveedores"}
+                  </Dropdown.Item>
+                )}
+                {canManage && (
+                  <Dropdown.Item
+                    id="editar"
+                    textValue="Editar selección"
+                    isDisabled={selectedRows.length !== 1}
+                    onAction={handleEditSelection}
+                  >
+                    <PencilIcon />
+                    Editar selección
+                  </Dropdown.Item>
+                )}
+                <Dropdown.Item
+                  id="exportar"
+                  textValue="Exportar selección"
+                  isDisabled={selectedRows.length === 0}
+                  onAction={handleExportSelection}
+                >
+                  <DownloadIcon />
+                  Exportar selección
+                </Dropdown.Item>
+                {canManage && (
+                  <Dropdown.Item
+                    id="eliminar"
+                    textValue="Eliminar selección"
+                    variant="danger"
+                    isDisabled={selectedRows.length === 0 || isDeleting}
+                    onAction={() => setConfirmandoEliminar(true)}
+                  >
+                    <Trash2Icon />
+                    Eliminar selección
+                  </Dropdown.Item>
+                )}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+          {canManage && (
+            <ActionLink href="/proveedores/nuevo">
+              Nuevo proveedor
+              <ArrowUpRightIcon />
+            </ActionLink>
+          )}
+        </div>
+      </header>
+
+      <div className={brand.metrics} aria-label="Resumen del listado">
+        <ListMetric
+          label="Proveedores"
+          value={response.total}
+          hint={
+            debouncedSearch
+              ? "Coinciden con la búsqueda"
+              : verInactivos
+              ? "Incluye inhabilitados"
+              : "Activos en el directorio"
+          }
+          icon={TruckIcon}
+        />
+        <ListMetric
+          label="Con email"
+          value={proveedores.filter((item) => item.email.trim()).length}
+          hint="En esta página"
+          icon={MailIcon}
+        />
+        <ListMetric
+          label="Con ubicación"
+          value={proveedores.filter((item) => item.ciudad.trim()).length}
+          hint="En esta página"
+          icon={MapPinIcon}
+        />
+      </div>
+      <Card className={listPage.results}>
+        <Card.Header className={brand.directoryHeader}>
+          <div className={brand.directoryTitle}>
+            <span className={brand.directoryIcon} aria-hidden>
+              <TruckIcon />
+            </span>
+            <div>
+              <Card.Title className={brand.directoryHeading}>
+                Directorio de proveedores
+              </Card.Title>
+              <Card.Description>
+                Datos, contactos y estado de cada proveedor.
+              </Card.Description>
             </div>
           </div>
-        </CardHeader>
-
-        <CardContent className="px-0" aria-busy={isLoading}>
+        </Card.Header>
+        <div className={listPage.toolbar}>
+          <SearchField
+            aria-label="Buscar proveedores"
+            value={search}
+            onChange={setSearch}
+            className={styles.search}
+          >
+            <SearchField.Group
+              className={`${listPage.searchGroup} ${focus.singleBorder}`}
+            >
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Nombre, CUIT, teléfono, email o ciudad" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={styles.toolbarEnd}>
+            <span className={styles.resultCount} role="status">
+              {isLoading ? (
+                <>
+                  <GdiSpinner />
+                  Actualizando…
+                </>
+              ) : (
+                <>
+                  <TruckIcon size={15} />
+                  {response.total}{" "}
+                  {response.total === 1 ? "proveedor" : "proveedores"}
+                </>
+              )}
+            </span>
+            <Switch
+              size="sm"
+              isSelected={verInactivos}
+              onChange={(checked) => {
+                setVerInactivos(checked);
+                setPage(1);
+              }}
+            >
+              <Switch.Content>
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                <Label>Ver inhabilitados</Label>
+              </Switch.Content>
+            </Switch>
+          </div>
+        </div>
+        {selectedRows.length > 0 && (
+          <div className={styles.selection}>
+            <span>{selectedRows.length} proveedor(es) seleccionado(s)</span>
+            <ActionButton
+              variant="ghost"
+              onPress={() => setSelected(new Set())}
+            >
+              Limpiar selección
+            </ActionButton>
+          </div>
+        )}
+        <div aria-busy={isLoading}>
           {proveedores.length === 0 ? (
-            <Empty className="min-h-72 border-0">
+            <Empty className={brand.empty}>
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <SearchXIcon />
@@ -434,133 +525,197 @@ export function ProveedoresTable({
                 <EmptyTitle>No encontramos proveedores</EmptyTitle>
                 <EmptyDescription>
                   {debouncedSearch
-                    ? "Probá con otro nombre, CUIT, teléfono o ciudad."
+                    ? "Probá con otro nombre, documento, teléfono o ciudad."
                     : "Todavía no hay proveedores para mostrar con este filtro."}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10 px-4">
-                      <Checkbox
-                        aria-label="Seleccionar todos los proveedores de esta página"
-                        checked={allSelected}
-                        onCheckedChange={(checked) =>
-                          setSelected(
-                            checked === true
-                              ? new Set(
-                                  proveedores.map((proveedor) => proveedor.id),
-                                )
-                              : new Set(),
-                          )
-                        }
-                      />
-                    </TableHead>
-                    <TableHead>Proveedor</TableHead>
-                    <TableHead>CUIT</TableHead>
-                    <TableHead>Contacto</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Ciudad</TableHead>
-                    <TableHead>Datos de pago</TableHead>
-                    <TableHead className="text-right">Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {proveedores.map((proveedor) => {
-                    const isSelected = selected.has(proveedor.id);
-                    return (
-                      <TableRow
-                        key={proveedor.id}
-                        data-state={isSelected ? "selected" : undefined}
-                      >
-                        <TableCell className="px-4">
-                          <Checkbox
-                            aria-label={`Seleccionar a ${proveedor.nombre}`}
-                            checked={isSelected}
-                            onCheckedChange={(checked) =>
-                              handleSelect(proveedor.id, checked === true)
-                            }
+            <Table
+              className={`${styles.table} ${brand.table} ${styles.providersTable}`}
+            >
+              <TableHeader>
+                <TableRow>
+                  <TableHead className={styles.checkCell}>
+                    <Checkbox
+                      aria-label="Seleccionar todos los proveedores de esta página"
+                      isSelected={allSelected}
+                      isIndeterminate={!allSelected && selectedRows.length > 0}
+                      onChange={(checked) =>
+                        setSelected(
+                          checked
+                            ? new Set(
+                                proveedores.map((proveedor) => proveedor.id)
+                              )
+                            : new Set()
+                        )
+                      }
+                    >
+                      <Checkbox.Content>
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox.Content>
+                    </Checkbox>
+                  </TableHead>
+                  <TableHead>Proveedor</TableHead>
+                  <TableHead>CUIT</TableHead>
+                  <TableHead>Contacto</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead>Datos de pago</TableHead>
+                  <TableHead className="text-right">Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {proveedores.map((proveedor) => {
+                  const isSelected = selected.has(proveedor.id);
+                  return (
+                    <TableRow
+                      key={proveedor.id}
+                      data-state={isSelected ? "selected" : undefined}
+                    >
+                      <TableCell className={styles.checkCell}>
+                        <Checkbox
+                          aria-label={`Seleccionar a ${proveedor.nombre}`}
+                          isSelected={isSelected}
+                          onChange={(checked) =>
+                            handleSelect(proveedor.id, checked)
+                          }
+                        >
+                          <Checkbox.Content>
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                          </Checkbox.Content>
+                        </Checkbox>
+                      </TableCell>
+                      <TableCell>
+                        <NavLink
+                          href={`/proveedores/${proveedor.id}`}
+                          className={styles.providerName}
+                        >
+                          <span
+                            className={brand.identityIcon}
+                            aria-hidden="true"
+                          >
+                            <TruckIcon />
+                          </span>
+                          <strong>{proveedor.nombre}</strong>
+                          <ArrowUpRightIcon
+                            className={brand.rowArrow}
+                            aria-hidden
                           />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          <NavLink
-                            href={`/proveedores/${proveedor.id}`}
-                            className="underline-offset-4 hover:underline"
+                        </NavLink>
+                      </TableCell>
+                      <TableCell>{proveedor.cuit || "—"}</TableCell>
+                      <TableCell>{proveedor.contacto || "—"}</TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {proveedor.email && <MailIcon aria-hidden />}
+                          {proveedor.email || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={brand.contactText}>
+                          {proveedor.ciudad && <MapPinIcon aria-hidden />}
+                          {proveedor.ciudad || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="sm"
+                          color={
+                            proveedor.datosPagoCompletos ? "success" : "warning"
+                          }
+                          variant="soft"
+                        >
+                          {proveedor.datosPagoCompletos
+                            ? "Completos"
+                            : "Incompletos"}
+                        </Chip>
+                      </TableCell>
+                      <TableCell>
+                        <div className={styles.rowActions}>
+                          <Chip
+                            size="sm"
+                            color={proveedor.activo ? "success" : "default"}
+                            variant={proveedor.activo ? "soft" : "secondary"}
                           >
-                            {proveedor.nombre}
-                          </NavLink>
-                          {!proveedor.activo ? (
-                            <Badge variant="outline" className="ml-2">
-                              Inhabilitado
-                            </Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>{proveedor.cuit || "—"}</TableCell>
-                        <TableCell>{proveedor.contacto || "—"}</TableCell>
-                        <TableCell>{proveedor.email || "—"}</TableCell>
-                        <TableCell>{proveedor.ciudad || "—"}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              proveedor.datosPagoCompletos
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {proveedor.datosPagoCompletos
-                              ? "Completos"
-                              : "Incompletos"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {canManage ? (
-                            <Button
-                              type="button"
+                            <span className={styles.statusDot} />
+                            {proveedor.activo ? "Activo" : "Inhabilitado"}
+                          </Chip>
+                          {canManage && (
+                            <ActionButton
                               variant="ghost"
-                              size="sm"
-                              disabled={isDeleting}
-                              onClick={() => cambiarEstado(proveedor)}
+                              isDisabled={isDeleting}
+                              onPress={() => cambiarEstado(proveedor)}
                             >
                               {proveedor.activo ? "Inhabilitar" : "Habilitar"}
-                            </Button>
-                          ) : (
-                            <Badge
-                              variant={
-                                proveedor.activo ? "secondary" : "outline"
-                              }
-                            >
-                              {proveedor.activo ? "Activo" : "Inhabilitado"}
-                            </Badge>
+                            </ActionButton>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
-          <TablePagination
-            total={response.total}
-            page={response.page}
-            pageSize={response.limit}
-            onPageChange={setPage}
-          />
-        </CardContent>
+        </div>
+        {pages > 1 && (
+          <footer className={listPage.pager}>
+            <span>
+              {(response.page - 1) * response.limit + 1}–
+              {Math.min(response.page * response.limit, response.total)} de{" "}
+              {response.total}
+            </span>
+            <div className={styles.actions}>
+              <ActionButton
+                variant="outline"
+                isIconOnly
+                aria-label="Página anterior"
+                isDisabled={response.page <= 1}
+                onPress={() => setPage(response.page - 1)}
+              >
+                <ChevronLeftIcon />
+              </ActionButton>
+              <span>
+                {response.page} / {pages}
+              </span>
+              <ActionButton
+                variant="outline"
+                isIconOnly
+                aria-label="Página siguiente"
+                isDisabled={response.page >= pages}
+                onPress={() => setPage(response.page + 1)}
+              >
+                <ChevronRightIcon />
+              </ActionButton>
+            </div>
+          </footer>
+        )}
       </Card>
-
-      <ConfirmacionDestructiva
-        open={confirmandoEliminar}
+      <FormDialog
+        className={brand.dialog}
+        isOpen={confirmandoEliminar}
         onOpenChange={setConfirmandoEliminar}
-        titulo="Eliminar proveedores"
-        descripcion={`Se eliminarán ${selectedRows.length} proveedor(es) sin historial. Los que tengan actividad deben inhabilitarse.`}
-        requiereTipear={false}
-        accionLabel="Eliminar"
-        onConfirmar={confirmarEliminarSeleccion}
-      />
-    </div>
+        title="Eliminar proveedores"
+        description={`Se eliminarán ${selectedRows.length} proveedor(es) sin historial. Los que tengan actividad deben inhabilitarse.`}
+      >
+        <Modal.Footer className={styles.dialogFooter}>
+          <ActionButton
+            variant="outline"
+            onPress={() => setConfirmandoEliminar(false)}
+          >
+            Cancelar
+          </ActionButton>
+          <ActionButton variant="danger" onPress={confirmarEliminarSeleccion}>
+            <Trash2Icon />
+            Eliminar
+          </ActionButton>
+        </Modal.Footer>
+      </FormDialog>
+    </section>
   );
 }

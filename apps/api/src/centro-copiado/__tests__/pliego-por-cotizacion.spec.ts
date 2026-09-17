@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Etapa B — el tamaño del pliego (A4/A3) es un input POR COTIZACIÓN.
  * Mismo documento cotizado como A4 y como A3: el pliego de impresión cambia
@@ -19,6 +20,7 @@ const A4: PliegoDim = { preset: 'A4', anchoMm: 210, altoMm: 297 };
 const A3: PliegoDim = { preset: 'A3', anchoMm: 297, altoMm: 420 };
 
 const prisma = new PrismaClient();
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 let tenantId: string;
 let motor: MotorUniversalService;
@@ -34,6 +36,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   motor = new MotorUniversalService(
     prisma as never,
@@ -81,6 +84,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

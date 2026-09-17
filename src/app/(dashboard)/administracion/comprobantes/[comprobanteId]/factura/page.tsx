@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ApiError } from "@/lib/api";
 
 import { FacturaView } from "@/components/administracion/factura-view";
 import type { FacturaDocumento } from "@/lib/administracion";
@@ -16,8 +17,9 @@ export default async function FacturaPage({
   let doc: FacturaDocumento | null = null;
   try {
     doc = await getFactura(comprobanteId);
-  } catch {
-    doc = null;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
 
   if (!doc) notFound();

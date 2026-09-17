@@ -1,3 +1,7 @@
+import { PublicacionAutomaticaInterceptor } from './publicacion-automatica.interceptor';
+import { ExportarFabricacionController } from './geometrias/exportar-fabricacion.controller';
+import { GeometriasProductoController } from './geometrias/geometrias-producto.controller';
+import { StorageModule } from '../archivos/storage/storage.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ProductosServiciosController } from './productos-servicios.controller';
@@ -12,6 +16,8 @@ import { FormularioCotizacionService } from './formulario-cotizacion.service';
 import { ProductosServiciosService } from './productos-servicios.service';
 import { RutasProduccionService } from './rutas-produccion.service';
 import { PrecioModule } from './precio/precio.module';
+import { RecetasProductoService } from './recetas-producto.service';
+import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module';
 
 /**
  * Módulo productos-servicios — modelo universal por pasos.
@@ -27,9 +33,14 @@ import { PrecioModule } from './precio/precio.module';
  *               por cliente, servicio AplicarPrecio (pure function).
  */
 @Module({
-  imports: [PrismaModule, PrecioModule],
-  controllers: [ProductosServiciosController],
+  imports: [StorageModule, PrismaModule, PrecioModule, EventosSistemaModule],
+  controllers: [
+    ProductosServiciosController,
+    GeometriasProductoController,
+    ExportarFabricacionController,
+  ],
   providers: [
+    PublicacionAutomaticaInterceptor,
     ProductosServiciosService,
     ProductosService,
     RutasProduccionService,
@@ -40,7 +51,8 @@ import { PrecioModule } from './precio/precio.module';
     CargosDirectosProductoService,
     ProductoValidacionService,
     FormularioCotizacionService,
+    RecetasProductoService,
   ],
-  exports: [ProductosServiciosService, PrecioModule],
+  exports: [ProductosServiciosService, RecetasProductoService, PrecioModule],
 })
 export class ProductosServiciosModule {}

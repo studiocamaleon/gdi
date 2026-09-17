@@ -35,6 +35,7 @@ const MUTED: [number, number, number] = [110, 110, 118];
 const HAIRLINE: [number, number, number] = [239, 236, 232];
 const OK: [number, number, number] = [22, 121, 74];
 const DANGER: [number, number, number] = [194, 65, 12];
+const DEBITO: [number, number, number] = [185, 28, 28];
 
 let geistCache: { regular: string; bold: string } | null | undefined;
 
@@ -222,48 +223,36 @@ export class EstadoCuentaPdfService {
     return y + 6;
   }
 
-  /** Saldo actual + estado + límite de crédito. */
-  private resumen(pdf: jsPDF, cc: CuentaCorriente, y0: number): number {
-    let y = y0;
-    pdf.setFont(this.familia, 'normal');
-    pdf.setFontSize(8.5);
-    pdf.setTextColor(...MUTED);
-    pdf.text('SALDO ACTUAL', MARGEN, y);
-
-    pdf.setFont(this.familia, 'bold');
-    pdf.setFontSize(20);
-    pdf.setTextColor(...(cc.saldo > 0 ? INK : OK));
-    pdf.text(this.money(cc.saldo), MARGEN, y + 8);
-
-    pdf.setFont(this.familia, 'normal');
-    pdf.setFontSize(9);
-    pdf.setTextColor(...MUTED);
-    const estado = `${cc.saldo > 0 ? 'Deudor' : 'Sin deuda'} · ${cc.comprobantesPendientes} ${cc.comprobantesPendientes === 1 ? 'orden' : 'órdenes'} sin cobrar`;
-    pdf.text(estado, MARGEN, y + 14);
-
-    // Columna derecha: límite de crédito.
-    const xr = MARGEN + CONTENIDO * 0.58;
-    pdf.setFontSize(8.5);
-    pdf.setTextColor(...MUTED);
-    pdf.text('LÍMITE DE CRÉDITO', xr, y);
-    pdf.setFontSize(10);
-    if (cc.cliente.limiteCredito === null) {
-      pdf.setTextColor(...MUTED);
-      pdf.text('Sin límite definido', xr, y + 7);
-    } else {
-      pdf.setFont(this.familia, 'bold');
-      pdf.setTextColor(...(cc.excedido ? DANGER : INK));
-      pdf.text(this.money(cc.cliente.limiteCredito), xr, y + 7);
+  /** Los mismos dos importes operativos del resumen web. */
+  private resumen(pdf: jsPDF, cc: CuentaCorriente, y: number): number {
+    const vencido = Math.round(
+      (cc.aging.d0_30 + cc.aging.d31_60 + cc.aging.d61_90 + cc.aging.d90_mas) * 100,
+    ) / 100;
+    const columnas = [
+      { x: MARGEN, titulo: 'SALDO TOTAL', monto: -cc.saldo,
+        color: cc.saldo > 0 ? DEBITO : cc.saldo < 0 ? OK : INK,
+        detalle: cc.saldo > 0 ? 'Saldo a pagar, incluido lo que aún no venció.' : cc.saldo < 0 ? 'Saldo a favor del cliente.' : 'Saldo total en cero.' },
+      { x: MARGEN + CONTENIDO * 0.53, titulo: 'SALDO VENCIDO', monto: -vencido, color: vencido > 0 ? DEBITO : INK,
+        detalle: vencido > 0 ? 'Pagos pendientes fuera de término.' : 'No hay pagos vencidos.' },
+    ];
+    for (const columna of columnas) {
       pdf.setFont(this.familia, 'normal');
-      pdf.setFontSize(9);
+      pdf.setFontSize(8.5);
       pdf.setTextColor(...MUTED);
-      const uso =
-        cc.usoLimitePct != null ? `Usa ${cc.usoLimitePct}% del límite` : '';
-      const alerta = cc.excedido ? `  ·  excede en ${this.money(cc.excedente)}` : '';
-      pdf.text(`${uso}${alerta}`, xr, y + 13);
+      pdf.text(columna.titulo, columna.x, y);
+      pdf.setFont(this.familia, 'bold');
+      pdf.setFontSize(20);
+      pdf.setTextColor(...columna.color);
+      const signo = columna.monto > 0 ? '+ ' : columna.monto < 0 ? '- ' : '';
+      pdf.text(`${signo}${this.money(Math.abs(columna.monto))}`, columna.x, y + 8);
+      pdf.setFont(this.familia, 'normal');
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(...MUTED);
+      pdf.text(columna.detalle, columna.x, y + 14);
     }
-
-    return y + 22;
+    const limite = cc.cliente.limiteCredito;
+    pdf.text(limite === null ? 'Crédito: sin límite definido.' : `Límite de crédito: ${this.money(limite)}.`, MARGEN, y + 23);
+    return y + 31;
   }
 
   /** Antigüedad del saldo deudor. Se omite si no hay deuda vencida ni por vencer. */
@@ -273,7 +262,7 @@ export class EstadoCuentaPdfService {
     pdf.setFont(this.familia, 'bold');
     pdf.setFontSize(10);
     pdf.setTextColor(...INK);
-    pdf.text('Antigüedad del saldo', MARGEN, y);
+    pdf.text('Vencimientos pendientes', MARGEN, y);
     y += 3;
 
     autoTable(pdf, {
@@ -289,7 +278,7 @@ export class EstadoCuentaPdfService {
         0: { textColor: MUTED },
         1: { halign: 'right', textColor: INK },
       },
-      foot: [['Total deudor', this.money(cc.agingTotal)]],
+      foot: [['Saldo pendiente de pago', this.money(cc.agingTotal)]],
       footStyles: {
         font: this.familia,
         fontStyle: 'bold',
@@ -299,8 +288,19 @@ export class EstadoCuentaPdfService {
         fillColor: false as unknown as undefined,
       },
     });
-    return (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-      .finalY + 8;
+    y = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 5;
+    if (cc.sinVencimiento > 0) {
+      pdf.setFont(this.familia, 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(...MUTED);
+      const nota = pdf.splitTextToSize(
+        `A vencer incluye ${this.money(cc.sinVencimiento)} de órdenes sin vencimiento definido. Se fija al finalizar la OT, según las condiciones del cliente.`,
+        CONTENIDO,
+      );
+      pdf.text(nota, MARGEN, y);
+      y += nota.length * 4 + 3;
+    }
+    return y + 3;
   }
 
   /** Ledger de movimientos, del más viejo al más nuevo (lectura de extracto). */
@@ -309,12 +309,18 @@ export class EstadoCuentaPdfService {
     pdf.setFontSize(10);
     pdf.setTextColor(...INK);
     pdf.text('Movimientos', MARGEN, y0);
+    pdf.setFont(this.familia, 'normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(...MUTED);
+    pdf.text('Saldo: negativo = debe | positivo = a favor | cero = al día', MARGEN, y0 + 5);
 
     // La vista guarda del más nuevo al más viejo; el extracto lee al revés.
     const filas = [...cc.movimientos].reverse();
+    const conSigno = (monto: number) =>
+      `${monto > 0 ? '+ ' : monto < 0 ? '- ' : ''}${this.money(Math.abs(monto))}`;
 
     autoTable(pdf, {
-      startY: y0 + 3,
+      startY: y0 + 8,
       margin: { left: MARGEN, right: MARGEN },
       theme: 'striped',
       headStyles: {
@@ -326,14 +332,22 @@ export class EstadoCuentaPdfService {
       },
       styles: { font: this.familia, fontSize: 8.5, cellPadding: 2, textColor: INK },
       alternateRowStyles: { fillColor: [250, 250, 249] },
-      head: [['Fecha', 'Concepto', 'Debe', 'Haber', 'Saldo']],
+      head: [['Fecha', 'Concepto', 'Cargos', 'Pagos y créditos', 'Saldo']],
       body: filas.map((m) => [
         fechaCorta(m.fecha),
         `${m.sigla}  ${m.descripcion}`,
-        m.debe > 0 ? this.money(m.debe) : '—',
-        m.haber > 0 ? this.money(m.haber) : '—',
-        this.money(m.saldo),
+        m.debe > 0 ? conSigno(-m.debe) : '—',
+        m.haber > 0 ? conSigno(m.haber) : '—',
+        conSigno(-m.saldo),
       ]),
+      didParseCell: ({ section, row, column, cell }) => {
+        if (section !== 'body') return;
+        const movimiento = filas[row.index];
+        if (!movimiento) return;
+        if (column.index === 2 && movimiento.debe > 0) cell.styles.textColor = DEBITO;
+        if (column.index === 3 && movimiento.haber > 0) cell.styles.textColor = OK;
+        if (column.index === 4) cell.styles.textColor = movimiento.saldo > 0 ? DEBITO : movimiento.saldo < 0 ? OK : INK;
+      },
       columnStyles: {
         0: { cellWidth: 22 },
         2: { halign: 'right', cellWidth: 30 },

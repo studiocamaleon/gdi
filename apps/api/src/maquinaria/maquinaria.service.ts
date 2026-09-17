@@ -50,6 +50,7 @@ import {
   consumableUnitForTemplate,
   getConsumableChannelFromDetail,
   isConsumableChannel,
+  isDuplicatorMasterDetail,
   PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES,
 } from './consumibles-impresion';
 import { getMaquinaDiagnosticoConfiguracion } from './maquinaria-configuracion';
@@ -192,6 +193,8 @@ const TEMPLATE_CATALOG_RULES: Record<
 };
 
 const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
+  'operacionMaquina',
+  'procesamientoCorte',
   'altoMaxHoja',
   'altoMinHoja',
   'alturaMaximaCapa',
@@ -214,6 +217,9 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'configuracionCanales',
   'configuracionColor',
   'configuracionTintas',
+  'commonLineHabilitado',
+  'commonLineLongitudMinimaMm',
+  'commonLineToleranciaMm',
   'controladorRip',
   'decimalesTap',
   'despejeZ',
@@ -253,6 +259,7 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'pesoMaximoBobina',
   'pesoMaximoObjeto',
   'pesoMaximoSoportado',
+  'placaSobresalientePermitida',
   'potenciaLaser',
   'potenciaSpindle',
   'postprocesadorRecorrido',
@@ -268,12 +275,14 @@ const TEMPLATE_ALLOWED_TECHNICAL_KEYS = new Set([
   'estrategiaNestingVectorial',
   'sistemaLaminacionTransferencia',
   'soportaCorteIntegrado',
+  'tamborInstalado',
   'tecnologia',
   'tipoFilm',
   'tipoUnionVectorial',
   'modoCantidadEncastres',
   'tipoLaser',
   'tipoMesa',
+  'ejeSobresalientePlaca',
   'vacioSujecion',
   'velocidadAvance',
   'velocidadCorte',
@@ -1345,7 +1354,7 @@ export class MaquinariaService {
     // Los perfiles nuevos de corte láser guardan IDs reales de materia prima.
     // Los códigos en mayúsculas pertenecen al selector legado y se toleran
     // hasta que el usuario los reemplace desde la UI.
-    if (payload.plantilla === PlantillaMaquinariaDto.corte_laser) {
+    if (payload.plantilla === PlantillaMaquinariaDto.corte_laser || payload.perfilesOperativos.some(p => p.detalle?.procesamientoCorteVersion === 1)) {
       const materialIds = Array.from(
         new Set(
           payload.perfilesOperativos.flatMap((perfil) => {
@@ -1354,7 +1363,7 @@ export class MaquinariaService {
             return valores
               .map(String)
               .filter(
-                (value) => value.length > 0 && !/^[A-Z][A-Z0-9_]*$/.test(value),
+                (value) => value.length > 0 && (perfil.detalle?.procesamientoCorteVersion === 1 || !/^[A-Z][A-Z0-9_]*$/.test(value)),
               );
           }),
         ),
@@ -1365,7 +1374,7 @@ export class MaquinariaService {
             tenantId: auth.tenantId,
             id: { in: materialIds },
             activo: true,
-            subfamilia: SubfamiliaMateriaPrima.SUSTRATO_RIGIDO,
+            ...(payload.perfilesOperativos.some(p => p.detalle?.procesamientoCorteVersion === 1) ? {} : { subfamilia: SubfamiliaMateriaPrima.SUSTRATO_RIGIDO }),
             esConsumible: false,
             esRepuesto: false,
             esProductoBase: false,
@@ -1375,7 +1384,7 @@ export class MaquinariaService {
         });
         if (materialesValidos.length !== materialIds.length) {
           throw new BadRequestException(
-            'Un perfil de corte laser referencia un material inexistente, inactivo o no utilizable del inventario.',
+            'Un perfil de corte referencia un material inexistente, inactivo o no utilizable del inventario.',
           );
         }
       }
@@ -1449,17 +1458,22 @@ export class MaquinariaService {
           `El consumible ${consumibleName} referencia un perfil operativo inexistente en la carga actual.`,
         );
       }
-      for (const detailKey of Object.keys(consumible.detalle ?? {})) {
+      const detalle = consumible.detalle ?? {};
+      const esMasterDuplicadora =
+        payload.plantilla === PlantillaMaquinariaDto.duplicadora_digital &&
+        isDuplicatorMasterDetail(detalle);
+      for (const detailKey of Object.keys(detalle)) {
+        if (detailKey === 'rol' && esMasterDuplicadora) continue;
         if (!ALLOWED_CONSUMABLE_DETAIL_KEYS.has(detailKey)) {
           throw new BadRequestException(
             `El consumible ${consumibleName} incluye el campo ${detailKey}, que no corresponde a la plantilla ${payload.plantilla}.`,
           );
         }
       }
-      const detalle = consumible.detalle ?? {};
       const channel = getConsumableChannelFromDetail(detalle);
       if (
         PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(payload.plantilla) &&
+        !esMasterDuplicadora &&
         !channel
       ) {
         throw new BadRequestException(
@@ -1597,6 +1611,12 @@ export class MaquinariaService {
       return;
     }
 
+    const operacion = payload.parametrosTecnicos.operacionMaquina;
+    if (operacion != null && operacion !== 'con_operario' && operacion !== 'autonoma') {
+      throw new BadRequestException('Elegí operación de máquina con operario o autónoma.');
+    }
+
+    if (payload.parametrosTecnicos.procesamientoCorte != null && !['mesa_de_corte', 'router_cnc', 'corte_laser'].includes(payload.plantilla)) throw new BadRequestException('Esta plantilla no admite recetas por herramientas de corte.');
     for (const [key, value] of Object.entries(payload.parametrosTecnicos)) {
       if (!TEMPLATE_ALLOWED_TECHNICAL_KEYS.has(key)) {
         throw new BadRequestException(

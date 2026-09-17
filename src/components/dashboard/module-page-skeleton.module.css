@@ -1,0 +1,11 @@
+.page {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  min-height: min(560px, calc(100dvh - 52px));
+  padding: 24px;
+  background: var(--canvas-background);
+}

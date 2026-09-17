@@ -1,0 +1,407 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.page > * {
+  flex-shrink: 0;
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header h1 {
+  margin: 0;
+  font-size: clamp(26px, 2.1vw, 34px);
+  font-weight: 550;
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+}
+.header p {
+  margin: 5px 0 0;
+  color: var(--muted-text);
+  font-size: 13px;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.back:hover {
+  color: var(--accent-soft-foreground);
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.sidebar,
+.content {
+  min-width: 0;
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* Base sin especificidad: el layout de cada ficha prevalece en cualquier orden
+ * de carga (navegación, HMR y compilación de producción). */
+:where(.card) {
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: none;
+}
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.cardHeader h3 {
+  font-size: 19px;
+  font-weight: 550;
+  letter-spacing: -0.035em;
+  line-height: 1.4;
+}
+.cardHeader p {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.cardBody {
+  min-width: 0;
+  padding: 20px;
+}
+.progressCard {
+  position: sticky;
+  top: 0;
+}
+.progressHeader {
+  padding: 16px;
+}
+.progressBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+.stepButton {
+  width: 100%;
+  height: auto;
+  min-height: 68px;
+  justify-content: start;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+  white-space: normal;
+}
+.stepButton[data-active="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.stepButton[data-disabled="true"] {
+  opacity: 0.55;
+}
+.stepRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+}
+.stepNumber {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.stepNumber[data-complete="true"] {
+  color: var(--success);
+  background: var(--success-soft);
+}
+.stepNumber[data-error="true"] {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.stepText {
+  flex: 1;
+  min-width: 0;
+}
+.stepText > div {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+.stepText svg {
+  width: 13px;
+  height: 13px;
+}
+.stepText small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted-text);
+  font-weight: 400;
+}
+.identityGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 16px;
+  align-items: start;
+}
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+.input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+.cardBody > div {
+  display: grid;
+  gap: 8px;
+}
+.labelHelp {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.helpButton {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  color: var(--muted-text);
+}
+.helpButton svg {
+  width: 14px;
+  height: 14px;
+}
+.tooltip {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tooltip p + p {
+  margin-top: 8px;
+}
+.selectPopover {
+  max-width: min(540px, calc(100vw - 32px));
+}
+.option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 2px;
+  white-space: normal;
+}
+.option strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.option small {
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.geometry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.geometry button {
+  width: 100%;
+  height: auto;
+  min-height: 36px;
+  padding: 8px;
+  white-space: normal;
+  line-height: 1.5;
+}
+.measureRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+}
+.measureRow input:first-child {
+  grid-column: 1 / -1;
+}
+.measureRow[data-geometry="3D"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.measureField {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+.measureField > span {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.measureActions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: end;
+  gap: 8px;
+}
+.measureRow[data-fixed] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.measureRow[data-fixed][data-geometry="3D"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.measureRow[data-fixed] > span:last-child {
+  display: none;
+}
+.fieldError {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+.navigation {
+  position: sticky;
+  z-index: 10;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.navigation > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+}
+.blockedCard {
+  border-style: dashed;
+}
+@container list-page (max-width: 1250px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  .progressBody {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .progressHeader {
+    padding-block: 12px;
+  }
+  .progressCard {
+    position: static;
+  }
+}
+@container list-page (max-width: 760px) {
+  .identityGrid {
+    grid-template-columns: 1fr;
+  }
+  .progressBody {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container list-page (max-width: 430px) {
+  .header h1 {
+    font-size: 20px;
+  }
+  .cardBody {
+    padding: 16px;
+  }
+  .cardHeader {
+    padding: 16px;
+  }
+  .stepButton {
+    padding: 8px;
+  }
+  .stepRow {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .stepText > div {
+    font-size: 11px;
+  }
+  .stepText small {
+    font-size: 10px;
+  }
+  .stepText svg {
+    display: none;
+  }
+  .navigation {
+    gap: 8px;
+    padding: 12px;
+  }
+  .navigation > div {
+    width: 100%;
+  }
+  .navigation > div > button {
+    flex: 1 1 100%;
+  }
+  .navigation > button {
+    display: none;
+  }
+  .measureRow:not([data-fixed]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .measureRow[data-geometry="3D"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .measureRow[data-geometry="3D"] > label:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+}
+
+.eyebrow {
+  display: block;
+  margin: 4px 0 8px;
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.titleDot {
+  color: var(--accent);
+}
+.progressHeader {
+  color: var(--brand-on-graphite);
+  background: var(--brand-graphite);
+  border-radius: 7px 7px 0 0;
+}
+.progressHeader p {
+  color: var(--brand-muted-on-graphite);
+}
+.progressHeader h3 {
+  color: var(--brand-on-graphite);
+}

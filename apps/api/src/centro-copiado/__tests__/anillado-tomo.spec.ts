@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Etapa D (anilladora): un TOMO con la terminación "Anillado" activa suma una
  * línea de anillado = 1 anillo × juegos + tiempo de anilladora, y el motor elige
@@ -20,6 +21,7 @@ import {
 } from '../provisionar-plantilla';
 
 const prisma = new PrismaClient();
+let restaurarUnidades: (() => Promise<void>) | undefined;
 const PERIODO = '2026-03';
 
 let tenantId = '';
@@ -103,6 +105,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   const motor = new MotorUniversalService(
     prisma as never,
@@ -183,6 +186,7 @@ beforeAll(async () => {
             sku: 'TEST-ESPIRAL-TOMO-10',
             precioReferencia: 100,
             moneda: 'ARS',
+            unidadPrecio: 'UNIDAD',
             atributosVarianteJson: {
               tipoAnillo: 'ESPIRAL_PLASTICO',
               diametro: 10,
@@ -194,6 +198,7 @@ beforeAll(async () => {
             sku: 'TEST-ESPIRAL-TOMO-14',
             precioReferencia: 140,
             moneda: 'ARS',
+            unidadPrecio: 'UNIDAD',
             atributosVarianteJson: {
               tipoAnillo: 'ESPIRAL_PLASTICO',
               diametro: 14,
@@ -207,6 +212,7 @@ beforeAll(async () => {
             sku: 'TEST-WIREO-TOMO-11',
             precioReferencia: 200,
             moneda: 'ARS',
+            unidadPrecio: 'UNIDAD',
             atributosVarianteJson: {
               tipoAnillo: 'WIRE_O',
               diametro: 11,
@@ -218,6 +224,7 @@ beforeAll(async () => {
             sku: 'TEST-WIREO-TOMO-13',
             precioReferencia: 240,
             moneda: 'ARS',
+            unidadPrecio: 'UNIDAD',
             atributosVarianteJson: {
               tipoAnillo: 'WIRE_O',
               diametro: 13,
@@ -254,6 +261,7 @@ beforeAll(async () => {
             sku: 'TEST-TAPA-FRONTAL-A4',
             precioReferencia: 150,
             moneda: 'ARS',
+            unidadPrecio: 'UNIDAD',
             atributosVarianteJson: {
               ancho: 210,
               alto: 297,
@@ -285,6 +293,7 @@ beforeAll(async () => {
             sku: 'TEST-TAPA-POSTERIOR-A4',
             precioReferencia: 120,
             moneda: 'ARS',
+            unidadPrecio: 'UNIDAD',
             atributosVarianteJson: {
               ancho: 210,
               alto: 297,
@@ -340,6 +349,7 @@ afterAll(async () => {
           .catch(() => undefined);
     }
   }
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

@@ -616,15 +616,16 @@ export class FidelizacionService {
     return rows[0];
   }
 
-  private configTx(
+  private async configTx(
     db: Prisma.TransactionClient | PrismaService,
     tenantId: string,
   ) {
-    return db.configuracionFidelizacion.upsert({
-      where: { tenantId },
-      create: { tenantId },
-      update: {},
-    });
+    const existente = await db.configuracionFidelizacion.findUnique({ where: { tenantId } });
+    if (existente) return existente;
+    // Dos primeras órdenes pueden pedir la configuración a la vez. El
+    // upsert con update vacío hacía SELECT + INSERT y perdía esa carrera.
+    await db.configuracionFidelizacion.createMany({ data: [{ tenantId }], skipDuplicates: true });
+    return db.configuracionFidelizacion.findUniqueOrThrow({ where: { tenantId } });
   }
   private bloquearConversion(tx: Prisma.TransactionClient, id: string) {
     return tx.configuracionFidelizacion.update({

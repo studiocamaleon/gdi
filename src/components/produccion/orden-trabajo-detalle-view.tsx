@@ -22,7 +22,9 @@ import {
 
 import { EstadoOtBadge } from "@/components/produccion/ordenes-trabajo-view";
 import type { Cobro } from "@/lib/administracion";
-import { getCobros } from "@/lib/administracion-api";
+import { getCobros, reciboPdfUrl } from "@/lib/administracion-api";
+import { montoCobroEnOrden, porcionCobroEnOrden } from "@/lib/cobro-aplicado";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   ORDEN_TRABAJO_ESTADOS,
   ORDEN_TRABAJO_FLOW,
@@ -312,6 +314,7 @@ export function PagosTab({
   ordenId,
   puedeCobrar = true,
   sinComprobante = false,
+  soloLectura = false,
 }: {
   pago: OrdenTrabajoPago | null;
   total: number;
@@ -321,18 +324,22 @@ export function PagosTab({
   puedeCobrar?: boolean;
   /** Orden sin comprobante fiscal: el total es neto (§6). */
   sinComprobante?: boolean;
+  soloLectura?: boolean;
 }) {
   const { moneda } = useConfigRegional();
   const [cobros, setCobros] = React.useState<Cobro[] | null>(null);
+  const [errorCobros, setErrorCobros] = React.useState(false);
   React.useEffect(() => {
     if (!ordenId) return;
     let activo = true;
+    setCobros(null);
+    setErrorCobros(false);
     getCobros({ ordenId })
       .then((data) => {
         if (activo) setCobros(data);
       })
       .catch(() => {
-        if (activo) setCobros([]);
+        if (activo) setErrorCobros(true);
       });
     return () => {
       activo = false;
@@ -361,6 +368,7 @@ export function PagosTab({
   const registrar = (
     mov: Omit<MovimientoView, "comprobante" | "usuarioNombre">,
   ) => {
+    if (soloLectura) return;
     setMovs((prev) => [
       {
         ...mov,
@@ -375,16 +383,23 @@ export function PagosTab({
   };
 
   if (ordenId) {
+    if (errorCobros) return (
+      <Alert variant="destructive">
+        <AlertTitle>No se pudieron consultar los cobros</AlertTitle>
+        <AlertDescription>Volvé a abrir la pestaña para reintentar. El saldo no puede calcularse sin esta información.</AlertDescription>
+      </Alert>
+    );
+    if (cobros === null) return <div className="mov-empty">Cargando cobros…</div>;
     const lista = cobros ?? [];
     const cargando = cobros === null;
-    const cobradoReal = lista.reduce((s, c) => s + c.montoBruto, 0);
+    const cobradoReal = lista.reduce((s, c) => s + montoCobroEnOrden(c), 0);
     const comisionesReal = lista.reduce(
-      (s, c) => s + c.comisionMonto + c.comisionIvaMonto,
+      (s, c) => s + porcionCobroEnOrden(c, c.comisionMonto + c.comisionIvaMonto),
       0,
     );
-    const netoReal = lista.reduce((s, c) => s + c.netoAcreditado, 0);
-    const retencionesReal = lista.reduce((s, c) => s + c.retencionesTotal, 0);
-    const disponibleTotal = lista.reduce((s, c) => s + c.disponibleReal, 0);
+    const netoReal = lista.reduce((s, c) => s + porcionCobroEnOrden(c, c.netoAcreditado), 0);
+    const retencionesReal = lista.reduce((s, c) => s + porcionCobroEnOrden(c, c.retencionesTotal), 0);
+    const disponibleTotal = lista.reduce((s, c) => s + porcionCobroEnOrden(c, c.disponibleReal), 0);
     const pendientes = lista.filter(
       (c) => c.estadoAcreditacion === "pendiente",
     ).length;
@@ -446,7 +461,7 @@ export function PagosTab({
         <div className="pagos-grid">
           <div className="arc-page">
             <div className="arc-sum-card">
-              <div className="h">Cobranza · las 3 cifras</div>
+              <div className="h">Cobranza · importes correspondientes a esta OT</div>
               <div className="arc-three">
                 <div className="arc-tc f">
                   <div className="l">Cobrado (bruto)</div>
@@ -514,7 +529,7 @@ export function PagosTab({
                     {formatMonedaOrden(saldoReal, moneda)}
                   </span>
                 </div>
-                {puedeCobrar ? (
+                {!soloLectura && puedeCobrar ? (
                   <Link
                     className="btn btn-primary"
                     href={`/administracion/cobros/nuevo?ordenId=${ordenId}`}
@@ -524,8 +539,7 @@ export function PagosTab({
                   </Link>
                 ) : (
                   <div className="mov-empty" style={{ padding: "10px 0" }}>
-                    La orden es un borrador: emitila para poder registrar
-                    cobros.
+                    {soloLectura ? "Activá Editar orden para registrar cobros." : "La orden es un borrador: emitila para poder registrar cobros."}
                   </div>
                 )}
                 <div className="prc-methods">
@@ -557,9 +571,9 @@ export function PagosTab({
               <div className="mov-th">
                 <span>Fecha</span>
                 <span>Método</span>
-                <span>Cuenta destino</span>
+                <span>Recibo / Cuenta destino</span>
                 <span>Acreditación</span>
-                <span className="r">Monto</span>
+                <span className="r">Aplicado a esta OT</span>
               </div>
               {lista.map((c) => (
                 <div key={c.id} className="mov-row">
@@ -569,8 +583,16 @@ export function PagosTab({
                       {metodoIni(c.metodoNombre)}
                     </span>
                     {c.metodoNombre}
+                    {c.origenAplicacion === "cuenta_corriente" ? <span className="mov-who"> · Cuenta corriente</span> : null}
                   </span>
                   <span className="mov-ref">
+                    {c.numeroRecibo ? (
+                      <a className="mov-recibo" href={reciboPdfUrl(c.id)} target="_blank" rel="noreferrer"
+                        title={`Recibo completo: ${formatMonedaOrden(c.montoBruto, moneda)}`}>
+                        {c.numeroRecibo}
+                      </a>
+                    ) : null}
+                    {c.numeroRecibo ? " · " : null}
                     {c.cuentaDestinoNombre ?? "Valor en cartera"}
                     {c.valor ? (
                       <span className="mov-who">
@@ -586,7 +608,7 @@ export function PagosTab({
                         : "Pendiente"}
                   </span>
                   <span className="mov-monto">
-                    {formatMonedaOrden(c.montoBruto, moneda)}
+                    {formatMonedaOrden(montoCobroEnOrden(c), moneda)}
                   </span>
                 </div>
               ))}
@@ -737,7 +759,7 @@ export function PagosTab({
                 <div className="ps-sub">No hay saldo pendiente de cobro.</div>
               </div>
             </div>
-          ) : showForm ? (
+          ) : soloLectura ? (<div className="mov-empty">Activá Editar orden para registrar cobros.</div>) : showForm ? (
             <CobroForm
               saldo={saldo}
               onSubmit={registrar}

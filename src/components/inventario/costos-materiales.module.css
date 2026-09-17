@@ -1,0 +1,78 @@
+.table {
+  min-width: 1120px;
+}
+.table th:first-child {
+  width: 28%;
+}
+.table th:last-child {
+  width: 440px;
+}
+.saveHint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  color: var(--muted-text);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.saveHint svg {
+  flex-shrink: 0;
+  color: var(--accent-soft-foreground);
+}
+.table .groupRow td {
+  background: var(--background);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.materialGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.materialGroup > svg {
+  flex-shrink: 0;
+  color: var(--accent-soft-foreground);
+}
+.materialGroup > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.materialGroup strong {
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: -.025em;
+}
+.unitSelect {
+  width: 140px;
+  max-width: 100%;
+}
+.unitSelect > button {
+  height: 36px;
+  min-height: 36px;
+  font-size: 13px;
+}
+.table td.variantName {
+  padding-left: 46px;
+}
+.optionChip {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.priceField {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.priceInput {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  font: 13px / 1.5 var(--brand-mono);
+  background: var(--surface);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

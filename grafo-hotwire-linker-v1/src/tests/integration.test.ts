@@ -125,3 +125,81 @@ test("el analizador reproduce las propiedades del TAP de referencia andina.tap",
   assert.ok(Math.abs((analysis.bounds?.maxY ?? 0) - 555.855823) < 1e-6);
   assert.ok(Math.abs(analysis.routeLengthMm - 26568.59954) < 1e-3);
 });
+
+function assertCompleteRoute(job: ReturnType<typeof generateHotwireJob>): void {
+  const contourTravel = new Map<string, number>();
+  for (let i = 1; i < job.routeSvg.length; i += 1) {
+    const a = job.routeSvg[i - 1], b = job.routeSvg[i];
+    if (b.via === "contour" && b.contourId) {
+      contourTravel.set(b.contourId, (contourTravel.get(b.contourId) ?? 0) + Math.hypot(a.x - b.x, a.y - b.y));
+    }
+  }
+  for (const contour of job.parsed.contours) {
+    assert.ok(Math.abs((contourTravel.get(contour.id) ?? 0) - contour.perimeter) < 1e-5, `Contorno completo una sola vez: ${contour.id}`);
+  }
+  for (const bridge of job.bridges) {
+    assert.equal(job.routeSvg.filter(p => p.bridgeId === bridge.id).length, 2, `Ida y vuelta por ${bridge.id}`);
+    if (bridge.a) assert.equal(bridge.aNodeId, bridge.a.contourId);
+    if (bridge.b) assert.equal(bridge.bNodeId, bridge.b.contourId);
+  }
+  assert.ok(Math.abs(job.metrics.totalLengthMm - job.metrics.contourLengthMm - job.metrics.bridgeTravelLengthMm) < 1e-5);
+  assert.deepEqual({ x: job.routeMachine[0].x, y: job.routeMachine[0].y }, { x: 0, y: 0 });
+  assert.deepEqual({ x: job.routeMachine.at(-1)!.x, y: job.routeMachine.at(-1)!.y }, { x: 0, y: 0 });
+}
+
+const outerRing = '<path id="aro" data-piece-id="aro" d="M10 10 H150 V150 H10 Z M20 20 H140 V140 H20 Z"/>';
+const nestedPart = '<path id="pieza" data-piece-id="pieza" d="M50 50 H70 V70 H50 Z"/>';
+
+for (const reverse of [false, true]) {
+  test(`conecta una pieza independiente desde el hueco de un aro (orden inverso: ${reverse})`, () => {
+    const paths = reverse ? [nestedPart, outerRing] : [outerRing, nestedPart];
+    const job = generateHotwireJob({
+      svg: `<svg width="160mm" height="160mm" viewBox="0 0 160 160">${paths.join("")}</svg>`,
+      profile: { bedWidthMm: 160, bedHeightMm: 160 },
+    });
+    assert.equal(job.parsed.pieces.length, 2);
+    const innerPart = job.parsed.contours.find(c => c.pieceId === "pieza")!;
+    // La contención de otra pieza no altera su identidad ni su material.
+    assert.equal(innerPart.role, "outer");
+    assert.equal(innerPart.parentContourId, undefined);
+    const bridge = job.bridges.find(b => b.kind === "external")!;
+    assert.ok(bridge);
+    assert.deepEqual(new Set([bridge.aNodeId, bridge.bNodeId]), new Set(["aro-subpath-2", "pieza"]));
+    for (let t = .1; t < 1; t += .1) {
+      const x = bridge.a!.point.x + t * (bridge.b!.point.x - bridge.a!.point.x);
+      const y = bridge.a!.point.y + t * (bridge.b!.point.y - bridge.a!.point.y);
+      assert.ok(x >= 20 && x <= 140 && y >= 20 && y <= 140, 'La conexión permanece en el hueco');
+      assert.ok(!(x > 50 && x < 70 && y > 50 && y < 70), 'La conexión no atraviesa la pieza alojada');
+    }
+    assertCompleteRoute(job);
+  });
+}
+
+test("conecta varias piezas dentro de un hueco y dos niveles de anidación", () => {
+  const svg = `<svg width="160mm" height="160mm" viewBox="0 0 160 160">${outerRing}
+    <path id="aro-interior" data-piece-id="aro-interior" d="M30 30 H100 V100 H30 Z M40 40 H90 V90 H40 Z"/>
+    ${nestedPart}
+    <path id="pieza-vecina" data-piece-id="vecina" d="M115 110 H130 V125 H115 Z"/>
+  </svg>`;
+  const job = generateHotwireJob({ svg, profile: { bedWidthMm: 160, bedHeightMm: 160 } });
+  assert.equal(job.parsed.pieces.length, 4);
+  assert.equal(job.bridges.filter(b => b.kind === "internal").length, 2);
+  assert.equal(job.bridges.filter(b => b.kind === "external").length, 3);
+  assert.equal(job.bridges.filter(b => b.kind === "origin").length, 1);
+  assertCompleteRoute(job);
+});
+
+for (const placa of [1, 2]) {
+  test(`genera el recorrido del Puma de 200 cm en dos placas: placa ${placa}`, () => {
+    const svg = fs.readFileSync(new URL(`../../samples/puma-200cm-anidado-placa-${placa}.svg`, import.meta.url), "utf8");
+    const job = generateHotwireJob({ svg, profile: { bedWidthMm: 1200, bedHeightMm: 600 } });
+    assert.equal(job.parsed.pieces.length, placa === 1 ? 5 : 3);
+    assert.equal(job.parsed.contours.length, placa === 1 ? 8 : 4);
+    if (placa === 1) {
+      const circleHole = "pieza-5-4-subpath-2", letterR = "pieza-7-5-subpath-1";
+      assert.ok(job.bridges.some(b => b.kind === "external" &&
+        [b.aNodeId, b.bNodeId].includes(circleHole) && [b.aNodeId, b.bNodeId].includes(letterR)));
+    }
+    assertCompleteRoute(job);
+  });
+}

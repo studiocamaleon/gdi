@@ -31,6 +31,13 @@ function base(plantilla: PlantillaMaquinariaDto): UpsertMaquinaDto {
 }
 
 describe('diagnóstico de configuración de maquinaria', () => {
+  it('descarta el control experimental de atención y acepta los tiempos de recarga', () => {
+    const perfil = {nombre:'Prueba',tipoPerfil:TipoPerfilOperativoMaquinaDto.corte,activo:true,
+      productivityValue:10,productivityUnit:UnidadProduccionMaquinaDto.m2_h,feedReloadMin:2,
+      detalle:{atencionOperario:'AUTONOMA'}};
+    expect(() => validatePerfilOperativoByTemplate(PlantillaMaquinariaDto.plotter_de_corte,perfil)).not.toThrow();
+    expect(perfil.detalle).toEqual({});
+  });
   it('deja lista una duplicadora con tinta negra, máster y perfiles simple/doble faz', () => {
     const payload = base(PlantillaMaquinariaDto.duplicadora_digital);
     Object.assign(payload, {
@@ -286,6 +293,47 @@ describe('diagnóstico de configuración de maquinaria', () => {
     ];
 
     expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
+  });
+
+  it('exige ancho de corte en los perfiles al activar Common Line', () => {
+    const payload = base(PlantillaMaquinariaDto.corte_laser);
+    payload.anchoUtil = 1300;
+    payload.largoUtil = 900;
+    payload.parametrosTecnicos = { commonLineHabilitado: true };
+    payload.perfilesOperativos = [
+      {
+        nombre: 'Corte acrílico',
+        tipoPerfil: TipoPerfilOperativoMaquinaDto.corte,
+        activo: true,
+        productivityValue: 30,
+        productivityUnit: UnidadProduccionMaquinaDto.mm_s,
+        detalle: {
+          tipoOperacion: 'CORTE',
+          material: ['ACRILICO'],
+          espesorMinMm: 2,
+          espesorMaxMm: 5,
+        },
+      },
+    ];
+
+    expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([
+      expect.objectContaining({
+        campo: 'anchoCorteMm',
+        mensaje: 'Perfil “Corte acrílico”: completá Ancho efectivo de corte.',
+      }),
+    ]);
+    payload.perfilesOperativos[0].detalle = {
+      ...payload.perfilesOperativos[0].detalle,
+      anchoCorteMm: 0.2,
+    };
+    expect(getMaquinaDiagnosticoConfiguracion(payload).faltantes).toEqual([]);
+    expect(() =>
+      validatePerfilOperativoByTemplate(
+        PlantillaMaquinariaDto.corte_laser,
+        payload.perfilesOperativos[0],
+        payload.parametrosTecnicos,
+      ),
+    ).not.toThrow();
   });
 
   it('acepta sólo Corte o Grabado y exige que la operación láser coincida', () => {

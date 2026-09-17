@@ -2,6 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import styles from "./comprobante.module.css";
 import {
   ArrowLeftIcon,
   DownloadIcon,
@@ -50,6 +57,8 @@ export function FacturaView({
   id: string;
 }) {
   const d = doc;
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   // Los importes van en la moneda DEL comprobante (una E puede ser USD) y
   // con 2 decimales siempre: lo fija la normativa, no la preferencia visual.
   const fmt = (n: number) =>
@@ -59,17 +68,9 @@ export function FacturaView({
   );
 
   return (
-    <div
-      className="fx-page"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        padding: "26px 28px 90px",
-      }}
-    >
+    <div {...scope} className={`fx-page ${theme} ${styles.previewPage}`}>
       <div className="fx-wrap">
-        <div className="fx-toolbar">
+        <div className={`fx-toolbar ${styles.previewToolbar}`}>
           <Link
             className="fx-crumb"
             href={`/administracion/comprobantes/${id}`}
@@ -79,20 +80,19 @@ export function FacturaView({
           </Link>
           {/* El PDF lo genera el server: es el mismo archivo que después
               va a salir por mail, no una impresión del navegador. */}
-          <a
-            className="btn btn-primary"
+          <ActionLink
+            prefetch={false}
             href={`/api/backend/administracion/comprobantes/${id}/pdf`}
             target="_blank"
             rel="noopener"
-            style={{ marginLeft: "auto" }}
           >
             <DownloadIcon />
             Descargar PDF
-          </a>
-          <button type="button" className="btn" onClick={() => window.print()}>
+          </ActionLink>
+          <ActionButton variant="outline" onPress={() => window.print()}>
             <PrinterIcon />
             Imprimir
-          </button>
+          </ActionButton>
         </div>
 
         {!d.cae ? (
@@ -211,7 +211,7 @@ export function FacturaView({
             </div>
 
             {/* Ítems */}
-            <table className="fx-items">
+            <table className={`fx-items ${styles.invoiceItems}`}>
               <thead>
                 <tr>
                   <th>Descripción</th>

@@ -12,10 +12,12 @@ export type UnitDimension =
 
 export type UnitCode =
   | "unidad"
+  | "botella"
   | "pack"
   | "caja"
   | "kit"
   | "hoja"
+  | "placa"
   | "pliego"
   | "resma"
   | "rollo"
@@ -51,10 +53,12 @@ export type UnitDefinition = {
 
 export const UNIT_DEFINITIONS: Record<UnitCode, UnitDefinition> = {
   unidad: { code: "unidad", label: "Unidad", symbol: "u", dimension: "count", factorToBase: 1, baseCode: "unidad" },
+  botella: { code: "botella", label: "Botella", symbol: "botella", dimension: "count", factorToBase: 1, baseCode: "botella" },
   pack: { code: "pack", label: "Pack", symbol: "pack", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   caja: { code: "caja", label: "Caja", symbol: "caja", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   kit: { code: "kit", label: "Kit", symbol: "kit", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   hoja: { code: "hoja", label: "Hoja", symbol: "hoja", dimension: "count", factorToBase: 1, baseCode: "unidad" },
+  placa: { code: "placa", label: "Placa", symbol: "placa", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   pliego: { code: "pliego", label: "Hoja", symbol: "hoja", dimension: "count", factorToBase: 1, baseCode: "unidad" },
   resma: { code: "resma", label: "Resma", symbol: "resma", dimension: "count", factorToBase: 500, baseCode: "unidad" },
   rollo: { code: "rollo", label: "Rollo", symbol: "rollo", dimension: "count", factorToBase: 1, baseCode: "unidad" },

@@ -1,0 +1,698 @@
+"use client";
+
+import * as React from "react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowUpRightIcon,
+  BoxesIcon,
+  BoxIcon,
+  GitBranchIcon,
+  Layers3Icon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  Trash2Icon,
+  WorkflowIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from "lucide-react";
+
+import {
+  Card,
+  Chip,
+  Input,
+  Modal,
+  SearchField,
+  ToggleButton,
+  ToggleButtonGroup,
+} from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import focus from "@/components/design-system/field-focus.module.css";
+import shared from "./flujos.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import {
+  construirColumnasProductivas,
+  insertarNodoProductivo,
+  moverNodoProductivo,
+  type DestinoNodoProductivo,
+} from "@/lib/modelo-productivo-layout";
+import {
+  cantidadUsosProductoComponente,
+  crearIdentidadOcurrenciaComponente,
+} from "@/lib/componentes-receta-ocurrencias";
+import type {
+  CatalogoFamilias,
+  NodoRutaWorkflow,
+  PasoTenant,
+  ProductoListItem,
+  RutaWorkflow,
+  TipoNodoRutaWorkflow,
+} from "@/lib/productos-servicios";
+import styles from "./ruta-workflow-editor.module.css";
+import { descripcionPasoParaUsuario } from "@/lib/pasos-presentacion";
+
+function DropButton({
+  onDragOver,
+  onDrop,
+  ...props
+}: React.ComponentProps<typeof Button> &
+  Pick<React.HTMLAttributes<HTMLSpanElement>, "onDragOver" | "onDrop">) {
+  return (
+    <span className={styles.dropTarget} onDragOver={onDragOver} onDrop={onDrop}>
+      <Button {...props} isIconOnly />
+    </span>
+  );
+}
+
+type OpcionNodo = {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  tipo: TipoNodoRutaWorkflow;
+  familiaCodigo?: string;
+  producto?: ProductoListItem;
+};
+
+function columnasAWorkflow(
+  columnas: string[][],
+  nodosActuales: NodoRutaWorkflow[],
+): RutaWorkflow {
+  const porClave = new Map(nodosActuales.map((nodo) => [nodo.clave, nodo]));
+  const nodos = columnas
+    .flatMap((columna) => columna)
+    .map((clave, orden) => ({
+      ...porClave.get(clave)!,
+      orden,
+    }));
+  const aristas = columnas
+    .slice(1)
+    .flatMap((columna, index) =>
+      columnas[index].flatMap((desdeClave) =>
+        columna.map((haciaClave) => ({ desdeClave, haciaClave })),
+      ),
+    );
+  return {
+    contractVersion: 1,
+    topologia: columnas.some((columna) => columna.length > 1)
+      ? "DAG"
+      : "LINEAL",
+    nodos,
+    aristas,
+  };
+}
+
+function claveNueva(prefijo: string) {
+  return `${prefijo}:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`}`;
+}
+
+function tituloNodo(nodo: NodoRutaWorkflow, familias: CatalogoFamilias) {
+  if (nodo.tipo === "COMPONENTE") return nodo.nombre;
+  return (
+    nodo.nombreVisible?.trim() ||
+    familias.familias.find((familia) => familia.codigo === nodo.familiaCodigo)
+      ?.nombre ||
+    "Paso de producción"
+  );
+}
+
+function iconoTipo(tipo: TipoNodoRutaWorkflow) {
+  if (tipo === "COMPONENTE") return BoxesIcon;
+  if (tipo === "ETAPA") return Layers3Icon;
+  return WorkflowIcon;
+}
+
+export function RutaWorkflowEditor({
+  value,
+  onChange,
+  catalogoFamilias,
+  pasosTenant,
+  productos,
+}: {
+  value: RutaWorkflow;
+  onChange: (workflow: RutaWorkflow) => void;
+  catalogoFamilias: CatalogoFamilias;
+  pasosTenant: PasoTenant[];
+  productos: ProductoListItem[];
+}) {
+  const [destino, setDestino] = React.useState<DestinoNodoProductivo | null>(
+    null,
+  );
+  const [tipo, setTipo] = React.useState<TipoNodoRutaWorkflow>("PASO");
+  const [busqueda, setBusqueda] = React.useState("");
+  const [arrastrando, setArrastrando] = React.useState<string | null>(null);
+  const [zoom, setZoom] = React.useState(100);
+  const [editando, setEditando] = React.useState<string | null>(null);
+  const [nombreEditado, setNombreEditado] = React.useState("");
+  const columnas = React.useMemo(
+    () => construirColumnasProductivas(value.nodos, value.aristas),
+    [value],
+  );
+  const columnasClaves = columnas.map((columna) =>
+    columna.map((nodo) => nodo.clave),
+  );
+  const compuestos = React.useMemo(
+    () =>
+      new Map(
+        pasosTenant
+          .filter((paso) => paso.tipoPaso === "COMPUESTO")
+          .map((paso) => [paso.id, paso]),
+      ),
+    [pasosTenant],
+  );
+  const opciones = React.useMemo<OpcionNodo[]>(() => {
+    if (tipo === "COMPONENTE") {
+      const ocurrencias = value.nodos.filter(
+        (nodo) => nodo.tipo === "COMPONENTE",
+      );
+      return productos.map((producto) => {
+        const usos = cantidadUsosProductoComponente(producto.id, ocurrencias);
+        return {
+          id: producto.id,
+          nombre: producto.nombre,
+          descripcion:
+            usos > 0
+              ? `${usos} uso${usos === 1 ? "" : "s"} en esta ruta · se puede repetir`
+              : "Producto con receta propia",
+          tipo,
+          producto,
+        };
+      });
+    }
+    if (tipo === "ETAPA") {
+      return [...compuestos.values()].map((paso) => ({
+        id: paso.id,
+        nombre: paso.nombre,
+        descripcion: "Nodo compuesto · un estado en producción",
+        tipo,
+        familiaCodigo: paso.id,
+      }));
+    }
+    return catalogoFamilias.familias
+      .filter(
+        (familia) =>
+          familia.visibleEnSelector !== false &&
+          !compuestos.has(familia.codigo),
+      )
+      .map((familia) => ({
+        id: familia.codigo,
+        nombre: familia.nombre,
+        descripcion: familia.descripcion ?? "Operación individual",
+        tipo,
+        familiaCodigo: familia.codigo,
+      }));
+  }, [catalogoFamilias.familias, compuestos, productos, tipo, value.nodos]);
+  const opcionesFiltradas = opciones.filter((opcion) =>
+    `${opcion.nombre} ${opcion.descripcion}`
+      .toLocaleLowerCase("es")
+      .includes(busqueda.trim().toLocaleLowerCase("es")),
+  );
+
+  const abrirAlta = (
+    nuevoDestino: DestinoNodoProductivo,
+    tipoInicial: TipoNodoRutaWorkflow = "PASO",
+  ) => {
+    setDestino(nuevoDestino);
+    setTipo(tipoInicial);
+    setBusqueda("");
+  };
+
+  const agregar = (opcion: OpcionNodo) => {
+    if (!destino) return;
+    const ocurrencias = value.nodos.filter(
+      (nodo) => nodo.tipo === "COMPONENTE",
+    );
+    const identidad = opcion.producto
+      ? crearIdentidadOcurrenciaComponente(opcion.producto, ocurrencias)
+      : null;
+    const nodo: NodoRutaWorkflow =
+      opcion.producto && identidad
+        ? {
+            clave: claveNueva("componente"),
+            tipo: "COMPONENTE",
+            orden: value.nodos.length,
+            productoComponenteId: opcion.producto.id,
+            codigo: identidad.codigo,
+            nombre: identidad.nombre,
+            requerido: true,
+          }
+        : {
+            clave: claveNueva("ruta-borrador"),
+            tipo: opcion.tipo === "ETAPA" ? "ETAPA" : "PASO",
+            orden: value.nodos.length,
+            familiaCodigo: opcion.familiaCodigo!,
+            nombreVisible: opcion.nombre,
+            icono: opcion.tipo === "ETAPA" ? "Layers" : "Layout",
+          };
+    const siguientes = insertarNodoProductivo(
+      columnasClaves,
+      nodo.clave,
+      destino,
+    );
+    onChange(columnasAWorkflow(siguientes, [...value.nodos, nodo]));
+    setDestino(null);
+  };
+
+  const mover = (clave: string, nuevoDestino: DestinoNodoProductivo) => {
+    const siguientes = moverNodoProductivo(columnasClaves, clave, nuevoDestino);
+    onChange(columnasAWorkflow(siguientes, value.nodos));
+  };
+
+  const eliminar = (clave: string) => {
+    const siguientes = columnasClaves
+      .map((columna) => columna.filter((item) => item !== clave))
+      .filter((columna) => columna.length > 0);
+    onChange(
+      columnasAWorkflow(
+        siguientes,
+        value.nodos.filter((nodo) => nodo.clave !== clave),
+      ),
+    );
+  };
+
+  const nodoEditado = value.nodos.find((nodo) => nodo.clave === editando);
+  const abrirEdicionNombre = (nodo: NodoRutaWorkflow) => {
+    setNombreEditado(
+      nodo.tipo === "COMPONENTE" ? nodo.nombre : (nodo.nombreVisible ?? ""),
+    );
+    setEditando(nodo.clave);
+  };
+  const aplicarNombre = () => {
+    if (!nodoEditado || !nombreEditado.trim()) return;
+    onChange({
+      ...value,
+      nodos: value.nodos.map((nodo) =>
+        nodo.clave !== nodoEditado.clave
+          ? nodo
+          : nodo.tipo === "COMPONENTE"
+            ? { ...nodo, nombre: nombreEditado.trim() }
+            : { ...nodo, nombreVisible: nombreEditado.trim() },
+      ),
+    });
+    setEditando(null);
+  };
+
+  return (
+    <Card className={styles.editor}>
+      <header className={styles.header}>
+        <div>
+          <span className={styles.eyebrow}>02 · Secuencia de producción</span>
+          <h2>Recorrido del flujo</h2>
+          <p>
+            Ordená de izquierda a derecha. Los nodos en una misma columna se
+            ejecutan en paralelo.
+          </p>
+        </div>
+        <div className={styles.headerTools}>
+          <Chip className={styles.topology} size="sm" variant="soft">
+            <GitBranchIcon />{" "}
+            {value.topologia === "DAG" ? "Con paralelos" : "Secuencia lineal"}
+          </Chip>
+          <div className={styles.zoom}>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setZoom((actual) => Math.max(70, actual - 10))}
+              isIconOnly
+              aria-label="Alejar flujo de producción"
+            >
+              <ZoomOutIcon />
+            </Button>
+            <span>{zoom}%</span>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setZoom((actual) => Math.min(130, actual + 10))}
+              isIconOnly
+              aria-label="Acercar flujo de producción"
+            >
+              <ZoomInIcon />
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className={styles.viewport}>
+        <div
+          className={styles.canvas}
+          style={{ transform: `scale(${zoom / 100})` }}
+        >
+          <div className={styles.endpoint}>
+            <span />
+            <b>INICIO</b>
+          </div>
+          {columnas.length === 0 ? (
+            <Button
+              variant="ghost"
+              type="button"
+              className={styles.empty}
+              onClick={() => abrirAlta({ tipo: "SECUENCIAL", posicion: 0 })}
+            >
+              <PlusIcon />
+              <strong>Agregar primer nodo</strong>
+              <span>Nodo simple, nodo compuesto o componente</span>
+            </Button>
+          ) : null}
+          {columnas.map((columna, columnaIndex) => (
+            <React.Fragment key={columna.map((nodo) => nodo.clave).join("|")}>
+              <DropButton
+                variant="ghost"
+                type="button"
+                isIconOnly
+                className={styles.gapAdd}
+                onClick={() =>
+                  abrirAlta({ tipo: "SECUENCIAL", posicion: columnaIndex })
+                }
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (arrastrando) {
+                    mover(arrastrando, {
+                      tipo: "SECUENCIAL",
+                      posicion: columnaIndex,
+                    });
+                  }
+                  setArrastrando(null);
+                }}
+                aria-label={`Agregar un momento antes del ${columnaIndex + 1}`}
+              >
+                <PlusIcon />
+              </DropButton>
+              <div
+                className={styles.moment}
+                data-parallel={columna.length > 1}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (arrastrando) {
+                    mover(arrastrando, {
+                      tipo: "PARALELO",
+                      columna: columnaIndex,
+                    });
+                  }
+                  setArrastrando(null);
+                }}
+              >
+                <div className={styles.momentHead}>
+                  <span>
+                    MOMENTO {String(columnaIndex + 1).padStart(2, "0")}
+                  </span>
+                  {columna.length > 1 ? (
+                    <b>{columna.length} en paralelo</b>
+                  ) : null}
+                </div>
+                <div className={styles.nodes}>
+                  {columna.map((nodo) => {
+                    const Icon = iconoTipo(nodo.tipo);
+                    return (
+                      <article
+                        key={nodo.clave}
+                        draggable
+                        data-dragging={arrastrando === nodo.clave}
+                        onDragStart={() => setArrastrando(nodo.clave)}
+                        onDragEnd={() => setArrastrando(null)}
+                        className={`${styles.node} ${styles[nodo.tipo.toLowerCase()]}`}
+                      >
+                        <div className={styles.nodeIcon}>
+                          <Icon />
+                        </div>
+                        <div className={styles.nodeCopy}>
+                          <span>
+                            {nodo.tipo === "COMPONENTE"
+                              ? "SUBRUTA FABRICADA"
+                              : nodo.tipo === "ETAPA"
+                                ? "NODO COMPUESTO"
+                                : "NODO SIMPLE"}
+                          </span>
+                          <strong>{tituloNodo(nodo, catalogoFamilias)}</strong>
+                          <small>
+                            {nodo.tipo === "COMPONENTE"
+                              ? "Receta y ruta propias"
+                              : nodo.tipo === "ETAPA"
+                                ? "Un estado en producción"
+                                : "Operación individual"}
+                          </small>
+                        </div>
+                        <div className={styles.nodeActions}>
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            onClick={() => abrirEdicionNombre(nodo)}
+                            isIconOnly
+                            aria-label="Editar nombre del nodo"
+                          >
+                            <PencilIcon />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            onClick={() => eliminar(nodo.clave)}
+                            isIconOnly
+                            aria-label="Eliminar nodo"
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        </div>
+                        <div className={styles.moveActions}>
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            isDisabled={columnaIndex === 0}
+                            onClick={() =>
+                              mover(nodo.clave, {
+                                tipo: "SECUENCIAL",
+                                posicion: columnaIndex - 1,
+                              })
+                            }
+                            isIconOnly
+                            aria-label="Mover nodo a la izquierda"
+                          >
+                            <ArrowLeftIcon />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            isDisabled={columnaIndex === columnas.length - 1}
+                            onClick={() =>
+                              mover(nodo.clave, {
+                                tipo: "SECUENCIAL",
+                                // Una columna entera debe pasar al otro lado
+                                // del momento siguiente. Un nodo paralelo se
+                                // separa justo después de su momento actual.
+                                posicion:
+                                  columnaIndex + (columna.length === 1 ? 2 : 1),
+                              })
+                            }
+                            isIconOnly
+                            aria-label="Mover nodo a la derecha"
+                          >
+                            <ArrowRightIcon />
+                          </Button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  className={styles.parallelAdd}
+                  onClick={() =>
+                    abrirAlta({ tipo: "PARALELO", columna: columnaIndex })
+                  }
+                >
+                  <PlusIcon /> Agregar en paralelo
+                </Button>
+              </div>
+            </React.Fragment>
+          ))}
+          {columnas.length > 0 ? (
+            <DropButton
+              variant="ghost"
+              type="button"
+              className={styles.gapAdd}
+              onClick={() =>
+                abrirAlta({
+                  tipo: "SECUENCIAL",
+                  posicion: columnas.length,
+                })
+              }
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (arrastrando) {
+                  mover(arrastrando, {
+                    tipo: "SECUENCIAL",
+                    posicion: columnas.length,
+                  });
+                }
+                setArrastrando(null);
+              }}
+              aria-label="Agregar un momento al final"
+            >
+              <PlusIcon />
+            </DropButton>
+          ) : null}
+          <div className={`${styles.endpoint} ${styles.end}`}>
+            <span />
+            <b>FIN</b>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.canvasFooter}>
+        <span>
+          <WorkflowIcon /> Nodo simple
+        </span>
+        <span>
+          <Layers3Icon /> Nodo compuesto
+        </span>
+        <span>
+          <BoxesIcon /> Componente
+        </span>
+        <span className={styles.canvasHint}>
+          Arrastrá los nodos o usá las flechas para reordenar.
+        </span>
+      </div>
+
+      <FormDialog
+        className={brand.dialog}
+        isOpen={Boolean(destino)}
+        onOpenChange={(open) => !open && setDestino(null)}
+        title="¿Qué querés incorporar?"
+        description="Elegí la clase de nodo y luego una opción del catálogo."
+      >
+        <Modal.Body className={styles.pickerBody}>
+          <ToggleButtonGroup
+            selectionMode="single"
+            disallowEmptySelection
+            isDetached
+            selectedKeys={new Set([tipo])}
+            onSelectionChange={(keys) => {
+              const next = [...keys][0];
+              if (next === "PASO" || next === "COMPONENTE" || next === "ETAPA")
+                setTipo(next);
+            }}
+            aria-label="Tipo de nodo"
+            className={styles.typeGrid}
+          >
+            {(
+              [
+                [
+                  "PASO",
+                  WorkflowIcon,
+                  "Nodo simple",
+                  "Una operación individual",
+                ],
+                [
+                  "COMPONENTE",
+                  BoxesIcon,
+                  "Componente",
+                  "Producto hijo fabricado",
+                ],
+                [
+                  "ETAPA",
+                  Layers3Icon,
+                  "Nodo compuesto",
+                  "Subtareas con un estado",
+                ],
+              ] as const
+            ).map(([itemTipo, Icon, label, description]) => (
+              <ToggleButton
+                key={itemTipo}
+                id={itemTipo}
+                className={styles.typeOption}
+              >
+                <Icon />
+                <span>
+                  <strong>{label}</strong>
+                  <small>{description}</small>
+                </span>
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <SearchField
+            value={busqueda}
+            onChange={setBusqueda}
+            aria-label="Buscar nodo para el flujo"
+            className={styles.search}
+          >
+            <SearchField.Group className={focus.singleBorder}>
+              <SearchField.SearchIcon>
+                <SearchIcon />
+              </SearchField.SearchIcon>
+              <SearchField.Input placeholder="Buscar por nombre" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <div className={styles.optionList}>
+            {opcionesFiltradas.map((opcion) => {
+              const Icon = iconoTipo(opcion.tipo);
+              return (
+                <Button
+                  variant="ghost"
+                  key={opcion.id}
+                  onPress={() => agregar(opcion)}
+                >
+                  <span className={styles.optionIcon}>
+                    <Icon />
+                  </span>
+                  <span>
+                    <strong>{opcion.nombre}</strong>
+                    <small>
+                      {opcion.tipo === "PASO"
+                        ? descripcionPasoParaUsuario(opcion.descripcion)
+                        : opcion.descripcion}
+                    </small>
+                  </span>
+                  <ArrowUpRightIcon />
+                </Button>
+              );
+            })}
+            {opcionesFiltradas.length === 0 && (
+              <div className={styles.noResults}>
+                <BoxIcon />
+                No hay opciones disponibles para esta búsqueda.
+              </div>
+            )}
+          </div>
+        </Modal.Body>
+      </FormDialog>
+      <FormDialog
+        className={brand.dialog}
+        isOpen={Boolean(nodoEditado)}
+        onOpenChange={(open) => !open && setEditando(null)}
+        title="Nombre visible del nodo"
+        description="Este nombre se propone al aplicar la ruta a un producto."
+      >
+        <Modal.Body className={shared.dialogBody}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="flujo-nombre-nodo">
+                Nombre del nodo
+              </FieldLabel>
+              <Input
+                className={focus.singleBorder}
+                id="flujo-nombre-nodo"
+                autoFocus
+                value={nombreEditado}
+                maxLength={nodoEditado?.tipo === "COMPONENTE" ? 180 : 120}
+                onChange={(event) => setNombreEditado(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") aplicarNombre();
+                }}
+              />
+            </Field>
+          </FieldGroup>
+        </Modal.Body>
+        <Modal.Footer className={shared.dialogFooter}>
+          <Button variant="outline" onPress={() => setEditando(null)}>
+            Cancelar
+          </Button>
+          <Button isDisabled={!nombreEditado.trim()} onPress={aplicarNombre}>
+            Listo
+          </Button>
+        </Modal.Footer>
+      </FormDialog>
+    </Card>
+  );
+}

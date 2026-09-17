@@ -14,6 +14,7 @@
 
 /** Costos: lo que a la imprenta le sale producirlo. */
 const COSTOS = [
+  'costosMaterialesMoneda',
   'costo',
   'costos',
   'costoTotal',
@@ -21,6 +22,7 @@ const COSTOS = [
   'costoEstimado',
   'costoSeparado',
   'costoConsolidado',
+  'costoAdicional',
   'costoMateriales',
   'costoProveedor',
   'costoTotalReal',
@@ -30,6 +32,9 @@ const COSTOS = [
   'costosFijos',
   'costoPorUnidad',
   'costoEstimadoMm2',
+  'costoReposicion',
+  'desgasteCosto',
+  'desgasteAsignadoCosto',
 ];
 
 /** Márgenes y contribución: la ganancia, en plata o en puntos. */

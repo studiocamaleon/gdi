@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { notFound } from "next/navigation";
 
 import { MateriaPrimaFicha } from "@/components/inventario/materia-prima-ficha";
@@ -15,9 +16,11 @@ export default function MateriaPrimaDetallePage({
   params: Promise<{ materiaPrimaId: string }>;
 }) {
   return (
-    <Suspense fallback={<ModulePageSkeleton variant="detail" />}>
-      <MateriaPrimaDetallePageContent params={params} />
-    </Suspense>
+    <DesignSystemProvider theme="brand" appearance="light">
+      <Suspense fallback={<ModulePageSkeleton variant="detail" />}>
+        <MateriaPrimaDetallePageContent params={params} />
+      </Suspense>
+    </DesignSystemProvider>
   );
 }
 

@@ -34,11 +34,13 @@ import {
   getCatalogoComercial,
 } from "@/lib/productos-servicios-api";
 import type {
+  DimensionProducto,
   ModoMedidasProducto,
   ProductoCategoriaComercial,
   ProductoDetalle,
 } from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
+import { getDimensionesRequeridas } from "@/lib/producto-medidas";
 import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
 import {
   getLabel,
@@ -60,10 +62,10 @@ interface Props {
 }
 
 const MODOS_MEDIDAS = [
-  { value: "FIJA", label: "Fija" },
-  { value: "LIBRE", label: "Libre" },
-  { value: "COMERCIAL_ELIGE", label: "Comercial elige" },
-  { value: "MIXTA", label: "Mixta" },
+  { value: "FIJA", label: "Medida fija" },
+  { value: "LIBRE", label: "Medida libre" },
+  { value: "COMERCIAL_ELIGE", label: "Medidas predefinidas" },
+  { value: "MIXTA", label: "Predefinida o personalizada" },
 ];
 
 export function ProductoFormView({ modo, productoExistente }: Props) {
@@ -89,11 +91,20 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
   const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
     productoExistente?.modoMedidas ?? "FIJA",
   );
+  const [geometria, setGeometria] = React.useState<"2D" | "3D">(() =>
+    productoExistente &&
+    getDimensionesRequeridas(productoExistente).includes("PROFUNDIDAD")
+      ? "3D"
+      : "2D",
+  );
   const [anchoDefault, setAnchoDefault] = React.useState(
     productoExistente?.medidaDefaultAnchoMm ?? "",
   );
   const [altoDefault, setAltoDefault] = React.useState(
     productoExistente?.medidaDefaultAltoMm ?? "",
+  );
+  const [profundidadDefault, setProfundidadDefault] = React.useState(
+    productoExistente?.medidaDefaultProfundidadMm ?? "",
   );
   const [activo, setActivo] = React.useState(productoExistente?.activo ?? true);
 
@@ -138,6 +149,10 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
         unknown
       >;
 
+      const dimensionesRequeridas: DimensionProducto[] =
+        geometria === "3D"
+          ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
+          : ["ANCHO", "ALTO"];
       const payload = {
         nombre,
         descripcion: descripcion || undefined,
@@ -149,8 +164,13 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
           > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas,
+        dimensionesRequeridas,
         medidaDefaultAnchoMm: anchoDefault ? Number(anchoDefault) : undefined,
         medidaDefaultAltoMm: altoDefault ? Number(altoDefault) : undefined,
+        medidaDefaultProfundidadMm:
+          geometria === "3D" && profundidadDefault
+            ? Number(profundidadDefault)
+            : undefined,
         precioConfigJson,
       };
 
@@ -251,6 +271,25 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
           </CardHeader>
           <CardContent className={`${styles.cardBody} space-y-4`}>
             <div className="space-y-2">
+              <Label>Geometría del producto</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={geometria === "2D" ? "default" : "outline"}
+                  onClick={() => setGeometria("2D")}
+                >
+                  2D · Ancho y alto
+                </Button>
+                <Button
+                  type="button"
+                  variant={geometria === "3D" ? "default" : "outline"}
+                  onClick={() => setGeometria("3D")}
+                >
+                  3D · Ancho, alto y profundidad
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="nombre">Nombre *</Label>
               <Input
                 id="nombre"
@@ -310,14 +349,15 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
             <div>
               <CardTitle>Comercial y medidas</CardTitle>
               <CardDescription>
-                Cómo se cobra y cómo se manejan las medidas al cotizar.
+                Definí cómo se vende el producto y qué datos deberá completar el
+                comercial al cotizarlo.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className={`${styles.cardBody} space-y-4`}>
             <div className="space-y-2">
               <LabelConTooltip
-                label="¿Cómo se cobra?"
+                label="Unidad de venta"
                 htmlFor="unidad"
                 tooltip={
                   getLabel(unidadComercialLabels, unidadComercial).descripcion
@@ -334,7 +374,7 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
             </div>
             <div className="space-y-2">
               <LabelConTooltip
-                label="Manejo de medidas"
+                label="¿Cómo se define la medida?"
                 htmlFor="modoMedidas"
                 tooltip={getLabel(modoMedidasLabels, modoMedidas).descripcion}
                 ejemplo={getLabel(modoMedidasLabels, modoMedidas).ejemplo}
@@ -351,7 +391,9 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
               />
             </div>
             {modoMedidas !== "LIBRE" && (
-              <div className="grid grid-cols-2 gap-4">
+              <div
+                className={`grid gap-4 ${geometria === "3D" ? "grid-cols-3" : "grid-cols-2"}`}
+              >
                 <div className="space-y-2">
                   <Label htmlFor="ancho">Ancho default (mm)</Label>
                   <Input
@@ -362,6 +404,20 @@ export function ProductoFormView({ modo, productoExistente }: Props) {
                     placeholder="90"
                   />
                 </div>
+                {geometria === "3D" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="profundidad">
+                      Profundidad default (mm)
+                    </Label>
+                    <Input
+                      id="profundidad"
+                      type="number"
+                      value={profundidadDefault}
+                      onChange={(e) => setProfundidadDefault(e.target.value)}
+                      placeholder="180"
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="alto">Alto default (mm)</Label>
                   <Input

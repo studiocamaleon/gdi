@@ -1,0 +1,416 @@
+.body {
+  padding: 24px;
+  color: var(--foreground);
+}
+.configurationGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+.mainColumn,
+.settingsColumn {
+  min-width: 0;
+}
+.mainColumn {
+  container: component-main / inline-size;
+}
+.settingsColumn {
+  display: grid;
+  gap: 16px;
+}
+.identityPanel,
+.executionCard,
+.repeatCard {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.identityPanel {
+  margin-bottom: 20px;
+}
+.identityGroup {
+  padding: 20px;
+}
+.body [data-slot="field"] {
+  min-width: 0;
+  gap: 8px;
+}
+.body [data-slot="field-label"] {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+.body [data-slot="field-description"] {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.collectionMode,
+.editablePieces {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: var(--canvas-background);
+}
+.collectionMode {
+  border-top: 1px solid var(--border);
+}
+.collectionMode[data-active="true"] {
+  background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface));
+}
+.collectionMode > div,
+.editablePieces > div {
+  min-width: 0;
+}
+.collectionMode [data-slot="field-description"],
+.editablePieces [data-slot="field-description"] {
+  margin-top: 5px;
+}
+.editablePieces {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.contextCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding-bottom: 14px;
+}
+.contextCard svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-soft-foreground);
+}
+.contextCard div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.contextCard strong {
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.025em;
+}
+.contextCard span {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.executionCard,
+.repeatCard {
+  display: grid;
+}
+.executionCard > div:first-child,
+.repeatCard > div:first-child {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas-background);
+}
+.executionCard strong,
+.repeatCard strong {
+  font-size: 16px;
+  font-weight: 550;
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+.executionCard > div:first-child span,
+.repeatCard > div:first-child span {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.executionControl,
+.repeatControl {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+}
+.executionHint {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.repeatControl > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  color: var(--foreground);
+  font-size: 12px;
+}
+.repeatFields {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.geometryNotice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.geometryNotice svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.message,
+.error {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.error {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.tableHead,
+.binding {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.85fr) minmax(190px, 0.85fr) minmax(
+      200px,
+      1.3fr
+    );
+  align-items: center;
+  gap: 20px;
+  padding: 18px 20px;
+}
+.tableHead {
+  padding-block: 12px;
+  color: var(--brand-muted-on-graphite);
+  background: var(--brand-graphite);
+  font: 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.binding + .binding {
+  border-top: 1px solid var(--border);
+}
+.binding strong,
+.binding small {
+  display: block;
+}
+.binding strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.binding small {
+  margin-top: 6px;
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.binding .requiredMark,
+.binding .optionalMark {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent-soft-foreground);
+  font-size: 10px;
+}
+.optionalMark svg {
+  width: 12px;
+  height: 12px;
+}
+.activationBinding {
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
+}
+.requiredMark span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.binding select,
+.binding input,
+.executionControl select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--foreground);
+  background: var(--canvas-background);
+  font-size: 13px;
+}
+.valueField {
+  min-width: 0;
+}
+.valueField > span {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.valueField .activationSummary {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas-background);
+}
+.automations {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.automationsHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--canvas-background);
+}
+.automationsHead > svg {
+  width: 20px;
+  flex: none;
+  color: var(--accent-soft-foreground);
+}
+.automationsHead strong,
+.automationsHead span,
+.automationList strong,
+.automationList span {
+  display: block;
+}
+.automationsHead strong {
+  font-size: 15px;
+  font-weight: 550;
+}
+.automationsHead span,
+.automationList span {
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.automationList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.automationList article {
+  min-width: 0;
+  padding: 18px 20px;
+  border-right: 1px solid var(--border);
+}
+.automationList strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.ruleEditor {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+}
+.numberWithUnit {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--canvas-background);
+}
+.numberWithUnit input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+}
+.numberWithUnit span {
+  flex: none;
+  padding-inline: 10px;
+  color: var(--muted-text);
+  font: 11px var(--brand-mono);
+}
+.body input:focus-visible,
+.body select:focus-visible,
+.numberWithUnit:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.numberWithUnit input:focus-visible {
+  outline: 0;
+}
+.hint {
+  margin: 14px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+@container component-main (min-width: 1100px) {
+  .ruleEditor {
+    grid-template-columns: minmax(0, 1.4fr) minmax(110px, 1fr) minmax(
+        75px,
+        0.7fr
+      );
+  }
+}
+@container component-main (max-width: 750px) {
+  .tableHead {
+    display: none;
+  }
+  .binding {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .valueField {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 1200px) {
+  .configurationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settingsColumn {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .body {
+    padding: 16px;
+  }
+  .settingsColumn,
+  .binding {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .identityGroup,
+  .collectionMode,
+  .editablePieces,
+  .binding {
+    padding: 16px;
+  }
+}

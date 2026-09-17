@@ -56,12 +56,16 @@ export class EmitirPresupuestoDto {
   @IsUUID()
   clienteId: string;
 
+  /** Capa opcional de coordinación; no cambia el ciclo del presupuesto. */
+  @IsOptional()
+  @IsUUID()
+  proyectoCampanaId?: string;
+
   @IsOptional()
   @IsUUID()
   vendedorEmpleadoId?: string;
 
-  @IsOptional()
-  @IsIn(ORDEN_CANALES_VENTA)
+  @IsIn(ORDEN_CANALES_VENTA, { message: 'Elegí un canal de venta para guardar.' })
   canalVenta?: string;
 
   /** ISO date (YYYY-MM-DD) — entrega estimada que se prometería. */
@@ -151,6 +155,10 @@ export class ListarPresupuestosDto {
   @IsOptional()
   @IsUUID()
   clienteId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  proyectoCampanaId?: string;
 
   @IsOptional()
   @IsString()

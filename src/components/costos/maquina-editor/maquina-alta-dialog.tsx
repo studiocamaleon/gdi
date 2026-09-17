@@ -1,32 +1,23 @@
 "use client";
+import styles from "../maquinaria.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import { SelectField } from "@/components/design-system/select-field";
 
 import * as React from "react";
+import { ArrowUpRightIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { Modal } from "@heroui/react";
+import { MaquinariaDialog } from "./maquinaria-dialog";
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+import { Input } from "@heroui/react";
 import type { Planta } from "@/lib/costos";
 import type { MaquinaPayload, PlantillaMaquinaria } from "@/lib/maquinaria";
 import { createMaquina } from "@/lib/maquinaria-api";
@@ -34,7 +25,7 @@ import {
   getMaquinariaTemplate,
   maquinariaTemplates,
 } from "@/lib/maquinaria-templates";
-import { emptyMaquina, SelectDisplay } from "./helpers";
+import { emptyMaquina } from "./helpers";
 
 type MaquinaAltaDialogProps = {
   open: boolean;
@@ -102,28 +93,24 @@ export function MaquinaAltaDialog({
   };
 
   return (
-    <Dialog
-      open={open}
+    <MaquinariaDialog
+      isOpen={open}
       onOpenChange={(next) => {
         if (!next && !creando) onClose();
       }}
+      isDismissable={!creando}
+      title="Nueva máquina"
+      description="Crearemos un borrador. Después podrás completar perfiles, consumibles y costos antes de activarla."
     >
-      <DialogContent>
-        <form onSubmit={handleCrear} className="flex flex-col gap-4">
-          <DialogHeader>
-            <DialogTitle>Nueva máquina</DialogTitle>
-            <DialogDescription>
-              Crearemos un borrador. Después podrás completar perfiles,
-              consumibles y costos antes de activarla.
-            </DialogDescription>
-          </DialogHeader>
-
+      <form onSubmit={handleCrear} className={styles.modalForm}>
+        <Modal.Body className={styles.modalBody}>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="maquina-alta-nombre">
                 Nombre de la máquina
               </FieldLabel>
               <Input
+                className={focus.singleBorder}
                 id="maquina-alta-nombre"
                 value={nombre}
                 autoFocus
@@ -136,61 +123,37 @@ export function MaquinaAltaDialog({
 
             <Field>
               <FieldLabel>Tipo de máquina</FieldLabel>
-              <Select
-                value={plantilla ?? undefined}
-                onValueChange={(value) =>
+              <SelectField
+                value={plantilla ?? ""}
+                onChange={(value) =>
                   setPlantilla((value ?? null) as PlantillaMaquinaria | null)
                 }
-              >
-                <SelectTrigger className="w-full">
-                  <SelectDisplay
-                    label={
-                      plantilla
-                        ? maquinariaTemplates.find(
-                            (template) => template.id === plantilla,
-                          )?.label
-                        : undefined
-                    }
-                    placeholder="Seleccionar tipo"
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {maquinariaTemplates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+                aria-label="Tipo de máquina"
+                className="w-full"
+                options={[
+                  ...(maquinariaTemplates.map((template) => ({
+                    value: template.id,
+                    label: template.label,
+                  })) ?? []),
+                ]}
+              />
             </Field>
 
             <Field data-disabled={plantas.length === 0}>
               <FieldLabel>Planta</FieldLabel>
-              <Select
-                value={plantaId || undefined}
+              <SelectField
+                value={plantaId}
                 disabled={plantas.length === 0}
-                onValueChange={(value) => setPlantaId(value ?? "")}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectDisplay
-                    label={
-                      plantas.find((planta) => planta.id === plantaId)?.nombre
-                    }
-                    placeholder="Seleccionar planta"
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {plantas.map((planta) => (
-                      <SelectItem key={planta.id} value={planta.id}>
-                        {planta.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+                onChange={(value) => setPlantaId(value ?? "")}
+                aria-label="Planta"
+                className="w-full"
+                options={[
+                  ...(plantas.map((planta) => ({
+                    value: planta.id,
+                    label: planta.nombre,
+                  })) ?? []),
+                ]}
+              />
               {plantas.length === 0 ? (
                 <FieldDescription>
                   Primero debes crear una planta.
@@ -198,22 +161,22 @@ export function MaquinaAltaDialog({
               ) : null}
             </Field>
           </FieldGroup>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={creando}
-              onClick={onClose}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={!puedeGuardar}>
-              {creando ? "Creando…" : "Crear borrador"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </Modal.Body>
+        <Modal.Footer className={styles.modalFooter}>
+          <Button
+            type="button"
+            variant="outline"
+            isDisabled={creando}
+            onClick={onClose}
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" isDisabled={!puedeGuardar}>
+            <ArrowUpRightIcon />
+            {creando ? "Creando…" : "Crear borrador"}
+          </Button>
+        </Modal.Footer>
+      </form>
+    </MaquinariaDialog>
   );
 }

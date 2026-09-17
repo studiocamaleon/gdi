@@ -8,5 +8,5 @@ export default async function ProductoRutasRedirectPage({
   params: Promise<{ productoId: string }>;
 }) {
   const { productoId } = await params;
-  redirect(`/productos-servicios/${productoId}?tab=rutas`);
+  redirect(`/productos-servicios/${productoId}?tab=produccion&vista=rutas`);
 }

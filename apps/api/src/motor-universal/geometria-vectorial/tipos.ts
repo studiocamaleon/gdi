@@ -1,3 +1,5 @@
+import type { ResultadoCommonLineTrabajo } from '../../workers/colas';
+
 export interface PuntoVectorial {
   x: number;
   y: number;
@@ -9,6 +11,10 @@ export interface ContornoVectorial {
 }
 
 export interface PiezaVectorial {
+  cantidadPorUnidad?: number;
+  propietario?: import("./contrato-nesting").PropietarioDemandaNesting;
+  operaciones?: import("./operaciones-vectoriales").OperacionVectorial[];
+  fabricacion?: import("./fabricacion-vectorial").FabricacionVectorial;
   id: string;
   /** Referencia estable al objeto del SVG que originó la pieza. Permite que el
    * editor agrupe y seleccione geometría sin depender de que el archivo tenga
@@ -95,6 +101,8 @@ export interface DiagnosticoSvg {
 }
 
 export interface PlacementVectorial {
+  operaciones?: import("./operaciones-vectoriales").OperacionVectorial[];
+  fabricacion?: import("./fabricacion-vectorial").FabricacionVectorial;
   pieceId: string;
   copyIndex: number;
   substrateIndex: number;
@@ -109,7 +117,26 @@ export interface PlacementVectorial {
 }
 
 export interface NestingIrregularResult {
+  planPatrones?: import("../../workers/colas").ResumenPlanPatrones;
   algorithm: 'irregular-2d-bottom-left-v1';
+  /** Solver real que originó el layout. `algorithm` se conserva como
+   * discriminante compatible con snapshots y consumidores existentes. */
+  motorNesting?: 'opennest-v1' | 'grafonest-baseline-v1' | 'grafonest-packingsolver-v1';
+  versionMotor?: string;
+  duracionMs?: number;
+  estrategiaOrientacion?: 'uniforme' | 'cardinal' | 'libre';
+  rotacionesPermitidas?: number;
+  versionPoliticaOrientacion?: number;
+  calidadSolucion?: 'BASE_SEGURA' | 'OPTIMIZADA';
+  optimizacionAgotada?: boolean;
+  busqueda?: {
+    motivoFin: 'MINIMO_PLACAS' | 'PRESUPUESTO_AGOTADO' | 'MOTOR_NO_DISPONIBLE' | 'PLAN_REUTILIZADO';
+    presupuestoMs: number;
+    intentos: number;
+    candidatosValidos: number;
+    minimoTeoricoPlacas: number;
+  };
+  commonLine?: ResultadoCommonLineTrabajo;
   placas: number;
   anchoPlacaMm: number;
   altoPlacaMm: number;

@@ -1,6 +1,19 @@
 "use client";
 
 import * as React from "react";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import Link from "next/link";
+import { ArrowLeftIcon, ArrowUpRightIcon, LibraryIcon, PackageCheckIcon, LayersIcon } from "lucide-react";
+import { Card, Checkbox, Chip, Input, SearchField, Tabs } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormSheet } from "@/components/design-system/form-sheet";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { SelectField } from "@/components/design-system/select-field";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import layout from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import materialStyles from "./materiales.module.css";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -21,7 +34,7 @@ type Props = {
 const steps = [
   { key: "nombre", nm: "Nombre", sub: "visible en tu empresa" },
   { key: "variantes", nm: "Variantes", sub: "a instalar" },
-  { key: "preview", nm: "Preview", sub: "qué se va a crear" },
+  { key: "preview", nm: "Revisión", sub: "qué se va a crear" },
   { key: "listo", nm: "Listo", sub: "instalación" },
 ] as const;
 
@@ -286,7 +299,7 @@ const BIco = {
 };
 
 function MaterialIcon({ kind, size = 28 }: { kind: string; size?: number }) {
-  const inks = { fill: "#14141a", light: "#d4d2cd", line: "#92929b" };
+  const inks = { fill: "var(--brand-graphite)", light: "var(--surface-secondary)", line: "var(--muted-text)" };
   switch (kind) {
     case "foam":
       return (
@@ -984,6 +997,8 @@ function MaterialIcon({ kind, size = 28 }: { kind: string; size?: number }) {
 }
 
 export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const [items, setItems] = React.useState(initialItems);
   const [query, setQuery] = React.useState("");
   const [familyFilter, setFamilyFilter] = React.useState("all");
@@ -1061,132 +1076,140 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
   };
 
   return (
-    <div className={s.scope}>
-      <div className={s.page}>
-        <div className={s.head}>
-          <div className="title-block">
-            <div className="eyebrow">
-              <span className="ic">
-                <BIco.Library />
-              </span>
-              Inventario · Materias primas
-            </div>
-            <h1>Biblioteca de materias primas</h1>
-            <div className="sub">
-              Instalá materiales comunes con variantes ya preparadas. El sistema
-              mantiene la relación canónica para reportes y compatibilidad
-              cross-tenant.
-            </div>
-          </div>
-          <div className="actions">
-            <button className={`${s.btn} ghost`} type="button">
-              Ver instaladas <span className="ct">{counts.installed}</span>
-            </button>
-            <button className={s.btn} type="button">
-              Sugerir material
-            </button>
-          </div>
+    <section
+      {...scope} data-visual="brand"
+      className={`${themeClass} ${layout.page} ${materialStyles.page} ${s.page}`}
+    >
+      <Link
+        href="/inventario/materias-primas"
+        className={materialStyles.backLink}
+      >
+        <ArrowLeftIcon size={14} /> Materiales
+      </Link>
+      <header className={layout.header}>
+        <div>
+          <p className={materialStyles.eyebrow}>Inventario · Biblioteca</p>
+          <h1>Biblioteca de materiales<span className={materialStyles.titleDot}>.</span></h1>
+          <p className={layout.subtitle}>
+            Instalá materiales comunes con variantes preparadas y adaptá su
+            nombre a tu empresa.
+          </p>
         </div>
-
+      </header>
+      <div className={materialStyles.metrics}>
+        <ListMetric
+          label="Materiales disponibles"
+          value={counts.all}
+          hint="Bases listas para tu catálogo"
+          icon={LibraryIcon}
+        />
+        <ListMetric
+          label="Instalados"
+          value={counts.installed}
+          hint="Ya incorporados a tu empresa"
+          icon={PackageCheckIcon}
+        />
+        <ListMetric
+          label="Por descubrir"
+          value={counts["not-installed"]}
+          hint="Materiales todavía sin instalar"
+          icon={LayersIcon}
+        />
+      </div>
+      <Card className={s.filtersCard}>
         <div className={s.toolbar}>
-          <div className={s.search}>
-            <span className="ic">
-              <BIco.Search />
-            </span>
-            <input
-              placeholder="Buscar por nombre, alias o descripción..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <span className="kbd">/</span>
-          </div>
-          <div className={s.filter}>
-            <span className="lbl">Familia</span>
-            <select
-              value={familyFilter}
-              onChange={(event) => setFamilyFilter(event.target.value)}
-              aria-label="Filtrar por familia"
+          <SearchField
+            aria-label="Buscar en la biblioteca"
+            value={query}
+            onChange={setQuery}
+            className={s.search}
+          >
+            <SearchField.Group
+              className={`${layout.searchGroup} ${focus.singleBorder}`}
             >
-              <option value="all">Todas</option>
-              {familyOptions.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <BIco.ChevDn />
-          </div>
-          {categoriaOptions.length > 0 ? (
-            <div className={s.filter}>
-              <span className="lbl">Categoría</span>
-              <select
-                value={categoriaFilter}
-                onChange={(event) => setCategoriaFilter(event.target.value)}
-                aria-label="Filtrar por categoría / rubro"
-              >
-                <option value="all">Todas</option>
-                {categoriaOptions.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-              <BIco.ChevDn />
-            </div>
-          ) : null}
-          <div className={s.filter}>
-            <span className="lbl">Uso</span>
-            <span className="v">Todos</span>
-            <BIco.ChevDn />
-          </div>
-          <div className={s.seg}>
-            {(["all", "not-installed", "installed"] as const).map((key) => (
-              <button
-                key={key}
-                className={statusFilter === key ? "on" : ""}
-                onClick={() => setStatusFilter(key)}
-                type="button"
-              >
-                {key === "all"
-                  ? "Todos"
-                  : key === "not-installed"
-                    ? "No instalados"
-                    : "Instalados"}
-                <span className="ct">{counts[key]}</span>
-              </button>
-            ))}
-          </div>
-          <div className={s.toolbarSummary}>
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar por nombre, alias o descripción…" />
+            </SearchField.Group>
+          </SearchField>
+          <SelectField
+            aria-label="Filtrar por familia"
+            value={familyFilter}
+            onChange={setFamilyFilter}
+            className={s.filter}
+            options={[
+              { value: "all", label: "Todas las familias" },
+              ...familyOptions.map((option) => ({
+                value: option.key,
+                label: option.label,
+              })),
+            ]}
+          />
+          {categoriaOptions.length > 0 && (
+            <SelectField
+              aria-label="Filtrar por categoría / rubro"
+              value={categoriaFilter}
+              onChange={setCategoriaFilter}
+              className={s.filter}
+              options={[
+                { value: "all", label: "Todas las categorías" },
+                ...categoriaOptions.map((cat) => ({ value: cat, label: cat })),
+              ]}
+            />
+          )}
+        </div>
+        <div className={s.filtersBottom}>
+          <SegmentedControl
+            tone="graphite"
+            aria-label="Estado de instalación"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={(
+              [
+                ["all", "Todos"],
+                ["not-installed", "No instalados"],
+                ["installed", "Instalados"],
+              ] as const
+            ).map(([key, label]) => ({
+              value: key,
+              label: `${label} ${counts[key]}`,
+              icon: null,
+            }))}
+          />
+          <span className={s.toolbarSummary}>
             Mostrando <strong>{visibleItems.length}</strong> de{" "}
             <strong>{items.length}</strong>
+          </span>
+        </div>
+      </Card>
+      <div className={s.familyStack}>
+        {visibleGroups.length === 0 && (
+          <div className={layout.empty}>
+            <LibraryIcon size={28} aria-hidden />
+            <p>No hay materiales que coincidan con los filtros.</p>
           </div>
-        </div>
-
-        <div className={s.familyStack}>
-          {visibleGroups.map(([familyKey, familyItems]) => (
-            <section key={familyKey} className={s.familySection}>
-              <div className={s.familyHead}>
-                <div>
-                  <h2>
-                    {bibliotecaFamilias[familyKey]?.nm ??
-                      humanizeEnum(familyKey)}
-                  </h2>
-                  <p>{familySectionDescription(familyKey)}</p>
-                </div>
-                <span>{familyItems.length} materiales</span>
+        )}
+        {visibleGroups.map(([familyKey, familyItems]) => (
+          <section key={familyKey} className={s.familySection}>
+            <div className={s.familyHead}>
+              <div>
+                <h2>
+                  {bibliotecaFamilias[familyKey]?.nm ?? humanizeEnum(familyKey)}
+                </h2>
+                <p>{familySectionDescription(familyKey)}</p>
               </div>
-              <div className={s.grid}>
-                {familyItems.map((item) => (
-                  <MaterialCard
-                    key={item.canonicalKey}
-                    item={item}
-                    onConfigure={setWizardKey}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+              <span>{familyItems.length} materiales</span>
+            </div>
+            <div className={s.grid}>
+              {familyItems.map((item) => (
+                <MaterialCard
+                  key={item.canonicalKey}
+                  item={item}
+                  onConfigure={setWizardKey}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
       {selectedItem && (
         <Wizard
@@ -1195,7 +1218,7 @@ export function BibliotecaMateriasPrimasView({ initialItems }: Props) {
           onInstalled={(preset) => updateItem(preset)}
         />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -1213,7 +1236,8 @@ function MaterialCard({
     .filter(Boolean);
   const aliases = item.aliasDisponibles.slice(1, 4);
   return (
-    <button
+    <Card<"button">
+      render={(props) => <button {...props} />}
       className={`${s.card} ${state.visibleName ? "has-banner" : ""}`}
       onClick={() => onConfigure(item.canonicalKey)}
       type="button"
@@ -1229,7 +1253,7 @@ function MaterialCard({
       )}
       <div className={s.cardHead}>
         <div className={s.cardIcon}>
-          <MaterialIcon kind={item.iconKind} size={32} />
+          <MaterialIcon kind={item.iconKind} size={48} />
         </div>
         <div className={s.cardMeta}>
           <div className={s.cardCanonical}>
@@ -1239,10 +1263,19 @@ function MaterialCard({
             {bibliotecaFamilias[item.subfamilia]?.nm ?? item.subfamilia}
           </div>
         </div>
-        <span className={`${s.status} ${state.status}`}>
-          <span className="d" />
+        <Chip
+          size="sm"
+          variant="soft"
+          color={
+            state.status === "installed"
+              ? "success"
+              : state.status === "partial"
+                ? "warning"
+                : "default"
+          }
+        >
           {statusLabel(state)}
-        </span>
+        </Chip>
       </div>
       <div className={s.cardDesc}>{item.descripcionCorta}</div>
       {aliases.length > 0 && (
@@ -1258,9 +1291,9 @@ function MaterialCard({
       )}
       <div className={s.cardUses}>
         {uses.map((use) => (
-          <span key={use.code} className={s.use}>
+          <Chip key={use.code} size="sm" variant="soft" className={s.use}>
             {use.code}
-          </span>
+          </Chip>
         ))}
       </div>
       <div className={s.cardFoot}>
@@ -1270,11 +1303,11 @@ function MaterialCard({
         <span className={s.cardCta}>
           Configurar instalación{" "}
           <span className="arr">
-            <BIco.Arrow />
+            <ArrowUpRightIcon size={16} aria-hidden />
           </span>
         </span>
       </div>
-    </button>
+    </Card>
   );
 }
 
@@ -1375,37 +1408,104 @@ function Wizard({
   };
 
   return (
-    <>
-      <div className={s.backdrop} onClick={onClose} />
-      <div className={s.sheet} role="dialog" aria-modal="true">
-        <div className={s.sheetHead}>
-          <div className="icon-box">
-            <MaterialIcon kind={item.iconKind} size={28} />
+    <FormSheet
+      className={s.installSheet}
+      title={`Instalar ${item.nombreCanonico}`}
+      description="Configurá cómo se llamará en tu empresa y qué variantes querés tener disponibles para cotizar."
+      onClose={onClose}
+      busy={saving}
+      footer={
+        step < 3 ? (
+          <div className={s.sheetFoot}>
+            <ActionButton
+              variant="outline"
+              isDisabled={saving}
+              onPress={onClose}
+              type="button"
+            >
+              Cancelar
+            </ActionButton>
+            <div className="spacer" />
+            <span className="step-count">
+              {step === 1 && (
+                <>
+                  <strong>{selectedVariants.length}</strong> variantes
+                  seleccionadas
+                </>
+              )}
+              {step === 0 && draft.visibleName && (
+                <>
+                  Nombre: <strong>{draft.visibleName}</strong>
+                </>
+              )}
+              {step === 2 && (
+                <>
+                  <strong>{selectedVariants.length}</strong> ítems a crear
+                </>
+              )}
+            </span>
+            {step > 0 && (
+              <ActionButton
+                variant="outline"
+                isDisabled={saving}
+                onPress={() => setStep((s) => Math.max(0, s - 1))}
+                type="button"
+              >
+                <BIco.ChevLeft /> Atrás
+              </ActionButton>
+            )}
+            <ActionButton
+              isPending={saving}
+              onPress={
+                step === 2 ? install : () => setStep((s) => Math.min(2, s + 1))
+              }
+              isDisabled={
+                saving ||
+                (step === 0 && !draft.visibleName.trim()) ||
+                (step === 2 && selectedVariants.length === 0)
+              }
+              type="button"
+            >
+              {step === 2
+                ? saving
+                  ? "Instalando..."
+                  : "Instalar materia prima"
+                : "Siguiente"}
+              {step < 2 && <BIco.ChevRight />}
+            </ActionButton>
           </div>
-          <div className="body">
-            <div className="eyebrow">
-              <BIco.Library />
-              <span>Biblioteca</span>
-              <span>›</span>
-              <span>{item.canonicalKey}</span>
-            </div>
-            <h2>Instalar {item.nombreCanonico}</h2>
-            <div className="sub">
-              Configurá cómo se llamará en tu empresa y qué variantes querés
-              tener disponibles para cotizar.
-            </div>
-          </div>
-          <button
-            className={s.sheetClose}
-            onClick={onClose}
-            aria-label="Cerrar"
-            type="button"
-          >
-            <BIco.X />
-          </button>
-        </div>
-        <Stepper current={step} onJump={setStep} />
-        <div className={s.sheetBody}>
+        ) : undefined
+      }
+    >
+      <Tabs
+        selectedKey={steps[step].key}
+        onSelectionChange={(key) =>
+          setStep(steps.findIndex((item) => item.key === key))
+        }
+        className={s.wizard}
+      >
+        <NavigationTabList
+          label="Pasos de instalación"
+          variant="detailed"
+          tone="graphite"
+          className={s.wizardNav}
+          items={steps.map((item, index) => ({
+            id: item.key,
+            label: item.nm,
+            description: item.sub,
+            icon:
+              index < step ? (
+                <BIco.Check />
+              ) : (
+                <span className={s.stepNumber}>{index + 1}</span>
+              ),
+          }))}
+        />
+        <Tabs.Panel
+          key={steps[step].key}
+          id={steps[step].key}
+          className={s.wizardPanel}
+        >
           {step === 0 && (
             <StepNombre
               item={item}
@@ -1436,106 +1536,9 @@ function Wizard({
           {step === 3 && (
             <StepListo item={item} draft={draft} onClose={onClose} />
           )}
-        </div>
-        {step < 3 && (
-          <div className={s.sheetFoot}>
-            <button
-              className={`${s.btn} ghost`}
-              onClick={onClose}
-              type="button"
-            >
-              Cancelar
-            </button>
-            <div className="spacer" />
-            <span className="step-count">
-              {step === 1 && (
-                <>
-                  <strong>{selectedVariants.length}</strong> variantes
-                  seleccionadas
-                </>
-              )}
-              {step === 0 && draft.visibleName && (
-                <>
-                  Nombre: <strong>{draft.visibleName}</strong>
-                </>
-              )}
-              {step === 2 && (
-                <>
-                  <strong>{selectedVariants.length}</strong> ítems a crear
-                </>
-              )}
-            </span>
-            {step > 0 && (
-              <button
-                className={s.btn}
-                onClick={() => setStep((s) => Math.max(0, s - 1))}
-                type="button"
-              >
-                <BIco.ChevLeft /> Atrás
-              </button>
-            )}
-            <button
-              className={`${s.btn} primary`}
-              onClick={
-                step === 2 ? install : () => setStep((s) => Math.min(2, s + 1))
-              }
-              disabled={
-                saving ||
-                (step === 0 && !draft.visibleName.trim()) ||
-                (step === 2 && selectedVariants.length === 0)
-              }
-              type="button"
-            >
-              {step === 2
-                ? saving
-                  ? "Instalando..."
-                  : "Instalar materia prima"
-                : "Siguiente"}
-              {step < 2 && <BIco.ChevRight />}
-            </button>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-function Stepper({
-  current,
-  onJump,
-}: {
-  current: number;
-  onJump: (step: number) => void;
-}) {
-  return (
-    <div className={s.stepper}>
-      {steps.map((step, index) => {
-        const state =
-          index < current ? "done" : index === current ? "current" : "pending";
-        return (
-          <React.Fragment key={step.key}>
-            <button
-              className={`${s.step} ${state}`}
-              onClick={() => onJump(index)}
-              type="button"
-            >
-              <span className="ix">
-                {state === "done" ? <BIco.Check /> : index + 1}
-              </span>
-              <span className="lbl">
-                {step.nm}
-                <span className="sm">{step.sub}</span>
-              </span>
-            </button>
-            {index < steps.length - 1 && (
-              <span
-                className={`${s.stepRule} ${state === "done" ? "done" : ""}`}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </div>
+        </Tabs.Panel>
+      </Tabs>
+    </FormSheet>
   );
 }
 
@@ -1546,11 +1549,8 @@ function CanonicalRecap({ item }: { item: MaterialPresetListItem }) {
         <BIco.Library />
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="lbl">Nombre canónico SaaS</div>
+        <div className="lbl">Nombre de biblioteca</div>
         <div className="v">{item.nombreCanonico}</div>
-        <div className="meta">
-          {item.canonicalKey} · {item.templateId}
-        </div>
       </div>
       <span className={s.canonicalPill}>
         <span className="ic">
@@ -1598,29 +1598,33 @@ function StepNombre({
           </div>
           <div className={s.modeGrid}>
             {puedeCompletar && (
-              <button
+              <ActionButton
                 type="button"
-                className={`${s.mode} ${installMode === "completar" ? "on" : ""}`}
-                onClick={() => setInstallMode("completar")}
+                variant={installMode === "completar" ? "secondary" : "outline"}
+                className={s.mode}
+                aria-pressed={installMode === "completar"}
+                onPress={() => setInstallMode("completar")}
               >
                 <span className={s.modeTitle}>Completar el existente</span>
                 <span className={s.modeSub}>
                   Agrega las variantes que falten a la materia prima ya
                   instalada.
                 </span>
-              </button>
+              </ActionButton>
             )}
-            <button
+            <ActionButton
               type="button"
-              className={`${s.mode} ${installMode === "separado" ? "on" : ""}`}
-              onClick={() => setInstallMode("separado")}
+              variant={installMode === "separado" ? "secondary" : "outline"}
+              className={s.mode}
+              aria-pressed={installMode === "separado"}
+              onPress={() => setInstallMode("separado")}
             >
               <span className={s.modeTitle}>Instalar copia separada</span>
               <span className={s.modeSub}>
                 Crea otra materia prima independiente (otro precio, proveedor o
-                máquina). El código y los SKU se ajustan para no repetirse.
+                máquina).
               </span>
-            </button>
+            </ActionButton>
           </div>
         </div>
       )}
@@ -1633,8 +1637,9 @@ function StepNombre({
           </div>
         </div>
         <div className={s.field} style={{ marginBottom: 14 }}>
-          <input
-            className={`${s.input} lg`}
+          <Input
+            className={s.nameInput}
+            aria-label="Nombre visible en tu empresa"
             value={draft.visibleName}
             onChange={(event) =>
               setDraft((d) => ({ ...d, visibleName: event.target.value }))
@@ -1646,31 +1651,36 @@ function StepNombre({
           <label>O elegí un alias común</label>
           <div className={s.aliasGrid}>
             {item.aliasDisponibles.map((alias) => (
-              <button
+              <ActionButton
                 key={alias}
-                className={`${s.alias} ${!customMode && draft.visibleName === alias ? "on" : ""}`}
-                onClick={() => setDraft((d) => ({ ...d, visibleName: alias }))}
+                variant={
+                  !customMode && draft.visibleName === alias
+                    ? "secondary"
+                    : "outline"
+                }
+                aria-pressed={!customMode && draft.visibleName === alias}
+                onPress={() => setDraft((d) => ({ ...d, visibleName: alias }))}
                 type="button"
               >
                 {alias}
-              </button>
+              </ActionButton>
             ))}
-            <button
-              className={`${s.alias} custom ${customMode ? "on" : ""}`}
-              onClick={() => setDraft((d) => ({ ...d, visibleName: "" }))}
+            <ActionButton
+              variant={customMode ? "secondary" : "outline"}
+              aria-pressed={customMode}
+              onPress={() => setDraft((d) => ({ ...d, visibleName: "" }))}
               type="button"
             >
               {customMode ? "Personalizado" : "+ Personalizado"}
-            </button>
+            </ActionButton>
           </div>
         </div>
         <div className={s.mapping}>
           <div className="col">
             <div className="k">
-              <BIco.Library /> Canónico SaaS
+              <BIco.Library /> Nombre de biblioteca
             </div>
             <div className="v">{item.nombreCanonico}</div>
-            <div className="meta">{item.canonicalKey}</div>
           </div>
           <div className="arrow">
             <BIco.Arrow />
@@ -1687,42 +1697,31 @@ function StepNombre({
           <span className="ic">
             <BIco.Info />
           </span>
-          El sistema conservará <strong>{item.nombreCanonico}</strong> como
-          nombre canónico para reportes cross-tenant y compatibilidad técnica.
+          <span>
+            El sistema conservará <strong>{item.nombreCanonico}</strong> como
+            nombre canónico para reportes y compatibilidad técnica.
+          </span>
         </div>
       </div>
       <div className={s.section}>
         <div className={s.sectionHead}>
-          <div className="ttl">Código y descripción</div>
+          <div className="ttl">Descripción</div>
           <div className="sub">
-            Opcional. Se autogeneran a partir del canónico.
+            Opcional. Podés ajustar la descripción de la biblioteca.
           </div>
         </div>
-        <div className={s.twoCols}>
-          <div className={s.field}>
-            <label>
-              Código <span className="opt">interno</span>
-            </label>
-            <input
-              className={`${s.input} mono`}
-              value={draft.codigo}
-              onChange={(event) =>
-                setDraft((d) => ({ ...d, codigo: event.target.value }))
-              }
-            />
-          </div>
-          <div className={s.field}>
-            <label>
-              Descripción <span className="opt">corta</span>
-            </label>
-            <input
-              className={s.input}
-              value={draft.descripcion}
-              onChange={(event) =>
-                setDraft((d) => ({ ...d, descripcion: event.target.value }))
-              }
-            />
-          </div>
+        <div className={s.field}>
+          <label htmlFor="biblioteca-descripcion">
+            Descripción <span className="opt">corta</span>
+          </label>
+          <Input
+            id="biblioteca-descripcion"
+            className={s.input}
+            value={draft.descripcion}
+            onChange={(event) =>
+              setDraft((d) => ({ ...d, descripcion: event.target.value }))
+            }
+          />
         </div>
       </div>
     </>
@@ -1795,15 +1794,27 @@ function StepVariantes({
           <div className="sub">{variantHelpText(item)}</div>
         </div>
         <div className={s.variantActions}>
-          <button className="quick" onClick={setRecommended} type="button">
+          <ActionButton
+            variant="outline"
+            onPress={setRecommended}
+            type="button"
+          >
             Seleccionar comunes
-          </button>
-          <button className="quick" onClick={() => setAll(true)} type="button">
+          </ActionButton>
+          <ActionButton
+            variant="outline"
+            onPress={() => setAll(true)}
+            type="button"
+          >
             Todas
-          </button>
-          <button className="quick" onClick={() => setAll(false)} type="button">
+          </ActionButton>
+          <ActionButton
+            variant="outline"
+            onPress={() => setAll(false)}
+            type="button"
+          >
             Limpiar
-          </button>
+          </ActionButton>
           <div className="sum">
             <strong>{selectedCount}</strong> de {totalAvailable} seleccionadas
           </div>
@@ -1821,46 +1832,49 @@ function StepVariantes({
               const checked =
                 bloqueada || draft.selectedVariantIds.has(variant.id);
               return (
-                <button
+                <Checkbox
                   key={variant.id}
                   className={`${s.variant} ${checked ? "checked" : ""} ${bloqueada ? "installed" : ""}`}
-                  onClick={() => toggle(variant)}
-                  type="button"
+                  onChange={() => toggle(variant)}
+                  isSelected={checked}
+                  isDisabled={bloqueada}
+                  aria-label={variantDescriptor(item, variant)}
                 >
-                  <span className={s.check}>{checked && <BIco.Check />}</span>
-                  <div className={s.variantInfo}>
-                    <div className="nm">
-                      {variantDescriptor(item, variant)}
-                      {variant.recomendada && !bloqueada && (
-                        <span className="rec">recom.</span>
-                      )}
+                  <Checkbox.Content className={s.variantContent}>
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <div className={s.variantInfo}>
+                      <div className="nm">
+                        {variantDescriptor(item, variant)}
+                        {variant.recomendada && !bloqueada && (
+                          <span className="rec">recom.</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="sub">
-                      SKU sugerido · {variant.skuSugerido}
-                    </div>
-                  </div>
-                  {bloqueada ? (
-                    <span className={s.variantInstalledTag}>ya instalada</span>
-                  ) : (
-                    <span style={{ width: 70 }} />
-                  )}
-                  <span className={s.variantEdit}>
-                    <BIco.Edit />
-                  </span>
-                </button>
+                    {bloqueada ? (
+                      <span className={s.variantInstalledTag}>
+                        ya instalada
+                      </span>
+                    ) : (
+                      <span style={{ width: 70 }} />
+                    )}
+                  </Checkbox.Content>
+                </Checkbox>
               );
             })}
           </div>
         ))}
-        <button
+        <ActionButton
+          variant="outline"
           className={s.variantAdd}
-          disabled
+          isDisabled
           title="Las variantes personalizadas se agregan desde la ficha de materia prima una vez instalada."
           type="button"
         >
           <BIco.Plus />
           Agregar variante personalizada
-        </button>
+        </ActionButton>
         {item.advertencias.length > 0 && (
           <div className={s.warning} style={{ marginTop: 14 }}>
             <span className="ic">
@@ -1908,14 +1922,14 @@ function StepPreview({
           <div style={{ flex: 1 }}>
             <h3>{draft.visibleName || "—"}</h3>
             <div className={s.previewMeta}>
-              {draft.codigo} · {selectedVariants.length} variantes nuevas
+              {selectedVariants.length} variantes nuevas
             </div>
           </div>
           <span className={s.canonicalPill}>
             <span className="ic">
               <BIco.Sparkles />
             </span>
-            {item.canonicalKey}
+            Biblioteca
           </span>
         </div>
         <div className={s.previewRow}>
@@ -1933,10 +1947,6 @@ function StepPreview({
           <span className="k">Familia</span>
           <span className="v muted">{familyLine(item)}</span>
         </div>
-        <div className={s.previewRow}>
-          <span className="k">Template</span>
-          <span className="v mono">{item.templateId}</span>
-        </div>
       </div>
       <div className={s.previewCard}>
         <div className="head">
@@ -1947,7 +1957,7 @@ function StepPreview({
             </div>
           </div>
         </div>
-        <div className={`bm-preview-list`}>
+        <div className={s.previewList}>
           {selectedVariants.map((variant) => (
             <div key={variant.id} className={s.previewItem}>
               <span className="ic">
@@ -1956,7 +1966,6 @@ function StepPreview({
               <span className="nm">
                 {variant.formato} · {variantDescriptor(item, variant)}
               </span>
-              <span className="sku">{variant.skuSugerido}</span>
             </div>
           ))}
         </div>
@@ -1974,8 +1983,7 @@ function StepPreview({
               </strong>
               <div>
                 Comparten el material canónico {item.nombreCanonico}, pero esta
-                copia tiene su propio código, SKU y precios. Los SKU se ajustan
-                con un sufijo para no repetirse.
+                copia tiene sus propias variantes, precios y proveedores.
               </div>
             </div>
           </div>
@@ -2029,7 +2037,7 @@ function StepListo({
           <div className="v">
             {item.templateId.replace("_v1", "").replaceAll("_", " ")}
           </div>
-          <div className="k">Template aplicado</div>
+          <div className="k">Plantilla aplicada</div>
         </div>
         <div className={s.successStat}>
           <div className="v">1</div>
@@ -2037,9 +2045,8 @@ function StepListo({
         </div>
       </div>
       <div className={s.successActions}>
-        <button
-          className={`${s.btn} primary lg`}
-          onClick={() =>
+        <ActionButton
+          onPress={() =>
             draft.lastMateriaPrimaId &&
             router.push(
               `/inventario/materias-primas/${draft.lastMateriaPrimaId}`,
@@ -2048,17 +2055,17 @@ function StepListo({
           type="button"
         >
           Ver materia prima
-        </button>
-        <button className={`${s.btn} lg`} onClick={onClose} type="button">
+        </ActionButton>
+        <ActionButton variant="outline" onPress={onClose} type="button">
           Instalar otro material
-        </button>
-        <button
-          className={`${s.btn} ghost lg`}
-          onClick={() => router.push("/inventario/materias-primas")}
+        </ActionButton>
+        <ActionButton
+          variant="ghost"
+          onPress={() => router.push("/inventario/materias-primas")}
           type="button"
         >
           Ir a inventario
-        </button>
+        </ActionButton>
       </div>
     </div>
   );

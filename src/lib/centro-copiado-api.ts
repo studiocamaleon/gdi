@@ -123,6 +123,7 @@ export interface GrupoCentroCopiado {
 }
 
 export interface CotizarCentroCopiadoRequest {
+  tipoCambioId?: string;
   /** Cliente actual; el motor usa su precio especial si existe y está activo. */
   clienteId?: string | null;
   documentos: DocumentoCentroCopiado[];

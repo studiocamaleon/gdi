@@ -1,19 +1,37 @@
 "use client";
 
-/**
- * Gastos fijos de estructura, con la forma de Holdprint: una lista y nada más.
- *
- * El módulo es INDEPENDIENTE — no lee de centros de costo ni de legajos — y por
- * eso tampoco clasifica por centro: el centro ya declara sus propios gastos en
- * su planilla, y cargarlos de los dos lados los contaría dos veces.
- * Ver docs/gastos-fijos-estructura-diseno.md
- */
-
 import * as React from "react";
-import { FilterIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import {
+  Card,
+  Chip,
+  Input,
+  Modal,
+  SearchField,
+  Tabs,
+  TextArea,
+} from "@heroui/react";
+import {
+  ArrowUpRightIcon,
+  CalendarDaysIcon,
+  CheckIcon,
+  CirclePauseIcon,
+  FileTextIcon,
+  InfinityIcon,
+  LayersIcon,
+  ListFilterIcon,
+  PauseIcon,
+  PencilIcon,
+  PlayIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Repeat2Icon,
+  SearchXIcon,
+  Settings2Icon,
+  ShapesIcon,
+  Trash2Icon,
+  WalletIcon,
+} from "lucide-react";
 import { toast } from "sonner";
-
-import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import {
   createGastoFijo,
   eliminarGastoFijo,
@@ -24,147 +42,111 @@ import {
   updateGastoFijo,
   type FrecuenciaGastoFijo,
   type GastoFijo,
-  type GastoFijoPayload,
 } from "@/lib/gastos-fijos-api";
 import { getProveedores } from "@/lib/proveedores-api";
 import { getCategoriasEgreso } from "@/lib/egresos-api";
 import type { CategoriaEgreso } from "@/lib/egresos";
 import { getMetodosPago } from "@/lib/administracion-api";
-import { formatearMoneda } from "@/lib/moneda";
+import { formatearMoneda, parsearMonto } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
-import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormSheet } from "@/components/design-system/form-sheet";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { SelectField } from "@/components/design-system/select-field";
+import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+import { MoneyInput } from "@/components/ui/money-input";
+import {
+  Field,
+  FieldLabel,
+  FieldGroup,
+  FieldDescription,
+} from "@/components/ui/field";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  calcularVigenteHasta,
+  CUOTAS_POR_ANIO,
+  desdeGasto,
+  formularioVacio,
+  payloadGastoFijo,
+  periodoActual,
+  vigenteEnMes,
+  type FormularioGastoFijo,
+} from "./gastos-fijos-form";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import s from "./gastos-fijos.module.css";
 
 type Estado = "todos" | "activos" | "inactivos";
-
-type Formulario = {
-  nombre: string;
-  valor: string;
-  frecuencia: FrecuenciaGastoFijo;
-  metodoPagoId: string;
-  proveedorId: string;
-  notas: string;
-  categoriaEgresoId: string;
-  documento: string;
-  vigenteDesde: string;
-  /** Cómo termina la vigencia, como en el modelo de referencia. */
-  fin: "nunca" | "en" | "despues";
-  vigenteHasta: string;
-  repeticiones: string;
-};
-
-const SIN_VALOR = "__ninguno__";
-
-/** Cuántas veces al año se paga cada frecuencia. */
-const CUOTAS_POR_ANIO: Record<FrecuenciaGastoFijo, number> = {
-  MENSUAL: 12,
-  BIMESTRAL: 6,
-  TRIMESTRAL: 4,
-  SEMESTRAL: 2,
-  ANUAL: 1,
-};
-
-function periodoActual() {
-  const hoy = new Date();
-  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function formularioVacio(): Formulario {
-  return {
-    nombre: "",
-    valor: "",
-    frecuencia: "MENSUAL",
-    metodoPagoId: "",
-    proveedorId: "",
-    notas: "",
-    categoriaEgresoId: "",
-    documento: "",
-    vigenteDesde: periodoActual(),
-    fin: "nunca",
-    vigenteHasta: "",
-    repeticiones: "",
-  };
-}
-
-function desdeGasto(g: GastoFijo): Formulario {
-  return {
-    nombre: g.nombre,
-    valor: String(g.valor),
-    frecuencia: g.frecuencia,
-    metodoPagoId: g.metodoPagoId ?? "",
-    proveedorId: g.proveedorId ?? "",
-    notas: g.notas ?? "",
-    categoriaEgresoId: g.categoriaEgresoId,
-    documento: g.documento ?? "",
-    vigenteDesde: g.vigenteDesde,
-    fin: g.vigenteHasta ? "en" : "nunca",
-    vigenteHasta: g.vigenteHasta ?? "",
-    repeticiones: "",
-  };
-}
-
-/**
- * El catálogo de categorías no guarda color, así que el punto de la lista lo
- * deriva del código: mismo código, mismo color siempre, sin tocar el schema.
- */
-const PALETA = [
-  "#2f6fdb", "#d9642a", "#7a52d0", "#1f9d6b", "#b8791b",
-  "#0e9aa7", "#c0392b", "#3f8f8a", "#9a6b3f", "#c77dab",
+const ESTADOS = [
+  { value: "todos", label: "Todos", icon: <ListFilterIcon /> },
+  { value: "activos", label: "Activos", icon: <CheckIcon /> },
+  { value: "inactivos", label: "Inactivos", icon: <CirclePauseIcon /> },
 ];
-function colorCategoria(codigo: string): string {
-  let h = 0;
-  for (let i = 0; i < codigo.length; i++) h = (h * 31 + codigo.charCodeAt(i)) >>> 0;
-  return PALETA[h % PALETA.length];
+const FINES = [
+  { value: "nunca", label: "Sin fin", icon: <InfinityIcon /> },
+  { value: "en", label: "En un mes", icon: <CalendarDaysIcon /> },
+  { value: "despues", label: "Por períodos", icon: <Repeat2Icon /> },
+];
+function mesLabel(mes: string) {
+  if (!mes) return "—";
+  const [anio, numero] = mes.split("-").map(Number);
+  return new Intl.DateTimeFormat("es", {
+    month: "short",
+    year: "numeric",
+  }).format(new Date(anio, numero - 1, 1));
 }
 
-const numero = (v: string) => {
-  const n = Number(v.replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-};
-
-/**
- * "Termina después de N repeticiones" se resuelve acá y viaja como un
- * `vigenteHasta` concreto: la base guarda vigencias, no reglas, así que la
- * cuenta se hace una vez y el resultado queda a la vista al reabrir la ficha.
- */
-function calcularVigenteHasta(f: Formulario): string | null {
-  if (f.fin === "nunca") return null;
-  if (f.fin === "en") return f.vigenteHasta || null;
-
-  const repeticiones = Math.max(1, Math.round(numero(f.repeticiones)));
-  const mesesPorCuota = 12 / CUOTAS_POR_ANIO[f.frecuencia];
-  const [anio, mes] = f.vigenteDesde.split("-").map(Number);
-  if (!anio || !mes) return null;
-
-  const indice = anio * 12 + (mes - 1) + repeticiones * mesesPorCuota - 1;
-  return `${Math.floor(indice / 12)}-${String((indice % 12) + 1).padStart(2, "0")}`;
-}
-
-export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[] }) {
+export function GastosFijosPanel({
+  initialGastos,
+}: {
+  initialGastos: GastoFijo[];
+}) {
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 2 });
-
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
+  const fmt = (v: number) =>
+    formatearMoneda(v, moneda, { decimales: moneda.decimales });
   const [gastos, setGastos] = React.useState(initialGastos);
   const [busqueda, setBusqueda] = React.useState("");
   const [estado, setEstado] = React.useState<Estado>("todos");
-  const [filtroAbierto, setFiltroAbierto] = React.useState(false);
   const [fichaAbierta, setFichaAbierta] = React.useState(false);
   const [editando, setEditando] = React.useState<GastoFijo | null>(null);
   const [aEliminar, setAEliminar] = React.useState<GastoFijo | null>(null);
-  const [form, setForm] = React.useState<Formulario>(formularioVacio);
+  const [form, setForm] = React.useState<FormularioGastoFijo>(() =>
+    formularioVacio(),
+  );
   const [tab, setTab] = React.useState<"datos" | "clasificacion">("datos");
   const [guardando, setGuardando] = React.useState(false);
+  const [cambiando, setCambiando] = React.useState<string | null>(null);
   const [sucio, setSucio] = React.useState(false);
   const [confirmandoSalida, setConfirmandoSalida] = React.useState(false);
+  const [errorForm, setErrorForm] = React.useState<string | null>(null);
+  const errorRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (errorForm) errorRef.current?.scrollIntoView({ block: "nearest" });
+  }, [errorForm]);
   const [proveedores, setProveedores] = React.useState<
     Array<{ id: string; nombre: string }>
   >([]);
@@ -172,591 +154,801 @@ export function GastosFijosPanel({ initialGastos }: { initialGastos: GastoFijo[]
     Array<{ id: string; nombre: string }>
   >([]);
   const [categorias, setCategorias] = React.useState<CategoriaEgreso[]>([]);
+  const [catalogosListos, setCatalogosListos] = React.useState(false);
+  const [cargandoCatalogos, setCargandoCatalogos] = React.useState(false);
+  const [errorCatalogos, setErrorCatalogos] = React.useState(false);
 
-  // Proveedores y métodos de pago se piden al abrir la ficha por primera vez:
-  // son catálogos que casi no cambian y no hacen falta para ver la lista.
-  const cargarCatalogos = React.useCallback(async () => {
-    if (categorias.length > 0) return;
+  const cargarCatalogos = async () => {
+    if (catalogosListos || cargandoCatalogos) return;
+    setCargandoCatalogos(true);
+    setErrorCatalogos(false);
     try {
       const [ps, ms, cs] = await Promise.all([
         getProveedores(),
         getMetodosPago(),
         getCategoriasEgreso(),
       ]);
+      const estructura = cs.filter(
+        (c) => c.activo && c.naturaleza === "GASTO_ESTRUCTURA",
+      );
       setProveedores(ps.map((p) => ({ id: p.id, nombre: p.nombre })));
       setMetodos(ms.map((m) => ({ id: m.id, nombre: m.nombre })));
-      // Un gasto fijo es por definición de estructura: las de producción o
-      // inversión son del otro lado del catálogo y acá no aplican.
-      setCategorias(
-        cs.filter((c) => c.activo && c.naturaleza === "GASTO_ESTRUCTURA"),
+      setCategorias(estructura);
+      setCatalogosListos(true);
+      setForm((f) =>
+        f.categoriaEgresoId
+          ? f
+          : {
+              ...f,
+              categoriaEgresoId:
+                estructura.find((c) => c.codigo === "otros_gastos")?.id ??
+                estructura[0]?.id ??
+                "",
+            },
       );
     } catch {
-      // Que no se pueda elegir favorecido no debería impedir cargar el gasto.
+      setErrorCatalogos(true);
+    } finally {
+      setCargandoCatalogos(false);
     }
-  }, [categorias.length]);
+  };
 
-  // Un gasto nuevo arranca con una categoría puesta para no obligar a elegirla:
-  // "Otros gastos" si existe, y si no la primera del catálogo.
-  React.useEffect(() => {
-    if (categorias.length === 0) return;
-    setForm((f) =>
-      f.categoriaEgresoId
-        ? f
-        : {
-            ...f,
-            categoriaEgresoId:
-              categorias.find((c) => c.codigo === "otros_gastos")?.id ??
-              categorias[0].id,
-          },
-    );
-  }, [categorias]);
-
-  const recargar = React.useCallback(async () => {
+  const recargar = async () => {
     try {
       setGastos(await getGastosFijos());
-    } catch (error) {
+    } catch {
       toast.error(
-        error instanceof Error ? error.message : "No se pudieron cargar los gastos.",
+        "No se pudo actualizar la lista. Recargá la página para ver los cambios.",
       );
     }
-  }, []);
-
+  };
   const filtrados = React.useMemo(() => {
-    const termino = busqueda.trim().toLowerCase();
+    const termino = busqueda.trim().toLocaleLowerCase();
     return gastos.filter((g) => {
       if (estado === "activos" && !g.activo) return false;
       if (estado === "inactivos" && g.activo) return false;
-      if (!termino) return true;
       return (
-        g.nombre.toLowerCase().includes(termino) ||
-        (g.proveedorNombre ?? "").toLowerCase().includes(termino)
+        !termino ||
+        `${g.nombre} ${g.proveedorNombre ?? ""} ${g.categoriaNombre}`
+          .toLocaleLowerCase()
+          .includes(termino)
       );
     });
   }, [gastos, busqueda, estado]);
-
-  // El total suma el MENSUAL, que es lo que pesa en el punto de equilibrio.
-  // Sumar las cuotas mezclaría un seguro anual con un alquiler mensual y daría
-  // un número que no significa nada.
-  const total = filtrados
-    .filter((g) => g.activo)
+  const mes = periodoActual();
+  const vigentes = gastos.filter((g) => vigenteEnMes(g, mes));
+  const activos = gastos.filter((g) => g.activo);
+  const mensualVigente = vigentes.reduce((acc, g) => acc + g.importeMensual, 0);
+  const totalVisible = filtrados
+    .filter((g) => vigenteEnMes(g, mes))
     .reduce((acc, g) => acc + g.importeMensual, 0);
 
-  const alternarActivo = async (gasto: GastoFijo) => {
+  const alternarActivo = async (g: GastoFijo) => {
+    if (cambiando) return;
+    setCambiando(g.id);
     try {
-      await toggleGastoFijo(gasto.id);
-      toast.success(gasto.activo ? "Gasto desactivado." : "Gasto activado.");
+      await toggleGastoFijo(g.id);
+      toast.success(g.activo ? "Gasto desactivado." : "Gasto activado.");
       await recargar();
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "No se pudo cambiar el estado.",
+        error instanceof Error
+          ? error.message
+          : "No se pudo cambiar el estado.",
       );
+    } finally {
+      setCambiando(null);
     }
   };
-
-  const abrir = (gasto: GastoFijo | null) => {
-    setEditando(gasto);
-    setForm(gasto ? desdeGasto(gasto) : formularioVacio());
+  const abrir = (g: GastoFijo | null) => {
+    setEditando(g);
+    setForm(
+      g
+        ? desdeGasto(g, moneda)
+        : formularioVacio(
+            categorias.find((c) => c.codigo === "otros_gastos")?.id ??
+              categorias[0]?.id,
+          ),
+    );
     setTab("datos");
     setSucio(false);
+    setErrorForm(null);
     setFichaAbierta(true);
     void cargarCatalogos();
   };
-
-  const editar = <K extends keyof Formulario>(campo: K, valor: Formulario[K]) => {
-    setForm((actual) => ({ ...actual, [campo]: valor }));
+  const editar = <K extends keyof FormularioGastoFijo>(
+    campo: K,
+    valor: FormularioGastoFijo[K],
+  ) => {
+    setForm((f) => ({ ...f, [campo]: valor }));
     setSucio(true);
+    setErrorForm(null);
   };
-
   const guardar = async () => {
-    if (!form.nombre.trim()) {
-      toast.error("El gasto necesita una descripción.");
-      return;
-    }
-    if (!form.categoriaEgresoId) {
-      toast.error("Elegí una categoría para el gasto.");
+    if (guardando || !catalogosListos) return;
+    let payload;
+    try {
+      payload = payloadGastoFijo(form, moneda, editando?.activo ?? true);
+    } catch (error) {
+      setErrorForm(
+        error instanceof Error ? error.message : "Revisá los datos del gasto.",
+      );
+      setTab(form.categoriaEgresoId ? "datos" : "clasificacion");
       return;
     }
     setGuardando(true);
     try {
-      const payload: GastoFijoPayload = {
-        nombre: form.nombre.trim(),
-        categoriaEgresoId: form.categoriaEgresoId,
-        valor: numero(form.valor),
-        frecuencia: form.frecuencia,
-        proveedorId: form.proveedorId || null,
-        metodoPagoId: form.metodoPagoId || null,
-        documento: form.documento.trim() || null,
-        vigenteDesde: form.vigenteDesde,
-        vigenteHasta: calcularVigenteHasta(form),
-        notas: form.notas.trim() || null,
-      };
       if (editando) await updateGastoFijo(editando.id, payload);
       else await createGastoFijo(payload);
-
       setSucio(false);
-      toast.success(editando ? "Gasto guardado." : "Gasto creado.");
       setFichaAbierta(false);
+      toast.success(editando ? "Gasto guardado." : "Gasto creado.");
       await recargar();
     } catch (error) {
-      toast.error(
+      setErrorForm(
         error instanceof Error ? error.message : "No se pudo guardar el gasto.",
       );
     } finally {
       setGuardando(false);
     }
   };
-
-  const pedirCierre = (siguiente: boolean) => {
-    if (siguiente) return setFichaAbierta(true);
-    if (sucio) return setConfirmandoSalida(true);
-    setFichaAbierta(false);
+  const pedirCierre = () => {
+    if (guardando) return;
+    if (sucio) setConfirmandoSalida(true);
+    else setFichaAbierta(false);
   };
-
   const mensualDelForm =
-    (numero(form.valor) * CUOTAS_POR_ANIO[form.frecuencia]) / 12;
+    ((parsearMonto(form.valor, moneda) ?? 0) *
+      CUOTAS_POR_ANIO[form.frecuencia]) /
+    12;
+  const hasta = calcularVigenteHasta(form);
+  // Una categoría archivada se conserva al editar; no desaparece del valor elegido.
+  const opcionesCategoria = categorias.map((c) => ({
+    value: c.id,
+    label: c.nombre,
+  }));
+  if (
+    editando &&
+    !opcionesCategoria.some((c) => c.value === editando.categoriaEgresoId)
+  ) {
+    opcionesCategoria.unshift({
+      value: editando.categoriaEgresoId,
+      label: editando.categoriaNombre,
+    });
+  }
 
   return (
-    <div className="content">
-      <div className="page-head">
-        <div className="title-block">
-          <h1>Gastos fijos</h1>
-          <div className="sub">
-            Lo que la estructura cuesta todos los meses, con trabajo o sin él.
-            Es la base del punto de equilibrio.
-          </div>
+    <section {...scope} className={`${theme} ${listPage.page} ${s.page}`}>
+      <header className={listPage.header}>
+        <div>
+          <p className={s.eyebrow}>Administración · Estructura</p>
+          <h1>
+            Gastos fijos<span className={s.dot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
+            Lo que cuesta sostener tu operación. La base para calcular el punto
+            de equilibrio.
+          </p>
         </div>
-      </div>
-
-      <div className="gfijo-toolbar">
-        <div className="gfijo-buscador">
-          <SearchIcon />
-          <input
-            type="search"
-            placeholder="Búsqueda"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            aria-label="Buscar gasto fijo"
+        <ActionButton onPress={() => abrir(null)}>
+          <PlusIcon aria-hidden /> Añadir gasto fijo
+        </ActionButton>
+      </header>
+      <div className={s.metrics} aria-label="Resumen de gastos fijos">
+        <div className={s.totalMetric}>
+          <ListMetric
+            label="Estructura mensual vigente"
+            value={fmt(mensualVigente)}
+            icon={WalletIcon}
+            hint={`${mesLabel(mes)} · ${vigentes.length} gastos incluidos por su vigencia.`}
           />
         </div>
-        <div className="gfijo-acciones">
-          <button
-            type="button"
-            className={`gfijo-btn ${filtroAbierto ? "activo" : ""}`}
-            onClick={() => setFiltroAbierto((v) => !v)}
-          >
-            <FilterIcon />
-            Filtrar
-          </button>
-          <button
-            type="button"
-            className="gfijo-btn gfijo-btn-primario"
-            onClick={() => abrir(null)}
-          >
-            <PlusIcon />
-            Insertar gasto
-          </button>
-        </div>
+        <ListMetric
+          label="Gastos activos"
+          value={activos.length}
+          icon={Repeat2Icon}
+          hint={`${gastos.length - activos.length} inactivos · ${activos.length - vigentes.length} fuera de la vigencia actual.`}
+        />
+        <ListMetric
+          label="Categorías de estructura"
+          value={new Set(activos.map((g) => g.categoriaEgresoId)).size}
+          icon={ShapesIcon}
+          hint="Categorías utilizadas por los gastos activos."
+        />
       </div>
-
-      {filtroAbierto ? (
-        <div className="gfijo-filtros">
-          <label className="gfijo-chip">
-            <span>Estado</span>
-            <select
-              value={estado}
-              onChange={(e) => setEstado(e.target.value as Estado)}
+      <Card className={s.results}>
+        <Card.Header className={s.sectionHeader}>
+          <span className={s.sectionIcon}>
+            <LayersIcon aria-hidden />
+          </span>
+          <div>
+            <Card.Title>Gastos de estructura</Card.Title>
+            <Card.Description>
+              Importes por período, vigencias y su equivalente mensual.
+            </Card.Description>
+          </div>
+          <span className={s.count}>
+            {filtrados.length} de {gastos.length} gastos
+          </span>
+        </Card.Header>
+        <div className={s.toolbar}>
+          <SearchField
+            aria-label="Buscar gasto fijo"
+            value={busqueda}
+            onChange={setBusqueda}
+            className={s.search}
+          >
+            <SearchField.Group className={focus.group}>
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Buscar gasto, categoría o proveedor…" />
+              <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+            </SearchField.Group>
+          </SearchField>
+          <SegmentedControl
+            aria-label="Estado de los gastos"
+            options={ESTADOS}
+            value={estado}
+            onChange={(v) => setEstado(v as Estado)}
+          />
+        </div>
+        {filtrados.length === 0 ? (
+          <Empty className={s.empty}>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                {gastos.length ? <SearchXIcon /> : <LayersIcon />}
+              </EmptyMedia>
+              <EmptyTitle>
+                {gastos.length
+                  ? "No encontramos gastos con estos filtros"
+                  : "Tu estructura empieza acá"}
+              </EmptyTitle>
+              <EmptyDescription>
+                {gastos.length
+                  ? "Probá otra búsqueda o consultá todos los estados."
+                  : "Sumá alquileres, servicios y otros gastos para conocer el costo mensual de tu operación."}
+              </EmptyDescription>
+            </EmptyHeader>
+            <ActionButton
+              variant="outline"
+              onPress={() =>
+                gastos.length
+                  ? (setBusqueda(""), setEstado("todos"))
+                  : abrir(null)
+              }
             >
-              <option value="todos">Todos</option>
-              <option value="activos">Activos</option>
-              <option value="inactivos">Inactivos</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            className="gfijo-cerrar-filtros"
-            aria-label="Quitar filtros"
-            onClick={() => {
-              setEstado("todos");
-              setFiltroAbierto(false);
-            }}
-          >
-            <XIcon />
-          </button>
-        </div>
-      ) : null}
-
-      <div className="card tbl-scroll">
-        <table className="tbl gfijo-tabla">
-          <thead>
-            <tr>
-              <th>Descripción</th>
-              <th>Categoría</th>
-              <th>Favorecido</th>
-              <th>Frecuencia</th>
-              <th className="right">Valor</th>
-              <th className="right sticky-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="gfijo-vacio">
-                  <div>No hay elementos registrados</div>
-                  <button type="button" onClick={() => abrir(null)}>
-                    Haga clic aquí
-                  </button>{" "}
-                  para añadir
-                </td>
-              </tr>
-            ) : null}
-            {filtrados.map((g) => (
-              <tr key={g.id} className={g.activo ? "" : "gfijo-inactivo"}>
-                <td>
-                  <div className="name">{g.nombre}</div>
-                </td>
-                <td className="gfijo-cat" title={g.categoriaNombre}>
-                  <span
-                    className="gfijo-punto"
-                    style={{ background: colorCategoria(g.categoriaCodigo) }}
-                  />
-                  {g.categoriaNombre}
-                </td>
-                <td>{g.proveedorNombre ?? "—"}</td>
-                <td>{FRECUENCIA_LABEL[g.frecuencia]}</td>
-                <td className="right numeric">
-                  <div className="strong-value">{fmt(g.valor)}</div>
-                  {g.frecuencia !== "MENSUAL" ? (
-                    <div className="desc">{fmt(g.importeMensual)} / mes</div>
-                  ) : null}
-                </td>
-                <td className="right sticky-right">
-                  <span className="centros-actions">
+              {gastos.length ? "Limpiar filtros" : "Añadir el primer gasto"}
+            </ActionButton>
+          </Empty>
+        ) : (
+          <Table className={s.table}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Gasto / categoría</TableHead>
+                <TableHead>Proveedor</TableHead>
+                <TableHead>Vigencia</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className={s.number}>Importe por período</TableHead>
+                <TableHead className={s.number}>Equivalente mensual</TableHead>
+                <TableHead>
+                  <span className="sr-only">Acciones</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtrados.map((g) => (
+                <TableRow key={g.id} data-inactive={!g.activo || undefined}>
+                  <TableCell className={s.descriptionCell}>
                     <button
                       type="button"
-                      className="btn"
-                      onClick={() => void alternarActivo(g)}
+                      className={s.detailLink}
+                      onClick={() => abrir(g)}
                     >
-                      {g.activo ? "Desactivar" : "Activar"}
+                      {g.nombre}
+                      <ArrowUpRightIcon aria-hidden />
                     </button>
-                    <button type="button" className="btn" onClick={() => abrir(g)}>
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="Eliminar"
-                      aria-label={`Eliminar ${g.nombre}`}
-                      onClick={() => setAEliminar(g)}
+                    <span className={s.category}>{g.categoriaNombre}</span>
+                  </TableCell>
+                  <TableCell className={s.provider}>
+                    {g.proveedorNombre ?? (
+                      <span className={s.muted}>Sin asignar</span>
+                    )}
+                  </TableCell>
+                  <TableCell className={s.validity}>
+                    <span>
+                      {mesLabel(g.vigenteDesde)}
+                      {g.vigenteHasta
+                        ? ` → ${mesLabel(g.vigenteHasta)}`
+                        : " → sin fin"}
+                    </span>
+                    <small>
+                      {g.vigenteDesde > mes
+                        ? "Comienza próximamente"
+                        : g.vigenteHasta && g.vigenteHasta < mes
+                          ? "Vigencia finalizada"
+                          : "Vigente este mes"}
+                    </small>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="sm"
+                      variant="soft"
+                      className={s.status}
+                      data-active={g.activo}
                     >
-                      <XIcon />
-                    </button>
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                      <i aria-hidden />
+                      {g.activo ? "Activo" : "Inactivo"}
+                    </Chip>
+                  </TableCell>
+                  <TableCell className={s.number}>
+                    {fmt(g.valor)}
+                    <small>
+                      Por {FRECUENCIA_LABEL[g.frecuencia].toLowerCase()}
+                    </small>
+                  </TableCell>
+                  <TableCell className={`${s.number} ${s.monthly}`}>
+                    {fmt(g.importeMensual)}
+                    <small>/ mes</small>
+                  </TableCell>
+                  <TableCell>
+                    <div className={s.actions}>
+                      <ActionButton
+                        variant="ghost"
+                        tone="neutral"
+                        isIconOnly
+                        title={g.activo ? "Desactivar gasto" : "Activar gasto"}
+                        aria-label={`${g.activo ? "Desactivar" : "Activar"} ${g.nombre}`}
+                        isDisabled={!!cambiando}
+                        isPending={cambiando === g.id}
+                        onPress={() => void alternarActivo(g)}
+                      >
+                        {g.activo ? <PauseIcon /> : <PlayIcon />}
+                      </ActionButton>
+                      <ActionButton
+                        variant="outline"
+                        tone="neutral"
+                        isIconOnly
+                        title="Editar gasto"
+                        aria-label={`Editar ${g.nombre}`}
+                        isDisabled={!!cambiando}
+                        onPress={() => abrir(g)}
+                      >
+                        <PencilIcon />
+                      </ActionButton>
+                      <ActionButton
+                        variant="ghost"
+                        tone="neutral"
+                        isIconOnly
+                        title="Eliminar gasto"
+                        aria-label={`Eliminar ${g.nombre}`}
+                        isDisabled={!!cambiando}
+                        onPress={() => setAEliminar(g)}
+                      >
+                        <Trash2Icon />
+                      </ActionButton>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <footer className={s.tableFooter}>
+          <span>
+            Mensual vigente de los gastos visibles{" "}
+            <small>{mesLabel(mes)} · Solo activos dentro de su vigencia.</small>
+          </span>
+          <strong>{fmt(totalVisible)}</strong>
+        </footer>
+      </Card>
+      <p className={s.caption}>
+        <CalendarDaysIcon aria-hidden />
+        La vigencia indica cuándo un gasto cuenta para el punto de equilibrio.
+        Las facturas y los pagos se registran en Egresos.
+      </p>
 
-      <div className="gfijo-total">
-        <span>Total mensual:</span>
-        <strong>{fmt(total)}</strong>
-      </div>
-
-      <Sheet open={fichaAbierta} onOpenChange={pedirCierre}>
-        <SheetContent
-          side="right"
-          className="gfijo-ficha !w-[min(720px,96vw)] !max-w-none"
-        >
-          <SheetHeader>
-            <SheetTitle>
-              {editando ? "Gasto fijo" : "Añadir gastos fijos"}
-            </SheetTitle>
-            <SheetDescription>
-              Se carga el valor de una cuota y cada cuánto se paga; el mensual lo
-              calcula el sistema.
-            </SheetDescription>
-          </SheetHeader>
-
-          <nav className="gfijo-tabs">
-            {(
-              [
-                ["datos", "Datos generales"],
-                ["clasificacion", "Clasificación"],
-              ] as const
-            ).map(([valor, etiqueta]) => (
-              <button
-                key={valor}
-                type="button"
-                className={`gfijo-tab ${tab === valor ? "activa" : ""}`}
-                onClick={() => setTab(valor)}
+      {fichaAbierta && (
+        <FormSheet
+          className={s.sheet}
+          title={
+            <>
+              <span className={s.eyebrow}>Administración · Estructura</span>
+              {editando ? "Editar gasto fijo" : "Nuevo gasto fijo"}
+              <span className={s.dot}>.</span>
+            </>
+          }
+          description="Definí el importe por período, su clasificación y desde cuándo forma parte de tu estructura."
+          onClose={pedirCierre}
+          busy={guardando}
+          footer={
+            <>
+              <span className={s.footerNote}>
+                {editando?.activo === false
+                  ? "Gasto inactivo"
+                  : "Gasto de estructura"}
+              </span>
+              <ActionButton
+                variant="outline"
+                onPress={pedirCierre}
+                isDisabled={guardando}
               >
-                {etiqueta}
-              </button>
-            ))}
-          </nav>
-
-          <div className="gfijo-cuerpo">
-            {tab === "datos" ? (
-              <>
-                <section className="gfijo-seccion">
-                  <header className="gfijo-seccion-head">
-                    <h3>Datos del gasto</h3>
-                  </header>
-                  <div className="gfijo-form">
-                    <label className="gfijo-ancho">
-                      <span>Descripción *</span>
-                      <input
+                Cancelar
+              </ActionButton>
+              <ActionButton
+                onPress={() => void guardar()}
+                isPending={guardando}
+                isDisabled={guardando || !catalogosListos}
+              >
+                <CheckIcon aria-hidden />
+                {guardando ? "Guardando…" : "Guardar gasto"}
+              </ActionButton>
+            </>
+          }
+        >
+          <div className={s.formContent}>
+            {errorCatalogos && (
+              <Alert variant="destructive">
+                <AlertTitle>No pudimos cargar las opciones</AlertTitle>
+                <AlertDescription>
+                  Tu borrador sigue disponible.
+                  <ActionButton
+                    variant="outline"
+                    onPress={() => void cargarCatalogos()}
+                  >
+                    <RefreshCwIcon />
+                    Reintentar
+                  </ActionButton>
+                </AlertDescription>
+              </Alert>
+            )}
+            {errorForm && (
+              <Alert ref={errorRef} variant="destructive">
+                <AlertTitle>Revisá el gasto</AlertTitle>
+                <AlertDescription>{errorForm}</AlertDescription>
+              </Alert>
+            )}
+            <Tabs
+              selectedKey={tab}
+              onSelectionChange={(v) => setTab(v as typeof tab)}
+              className={s.formTabs}
+            >
+              <NavigationTabList
+                label="Ficha del gasto fijo"
+                variant="detailed"
+                tone="graphite"
+                className={s.navigation}
+                items={[
+                  {
+                    id: "datos",
+                    label: "Datos del gasto",
+                    description: "Importe y vigencia",
+                    icon: <Settings2Icon />,
+                  },
+                  {
+                    id: "clasificacion",
+                    label: "Clasificación",
+                    description: "Categoría y referencia",
+                    icon: <ShapesIcon />,
+                  },
+                ]}
+              />
+              <Tabs.Panel id="datos" className={s.formPanel}>
+                <fieldset disabled={guardando} className={s.formSection}>
+                  <legend>El gasto</legend>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="gf-nombre">
+                        Descripción <span aria-hidden>*</span>
+                      </FieldLabel>
+                      <Input
+                        id="gf-nombre"
                         value={form.nombre}
-                        placeholder="Alquiler del local"
                         onChange={(e) => editar("nombre", e.target.value)}
+                        placeholder="Ej. Alquiler del local"
+                        autoFocus
+                        className={focus.singleBorder}
                       />
-                    </label>
-                    <label>
-                      <span>Valor *</span>
-                      <input
-                        inputMode="decimal"
-                        value={form.valor}
-                        placeholder="0,00"
-                        onChange={(e) => editar("valor", e.target.value)}
-                      />
-                    </label>
-                    <label>
-                      <span>Período *</span>
-                      <select
-                        value={form.frecuencia}
-                        onChange={(e) =>
-                          editar("frecuencia", e.target.value as FrecuenciaGastoFijo)
-                        }
-                      >
-                        {FRECUENCIAS_GASTO_FIJO.map((f) => (
-                          <option key={f.value} value={f.value}>
-                            {f.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Forma de pago</span>
-                      <select
-                        value={form.metodoPagoId || SIN_VALOR}
-                        onChange={(e) =>
-                          editar(
-                            "metodoPagoId",
-                            e.target.value === SIN_VALOR ? "" : e.target.value,
-                          )
-                        }
-                      >
-                        <option value={SIN_VALOR}>Sin especificar</option>
-                        {metodos.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="gfijo-ancho">
-                      <span>Favorecido</span>
-                      <select
-                        value={form.proveedorId || SIN_VALOR}
-                        onChange={(e) =>
-                          editar(
-                            "proveedorId",
-                            e.target.value === SIN_VALOR ? "" : e.target.value,
-                          )
-                        }
-                      >
-                        <option value={SIN_VALOR}>Sin especificar</option>
-                        {proveedores.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="gfijo-ancho">
-                      <span>Observación</span>
-                      <textarea
-                        rows={3}
+                    </Field>
+                    <div className={s.formGrid}>
+                      <Field>
+                        <FieldLabel>
+                          Importe por período <span aria-hidden>*</span>
+                        </FieldLabel>
+                        <MoneyInput
+                          value={form.valor}
+                          onValueChange={(texto) => editar("valor", texto)}
+                          moneda={moneda}
+                          ariaLabel="Importe por período"
+                          placeholder="0"
+                          className={s.moneyInput}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="gf-frecuencia">
+                          Período <span aria-hidden>*</span>
+                        </FieldLabel>
+                        <SelectField
+                          id="gf-frecuencia"
+                          aria-label="Período"
+                          value={form.frecuencia}
+                          onChange={(v) =>
+                            editar("frecuencia", v as FrecuenciaGastoFijo)
+                          }
+                          disabled={guardando}
+                          options={FRECUENCIAS_GASTO_FIJO}
+                        />
+                      </Field>
+                    </div>
+                    <div className={s.monthlyPreview}>
+                      <span className={s.previewIcon}>
+                        <WalletIcon aria-hidden />
+                      </span>
+                      <div>
+                        <span>Equivalente mensual</span>
+                        <small>
+                          Importe repartido entre los meses del período.
+                        </small>
+                      </div>
+                      <strong>{fmt(mensualDelForm)}</strong>
+                    </div>
+                    <div className={s.formGrid}>
+                      <Field>
+                        <FieldLabel htmlFor="gf-proveedor">
+                          Proveedor
+                        </FieldLabel>
+                        <SelectField
+                          id="gf-proveedor"
+                          aria-label="Proveedor"
+                          value={form.proveedorId}
+                          onChange={(v) => editar("proveedorId", v)}
+                          disabled={guardando || cargandoCatalogos}
+                          options={[
+                            { value: "", label: "Sin proveedor asignado" },
+                            ...proveedores.map((p) => ({
+                              value: p.id,
+                              label: p.nombre,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="gf-metodo">
+                          Forma de pago
+                        </FieldLabel>
+                        <SelectField
+                          id="gf-metodo"
+                          aria-label="Forma de pago"
+                          value={form.metodoPagoId}
+                          onChange={(v) => editar("metodoPagoId", v)}
+                          disabled={guardando || cargandoCatalogos}
+                          options={[
+                            { value: "", label: "Sin forma de pago" },
+                            ...metodos.map((m) => ({
+                              value: m.id,
+                              label: m.nombre,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                    </div>
+                    <Field>
+                      <FieldLabel htmlFor="gf-notas">Observaciones</FieldLabel>
+                      <TextArea
+                        id="gf-notas"
                         value={form.notas}
                         onChange={(e) => editar("notas", e.target.value)}
+                        rows={2}
+                        placeholder="Información adicional sobre este gasto…"
+                        className={focus.singleBorder}
                       />
-                    </label>
-                  </div>
-                  {numero(form.valor) > 0 && form.frecuencia !== "MENSUAL" ? (
-                    <footer className="gfijo-seccion-foot">
-                      <span>Se prorratea para el punto de equilibrio</span>
-                      <strong>= {fmt(mensualDelForm)} / mes</strong>
-                    </footer>
-                  ) : null}
-                </section>
-
-                <section className="gfijo-seccion">
-                  <header className="gfijo-seccion-head">
-                    <h3>Vigencia</h3>
-                    <p>
-                      Desde qué mes cuenta para la estructura y hasta cuándo. El
-                      histórico queda: subir el alquiler en julio no cambia lo
-                      que costó en junio.
-                    </p>
-                  </header>
-                  <div className="gfijo-form">
-                    <label>
-                      <span>Empezando en *</span>
-                      <input
+                    </Field>
+                  </FieldGroup>
+                </fieldset>
+                <fieldset disabled={guardando} className={s.formSection}>
+                  <legend>Vigencia</legend>
+                  <p className={s.sectionDescription}>
+                    Meses en los que este gasto se incluye en el punto de
+                    equilibrio.
+                  </p>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="gf-desde">Desde</FieldLabel>
+                      <Input
+                        id="gf-desde"
                         type="month"
                         value={form.vigenteDesde}
-                        onChange={(e) =>
-                          editar("vigenteDesde", e.target.value || periodoActual())
-                        }
+                        onChange={(e) => editar("vigenteDesde", e.target.value)}
+                        className={focus.singleBorder}
                       />
-                    </label>
-                    <fieldset className="gfijo-fin gfijo-ancho">
-                      <legend>Termina en</legend>
-                      {(
-                        [
-                          ["nunca", "Nunca"],
-                          ["en", "En"],
-                          ["despues", "Después"],
-                        ] as const
-                      ).map(([valor, etiqueta]) => (
-                        <label key={valor} className="gfijo-radio">
-                          <input
-                            type="radio"
-                            name="gfijo-fin"
-                            checked={form.fin === valor}
-                            onChange={() => editar("fin", valor)}
-                          />
-                          <span>{etiqueta}</span>
-                        </label>
-                      ))}
-                      {form.fin === "en" ? (
-                        <input
+                    </Field>
+                    <Field>
+                      <FieldLabel>Finaliza</FieldLabel>
+                      <SegmentedControl
+                        aria-label="Fin de la vigencia"
+                        value={form.fin}
+                        options={FINES}
+                        onChange={(v) =>
+                          editar("fin", v as FormularioGastoFijo["fin"])
+                        }
+                        isDisabled={guardando}
+                      />
+                    </Field>
+                    {form.fin === "en" && (
+                      <Field>
+                        <FieldLabel htmlFor="gf-hasta">
+                          Hasta, inclusive
+                        </FieldLabel>
+                        <Input
+                          id="gf-hasta"
                           type="month"
+                          min={form.vigenteDesde}
                           value={form.vigenteHasta}
-                          onChange={(e) => editar("vigenteHasta", e.target.value)}
+                          onChange={(e) =>
+                            editar("vigenteHasta", e.target.value)
+                          }
+                          className={focus.singleBorder}
                         />
-                      ) : null}
-                      {form.fin === "despues" ? (
-                        <span className="gfijo-repeticiones">
-                          <input
-                            inputMode="numeric"
-                            value={form.repeticiones}
-                            placeholder="12"
-                            onChange={(e) => editar("repeticiones", e.target.value)}
-                          />
-                          <span>
-                            repeticiones
-                            {calcularVigenteHasta(form)
-                              ? ` · hasta ${calcularVigenteHasta(form)}`
-                              : ""}
-                          </span>
-                        </span>
-                      ) : null}
-                    </fieldset>
-                  </div>
-                </section>
-              </>
-            ) : null}
-
-            {tab === "clasificacion" ? (
-              <section className="gfijo-seccion">
-                <header className="gfijo-seccion-head">
-                  <h3>Clasificación</h3>
-                  <p>
-                    El gasto fijo no se imputa a centros de costo: el centro ya
-                    declara sus propios gastos en su planilla, y cargarlos de los
-                    dos lados los contaría dos veces.
+                      </Field>
+                    )}
+                    {form.fin === "despues" && (
+                      <Field>
+                        <FieldLabel htmlFor="gf-repeticiones">
+                          Cantidad de períodos
+                        </FieldLabel>
+                        <Input
+                          id="gf-repeticiones"
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={form.repeticiones}
+                          onChange={(e) =>
+                            editar("repeticiones", e.target.value)
+                          }
+                          placeholder="Ej. 12"
+                          className={focus.singleBorder}
+                        />
+                        <FieldDescription>
+                          Cada período corresponde a un{" "}
+                          {FRECUENCIA_LABEL[form.frecuencia].toLowerCase()}.
+                        </FieldDescription>
+                      </Field>
+                    )}
+                    <p className={s.vigenciaPreview}>
+                      <CalendarDaysIcon aria-hidden />
+                      {form.vigenteDesde
+                        ? `Desde ${mesLabel(form.vigenteDesde)}`
+                        : "Elegí el mes de inicio"}
+                      {form.fin === "nunca"
+                        ? ", sin fecha de fin."
+                        : hasta
+                          ? ` hasta ${mesLabel(hasta)}, inclusive.`
+                          : ". Completá cuándo finaliza."}
+                    </p>
+                  </FieldGroup>
+                </fieldset>
+              </Tabs.Panel>
+              <Tabs.Panel id="clasificacion" className={s.formPanel}>
+                <fieldset disabled={guardando} className={s.formSection}>
+                  <legend>Clasificación del gasto</legend>
+                  <p className={s.sectionDescription}>
+                    Agrupá este gasto dentro del presupuesto de estructura.
                   </p>
-                </header>
-                <div className="gfijo-form">
-                  <label>
-                    <span>Clasificar gasto</span>
-                    <select
-                      value={form.categoriaEgresoId}
-                      onChange={(e) => editar("categoriaEgresoId", e.target.value)}
-                    >
-                      {categorias.length === 0 ? (
-                        <option value="">Cargando…</option>
-                      ) : null}
-                      {categorias.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Documento</span>
-                    <input
-                      value={form.documento}
-                      placeholder="Factura, contrato…"
-                      onChange={(e) => editar("documento", e.target.value)}
-                    />
-                  </label>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="gf-categoria">
+                        Categoría <span aria-hidden>*</span>
+                      </FieldLabel>
+                      <SelectField
+                        id="gf-categoria"
+                        aria-label="Categoría del gasto"
+                        value={form.categoriaEgresoId}
+                        onChange={(v) => editar("categoriaEgresoId", v)}
+                        disabled={guardando || cargandoCatalogos}
+                        required
+                        options={[
+                          {
+                            value: "",
+                            label: cargandoCatalogos
+                              ? "Cargando categorías…"
+                              : "Elegir categoría",
+                          },
+                          ...opcionesCategoria,
+                        ]}
+                      />
+                      <FieldDescription>
+                        Solo se muestran categorías de gastos de estructura.
+                      </FieldDescription>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="gf-documento">
+                        Documento de referencia
+                      </FieldLabel>
+                      <Input
+                        id="gf-documento"
+                        value={form.documento}
+                        onChange={(e) => editar("documento", e.target.value)}
+                        placeholder="Ej. Contrato de alquiler o número de factura"
+                        className={focus.singleBorder}
+                      />
+                      <FieldDescription>
+                        Una referencia para identificar el gasto. No registra
+                        una factura ni un pago.
+                      </FieldDescription>
+                    </Field>
+                  </FieldGroup>
+                </fieldset>
+                <div className={s.referenceNote}>
+                  <FileTextIcon aria-hidden />
+                  <p>
+                    El importe y la vigencia definen cuánto aporta este gasto a
+                    la estructura mensual.
+                  </p>
                 </div>
-              </section>
-            ) : null}
+              </Tabs.Panel>
+            </Tabs>
           </div>
-
-          <SheetFooter className="gfijo-acciones-pie">
-            <Button variant="outline" onClick={() => pedirCierre(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={guardar} disabled={guardando}>
-              {guardando ? <GdiSpinner className="size-4" /> : null}
-              Guardar
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      <ConfirmacionSalida
-        open={confirmandoSalida}
-        cambios={1}
-        donde="este gasto fijo"
-        guardando={guardando}
-        onGuardarYSalir={async () => {
-          setConfirmandoSalida(false);
-          await guardar();
-        }}
-        onDescartarYSalir={() => {
-          setConfirmandoSalida(false);
-          setSucio(false);
-          setFichaAbierta(false);
-        }}
-        onSeguirEditando={() => setConfirmandoSalida(false)}
-      />
-
+        </FormSheet>
+      )}
+      <FormDialog
+        isOpen={confirmandoSalida}
+        onOpenChange={setConfirmandoSalida}
+        title="Cambios sin guardar"
+        description="Tenés cambios en este gasto. Podés guardarlos, descartarlos o seguir editando."
+      >
+        <Modal.Footer className={s.confirmFooter}>
+          <ActionButton
+            variant="outline"
+            onPress={() => setConfirmandoSalida(false)}
+          >
+            Seguir editando
+          </ActionButton>
+          <ActionButton
+            variant="danger-soft"
+            onPress={() => {
+              setConfirmandoSalida(false);
+              setFichaAbierta(false);
+              setSucio(false);
+            }}
+          >
+            Descartar cambios
+          </ActionButton>
+          <ActionButton
+            isDisabled={!catalogosListos}
+            onPress={() => {
+              setConfirmandoSalida(false);
+              void guardar();
+            }}
+          >
+            Guardar y salir
+          </ActionButton>
+        </Modal.Footer>
+      </FormDialog>
       <ConfirmacionDestructiva
-        open={aEliminar !== null}
-        onOpenChange={(abierto) => {
-          if (!abierto) setAEliminar(null);
+        apariencia="heroui"
+        open={!!aEliminar}
+        onOpenChange={(open) => {
+          if (!open) setAEliminar(null);
         }}
         titulo="Eliminar gasto fijo"
-        descripcion={`¿Eliminar "${aEliminar?.nombre ?? ""}" de la estructura?`}
-        impacto={[
-          "El punto de equilibrio baja en ese importe.",
-          "Esta acción no se puede deshacer.",
-        ]}
+        descripcion="El gasto dejará de formar parte del presupuesto de estructura, incluidos los períodos anteriores."
         nombreItem={aEliminar?.nombre}
         requiereTipear={false}
-        accionLabel="Eliminar"
+        accionLabel="Eliminar gasto"
         onConfirmar={async () => {
           if (!aEliminar) return;
-          const gasto = aEliminar;
-          setAEliminar(null);
           try {
-            await eliminarGastoFijo(gasto.id);
-            toast.success(`"${gasto.nombre}" eliminado.`);
+            await eliminarGastoFijo(aEliminar.id);
+            setAEliminar(null);
+            toast.success("Gasto eliminado.");
             await recargar();
           } catch (error) {
             toast.error(
-              error instanceof Error ? error.message : "No se pudo eliminar.",
+              error instanceof Error
+                ? error.message
+                : "No se pudo eliminar el gasto.",
             );
           }
         }}
       />
-    </div>
+    </section>
   );
 }

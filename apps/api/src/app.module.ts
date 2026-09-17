@@ -1,3 +1,4 @@
+import { PlanificacionEntregasModule } from './planificacion-entregas/planificacion.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
@@ -13,6 +14,7 @@ import { ImpersonacionGuard } from './auth/impersonacion.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { PermisosGuard } from './auth/permisos.guard';
 import { MargenesInterceptor } from './auth/margenes.interceptor';
+import { JsonCompartidoInterceptor } from './common/interceptors/json-compartido.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { AuthModule } from './auth/auth.module';
@@ -50,6 +52,11 @@ import { RecorridosVectorialesModule } from './recorridos-vectoriales/recorridos
 import { SuscripcionAccesoGuard } from './suscripciones/suscripcion-acceso.guard';
 import { ProvisionamientoModule } from './provisionamiento/provisionamiento.module';
 import { RegistroModule } from './registro/registro.module';
+import { CampanasModule } from './campanas/campanas.module';
+import { DesarrolloDocumentalModule } from './desarrollo-documental/desarrollo-documental.module';
+import { EventosSistemaModule } from './eventos-sistema/eventos-sistema.module';
+import { GeometriaJobsModule } from './workers/geometria/geometria-jobs.module';
+import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
 
 @Module({
   imports: [
@@ -90,12 +97,15 @@ import { RegistroModule } from './registro/registro.module';
       },
     ]),
     PrismaModule,
+    EventosSistemaModule,
     AuthModule,
     TenantsModule,
     PlataformaModule,
     CobroModule,
     SuscripcionesModule,
     ClientesModule,
+    CampanasModule,
+    DesarrolloDocumentalModule,
     EmpleadosModule,
     UsuariosModule,
     ProveedoresModule,
@@ -115,6 +125,7 @@ import { RegistroModule } from './registro/registro.module';
     EgresosModule,
     ReportesModule,
     EtaModule,
+    PlanificacionEntregasModule,
     ArchivosModule,
     IntegracionesModule,
     CentroCopiadoModule,
@@ -123,6 +134,8 @@ import { RegistroModule } from './registro/registro.module';
     RecorridosVectorialesModule,
     ProvisionamientoModule,
     RegistroModule,
+    GeometriaJobsModule,
+    CotizacionesModule,
   ],
   controllers: [AppController],
   providers: [
@@ -135,6 +148,9 @@ import { RegistroModule } from './registro/registro.module';
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,
     },
+    // Los interceptores responden en orden inverso: compactar siempre luego
+    // de podar costos/márgenes, conservando el JSON convencional sin Accept.
+    { provide: APP_INTERCEPTOR, useClass: JsonCompartidoInterceptor },
     // Poda la plata de las respuestas marcadas con @OcultaMargenes cuando el
     // usuario no puede verla. Ver auth/margenes.ts.
     {

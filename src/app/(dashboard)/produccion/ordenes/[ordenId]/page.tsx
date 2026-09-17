@@ -7,6 +7,7 @@ import type { ClienteDetalle } from "@/lib/clientes";
 import { getOrdenTrabajo } from "@/lib/ordenes-trabajo-api";
 import { getProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
+import { getEstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function OrdenTrabajoDetallePage({
   // para agregar/editar items (mientras la orden esté en borrador/pendiente).
   let clientes: ClienteDetalle[] = [];
   let productos: ProductoListItem[] = [];
+  const documentos = await getEstadoDocumentalOrden(ordenId).catch(() => null);
   try {
     clientes = await getClientes({ limit: 30 });
   } catch {
@@ -52,6 +54,7 @@ export default async function OrdenTrabajoDetallePage({
       initialProductos={productos}
       recienEmitida={emitida === "1"}
       recienConvertida={convertida === "1"}
+      initialDocumentos={documentos}
     />
   );
 }

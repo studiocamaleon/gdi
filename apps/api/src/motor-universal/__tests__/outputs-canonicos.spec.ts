@@ -1,5 +1,22 @@
 import { calcularOutputsCanonicos } from '../outputs-canonicos';
 
+describe('cantidad de piezas cortadas', () => {
+  it('publica las cuatro piezas del exhibidor aunque compartan una placa', () => {
+    const outputs = calcularOutputsCanonicos({ outputsCanonicos: ['piezas_cortadas'] } as never, {
+      paso: {} as never, jobContext: { cantidad: 4 }, cantidadEfectiva: 1,
+      nestingDispatch: { cantidadCalculada: 1, piezasAcomodadas: 4 } as never,
+    });
+    expect(outputs.piezas_cortadas).toBe(4);
+  });
+  it('conserva la cantidad efectiva cuando el corte no dispone de nesting', () => {
+    const outputs = calcularOutputsCanonicos({ outputsCanonicos: ['piezas_cortadas'] } as never, {
+      paso: {} as never, jobContext: { cantidad: 4 }, cantidadEfectiva: 4,
+      nestingDispatch: null,
+    });
+    expect(outputs.piezas_cortadas).toBe(4);
+  });
+});
+
 describe('calcularOutputsCanonicos - cortes_calculados', () => {
   const familia = {
     outputsCanonicos: ['cortes_calculados'],

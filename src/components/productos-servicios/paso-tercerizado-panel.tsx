@@ -1,4 +1,5 @@
 "use client";
+import { NativeButton, NativeInput } from "./nodos-ui";
 
 import * as React from "react";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -72,7 +73,9 @@ const slug = (str: string) =>
 
 function cfgDe(value: UpsertConfigPasoPayload): Record<string, unknown> {
   const c = value.tercerizadoConfigJson;
-  return c && typeof c === "object" ? { ...(c as Record<string, unknown>) } : {};
+  return c && typeof c === "object"
+    ? { ...(c as Record<string, unknown>) }
+    : {};
 }
 
 /** Producto cartesiano de los valores de cada eje (sin el de cantidad). */
@@ -191,20 +194,33 @@ export function PasoTercerizadoPanel({
               </div>
               <div className={s.f}>
                 <span className={s.k}>
-                  Plazo de entrega <span className={s.o}>· opcional</span>
+                  Plazo de entrega del proveedor <span aria-hidden> *</span>
                 </span>
-                <span className={s.ctl}>
-                  <input
+                <span
+                  className={`${s.ctl} ${
+                    value.plazoProveedorDias == null ||
+                    value.plazoProveedorDias < 0
+                      ? s.warnb
+                      : ""
+                  }`}
+                >
+                  <NativeInput
                     className={s.num}
                     inputMode="numeric"
+                    type="number"
+                    min={0}
+                    required
+                    aria-required="true"
+                    aria-invalid={
+                      value.plazoProveedorDias == null ||
+                      value.plazoProveedorDias < 0
+                    }
                     placeholder="—"
                     value={value.plazoProveedorDias ?? ""}
                     onChange={(e) =>
                       onChange({
                         plazoProveedorDias:
-                          e.target.value === ""
-                            ? null
-                            : Number(e.target.value),
+                          e.target.value === "" ? null : Number(e.target.value),
                       })
                     }
                   />
@@ -256,7 +272,7 @@ export function PasoTercerizadoPanel({
             <p className={s.hint}>{FUENTE_HINT[fuente]}</p>
             <div className={s.seg}>
               {FUENTES.map((f) => (
-                <button
+                <NativeButton
                   key={f.value}
                   type="button"
                   aria-pressed={fuente === f.value}
@@ -278,7 +294,7 @@ export function PasoTercerizadoPanel({
                   }
                 >
                   {f.label}
-                </button>
+                </NativeButton>
               ))}
             </div>
             {fuente === "tarifa_magnitud" ? (
@@ -302,20 +318,20 @@ export function PasoTercerizadoPanel({
                 : "El precio del proveedor ya incluye los materiales del paso."}
             </p>
             <div className={s.seg}>
-              <button
+              <NativeButton
                 type="button"
                 aria-pressed={cfg.materialesPropios !== true}
                 onClick={() => patchCfg({ materialesPropios: false })}
               >
                 Los incluye el proveedor
-              </button>
-              <button
+              </NativeButton>
+              <NativeButton
                 type="button"
                 aria-pressed={cfg.materialesPropios === true}
                 onClick={() => patchCfg({ materialesPropios: true })}
               >
                 Los ponemos nosotros
-              </button>
+              </NativeButton>
             </div>
           </div>
 
@@ -346,15 +362,12 @@ function TarifaEditor({
   const { moneda } = useConfigRegional();
   const numOrNull = (v: string) => (v === "" ? null : Number(v));
   return (
-    <div
-      className={s.fields}
-      style={{ marginTop: 12, maxWidth: 520 }}
-    >
+    <div className={s.fields} style={{ marginTop: 12, maxWidth: 520 }}>
       <div className={s.f}>
         <span className={s.k}>Tarifa</span>
         <span className={s.ctl}>
           <span className={s.pre}>{moneda.simbolo}</span>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             placeholder="0"
@@ -383,7 +396,7 @@ function TarifaEditor({
           Mínimo de magnitud <span className={s.o}>· opcional</span>
         </span>
         <span className={s.ctl}>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             placeholder="—"
@@ -400,7 +413,7 @@ function TarifaEditor({
         </span>
         <span className={s.ctl}>
           <span className={s.pre}>{moneda.simbolo}</span>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             placeholder="—"
@@ -432,7 +445,7 @@ function ManualEditor({
         </span>
         <span className={s.ctl}>
           <span className={s.pre}>{moneda.simbolo}</span>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             placeholder="—"
@@ -467,15 +480,12 @@ function FijoEditor({
 }) {
   const { moneda } = useConfigRegional();
   return (
-    <div
-      className={s.fields}
-      style={{ marginTop: 12, maxWidth: 520 }}
-    >
+    <div className={s.fields} style={{ marginTop: 12, maxWidth: 520 }}>
       <div className={s.f}>
         <span className={s.k}>Precio por orden</span>
         <span className={s.ctl}>
           <span className={s.pre}>{moneda.simbolo}</span>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             placeholder="0"
@@ -657,13 +667,23 @@ function MatrizEditor({
             </p>
           </div>
           <div className={s.sp} />
-          <button type="button" className={`${s.btn} ${s.btnGh}`} onClick={addEje}>
+          <NativeButton
+            type="button"
+            className={`${s.btn} ${s.btnGh}`}
+            onClick={addEje}
+          >
             <PlusIcon className="size-3.5" />
             Agregar atributo
-          </button>
+          </NativeButton>
         </div>
         {atributos.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: "var(--muted-text-2, #92929b)", margin: 0 }}>
+          <p
+            style={{
+              fontSize: 12.5,
+              color: "var(--muted-text-2, #92929b)",
+              margin: 0,
+            }}
+          >
             Agregá los atributos que mueven el precio (medida, faz, papel…).
           </p>
         ) : (
@@ -671,40 +691,42 @@ function MatrizEditor({
             {atributos.map((eje) => (
               <div className={s.attr} key={eje.clave}>
                 <div className={s.ah}>
-                  <input
+                  <NativeInput
                     className={s.nm}
                     value={eje.label}
                     placeholder="Nombre del atributo"
-                    onChange={(e) => patchEje(eje.clave, { label: e.target.value })}
+                    onChange={(e) =>
+                      patchEje(eje.clave, { label: e.target.value })
+                    }
                   />
                   <span className={s.rc}>
                     {eje.valores.length
                       ? `${eje.valores.length} ${eje.valores.length > 1 ? "valores" : "valor"}`
                       : "sin valores"}
                   </span>
-                  <button
+                  <NativeButton
                     type="button"
                     className={s.icb}
                     onClick={() => removeEje(eje.clave)}
                     title="Quitar atributo"
                   >
                     <Trash2Icon className="size-3.5" />
-                  </button>
+                  </NativeButton>
                 </div>
                 <div className={s.av}>
                   {eje.valores.map((v) => (
                     <span className={s.vchip} key={v.clave}>
                       {v.label}
-                      <button
+                      <NativeButton
                         type="button"
                         onClick={() => removeValor(eje.clave, v.clave)}
                         aria-label={`Quitar ${v.label}`}
                       >
                         <XIcon className="size-3" />
-                      </button>
+                      </NativeButton>
                     </span>
                   ))}
-                  <input
+                  <NativeInput
                     className={s.vadd}
                     placeholder="Agregar valor…"
                     onKeyDown={(e) => {
@@ -742,7 +764,7 @@ function MatrizEditor({
           {cantidades.map((c) => (
             <span className={s.vchip} key={c.clave}>
               {Number(c.clave).toLocaleString("es-AR")}
-              <button
+              <NativeButton
                 type="button"
                 onClick={() =>
                   setCantidades(cantidades.filter((x) => x.clave !== c.clave))
@@ -750,10 +772,10 @@ function MatrizEditor({
                 aria-label={`Quitar ${c.label}`}
               >
                 <XIcon className="size-3" />
-              </button>
+              </NativeButton>
             </span>
           ))}
-          <input
+          <NativeInput
             className={`${s.vadd} ${s.qadd}`}
             inputMode="numeric"
             placeholder="Ej: 5000"
@@ -817,9 +839,11 @@ function MatrizEditor({
                         ) ?? "";
                       return (
                         <td key={c.clave} className={s.pr}>
-                          <span className={`${s.ctl} ${val === "" ? s.zero : ""}`}>
+                          <span
+                            className={`${s.ctl} ${val === "" ? s.zero : ""}`}
+                          >
                             <span className={s.pre}>{moneda.simbolo}</span>
-                            <input
+                            <NativeInput
                               className={s.num}
                               inputMode="decimal"
                               placeholder="0"

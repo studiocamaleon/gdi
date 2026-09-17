@@ -45,7 +45,7 @@ export function analizarSvgFabricacion(input: {
   anchoFinalMm: number;
   altoFinalMm?: number | null;
   toleranciaCurvaMm?: number;
-}): { geometria: GeometriaVectorialCanonica; diagnosticos: DiagnosticoSvg[] } {
+}): { geometria: GeometriaVectorialCanonica; diagnosticos: DiagnosticoSvg[]; medidasFuente: { ancho: number; alto: number } } {
   const diagnosticos: DiagnosticoSvg[] = [];
   validarFuenteSvg(input.svg, input.anchoFinalMm, input.altoFinalMm);
 
@@ -219,6 +219,7 @@ export function analizarSvgFabricacion(input: {
       hashFuente: createHash('sha256').update(input.svg).digest('hex'),
     },
     diagnosticos,
+    medidasFuente: { ancho: bounds.width, alto: bounds.height },
   };
 }
 

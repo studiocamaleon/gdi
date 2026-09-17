@@ -1,31 +1,18 @@
 "use client";
 import * as React from "react";
+import { StarIcon, SlidersHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   ajustarPuntos,
   getFidelizacionCuenta,
   type FidelizacionCuenta,
 } from "@/lib/fidelizacion-api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { Card, Chip, Input, Label, Modal, TextField } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import focus from "@/components/design-system/field-focus.module.css";
+import brand from "./contactos-workspace.module.css";
+import styles from "@/components/clientes/clientes.module.css";
 import {
   Table,
   TableBody,
@@ -51,7 +38,7 @@ export function ClienteFidelizacionCard({
       getFidelizacionCuenta(clienteId)
         .then(setData)
         .catch(() => undefined),
-    [clienteId],
+    [clienteId]
   );
   React.useEffect(() => {
     void cargar();
@@ -67,124 +54,131 @@ export function ClienteFidelizacionCard({
     }
   };
   return (
-    <Card>
-      <CardHeader>
+    <Card className={styles.sectionCard}>
+      <Card.Header className={styles.sectionHeader}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Puntos de fidelización</CardTitle>
-            <CardDescription>
+            <Card.Title className={styles.sectionTitle}>
+              <StarIcon aria-hidden /> Puntos de fidelización
+            </Card.Title>
+            <Card.Description>
               Saldo, reservas y movimientos auditados del cliente.
-            </CardDescription>
+            </Card.Description>
           </div>
-          {puedeAjustar ? (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger render={<Button variant="outline" size="sm" />}>
-                Ajustar puntos
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Ajustar puntos</DialogTitle>
-                  <DialogDescription>
-                    El movimiento quedará auditado y requiere un motivo.
-                  </DialogDescription>
-                </DialogHeader>
-                <FieldGroup>
-                  <Field>
-                    <FieldLabel htmlFor="ajuste-puntos">Puntos</FieldLabel>
-                    <Input
-                      id="ajuste-puntos"
-                      type="number"
-                      min="1"
-                      value={puntos || ""}
-                      onChange={(e) => setPuntos(Number(e.target.value))}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="ajuste-motivo">Motivo</FieldLabel>
-                    <Input
-                      id="ajuste-motivo"
-                      value={motivo}
-                      onChange={(e) => setMotivo(e.target.value)}
-                    />
-                  </Field>
-                </FieldGroup>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    disabled={puntos < 1 || motivo.trim().length < 3}
-                    onClick={() => void ajustar("DEBITO")}
-                  >
-                    Debitar
-                  </Button>
-                  <Button
-                    disabled={puntos < 1 || motivo.trim().length < 3}
-                    onClick={() => void ajustar("CREDITO")}
-                  >
-                    Acreditar
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          ) : null}
+          {puedeAjustar && (
+            <ActionButton
+              type="button"
+              variant="outline"
+              onPress={() => setOpen(true)}
+            >
+              <SlidersHorizontalIcon /> Ajustar puntos
+            </ActionButton>
+          )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="flex flex-wrap items-center gap-6">
+      </Card.Header>
+      <Card.Content className={styles.sectionBody}>
+        <div className={styles.loyaltySummary}>
           <div>
-            <p className="text-3xl font-semibold">
-              {data?.disponiblesPuntos ?? 0}
-            </p>
-            <p className="text-sm text-muted-foreground">
+            <p className={styles.points}>{data?.disponiblesPuntos ?? 0}</p>
+            <p className={styles.pointsHint}>
               disponibles · equivalente a $
               {(data?.equivalenteMonetario ?? 0).toLocaleString("es-AR")}
             </p>
           </div>
-          <div>
-            <Badge variant="secondary">
-              {data?.reservadosPuntos ?? 0} reservados
-            </Badge>
-          </div>
-          {(data?.saldoPuntos ?? 0) < 0 ? (
-            <Badge variant="destructive">Saldo negativo auditado</Badge>
-          ) : null}
+          <Chip size="sm" variant="soft">
+            {data?.reservadosPuntos ?? 0} reservados
+          </Chip>
+          {(data?.saldoPuntos ?? 0) < 0 && (
+            <Chip size="sm" color="danger" variant="soft">
+              Saldo negativo auditado
+            </Chip>
+          )}
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Movimiento</TableHead>
-              <TableHead>Motivo</TableHead>
-              <TableHead className="text-right">Puntos</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data?.movimientos.length ? (
-              data.movimientos.slice(0, 10).map((mov) => (
-                <TableRow key={mov.id}>
-                  <TableCell>
-                    {new Date(mov.createdAt).toLocaleDateString("es-AR")}
-                  </TableCell>
-                  <TableCell>{mov.tipo.replaceAll("_", " ")}</TableCell>
-                  <TableCell>{mov.motivo ?? "—"}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {mov.deltaPuntos > 0 ? "+" : ""}
-                    {mov.deltaPuntos}
+        <div className={styles.tableFrame}>
+          <Table className={styles.table}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Fecha</TableHead>
+                <TableHead>Movimiento</TableHead>
+                <TableHead>Motivo</TableHead>
+                <TableHead className="text-right">Puntos</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data?.movimientos.length ? (
+                data.movimientos.slice(0, 10).map((mov) => (
+                  <TableRow key={mov.id}>
+                    <TableCell>
+                      {new Date(mov.createdAt).toLocaleDateString("es-AR")}
+                    </TableCell>
+                    <TableCell>{mov.tipo.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{mov.motivo ?? "—"}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {mov.deltaPuntos > 0 ? "+" : ""}
+                      {mov.deltaPuntos}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center">
+                    Todavía no hay movimientos.
                   </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={4}
-                  className="text-center text-muted-foreground"
-                >
-                  Todavía no hay movimientos.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </Card.Content>
+      {puedeAjustar && (
+        <FormDialog
+          className={brand.dialog}
+          isOpen={open}
+          onOpenChange={setOpen}
+          title="Ajustar puntos"
+          description="El movimiento quedará auditado y requiere un motivo."
+        >
+          <Modal.Body className={styles.dialogBody}>
+            <TextField>
+              <Label htmlFor="ajuste-puntos">Puntos</Label>
+              <Input
+                id="ajuste-puntos"
+                type="number"
+                min="1"
+                value={puntos || ""}
+                onChange={(event) => setPuntos(Number(event.target.value))}
+                className={focus.singleBorder}
+              />
+            </TextField>
+            <TextField>
+              <Label htmlFor="ajuste-motivo">Motivo</Label>
+              <Input
+                id="ajuste-motivo"
+                value={motivo}
+                onChange={(event) => setMotivo(event.target.value)}
+                className={focus.singleBorder}
+              />
+            </TextField>
+          </Modal.Body>
+          <Modal.Footer className={styles.dialogFooter}>
+            <ActionButton
+              type="button"
+              variant="outline"
+              isDisabled={puntos < 1 || motivo.trim().length < 3}
+              onPress={() => void ajustar("DEBITO")}
+            >
+              Debitar
+            </ActionButton>
+            <ActionButton
+              type="button"
+              isDisabled={puntos < 1 || motivo.trim().length < 3}
+              onPress={() => void ajustar("CREDITO")}
+            >
+              Acreditar
+            </ActionButton>
+          </Modal.Footer>
+        </FormDialog>
+      )}
     </Card>
   );
 }

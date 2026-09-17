@@ -40,22 +40,34 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
+  AltaVisualProvider,
+  useAltaVisual,
+  Badge,
+  Button,
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+  CardDescription,
+  CardContent,
+  HumanSelect,
+  Input,
+  Label,
+  LabelConTooltip,
+  MedidaInput,
+  StepButton,
+  Textarea,
+} from "./producto-alta-ui";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import listPage from "@/components/design-system/list-page.module.css";
+import altaStyles from "./producto-alta.module.css";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { HumanSelect, optionFromLabel } from "@/components/ui/human-select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+import { optionFromLabel } from "@/components/ui/human-select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { ProductoValidacionPanel } from "@/components/productos-servicios/producto-validacion-panel";
 import {
   precioConfigKey,
@@ -72,6 +84,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import type {
   CargoDirectoCatalogo,
+  DimensionProducto,
   MedidaPredefinidaProducto,
   ModoMedidasProducto,
   ProductoCategoriaComercial,
@@ -80,6 +93,7 @@ import type {
 } from "@/lib/productos-servicios";
 import { unidadComercialProductoItems } from "@/lib/productos-servicios";
 import {
+  getDimensionesRequeridas,
   getMedidasPredefinidas,
   medidaLabel,
   normalizeMedidasDraft,
@@ -98,7 +112,7 @@ const STEPS = [
   {
     id: "identidad",
     nombre: "Identidad",
-    descripcion: "Qué es y cómo se cobra",
+    descripcion: "Qué es y cómo se vende",
     icon: TagIcon,
   },
   {
@@ -116,7 +130,7 @@ const STEPS = [
   {
     id: "precio",
     nombre: "Precio + revisar",
-    descripcion: "Cómo se cobra y validar",
+    descripcion: "Precio y validación",
     icon: SaveIcon,
   },
 ] as const;
@@ -124,10 +138,10 @@ const STEPS = [
 type StepId = (typeof STEPS)[number]["id"];
 
 const MODOS_MEDIDAS = [
-  { value: "FIJA", label: "Fija" },
-  { value: "LIBRE", label: "Libre" },
-  { value: "COMERCIAL_ELIGE", label: "Comercial elige" },
-  { value: "MIXTA", label: "Mixta" },
+  { value: "FIJA", label: "Medida fija" },
+  { value: "LIBRE", label: "Medida libre" },
+  { value: "COMERCIAL_ELIGE", label: "Medidas predefinidas" },
+  { value: "MIXTA", label: "Predefinida o personalizada" },
 ];
 
 function modoMedidasUsaPredefinidas(modo: string) {
@@ -137,9 +151,15 @@ function modoMedidasUsaPredefinidas(modo: string) {
 function normalizarMedidasPorModo(
   modo: string,
   medidas: MedidaPredefinidaProducto[],
+  es3D = false,
 ) {
   if (!modoMedidasUsaPredefinidas(modo)) return [];
-  const normalizadas = normalizeMedidasDraft(medidas);
+  const normalizadas = normalizeMedidasDraft(medidas).map((medida) => ({
+    ...medida,
+    ...(es3D
+      ? { profundidadMm: medida.profundidadMm }
+      : { profundidadMm: undefined }),
+  }));
   if (modo !== "FIJA") return normalizadas;
   const defaultMedida =
     normalizadas.find((medida) => medida.esDefault) ?? normalizadas[0];
@@ -158,11 +178,24 @@ function nuevaMedidaPredefinida(index: number): MedidaPredefinidaProducto {
 
 function MedidasPredefinidasWizard({
   medidas,
+  modo,
+  es3D,
   onChange,
 }: {
   medidas: MedidaPredefinidaProducto[];
+  modo: ModoMedidasProducto;
+  es3D: boolean;
   onChange: (medidas: MedidaPredefinidaProducto[]) => void;
 }) {
+  const alta = useAltaVisual();
+  const esMedidaFija = modo === "FIJA";
+  const medidaDefault =
+    medidas.find((medida) => medida.esDefault) ?? medidas[0] ?? null;
+  const medidasVisibles = esMedidaFija
+    ? medidaDefault
+      ? [medidaDefault]
+      : []
+    : medidas;
   const updateMedida = (
     id: string,
     patch: Partial<MedidaPredefinidaProducto>,
@@ -189,23 +222,37 @@ function MedidasPredefinidasWizard({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <Label>Medidas disponibles</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
-          }
-        >
-          Agregar medida
-        </Button>
+        <Label>
+          {esMedidaFija ? "Medida del producto" : "Medidas disponibles"}
+        </Label>
+        {!esMedidaFija && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              onChange([...medidas, nuevaMedidaPredefinida(medidas.length)])
+            }
+          >
+            Agregar medida
+          </Button>
+        )}
       </div>
       <div className="space-y-2">
-        {medidas.map((medida, index) => (
+        {medidasVisibles.map((medida, index) => (
           <div
             key={medida.id}
-            className="grid grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto] items-center gap-2"
+            className={
+              alta
+                ? altaStyles.measureRow
+                : `grid items-center gap-2 ${
+                    es3D
+                      ? "grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto_auto]"
+                      : "grid-cols-[1.4fr_0.8fr_0.8fr_auto_auto]"
+                  }`
+            }
+            data-geometry={es3D ? "3D" : "2D"}
+            data-fixed={esMedidaFija || undefined}
           >
             <Input
               value={medida.nombre}
@@ -215,62 +262,89 @@ function MedidasPredefinidasWizard({
               placeholder={medidaLabel({ ...medida, nombre: "" })}
               aria-label={`Nombre de medida ${index + 1}`}
             />
-            <Input
+            <MedidaInput
               type="number"
               min="0"
-              value={medida.anchoMm || ""}
+              value={medida.anchoMm ? medida.anchoMm / 10 : ""}
               onChange={(event) =>
                 updateMedida(medida.id, {
-                  anchoMm: Number(event.target.value) || 0,
+                  anchoMm: (Number(event.target.value) || 0) * 10,
                 })
               }
-              placeholder="Ancho"
+              placeholder="Ancho cm"
+              label="Ancho (cm)"
               aria-label={`Ancho de medida ${index + 1}`}
             />
-            <Input
+            <MedidaInput
               type="number"
               min="0"
-              value={medida.altoMm || ""}
+              value={medida.altoMm ? medida.altoMm / 10 : ""}
               onChange={(event) =>
                 updateMedida(medida.id, {
-                  altoMm: Number(event.target.value) || 0,
+                  altoMm: (Number(event.target.value) || 0) * 10,
                 })
               }
-              placeholder="Alto"
+              placeholder="Alto cm"
+              label="Alto (cm)"
               aria-label={`Alto de medida ${index + 1}`}
             />
-            <Button
-              type="button"
-              variant={medida.esDefault ? "default" : "outline"}
-              size="icon"
-              onClick={() => setDefault(medida.id)}
-              aria-pressed={medida.esDefault}
-              title={
-                medida.esDefault
-                  ? "Medida predeterminada"
-                  : "Marcar como predeterminada"
-              }
-            >
-              <StarIcon
-                className="size-4"
-                fill={medida.esDefault ? "currentColor" : "none"}
+            {es3D && (
+              <MedidaInput
+                type="number"
+                min="0"
+                value={medida.profundidadMm ? medida.profundidadMm / 10 : ""}
+                onChange={(event) =>
+                  updateMedida(medida.id, {
+                    profundidadMm: (Number(event.target.value) || 0) * 10,
+                  })
+                }
+                placeholder="Profundidad cm"
+                label="Profundidad (cm)"
+                aria-label={`Profundidad de medida ${index + 1}`}
               />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => removeMedida(medida.id)}
-              disabled={medidas.length <= 1}
-              title="Eliminar medida"
-            >
-              <Trash2Icon className="size-4" />
-            </Button>
+            )}
+            {!esMedidaFija ? (
+              <div className={alta ? altaStyles.measureActions : "contents"}>
+                <Button
+                  type="button"
+                  variant={medida.esDefault ? "default" : "outline"}
+                  size="icon"
+                  onClick={() => setDefault(medida.id)}
+                  aria-pressed={medida.esDefault}
+                  aria-label={`Medida ${index + 1} predeterminada`}
+                  title={
+                    medida.esDefault
+                      ? "Medida predeterminada"
+                      : "Marcar como predeterminada"
+                  }
+                >
+                  <StarIcon
+                    className="size-4"
+                    fill={medida.esDefault ? "currentColor" : "none"}
+                  />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeMedida(medida.id)}
+                  disabled={medidas.length <= 1}
+                  title="Eliminar medida"
+                  aria-label={`Eliminar medida ${index + 1}`}
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </div>
+            ) : (
+              <span className="col-span-2" />
+            )}
           </div>
         ))}
       </div>
       <p className="text-muted-foreground text-xs">
-        La medida con estrella se usa por defecto al cotizar.
+        {esMedidaFija
+          ? "Esta medida se aplicará automáticamente al cotizar."
+          : "La medida con estrella aparecerá seleccionada inicialmente al cotizar."}
       </p>
     </div>
   );
@@ -338,11 +412,23 @@ function validarPrecio(precioConfig: TabPrecioConfig | null): ValidacionStep {
 
 // ─── Wizard principal ──────────────────────────────────────────────
 
-export function ProductoWizard({
+export function ProductoWizard(props: Props) {
+  return (
+    <AltaVisualProvider enabled={props.modo === "crear"}>
+      <ProductoWizardContent {...props} />
+    </AltaVisualProvider>
+  );
+}
+
+function ProductoWizardContent({
   modo,
   productoExistente,
   rutasDisponibles = [],
 }: Props) {
+  const alta = useAltaVisual();
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
+  const visual = alta ? altaStyles : styles;
   const router = useRouter();
   const searchParams = useSearchParams();
   const stepFromUrl = searchParams.get("step") as StepId | null;
@@ -373,6 +459,12 @@ export function ProductoWizard({
   const [modoMedidas, setModoMedidas] = React.useState<ModoMedidasProducto>(
     productoExistente?.modoMedidas ?? "FIJA",
   );
+  const [geometria, setGeometria] = React.useState<"2D" | "3D">(() =>
+    productoExistente &&
+    getDimensionesRequeridas(productoExistente).includes("PROFUNDIDAD")
+      ? "3D"
+      : "2D",
+  );
   const [medidas, setMedidas] = React.useState<MedidaPredefinidaProducto[]>(
     () =>
       productoExistente
@@ -396,15 +488,19 @@ export function ProductoWizard({
   // Ver docs/productos-comprados-merchandising-diseno.md
   const [sinMedida, setSinMedida] = React.useState<boolean>(() =>
     productoExistente
-      ? (productoExistente.modoMedidas ?? "FIJA") === "FIJA" &&
-        getMedidasPredefinidas(productoExistente).length === 0
+      ? getDimensionesRequeridas(productoExistente).length === 0
       : false,
   );
 
   // "Sin medida" solo aplica a productos por unidad; si cambia a m²/ml, se apaga.
   React.useEffect(() => {
-    if (unidadComercial !== "unidad" && sinMedida) setSinMedida(false);
-  }, [unidadComercial, sinMedida]);
+    if (unidadComercial !== "unidad" && sinMedida) {
+      setSinMedida(false);
+      if (medidas.length === 0) {
+        setMedidas([nuevaMedidaPredefinida(0)]);
+      }
+    }
+  }, [medidas.length, unidadComercial, sinMedida]);
 
   // Estado de step 5 — Precio
   const [precioPersistido, setPrecioPersistido] =
@@ -486,7 +582,7 @@ export function ProductoWizard({
     const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
     const medidasNormalizadas = sinMedida
       ? []
-      : normalizarMedidasPorModo(modoMedidas, medidas);
+      : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D");
     const medidaDefault = medidasNormalizadas.find(
       (medida) => medida.esDefault,
     );
@@ -494,6 +590,22 @@ export function ProductoWizard({
       toast.error("Agregá al menos una medida predefinida.");
       return;
     }
+    if (
+      !sinMedida &&
+      geometria === "3D" &&
+      modoMedidas !== "LIBRE" &&
+      medidasNormalizadas.some(
+        (medida) => !medida.profundidadMm || medida.profundidadMm <= 0,
+      )
+    ) {
+      toast.error("Completá la profundidad de cada medida 3D.");
+      return;
+    }
+    const dimensionesRequeridas: DimensionProducto[] = sinMedida
+      ? []
+      : geometria === "3D"
+        ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
+        : ["ANCHO", "ALTO"];
     setGuardandoStep(true);
     try {
       const payload = {
@@ -507,8 +619,10 @@ export function ProductoWizard({
           > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidasEfectivo,
+        dimensionesRequeridas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
+        medidaDefaultProfundidadMm: medidaDefault?.profundidadMm,
         medidasPredefinidasJson: medidasNormalizadas,
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
       };
@@ -518,7 +632,9 @@ export function ProductoWizard({
           "Borrador creado · completá las rutas antes de publicarlo",
         );
         router.push(
-          `/productos-servicios/${creado.id}?tab=${avanzar ? "rutas" : "identidad"}`,
+          avanzar
+            ? `/productos-servicios/${creado.id}?tab=produccion&vista=rutas`
+            : `/productos-servicios/${creado.id}?tab=identidad`,
         );
         router.refresh();
       } else if (productoExistente) {
@@ -544,10 +660,15 @@ export function ProductoWizard({
     const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
     const medidasNormalizadas = sinMedida
       ? []
-      : normalizarMedidasPorModo(modoMedidas, medidas);
+      : normalizarMedidasPorModo(modoMedidas, medidas, geometria === "3D");
     const medidaDefault = medidasNormalizadas.find(
       (medida) => medida.esDefault,
     );
+    const dimensionesRequeridas: DimensionProducto[] = sinMedida
+      ? []
+      : geometria === "3D"
+        ? ["ANCHO", "ALTO", "PROFUNDIDAD"]
+        : ["ANCHO", "ALTO"];
     setGuardandoStep(true);
     try {
       await actualizarProducto(productoExistente.id, {
@@ -561,8 +682,10 @@ export function ProductoWizard({
           > | null) ?? {},
         unidadComercial: unidadComercial as "unidad" | "m2" | "metro_lineal",
         modoMedidas: modoMedidasEfectivo,
+        dimensionesRequeridas,
         medidaDefaultAnchoMm: medidaDefault?.anchoMm,
         medidaDefaultAltoMm: medidaDefault?.altoMm,
+        medidaDefaultProfundidadMm: medidaDefault?.profundidadMm,
         medidasPredefinidasJson: medidasNormalizadas,
         precioConfigJson: precioConfig as unknown as Record<string, unknown>,
         activo,
@@ -578,8 +701,14 @@ export function ProductoWizard({
   };
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
+    <main
+      {...(alta ? scope : {})}
+      data-visual={alta ? "brand" : undefined}
+      className={
+        alta ? `${theme} ${listPage.page} ${visual.page}` : visual.page
+      }
+    >
+      <header className={visual.header}>
         <div>
           <Link
             href={
@@ -587,16 +716,17 @@ export function ProductoWizard({
                 ? `/productos-servicios/${productoExistente.id}`
                 : "/productos-servicios"
             }
-            className={styles.back}
+            className={visual.back}
           >
             <ArrowLeftIcon className="mr-1 size-4" />
             {productoExistente ? "Salir del wizard" : "Volver al catálogo"}
           </Link>
-          <span className={styles.eyebrow}>Catálogo de productos</span>
+          <span className={visual.eyebrow}>Costos · Catálogo de productos</span>
           <h1>
             {modo === "crear"
               ? "Nuevo producto"
               : `Editar: ${productoExistente?.nombre}`}
+            {alta && <span className={altaStyles.titleDot}>.</span>}
           </h1>
           <p>
             Construí la ficha comercial y productiva en un recorrido guiado.
@@ -609,19 +739,19 @@ export function ProductoWizard({
         )}
       </header>
 
-      <div className={styles.workspace}>
+      <div className={visual.workspace}>
         {/* Sidebar de progreso */}
-        <aside className={styles.sidebar}>
-          <Card className={styles.progressCard}>
-            <CardHeader className={styles.progressHeader}>
+        <aside className={visual.sidebar}>
+          <Card className={visual.progressCard}>
+            <CardHeader className={visual.progressHeader}>
               <CardTitle>Progreso</CardTitle>
               <CardDescription>
                 {modo === "crear"
-                  ? "Empezá creando el producto en el step 1."
+                  ? "Completá los datos iniciales para crear un borrador."
                   : "Tocá un step para saltar."}
               </CardDescription>
             </CardHeader>
-            <CardContent className={styles.progressBody}>
+            <CardContent className={visual.progressBody}>
               {STEPS.map((step, idx) => {
                 const val = validaciones[step.id];
                 const Icon = step.icon;
@@ -629,24 +759,24 @@ export function ProductoWizard({
                 const ok = val.errores.length === 0;
                 const disponible = modo === "editar" || step.id === "identidad";
                 return (
-                  <button
+                  <StepButton
                     key={step.id}
                     onClick={() => disponible && irAStep(step.id)}
                     disabled={!disponible}
-                    className={styles.stepButton}
+                    className={visual.stepButton}
                     data-active={isActive || undefined}
                     data-complete={ok || undefined}
                     data-disabled={!disponible || undefined}
                   >
-                    <div className={styles.stepRow}>
+                    <div className={visual.stepRow}>
                       <div
-                        className={styles.stepNumber}
+                        className={visual.stepNumber}
                         data-complete={ok || undefined}
                         data-error={val.errores.length > 0 || undefined}
                       >
                         {ok ? <CheckIcon className="size-3" /> : idx + 1}
                       </div>
-                      <div className={styles.stepText}>
+                      <div className={visual.stepText}>
                         <div>
                           <Icon />
                           {step.nombre}
@@ -670,7 +800,7 @@ export function ProductoWizard({
                         </Badge>
                       )}
                     </div>
-                  </button>
+                  </StepButton>
                 );
               })}
             </CardContent>
@@ -678,7 +808,7 @@ export function ProductoWizard({
         </aside>
 
         {/* Contenido del step */}
-        <div className={styles.content}>
+        <div className={visual.content}>
           {stepActivo === "identidad" && (
             <StepIdentidad
               modo={modo}
@@ -693,6 +823,8 @@ export function ProductoWizard({
               setUnidadComercial={setUnidadComercial}
               modoMedidas={modoMedidas}
               setModoMedidas={setModoMedidas}
+              geometria={geometria}
+              setGeometria={setGeometria}
               sinMedida={sinMedida}
               setSinMedida={setSinMedida}
               medidas={medidas}
@@ -733,7 +865,7 @@ export function ProductoWizard({
 
           {/* Bloqueo si modo crear y producto no existe pero el step requiere producto */}
           {stepActivo !== "identidad" && !productoExistente && (
-            <Card className={styles.blockedCard}>
+            <Card className={visual.blockedCard}>
               <CardContent className="pt-6 text-center text-sm text-muted-foreground">
                 Necesitás crear primero el producto en el step
                 &quot;Identidad&quot;.
@@ -742,7 +874,7 @@ export function ProductoWizard({
           )}
 
           {/* Navegación inferior */}
-          <footer className={styles.navigation}>
+          <footer className={visual.navigation}>
             <Button
               variant="outline"
               onClick={() => stepAnterior && irAStep(stepAnterior.id)}
@@ -762,7 +894,7 @@ export function ProductoWizard({
                   Guardar borrador
                 </Button>
                 <Button
-                  className={styles.primaryAction}
+                  className={alta ? undefined : styles.primaryAction}
                   onClick={() => guardarIdentidad(true)}
                   disabled={guardandoStep || valIdentidad.errores.length > 0}
                 >
@@ -776,7 +908,7 @@ export function ProductoWizard({
               </div>
             ) : (
               <Button
-                className={styles.primaryAction}
+                className={alta ? undefined : styles.primaryAction}
                 onClick={() => stepSiguiente && irAStep(stepSiguiente.id)}
                 disabled={!stepSiguiente}
               >
@@ -806,6 +938,8 @@ interface StepIdentidadProps {
   setUnidadComercial: (v: string) => void;
   modoMedidas: ModoMedidasProducto;
   setModoMedidas: (v: ModoMedidasProducto) => void;
+  geometria: "2D" | "3D";
+  setGeometria: (v: "2D" | "3D") => void;
   sinMedida: boolean;
   setSinMedida: (v: boolean) => void;
   medidas: MedidaPredefinidaProducto[];
@@ -816,6 +950,8 @@ interface StepIdentidadProps {
 }
 
 function StepIdentidad(props: StepIdentidadProps) {
+  const alta = useAltaVisual();
+  const visual = alta ? altaStyles : styles;
   const subcategoriaOptions = props.catalogoComercial.flatMap((categoria) =>
     categoria.subcategorias.map((subcategoria) => ({
       value: subcategoria.codigo,
@@ -824,8 +960,12 @@ function StepIdentidad(props: StepIdentidadProps) {
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card className={styles.identityCard}>
+    <div
+      className={
+        alta ? altaStyles.identityGrid : "grid grid-cols-1 gap-4 lg:grid-cols-2"
+      }
+    >
+      <Card className={alta ? undefined : styles.identityCard}>
         <CardHeader>
           <CardTitle>Identidad</CardTitle>
           <CardDescription>
@@ -848,7 +988,7 @@ function StepIdentidad(props: StepIdentidadProps) {
               }
             />
             {!props.nombre.trim() && (
-              <p id="nombre-error" className={styles.fieldError}>
+              <p id="nombre-error" className={visual.fieldError}>
                 Ingresá el nombre del producto.
               </p>
             )}
@@ -898,17 +1038,18 @@ function StepIdentidad(props: StepIdentidadProps) {
         </CardContent>
       </Card>
 
-      <Card className={styles.commercialCard}>
+      <Card className={alta ? undefined : styles.commercialCard}>
         <CardHeader>
           <CardTitle>Comercial y medidas</CardTitle>
           <CardDescription>
-            Cómo se cobra y cómo se manejan las medidas al cotizar.
+            Definí cómo se vende el producto y qué datos deberá completar el
+            comercial al cotizarlo.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <LabelConTooltip
-              label="¿Cómo se cobra?"
+              label="Unidad de venta"
               htmlFor="unidad"
               tooltip={
                 getLabel(unidadComercialLabels, props.unidadComercial)
@@ -927,23 +1068,29 @@ function StepIdentidad(props: StepIdentidadProps) {
           {props.unidadComercial === "unidad" && (
             <div className="space-y-2">
               <LabelConTooltip
-                label="¿El producto tiene medida?"
+                label="¿El producto se define por medidas?"
                 htmlFor="sinMedida"
-                tooltip="Los productos comprados por unidad (tazas, remeras, lapiceras) no tienen medida propia: se cotizan por unidad y la estampa la maneja la personalización. Elegí «Sin medida» para ellos."
+                tooltip="Indicá si el producto necesita dimensiones para calcular su precio, materiales o producción."
               />
               <HumanSelect
                 value={props.sinMedida ? "sin" : "con"}
-                onValueChange={(v) => props.setSinMedida(v === "sin")}
+                onValueChange={(v) => {
+                  const nextSinMedida = v === "sin";
+                  props.setSinMedida(nextSinMedida);
+                  if (!nextSinMedida && props.medidas.length === 0) {
+                    props.setMedidas([nuevaMedidaPredefinida(0)]);
+                  }
+                }}
                 options={[
                   {
                     value: "con",
-                    label: "Con medida",
+                    label: "Sí, utiliza medidas",
                     description:
                       "El producto tiene una medida física (ej. tarjeta 90×50 mm).",
                   },
                   {
                     value: "sin",
-                    label: "Sin medida (por unidad)",
+                    label: "No utiliza medidas",
                     description:
                       "Merchandising comprado: taza, remera, lapicera. Se cotiza por unidad.",
                   },
@@ -954,8 +1101,48 @@ function StepIdentidad(props: StepIdentidadProps) {
           )}
           {!props.sinMedida && (
             <div className="space-y-2">
+              <Label>Geometría del producto</Label>
+              <div
+                className={
+                  alta ? altaStyles.geometry : "grid grid-cols-2 gap-2"
+                }
+              >
+                <Button
+                  type="button"
+                  variant={
+                    props.geometria === "2D"
+                      ? alta
+                        ? "secondary"
+                        : "default"
+                      : "outline"
+                  }
+                  onClick={() => props.setGeometria("2D")}
+                >
+                  2D · Ancho y alto
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    props.geometria === "3D"
+                      ? alta
+                        ? "secondary"
+                        : "default"
+                      : "outline"
+                  }
+                  onClick={() => props.setGeometria("3D")}
+                >
+                  3D · Ancho, alto y profundidad
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                El sheet solicitará exactamente estas dimensiones al cotizar.
+              </p>
+            </div>
+          )}
+          {!props.sinMedida && (
+            <div className="space-y-2">
               <LabelConTooltip
-                label="Manejo de medidas"
+                label="¿Cómo se define la medida?"
                 htmlFor="modoMedidas"
                 tooltip={
                   getLabel(modoMedidasLabels, props.modoMedidas).descripcion
@@ -964,9 +1151,13 @@ function StepIdentidad(props: StepIdentidadProps) {
               />
               <HumanSelect
                 value={props.modoMedidas}
-                onValueChange={(v) =>
-                  props.setModoMedidas((v || "FIJA") as ModoMedidasProducto)
-                }
+                onValueChange={(v) => {
+                  const nextModo = (v || "FIJA") as ModoMedidasProducto;
+                  props.setModoMedidas(nextModo);
+                  if (nextModo === "FIJA" && props.medidas.length === 0) {
+                    props.setMedidas([nuevaMedidaPredefinida(0)]);
+                  }
+                }}
                 options={MODOS_MEDIDAS.map((it) =>
                   optionFromLabel(it.value, modoMedidasLabels),
                 )}
@@ -978,6 +1169,8 @@ function StepIdentidad(props: StepIdentidadProps) {
             modoMedidasUsaPredefinidas(props.modoMedidas) && (
               <MedidasPredefinidasWizard
                 medidas={props.medidas}
+                modo={props.modoMedidas}
+                es3D={props.geometria === "3D"}
                 onChange={props.setMedidas}
               />
             )}

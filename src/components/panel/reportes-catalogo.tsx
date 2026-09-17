@@ -3,8 +3,10 @@
 import Link from "next/link";
 import {
   ArrowUpRightIcon,
-  ChartNoAxesCombinedIcon,
   CircleIcon,
+  ChartNoAxesCombinedIcon,
+  TargetIcon,
+  FactoryIcon,
 } from "lucide-react";
 
 import { usePuedeFn } from "@/components/navigation/permisos-provider";
@@ -30,23 +32,6 @@ export function ReportesCatalogo() {
 
   return (
     <div className={styles.catalogo}>
-      <div className={styles.intro}>
-        <div className={styles.introIcon} aria-hidden="true">
-          <ChartNoAxesCombinedIcon />
-        </div>
-        <div>
-          <span className={styles.kicker}>Centro de análisis</span>
-          <p>
-            Una lectura ordenada de tu negocio, desde las ventas hasta la
-            operación diaria.
-          </p>
-        </div>
-        <div className={styles.introMeta}>
-          <strong>{visibles.length}</strong>
-          <span>vistas disponibles</span>
-        </div>
-      </div>
-
       <div className={styles.categorias}>
         {CATEGORIAS_REPORTES.map((categoria, indice) => {
           const reportes = visibles.filter(
@@ -99,6 +84,26 @@ export function ReportesCatalogo() {
                       ) : null}
                       <strong>{reporte.label}</strong>
                       <span>{reporte.descripcion}</span>
+                    </span>
+                    {destacada ? (
+                      <div className={styles.focusAreas} aria-hidden="true">
+                        <div>
+                          <ChartNoAxesCombinedIcon />
+                          <span>Ventas</span>
+                        </div>
+                        <div>
+                          <TargetIcon />
+                          <span>Rentabilidad</span>
+                        </div>
+                        <div>
+                          <FactoryIcon />
+                          <span>Operación</span>
+                        </div>
+                      </div>
+                    ) : null}
+                    <span className={styles.openLabel}>
+                      {destacada ? "Explorar resumen" : "Abrir reporte"}
+                      <ArrowUpRightIcon aria-hidden="true" />
                     </span>
                   </Link>
                 ))}

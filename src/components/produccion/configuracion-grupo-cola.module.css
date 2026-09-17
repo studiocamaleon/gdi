@@ -1,0 +1,4 @@
+.heading { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; font-size: 11px; line-height: 1.5; color: var(--muted-foreground); }
+.heading > svg { width: 14px; height: 14px; flex: none; }
+.heading strong { font-weight: 550; color: var(--foreground); }
+.heading > span, .heading strong { overflow-wrap: anywhere; }

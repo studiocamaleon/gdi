@@ -1,3 +1,4 @@
+import { PublicarCambiosReceta } from './publicacion-automatica.interceptor';
 import {
   Body,
   Controller,
@@ -5,6 +6,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -50,6 +52,15 @@ import {
 } from './dto/cargo-directo.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { FormularioCotizacionService } from './formulario-cotizacion.service';
+import { CurrentSession } from '../auth/current-auth.decorator';
+import type { CurrentAuth } from '../auth/auth.types';
+import {
+  DescartarBorradorRecetaDto,
+  DeprecarRecetaDto,
+  GuardarBorradorRecetaDto,
+  PublicarRecetaDto,
+} from './dto/receta-producto.dto';
+import { RecetasProductoService } from './recetas-producto.service';
 
 interface RequestWithAuth extends Request {
   auth?: { tenantId: string; userId: string };
@@ -68,7 +79,72 @@ export class ProductosServiciosController {
     private readonly service: ProductosServiciosService,
     private readonly pasosTenant: PasosTenantService,
     private readonly formulario: FormularioCotizacionService,
+    private readonly recetas: RecetasProductoService,
   ) {}
+
+  @Get('productos/:id/receta')
+  obtenerReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recetas.obtener(auth, id);
+  }
+
+  @Get('productos/:id/receta/estado-publicacion')
+  obtenerEstadoPublicacionReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recetas.obtenerEstadoPublicacion(auth, id);
+  }
+
+  @Get('recetas/revisiones/:revisionId/bom-multinivel')
+  obtenerBomMultinivel(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+  ) {
+    return this.recetas.obtenerBomMultinivel(auth, revisionId);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('productos/:id/receta/borrador')
+  guardarBorradorReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: GuardarBorradorRecetaDto,
+  ) {
+    return this.recetas.guardarConPublicacionAutomatica(auth, id, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('recetas/revisiones/:revisionId/publicar')
+  publicarReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Body() dto: PublicarRecetaDto,
+  ) {
+    return this.recetas.publicar(auth, revisionId, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Delete('recetas/revisiones/:revisionId/borrador')
+  descartarBorradorReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Body() dto: DescartarBorradorRecetaDto,
+  ) {
+    return this.recetas.descartarBorrador(auth, revisionId, dto);
+  }
+
+  @Permiso('costos.gestionar')
+  @Post('recetas/revisiones/:revisionId/deprecar')
+  deprecarReceta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('revisionId', ParseUUIDPipe) revisionId: string,
+    @Body() dto: DeprecarRecetaDto,
+  ) {
+    return this.recetas.deprecar(auth, revisionId, dto);
+  }
 
   @Get('catalogo-comercial')
   listarCatalogoComercial() {
@@ -90,6 +166,7 @@ export class ProductosServiciosController {
       subcategoriaCodigo: query.subcategoriaCodigo?.trim() || undefined,
       categoriaCodigo: query.categoriaCodigo?.trim() || undefined,
       orden: query.orden,
+      composicion: query.composicion,
     });
   }
 
@@ -132,6 +209,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos')
+  @PublicarCambiosReceta('productoNuevo', 'id')
   async crearProducto(
     @Req() req: RequestWithAuth,
     @Body() dto: CrearProductoDto,
@@ -143,6 +221,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('productos/:id')
+  @PublicarCambiosReceta('producto', 'id')
   async actualizarProducto(
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
@@ -155,6 +234,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/:id/duplicar')
+  @PublicarCambiosReceta('productoNuevo', 'id')
   async duplicarProducto(
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
@@ -201,6 +281,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('rutas/:id')
+  @PublicarCambiosReceta('ruta', 'id')
   async actualizarRuta(
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
@@ -225,6 +306,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('rutas/:id/migrar-productos')
+  @PublicarCambiosReceta('ruta', 'id')
   async migrarProductosRuta(
     @Req() req: RequestWithAuth,
     @Param('id') id: string,
@@ -252,6 +334,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/:productoId/rutas-alternativas')
+  @PublicarCambiosReceta('producto', 'productoId')
   async crearProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
     @Param('productoId') productoId: string,
@@ -264,6 +347,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('productos/rutas-alternativas/:rutaAltId')
+  @PublicarCambiosReceta('rutaAlternativa', 'rutaAltId')
   async actualizarProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
     @Param('rutaAltId') rutaAltId: string,
@@ -280,6 +364,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('productos/rutas-alternativas/:rutaAltId/orden-pasos')
+  @PublicarCambiosReceta('rutaAlternativa', 'rutaAltId')
   async reordenarPasosRutaAlternativa(
     @Req() req: RequestWithAuth,
     @Param('rutaAltId') rutaAltId: string,
@@ -292,6 +377,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/rutas-alternativas/:rutaAltId/duplicar')
+  @PublicarCambiosReceta('rutaAlternativa', 'rutaAltId')
   async duplicarProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
     @Param('rutaAltId') rutaAltId: string,
@@ -309,6 +395,7 @@ export class ProductosServiciosController {
   @Permiso('costos.gestionar')
   @Delete('productos/rutas-alternativas/:rutaAltId')
   @HttpCode(204)
+  @PublicarCambiosReceta('rutaAlternativa', 'rutaAltId')
   async eliminarProductoRutaAlternativa(
     @Req() req: RequestWithAuth,
     @Param('rutaAltId') rutaAltId: string,
@@ -320,6 +407,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/rutas-alternativas/:rutaAltId/config-pasos')
+  @PublicarCambiosReceta('rutaAlternativa', 'rutaAltId')
   async upsertConfigPaso(
     @Req() req: RequestWithAuth,
     @Param('rutaAltId') rutaAltId: string,
@@ -503,6 +591,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/:productoId/cargos-cotizacion')
+  @PublicarCambiosReceta('producto', 'productoId')
   async asociarCargoCotizacion(
     @Req() req: RequestWithAuth,
     @Param('productoId') productoId: string,
@@ -515,6 +604,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('productos/cargos-cotizacion/:asociacionId')
+  @PublicarCambiosReceta('cargoCotizacion', 'asociacionId')
   async actualizarCargoCotizacion(
     @Req() req: RequestWithAuth,
     @Param('asociacionId') asociacionId: string,
@@ -528,6 +618,7 @@ export class ProductosServiciosController {
   @Permiso('costos.gestionar')
   @Delete('productos/cargos-cotizacion/:asociacionId')
   @HttpCode(204)
+  @PublicarCambiosReceta('cargoCotizacion', 'asociacionId')
   async desasociarCargoCotizacion(
     @Req() req: RequestWithAuth,
     @Param('asociacionId') asociacionId: string,
@@ -539,6 +630,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/config-pasos/:configPasoId/cargos')
+  @PublicarCambiosReceta('configPaso', 'configPasoId')
   async asociarCargoPaso(
     @Req() req: RequestWithAuth,
     @Param('configPasoId') configPasoId: string,
@@ -551,6 +643,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('productos/config-pasos/cargos/:asociacionId')
+  @PublicarCambiosReceta('cargoPaso', 'asociacionId')
   async actualizarCargoPaso(
     @Req() req: RequestWithAuth,
     @Param('asociacionId') asociacionId: string,
@@ -564,6 +657,7 @@ export class ProductosServiciosController {
   @Permiso('costos.gestionar')
   @Delete('productos/config-pasos/cargos/:asociacionId')
   @HttpCode(204)
+  @PublicarCambiosReceta('cargoPaso', 'asociacionId')
   async desasociarCargoPaso(
     @Req() req: RequestWithAuth,
     @Param('asociacionId') asociacionId: string,
@@ -575,6 +669,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/config-pasos/cargos/:asociacionId/distribuir-niveles')
+  @PublicarCambiosReceta('cargoPaso', 'asociacionId')
   async distribuirCargoPasoPorNiveles(
     @Req() req: RequestWithAuth,
     @Param('asociacionId') asociacionId: string,
@@ -588,6 +683,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Post('productos/:productoId/pasos-extras')
+  @PublicarCambiosReceta('producto', 'productoId')
   async agregarPasoExtra(
     @Req() req: RequestWithAuth,
     @Param('productoId') productoId: string,
@@ -600,6 +696,7 @@ export class ProductosServiciosController {
 
   @Permiso('costos.gestionar')
   @Patch('productos/pasos-extras/:pasoExtraId')
+  @PublicarCambiosReceta('pasoExtra', 'pasoExtraId')
   async actualizarPasoExtra(
     @Req() req: RequestWithAuth,
     @Param('pasoExtraId') pasoExtraId: string,
@@ -613,6 +710,7 @@ export class ProductosServiciosController {
   @Permiso('costos.gestionar')
   @Delete('productos/pasos-extras/:pasoExtraId')
   @HttpCode(204)
+  @PublicarCambiosReceta('pasoExtra', 'pasoExtraId')
   async eliminarPasoExtra(
     @Req() req: RequestWithAuth,
     @Param('pasoExtraId') pasoExtraId: string,

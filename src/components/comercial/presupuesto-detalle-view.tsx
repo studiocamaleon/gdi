@@ -3,14 +3,37 @@
 import * as React from "react";
 
 import Link from "next/link";
+import { Card, Tabs, TextArea, Checkbox, Label } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { SelectField } from "@/components/design-system/select-field";
+import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
+import focus from "@/components/design-system/field-focus.module.css";
+import s from "./presupuesto-detalle-view.module.css";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeftIcon,
+  ArrowUpRight,
+  ArrowRightLeft,
+  Copy,
+  Eye,
+  CircleDollarSign,
+  Gift,
+  MessageSquareText,
+  Clock3,
   CalendarIcon,
   CheckIcon,
   ExternalLinkIcon,
   FileTextIcon,
+  FolderIcon,
   HistoryIcon,
   PackageIcon,
   SendIcon,
@@ -36,31 +59,18 @@ import {
   useFecha,
 } from "@/components/navigation/config-regional-provider";
 import type { MembershipRole } from "@/lib/auth";
-import { CANALES_VENTA } from "@/lib/propuestas";
+import { nombreCanalVenta } from "@/lib/canales-venta";
 import { fechaConDia } from "@/lib/fecha";
 
-/**
- * Vista de detalle DEDICADA de un presupuesto (antes vivía en un drawer de
- * 460px, donde no entraban items + specs + totales + acciones + historial).
- * Espeja la ficha de OT: header con estado, stepper del ciclo, fila de campos,
- * barra de acción principal y tabs.
- */
-
-const ESTADO_META: Record<
-  PresupuestoEstado,
-  { label: string; dot: string; fg: string }
-> = {
-  borrador: { label: "Borrador", dot: "#9b9ba3", fg: "#6e6e76" },
-  pendiente_aprobacion: {
-    label: "Pendiente de aprobación",
-    dot: "#d9642a",
-    fg: "#b1531f",
-  },
-  enviado: { label: "Enviado", dot: "#1d4ed8", fg: "#1d4ed8" },
-  aprobado: { label: "Aprobado", dot: "#16794a", fg: "#16794a" },
-  rechazado: { label: "Rechazado", dot: "#b91c1c", fg: "#b91c1c" },
-  vencido: { label: "Vencido", dot: "#92929b", fg: "#6e6e76" },
-  convertido: { label: "Convertido en OT", dot: "#16794a", fg: "#16794a" },
+/** Ficha comercial: presentación y acciones según el estado del presupuesto. */
+const ESTADO_META: Record<PresupuestoEstado, { label: string }> = {
+  borrador: { label: "Borrador" },
+  pendiente_aprobacion: { label: "Pendiente de aprobación" },
+  enviado: { label: "Enviado" },
+  aprobado: { label: "Aprobado" },
+  rechazado: { label: "Rechazado" },
+  vencido: { label: "Vencido" },
+  convertido: { label: "Convertido en OT" },
 };
 
 /** Camino feliz del presupuesto. Rechazado/vencido se muestran aparte. */
@@ -80,21 +90,31 @@ const MOTIVOS_PERDIDA = [
 ];
 
 /** El canal se guarda como slug ("mostrador"); se muestra con su etiqueta. */
-const canalLabel = (v: string | null) =>
-  v ? (CANALES_VENTA.find((c) => c.value === v)?.label ?? v) : "—";
+const canalLabel = (v: string | null) => nombreCanalVenta(v);
 
 const fmtMoneda = (n: number, moneda: Moneda) =>
   formatearMoneda(n, moneda, { decimales: 0 });
 
 type Tab = "productos" | "conversion" | "historial";
 
-export function PresupuestoDetalleView({
-  inicial,
-  rol,
-}: {
+type PresupuestoDetalleViewProps = {
   inicial: PresupuestoDetalle;
   rol: MembershipRole;
-}) {
+};
+export function PresupuestoDetalleView(props: PresupuestoDetalleViewProps) {
+  return (
+    <DesignSystemProvider appearance="light" theme="brand">
+      <PresupuestoDetalleContent {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function PresupuestoDetalleContent({
+  inicial,
+  rol,
+}: PresupuestoDetalleViewProps) {
+  const scope = useDesignScope();
+  const themeClass = useDesignTheme();
   const router = useRouter();
   const { fechaCorta, fechaHora } = useFecha();
   const fmtFecha = (iso: string | null) =>
@@ -207,121 +227,119 @@ export function PresupuestoDetalleView({
 
   const meta = ESTADO_META[d.estado];
   const idxActual = FLUJO.indexOf(d.estado);
-  const fueraDelFlujo = idxActual < 0; // rechazado / vencido / pendiente_aprobacion
+  const fueraDelFlujo = idxActual < 0;
 
   return (
-    <section className="ot-v1 pp-detalle flex flex-1 flex-col p-4 md:p-6">
-      {/* ── Header ─────────────────────────────────────────── */}
-      <div className="orden-head">
-        <div className="left">
-          <nav className="orden-breadcrumb" aria-label="Ubicación">
-            <span className="bc-item">
-              <FileTextIcon />
-              Comercial
-            </span>
-            <span className="bc-sep">›</span>
-            <Link className="bc-item bc-link" href="/comercial/presupuestos">
-              <ArrowLeftIcon />
-              Presupuestos
+    <section
+      {...scope}
+      className={`${themeClass} ${s.page}`}
+      aria-label="Detalle de presupuesto"
+    >
+      <header className={s.header}>
+        <div>
+          <nav className={s.breadcrumb} aria-label="Ubicación">
+            <Link href="/comercial/presupuestos">
+              <ArrowLeftIcon aria-hidden /> Presupuestos
             </Link>
+            <span aria-hidden>/</span>
+            <span>Detalle comercial</span>
           </nav>
-          <h1
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontFamily: "var(--font-mono)" }}>
+          <div className={s.titleRow}>
+            <h1>
               {d.numero ?? "Borrador"}
-            </span>
-            <span className="pp-badge" style={{ color: meta.fg }}>
-              <span className="d" style={{ background: meta.dot }} />
+              <span className={s.titleDot}>.</span>
+            </h1>
+            <span className={s.status} data-estado={d.estado}>
+              <span aria-hidden />
               {meta.label}
             </span>
-            {d.estado === "enviado" && d.primeraVistaEl ? (
-              <span className="pp-visto">
-                Visto {fmtMomento(d.primeraVistaEl)}
-              </span>
-            ) : null}
-          </h1>
-          <div className="sub">
-            {d.cliente?.nombre ?? "Sin cliente"} · emitido{" "}
-            {fmtFecha(d.fechaEmision)} · válido hasta {fmtFecha(d.fechaValidez)}
           </div>
+          <p className={s.subtitle}>
+            {d.cliente?.nombre ?? "Sin cliente"} · Emitido{" "}
+            {fmtFecha(d.fechaEmision)}
+          </p>
+          {d.estado === "enviado" && d.primeraVistaEl && (
+            <p className={s.seen}>
+              <Eye aria-hidden />
+              Visto por el cliente · {fmtMomento(d.primeraVistaEl)}
+            </p>
+          )}
         </div>
-
-        <div className="right">
-          <a
-            className="btn"
+        <div className={s.headerActions}>
+          <ActionLink
+            variant="outline"
             href={presupuestoPdfUrl(id)}
+            prefetch={false}
             target="_blank"
             rel="noreferrer"
           >
-            <FileTextIcon /> PDF
-          </a>
-          {d.publicToken ? (
+            <FileTextIcon aria-hidden />
+            PDF
+          </ActionLink>
+          {d.publicToken && (
             <>
-              <button type="button" className="btn" onClick={copiarLink}>
-                {linkCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
+              <ActionButton variant="outline" onPress={copiarLink}>
+                {linkCopiado ? <CheckIcon aria-hidden /> : <Copy aria-hidden />}
                 {linkCopiado ? "Copiado" : "Copiar link"}
-              </button>
-              <a
-                className="btn"
+              </ActionButton>
+              <ActionLink
+                variant="outline"
                 href={presupuestoPublicPath(d.publicToken)}
+                prefetch={false}
                 target="_blank"
                 rel="noreferrer"
-                title="Abrir la vista que ve el cliente"
               >
                 Ver como cliente
-              </a>
+                <ExternalLinkIcon aria-hidden />
+              </ActionLink>
             </>
-          ) : null}
+          )}
         </div>
-      </div>
+      </header>
 
-      {/* ── Ciclo de vida ──────────────────────────────────── */}
-      <div className="otd-flow">
-        {fueraDelFlujo ? (
-          <div className="otd-fstage cur">
-            <span className="fs-dot" style={{ background: meta.dot }} />
-            <span className="fs-lbl" style={{ color: meta.fg }}>
-              {meta.label}
-            </span>
-          </div>
-        ) : (
-          FLUJO.map((k, i) => {
-            const e = ESTADO_META[k];
-            const st =
-              i < idxActual ? "past" : i === idxActual ? "cur" : "future";
-            return (
-              <React.Fragment key={k}>
-                <div className={`otd-fstage ${st}`}>
-                  <span
-                    className="fs-dot"
-                    style={st !== "future" ? { background: e.dot } : {}}
-                  />
-                  <span
-                    className="fs-lbl"
-                    style={st === "cur" ? { color: e.fg } : {}}
-                  >
-                    {e.label}
-                  </span>
-                </div>
-                {i < FLUJO.length - 1 ? (
-                  <span className={`otd-fline ${i < idxActual ? "on" : ""}`} />
-                ) : null}
-              </React.Fragment>
-            );
-          })
-        )}
-      </div>
+      <ol className={s.flow} aria-label="Ciclo del presupuesto">
+        {(fueraDelFlujo ? [d.estado] : FLUJO).map((estado, i) => {
+          const actual = fueraDelFlujo || i === idxActual;
+          const pasado = !fueraDelFlujo && i < idxActual;
+          return (
+            <li
+              key={estado}
+              className={s.flowStep}
+              data-current={actual || undefined}
+              data-complete={pasado || undefined}
+              aria-current={actual ? "step" : undefined}
+            >
+              <span className={s.stepNumber}>
+                {fueraDelFlujo ? (
+                  <FileTextIcon aria-hidden />
+                ) : pasado ? (
+                  <CheckIcon aria-hidden />
+                ) : (
+                  String(i + 1).padStart(2, "0")
+                )}
+              </span>
+              <span>{ESTADO_META[estado].label}</span>
+              {!fueraDelFlujo && i < FLUJO.length - 1 && (
+                <span className={s.stepLine} aria-hidden />
+              )}
+            </li>
+          );
+        })}
+      </ol>
 
-      {/* ── Campos ─────────────────────────────────────────── */}
-      <div className="orden-form">
+      <dl className={s.fields}>
         <Campo label="Cliente" icon={<UserIcon />}>
           {d.cliente?.nombre ?? "Sin cliente"}
+        </Campo>
+        <Campo label="Campaña" icon={<FolderIcon />}>
+          {d.proyectoCampana ? (
+            <Link href={`/comercial/campanas/${d.proyectoCampana.id}`}>
+              {d.proyectoCampana.codigo} · {d.proyectoCampana.nombre}
+              <ArrowUpRight aria-hidden />
+            </Link>
+          ) : (
+            "Sin campaña"
+          )}
         </Campo>
         <Campo label="Vendedor" icon={<UserIcon />}>
           {d.vendedor?.nombre ?? "—"}
@@ -340,9 +358,8 @@ export function PresupuestoDetalleView({
         >
           {fmtFecha(d.fechaValidez)}
         </Campo>
-      </div>
+      </dl>
 
-      {/* ── Acción principal del estado ────────────────────── */}
       <AccionesEstado
         d={d}
         puedeAprobar={puedeAprobar}
@@ -367,158 +384,165 @@ export function PresupuestoDetalleView({
         disponibles={itemsConvertibles.length}
       />
 
-      {devolucionAbierta ? (
-        <div className="otd-card pp-form-card">
-          <div className="otd-card-head">
-            <span className="ttl">Devolver al vendedor</span>
-            <span className="sub">
-              Se le avisa para que lo corrija y lo vuelva a mandar.
-            </span>
-          </div>
-          <div className="pp-form-body">
-            <textarea
-              className="pp-textarea"
-              placeholder="Qué hay que corregir…"
-              value={notaDevolucion}
-              onChange={(e) => setNotaDevolucion(e.target.value)}
-            />
-            <div className="pp-form-actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setDevolucionAbierta(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={trabajando}
-                onClick={() =>
-                  void accion(async () => {
-                    await resolverAprobacionPresupuesto(id, {
-                      decision: "devolver",
-                      comentario: notaDevolucion || undefined,
-                    });
-                    setDevolucionAbierta(false);
-                    setNotaDevolucion("");
-                  }, "Devuelto al vendedor.")
-                }
-              >
-                Devolver
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {rechazoAbierto ? (
-        <div className="otd-card pp-form-card">
-          <div className="otd-card-head">
-            <span className="ttl">Registrar rechazo</span>
-            <span className="sub">
-              Queda el motivo para los reportes de pérdida.
-            </span>
-          </div>
-          <div className="pp-form-body">
-            <div className="pp-motivos">
-              {MOTIVOS_PERDIDA.map((m) => (
-                <button
-                  key={m.v}
-                  type="button"
-                  className={`pp-motivo ${motivo === m.v ? "on" : ""}`}
-                  onClick={() => setMotivo(m.v)}
-                >
-                  {m.l}
-                </button>
-              ))}
-            </div>
-            <textarea
-              className="pp-textarea"
-              placeholder="Detalle (opcional)…"
-              value={motivoDetalle}
-              onChange={(e) => setMotivoDetalle(e.target.value)}
-            />
-            <div className="pp-form-actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setRechazoAbierto(false)}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                disabled={trabajando}
-                onClick={() =>
-                  void accion(async () => {
-                    await resolverPresupuesto(id, {
-                      resultado: "rechazado",
-                      motivoPerdida: motivo,
-                      motivoPerdidaDetalle: motivoDetalle || undefined,
-                    });
-                    setRechazoAbierto(false);
-                    setMotivoDetalle("");
-                  }, "Rechazo registrado.")
-                }
-              >
-                Registrar rechazo
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ── Tabs ───────────────────────────────────────────────
-          `.orden-tabs` tiene flex:1 y espera vivir dentro de `.orden-tabs-row`
-          (flex en fila); suelto en una columna colapsa a 0 de alto. */}
-      <div className="orden-tabs-row">
-        <div
-          className="orden-tabs"
-          role="tablist"
-          style={{ overflowY: "hidden" }}
+      <div className={s.workspace}>
+        <Tabs
+          className={s.tabs}
+          selectedKey={tab}
+          onSelectionChange={(key) => setTab(key as Tab)}
         >
-          {(
-            [
+          <NavigationTabList
+            label="Secciones del presupuesto"
+            tone="graphite"
+            variant="detailed"
+            items={[
               {
-                k: "productos",
-                l: "Productos",
-                ic: <PackageIcon />,
-                ct: d.items.length,
+                id: "productos",
+                label: "Productos",
+                description: "Detalle y especificaciones",
+                icon: <PackageIcon aria-hidden />,
+                count: d.items.length,
               },
-              { k: "conversion", l: "Conversión", ic: <SendIcon />, ct: null },
               {
-                k: "historial",
-                l: "Historial",
-                ic: <HistoryIcon />,
-                ct: d.eventos.length,
+                id: "conversion",
+                label: "Conversión",
+                description: "De presupuesto a orden",
+                icon: <ArrowRightLeft aria-hidden />,
               },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.k}
-              type="button"
-              className={`otab ${tab === t.k ? "on" : ""}`}
-              onClick={() => setTab(t.k as Tab)}
-            >
-              <span className="ic">{t.ic}</span>
-              <span>{t.l}</span>
-              {t.ct != null ? <span className="ct">{t.ct}</span> : null}
-            </button>
-          ))}
-        </div>
+              {
+                id: "historial",
+                label: "Historial",
+                description: "Actividad y seguimiento",
+                icon: <HistoryIcon aria-hidden />,
+                count: d.eventos.length,
+              },
+            ]}
+          />
+          <Tabs.Panel id="productos" className={s.tabPanel}>
+            <TabProductos d={d} />
+          </Tabs.Panel>
+          <Tabs.Panel id="conversion" className={s.tabPanel}>
+            <TabConversion
+              d={d}
+              seleccion={seleccion}
+              setSeleccion={setSeleccion}
+            />
+          </Tabs.Panel>
+          <Tabs.Panel id="historial" className={s.tabPanel}>
+            <TabHistorial d={d} />
+          </Tabs.Panel>
+        </Tabs>
+        <ResumenFinanciero d={d} />
       </div>
 
-      {tab === "productos" ? <TabProductos d={d} /> : null}
-      {tab === "conversion" ? (
-        <TabConversion
-          d={d}
-          seleccion={seleccion}
-          setSeleccion={setSeleccion}
-        />
-      ) : null}
-      {tab === "historial" ? <TabHistorial d={d} /> : null}
+      <FormDialog
+        isOpen={devolucionAbierta}
+        onOpenChange={setDevolucionAbierta}
+        isDismissable={!trabajando}
+        title="Devolver al vendedor"
+        description="Se le avisa para que lo corrija y lo vuelva a mandar."
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void accion(async () => {
+              await resolverAprobacionPresupuesto(id, {
+                decision: "devolver",
+                comentario: notaDevolucion || undefined,
+              });
+              setDevolucionAbierta(false);
+              setNotaDevolucion("");
+            }, "Devuelto al vendedor.");
+          }}
+        >
+          <div className={s.formBody}>
+            <label className={s.formField}>
+              <span>Qué hay que corregir</span>
+              <TextArea
+                className={`${s.textarea} ${focus.singleBorder}`}
+                placeholder="Indicá los cambios necesarios…"
+                value={notaDevolucion}
+                onChange={(e) => setNotaDevolucion(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className={s.formActions}>
+            <ActionButton
+              variant="outline"
+              isDisabled={trabajando}
+              onPress={() => setDevolucionAbierta(false)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton type="submit" isDisabled={trabajando}>
+              Devolver
+            </ActionButton>
+          </div>
+        </form>
+      </FormDialog>
+      <FormDialog
+        isOpen={rechazoAbierto}
+        onOpenChange={setRechazoAbierto}
+        isDismissable={!trabajando}
+        title="Registrar rechazo"
+        description="El motivo queda registrado para el seguimiento comercial y los reportes de pérdida."
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void accion(async () => {
+              await resolverPresupuesto(id, {
+                resultado: "rechazado",
+                motivoPerdida: motivo,
+                motivoPerdidaDetalle: motivoDetalle || undefined,
+              });
+              setRechazoAbierto(false);
+              setMotivoDetalle("");
+            }, "Rechazo registrado.");
+          }}
+        >
+          <div className={s.formBody}>
+            <div className={s.formField}>
+              <span>Motivo del rechazo</span>
+              <SelectField
+                aria-label="Motivo del rechazo"
+                value={motivo}
+                onChange={setMotivo}
+                options={MOTIVOS_PERDIDA.map((m) => ({
+                  value: m.v,
+                  label: m.l,
+                }))}
+              />
+            </div>
+            <label className={s.formField}>
+              <span>
+                Detalle <small>Opcional</small>
+              </span>
+              <TextArea
+                className={`${s.textarea} ${focus.singleBorder}`}
+                placeholder="Agregá contexto sobre la decisión del cliente…"
+                value={motivoDetalle}
+                onChange={(e) => setMotivoDetalle(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className={s.formActions}>
+            <ActionButton
+              variant="outline"
+              isDisabled={trabajando}
+              onPress={() => setRechazoAbierto(false)}
+            >
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              variant="danger"
+              isDisabled={trabajando}
+            >
+              Registrar rechazo
+            </ActionButton>
+          </div>
+        </form>
+      </FormDialog>
     </section>
   );
 }
@@ -535,14 +559,41 @@ function Campo({
   hint?: string;
 }) {
   return (
-    <div className="ofield">
-      <div className="ofield-lbl">
-        <span className="ic">{icon}</span>
-        <span>{label}</span>
-      </div>
-      <div className="ofield-ctrl pp-ofield-ro">{children}</div>
-      {hint ? <div className="ofield-hint">{hint}</div> : null}
+    <div className={s.field}>
+      <dt>
+        <span aria-hidden>{icon}</span>
+        {label}
+      </dt>
+      <dd>{children}</dd>
+      {hint && <dd className={s.fieldHint}>{hint}</dd>}
     </div>
+  );
+}
+
+function SectionHeading({
+  icon: Icon,
+  title,
+  description,
+  count,
+}: {
+  icon: typeof PackageIcon;
+  title: string;
+  description: string;
+  count?: number;
+}) {
+  return (
+    <header className={s.sectionHeading}>
+      <span className={s.sectionIcon}>
+        <Icon aria-hidden />
+      </span>
+      <div>
+        <h2>
+          {title}
+          {count != null && <span className={s.count}>{count}</span>}
+        </h2>
+        <p>{description}</p>
+      </div>
+    </header>
   );
 }
 
@@ -574,25 +625,25 @@ function AccionesEstado({
 }) {
   if (d.estado === "convertido") {
     return (
-      <div className="pp-accion-bar ok">
+      <div className={s.actionBar} data-tone="success">
         <div>
-          <div className="t">
+          <div className={s.actionTitle}>
             Convertido en {d.ordenesConvertidas.length || 1} orden
             {d.ordenesConvertidas.length === 1 ? "" : "es"}
           </div>
-          <div className="s">
+          <div className={s.actionDescription}>
             Todos los productos del presupuesto ya pasaron a producción.
           </div>
         </div>
-        <div className="acts">
+        <div className={s.actionButtons}>
           {d.ordenesConvertidas.map((orden) => (
-            <Link
+            <ActionLink
               key={orden.id}
-              className="btn btn-primary"
+
               href={`/produccion/ordenes/${orden.id}`}
             >
               Ver {orden.numero}
-            </Link>
+            </ActionLink>
           ))}
         </div>
       </div>
@@ -601,57 +652,59 @@ function AccionesEstado({
 
   if (d.estado === "borrador") {
     return (
-      <div className="pp-accion-bar">
+      <div className={s.actionBar}>
         <div>
-          <div className="t">Listo para enviar</div>
-          <div className="s">
+          <div className={s.actionTitle}>Listo para enviar</div>
+          <div className={s.actionDescription}>
             Al enviarlo se genera el link para que el cliente lo apruebe.
           </div>
         </div>
-        <button
+        <ActionButton
           type="button"
-          className="btn btn-primary"
-          disabled={trabajando}
-          onClick={onEnviar}
+
+          isDisabled={trabajando}
+          onPress={onEnviar}
         >
           <SendIcon /> Enviar al cliente
-        </button>
+        </ActionButton>
       </div>
     );
   }
 
   if (d.estado === "pendiente_aprobacion") {
     return (
-      <div className="pp-accion-bar warn">
+      <div className={s.actionBar} data-tone="warning">
         <div>
-          <div className="t">Necesita aprobación interna</div>
-          <div className="s">
+          <div className={s.actionTitle}>Necesita aprobación interna</div>
+          <div className={s.actionDescription}>
             {d.aprobacionMotivos.length
               ? d.aprobacionMotivos.map((m) => m.detalle).join(" · ")
               : "Supera los umbrales configurados."}
           </div>
         </div>
         {puedeAprobar ? (
-          <div className="acts">
-            <button
+          <div className={s.actionButtons}>
+            <ActionButton
               type="button"
-              className="btn"
-              disabled={trabajando}
-              onClick={onAbrirDevolucion}
+              variant="outline"
+              isDisabled={trabajando}
+              onPress={onAbrirDevolucion}
             >
               Devolver
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
-              className="btn btn-primary"
-              disabled={trabajando}
-              onClick={onAprobar}
+
+              isDisabled={trabajando}
+              onPress={onAprobar}
             >
               <CheckIcon /> Aprobar y enviar
-            </button>
+            </ActionButton>
           </div>
         ) : (
-          <span className="s">Lo tiene que resolver un administrador.</span>
+          <span className={s.actionDescription}>
+            Lo tiene que resolver un administrador.
+          </span>
         )}
       </div>
     );
@@ -659,46 +712,46 @@ function AccionesEstado({
 
   if (d.estado === "enviado") {
     return (
-      <div className="pp-accion-bar">
+      <div className={s.actionBar}>
         <div>
-          <div className="t">Esperando la decisión del cliente</div>
-          <div className="s">
+          <div className={s.actionTitle}>Esperando la decisión del cliente</div>
+          <div className={s.actionDescription}>
             {d.primeraVistaEl
               ? "Ya lo vio. Podés registrar la respuesta si te contestó por otro canal."
               : "Todavía no lo abrió. Compartile el link."}
           </div>
         </div>
-        <button
+        <ActionButton
           type="button"
-          className="btn"
-          disabled={trabajando}
-          onClick={onAbrirRechazo}
+          variant="outline"
+          isDisabled={trabajando}
+          onPress={onAbrirRechazo}
         >
           Registrar rechazo
-        </button>
+        </ActionButton>
       </div>
     );
   }
 
   if (d.estado === "aprobado") {
     return (
-      <div className="pp-accion-bar ok">
+      <div className={s.actionBar} data-tone="success">
         <div>
-          <div className="t">Aprobado por el cliente</div>
-          <div className="s">
+          <div className={s.actionTitle}>Aprobado por el cliente</div>
+          <div className={s.actionDescription}>
             {parcial
               ? `Se convertirán ${seleccionadas} de ${disponibles} productos pendientes (elegilos en la pestaña Conversión).`
               : "Se convertirán todos los productos pendientes en una orden de trabajo."}
           </div>
         </div>
-        <button
+        <ActionButton
           type="button"
-          className="btn btn-primary"
-          disabled={trabajando || seleccionadas === 0}
-          onClick={onConvertir}
+
+          isDisabled={trabajando || seleccionadas === 0}
+          onPress={onConvertir}
         >
           Convertir en orden
-        </button>
+        </ActionButton>
       </div>
     );
   }
@@ -709,165 +762,197 @@ function AccionesEstado({
 function TabProductos({ d }: { d: PresupuestoDetalle }) {
   const { moneda } = useConfigRegional();
   return (
-    <>
-      <div className="otd-card">
-        <table className="tbl" style={{ tableLayout: "fixed" }}>
-          <thead>
-            <tr>
-              <th style={{ width: "8%" }}>#</th>
-              <th style={{ width: "52%" }}>Producto</th>
-              <th style={{ width: "13%" }}>Cantidad</th>
-              <th className="right" style={{ width: "13%" }}>
-                Subtotal
-              </th>
-              <th className="right" style={{ width: "14%" }}>
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {d.items.map((i, idx) => (
-              <tr key={i.cotizacionItemId ?? idx}>
-                <td>{idx + 1}</td>
-                <td>
-                  <div className="name">{i.nombre}</div>
-                  {i.specs.length ? (
-                    <div className="pp-chips" style={{ marginTop: 6 }}>
-                      {i.specs.map((s) => (
-                        <span key={s.etiqueta} className="pp-chip">
-                          <span className="k">{s.etiqueta}</span>
-                          {s.valor}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {i.adicionales.length ? (
-                    <div className="pp-chips" style={{ marginTop: 6 }}>
-                      {i.adicionales.map((a) => (
-                        <span key={a} className="pp-chip opt">
-                          <CheckIcon /> {a}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </td>
-                <td className="mono">
-                  {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
-                </td>
-                <td className="right mono">
-                  {/* Con descuento: lista neta tachada + badge, precio abajo. */}
-                  {i.descuentoMonto ? (
-                    <>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "var(--muted)",
-                          textDecoration: "line-through",
-                        }}
-                      >
-                        {fmtMoneda(i.subtotal + i.descuentoMonto, moneda)}
-                      </div>
-                      {fmtMoneda(i.subtotal, moneda)}{" "}
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: "#b91c1c",
-                        }}
-                      >
-                        −
-                        {(i.descuentoPct ?? 0).toLocaleString("es-AR", {
-                          maximumFractionDigits: 1,
-                        })}
-                        %
-                      </span>
-                    </>
-                  ) : (
-                    fmtMoneda(i.subtotal, moneda)
-                  )}
-                </td>
-                <td className="right mono">
-                  <b>{fmtMoneda(i.total, moneda)}</b>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="otd-card">
-        <div className="otd-card-head">
-          <span className="ttl">Resumen financiero</span>
-          <span className="sub">
-            {d.items.length} producto{d.items.length === 1 ? "" : "s"} ·
-            presupuesto
-          </span>
-        </div>
-        <div className="pp-resumen">
-          <Cifra
-            l="Subtotal"
-            v={fmtMoneda(d.subtotal, moneda)}
-            s={
-              d.descuentoTotal > 0
-                ? `con descuento −${fmtMoneda(d.descuentoTotal, moneda)}`
-                : "sin impuestos"
-            }
-          />
-          <span className="op">+</span>
-          <Cifra
-            l="Impuestos"
-            v={fmtMoneda(d.impuestos, moneda)}
-            s={d.impuestos > 0 ? "IVA incluido" : "sin impuestos"}
-          />
-          <span className="op">+</span>
-          <Cifra
-            l="Cargos directos"
-            v={fmtMoneda(d.cargosDirectos, moneda)}
-            s={d.cargosDirectos > 0 ? "" : "sin cargos"}
-          />
-          <span className="op">=</span>
-          <div className="pp-total">
-            <div className="l">Total c/ imp.</div>
-            <div className="v">{fmtMoneda(d.total, moneda)}</div>
-            {d.senaSugeridaPct ? (
-              <div className="s">Seña sugerida {d.senaSugeridaPct}%</div>
-            ) : null}
+    <div className={s.panelStack}>
+      <SectionHeading
+        icon={PackageIcon}
+        title="Productos del presupuesto"
+        description="Cantidades, especificaciones y valores acordados."
+        count={d.items.length}
+      />
+      {d.items.length === 0 && (
+        <Card className={s.empty}>
+          Este presupuesto todavía no tiene productos.
+        </Card>
+      )}
+      {d.items.map((item, idx) => (
+        <Card key={item.cotizacionItemId ?? idx} className={s.product}>
+          <div className={s.productHead}>
+            <span className={s.productGlyph} aria-hidden>
+              <ProductoCatalogoGlyph
+                cobro={
+                  item.cantidadUnidad === "m²"
+                    ? "Por m²"
+                    : item.cantidadUnidad === "ml"
+                      ? "Por metro lineal"
+                      : "Por unidad"
+                }
+              />
+            </span>
+            <div className={s.productIdentity}>
+              <span className={s.eyebrow}>
+                Producto {String(idx + 1).padStart(2, "0")}
+              </span>
+              <h3>{item.nombre}</h3>
+            </div>
+            <div className={s.quantity}>
+              <span>Cantidad</span>
+              <strong>
+                {item.cantidad.toLocaleString("es-AR")}{" "}
+                <small>{item.cantidadUnidad}</small>
+              </strong>
+            </div>
           </div>
-        </div>
-      </div>
-
-      {d.fidelizacion.puntosEstimados > 0 || d.fidelizacion.canjePuntos > 0 ? (
-        <div className="otd-card">
-          <div className="otd-card-head">
-            <span className="ttl">Fidelización</span>
+          {item.specs.length > 0 && (
+            <dl className={s.specs}>
+              {item.specs.map((spec, specIdx) => (
+                <div key={`${spec.etiqueta}-${specIdx}`}>
+                  <dt>{spec.etiqueta}</dt>
+                  <dd>{spec.valor}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {item.adicionales.length > 0 && (
+            <div className={s.optionals}>
+              <span className={s.eyebrow}>Adicionales</span>
+              <ul>
+                {item.adicionales.map((adicional, aIdx) => (
+                  <li key={`${adicional}-${aIdx}`}>
+                    <CheckIcon aria-hidden />
+                    {adicional}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className={s.productAmounts}>
+            <div>
+              <span>Subtotal</span>
+              {item.descuentoMonto ? (
+                <>
+                  <del>
+                    {fmtMoneda(item.subtotal + item.descuentoMonto, moneda)}
+                  </del>
+                  <strong>
+                    {fmtMoneda(item.subtotal, moneda)}{" "}
+                    <small className={s.discount}>
+                      −
+                      {(item.descuentoPct ?? 0).toLocaleString("es-AR", {
+                        maximumFractionDigits: 1,
+                      })}
+                      %
+                    </small>
+                  </strong>
+                </>
+              ) : (
+                <strong>{fmtMoneda(item.subtotal, moneda)}</strong>
+              )}
+            </div>
+            <div className={s.productTotal}>
+              <span>Total con impuestos</span>
+              <strong>{fmtMoneda(item.total, moneda)}</strong>
+            </div>
           </div>
-          <div className="pp-observaciones">
-            {d.fidelizacion.canjePuntos > 0
-              ? `${d.fidelizacion.canjePuntos} puntos · −${fmtMoneda(d.fidelizacion.canjeMonto, moneda)} reservados para este presupuesto.`
-              : `Esta compra estima ${d.fidelizacion.puntosEstimados} puntos. Se acreditan al completar, pagar y retirar el trabajo.`}
-          </div>
-        </div>
-      ) : null}
-
-      {d.observaciones ? (
-        <div className="otd-card">
-          <div className="otd-card-head">
-            <span className="ttl">Observaciones</span>
-          </div>
-          <div className="pp-observaciones">{d.observaciones}</div>
-        </div>
-      ) : null}
-    </>
+        </Card>
+      ))}
+      {d.observaciones && (
+        <Card className={s.note}>
+          <h3>
+            <MessageSquareText aria-hidden />
+            Observaciones
+          </h3>
+          <p>{d.observaciones}</p>
+        </Card>
+      )}
+    </div>
   );
 }
 
-function Cifra({ l, v, s }: { l: string; v: string; s?: string }) {
+function ResumenFinanciero({ d }: { d: PresupuestoDetalle }) {
+  const { moneda } = useConfigRegional();
   return (
-    <div className="pp-cifra">
-      <div className="l">{l}</div>
-      <div className="v">{v}</div>
-      {s ? <div className="s">{s}</div> : null}
-    </div>
+    <aside
+      className={s.summary}
+      aria-label="Resumen financiero del presupuesto"
+    >
+      <Card className={s.summaryCard}>
+        <header className={s.summaryHeading}>
+          <span>
+            <CircleDollarSign aria-hidden />
+          </span>
+          <div>
+            <p className={s.eyebrow}>Valor de la propuesta</p>
+            <h2>Resumen financiero</h2>
+          </div>
+        </header>
+        <p className={s.summaryCount}>
+          {d.items.length} {d.items.length === 1 ? "producto" : "productos"} ·
+          Presupuesto
+        </p>
+        {d.tipoCambio?.tasa != null && (
+          <p className={s.summaryCount}>
+            Tipo de cambio guardado: 1 USD ={" "}
+            {d.tipoCambio.tasa.toLocaleString(moneda.locale)}{" "}
+            {d.tipoCambio.monedaDestino}
+            <br />
+            {d.tipoCambio.referencia} ·{" "}
+            {new Date(d.tipoCambio.capturadoEn).toLocaleString(moneda.locale)}
+          </p>
+        )}
+        <dl className={s.amounts}>
+          <div>
+            <dt>
+              Subtotal
+              <small>
+                {d.descuentoTotal > 0
+                  ? `Con descuento −${fmtMoneda(d.descuentoTotal, moneda)}`
+                  : "Sin impuestos"}
+              </small>
+            </dt>
+            <dd>{fmtMoneda(d.subtotal, moneda)}</dd>
+          </div>
+          <div>
+            <dt>
+              Impuestos
+              <small>
+                {d.impuestos > 0 ? "IVA incluido" : "Sin impuestos"}
+              </small>
+            </dt>
+            <dd>{fmtMoneda(d.impuestos, moneda)}</dd>
+          </div>
+          <div>
+            <dt>
+              Cargos directos
+              {d.cargosDirectos === 0 && <small>Sin cargos</small>}
+            </dt>
+            <dd>{fmtMoneda(d.cargosDirectos, moneda)}</dd>
+          </div>
+        </dl>
+        <div className={s.summaryTotal}>
+          <span>Total con impuestos</span>
+          <strong>{fmtMoneda(d.total, moneda)}</strong>
+          {Boolean(d.senaSugeridaPct) && (
+            <p>
+              Seña sugerida <b>{d.senaSugeridaPct}%</b>
+            </p>
+          )}
+        </div>
+      </Card>
+      {(d.fidelizacion.puntosEstimados > 0 ||
+        d.fidelizacion.canjePuntos > 0) && (
+        <Card className={s.note}>
+          <h3>
+            <Gift aria-hidden />
+            Fidelización
+          </h3>
+          <p>
+            {d.fidelizacion.canjePuntos > 0
+              ? `${d.fidelizacion.canjePuntos} puntos · −${fmtMoneda(d.fidelizacion.canjeMonto, moneda)} reservados para este presupuesto.`
+              : `Esta compra estima ${d.fidelizacion.puntosEstimados} puntos. Se acreditan al completar, pagar y retirar el trabajo.`}
+          </p>
+        </Card>
+      )}
+    </aside>
   );
 }
 
@@ -884,74 +969,75 @@ function TabConversion({
   const convertibles = d.items.filter((i) => i.cotizacionItemId != null);
   const pendientes = convertibles.filter((i) => !i.conversion);
   const disponible = d.estado === "aprobado";
-
-  const toggle = (itemId: string) => {
+  const toggle = (id: string) => {
     const next = new Set(seleccion);
-    if (next.has(itemId)) next.delete(itemId);
-    else next.add(itemId);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
     setSeleccion(next);
   };
-
   const totalSel = convertibles
     .filter((i) => i.cotizacionItemId && seleccion.has(i.cotizacionItemId))
-    .reduce((s, i) => s + i.total, 0);
-
+    .reduce((sum, i) => sum + i.total, 0);
   return (
-    <div className="otd-card">
-      <div className="otd-card-head">
-        <span className="ttl">
-          Qué se convierte <span className="ct">{seleccion.size}</span>
-        </span>
-        <span className="sub">
-          {disponible
-            ? "Destildá lo que todavía no quieras producir: los productos ya convertidos quedan identificados."
-            : "Disponible cuando el presupuesto esté aprobado."}
-        </span>
-      </div>
-      <div className="pp-conv">
+    <div className={s.panelStack}>
+      <SectionHeading
+        icon={ArrowRightLeft}
+        title="Preparar la orden"
+        description={
+          disponible
+            ? "Elegí los productos que querés enviar a producción. Los ya convertidos quedan identificados."
+            : "La conversión estará disponible cuando el cliente apruebe el presupuesto."
+        }
+      />
+      <Card className={s.conversion}>
         {convertibles.length === 0 ? (
-          <div className="pp-conv-empty">
-            Este presupuesto no tiene items convertibles.
+          <div className={s.empty}>
+            Este presupuesto no tiene ítems convertibles.
           </div>
         ) : (
-          convertibles.map((i) => {
-            const itemId = i.cotizacionItemId!;
-            const yaConvertido = i.conversion != null;
+          convertibles.map((item) => {
+            const itemId = item.cotizacionItemId!;
+            const yaConvertido = item.conversion != null;
             const on = yaConvertido || seleccion.has(itemId);
             return (
-              <label
+              <Checkbox
                 key={itemId}
-                className={`pp-conv-row ${on ? "on" : ""} ${disponible ? "" : "off"}`}
+                isSelected={on}
+                isDisabled={!disponible || yaConvertido}
+                onChange={() => toggle(itemId)}
+                className={s.conversionRow}
               >
-                <input
-                  type="checkbox"
-                  checked={on}
-                  disabled={!disponible || yaConvertido}
-                  onChange={() => toggle(itemId)}
-                />
-                <span className="nm">
-                  {i.nombre}
-                  {i.conversion ? (
-                    <small className="mono"> → {i.conversion.numero}</small>
-                  ) : null}
-                </span>
-                <span className="qt mono">
-                  {i.cantidad.toLocaleString("es-AR")} {i.cantidadUnidad}
-                </span>
-                <span className="tt mono">{fmtMoneda(i.total, moneda)}</span>
-              </label>
+                <Checkbox.Content className={s.conversionContent}>
+                  <Checkbox.Control>
+                    <Checkbox.Indicator />
+                  </Checkbox.Control>
+                  <Label className={s.conversionName}>
+                    {item.nombre}
+                    {item.conversion && (
+                      <small>Convertido en {item.conversion.numero}</small>
+                    )}
+                  </Label>
+                  <span className={s.conversionQty}>
+                    {item.cantidad.toLocaleString("es-AR")}{" "}
+                    {item.cantidadUnidad}
+                  </span>
+                  <span className={s.conversionTotal}>
+                    {fmtMoneda(item.total, moneda)}
+                  </span>
+                </Checkbox.Content>
+              </Checkbox>
             );
           })
         )}
-      </div>
-      {convertibles.length > 0 ? (
-        <div className="pp-conv-foot">
-          <span>
-            {seleccion.size} de {pendientes.length} productos pendientes
-          </span>
-          <b className="mono">{fmtMoneda(totalSel, moneda)}</b>
-        </div>
-      ) : null}
+        {convertibles.length > 0 && (
+          <div className={s.conversionFoot}>
+            <span>
+              {seleccion.size} de {pendientes.length} productos pendientes
+            </span>
+            <strong>{fmtMoneda(totalSel, moneda)}</strong>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -959,31 +1045,37 @@ function TabConversion({
 function TabHistorial({ d }: { d: PresupuestoDetalle }) {
   const { fechaHora: fmtMomento } = useFecha();
   return (
-    <div className="otd-card">
-      <div className="otd-card-head">
-        <span className="ttl">
-          Historial <span className="ct">{d.eventos.length}</span>
-        </span>
-        <span className="sub">Todo lo que pasó con este presupuesto</span>
-      </div>
-      <div className="pp-timeline">
+    <div className={s.panelStack}>
+      <SectionHeading
+        icon={HistoryIcon}
+        title="Historial del presupuesto"
+        description="Cada cambio, con su fecha y la persona que lo realizó."
+        count={d.eventos.length}
+      />
+      <Card className={s.history}>
         {d.eventos.length === 0 ? (
-          <div className="pp-conv-empty">Sin eventos todavía.</div>
+          <div className={s.empty}>Sin eventos todavía.</div>
         ) : (
-          d.eventos.map((e, i) => (
-            <div key={i} className="pp-tl">
-              <span className="dot" />
-              <div className="tm">{fmtMomento(e.fecha)}</div>
-              <div className="tx">{e.descripcion}</div>
-              {e.usuario || e.origen ? (
-                <div className="tm">
-                  {[e.usuario, e.origen].filter(Boolean).join(" · ")}
+          <ol className={s.timeline}>
+            {d.eventos.map((e, i) => (
+              <li key={`${e.fecha}-${i}`}>
+                <span className={s.eventIcon}>
+                  <Clock3 aria-hidden />
+                </span>
+                <div>
+                  <time dateTime={e.fecha}>{fmtMomento(e.fecha)}</time>
+                  <p>{e.descripcion}</p>
+                  {(e.usuario || e.origen) && (
+                    <span className={s.eventAuthor}>
+                      {[e.usuario, e.origen].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
                 </div>
-              ) : null}
-            </div>
-          ))
+              </li>
+            ))}
+          </ol>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

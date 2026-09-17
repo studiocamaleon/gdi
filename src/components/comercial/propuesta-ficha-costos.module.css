@@ -1,0 +1,201 @@
+.collapsible {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  background: var(--card);
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: auto;
+  min-height: 50px;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0;
+  background: var(--card);
+  color: var(--foreground);
+  cursor: pointer;
+  font: inherit;
+  padding: 10px 12px;
+  transition: background 140ms ease;
+  text-align: left;
+}
+
+.trigger:hover {
+  background: var(--muted);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--card) 94%, var(--foreground));
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  transition: transform 140ms ease;
+}
+
+.triggerCopy,
+.itemCopy,
+.itemQuantity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.triggerCopy {
+  align-items: flex-start;
+}
+
+.triggerCopy strong,
+.itemCopy strong,
+.itemQuantity strong {
+  color: var(--foreground);
+}
+
+.triggerCopy small,
+.itemCopy small,
+.itemQuantity small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.triggerTotal {
+  margin-left: auto;
+  color: var(--foreground);
+  font-family: inherit;
+}
+
+.content {
+  border-top: 1px solid var(--border);
+}
+
+.stageTableWrap {
+  margin-top: 0;
+}
+
+.stageTable {
+  min-width: 760px;
+}
+
+.stageRow:hover,
+.stageRow:hover td {
+  background: color-mix(in srgb, var(--card) 96%, var(--foreground));
+}
+
+.inactiveRow {
+  color: var(--muted-foreground);
+}
+
+.operationCell {
+  min-width: 280px;
+  white-space: normal !important;
+}
+
+.operationTrigger {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  justify-content: flex-start;
+  padding: 0;
+  white-space: normal;
+}
+
+.operationTrigger:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.operationTrigger:hover,
+.operationTrigger[aria-expanded="true"] {
+  background: transparent;
+  color: var(--foreground);
+}
+
+.operationChevron {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  transition: transform 140ms ease;
+}
+
+.operationChevron[data-open="true"] {
+  color: var(--foreground);
+  transform: rotate(90deg);
+}
+
+.hiddenChevron {
+  visibility: hidden;
+}
+
+.operationIndex {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.operationDetailRow:hover td {
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
+}
+
+.detailCell {
+  padding: 0 !important;
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
+  white-space: normal !important;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, auto) minmax(90px, auto);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+}
+
+.item + .item {
+  border-top: 1px solid var(--border);
+}
+
+.itemQuantity {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.itemCost {
+  color: var(--foreground);
+  font-family: inherit;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .item {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-left: 12px;
+  }
+
+  .itemQuantity {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .itemCost {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}

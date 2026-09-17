@@ -1,0 +1,97 @@
+{
+  "fecha": "2026-09-07",
+  "objetivo": "50 exhibidores; cantidades exactas, sin excedentes",
+  "escala": {
+    "mmPorUnidad": 0.35277777777777775,
+    "origen": "Inferida de la medida de estante confirmada por el usuario; los seis DXF no declaran unidad."
+  },
+  "geometria": "Sólo envolvente exterior de CORTE_3; trazos interiores reservados para operaciones, no huecos de nesting.",
+  "cierreEstante": "Contorno D6 abierto: envolvente cerrada con segmento recto de 13.878 mm. Pendiente confirmar para corte.",
+  "margenes": "Placa 564 × 860 mm; 5 mm en cada borde: útil 554 × 850 mm. Más restrictivo que el útil 560 × 856 mm mencionado por el usuario.",
+  "rotaciones": "0/90/180/270 grados; sin restricción de fibra declarada. El patrón A rota header y faldón 90 grados.",
+  "archivos": [
+    {
+      "id": "cuerpo",
+      "archivo": "/Users/lucasgomez/Downloads/prueba nesting_cuerpox50.dxf",
+      "sha256": "1bd57ce49cbed4d693d81f58048804b7d44c70da5cefd9d0d86e77862f9d4a9f",
+      "cantidad": 50,
+      "contornoExterior": "AD",
+      "cerradoDxf": true,
+      "separacionExtremosMm": 0,
+      "anchoMm": 384.0415805267985,
+      "altoMm": 424.34700499999883,
+      "areaMm2": 143297.59292696882
+    },
+    {
+      "id": "soporte",
+      "archivo": "/Users/lucasgomez/Downloads/Nesting_visual/prueba nesting_soportex50.dxf",
+      "sha256": "3373f78129ea11292f781ef3903cc28fb1f3703e3c353f71c3fb82eba432b7a0",
+      "cantidad": 50,
+      "contornoExterior": "74",
+      "cerradoDxf": true,
+      "separacionExtremosMm": 0,
+      "anchoMm": 48.714358440147606,
+      "altoMm": 94.13671940050378,
+      "areaMm2": 4054.6062117117276
+    },
+    {
+      "id": "faldon",
+      "archivo": "/Users/lucasgomez/Downloads/Nesting_visual/prueba nesting_faldonx50.dxf",
+      "sha256": "ec44c9d2dc41dc3a4b362f3e7984adb5afe5f5ae2cf3e04277d7f029446d3c6c",
+      "cantidad": 50,
+      "contornoExterior": "88",
+      "cerradoDxf": true,
+      "separacionExtremosMm": 0,
+      "anchoMm": 176.21803317864743,
+      "altoMm": 115.71835275383245,
+      "areaMm2": 19141.452266195876
+    },
+    {
+      "id": "estante",
+      "archivo": "/Users/lucasgomez/Downloads/Nesting_visual/prueba nesting_estantex200.dxf",
+      "sha256": "55dda552a56305453e9c69b312f0a294b71a1afb2044fdbdeb6b719a049f777c",
+      "cantidad": 200,
+      "contornoExterior": "D6",
+      "cerradoDxf": false,
+      "separacionExtremosMm": 13.878030500271034,
+      "anchoMm": 103.38686435152714,
+      "altoMm": 176.19179274111843,
+      "areaMm2": 15876.41445127634
+    },
+    {
+      "id": "costilla",
+      "archivo": "/Users/lucasgomez/Downloads/Nesting_visual/prueba nesting_costillax50.dxf",
+      "sha256": "c3ed50d4ffec726b9201b89190eb1fa545174f453ec8fdf797dd72a3a277cf70",
+      "cantidad": 50,
+      "contornoExterior": "7C",
+      "cerradoDxf": true,
+      "separacionExtremosMm": 0,
+      "anchoMm": 100.8125299265483,
+      "altoMm": 113.44710463853296,
+      "areaMm2": 9777.780629988449
+    },
+    {
+      "id": "header",
+      "archivo": "/Users/lucasgomez/Downloads/Nesting_visual/prueba nesting_headerx50.dxf",
+      "sha256": "8cee43991c9d693fe7fb759697b191c5d2c53f9c3d74c624efe1c0602ab91664",
+      "cantidad": 50,
+      "contornoExterior": "7B",
+      "cerradoDxf": true,
+      "separacionExtremosMm": 0,
+      "anchoMm": 163.68502001519917,
+      "altoMm": 152.93547569249787,
+      "areaMm2": 23045.309158737997
+    }
+  ],
+  "referenciaPhoenix": {
+    "placas": 34,
+    "patrones": 3,
+    "repeticiones": [
+      25,
+      6,
+      3
+    ],
+    "cantidadesExactasConfirmadas": false,
+    "excedentes": "Desconocidos por el usuario"
+  }
+}

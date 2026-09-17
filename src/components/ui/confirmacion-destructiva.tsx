@@ -26,6 +26,10 @@
  */
 
 import * as React from "react";
+import { Modal, Input as HeroInput, TextArea } from "@heroui/react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { ActionButton } from "@/components/design-system/action-button";
+import focus from "@/components/design-system/field-focus.module.css";
 import { AlertTriangleIcon } from "lucide-react";
 
 import {
@@ -41,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface ConfirmacionDestructivaProps {
+  apariencia?: "heroui";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   titulo: string;
@@ -66,6 +71,7 @@ interface ConfirmacionDestructivaProps {
 }
 
 export function ConfirmacionDestructiva({
+  apariencia,
   open,
   onOpenChange,
   titulo,
@@ -108,6 +114,82 @@ export function ConfirmacionDestructiva({
       setEjecutando(false);
     }
   };
+
+  if (apariencia === "heroui") {
+    return (
+      <FormDialog
+        isOpen={open}
+        onOpenChange={onOpenChange}
+        title={titulo}
+        description={descripcion}
+        isDismissable={!ejecutando}
+      >
+        <Modal.Body className="flex flex-col gap-4 px-6 py-5">
+          {impacto && impacto.length > 0 && (
+            <div className="rounded-lg bg-danger-soft p-4 text-sm text-danger">
+              <div className="mb-2 flex items-center gap-2 font-medium">
+                <AlertTriangleIcon className="size-4" />
+                Esto va a:
+              </div>
+              <ul className="list-disc space-y-1 pl-5">
+                {impacto.map((item, idx) => (
+                  <li key={idx}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {motivo && (
+            <label className="flex flex-col gap-2 text-sm">
+              {motivo.label}
+              <TextArea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                placeholder={motivo.placeholder}
+                autoFocus
+                rows={3}
+                maxLength={500}
+                className={focus.singleBorder}
+              />
+            </label>
+          )}
+          {requiereTipear && palabraEsperada && (
+            <label className="flex flex-col gap-2 text-sm">
+              <span>
+                Para confirmar, escribí <strong>{palabraEsperada}</strong>{" "}
+                abajo:
+              </span>
+              <HeroInput
+                value={tipeado}
+                onChange={(e) => setTipeado(e.target.value)}
+                placeholder={palabraEsperada}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                className={focus.singleBorder}
+              />
+            </label>
+          )}
+        </Modal.Body>
+        <Modal.Footer className="flex flex-wrap justify-end gap-2 border-t border-border px-6 py-4">
+          <ActionButton
+            variant="outline"
+            onPress={() => onOpenChange(false)}
+            isDisabled={ejecutando}
+          >
+            Cancelar
+          </ActionButton>
+          <ActionButton
+            variant="danger"
+            onPress={handleConfirmar}
+            isDisabled={!habilitado}
+            isPending={ejecutando}
+          >
+            {ejecutando ? "Procesando..." : accionLabel}
+          </ActionButton>
+        </Modal.Footer>
+      </FormDialog>
+    );
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>

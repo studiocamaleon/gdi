@@ -11,6 +11,8 @@
  * Ver `docs/nesting-abstraccion-diseno.md` para diseño completo.
  */
 
+import type { ResultadoCommonLineTrabajo } from '../../workers/colas';
+
 // ─── Pieza ────────────────────────────────────────────────────────
 
 /** Una pieza a acomodar. */
@@ -131,7 +133,8 @@ export type NestingAlgorithm =
   | 'maxrects-rollo'
   | 'shelf-rollo'
   | 'secuencial-rollo'
-  | 'irregular-2d-bottom-left-v1';
+  | 'irregular-2d-bottom-left-v1'
+  | 'manual-vector-estimate-v1';
 
 export interface NestingMetrics {
   /** Solo grid-2d-single: cantidad de columnas resultantes. */
@@ -160,6 +163,8 @@ export interface NestingMetrics {
   perSubstrate?: Array<{ areaUtilMm2: number; consumedLengthMm: number }>;
   /** Nesting vectorial: largo de corte real, incluyendo divisiones/encastres. */
   perimetroCorteMm?: number;
+  /** Optimización de líneas rectas compartidas aplicada por el worker. */
+  commonLine?: ResultadoCommonLineTrabajo;
   /** Nesting vectorial: trazabilidad entre piezas originales y segmentos. */
   piezasOriginales?: number;
   segmentos?: number;

@@ -1,0 +1,49 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+
+.selection {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chip {
+  gap: 6px;
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 3px 3px 3px 10px;
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  overflow: visible;
+  white-space: normal;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.remove {
+  color: var(--muted-text);
+}
+
+.remove:hover,
+.remove:focus-visible {
+  color: var(--accent-soft-foreground);
+  background: var(--accent-soft);
+}

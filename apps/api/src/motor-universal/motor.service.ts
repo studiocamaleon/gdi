@@ -1,8 +1,26 @@
+import { TipoCambioService } from '../cotizaciones/tipo-cambio.service';
+import {
+  monedaCotizacionContext,
+  precioMaterialEnMonedaCotizacion,
+} from '../cotizaciones/material-moneda-context';
+import {
+  materialUnitConversion,
+  materialPriceContext,
+  type MaterialUnitContext,
+} from '../inventario/material-units';
+import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
+import { demandaDesdeTiempo, combinarDemandas, leerModoOperacionMaquina } from '../eta/motor/demanda-humana';
+import { lineasDesgasteCorte } from './repartir-operaciones-corte';
+import { usaProcesamientoCorte, prepararProcesamientoCorte, calcularProcesamientoCorte } from './procesamiento-corte';
+import { geometriaDeColeccion } from "./geometria-vectorial/geometria-coleccion";
+import { adjuntarOperacionesGuardadas, longitudOperacion } from './geometria-vectorial/operaciones-vectoriales';
+import { resolverFuentesProducto, atributosDeRevision } from '../productos-servicios/geometrias/resolver-fuentes';
 import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -12,7 +30,6 @@ import {
   estrategiaNestingDeFamilia,
   fallbackSinLayoutDeFamilia,
   guardSinLayoutDeFamilia,
-  herramientasCotizacionEfectivas,
   primitivasDeFamilia,
   resolverFamilia,
 } from '../productos-servicios/pasos/familias';
@@ -24,6 +41,7 @@ import {
   REGISTRO_FACTOR_VELOCIDAD,
   REGISTRO_SELECCION_PERFIL,
   REGISTRO_TIEMPO_RUN,
+  REGISTRO_FASES_RUN,
 } from './primitivas';
 import type {
   DefinicionFamiliaResuelta,
@@ -40,6 +58,7 @@ import type {
   ImpuestoSnapshot as PrecioImpuestoSnapshot,
   ComisionSnapshot as PrecioComisionSnapshot,
   PrecioConfig as TabPrecioConfig,
+  BloquePrecioCompuestoOutput,
 } from '../productos-servicios/precio/aplicar-precio.types';
 import type {
   CotizarInput,
@@ -62,6 +81,7 @@ import type {
   ComponenteDesgasteCargado,
   DefaultsFamiliaPaso,
   TiempoExtraEjecutado,
+  ComponenteFabricadoCosteado,
 } from './tipos';
 import {
   esCorteSobreHojas,
@@ -70,14 +90,23 @@ import {
   getImposicionCaballeteConfig,
   hayPliegosImpresosHeredados,
   runNestingForPaso,
+  type NestingDispatchOpts,
   type NestingDispatchResult,
 } from './nesting-dispatcher';
+import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
+import { AnalisisVectorialAsyncService } from './geometria-vectorial/analisis-vectorial-async.service';
 import {
+  debeEjecutarNestingVectorial,
   resolveNestingConfig,
   type MaterialResueltoParaNestingConfig,
   type NestingConfigResolved,
   type PrintSheetCandidateMaterial,
 } from './nesting-config';
+import {
+  aplicarNestingCompuesto,
+  leerExclusionNestingComponente,
+  leerPoliticaNestingCompuesto,
+} from './nesting-compuesto-shadow';
 import { calcularOutputsCanonicos } from './outputs-canonicos';
 import {
   capacidadesEmitidas,
@@ -103,7 +132,12 @@ import {
   type CostingStrategyKind,
 } from '../productos-servicios/nesting/costing';
 import { MAX_HOJAS_CABALLETE_DEFAULT } from '../productos-servicios/nesting/helpers/cuadernillo-imposicion';
+import { RecetasProductoService } from '../productos-servicios/recetas-producto.service';
 import { calculateSustratoToPliegoConversion } from '../productos-servicios/nesting/helpers/sustrato-to-pliego';
+import {
+  chargedBoundsAlongPlateLongAxis,
+  resolvePlateAxes,
+} from '../productos-servicios/nesting/helpers/plate-axis';
 import {
   getModoColorsFromPerfil,
   MODO_COLOR_LABELS,
@@ -116,6 +150,25 @@ import {
   type NivelCobertura,
 } from '../productos-servicios/cobertura-toner';
 import { seleccionarMenorCapacidadQueCumpla } from './seleccion-capacidad';
+import {
+  agregarContextoComponentesVinculados,
+  consolidarEtapasCompuestas,
+} from './etapas-compuestas';
+import {
+  areaImpresaTrabajoDesdeNestingM2,
+  desglosarMermaOperativa,
+  porcentajeMermaOperativaImpresion,
+} from './merma-operativa';
+
+export function aplicarMermaAdicional(
+  cantidad: number,
+  porcentaje: unknown,
+): number {
+  const merma = Number(porcentaje ?? 0);
+  return Number.isFinite(merma) && merma > 0
+    ? cantidad * (1 + merma / 100)
+    : cantidad;
+}
 import { indicePerfilUnicoPorOperacion } from './seleccion-perfil-operacion';
 import {
   modoTiempoEfectivo,
@@ -148,8 +201,25 @@ import { MotorCotizacionError } from './motor-error';
 import { jobContextCotizacionValido } from './cotizar.dto';
 import { RecorridosVectorialesService } from '../recorridos-vectoriales/recorridos-vectoriales.service';
 import { crearSvgPlacaDesdeNesting } from '../recorridos-vectoriales/nesting-svg';
+import {
+  agruparComponentesPorNivelCalculo,
+  dependenciasCalculoComponente,
+  proyectarEspecificacionesEfectivasComponente,
+  resolverOcurrenciasCotizadasComponente,
+  resolverOperacionesIncorporacion,
+  resolverJobContextComponente,
+} from '../productos-servicios/componentes-configuracion';
+import { resolverPasoCompuesto } from '../productos-servicios/pasos-compuestos';
+import {
+  catalogoSalidasPublicasComposicion,
+  extraerSalidasPublicasComposicion,
+} from '../productos-servicios/composicion-outputs';
+import {
+  asignarCostosPricingCompuesto,
+  leerPoliticaPricingComponente,
+} from '../productos-servicios/precio/pricing-compuesto';
 
-const MOTOR_CONTRACT_VERSION = 'motor-universal-v4';
+const MOTOR_CONTRACT_VERSION = 'motor-universal-v5';
 
 function hashCotizacionInput(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -223,6 +293,7 @@ interface PasoExtraSlotJson {
   }>;
   formula?: string;
   cantidadFactor?: number | string | null;
+  mermaAdicionalPct?: number | string | null;
   cantidadBase?: string | null;
   fuenteMedida?: string | null;
   aplicaMultiCaras?: boolean;
@@ -314,6 +385,7 @@ const UNIDADES_CONVERTIBLES: Record<string, UnidadConvertible> = {
   UNIDAD: { familia: 'unidad', factorBase: 1 },
   PIEZA: { familia: 'unidad', factorBase: 1 },
   HOJA: { familia: 'unidad', factorBase: 1 },
+  PLACA: { familia: 'unidad', factorBase: 1 },
   PLIEGO: { familia: 'unidad', factorBase: 1 },
   PAGINA: { familia: 'unidad', factorBase: 1 },
   A4_EQUIV: { familia: 'unidad', factorBase: 1 },
@@ -352,7 +424,16 @@ function precioPorUnidadDeConsumo(
   unidadStock: string | null | undefined,
   unidadConsumo: string | null | undefined,
   rendimientoEstimado: number | null | undefined,
+  contextoUnidades?: MaterialUnitContext,
 ): number {
+  if (contextoUnidades && unidadStock && unidadConsumo) {
+    const conversion = materialUnitConversion(
+      contextoUnidades,
+      unidadStock,
+      unidadConsumo,
+    );
+    if (conversion.ok) return precioReferencia / conversion.factor;
+  }
   const stock = normalizarUnidad(unidadStock);
   const consumo = normalizarUnidad(unidadConsumo);
   const stockConv = stock ? UNIDADES_CONVERTIBLES[stock] : undefined;
@@ -411,7 +492,23 @@ function precioMaterialPorUnidadDeConsumo(
   unidadStock: string | null | undefined,
   unidadConsumo: string | null | undefined,
   attrs: Record<string, unknown> | null | undefined,
+  templateId?: string | null,
+  contextoUnidades?: MaterialUnitContext,
 ): number {
+  if (unidadStock && unidadConsumo) {
+    const conversion = materialUnitConversion(
+      contextoUnidades ?? {
+        unidadStock,
+        unidadCompra: unidadStock,
+        templateId,
+        atributos: attrs,
+      },
+      unidadStock,
+      unidadConsumo,
+    );
+    if (conversion.ok) return precioReferencia / conversion.factor;
+    if (contextoUnidades) return Number.NaN;
+  }
   const stock = normalizarUnidad(unidadStock);
   const consumo = normalizarUnidad(unidadConsumo);
   const precioConvertido = precioPorUnidadDeConsumo(
@@ -491,7 +588,35 @@ export class MotorUniversalService {
     private readonly preciosEspecialesClientes: PreciosEspecialesClientesService,
     private readonly geometriaCache: GeometriaVectorialCacheService = new GeometriaVectorialCacheService(),
     private readonly recorridosVectoriales: RecorridosVectorialesService = new RecorridosVectorialesService(),
+    @Optional()
+    private readonly recetasProducto?: RecetasProductoService,
+    @Optional()
+    private readonly analisisVectorialAsync?: AnalisisVectorialAsyncService,
+    @Optional() private readonly tipoCambio?: TipoCambioService,
   ) {}
+
+  private opcionesNesting(tenantId: string): NestingDispatchOpts {
+    return {
+      loadPrintSheetMaterial: (varianteId) =>
+        this.cargarPrintSheetMaterial(tenantId, varianteId),
+      ...(this.analisisVectorialAsync
+        ? {
+            resolveIrregularNesting: async ({ fuente, parametros, problema, coleccion }) =>
+              coleccion ? this.analisisVectorialAsync!.resolverProblemaParaCotizacion({ tenantId, problema }) : this.analisisVectorialAsync!.resolverParaCotizacion({
+                tenantId,
+                dto: {
+                  svg: fuente.svg,
+                  nombreArchivo: fuente.nombreArchivo,
+                  anchoFinalMm: fuente.anchoFinalMm,
+                  altoFinalMm: fuente.altoFinalMm,
+                  configuracionCapas: fuente.configuracionCapas,
+                  ...parametros,
+                },
+              }),
+          }
+        : {}),
+    };
+  }
 
   private async generarRecorridoCorteCotizacion(
     paso: PasoCargado,
@@ -618,10 +743,42 @@ export class MotorUniversalService {
     return JSON.stringify(value);
   }
 
+  get usaTipoCambio(): boolean {
+    return Boolean(this.tipoCambio);
+  }
+
+  /** Extiende la misma captura a todos los segmentos de Centro de copiado. */
+  async conTipoCambio<T>(
+    tenantId: string,
+    id: string | undefined,
+    accion: () => Promise<T>,
+  ): Promise<T> {
+    const actual = monedaCotizacionContext.getStore();
+    if (actual) {
+      if (actual.tenantId !== tenantId || (id && id !== actual.cambio.id))
+        throw new BadRequestException(
+          'El tipo de cambio no coincide con el del documento.',
+        );
+      return accion();
+    }
+    if (!this.tipoCambio) return accion();
+    const cambio = id
+      ? await this.tipoCambio.obtenerParaCotizar(tenantId, id)
+      : await this.tipoCambio.crear(tenantId, null);
+    return monedaCotizacionContext.run(
+      { tenantId, cambio, materiales: new Map() },
+      accion,
+    );
+  }
+
   async cotizar(
     input: CotizarInput,
     opciones?: {
       omitirPrecioReferenciaMinimo?: boolean;
+      componentesCamino?: string[];
+      recetaPrecargada?: Awaited<
+        ReturnType<RecetasProductoService['resolverPublicadaParaCotizar']>
+      >;
       /**
        * Producto ya cargado por el caller (mismo tenant/producto/ruta), para
        * evitar recargar el "include gigante" cuando cotizar-y-guardar ya lo
@@ -630,6 +787,27 @@ export class MotorUniversalService {
       productoPrecargado?: ProductoCargado;
     },
   ): Promise<CotizarOutput> {
+    if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
+      const cambio = input.tipoCambioId
+        ? await this.tipoCambio.obtenerParaCotizar(
+            input.tenantId,
+            input.tipoCambioId,
+          )
+        : await this.tipoCambio.resolver(input.tenantId, input.usuarioId);
+      return monedaCotizacionContext.run(
+        { tenantId: input.tenantId, cambio, materiales: new Map() },
+        () => this.cotizar(input, opciones),
+      );
+    }
+    const contextoCambio = monedaCotizacionContext.getStore();
+    if (
+      contextoCambio &&
+      (contextoCambio.tenantId !== input.tenantId ||
+        (input.tipoCambioId && input.tipoCambioId !== contextoCambio.cambio.id))
+    )
+      throw new BadRequestException(
+        'El contexto monetario no coincide con la cotización.',
+      );
     const quoteRunId = randomUUID();
     const startedAt = Date.now();
     const errores: ErrorMotor[] = [];
@@ -708,6 +886,46 @@ export class MotorUniversalService {
       return fallar([err.toErrorMotor()]);
     }
 
+    const recetaPublicada =
+      opciones?.recetaPrecargada !== undefined
+        ? opciones.recetaPrecargada
+        : this.recetasProducto
+          ? await this.recetasProducto.resolverPublicadaParaCotizar(
+              input.tenantId,
+              input.productoId,
+              producto.rutaAlternativaId,
+            )
+          : null;
+
+    // Fase 4.2.1: una etapa compuesta no se costea como un pseudopaso. Se
+    // reemplaza en memoria por sus hijos reales, cargados desde el snapshot
+    // publicado, para que atraviesen exactamente el mismo motor universal.
+    if (recetaPublicada?.pasosCompuestos?.some((item) => item.version === 2)) {
+      const internos = await this.cargarPasosInternosCompuestos(
+        input.tenantId,
+        recetaPublicada.snapshot,
+      );
+      const contenedores = new Set(
+        recetaPublicada.pasosCompuestos
+          .filter((item) => item.version === 2)
+          .map((item) => item.nodoClave.replace(/^ruta:/, '')),
+      );
+      producto = {
+        ...producto,
+        pasos: [
+          ...producto.pasos.filter(
+            (item) => !contenedores.has(item.rutaPasoId),
+          ),
+          ...internos,
+        ].sort(
+          (a, b) =>
+            a.rutaPasoOrden - b.rutaPasoOrden ||
+            a.rutaPasoId.localeCompare(b.rutaPasoId),
+        ),
+      };
+    }
+    input.jobContext = await resolverFuentesProducto(this.prisma, input.tenantId,
+      atributosDeRevision(recetaPublicada?.snapshot, producto.atributosComercialesJson), input.jobContext);
     // JobContext mutable (los pasos PRE pueden mutarlo) + defaults sensatos
     const jobContext: JobContext = {
       caras: 1, // simple faz por defecto (se sobrescribe con input)
@@ -728,18 +946,28 @@ export class MotorUniversalService {
     // El navegador sólo captura la fuente. El servidor vuelve a derivar toda
     // la geometría para que perímetro, área y cantidad de piezas usados en el
     // precio no puedan ser adulterados desde el JobContext.
-    if (jobContext.disenoVectorialFuente) {
+    if (jobContext.disenosVectoriales?.length) {
+      const g = geometriaDeColeccion(jobContext);
+      jobContext.geometriaVectorial = g;
+      jobContext.piezas = g.piezas.map(p => ({cantidad: jobContext.cantidad * (p.cantidadPorUnidad ?? 1), anchoMm: p.anchoMm, altoMm: p.altoMm, perimetroMm: p.perimetroMm, sourcePieceId: p.id}));
+      jobContext.medidaCustomMm = {anchoMm:g.anchoMm,altoMm:g.altoMm};
+      jobContext.piezaAnchoMaxMm = g.anchoMm;
+      jobContext.piezaAltoMaxMm = g.altoMm;
+      jobContext.piezaAreaTotalM2 = g.areaTotalMm2 * jobContext.cantidad / 1000000;
+      jobContext.piezaPerimetroTotalM = g.perimetroTotalMm * jobContext.cantidad / 1000;
+    } else if (jobContext.disenoVectorialFuente) {
       try {
         const fuente = jobContext.disenoVectorialFuente;
-        const cached = this.geometriaCache.obtenerParaCotizacion({
-          tenantId: input.tenantId,
-          cacheKey: jobContext.disenoVectorialCacheKey,
-          svg: fuente.svg,
-          anchoFinalMm: fuente.anchoFinalMm,
-          altoFinalMm: fuente.altoFinalMm,
-          configuracionCapas: fuente.configuracionCapas,
-        });
-        const geometria = cached
+        const cached =
+          await this.geometriaCache.obtenerParaCotizacionCompartido({
+            tenantId: input.tenantId,
+            cacheKey: jobContext.disenoVectorialCacheKey,
+            svg: fuente.svg,
+            anchoFinalMm: fuente.anchoFinalMm,
+            altoFinalMm: fuente.altoFinalMm,
+            configuracionCapas: fuente.configuracionCapas,
+          });
+        const geometriaBase = cached
           ? cached.geometriaFabricacion
           : aplicarCapasAGeometria(
               analizarSvgFabricacion({
@@ -749,6 +977,8 @@ export class MotorUniversalService {
               }).geometria,
               fuente.configuracionCapas,
             );
+        const geometria = adjuntarOperacionesGuardadas(geometriaBase, fuente);
+        jobContext.piezaHendidoTotalM = (fuente.operaciones ?? []).filter(o => o.tipo === 'HENDIDO').reduce((s,o) => s + longitudOperacion(o),0) * jobContext.cantidad / 1000;
         if (geometria.piezas.length === 0) {
           throw new SvgFabricacionError(
             'El diseño no tiene piezas configuradas para cortar.',
@@ -831,6 +1061,27 @@ export class MotorUniversalService {
           altoMm: jobContext.medidaCustomMm.altoMm,
         },
       ];
+    }
+    if (
+      (producto.dimensionesRequeridas ?? ['ANCHO', 'ALTO']).includes(
+        'PROFUNDIDAD',
+      ) &&
+      !this.numeroPositivo(jobContext.profundidadMm)
+    ) {
+      if (producto.medidaDefaultProfundidadMm) {
+        jobContext.profundidadMm = producto.medidaDefaultProfundidadMm;
+      } else {
+        return fallar([
+          {
+            codigo: 'profundidad_producto_requerida',
+            severidad: 'ERROR',
+            mensaje:
+              'Este producto es 3D y necesita una profundidad para cotizarse.',
+            sugerencia:
+              'Ingresá la profundidad definida por el contrato comercial del producto.',
+          },
+        ]);
+      }
     }
     // Congelar la medida VISIBLE antes de que ningún paso PRE la mute. Los
     // pasos que miden sobre el borde terminado (soldadura de bolsillo,
@@ -927,7 +1178,7 @@ export class MotorUniversalService {
     // activación sobre outputs canónicos (`validacion-pre-pasada.ts`): acá
     // todavía no corrió nadie y ese dato no existe.
     const mutacionesPrePasada = new Map<string, MutacionAplicada>();
-    for (const paso of producto.pasos) {
+    for (const paso of producto.pasos.filter((item) => !item.contenedorClave)) {
       const paramsPaso = this.paramsEfectivosDelPaso(paso, jobContext);
       if (!declaraEfectoDemasia(paramsPaso)) continue;
       const activacion = this.evaluarActivacion(paso, jobContext);
@@ -974,12 +1225,19 @@ export class MotorUniversalService {
     derivacionesDelJobContext(jobContext);
     let huboErrorEnPasoAnterior = false;
 
-    for (let i = 0; i < producto.pasos.length; i++) {
+    const pasosPrincipales = producto.pasos.filter(
+      (item) => !item.contenedorClave,
+    );
+    const pasosInternosCompuestos = producto.pasos.filter((item) =>
+      Boolean(item.contenedorClave),
+    );
+
+    for (let i = 0; i < pasosPrincipales.length; i++) {
       if (huboErrorEnPasoAnterior) {
         // Si un paso falló, no avanzamos a los siguientes (D.7 multi-error híbrido)
         break;
       }
-      const paso = producto.pasos[i];
+      const paso = pasosPrincipales[i];
 
       const ejecucion = await this.ejecutarPaso(
         input.tenantId,
@@ -1082,7 +1340,8 @@ export class MotorUniversalService {
           // Traza para el visor de nesting (ojales): las posiciones salen del
           // motor para que el dibujo no pueda contradecir al cálculo.
           const layout = derivacion.traza?.ojalesLayout as
-            PasoEjecutado['ojalesLayout'] | undefined;
+            | PasoEjecutado['ojalesLayout']
+            | undefined;
           if (layout && layout.length > 0) {
             ejecucion.ojalesLayout = layout;
             ejecucion.ojalesConfig = derivacion.traza
@@ -1102,7 +1361,7 @@ export class MotorUniversalService {
       (acc, p) => acc + p.costoTotal,
       0,
     );
-    const cargosDirectosCotizacion = this.aplicarCargosCotizacion(
+    let cargosDirectosCotizacion = this.aplicarCargosCotizacion(
       producto.cargosDirectosCotizacion,
       jobContext,
       subtotalSinCargosCotizacion,
@@ -1113,11 +1372,11 @@ export class MotorUniversalService {
     }
 
     // 5. COMPONER RESULTADO
-    const tiempoTotal = pasosEjecutados.reduce(
+    let tiempoTotal = pasosEjecutados.reduce(
       (acc, p) => acc + (p.tiempo?.costo ?? 0),
       0,
     );
-    const materialesTotal = pasosEjecutados.reduce(
+    let materialesTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.materiales?.reduce((m, mat) => m + mat.costoTotal, 0) ?? 0),
       0,
@@ -1126,23 +1385,23 @@ export class MotorUniversalService {
     // cargos (no son tiempo de trabajo) pero las métricas por centro de costo
     // los leen como lo que son, horas de un centro.
     // Ver docs/cargos-por-paso-analisis-y-plan.md §7.3.
-    const tiempoExtraTotal = pasosEjecutados.reduce(
+    let tiempoExtraTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.tiempo?.tiemposExtra?.reduce((t, b) => t + b.costo, 0) ?? 0),
       0,
     );
-    const cargosDirectosPasoTotal = pasosEjecutados.reduce(
+    let cargosDirectosPasoTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc + (p.cargosDirectosPaso?.reduce((c, cd) => c + cd.monto, 0) ?? 0),
       0,
     );
-    const cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
+    let cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
       (acc, c) => acc + c.monto,
       0,
     );
-    const cargosDirectosTotal =
+    let cargosDirectosTotal =
       cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
-    const cargosSinMargenTotal =
+    let cargosSinMargenTotal =
       pasosEjecutados.reduce(
         (acc, paso) =>
           acc +
@@ -1162,7 +1421,7 @@ export class MotorUniversalService {
     // el costoTotal del paso incluye los materiales del inventario — acá se
     // restan porque `materialesTotal` (arriba) ya los contó: este bucket es
     // SÓLO lo que cobra el proveedor.
-    const tercerizadoTotal = pasosEjecutados.reduce(
+    let tercerizadoTotal = pasosEjecutados.reduce(
       (acc, p) =>
         acc +
         (p.tercerizado
@@ -1171,12 +1430,714 @@ export class MotorUniversalService {
           : 0),
       0,
     );
+    const componentesFabricados: ComponenteFabricadoCosteado[] = [];
+    const outputsComponentes: Record<string, Record<string, unknown>> = {};
+    let incorporacionComponentesTotal = 0;
+    if (
+      recetaPublicada &&
+      (recetaPublicada.componentes.length || pasosInternosCompuestos.length)
+    ) {
+      const camino = opciones?.componentesCamino ?? [input.productoId];
+      let componentesPorNivel: Array<typeof recetaPublicada.componentes>;
+      try {
+        componentesPorNivel = agruparComponentesPorNivelCalculo(
+          recetaPublicada.componentes,
+        );
+      } catch (error) {
+        return fallar([
+          {
+            codigo: 'dependencias_componentes_invalidas',
+            severidad: 'ERROR',
+            mensaje:
+              error instanceof Error
+                ? error.message
+                : 'No se pudo resolver el orden de cálculo de los componentes.',
+            sugerencia:
+              'Revisar las fuentes de parámetros configuradas en la BOM.',
+          },
+        ]);
+      }
+      const componentesOrdenados = componentesPorNivel.flat();
+      for (const componentesNivel of componentesPorNivel) {
+        const tareasNivel: Array<{
+          componente: (typeof recetaPublicada.componentes)[number];
+          ocurrencia: ReturnType<
+            typeof resolverOcurrenciasCotizadasComponente
+          >[number];
+          jobContextComponente: Record<string, unknown>;
+          cantidadComponente: number;
+        }> = [];
+
+        // Sólo los niveles son secuenciales. Dentro de un nivel no hay
+        // dependencias entre componentes, por lo que sus recetas y nestings
+        // pueden ejecutarse en paralelo sin leer outputs incompletos.
+        for (const componente of componentesNivel) {
+          if (!componente.requerido) continue;
+          if (camino.includes(componente.productoComponenteId)) {
+            return fallar([
+              {
+                codigo: 'ciclo_componentes_fabricados',
+                severidad: 'ERROR',
+                mensaje: `La composición de "${componente.nombre}" forma un ciclo.`,
+                sugerencia:
+                  'Revisar la BOM publicada y quitar la referencia circular.',
+              },
+            ]);
+          }
+
+          let ocurrencias: ReturnType<
+            typeof resolverOcurrenciasCotizadasComponente
+          >;
+          try {
+            ocurrencias = resolverOcurrenciasCotizadasComponente({
+              configuracion: componente.configuracionJson,
+              contextoPadre: jobContext as unknown as Record<string, unknown>,
+              codigoComponente: componente.codigo,
+              nombreComponente: componente.nombre,
+            });
+          } catch (error) {
+            return fallar([
+              {
+                codigo: 'ocurrencias_componente_invalidas',
+                severidad: 'ERROR',
+                mensaje:
+                  error instanceof Error
+                    ? error.message
+                    : `No se pudieron interpretar las ocurrencias de "${componente.nombre}".`,
+                sugerencia:
+                  'Revisá los componentes agregados en la cotización.',
+              },
+            ]);
+          }
+
+          for (const ocurrencia of ocurrencias) {
+            let jobContextComponente: Record<string, unknown>;
+            try {
+              jobContextComponente = resolverJobContextComponente({
+                configuracion: componente.configuracionJson,
+                contextoPadre: jobContext as unknown as Record<string, unknown>,
+                codigoComponente: componente.codigo,
+                cantidadLegacy: componente.cantidad,
+                outputsComponentes,
+                overrideCotizacion: ocurrencia.overrideCotizacion,
+              });
+            } catch (error) {
+              return fallar([
+                {
+                  codigo: 'configuracion_componente_incompleta',
+                  severidad: 'ERROR',
+                  mensaje:
+                    error instanceof Error
+                      ? error.message
+                      : `No se pudo configurar el componente "${ocurrencia.nombre}".`,
+                  sugerencia:
+                    'Completá los parámetros solicitados del componente antes de cotizar.',
+                },
+              ]);
+            }
+            const cantidadComponente = Number(jobContextComponente.cantidad);
+            if (
+              !Number.isFinite(cantidadComponente) ||
+              cantidadComponente <= 0
+            ) {
+              return fallar([
+                {
+                  codigo: 'cantidad_componente_invalida',
+                  severidad: 'ERROR',
+                  mensaje: `La cantidad calculada de "${ocurrencia.nombre}" debe ser un número positivo.`,
+                  contexto: {
+                    cantidad: cantidadComponente,
+                    unidad: componente.unidad,
+                  },
+                },
+              ]);
+            }
+            tareasNivel.push({
+              componente,
+              ocurrencia,
+              jobContextComponente,
+              cantidadComponente,
+            });
+          }
+        }
+
+        const resultadosNivel = await Promise.all(
+          tareasNivel.map(async (tarea) => ({
+            ...tarea,
+            resultadoComponente: await this.cotizar(
+              {
+                tenantId: input.tenantId,
+                productoId: tarea.componente.productoComponenteId,
+                jobContext: tarea.jobContextComponente as never,
+                periodo,
+              },
+              {
+                omitirPrecioReferenciaMinimo: true,
+                componentesCamino: [
+                  ...camino,
+                  tarea.componente.productoComponenteId,
+                ],
+              },
+            ),
+          })),
+        );
+
+        for (const {
+          componente,
+          ocurrencia,
+          jobContextComponente,
+          cantidadComponente,
+          resultadoComponente,
+        } of resultadosNivel) {
+          if (!resultadoComponente.exitoso || !resultadoComponente.cotizacion) {
+            const detalle = resultadoComponente.errores.find(
+              (error) => error.severidad === 'ERROR',
+            );
+            return fallar([
+              {
+                codigo: detalle?.codigo.startsWith('nesting_calculo_')
+                  ? detalle.codigo
+                  : 'componente_fabricado_no_cotizable',
+                severidad: 'ERROR',
+                mensaje: detalle?.mensaje
+                  ? `No se pudo costear el componente fabricado "${ocurrencia.nombre}": ${detalle.mensaje}`
+                  : `No se pudo costear el componente fabricado "${ocurrencia.nombre}".`,
+                contexto: {
+                  productoComponenteId: componente.productoComponenteId,
+                  errores: resultadoComponente.errores,
+                },
+                sugerencia:
+                  detalle?.sugerencia ??
+                  'Corregir y publicar la configuración productiva del componente.',
+              },
+            ]);
+          }
+          const hija = resultadoComponente.cotizacion;
+          if (!hija.receta) {
+            return fallar([
+              {
+                codigo: 'componente_sin_receta_publicada',
+                severidad: 'ERROR',
+                mensaje: `El componente fabricado "${ocurrencia.nombre}" no tiene una receta publicada vigente.`,
+              },
+            ]);
+          }
+          const piezasComponente: unknown[] = Array.isArray(
+            jobContextComponente.piezas,
+          )
+            ? (jobContextComponente.piezas as unknown[])
+            : [];
+          const cantidadPiezas = piezasComponente.length
+            ? piezasComponente.reduce<number>((total, pieza) => {
+                if (
+                  !pieza ||
+                  typeof pieza !== 'object' ||
+                  Array.isArray(pieza)
+                ) {
+                  return total;
+                }
+                const cantidad = Number(
+                  (pieza as Record<string, unknown>).cantidad,
+                );
+                return Number.isFinite(cantidad) ? total + cantidad : total;
+              }, 0)
+            : cantidadComponente;
+          const unidadComponente =
+            jobContextComponente.disenosVectoriales ||
+            (jobContextComponente.piezas as JobContext['piezas'])?.some(
+              (pieza) => pieza.cantidadPorUnidad != null,
+            )
+              ? 'conjunto'
+              : componente.unidad;
+          const outputsPublicos = {
+            ...(hija.outputsComposicion ?? {}),
+            cantidadEfectiva: cantidadComponente,
+            cantidadPiezas,
+            unidadCantidadEfectiva: unidadComponente,
+            _componente: {
+              codigo: ocurrencia.codigo,
+              plantillaCodigo: componente.codigo,
+              ocurrenciaId: ocurrencia.ocurrenciaId ?? null,
+            },
+          };
+          outputsComponentes[ocurrencia.codigo] = outputsPublicos;
+          componentesFabricados.push({
+            productoId: componente.productoComponenteId,
+            codigo: ocurrencia.codigo,
+            plantillaCodigo: componente.codigo,
+            ocurrenciaId: ocurrencia.ocurrenciaId,
+            nombre: ocurrencia.nombre,
+            politicaEjecucion: componente.politicaEjecucion,
+            cantidad: cantidadComponente,
+            unidad: unidadComponente,
+            jobContext: jobContextComponente,
+            especificacionesEfectivas:
+              proyectarEspecificacionesEfectivasComponente({
+                configuracion: componente.configuracionJson,
+                jobContext: jobContextComponente,
+              }),
+            recetaRevisionId: hija.receta.revisionId,
+            recetaVersion: hija.receta.version,
+            recetaHuella: hija.receta.huella,
+            costoUnitario: hija.costos.unitario,
+            costoTotal: hija.costos.total,
+            cantidadComercialPricing: hija.cantidadComercialPricing,
+            unidadComercialPricing: hija.unidadComercialPricing,
+            costoSinMargenTotal: hija.costos.cargosSinMargenTotal,
+            pricing: leerPoliticaPricingComponente(
+              componente.configuracionJson,
+            ),
+            nestingCompartido: leerExclusionNestingComponente(
+              componente.configuracionJson,
+            ),
+            outputsPublicos,
+            dependenciasCalculo: dependenciasCalculoComponente(
+              componente.configuracionJson,
+            ),
+            nodosPredecesoresClaves: componente.nodosPredecesoresClaves,
+            nodoIncorporacionClave: componente.nodoIncorporacionClave,
+            grafoProduccion: hija.grafoProduccion,
+            pasos: hija.pasos,
+            componentes: hija.componentesFabricados,
+            analisisNestingCompuesto: hija.analisisNestingCompuesto,
+          });
+        }
+      }
+
+      // Fase 4.2.2 — las operaciones internas usan el cálculo completo de un
+      // paso, pero son privadas de la etapa. Se resuelven DESPUÉS de fabricar
+      // los componentes y se consolidan antes de emitir la cotización/OT.
+      // Sólo en este punto existen sus outputs públicos. El contexto mantiene
+      // los datos del padre, publica todos los hijos bajo `componentes` y,
+      // cuando el paso se vinculó a un único hijo, expone además sus outputs
+      // en forma plana para reutilizar las reglas controladas del editor normal.
+      const nombresEtapasCompuestas = new Map<string, string>();
+      for (const etapa of recetaPublicada.pasosCompuestos ?? []) {
+        nombresEtapasCompuestas.set(etapa.nodoClave, etapa.pasoNombre);
+        nombresEtapasCompuestas.set(
+          etapa.nodoClave.replace(/^ruta:/, ''),
+          etapa.pasoNombre,
+        );
+      }
+
+      for (const paso of pasosInternosCompuestos) {
+        if (errores.some((error) => error.severidad === 'ERROR')) break;
+
+        const codigosVinculados = paso.componentesCodigos ?? [];
+        const componentesVinculados = componentesFabricados.filter(
+          (componente) =>
+            codigosVinculados.includes(
+              componente.plantillaCodigo ?? componente.codigo,
+            ),
+        );
+        if (
+          codigosVinculados.length > 0 &&
+          componentesVinculados.length === 0
+        ) {
+          continue;
+        }
+        const outputsVinculados =
+          componentesVinculados.length === 1
+            ? outputsComponentes[componentesVinculados[0].codigo]
+            : undefined;
+        const contextoAgregado = agregarContextoComponentesVinculados({
+          contextoPadre: jobContext as unknown as Record<string, unknown>,
+          componentes: componentesFabricados,
+          codigosPlantilla: codigosVinculados,
+        });
+        const contextoPaso = {
+          ...contextoAgregado,
+          ...(outputsVinculados ?? {}),
+          componentes: outputsComponentes,
+        } as unknown as JobContext;
+        derivacionesDelJobContext(contextoPaso);
+
+        const paramsPaso = this.paramsEfectivosDelPaso(paso, contextoPaso);
+        if (declaraEfectoDemasia(paramsPaso)) {
+          const activacion = this.evaluarActivacion(paso, contextoPaso);
+          if (activacion.activado) {
+            const efecto = leerEfectoDemasia(paramsPaso);
+            if (!efecto) {
+              errores.push({
+                codigo: 'efecto_demasia_mal_configurado',
+                severidad: 'ERROR',
+                rutaPasoId: paso.rutaPasoId,
+                rutaPasoOrden: paso.rutaPasoOrden,
+                familiaCodigo: paso.familiaCodigo,
+                mensaje: `El paso "${paso.nombreVisible ?? paso.familiaCodigo}" no declara lados afectados ni demasía válida.`,
+                sugerencia:
+                  'Configurar los lados afectados y la demasía por lado en el paso interno.',
+              });
+              break;
+            }
+            const traza = aplicarMutacionPre(contextoPaso, efecto, {
+              rutaPasoId: paso.rutaPasoId,
+              nombrePaso: paso.nombreVisible ?? paso.familiaCodigo,
+            });
+            if (traza) mutacionesPrePasada.set(paso.rutaPasoId, traza);
+          }
+        }
+
+        const ejecucion = await this.ejecutarPaso(
+          input.tenantId,
+          paso,
+          contextoPaso,
+          errores,
+          tarifasMap,
+          periodo,
+          outputsAcumulados,
+        );
+        ejecucion.contenedorClave = paso.contenedorClave ?? null;
+        ejecucion.contenedorNombre = paso.contenedorClave
+          ? (nombresEtapasCompuestas.get(paso.contenedorClave) ?? null)
+          : null;
+        ejecucion.pasoInternoCodigo = paso.pasoInternoCodigo ?? null;
+        ejecucion.componentesCodigos = paso.componentesCodigos ?? [];
+        const arrastrado = arrastrePorConfigPasoId.get(paso.configPasoId);
+        if (arrastrado && ejecucion.activado) {
+          ejecucion.activadoPorDependencia = {
+            requeridoPorNombre: arrastrado.requeridoPorNombre,
+          };
+        }
+        const trazaPre = mutacionesPrePasada.get(paso.rutaPasoId);
+        if (trazaPre) ejecucion.mutacionAplicada = trazaPre;
+        pasosEjecutados.push(ejecucion);
+
+        if (
+          errores.some(
+            (error) =>
+              error.rutaPasoId === paso.rutaPasoId &&
+              error.severidad === 'ERROR',
+          )
+        ) {
+          break;
+        }
+
+        if (ejecucion.outputsCanonicos) {
+          for (const [key, value] of Object.entries(
+            ejecucion.outputsCanonicos,
+          )) {
+            if (value === null || value === undefined) continue;
+            if (
+              outputsAcumulados.has(key) &&
+              !outputsAmbiguosAdvertidos.has(key)
+            ) {
+              outputsAmbiguosAdvertidos.add(key);
+              errores.push({
+                codigo: 'output_canonico_ambiguo',
+                severidad: 'WARNING',
+                mensaje: `Más de un paso publicó el output "${key}"; se conserva el último valor.`,
+                rutaPasoId: paso.rutaPasoId,
+                rutaPasoOrden: paso.rutaPasoOrden,
+                familiaCodigo: paso.familiaCodigo,
+                contexto: { outputCanonico: key },
+                sugerencia:
+                  'Configurar el consumidor con un origen explícito cuando haya más de un emisor.',
+              });
+            }
+            (jobContext as Record<string, unknown>)[key] = value;
+            outputsAcumulados.add(key);
+          }
+        }
+        if (ejecucion.capacidades?.length) {
+          const ctx = jobContext as Record<string, unknown>;
+          const porPaso = (ctx[KEY_CAPACIDADES_POR_PASO] ?? {}) as Record<
+            string,
+            CapacidadEmitida[]
+          >;
+          porPaso[paso.rutaPasoId] = ejecucion.capacidades;
+          ctx[KEY_CAPACIDADES_POR_PASO] = porPaso;
+        }
+
+        const derivadorDecl = resolverFamilia(paso.familiaCodigo)?.derivador;
+        if (derivadorDecl && ejecucion.activado) {
+          const derivacion =
+            derivacionesDelJobContext(contextoPaso)[paso.configPasoId];
+          if (!derivacion) {
+            errores.push({
+              codigo: derivadorDecl.codigoSinDatos ?? 'derivador_sin_datos',
+              severidad: 'ERROR',
+              rutaPasoId: paso.rutaPasoId,
+              rutaPasoOrden: paso.rutaPasoOrden,
+              familiaCodigo: paso.familiaCodigo,
+              mensaje: `El paso "${ejecucion.nombreVisible ?? paso.familiaCodigo}" ${derivadorDecl.mensajeSinDatos}`,
+              sugerencia: derivadorDecl.sugerenciaSinDatos,
+            });
+          } else {
+            const layout = derivacion.traza?.ojalesLayout as
+              | PasoEjecutado['ojalesLayout']
+              | undefined;
+            if (layout?.length) {
+              ejecucion.ojalesLayout = layout;
+              ejecucion.ojalesConfig = derivacion.traza
+                ?.ojalesConfig as PasoEjecutado['ojalesConfig'];
+            }
+          }
+        }
+
+        if (codigosVinculados.length > 0 && ejecucion.activado) {
+          incorporacionComponentesTotal += ejecucion.costoTotal;
+        }
+      }
+
+      if (errores.some((error) => error.severidad === 'ERROR')) {
+        return fallar(errores);
+      }
+
+      // Los cargos y buckets se recalculan recién ahora: ya incluyen el costo
+      // real de los pasos internos, sus materiales y su tercerización.
+      cargosDirectosCotizacion = this.aplicarCargosCotizacion(
+        producto.cargosDirectosCotizacion,
+        jobContext,
+        pasosEjecutados.reduce((acc, paso) => acc + paso.costoTotal, 0),
+        errores,
+      );
+      if (errores.some((error) => error.severidad === 'ERROR')) {
+        return fallar(errores);
+      }
+      tiempoTotal = pasosEjecutados.reduce(
+        (acc, paso) => acc + (paso.tiempo?.costo ?? 0),
+        0,
+      );
+      materialesTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.materiales?.reduce(
+            (subtotal, material) => subtotal + material.costoTotal,
+            0,
+          ) ?? 0),
+        0,
+      );
+      tiempoExtraTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.tiempo?.tiemposExtra?.reduce(
+            (subtotal, bloque) => subtotal + bloque.costo,
+            0,
+          ) ?? 0),
+        0,
+      );
+      cargosDirectosPasoTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.cargosDirectosPaso?.reduce(
+            (subtotal, cargo) => subtotal + cargo.monto,
+            0,
+          ) ?? 0),
+        0,
+      );
+      cargosDirectosCotizacionTotal = cargosDirectosCotizacion.reduce(
+        (acc, cargo) => acc + cargo.monto,
+        0,
+      );
+      cargosDirectosTotal =
+        cargosDirectosPasoTotal + cargosDirectosCotizacionTotal;
+      cargosSinMargenTotal =
+        pasosEjecutados.reduce(
+          (acc, paso) =>
+            acc +
+            (paso.cargosDirectosPaso?.reduce(
+              (subtotal, cargo) =>
+                subtotal + (cargo.aplicaMargen ? 0 : cargo.monto),
+              0,
+            ) ?? 0),
+          0,
+        ) +
+        cargosDirectosCotizacion.reduce(
+          (acc, cargo) => acc + (cargo.aplicaMargen ? 0 : cargo.monto),
+          0,
+        );
+      tercerizadoTotal = pasosEjecutados.reduce(
+        (acc, paso) =>
+          acc +
+          (paso.tercerizado
+            ? paso.costoTotal -
+              (paso.materiales?.reduce(
+                (subtotal, material) => subtotal + material.costoTotal,
+                0,
+              ) ?? 0)
+            : 0),
+        0,
+      );
+
+      const operacionesResueltas: Array<
+        | ReturnType<typeof resolverOperacionesIncorporacion>[number]
+        | ReturnType<typeof resolverPasoCompuesto>[number]
+      > = [];
+      try {
+        if (recetaPublicada.pasosCompuestos?.length) {
+          const nombresComponentes = Object.fromEntries(
+            componentesOrdenados.map((item) => [item.codigo, item.nombre]),
+          );
+          for (const pasoCompuesto of recetaPublicada.pasosCompuestos) {
+            operacionesResueltas.push(
+              ...resolverPasoCompuesto({
+                configuracion: pasoCompuesto,
+                contextoPadre: jobContext as unknown as Record<string, unknown>,
+                outputsComponentes,
+                nombresComponentes,
+              }),
+            );
+          }
+        } else {
+          for (const componente of componentesOrdenados) {
+            if (!componente.requerido) continue;
+            const tieneOcurrencias = componentesFabricados.some(
+              (costeado) =>
+                (costeado.plantillaCodigo ?? costeado.codigo) ===
+                componente.codigo,
+            );
+            if (!tieneOcurrencias) continue;
+            operacionesResueltas.push(
+              ...resolverOperacionesIncorporacion({
+                configuracion: componente.configuracionJson,
+                contextoPadre: jobContext as unknown as Record<string, unknown>,
+                outputsComponentes,
+                componenteCodigo: componente.codigo,
+                componenteNombre: componente.nombre,
+                nodoDestinoClave: componente.nodoIncorporacionClave,
+              }),
+            );
+          }
+        }
+      } catch (error) {
+        return fallar([
+          {
+            codigo: 'operacion_incorporacion_invalida',
+            severidad: 'ERROR',
+            mensaje:
+              error instanceof Error
+                ? error.message
+                : 'No se pudieron calcular las operaciones del paso compuesto.',
+            sugerencia: 'Revisá la configuración del paso compuesto en la BOM.',
+          },
+        ]);
+      }
+      for (const operacion of operacionesResueltas) {
+        const pasoDestino = pasosEjecutados.find(
+          (paso) =>
+            `ruta:${paso.rutaPasoId}` === operacion.nodoDestinoClave ||
+            `extra:${paso.rutaPasoId}` === operacion.nodoDestinoClave,
+        );
+        if (!pasoDestino?.activado || !pasoDestino.tiempo) {
+          return fallar([
+            {
+              codigo: 'paso_compuesto_no_disponible',
+              severidad: 'ERROR',
+              mensaje: `La operación "${operacion.nombre}" apunta a un paso de incorporación que no está activo.`,
+              sugerencia:
+                'Elegí un paso obligatorio y vigente como nodo de incorporación.',
+            },
+          ]);
+        }
+        const tarifaHora = Number(pasoDestino.tiempo.tarifaHora ?? 0);
+        if (!(tarifaHora > 0)) {
+          return fallar([
+            {
+              codigo: 'paso_compuesto_sin_tarifa',
+              severidad: 'ERROR',
+              mensaje: `El paso compuesto "${pasoDestino.nombreVisible ?? pasoDestino.familiaCodigo}" no tiene una tarifa horaria válida para costear "${operacion.nombre}".`,
+              sugerencia:
+                'Asigná al paso de ensamblaje un centro de costo con tarifa publicada.',
+            },
+          ]);
+        }
+        const costo =
+          (operacion.duracionMin / 60) *
+          tarifaHora *
+          operacion.dotacionOperarios;
+        const costeada = {
+          ...operacion,
+          centroCostoId: pasoDestino.tiempo.centroCostoId ?? null,
+          centroCostoNombre: pasoDestino.tiempo.centroCostoNombre ?? null,
+          tarifaHora,
+          costo,
+        };
+        pasoDestino.operacionesIncorporacion = [
+          ...(pasoDestino.operacionesIncorporacion ?? []),
+          costeada,
+        ];
+        pasoDestino.tiempo.demandaHumana = combinarDemandas([
+          demandaDesdeTiempo(pasoDestino.tiempo),
+          {version:1, verificada:true, fases:[{minutos:operacion.duracionMin,personas:operacion.dotacionOperarios}]},
+        ], pasoDestino.tiempo.totalMin + operacion.duracionMin);
+        pasoDestino.tiempo.runMin += operacion.duracionMin;
+        pasoDestino.tiempo.totalMin += operacion.duracionMin;
+        pasoDestino.tiempo.costo += costo;
+        pasoDestino.costoTotal += costo;
+        tiempoTotal += costo;
+        incorporacionComponentesTotal += costo;
+        const codigosRelacionados =
+          'componentesCodigos' in operacion
+            ? (operacion.componentesCodigos ?? [])
+            : 'componenteCodigo' in operacion && operacion.componenteCodigo
+              ? [operacion.componenteCodigo]
+              : [];
+        for (const codigo of codigosRelacionados) {
+          const componenteCosteado = componentesFabricados.find(
+            (item) => item.codigo === codigo,
+          );
+          if (componenteCosteado) {
+            componenteCosteado.operacionesIncorporacion = [
+              ...(componenteCosteado.operacionesIncorporacion ?? []),
+              costeada,
+            ];
+          }
+        }
+      }
+    }
+    // F4.4.2 — la política opt-in aplica el lote rectangular antes de cerrar
+    // los totales. Así F4.3 recibe costos ya reconciliados y no hay un ajuste
+    // comercial posterior capaz de duplicar margen, impuestos o redondeo.
+    // La topología se expresa con nodos ejecutables, incluidos los contenedores
+    // compuestos, no con sus operaciones privadas de cálculo.
+    for (const paso of pasosEjecutados) {
+      paso.requiereMaquina = !admitePasoSinMaquina(paso.familiaCodigo);
+      paso.plantillaCodigo = resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null;
+    }
+    const pasosOperativos = consolidarEtapasCompuestas(pasosEjecutados);
+    const grafoProduccion =
+      (recetaPublicada?.snapshot &&
+      typeof recetaPublicada.snapshot === 'object' &&
+      !Array.isArray(recetaPublicada.snapshot)
+        ? ((recetaPublicada.snapshot as Record<string, unknown>)
+            .grafoProduccion as CotizacionResultado['grafoProduccion'])
+        : undefined) ?? null;
+    const analisisNestingCompuesto = recetaPublicada?.componentes.length
+      ? await aplicarNestingCompuesto({
+          politica: leerPoliticaNestingCompuesto(
+            producto.atributosComercialesJson,
+          ),
+          tenantId: input.tenantId,
+          productoPadreId: producto.productoId,
+          recetaRevisionId: recetaPublicada.id,
+          componentes: componentesFabricados,
+          grafoProduccion,
+          pasosPadre: pasosOperativos,
+          ...(this.analisisVectorialAsync
+            ? {
+                resolverNestingIrregular: (problema) =>
+                  this.analisisVectorialAsync!.resolverProblemaParaCotizacion({
+                    tenantId: input.tenantId,
+                    problema,
+                    claveSolicitud: `cotizacion-compuesta-${producto.productoId}-${recetaPublicada.id}`,
+                  }),
+              }
+            : {}),
+        })
+      : undefined;
+    const componentesFabricadosTotal = componentesFabricados.reduce(
+      (totalComponentes, componente) =>
+        totalComponentes + componente.costoTotal,
+      0,
+    );
     const total =
       tiempoTotal +
       tiempoExtraTotal +
       materialesTotal +
       cargosDirectosTotal +
-      tercerizadoTotal;
+      tercerizadoTotal +
+      componentesFabricadosTotal;
     const cantidadEfectiva = jobContext.cantidad ?? 1;
     const cantidadComercialReal = this.resolverCantidadComercialBase(
       producto,
@@ -1218,8 +2179,43 @@ export class MotorUniversalService {
         : cantidadComercialReal,
       cantidadComercialPricing,
     );
+    const outputsComposicion = extraerSalidasPublicasComposicion(
+      jobContext as unknown as Record<string, unknown>,
+      catalogoSalidasPublicasComposicion(
+        producto.pasos.map((paso) => ({
+          familiaCodigo: paso.familiaCodigo,
+          nombreVisible: paso.nombreVisible,
+        })),
+      ),
+    );
 
+    // 4.2.2: las operaciones internas ya aportaron sus tiempos, materiales y
+    // costos a los totales. Desde este límite se exponen como una única etapa
+    // operativa para que OT y Tablero no materialicen estados independientes.
+    const desgloseCostosPricingCompuesto = recetaPublicada?.componentes.length
+      ? asignarCostosPricingCompuesto({
+          precioConfigPadre: producto.precioConfigJson,
+          costoTotal: total,
+          componentes: componentesFabricados.map((componente) => ({
+            productoId: componente.productoId,
+            codigo: componente.codigo,
+            nombre: componente.nombre,
+            costoTotal: componente.costoTotal,
+            politica:
+              componente.pricing ??
+              ({ version: 1, modo: 'HEREDAR_PADRE' } as const),
+          })),
+        })
+      : undefined;
+
+    const contextoMoneda = monedaCotizacionContext.getStore();
     const cotizacion: CotizacionResultado = {
+      ...(contextoMoneda
+        ? {
+            tipoCambio: contextoMoneda.cambio,
+            costosMaterialesMoneda: [...contextoMoneda.materiales.values()],
+          }
+        : {}),
       productoId: producto.productoId,
       productoNombre: producto.productoNombre,
       rutaAlternativaId: producto.rutaAlternativaId,
@@ -1238,6 +2234,14 @@ export class MotorUniversalService {
         minimoComercialContext,
         cantidadComercialPricing,
       ),
+      receta: recetaPublicada
+        ? {
+            revisionId: recetaPublicada.id,
+            version: recetaPublicada.version,
+            huella: recetaPublicada.huella,
+          }
+        : null,
+      grafoProduccion,
       costos: {
         tiempoTotal,
         tiempoExtraTotal,
@@ -1245,10 +2249,16 @@ export class MotorUniversalService {
         cargosDirectosTotal,
         cargosSinMargenTotal,
         tercerizadoTotal,
+        componentesFabricadosTotal,
+        incorporacionComponentesTotal,
         total,
         unitario: costoUnitarioComercial,
       },
-      pasos: pasosEjecutados,
+      componentesFabricados,
+      desgloseCostosPricingCompuesto,
+      analisisNestingCompuesto,
+      outputsComposicion,
+      pasos: pasosOperativos,
       cargosDirectosCotizacion,
     };
 
@@ -1265,6 +2275,8 @@ export class MotorUniversalService {
         costoSinMargenUnitario,
         cantidad: cantidadComercialPricing,
         descuento: input.descuento ?? null,
+        desgloseCostosPricingCompuesto,
+        componentesFabricados,
       });
     } catch (error) {
       const esperado = error instanceof BadRequestException;
@@ -1324,6 +2336,7 @@ export class MotorUniversalService {
         margenAplicadoPct: desglose.margenEfectivoPct,
         margenNegativo: desglose.margenEfectivoPct < 0,
       };
+      cotizacion.desglosePricingCompuesto = desglose.pricingCompuesto;
     }
 
     const cotizacionReferenciaMinimo =
@@ -1338,6 +2351,8 @@ export class MotorUniversalService {
     if (cotizacionReferenciaMinimo?.desglosePrecio) {
       cotizacion.precio = cotizacionReferenciaMinimo.precio;
       cotizacion.desglosePrecio = cotizacionReferenciaMinimo.desglosePrecio;
+      cotizacion.desglosePricingCompuesto =
+        cotizacionReferenciaMinimo.desglosePricingCompuesto;
     }
 
     vectorCacheHit = nestingVectorialFueReutilizado(jobContext);
@@ -1388,6 +2403,29 @@ export class MotorUniversalService {
     cotizacionId?: string;
     cotizacionItemId?: string;
   }> {
+    if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
+      let id = input.tipoCambioId;
+      if (input.cotizacionId) {
+        const padre = await this.prisma.cotizacion.findFirst({
+          where: { id: input.cotizacionId, tenantId: input.tenantId },
+          select: { tipoCambioId: true },
+        });
+        if (!padre)
+          throw new NotFoundException('No se encontró la cotización.');
+        if (padre.tipoCambioId && id && id !== padre.tipoCambioId)
+          throw new BadRequestException(
+            'El tipo de cambio debe ser el mismo para todos los ítems. Recotizá el documento completo para cambiarlo.',
+          );
+        id = padre.tipoCambioId ?? id;
+      }
+      const cambio = id
+        ? await this.tipoCambio.obtenerParaCotizar(input.tenantId, id)
+        : await this.tipoCambio.crear(input.tenantId, input.usuarioId ?? null);
+      return monedaCotizacionContext.run(
+        { tenantId: input.tenantId, cambio, materiales: new Map() },
+        () => this.cotizarYGuardar({ ...input, tipoCambioId: cambio.id }),
+      );
+    }
     // Cargamos el producto una sola vez y lo reutilizamos tanto para cotizar
     // como para el snapshot (A2: evita recargar el "include gigante"). Si la
     // carga falla, dejamos que cotizar produzca el error estándar.
@@ -1401,9 +2439,19 @@ export class MotorUniversalService {
     } catch {
       producto = null;
     }
+    const receta =
+      producto && this.recetasProducto
+        ? await this.recetasProducto.resolverPublicadaParaCotizar(
+            input.tenantId,
+            input.productoId,
+            producto.rutaAlternativaId,
+          )
+        : null;
     const result = await this.cotizar(
       input,
-      producto ? { productoPrecargado: producto } : undefined,
+      producto
+        ? { productoPrecargado: producto, recetaPrecargada: receta }
+        : undefined,
     );
     if (!result.exitoso || !result.cotizacion || !producto) {
       return { result };
@@ -1411,7 +2459,20 @@ export class MotorUniversalService {
 
     // Crear (o reusar) la cotización y su item de forma ATÓMICA (M6): si el
     // item falla, no queda una cotización borrador huérfana.
-    const productoCargado = producto;
+    const datosCrudos = this.buildCotizacionItemData({
+      tenantId: input.tenantId,
+      cotizacionId: input.cotizacionId ?? '',
+      productoId: input.productoId,
+      jobContext: input.jobContext,
+      producto,
+      cotizacion: result.cotizacion,
+      descuento: input.descuento ?? null,
+      inputHash: hashCotizacionInput(input),
+      periodo: result.cotizacion.periodoTarifario,
+      receta,
+    });
+    const datosItem =
+      this.prisma.prepararSnapshot?.('CotizacionItem', datosCrudos) ?? datosCrudos;
     const { cotizacionId, itemId } = await this.prisma.$transaction(
       async (tx) => {
         let cid = input.cotizacionId;
@@ -1420,7 +2481,7 @@ export class MotorUniversalService {
           // (evita IDOR de escritura cross-tenant).
           const existente = await tx.cotizacion.findFirst({
             where: { id: cid, tenantId: input.tenantId },
-            select: { id: true, estado: true },
+            select: { id: true, estado: true, tipoCambioId: true },
           });
           if (!existente) {
             throw new NotFoundException('No se encontró la cotización.');
@@ -1430,6 +2491,15 @@ export class MotorUniversalService {
               'Solo se pueden agregar items a una cotización en borrador.',
             );
           }
+          const cambioId = monedaCotizacionContext.getStore()?.cambio.id;
+          if (
+            existente.tipoCambioId &&
+            cambioId &&
+            existente.tipoCambioId !== cambioId
+          )
+            throw new BadRequestException(
+              'La cotización tiene otro tipo de cambio. Recargá el documento antes de guardar.',
+            );
           // Toma un lock de escritura sobre el borrador hasta insertar el
           // item. Si otro proceso lo emitió entre el SELECT y este punto, el
           // predicado se reevalúa al obtener el lock y no se persiste nada.
@@ -1438,8 +2508,12 @@ export class MotorUniversalService {
               id: cid,
               tenantId: input.tenantId,
               estado: 'borrador',
+              tipoCambioId: existente.tipoCambioId,
             },
-            data: { updatedAt: new Date() },
+            data: {
+              updatedAt: new Date(),
+              ...(cambioId ? { tipoCambioId: cambioId } : {}),
+            },
           });
           if (lock.count !== 1) {
             throw new BadRequestException(
@@ -1461,6 +2535,7 @@ export class MotorUniversalService {
             data: {
               tenantId: input.tenantId,
               clienteId: input.clienteId ?? null,
+              tipoCambioId: monedaCotizacionContext.getStore()?.cambio.id,
               estado: 'borrador',
             },
           });
@@ -1468,17 +2543,8 @@ export class MotorUniversalService {
         }
 
         const item = await tx.cotizacionItem.create({
-          data: this.buildCotizacionItemData({
-            tenantId: input.tenantId,
-            cotizacionId: cid,
-            productoId: input.productoId,
-            jobContext: input.jobContext,
-            producto: productoCargado,
-            cotizacion: result.cotizacion!,
-            descuento: input.descuento ?? null,
-            inputHash: hashCotizacionInput(input),
-            periodo: result.cotizacion!.periodoTarifario,
-          }),
+          data: { ...datosItem, cotizacionId: cid },
+          select: { id: true },
         });
 
         return { cotizacionId: cid, itemId: item.id };
@@ -1491,6 +2557,8 @@ export class MotorUniversalService {
   async recotizarItem(input: {
     tenantId: string;
     cotizacionItemId: string;
+    tipoCambioId?: string;
+    usuarioId?: string;
     rutaAlternativaId?: string | null;
     jobContext: JobContext;
     clienteId?: string | null;
@@ -1504,7 +2572,14 @@ export class MotorUniversalService {
     const item = await this.prisma.cotizacionItem.findFirst({
       where: { id: input.cotizacionItemId, tenantId: input.tenantId },
       include: {
-        cotizacion: { select: { id: true, estado: true, clienteId: true } },
+        cotizacion: {
+          select: {
+            id: true,
+            estado: true,
+            clienteId: true,
+            tipoCambioId: true,
+          },
+        },
       },
     });
     if (!item) {
@@ -1516,6 +2591,20 @@ export class MotorUniversalService {
       );
     }
 
+    if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
+      const id = input.tipoCambioId ?? item.cotizacion.tipoCambioId;
+      if (item.cotizacion.tipoCambioId && id !== item.cotizacion.tipoCambioId)
+        throw new BadRequestException(
+          'Para cambiar el tipo de cambio recotizá todos los ítems del documento.',
+        );
+      const cambio = id
+        ? await this.tipoCambio.obtenerParaCotizar(input.tenantId, id)
+        : await this.tipoCambio.crear(input.tenantId, input.usuarioId ?? null);
+      return monedaCotizacionContext.run(
+        { tenantId: input.tenantId, cambio, materiales: new Map() },
+        () => this.recotizarItem({ ...input, tipoCambioId: cambio.id }),
+      );
+    }
     const rutaAlternativaId =
       input.rutaAlternativaId ?? item.rutaAlternativaId ?? null;
     let producto: ProductoCargado | null = null;
@@ -1528,8 +2617,15 @@ export class MotorUniversalService {
     } catch {
       producto = null;
     }
-    const result = await this.cotizar(
-      {
+    const receta =
+      producto && this.recetasProducto
+        ? await this.recetasProducto.resolverPublicadaParaCotizar(
+            input.tenantId,
+            item.productoId,
+            producto.rutaAlternativaId,
+          )
+        : null;
+    const solicitud: CotizarInput = {
         tenantId: input.tenantId,
         productoId: item.productoId,
         rutaAlternativaId,
@@ -1537,12 +2633,34 @@ export class MotorUniversalService {
         clienteId: input.clienteId ?? item.cotizacion.clienteId ?? null,
         periodo: input.periodo ?? null,
         descuento: input.descuento ?? null,
-      },
-      producto ? { productoPrecargado: producto } : undefined,
+    };
+    const result = await this.cotizar(solicitud,
+      producto
+        ? { productoPrecargado: producto, recetaPrecargada: receta }
+        : undefined,
     );
     if (!result.exitoso || !result.cotizacion || !producto) {
       return { result };
     }
+
+    const datosCrudos = this.buildCotizacionItemData({
+      tenantId: input.tenantId,
+      cotizacionId: item.cotizacionId,
+      productoId: item.productoId,
+      jobContext: solicitud.jobContext,
+      producto,
+      cotizacion: result.cotizacion!,
+      descuento: input.descuento ?? null,
+      inputHash: hashCotizacionInput({
+        ...solicitud,
+        productoId: item.productoId,
+        rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
+      }),
+      periodo: result.cotizacion!.periodoTarifario,
+      receta,
+    });
+    const datosItem =
+      this.prisma.prepararSnapshot?.('CotizacionItem', datosCrudos) ?? datosCrudos;
 
     await this.prisma.$transaction(async (tx) => {
       const lock = await tx.cotizacion.updateMany({
@@ -1551,7 +2669,12 @@ export class MotorUniversalService {
           tenantId: input.tenantId,
           estado: 'borrador',
         },
-        data: { updatedAt: new Date() },
+        data: {
+          updatedAt: new Date(),
+          ...(monedaCotizacionContext.getStore()
+            ? { tipoCambioId: monedaCotizacionContext.getStore()!.cambio.id }
+            : {}),
+        },
       });
       if (lock.count !== 1) {
         throw new BadRequestException(
@@ -1564,21 +2687,7 @@ export class MotorUniversalService {
           tenantId: input.tenantId,
           cotizacionId: item.cotizacionId,
         },
-        data: this.buildCotizacionItemData({
-          tenantId: input.tenantId,
-          cotizacionId: item.cotizacionId,
-          productoId: item.productoId,
-          jobContext: input.jobContext,
-          producto,
-          cotizacion: result.cotizacion!,
-          descuento: input.descuento ?? null,
-          inputHash: hashCotizacionInput({
-            ...input,
-            productoId: item.productoId,
-            rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
-          }),
-          periodo: result.cotizacion!.periodoTarifario,
-        }),
+        data: datosItem,
       });
       if (updateResult.count !== 1) {
         throw new NotFoundException('No se encontró el item de cotización.');
@@ -1602,6 +2711,12 @@ export class MotorUniversalService {
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
     inputHash: string;
     periodo: string;
+    receta?: {
+      id: string;
+      version: number;
+      huella: string;
+      snapshot: unknown;
+    } | null;
   }) {
     const desglosePrecio = args.cotizacion.desglosePrecio;
     const precioResultado = desglosePrecio
@@ -1622,9 +2737,14 @@ export class MotorUniversalService {
       cotizacionId: args.cotizacionId,
       productoId: args.productoId,
       rutaAlternativaId: args.cotizacion.rutaAlternativaId,
+      recetaRevisionId: args.receta?.id ?? null,
+      recetaVersion: args.receta?.version ?? null,
+      recetaHuella: args.receta?.huella ?? null,
       cantidad: args.cotizacion.cantidadComercialReal.toString(),
       jobContextJson: args.jobContext as never,
       snapshotJson: {
+        tipoCambio: args.cotizacion.tipoCambio ?? null,
+        costosMaterialesMoneda: args.cotizacion.costosMaterialesMoneda ?? [],
         motor: {
           contractVersion: MOTOR_CONTRACT_VERSION,
           buildSha:
@@ -1641,6 +2761,14 @@ export class MotorUniversalService {
           modoMedidas: args.producto.modoMedidas,
           minimoComercialBase: args.producto.minimoComercialBase,
         },
+        receta: args.receta
+          ? {
+              revisionId: args.receta.id,
+              version: args.receta.version,
+              huella: args.receta.huella,
+              bom: args.receta.snapshot,
+            }
+          : null,
         ruta: {
           id: args.producto.rutaId,
           version: args.producto.rutaVersion,
@@ -1695,6 +2823,13 @@ export class MotorUniversalService {
           : null,
       trazabilidadJson: {
         pasos: args.cotizacion.pasos,
+        componentesFabricados: args.cotizacion.componentesFabricados ?? [],
+        desgloseCostosPricingCompuesto:
+          args.cotizacion.desgloseCostosPricingCompuesto ?? null,
+        desglosePricingCompuesto:
+          args.cotizacion.desglosePricingCompuesto ?? null,
+        analisisNestingCompuesto:
+          args.cotizacion.analisisNestingCompuesto ?? null,
         cargosDirectosCotizacion: args.cotizacion.cargosDirectosCotizacion,
       } as never,
       precioConfigSnapshotJson: (precioResultado?.snapshots.precioConfig ??
@@ -1726,6 +2861,10 @@ export class MotorUniversalService {
     costoSinMargenUnitario: number;
     cantidad: number;
     descuento?: { tipo: 'PORCENTAJE' | 'MONTO'; valor: number } | null;
+    desgloseCostosPricingCompuesto?: NonNullable<
+      CotizacionResultado['desgloseCostosPricingCompuesto']
+    >;
+    componentesFabricados?: ComponenteFabricadoCosteado[];
   }): Promise<{
     precioUnitario: number;
     precioTotal: number;
@@ -1752,6 +2891,11 @@ export class MotorUniversalService {
       precioEspecialCliente:
         | import('../productos-servicios/precio/aplicar-precio.types').PrecioEspecialClienteSnapshot
         | null;
+    };
+    pricingCompuesto?: {
+      version: 1;
+      estrategia: 'POR_COMPONENTE' | 'MIXTO';
+      bloques: BloquePrecioCompuestoOutput[];
     };
   } | null> {
     // 1. Producto y su precio standard
@@ -1906,18 +3050,88 @@ export class MotorUniversalService {
     // El redondeo del dinero lo decide el tenant: los decimales de su moneda
     // (0 en CLP) o directo a la unidad si eligió `redondeoPrecio: 'entero'`.
     const regional = await regionalDelTenant(this.prisma, args.tenantId);
-    const out = this.aplicarPrecio.aplicar({
-      costoUnitario: args.costoUnitario,
-      costoSinMargenUnitario: args.costoSinMargenUnitario,
-      cantidad: args.cantidad,
-      precioConfig: precioConfigEfectivo,
-      impuestos: impuestosSnapshot,
-      comisiones: comisionesSnapshot,
-      precioEspecialCliente: precioEspecialSnapshot ?? undefined,
-      descuento: args.descuento ?? null,
-      decimalesPrecio:
-        regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales,
-    });
+    const decimalesPrecio =
+      regional.redondeoPrecio === 'entero' ? 0 : regional.moneda.decimales;
+    const asignacion = args.desgloseCostosPricingCompuesto;
+    const estrategiaCompuesta = asignacion?.estrategia;
+    const usarPricingCompuesto =
+      estrategiaCompuesta === 'POR_COMPONENTE' ||
+      estrategiaCompuesta === 'MIXTO';
+    const componentesPorCodigo = new Map(
+      (args.componentesFabricados ?? []).map((componente) => [
+        componente.codigo,
+        componente,
+      ]),
+    );
+    const costoSinMargenPadreTotal =
+      args.costoSinMargenUnitario * args.cantidad;
+    const costoSinMargenHeredadoTotal =
+      asignacion?.componentes.reduce((total, componente) => {
+        if (!componente.incluidoEnBloqueGeneral) return total;
+        return (
+          total +
+          (componentesPorCodigo.get(componente.codigo)?.costoSinMargenTotal ??
+            0)
+        );
+      }, 0) ?? 0;
+
+    const outCompuesto = usarPricingCompuesto
+      ? this.aplicarPrecio.aplicarCompuesto({
+          costoTotal:
+            asignacion?.costoTotalAsignado ??
+            args.costoUnitario * args.cantidad,
+          cantidad: args.cantidad,
+          precioConfigPadre: precioConfigEfectivo,
+          impuestos: impuestosSnapshot,
+          comisiones: comisionesSnapshot,
+          precioEspecialCliente: precioEspecialSnapshot ?? undefined,
+          descuento: args.descuento ?? null,
+          decimalesPrecio,
+          bloques: [
+            {
+              codigo: 'GENERAL',
+              nombre: 'Trabajo propio y componentes heredados',
+              costoTotal: asignacion?.bloqueGeneral.costoTotal ?? 0,
+              costoSinMargenTotal:
+                costoSinMargenPadreTotal + costoSinMargenHeredadoTotal,
+              cantidad: args.cantidad,
+              precioConfig: precioConfigEfectivo,
+            },
+            ...(asignacion?.componentes ?? [])
+              .filter((componente) => !componente.incluidoEnBloqueGeneral)
+              .map((componente) => {
+                const costeado = componentesPorCodigo.get(componente.codigo);
+                const precioConfig = componente.politica.precioConfigSnapshot;
+                if (!precioConfig) {
+                  throw new BadRequestException(
+                    `El componente "${componente.nombre}" no tiene una regla de precio congelada.`,
+                  );
+                }
+                return {
+                  codigo: componente.codigo,
+                  nombre: componente.nombre,
+                  costoTotal: componente.costoTotal,
+                  costoSinMargenTotal: costeado?.costoSinMargenTotal ?? 0,
+                  cantidad: costeado?.cantidadComercialPricing ?? 1,
+                  precioConfig,
+                };
+              }),
+          ],
+        })
+      : null;
+    const out =
+      outCompuesto ??
+      this.aplicarPrecio.aplicar({
+        costoUnitario: args.costoUnitario,
+        costoSinMargenUnitario: args.costoSinMargenUnitario,
+        cantidad: args.cantidad,
+        precioConfig: precioConfigEfectivo,
+        impuestos: impuestosSnapshot,
+        comisiones: comisionesSnapshot,
+        precioEspecialCliente: precioEspecialSnapshot ?? undefined,
+        descuento: args.descuento ?? null,
+        decimalesPrecio,
+      });
 
     return {
       precioUnitario: out.precioBrutoUnitario,
@@ -1933,6 +3147,13 @@ export class MotorUniversalService {
       precioBrutoTotal: out.precioBrutoTotal,
       descuento: out.descuento,
       snapshots: out.snapshots,
+      pricingCompuesto: usarPricingCompuesto
+        ? {
+            version: 1,
+            estrategia: estrategiaCompuesta,
+            bloques: outCompuesto?.bloques ?? [],
+          }
+        : undefined,
     };
   }
 
@@ -2965,7 +4186,13 @@ export class MotorUniversalService {
         costoTotal: 0,
       };
     }
-    const perfilDependeDelSustrato =
+    if (!usaProcesamientoCorte(pasoConMaquina) && pasoConMaquina.perfil?.detalleJson &&
+      typeof pasoConMaquina.perfil.detalleJson === 'object' && 'procesamientoCorteVersion' in pasoConMaquina.perfil.detalleJson) {
+      errores.push({ codigo:'perfil_herramienta_requiere_operaciones',severidad:'ERROR',
+        mensaje:'El perfil elegido es una receta por herramienta. Activá la cotización por operaciones vectoriales en este nodo.',rutaPasoId:pasoConMaquina.rutaPasoId });
+      return this.pasoAbortado(pasoConMaquina);
+    }
+    const perfilDependeDelSustrato = usaProcesamientoCorte(pasoConMaquina) ||
       pasoConMaquina.familiaCodigo === 'corte_laser' ||
       pasoConMaquina.familiaCodigo === 'grabado_laser';
     let perfilResuelto =
@@ -3004,7 +4231,23 @@ export class MotorUniversalService {
     // En láser, primero hay que conocer la variante realmente elegida por el
     // slot (también cuando MOTOR_ELIGE_AUTO) para seleccionar la velocidad del
     // perfil que cubre ese material y espesor.
-    if (!sinImpresion && perfilDependeDelSustrato) {
+    if (!sinImpresion && usaProcesamientoCorte(paso)) {
+      try {
+        const materialCorte = materialPreliminar ?? (jobContext.layout_produccion?.materialVarianteId
+          ? await this.cargarVariantePorId(tenantId, jobContext.layout_produccion.materialVarianteId) : null);
+        const preparacion = prepararProcesamientoCorte(paso, jobContext, materialCorte);
+        paso = { ...paso, procesamientoCortePreparacion: preparacion };
+        perfilResuelto = preparacion.perfiles.CORTE_COMPLETO as NonNullable<PasoCargado['perfil']>;
+        // El perfil de corte se resuelve antes del nesting: determina el kerf.
+        paso = { ...paso, perfil: perfilResuelto };
+      } catch (error) {
+        errores.push({ codigo: 'operaciones_corte_sin_configurar', severidad: 'ERROR',
+          mensaje: error instanceof Error ? error.message : 'No se pudieron resolver las operaciones de corte.',
+          rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo });
+        return this.pasoAbortado(paso);
+      }
+    } else if (!sinImpresion && perfilDependeDelSustrato) {
       const attrs = materialPreliminar?.atributosVarianteJson ?? {};
       const espesorMm = this.numeroPositivo(
         attrs.espesorMm ?? attrs.espesor_mm ?? attrs.espesor,
@@ -3075,23 +4318,42 @@ export class MotorUniversalService {
     let nestingDispatch: NestingDispatchResult | null = null;
     const debeCalcularNestingProductivo =
       paso.mecanismoCantidad === 'CALCULADO_POR_PASO' ||
-      (herramientasCotizacionEfectivas(
-        paso.familiaCodigo,
-        paso.paramsPasoJson,
-      ).includes('diseno_vectorial') &&
-        jobContext.modoCotizacionVectorial !== 'medidas') ||
+      debeEjecutarNestingVectorial(paso, jobContext) ||
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
-      nestingDispatch = await runNestingForPaso(
-        paso,
-        this.getJobContextParaNesting(paso, jobContext),
-        materialPreliminar,
-        {
-          loadPrintSheetMaterial: (varianteId) =>
-            this.cargarPrintSheetMaterial(tenantId, varianteId),
-        },
-      );
+      try {
+        nestingDispatch = await runNestingForPaso(
+          paso,
+          this.getJobContextParaNesting(paso, jobContext),
+          materialPreliminar,
+          this.opcionesNesting(tenantId),
+        );
+      } catch (error) {
+        if (error instanceof MotorCotizacionError) {
+          errores.push({
+            ...error.toErrorMotor(),
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+          });
+          return this.pasoAbortado(paso);
+        }
+        if (error instanceof NestingIrregularError) {
+          errores.push({
+            codigo: 'nesting_irregular_incompatible_con_maquina',
+            severidad: 'ERROR',
+            mensaje: error.message,
+            rutaPasoId: paso.rutaPasoId,
+            rutaPasoOrden: paso.rutaPasoOrden,
+            familiaCodigo: paso.familiaCodigo,
+            sugerencia:
+              'Elegí un formato compatible o fraccioná la placa antes de cotizar; revisá también la orientación y el eje abierto de la máquina.',
+          });
+          return this.pasoAbortado(paso);
+        }
+        throw error;
+      }
       nestingDispatch = this.aplicarPasadasLaminadoPorCaras(
         paso,
         jobContext,
@@ -3346,6 +4608,18 @@ export class MotorUniversalService {
         return this.pasoAbortado(pasoConPerfil);
       }
     }
+    if (pasoConPerfil.procesamientoCortePreparacion) {
+      try {
+        pasoConPerfil.procesamientoCorteCosteado = calcularProcesamientoCorte(
+          pasoConPerfil, jobContext, pasoConPerfil.procesamientoCortePreparacion, nestingDispatch);
+      } catch (error) {
+        errores.push({ codigo: 'operaciones_corte_no_cotizables', severidad: 'ERROR',
+          mensaje: error instanceof Error ? error.message : 'No se pudo calcular el trabajo de corte.',
+          rutaPasoId: paso.rutaPasoId, rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo });
+        return this.pasoAbortado(paso);
+      }
+    }
     const tiempo = sinImpresion
       ? this.tiempoCero()
       : this.calcularTiempo(
@@ -3370,6 +4644,7 @@ export class MotorUniversalService {
       errores,
       materialPreliminar,
     );
+    if (tiempo.procesamientoCorte) materiales.push(...lineasDesgasteCorte(tiempo.procesamientoCorte));
     const materialesCosto = materiales.reduce(
       (acc, m) => acc + m.costoTotal,
       0,
@@ -3433,6 +4708,11 @@ export class MotorUniversalService {
     const nestingResult: NestingEjecutado | undefined = nestingDispatch
       ? {
           algorithm: nestingDispatch.algorithm,
+          algorithmPolicy: resolveNestingConfig(
+            pasoConPerfil,
+            this.getJobContextParaNesting(pasoConPerfil, jobContext),
+            materialPreliminar,
+          ).algorithm,
           cantidadCalculada: nestingDispatch.cantidadCalculada,
           unidad: nestingDispatch.unidad,
           aprovechamientoPct: nestingDispatch.aprovechamientoPct,
@@ -3454,6 +4734,28 @@ export class MotorUniversalService {
           consumedLengthMm: nestingDispatch.consumedLengthMm,
           machineRunLengthMm: nestingDispatch.machineRunLengthMm,
           piezasAcomodadas: nestingDispatch.piezasAcomodadas,
+          demandaRectangular: nestingDispatch.demandaRectangular,
+          demandaNesting: nestingDispatch.demandaNesting,
+          solucionNesting: nestingDispatch.solucionNesting,
+          commonLine: nestingDispatch.commonLine,
+          layoutVinculadoGeometriaVectorial:
+            nestingDispatch.layoutVinculadoGeometriaVectorial,
+          costingSegmentSteps:
+            this.resolverSegmentosCosteoNesting(pasoConPerfil),
+          perfil: pasoConPerfil.perfil
+            ? {
+                id: pasoConPerfil.perfil.id,
+                nombre: pasoConPerfil.perfil.nombre,
+              }
+            : undefined,
+          modoColor: modoColorElegido,
+          tecnologia: this.resolverTecnologiaMaquina(pasoConPerfil.maquina),
+          carasProcesadas,
+          tintasAdicionales: Array.isArray(jobContext.tintasAdicionales)
+            ? jobContext.tintasAdicionales
+                .filter((tinta): tinta is string => typeof tinta === 'string')
+                .sort()
+            : undefined,
           estrategiaDisposicion: nestingDispatch.estrategiaDisposicion,
           visualConfig: nestingDispatch.visualConfig,
           outputsCanonicos,
@@ -3557,7 +4859,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: {
@@ -3852,18 +5156,25 @@ export class MotorUniversalService {
     const omitirSetupCleanup = jc?.omitirSetupCleanup === true;
 
     // Setup, cleanup, tiempoFijo: jerarquía override > perfil > familia > 0
+    const procesamientoCorte = paso.procesamientoCorteCosteado;
     const setupMin = omitirSetupCleanup
       ? 0
-      : (paso.setupOverrideMin ?? paso.perfil?.setupMin ?? 0);
+      : (paso.setupOverrideMin ?? procesamientoCorte?.configuracion.preparacionMin ?? paso.perfil?.setupMin ?? 0);
     const cleanupMin = omitirSetupCleanup
       ? 0
-      : (paso.cleanupOverrideMin ?? paso.perfil?.cleanupMin ?? 0);
+      : (paso.cleanupOverrideMin ?? procesamientoCorte?.configuracion.limpiezaMin ?? paso.perfil?.cleanupMin ?? 0);
     const tiempoFijoMin =
       tiempoManualMin != null ? 0 : tiempoFijoEfectivoMin(paso);
 
     let runMin = 0;
+    let fasesRun: import('../eta/motor/demanda-humana').FaseRun[] | undefined;
 
-    if (tiempoManualMin != null) {
+    if (procesamientoCorte) {
+      if (tiempoManualMin != null) errores.push({ codigo: 'tiempo_manual_con_operaciones_corte', severidad: 'ERROR',
+        mensaje: 'El tiempo manual total no puede reemplazar el desglose por herramientas. Desactivá una de las dos modalidades.',
+        rutaPasoId: paso.rutaPasoId, familiaCodigo: paso.familiaCodigo });
+      runMin = procesamientoCorte.runMin;
+    } else if (tiempoManualMin != null) {
       runMin = tiempoManualMin;
     } else if (modoTiempo === 'T-1') {
       // Fijo: solo el tiempoFijo cuenta
@@ -3941,6 +5252,13 @@ export class MotorUniversalService {
       primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun
     ) {
       runMin = this.runPorPrimitivaTiempo(paso, jobContext);
+      const codigo = primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun;
+      const desglose = codigo ? REGISTRO_FASES_RUN[codigo] : undefined;
+      fasesRun = desglose?.(paso,jobContext,{
+        resolverCantidad:(p,jc)=>this.resolverCantidad(p,jc,null),
+      });
+      // Una primitiva sin secuencia conocida no se presume autónoma.
+      fasesRun ??= [{minutos:runMin,operario:true}];
     } else if (modoTiempo === 'T-3') {
       // Productividad del perfil — necesita: cantidad y productividad
       const productividad = Number(paso.perfil?.productivityValue ?? 0);
@@ -4017,6 +5335,24 @@ export class MotorUniversalService {
       }
     }
 
+    // Una merma operativa de impresión significa pasadas reales adicionales:
+    // consume tiempo de corrida, pero no repite setup, cleanup ni bloques
+    // fijos. El output productivo sigue siendo la cantidad buena solicitada.
+    const runMinTrabajo = runMin;
+    const mermaOperativaPct =
+      tiempoManualMin == null &&
+      paso.maquina &&
+      PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(paso.maquina.plantilla)
+        ? porcentajeMermaOperativaImpresion(paso)
+        : 0;
+    const desgloseRun = desglosarMermaOperativa(
+      runMinTrabajo,
+      mermaOperativaPct,
+    );
+    runMin = desgloseRun.cantidadTotal;
+    if (fasesRun && runMinTrabajo > 0 && runMin !== runMinTrabajo)
+      fasesRun = fasesRun.map(f=>({...f,minutos:f.minutos*runMin/runMinTrabajo}));
+
     // Por defecto el tiempo del paso se factura en minutos ENTEROS (ceil): un
     // trabajo de 1 hoja y uno de 40 pagan el mismo minuto de máquina, y el precio
     // por hoja salta mucho a cantidades bajas. El centro de copiado activa
@@ -4026,7 +5362,7 @@ export class MotorUniversalService {
     const totalCrudoMin = setupMin + runMin + cleanupMin + tiempoFijoMin;
     const ctxTiempo = jobContext as Record<string, unknown>;
     const trabajoMin =
-      ctxTiempo.tiempoReal === true ? totalCrudoMin : Math.ceil(totalCrudoMin);
+      ctxTiempo.tiempoReal === true ? totalCrudoMin : Math.ceil(procesamientoCorte ? Math.round(totalCrudoMin * 1e8) / 1e8 : totalCrudoMin);
 
     // F.2.10 — Tarifa horaria. Prioridad:
     //   1. Centro de costo principal de la máquina.
@@ -4035,7 +5371,8 @@ export class MotorUniversalService {
     const centroCosto = this.resolveCentroCostoPaso(paso);
     if (centroCosto.id) {
       const tarifaCentro = tarifasMap.get(centroCosto.id) as
-        { tarifa: unknown } | undefined;
+        | { tarifa: unknown }
+        | undefined;
       if (tarifaCentro != null) {
         tarifaHora = Number(tarifaCentro.tarifa);
       }
@@ -4117,9 +5454,25 @@ export class MotorUniversalService {
     return {
       setupMin,
       runMin,
+      ...(procesamientoCorte ? { procesamientoCorte: { ...procesamientoCorte, redondeo: ctxTiempo.tiempoReal === true ? 'EXACTO' as const : 'MINUTO' as const } } : {}),
+      ...(desgloseRun.cantidadMerma > 0
+        ? {
+            runTrabajoMin: desgloseRun.cantidadTrabajo,
+            runMermaMin: desgloseRun.cantidadMerma,
+            mermaOperativaPct: desgloseRun.porcentaje,
+          }
+        : {}),
       cleanupMin,
       tiempoFijoMin,
       extraMin,
+      ...(fasesRun ? {fasesRun} : {}),
+      ...(paso.maquina ? { operacionMaquina: leerModoOperacionMaquina(paso.maquina.parametrosTecnicosJson?.operacionMaquina) } : {}),
+      demandaHumana: demandaDesdeTiempo({
+        totalMin: trabajoMin + extraMin, setupMin, runMin, cleanupMin,
+        tiempoFijoMin, tiemposExtra, dotacionOperarios,
+        maquinaId: paso.maquina?.id ?? null, fasesRun, procesamientoCorte,
+        operacionMaquina: leerModoOperacionMaquina(paso.maquina?.parametrosTecnicosJson?.operacionMaquina),
+      }),
       totalMin: trabajoMin + extraMin,
       centroCostoId: centroCosto.id,
       centroCostoNombre: centroCosto.nombre,
@@ -4167,7 +5520,8 @@ export class MotorUniversalService {
         centroNombre = base.centroCosto.nombre;
       } else if (centroId) {
         const tarifaCentro = tarifasMap.get(centroId) as
-          { tarifa: unknown; nombre?: string | null } | undefined;
+          | { tarifa: unknown; nombre?: string | null }
+          | undefined;
         if (tarifaCentro != null) {
           tarifaHora = Number(tarifaCentro.tarifa);
           centroNombre = tarifaCentro.nombre ?? null;
@@ -4341,12 +5695,77 @@ export class MotorUniversalService {
     }
 
     if (strategy === 'consumed-length') {
+      if (substrate.kind === 'sheet' && detail?.units?.length) {
+        const perSubstrate = detail.units.flatMap((unit) => {
+          const unitSubstrate =
+            nestingDispatch.substrates[unit.index] ?? substrate;
+          if (unitSubstrate.kind !== 'sheet') return [];
+          const chargedRatio = Math.max(
+            0,
+            Math.min(1, unit.occupationPct / 100),
+          );
+          const { longSideMm } = resolvePlateAxes(unitSubstrate);
+          const chargedLengthMm = longSideMm * chargedRatio;
+          const chargedAreaMm2 =
+            unitSubstrate.widthMm * unitSubstrate.heightMm * chargedRatio;
+          const placedAreaUnitMm2 = nestingDispatch.placements
+            .filter(
+              (placement) => (placement.substrateIndex ?? 0) === unit.index,
+            )
+            .reduce(
+              (acc, placement) => acc + placement.widthMm * placement.heightMm,
+              0,
+            );
+          return [
+            {
+              index: unit.index,
+              chargedRatio,
+              chargedLengthMm,
+              chargedAreaMm2,
+              chargedBounds: chargedBoundsAlongPlateLongAxis(
+                unitSubstrate,
+                chargedLengthMm,
+              ),
+              wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaUnitMm2),
+              segmentAppliedPct: null,
+            },
+          ];
+        });
+        const lastPreview = perSubstrate[perSubstrate.length - 1];
+        return {
+          strategy,
+          label: 'largo consumido del sustrato',
+          chargedLengthMm: lastPreview?.chargedLengthMm,
+          chargedRatio: lastPreview?.chargedRatio,
+          chargedAreaMm2: perSubstrate.reduce(
+            (total, unit) => total + unit.chargedAreaMm2,
+            0,
+          ),
+          chargedBounds: lastPreview?.chargedBounds,
+          wasteAreaMm2: perSubstrate.reduce(
+            (total, unit) => total + unit.wasteAreaMm2,
+            0,
+          ),
+          perSubstrate,
+        };
+      }
       const chargedLengthMm =
         nestingDispatch.consumedLengthMm ??
         nestingDispatch.metricasRaw.largoConsumidoMm ??
-        heightMm;
-      const ratio = heightMm > 0 ? Math.min(1, chargedLengthMm / heightMm) : 0;
-      const chargedAreaMm2 = widthMm * chargedLengthMm;
+        (substrate.kind === 'sheet'
+          ? resolvePlateAxes(substrate).longSideMm
+          : heightMm);
+      const longSideMm =
+        substrate.kind === 'sheet'
+          ? resolvePlateAxes(substrate).longSideMm
+          : heightMm;
+      const shortSideMm =
+        substrate.kind === 'sheet'
+          ? resolvePlateAxes(substrate).shortSideMm
+          : widthMm;
+      const ratio =
+        longSideMm > 0 ? Math.min(1, chargedLengthMm / longSideMm) : 0;
+      const chargedAreaMm2 = shortSideMm * chargedLengthMm;
       return {
         strategy,
         label:
@@ -4356,12 +5775,15 @@ export class MotorUniversalService {
         chargedLengthMm,
         chargedRatio: ratio,
         chargedAreaMm2,
-        chargedBounds: {
-          xMm: 0,
-          yMm: 0,
-          widthMm,
-          heightMm: chargedLengthMm,
-        },
+        chargedBounds:
+          substrate.kind === 'sheet'
+            ? chargedBoundsAlongPlateLongAxis(substrate, chargedLengthMm)
+            : {
+                xMm: 0,
+                yMm: 0,
+                widthMm,
+                heightMm: chargedLengthMm,
+              },
         wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaMm2),
       };
     }
@@ -4387,13 +5809,23 @@ export class MotorUniversalService {
         return {
           index: unit.index,
           chargedRatio,
+          chargedLengthMm:
+            unitSubstrate.kind === 'sheet'
+              ? resolvePlateAxes(unitSubstrate).longSideMm * chargedRatio
+              : unitHeightMm * chargedRatio,
           chargedAreaMm2,
-          chargedBounds: {
-            xMm: 0,
-            yMm: 0,
-            widthMm: unitSubstrate.widthMm,
-            heightMm: unitHeightMm * chargedRatio,
-          },
+          chargedBounds:
+            unitSubstrate.kind === 'sheet'
+              ? chargedBoundsAlongPlateLongAxis(
+                  unitSubstrate,
+                  resolvePlateAxes(unitSubstrate).longSideMm * chargedRatio,
+                )
+              : {
+                  xMm: 0,
+                  yMm: 0,
+                  widthMm: unitSubstrate.widthMm,
+                  heightMm: unitHeightMm * chargedRatio,
+                },
           wasteAreaMm2: Math.max(0, chargedAreaMm2 - placedAreaUnitMm2),
           segmentAppliedPct,
         };
@@ -4412,12 +5844,19 @@ export class MotorUniversalService {
         label: 'segmentos de placa',
         chargedRatio,
         chargedAreaMm2,
-        chargedBounds: lastPreview?.chargedBounds ?? {
-          xMm: 0,
-          yMm: 0,
-          widthMm,
-          heightMm: heightMm * chargedRatio,
-        },
+        chargedBounds:
+          lastPreview?.chargedBounds ??
+          (substrate.kind === 'sheet'
+            ? chargedBoundsAlongPlateLongAxis(
+                substrate,
+                resolvePlateAxes(substrate).longSideMm * chargedRatio,
+              )
+            : {
+                xMm: 0,
+                yMm: 0,
+                widthMm,
+                heightMm: heightMm * chargedRatio,
+              }),
         wasteAreaMm2: perSubstrate.length
           ? perSubstrate.reduce(
               (total, unit) => total + (unit.wasteAreaMm2 ?? 0),
@@ -4572,9 +6011,7 @@ export class MotorUniversalService {
     // tratarlo como sustrato producía el mensaje absurdo de que una pieza de
     // 254 mm no entraba en 1.000 mm. En ese caso dejamos que la validación de
     // materiales informe la placa faltante con el diagnóstico correcto.
-    if (
-      estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa'
-    ) {
+    if (estrategiaNestingDeFamilia(paso.familiaCodigo) === 'irregular_placa') {
       return material != null && tieneSustratoPliego;
     }
     return tieneSustratoRollo || tieneSustratoPliego;
@@ -4599,9 +6036,7 @@ export class MotorUniversalService {
     const tieneSustratoPliego =
       (config.sheetWidthMm ?? 0) > 0 && (config.sheetHeightMm ?? 0) > 0;
     const esRollo =
-      !tieneSustratoPliego &&
-      anchoUtilRolloMm != null &&
-      anchoUtilRolloMm > 0;
+      !tieneSustratoPliego && anchoUtilRolloMm != null && anchoUtilRolloMm > 0;
     const limiteAnchoMm = esRollo
       ? anchoUtilRolloMm
       : (config.sheetWidthMm ?? 0);
@@ -5202,6 +6637,20 @@ export class MotorUniversalService {
           nestingDispatch,
           materialParaCantidad,
         );
+        // El nesting de rollo entrega metros lineales, no la unidad de uso
+        // del material. Convertir antes de aplicar merma y precio evita
+        // costear 1 m lineal como 1 m² (o como un rollo completo).
+        if (
+          paso.mecanismoCantidad === 'CALCULADO_POR_PASO' &&
+          slot === paso.slots[0] &&
+          nestingDispatch?.unidad === 'm_lineales'
+        ) {
+          cantidad = this.convertirCantidadRolloAUnidadMaterial(
+            cantidad,
+            nestingDispatch,
+            materialResuelto,
+          );
+        }
         cantidad = this.ajustarCantidadSustratoComprado(
           paso,
           slot.slotCodigo,
@@ -5294,6 +6743,17 @@ export class MotorUniversalService {
         }
       }
 
+      // Fase 3 — pérdida adicional explícita del taller. El nesting y los
+      // derivadores ya incluyen su propio desperdicio; este porcentaje se
+      // aplica una sola vez, después de caras y multiplicadores.
+      let cantidadTrabajoAntesDeMerma = cantidad;
+      cantidad = aplicarMermaAdicional(cantidad, slot.mermaAdicionalPct);
+      const porcentajeMermaAdicional = Number(slot.mermaAdicionalPct ?? 0);
+      let cantidadMermaAdicional = Math.max(
+        0,
+        cantidad - cantidadTrabajoAntesDeMerma,
+      );
+
       const unidadConsumo = unidadEfectivaDeFormula(
         slot.formula,
         materialResuelto.unidadStock,
@@ -5306,7 +6766,7 @@ export class MotorUniversalService {
           rutaPasoId: paso.rutaPasoId,
           rutaPasoOrden: paso.rutaPasoOrden,
           familiaCodigo: paso.familiaCodigo,
-          mensaje: `El material ${materialResuelto.sku} no tiene un precio de referencia válido.`,
+          mensaje: `El material ${materialResuelto.sku} necesita un precio válido y su unidad confirmada en la ficha de materiales.`,
           contexto: {
             materialVarianteId: materialResuelto.id,
             slotCodigo: slot.slotCodigo,
@@ -5316,11 +6776,13 @@ export class MotorUniversalService {
         });
         continue;
       }
-      const precioUnitario = precioMaterialPorUnidadDeConsumo(
+      let precioUnitario = precioMaterialPorUnidadDeConsumo(
         precioReferencia,
         materialResuelto.unidadStock,
         unidadConsumo,
         materialResuelto.atributosVarianteJson,
+        materialResuelto.materiaPrimaTemplateId,
+        materialResuelto.contextoUnidades,
       );
       if (
         !Number.isFinite(cantidad) ||
@@ -5348,27 +6810,48 @@ export class MotorUniversalService {
       }
       const costeoNesting = this.calcularCosteoNestingMaterial(
         this.resolverEstrategiaCosteoNesting(paso),
-        precioUnitario,
+        precioReferencia,
         jobContext,
         nestingDispatch,
         paso,
+        materialResuelto.unidadStock,
+        materialResuelto.contextoUnidades,
       );
+      let costoTotal: number;
       if (costeoNesting && precioUnitario > 0) {
+        // El precio de catálogo está expresado en la unidad de stock. El
+        // nesting recibe precio por placa; la línea debe usar esa misma base
+        // (o precio/m² para área exacta) antes de derivar el consumo.
+        precioUnitario = costeoNesting.precioUnidadLinea;
         // 'simple' consume unidades ENTERAS: la cantidad es el conteo exacto
         // (dividir el costo redondeado metía 250.0000008 hojas en la línea).
-        cantidad =
+        cantidadTrabajoAntesDeMerma =
           costeoNesting.strategy === 'simple'
             ? costeoNesting.breakdown.fullUnits
             : costeoNesting.totalCost / precioUnitario;
+        const desgloseNestingConMerma = desglosarMermaOperativa(
+          cantidadTrabajoAntesDeMerma,
+          porcentajeMermaAdicional,
+        );
+        cantidadMermaAdicional = desgloseNestingConMerma.cantidadMerma;
+        cantidad = desgloseNestingConMerma.cantidadTotal;
+        // El nesting explica el costo geométrico del trabajo bueno. La merma
+        // operativa representa corridas adicionales del mismo patrón y se
+        // agrega después, sin fingir que el acomodo dejó más espacio vacío.
+        costoTotal =
+          costeoNesting.totalCost *
+          (1 + desgloseNestingConMerma.porcentaje / 100);
+      } else {
+        costoTotal = cantidad * precioUnitario;
       }
-      const costoTotal = costeoNesting?.totalCost ?? cantidad * precioUnitario;
 
       // Cuando el costeo del nesting contó unidades ENTERAS del sustrato
       // (materia prima completa / por tramos / largo utilizado), `cantidad`
       // quedó expresada en hojas/placas — etiquetarla con la unidad de stock
       // mentía: "1 m²" para una hoja de 2,98 m². La unidad honesta sale de la
       // presentación de la variante (hoja) o de la unidad del nesting. La
-      // estrategia m2-exact sí deja la cantidad en m² y conserva su unidad.
+      // estrategia m2-exact deja siempre cantidad y precio en m², incluso
+      // cuando el catálogo tiene el precio por hoja.
       const presentacionVariante =
         materialResuelto.atributosVarianteJson &&
         typeof materialResuelto.atributosVarianteJson.presentacion === 'string'
@@ -5376,11 +6859,30 @@ export class MotorUniversalService {
               .trim()
               .toLowerCase()
           : '';
-      const unidadLinea =
-        costeoNesting && costeoNesting.strategy !== 'm2-exact'
-          ? presentacionVariante ||
+      const usaPlacas = [
+        unidadConsumo,
+        materialResuelto.contextoUnidades?.unidadStock,
+        materialResuelto.contextoUnidades?.unidadCompra,
+        materialResuelto.contextoUnidades?.unidadPrecio,
+      ].some((unit) => normalizarUnidad(unit) === 'PLACA');
+      const presentacionSustrato =
+        usaPlacas && ['', 'hoja', 'pliego', 'placa'].includes(presentacionVariante)
+          ? 'placa'
+          : presentacionVariante;
+      const unidadLinea = costeoNesting
+        ? costeoNesting.strategy === 'm2-exact'
+          ? 'm2'
+          : presentacionSustrato ||
             (nestingDispatch?.unidad === 'pliegos' ? 'pliego' : unidadConsumo)
-          : unidadConsumo;
+        : unidadConsumo;
+      const opcionesNestingRollo = await this.resolverOpcionesNestingRollo({
+        tenantId,
+        paso,
+        slot,
+        jobContext,
+        nestingDispatch,
+        unidadConsumo,
+      });
 
       ejecutados.push({
         slotCodigo: slot.slotCodigo,
@@ -5391,10 +6893,12 @@ export class MotorUniversalService {
         materialSku: materialResuelto.sku,
         materialDisplayName: this.getMaterialDisplayName(materialResuelto),
         materiaPrimaNombre: materialResuelto.materiaPrimaNombre ?? null,
+        materiaPrimaId: materialResuelto.materiaPrimaId ?? null,
         materiaPrimaTemplateId: materialResuelto.materiaPrimaTemplateId ?? null,
         materiaPrimaTipoTecnico:
           materialResuelto.materiaPrimaTipoTecnico ?? null,
         atributosVarianteJson: materialResuelto.atributosVarianteJson ?? null,
+        opcionesNestingRollo,
         tipoLineaCosto: 'MATERIAL',
         cantidad,
         // G-M9: la unidad efectiva depende de la fórmula del slot. Para
@@ -5406,6 +6910,16 @@ export class MotorUniversalService {
         unidad: unidadLinea,
         precioUnitario,
         costoTotal,
+        mermaAdicional:
+          Number.isFinite(porcentajeMermaAdicional) &&
+          porcentajeMermaAdicional > 0 &&
+          cantidadMermaAdicional > 0
+            ? {
+                porcentaje: porcentajeMermaAdicional,
+                cantidadTrabajo: Number(cantidadTrabajoAntesDeMerma.toFixed(8)),
+                cantidadMerma: Number(cantidadMermaAdicional.toFixed(8)),
+              }
+            : undefined,
         estrategiaCosto:
           costeoNesting?.strategy ?? this.resolverEstrategiaCosteoNesting(paso),
         detalleCosteoNesting: costeoNesting
@@ -5421,7 +6935,9 @@ export class MotorUniversalService {
             }
           : undefined,
         modoSeleccion: slot.modoSeleccion as
-          'HARDCODED' | 'COMERCIAL_ELIGE' | 'MOTOR_ELIGE_AUTO',
+          | 'HARDCODED'
+          | 'COMERCIAL_ELIGE'
+          | 'MOTOR_ELIGE_AUTO',
       });
     }
 
@@ -5580,6 +7096,42 @@ export class MotorUniversalService {
     return dup as JobContext;
   }
 
+  private convertirCantidadRolloAUnidadMaterial(
+    metrosLineales: number,
+    nesting: NestingDispatchResult,
+    material: {
+      unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
+      materiaPrimaTemplateId?: string | null;
+      atributosVarianteJson?: Record<string, unknown> | null;
+    },
+  ): number {
+    const rollo = nesting.substrates[0];
+    if (rollo?.kind !== 'roll') return Number.NaN;
+    const unidad = normalizarUnidad(material.unidadStock) ?? '';
+    const conversion = materialUnitConversion(
+      {
+        ...material.contextoUnidades,
+        unidadStock: unidad,
+        unidadCompra: unidad,
+        templateId:
+          material.materiaPrimaTemplateId ?? 'sustrato_rollo_flexible_v1',
+        atributos: {
+          ...material.atributosVarianteJson,
+          // El ancho físico del acomodo incluye los bordes desperdiciados.
+          // No usar el ancho imprimible ni el área comercial de las piezas.
+          ancho: undefined,
+          anchoMm: rollo.widthMm,
+        },
+      },
+      'METRO_LINEAL',
+      unidad,
+    );
+    // La validación de costeo rechaza la línea si falta la equivalencia;
+    // nunca interpretar silenciosamente metros como rollos o unidades.
+    return conversion.ok ? metrosLineales * conversion.factor : Number.NaN;
+  }
+
   /** Despacha el gancho `compraSustrato` declarado; sin declaración la
    *  cantidad de consumo ES la de compra. [P2: era la conversión
    *  pliegos→hojas propia de impresión por hoja] */
@@ -5591,6 +7143,7 @@ export class MotorUniversalService {
     nestingDispatch: NestingDispatchResult | null,
     materialResuelto: {
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson?: Record<string, unknown> | null;
     },
   ): number {
@@ -5664,14 +7217,17 @@ export class MotorUniversalService {
 
   private calcularCosteoNestingMaterial(
     estrategiaCosto: string,
-    precioUnitario: number,
+    precioReferencia: number,
     jobContext: JobContext,
     nestingDispatch: NestingDispatchResult | null,
     paso: PasoCargado,
+    unidadPrecio: string | null | undefined,
+    contextoUnidades?: MaterialUnitContext,
   ) {
-    if (!nestingDispatch || precioUnitario <= 0) return null;
+    if (!nestingDispatch || precioReferencia <= 0) return null;
     if (!isNestingCostingStrategy(estrategiaCosto)) return null;
-    if (nestingDispatch.substrates[0]?.kind !== 'sheet') return null;
+    const sustrato = nestingDispatch.substrates[0];
+    if (sustrato?.kind !== 'sheet') return null;
     // 'simple' vía nesting sólo cuando la unidad NESTEADA es la unidad
     // COMPRADA (placa, chapa, sustrato de montaje). Donde la familia declara
     // el gancho `compraSustrato` (impresión por hoja: los pliegos de
@@ -5691,24 +7247,7 @@ export class MotorUniversalService {
       if (tieneConversionCompra || carasDuplicadas) return null;
     }
 
-    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    const nestingConfig =
-      typeof params.nestingConfig === 'object' &&
-      params.nestingConfig !== null &&
-      !Array.isArray(params.nestingConfig)
-        ? (params.nestingConfig as Record<string, unknown>)
-        : {};
-    const costingConfig =
-      typeof nestingConfig.costing === 'object' &&
-      nestingConfig.costing !== null &&
-      !Array.isArray(nestingConfig.costing)
-        ? (nestingConfig.costing as Record<string, unknown>)
-        : {};
-    const segmentSteps = Array.isArray(costingConfig.segmentSteps)
-      ? costingConfig.segmentSteps
-          .map((item) => Number(item))
-          .filter((item) => Number.isFinite(item) && item > 0 && item <= 100)
-      : undefined;
+    const segmentSteps = this.resolverSegmentosCosteoNesting(paso);
 
     const totalPieces = this.totalPiezasParaCosteo(jobContext);
     const unitsNeeded =
@@ -5717,7 +7256,34 @@ export class MotorUniversalService {
         return acc + sub.count;
       }, 0) || Math.ceil(nestingDispatch.cantidadCalculada);
 
-    return applyCostingStrategy({
+    // Todas las estrategias de placa esperan el precio de UNA placa física,
+    // también m2-exact (que internamente lo divide por el área). Un material
+    // cotizado por m² no vale lo mismo que su placa: PVC 1,22 × 2,44 consume
+    // 2,9768 m² por placa. Usamos la geometría que efectivamente se anidó.
+    const areaSustratoM2 = (sustrato.widthMm * sustrato.heightMm) / 1_000_000;
+    let precioPlaca =
+      normalizarUnidad(unidadPrecio) === 'M2'
+        ? precioReferencia * areaSustratoM2
+        : precioReferencia;
+    if (
+      contextoUnidades &&
+      unidadPrecio &&
+      !['M2', 'HOJA', 'PLACA', 'PLIEGO', 'UNIDAD', 'PIEZA'].includes(
+        normalizarUnidad(unidadPrecio) ?? '',
+      )
+    ) {
+      const conversion = materialUnitConversion(
+        contextoUnidades,
+        unidadPrecio,
+        'hoja',
+      );
+      if (!conversion.ok)
+        throw new BadRequestException(
+          `No se puede costear la placa: ${conversion.mensaje}`,
+        );
+      precioPlaca = precioReferencia / conversion.factor;
+    }
+    const costeo = applyCostingStrategy({
       strategy: estrategiaCosto,
       nesting: {
         algorithm: nestingDispatch.algorithm,
@@ -5725,13 +7291,21 @@ export class MotorUniversalService {
         placements: nestingDispatch.placements,
         metrics: nestingDispatch.metricasRaw,
       },
-      unitPrice: precioUnitario,
+      unitPrice: precioPlaca,
       totalPieces,
       unitsNeeded,
       pieceWidthMm: jobContext.medidaCustomMm?.anchoMm,
       pieceHeightMm: jobContext.medidaCustomMm?.altoMm,
       segmentSteps,
     });
+    return {
+      ...costeo,
+      // No usar breakdown.pricePerM2 aquí: está redondeado para el desglose.
+      precioUnidadLinea:
+        estrategiaCosto === 'm2-exact'
+          ? precioPlaca / areaSustratoM2
+          : precioPlaca,
+    };
   }
 
   /**
@@ -5758,6 +7332,30 @@ export class MotorUniversalService {
         : {};
     const strategy = costingConfig.strategy;
     return typeof strategy === 'string' ? strategy : 'simple';
+  }
+
+  private resolverSegmentosCosteoNesting(
+    paso: PasoCargado,
+  ): number[] | undefined {
+    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
+    const nestingConfig =
+      typeof params.nestingConfig === 'object' &&
+      params.nestingConfig !== null &&
+      !Array.isArray(params.nestingConfig)
+        ? (params.nestingConfig as Record<string, unknown>)
+        : {};
+    const costingConfig =
+      typeof nestingConfig.costing === 'object' &&
+      nestingConfig.costing !== null &&
+      !Array.isArray(nestingConfig.costing)
+        ? (nestingConfig.costing as Record<string, unknown>)
+        : {};
+    return Array.isArray(costingConfig.segmentSteps)
+      ? costingConfig.segmentSteps
+          .map((item) => Number(item))
+          .filter((item) => Number.isFinite(item) && item > 0 && item <= 100)
+          .sort((a, b) => a - b)
+      : undefined;
   }
 
   private totalPiezasParaCosteo(jobContext: JobContext): number {
@@ -5793,14 +7391,20 @@ export class MotorUniversalService {
       id: string;
       atributosVarianteJson?: Record<string, unknown> | null;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       subfamilia?: string | null;
     } | null,
   ): MaterialEjecutado[] {
     const maquina = paso.maquina;
     const componentes = maquina?.componentesDesgaste ?? [];
     if (!maquina || componentes.length === 0) return [];
+    const mermaOperativaPct = PRINTER_TEMPLATES_WITH_MACHINE_CONSUMABLES.has(
+      maquina.plantilla,
+    )
+      ? porcentajeMermaOperativaImpresion(paso)
+      : 0;
 
-    let tintaProcesadaMl: number | null = null;
+    let tintaProcesadaTrabajoMl: number | null = null;
     if (
       componentes.some((componente) => componente.unidadDesgaste === 'ml_tinta')
     ) {
@@ -5841,7 +7445,7 @@ export class MotorUniversalService {
         materialPreliminar,
       );
       if (consumosCompletos && consumoTintaMlM2 > 0 && areaImpresaM2 > 0) {
-        tintaProcesadaMl =
+        tintaProcesadaTrabajoMl =
           consumoTintaMlM2 *
           areaImpresaM2 *
           this.resolverCarasConsumible(paso, jobContext);
@@ -5895,8 +7499,15 @@ export class MotorUniversalService {
       if (!precioRepuesto) continue;
 
       const porMlTinta = componente.unidadDesgaste === 'ml_tinta';
-      const cantidad = porMlTinta ? tintaProcesadaMl : getClicks();
-      if (!cantidad || cantidad <= 0) continue;
+      const cantidadTrabajo = porMlTinta
+        ? tintaProcesadaTrabajoMl
+        : getClicks();
+      if (!cantidadTrabajo || cantidadTrabajo <= 0) continue;
+      const desglose = desglosarMermaOperativa(
+        cantidadTrabajo,
+        mermaOperativaPct,
+      );
+      const cantidad = desglose.cantidadTotal;
       const costoPorUnidad = precioRepuesto / vidaUtil;
       const costoTotal = costoPorUnidad * cantidad;
 
@@ -5914,6 +7525,14 @@ export class MotorUniversalService {
         unidad: porMlTinta ? 'ml' : 'a4_equiv',
         precioUnitario: costoPorUnidad,
         costoTotal,
+        mermaAdicional:
+          desglose.cantidadMerma > 0
+            ? {
+                porcentaje: desglose.porcentaje,
+                cantidadTrabajo: desglose.cantidadTrabajo,
+                cantidadMerma: desglose.cantidadMerma,
+              }
+            : undefined,
         estrategiaCosto: porMlTinta ? 'costo_por_ml_tinta' : 'costo_por_click',
         // La pieza la declara la máquina, no un slot que alguien elija.
         modoSeleccion: 'MAQUINA_DESGASTE',
@@ -5938,6 +7557,7 @@ export class MotorUniversalService {
       id: string;
       atributosVarianteJson?: Record<string, unknown> | null;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       subfamilia?: string | null;
     } | null,
   ): MaterialEjecutado[] {
@@ -5986,20 +7606,24 @@ export class MotorUniversalService {
       return [];
     }
 
-    const areaImpresaM2 = this.calcularAreaImpresaConsumiblesM2(
+    const areaImpresaTrabajoM2 = this.calcularAreaImpresaConsumiblesM2(
       paso,
       jobContext,
       nestingDispatch,
       materialPreliminar,
     );
+    const areaImpresa = desglosarMermaOperativa(
+      areaImpresaTrabajoM2,
+      porcentajeMermaOperativaImpresion(paso),
+    );
     const caras = this.resolverCarasConsumible(paso, jobContext);
     // Área CERO = trabajo cero (ej. un ítem que sólo lleva un paso opcional y no
     // imprime): 0 unidades ⇒ 0 consumibles, no es un error. Sólo un área inválida
     // (NaN o negativa) sí lo es.
-    if (areaImpresaM2 === 0) {
+    if (areaImpresaTrabajoM2 === 0) {
       return [];
     }
-    if (!Number.isFinite(areaImpresaM2) || areaImpresaM2 < 0) {
+    if (!Number.isFinite(areaImpresaTrabajoM2) || areaImpresaTrabajoM2 < 0) {
       errores.push({
         codigo: 'consumibles_maquina_area_invalida',
         severidad: 'ERROR',
@@ -6091,22 +7715,25 @@ export class MotorUniversalService {
         errores.push({
           codigo: 'consumible_maquina_sin_precio',
           severidad: 'ERROR',
-          mensaje: `La variante ${consumible.materialVariante.sku} no tiene precio de referencia.`,
+          mensaje: `La variante ${consumible.materialVariante.sku} necesita un precio válido y su unidad confirmada en la ficha de materiales.`,
           rutaPasoId: paso.rutaPasoId,
           rutaPasoOrden: paso.rutaPasoOrden,
           familiaCodigo: paso.familiaCodigo,
           sugerencia:
-            'Completar el precio de referencia de la variante de materia prima.',
+            'Completar el precio, su unidad y la equivalencia de compra y uso en la ficha del material.',
         });
         continue;
       }
 
-      const cantidad = consumoBase * areaImpresaM2 * caras;
+      const cantidadTrabajo = consumoBase * areaImpresa.cantidadTrabajo * caras;
+      const cantidadMerma = consumoBase * areaImpresa.cantidadMerma * caras;
+      const cantidad = cantidadTrabajo + cantidadMerma;
       const precioUnitario = precioPorUnidadDeConsumo(
         precioReferencia,
         consumible.materialVariante.unidadStock,
         consumible.unidad,
         consumible.rendimientoEstimado,
+        consumible.materialVariante.contextoUnidades,
       );
       const costoTotal = cantidad * precioUnitario;
 
@@ -6132,6 +7759,14 @@ export class MotorUniversalService {
         unidad: consumible.unidad,
         precioUnitario,
         costoTotal,
+        mermaAdicional:
+          cantidadMerma > 0
+            ? {
+                porcentaje: areaImpresa.porcentaje,
+                cantidadTrabajo,
+                cantidadMerma,
+              }
+            : undefined,
         estrategiaCosto: 'consumo_maquina_por_m2',
         modoSeleccion: 'MAQUINA_CONSUMIBLE',
       });
@@ -6183,7 +7818,7 @@ export class MotorUniversalService {
           errores.push({
             codigo: 'consumible_maquina_master_sin_precio',
             severidad: 'ERROR',
-            mensaje: `La variante ${master.materialVariante.sku} no tiene precio de referencia.`,
+            mensaje: `La variante ${master.materialVariante.sku} necesita un precio válido y su unidad confirmada en la ficha de materiales.`,
             rutaPasoId: paso.rutaPasoId,
             rutaPasoOrden: paso.rutaPasoOrden,
             familiaCodigo: paso.familiaCodigo,
@@ -6303,6 +7938,7 @@ export class MotorUniversalService {
     materialPreliminar: {
       id: string;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson?: Record<string, unknown> | null;
       subfamilia?: string | null;
     } | null,
@@ -6312,13 +7948,11 @@ export class MotorUniversalService {
     const areaPersonalizacion = this.areaPersonalizacionM2(paso, jobContext);
     if (areaPersonalizacion !== null) return areaPersonalizacion;
 
-    if (nestingDispatch?.substrates?.length) {
-      const area = nestingDispatch.substrates.reduce((acc, sub) => {
-        if (sub.kind === 'roll') {
-          return acc + (sub.lengthMm * sub.widthMm) / 1_000_000;
-        }
-        return acc + (sub.count * sub.widthMm * sub.heightMm) / 1_000_000;
-      }, 0);
+    if (nestingDispatch) {
+      const area = areaImpresaTrabajoDesdeNestingM2(
+        nestingDispatch,
+        this.totalPiezasParaCosteo(jobContext),
+      );
       if (area > 0) return area;
     }
 
@@ -6439,6 +8073,7 @@ export class MotorUniversalService {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     subfamilia?: string | null;
     atributosVarianteJson?: Record<string, unknown> | null;
   } | null> {
@@ -6532,9 +8167,26 @@ export class MotorUniversalService {
         (capacidadDefault ? 'MENOR_CAPACIDAD_QUE_CUMPLA' : 'MENOR_COSTO');
 
       if (criterio === 'MENOR_COSTO') {
-        return validos.sort(
-          (a, b) => Number(a.precioReferencia) - Number(b.precioReferencia),
-        )[0];
+        // Comparar importes en una misma unidad: 50/caja puede ser más barato
+        // que 6/unidad cuando cada caja contiene 10 unidades.
+        const unidadComparable = unidadEfectivaDeFormula(
+          slot.formula ?? 'fijo',
+          validos[0].unidadStock,
+        );
+        return validos
+          .map((variante) => ({
+            variante,
+            precio: precioMaterialPorUnidadDeConsumo(
+              Number(variante.precioReferencia),
+              variante.unidadStock,
+              unidadComparable,
+              variante.atributosVarianteJson,
+              variante.materiaPrimaTemplateId,
+              variante.contextoUnidades,
+            ),
+          }))
+          .filter((item) => Number.isFinite(item.precio) && item.precio > 0)
+          .sort((a, b) => a.precio - b.precio)[0]?.variante ?? null;
       }
 
       if (criterio === 'MAYOR_APROVECHAMIENTO') {
@@ -6545,14 +8197,19 @@ export class MotorUniversalService {
         if (paso) {
           const evaluados = await Promise.all(
             validos.map(async (v) => {
-              const dispatch = await runNestingForPaso(paso, jobContext, {
-                id: v.id,
-                atributosVarianteJson: v.atributosVarianteJson ?? null,
-                subfamilia: v.subfamilia ?? null,
-                materiaPrimaTemplateId: v.materiaPrimaTemplateId ?? null,
-                materiaPrimaTipoTecnico: v.materiaPrimaTipoTecnico ?? null,
-                unidadStock: v.unidadStock ?? null,
-              });
+              const dispatch = await runNestingForPaso(
+                paso,
+                jobContext,
+                {
+                  id: v.id,
+                  atributosVarianteJson: v.atributosVarianteJson ?? null,
+                  subfamilia: v.subfamilia ?? null,
+                  materiaPrimaTemplateId: v.materiaPrimaTemplateId ?? null,
+                  materiaPrimaTipoTecnico: v.materiaPrimaTipoTecnico ?? null,
+                  unidadStock: v.unidadStock ?? null,
+                },
+                this.opcionesNesting(tenantId),
+              );
               return { v, aprovechamiento: dispatch?.aprovechamientoPct ?? -1 };
             }),
           );
@@ -6615,6 +8272,94 @@ export class MotorUniversalService {
         }),
       ),
     );
+  }
+
+  /**
+   * Conserva los anchos que seguían disponibles cuando MOTOR_ELIGE_AUTO tomó
+   * su decisión individual. El lote compuesto vuelve a correr el nesting con
+   * estas alternativas y decide por costo real consolidado. Una elección
+   * comercial explícita no entra acá: en ese caso el ancho queda fijado.
+   */
+  private async resolverOpcionesNestingRollo(args: {
+    tenantId: string;
+    paso: PasoCargado;
+    slot: PasoCargado['slots'][number];
+    jobContext: JobContext;
+    nestingDispatch: NestingDispatchResult | null;
+    unidadConsumo: string;
+  }): Promise<MaterialEjecutado['opcionesNestingRollo'] | undefined> {
+    const { paso, slot, jobContext, nestingDispatch } = args;
+    if (
+      slot.modoSeleccion !== 'MOTOR_ELIGE_AUTO' ||
+      this.getEleccionMaterialComercial(slot, jobContext, paso) ||
+      !nestingDispatch ||
+      !['shelf-rollo', 'maxrects-rollo'].includes(nestingDispatch.algorithm) ||
+      !['m2', 'm_lineales'].includes(args.unidadConsumo)
+    ) {
+      return undefined;
+    }
+
+    const variantes = await Promise.all(
+      this.getSlotCandidatoVarianteIds(slot).map((varianteId) =>
+        this.cargarVariantePorId(args.tenantId, varianteId),
+      ),
+    );
+    const filtroCampo = slot.criterioFiltroCampo ?? '';
+    const filtroValor = filtroCampo
+      ? (jobContext as Record<string, unknown>)[filtroCampo]
+      : undefined;
+    const bocaMm = Number(paso.maquina?.anchoUtil ?? 0);
+    const opciones = variantes
+      .filter((variante): variante is NonNullable<typeof variante> => {
+        if (!variante) return false;
+        if (filtroCampo && filtroValor != null && filtroValor !== '') {
+          return (
+            textoPrimitivo(variante.atributosVarianteJson?.[filtroCampo]) ===
+            textoPrimitivo(filtroValor)
+          );
+        }
+        return true;
+      })
+      .flatMap((variante) => {
+        const anchoMm = getRolloAnchoMm(variante.atributosVarianteJson);
+        const precioReferencia = Number(variante.precioReferencia);
+        const precioUnitario = precioMaterialPorUnidadDeConsumo(
+          precioReferencia,
+          variante.unidadStock,
+          args.unidadConsumo,
+          variante.atributosVarianteJson,
+          variante.materiaPrimaTemplateId,
+          variante.contextoUnidades,
+        );
+        if (
+          !(anchoMm > 0) ||
+          (bocaMm > 0 && anchoMm > bocaMm) ||
+          !(precioUnitario > 0)
+        ) {
+          return [];
+        }
+        return [
+          {
+            materialVarianteId: variante.id,
+            materialSku: variante.sku,
+            materialDisplayName: this.getMaterialDisplayName(variante),
+            materiaPrimaId: variante.materiaPrimaId ?? null,
+            materiaPrimaNombre: variante.materiaPrimaNombre ?? null,
+            materiaPrimaTemplateId: variante.materiaPrimaTemplateId ?? null,
+            materiaPrimaTipoTecnico: variante.materiaPrimaTipoTecnico ?? null,
+            atributosVarianteJson: variante.atributosVarianteJson ?? null,
+            anchoMm,
+            unidad: args.unidadConsumo as 'm2' | 'm_lineales',
+            precioUnitario,
+          },
+        ];
+      })
+      .sort(
+        (a, b) =>
+          a.anchoMm - b.anchoMm ||
+          a.materialVarianteId.localeCompare(b.materialVarianteId),
+      );
+    return opciones.length > 0 ? opciones : undefined;
   }
 
   private getEleccionMaterialComercial(
@@ -6687,7 +8432,7 @@ export class MotorUniversalService {
         codigo: 'material_hardcoded_no_disponible',
         mensaje: `El material fijo ${slotLabel} del paso ${paso.rutaPasoOrden} no existe, está inactivo o no tiene precio.`,
         sugerencia:
-          'Elegir una variante activa con precio de referencia mayor a cero.',
+          'Elegir una variante activa con precio, unidad del precio confirmada y equivalencias configuradas.',
       };
     }
 
@@ -6697,15 +8442,18 @@ export class MotorUniversalService {
         codigo: 'material_auto_no_resoluble',
         mensaje: `El motor no encontró un material activo y con precio para ${slotLabel} en el paso ${paso.rutaPasoOrden}.`,
         sugerencia:
-          'Revisar los candidatos del slot, sus precios y el criterio de selección automática.',
+          'Revisar precios, unidad del precio y equivalencias en la ficha de los materiales candidatos.',
       };
     }
 
     return {
       ...base,
       codigo: 'material_comercial_requerido',
-      mensaje: `El paso ${paso.rutaPasoOrden} requiere elegir el material ${slotLabel}.`,
-      sugerencia: 'Seleccionar un material antes de cotizar.',
+      mensaje: eleccion
+        ? `El material ${slotLabel} seleccionado necesita un precio y su unidad confirmada en la ficha de materiales.`
+        : `El paso ${paso.rutaPasoOrden} requiere elegir el material ${slotLabel}.`,
+      sugerencia:
+        'Seleccionar un material y confirmar la unidad del precio y su equivalencia en la ficha.',
     };
   }
 
@@ -6724,8 +8472,9 @@ export class MotorUniversalService {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     anchoMm?: number;
-    /** G-M9: unidad de stock heredada (PLIEGO, METRO_LINEAL, etc.). */
+    /** Base del precio: unidad de consumo. El nombre del campo es legado. */
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     /** Formato del sustrato (SUSTRATO_ROLLO_FLEXIBLE, _HOJA, _RIGIDO…) para
      *  rutear rollo vs pliego/placa sin sniffing de atributos. */
     subfamilia?: string | null;
@@ -6749,6 +8498,8 @@ export class MotorUniversalService {
             canonicalMaterialKey: true,
             activo: true,
             unidadStock: true,
+            unidadUso: true,
+            unidadCompra: true,
             subfamilia: true,
             templateId: true,
             tipoTecnico: true,
@@ -6756,7 +8507,7 @@ export class MotorUniversalService {
         },
       },
     });
-    if (!v) return null;
+    if (!v || precioMaterialEnMonedaCotizacion(v) == null) return null;
     const attrs = v.atributosVarianteJson as Record<string, unknown> | null;
     return {
       id: v.id,
@@ -6767,10 +8518,11 @@ export class MotorUniversalService {
       canonicalMaterialKey: v.materiaPrima?.canonicalMaterialKey ?? null,
       materiaPrimaTemplateId: v.materiaPrima?.templateId ?? null,
       materiaPrimaTipoTecnico: v.materiaPrima?.tipoTecnico ?? null,
-      precioReferencia: v.precioReferencia ? Number(v.precioReferencia) : null,
+      precioReferencia: precioMaterialEnMonedaCotizacion(v),
       anchoMm: typeof attrs?.anchoMm === 'number' ? attrs.anchoMm : undefined,
       // Variante puede tener override; sino hereda de la materia prima padre.
-      unidadStock: v.unidadStock ?? v.materiaPrima?.unidadStock ?? null,
+      unidadStock: materialPriceContext(v).unidadUso,
+      contextoUnidades: materialPriceContext(v),
       // Formato del sustrato (rollo/hoja/rígido) para el ruteo de nesting.
       subfamilia: v.materiaPrima?.subfamilia ?? null,
       atributosVarianteJson: attrs,
@@ -6865,6 +8617,7 @@ export class MotorUniversalService {
       materiaPrimaTemplateId?: string | null;
       materiaPrimaTipoTecnico?: string | null;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson?: Record<string, unknown> | null;
     } | null,
     jobContext: JobContext,
@@ -6930,16 +8683,19 @@ export class MotorUniversalService {
           b = Number(ctx[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MAQUINA') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'MATERIAL' && v.slotMaterial) {
           const slot = paso.slots.find((s) => s.slotCodigo === v.slotMaterial);
           const attrs = slot?.materialVariante?.atributosVarianteJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(attrs?.[v.campoB] ?? NaN);
         } else if (v.fuenteB === 'CONFIG_PASO') {
           const params = paso.paramsPasoJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           b = Number(params?.[v.campoB] ?? NaN);
         }
         // Si falta uno de los datos, NO se valida (skip silencioso).
@@ -7042,14 +8798,16 @@ export class MotorUniversalService {
         }
         if (fuente === 'maq') {
           const params = paso.maquina?.parametrosTecnicosJson as
-            Record<string, unknown> | undefined;
+            | Record<string, unknown>
+            | undefined;
           return this.valueToMessage(params?.[campo]);
         }
         if (fuente === 'mat') {
           // Buscar en cualquier slot
           for (const s of paso.slots) {
             const attrs = s.materialVariante?.atributosVarianteJson as
-              Record<string, unknown> | undefined;
+              | Record<string, unknown>
+              | undefined;
             if (attrs && attrs[campo] !== undefined)
               return this.valueToMessage(attrs[campo]);
           }
@@ -7567,6 +9325,13 @@ export class MotorUniversalService {
     paso: PasoCargado,
     jobContext: JobContext,
   ): number {
+    const cantidadComponentes = this.numeroPositivo(
+      (jobContext as Record<string, unknown>).cantidadPiezasComponentes,
+    );
+    if (cantidadComponentes !== null && cantidadComponentes !== undefined) {
+      return cantidadComponentes;
+    }
+
     // Consumo y tiempo COMPARTEN la fuente (§8): el override por-slot gana sobre
     // el param del paso, igual que en buildJobContextPiezas.
     const fuente = fuenteMedidaEfectiva(paso) ?? 'piezas_jobcontext';
@@ -7958,7 +9723,7 @@ export class MotorUniversalService {
   ): NonNullable<PasoCargado['perfil']> | null {
     const perfilesDisponibles = this.filtrarPerfilesCompatibles(
       paso.familiaCodigo,
-      paso.perfilesDisponibles,
+      paso.perfilesDisponibles?.filter(p => !(p.detalleJson && typeof p.detalleJson === 'object' && 'procesamientoCorteVersion' in p.detalleJson)),
     );
     if (perfilesDisponibles.length <= 1) {
       return null; // no hay alternativas, mantener default
@@ -8246,7 +10011,9 @@ export class MotorUniversalService {
         cargoCodigo: cargo.catalogo.codigo,
         cargoNombre: cargo.catalogo.nombre,
         modoCalculo: cargo.catalogo.modoCalculo as
-          'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT',
+          | 'MONTO_FIJO_PLANO'
+          | 'PORCENTAJE_SOBRE_BASE'
+          | 'POR_UNIDAD_INPUT',
         monto,
         aplicaMargen: cargo.aplicaMargenOverride ?? cargo.catalogo.aplicaMargen,
         detalle: { config, baseCalculo: subtotalCotizacion },
@@ -8306,7 +10073,8 @@ export class MotorUniversalService {
     if (modoCalculo === 'MONTO_FIJO_PLANO') {
       // Si hay zonas (ej: viático), buscar la zona elegida en el JobContext
       const zonas = config.zonas as
-        Array<{ codigo: string; monto: number }> | undefined;
+        | Array<{ codigo: string; monto: number }>
+        | undefined;
       if (zonas && jobContext.zonaInstalacion) {
         const zona = zonas.find((z) => z.codigo === jobContext.zonaInstalacion);
         if (zona) return numeroNoNegativo(zona.monto, 'zonas[].monto');
@@ -8427,7 +10195,22 @@ export class MotorUniversalService {
       sku: string;
       activo: boolean;
       precioReferencia: unknown;
-      materiaPrima?: { activo: boolean } | null;
+      moneda?: string | null;
+      unidadPrecio?: string | null;
+      unidadCompra?: string | null;
+      unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
+      equivalenciaCompra?: unknown;
+      unidadUso?: string | null;
+      equivalenciasJson?: unknown;
+      atributosVarianteJson?: unknown;
+      materiaPrima?: {
+        activo: boolean;
+        unidadCompra?: string;
+        unidadUso?: string | null;
+        unidadStock?: string;
+        templateId?: string;
+      } | null;
     } | null;
   }): ComponenteDesgasteCargado {
     return {
@@ -8453,10 +10236,9 @@ export class MotorUniversalService {
             activo: componente.materiaPrimaVariante.activo,
             materiaPrimaActiva:
               componente.materiaPrimaVariante.materiaPrima?.activo ?? false,
-            precioReferencia:
-              componente.materiaPrimaVariante.precioReferencia == null
-                ? null
-                : Number(componente.materiaPrimaVariante.precioReferencia),
+            precioReferencia: precioMaterialEnMonedaCotizacion(
+              componente.materiaPrimaVariante,
+            ),
           }
         : null,
     };
@@ -8479,12 +10261,21 @@ export class MotorUniversalService {
       activo: boolean;
       nombreVariante?: string | null;
       precioReferencia: unknown;
+      moneda?: string | null;
+      unidadPrecio?: string | null;
+      unidadCompra?: string | null;
+      equivalenciaCompra?: unknown;
+      unidadUso?: string | null;
+      equivalenciasJson?: unknown;
       unidadStock?: string | null;
+      contextoUnidades?: MaterialUnitContext;
       atributosVarianteJson: unknown;
       materiaPrima?: {
         nombre: string;
         activo: boolean;
         unidadStock: string;
+        unidadCompra?: string;
+        unidadUso?: string | null;
         templateId: string;
         tipoTecnico: string;
       };
@@ -8518,14 +10309,12 @@ export class MotorUniversalService {
           consumible.materiaPrimaVariante.materiaPrima?.templateId ?? null,
         materiaPrimaTipoTecnico:
           consumible.materiaPrimaVariante.materiaPrima?.tipoTecnico ?? null,
-        precioReferencia:
-          consumible.materiaPrimaVariante.precioReferencia == null
-            ? null
-            : Number(consumible.materiaPrimaVariante.precioReferencia),
-        unidadStock:
-          consumible.materiaPrimaVariante.unidadStock ??
-          consumible.materiaPrimaVariante.materiaPrima?.unidadStock ??
-          null,
+        precioReferencia: precioMaterialEnMonedaCotizacion(
+          consumible.materiaPrimaVariante,
+        ),
+        unidadStock: materialPriceContext(consumible.materiaPrimaVariante)
+          .unidadUso,
+        contextoUnidades: materialPriceContext(consumible.materiaPrimaVariante),
         atributosVarianteJson: consumible.materiaPrimaVariante
           .atributosVarianteJson as Record<string, unknown> | null,
       },
@@ -8563,7 +10352,15 @@ export class MotorUniversalService {
                       include: {
                         materiaPrimaVariante: {
                           include: {
-                            materiaPrima: { select: { activo: true } },
+                            materiaPrima: {
+                              select: {
+                                activo: true,
+                                unidadStock: true,
+                                unidadUso: true,
+                                unidadCompra: true,
+                                templateId: true,
+                              },
+                            },
                           },
                         },
                       },
@@ -8578,6 +10375,8 @@ export class MotorUniversalService {
                                 nombre: true,
                                 activo: true,
                                 unidadStock: true,
+                                unidadUso: true,
+                                unidadCompra: true,
                                 templateId: true,
                                 tipoTecnico: true,
                               },
@@ -8602,6 +10401,8 @@ export class MotorUniversalService {
                             canonicalMaterialKey: true,
                             activo: true,
                             unidadStock: true,
+                            unidadUso: true,
+                            unidadCompra: true,
                             subfamilia: true,
                             templateId: true,
                             tipoTecnico: true,
@@ -8639,6 +10440,8 @@ export class MotorUniversalService {
                                     nombre: true,
                                     activo: true,
                                     unidadStock: true,
+                                    unidadUso: true,
+                                    unidadCompra: true,
                                     templateId: true,
                                     tipoTecnico: true,
                                   },
@@ -8667,7 +10470,15 @@ export class MotorUniversalService {
                           include: {
                             materiaPrimaVariante: {
                               include: {
-                                materiaPrima: { select: { activo: true } },
+                                materiaPrima: {
+                                  select: {
+                                    activo: true,
+                                    unidadStock: true,
+                                    unidadUso: true,
+                                    unidadCompra: true,
+                                    templateId: true,
+                                  },
+                                },
                               },
                             },
                           },
@@ -8682,6 +10493,8 @@ export class MotorUniversalService {
                                     nombre: true,
                                     activo: true,
                                     unidadStock: true,
+                                    unidadUso: true,
+                                    unidadCompra: true,
                                     templateId: true,
                                     tipoTecnico: true,
                                   },
@@ -8867,6 +10680,7 @@ export class MotorUniversalService {
               codigo: cp.maquinaM1.codigo,
               nombre: cp.maquinaM1.nombre,
               plantilla: cp.maquinaM1.plantilla,
+              espesorMaximo: cp.maquinaM1.espesorMaximo != null ? Number(cp.maquinaM1.espesorMaximo) : null,
               anchoUtil: cp.maquinaM1.anchoUtil
                 ? Number(cp.maquinaM1.anchoUtil)
                 : null,
@@ -8945,6 +10759,7 @@ export class MotorUniversalService {
             codigo: mc.maquina.codigo,
             nombre: mc.maquina.nombre,
             plantilla: mc.maquina.plantilla,
+            espesorMaximo: mc.maquina.espesorMaximo != null ? Number(mc.maquina.espesorMaximo) : null,
             anchoUtil: mc.maquina.anchoUtil
               ? Number(mc.maquina.anchoUtil)
               : null,
@@ -9038,6 +10853,7 @@ export class MotorUniversalService {
             s.cantidadFactor === null || s.cantidadFactor === undefined
               ? null
               : Number(s.cantidadFactor),
+          mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
           cantidadBase: s.cantidadBase,
           fuenteMedida: s.fuenteMedida,
           aplicaMultiCaras: s.aplicaMultiCaras,
@@ -9058,15 +10874,13 @@ export class MotorUniversalService {
                   s.materialVariante.materiaPrima?.templateId ?? null,
                 materiaPrimaTipoTecnico:
                   s.materialVariante.materiaPrima?.tipoTecnico ?? null,
-                precioReferencia: s.materialVariante.precioReferencia
-                  ? Number(s.materialVariante.precioReferencia)
-                  : null,
+                precioReferencia: precioMaterialEnMonedaCotizacion(
+                  s.materialVariante,
+                ),
                 atributosVarianteJson: s.materialVariante
                   .atributosVarianteJson as Record<string, unknown> | null,
-                unidadStock:
-                  s.materialVariante.unidadStock ??
-                  s.materialVariante.materiaPrima?.unidadStock ??
-                  null,
+                unidadStock: materialPriceContext(s.materialVariante).unidadUso,
+                contextoUnidades: materialPriceContext(s.materialVariante),
                 subfamilia: s.materialVariante.materiaPrima?.subfamilia ?? null,
               }
             : undefined,
@@ -9157,6 +10971,7 @@ export class MotorUniversalService {
       productoNombre: producto.nombre,
       unidadComercial: producto.unidadComercial,
       modoMedidas: producto.modoMedidas,
+      dimensionesRequeridas: producto.dimensionesRequeridas,
       minimoComercialPolitica: producto.minimoComercialPolitica,
       minimoComercialCantidad: producto.minimoComercialCantidad
         ? Number(producto.minimoComercialCantidad)
@@ -9171,7 +10986,11 @@ export class MotorUniversalService {
       medidaDefaultAltoMm: producto.medidaDefaultAltoMm
         ? Number(producto.medidaDefaultAltoMm)
         : null,
+      medidaDefaultProfundidadMm: producto.medidaDefaultProfundidadMm
+        ? Number(producto.medidaDefaultProfundidadMm)
+        : null,
       precioConfigJson: producto.precioConfigJson,
+      atributosComercialesJson: producto.atributosComercialesJson,
       rutaAlternativaId: rutaAlt.id,
       rutaAlternativaNombre: rutaAlt.nombre,
       rutaId: rutaAlt.ruta.id,
@@ -9260,7 +11079,17 @@ export class MotorUniversalService {
               where: { activo: true },
               include: {
                 materiaPrimaVariante: {
-                  include: { materiaPrima: { select: { activo: true } } },
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        activo: true,
+                        unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
+                        templateId: true,
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -9274,6 +11103,8 @@ export class MotorUniversalService {
                         nombre: true,
                         activo: true,
                         unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
                         templateId: true,
                         tipoTecnico: true,
                       },
@@ -9330,7 +11161,17 @@ export class MotorUniversalService {
               where: { activo: true },
               include: {
                 materiaPrimaVariante: {
-                  include: { materiaPrima: { select: { activo: true } } },
+                  include: {
+                    materiaPrima: {
+                      select: {
+                        activo: true,
+                        unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
+                        templateId: true,
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -9344,6 +11185,8 @@ export class MotorUniversalService {
                         nombre: true,
                         activo: true,
                         unidadStock: true,
+                        unidadUso: true,
+                        unidadCompra: true,
                         templateId: true,
                         tipoTecnico: true,
                       },
@@ -9432,7 +11275,15 @@ export class MotorUniversalService {
               include: {
                 materiaPrimaVariante: {
                   include: {
-                    materiaPrima: { select: { activo: true } };
+                    materiaPrima: {
+                      select: {
+                        activo: true;
+                        unidadStock: true;
+                        unidadUso: true;
+                        unidadCompra: true;
+                        templateId: true;
+                      };
+                    };
                   };
                 };
               };
@@ -9446,6 +11297,7 @@ export class MotorUniversalService {
                         nombre: true;
                         activo: true;
                         unidadStock: true;
+                        unidadUso: true;
                         templateId: true;
                         tipoTecnico: true;
                       };
@@ -9482,7 +11334,15 @@ export class MotorUniversalService {
             include: {
               materiaPrimaVariante: {
                 include: {
-                  materiaPrima: { select: { activo: true } };
+                  materiaPrima: {
+                    select: {
+                      activo: true;
+                      unidadStock: true;
+                      unidadUso: true;
+                      unidadCompra: true;
+                      templateId: true;
+                    };
+                  };
                 };
               };
             };
@@ -9496,6 +11356,7 @@ export class MotorUniversalService {
                       nombre: true;
                       activo: true;
                       unidadStock: true;
+                      unidadUso: true;
                       templateId: true;
                       tipoTecnico: true;
                     };
@@ -9564,6 +11425,7 @@ export class MotorUniversalService {
             codigo: maquina.codigo,
             nombre: maquina.nombre,
             plantilla: maquina.plantilla,
+            espesorMaximo: maquina.espesorMaximo != null ? Number(maquina.espesorMaximo) : null,
             anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
             largoUtil: maquina.largoUtil ? Number(maquina.largoUtil) : null,
             centroCostoPrincipalId: maquina.centroCostoPrincipalId,
@@ -9626,6 +11488,215 @@ export class MotorUniversalService {
     });
   }
 
+  private async cargarPasosInternosCompuestos(
+    tenantId: string,
+    snapshot: unknown,
+  ): Promise<PasoCargado[]> {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      return [];
+    }
+    const raw = (snapshot as Record<string, unknown>).pasos;
+    if (!Array.isArray(raw)) return [];
+    const pasos = raw.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const paso = item as Record<string, unknown>;
+      const configuracion = paso.configuracion;
+      if (
+        !configuracion ||
+        typeof configuracion !== 'object' ||
+        Array.isArray(configuracion) ||
+        typeof (configuracion as Record<string, unknown>).contenedorClave !==
+          'string' ||
+        typeof paso.clave !== 'string' ||
+        typeof paso.familiaCodigo !== 'string'
+      ) {
+        return [];
+      }
+      return [
+        {
+          clave: paso.clave,
+          nombre: typeof paso.nombre === 'string' ? paso.nombre : paso.clave,
+          familiaCodigo: paso.familiaCodigo,
+          orden: Number(paso.orden ?? 0),
+          configuracion: configuracion as Record<string, unknown>,
+          slots: Array.isArray(paso.slots) ? paso.slots : [],
+        },
+      ];
+    });
+    if (!pasos.length) return [];
+
+    const maquinaInclude = {
+      centroCostoPrincipal: { select: { id: true, nombre: true } },
+      perfilesOperativos: true,
+      componentesDesgaste: {
+        where: { activo: true },
+        include: {
+          materiaPrimaVariante: {
+            include: {
+              materiaPrima: {
+                select: {
+                  activo: true,
+                  unidadStock: true,
+                  unidadUso: true,
+                  unidadCompra: true,
+                  templateId: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      consumibles: {
+        where: { activo: true },
+        include: {
+          materiaPrimaVariante: {
+            include: {
+              materiaPrima: {
+                select: {
+                  nombre: true,
+                  activo: true,
+                  unidadStock: true,
+                  unidadUso: true,
+                  unidadCompra: true,
+                  templateId: true,
+                  tipoTecnico: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    } satisfies Prisma.MaquinaInclude;
+
+    return Promise.all(
+      pasos.map(async (item) => {
+        const cfg = item.configuracion;
+        const maquinaM1Id =
+          typeof cfg.maquinaM1Id === 'string' ? cfg.maquinaM1Id : null;
+        const perfilM1Id =
+          typeof cfg.perfilM1Id === 'string' ? cfg.perfilM1Id : null;
+        const centroCostoId =
+          typeof cfg.centroCostoId === 'string' ? cfg.centroCostoId : null;
+        const candidatas = Array.isArray(cfg.maquinasCandidatas)
+          ? cfg.maquinasCandidatas
+          : [];
+        const candidataIds = candidatas.flatMap((candidate) => {
+          if (!candidate || typeof candidate !== 'object') return [];
+          const id = (candidate as Record<string, unknown>).maquinaId;
+          return typeof id === 'string' ? [id] : [];
+        });
+        const [maquinaM1, perfilM1, centroCosto, maquinasCandidatas] =
+          await Promise.all([
+            maquinaM1Id
+              ? this.prisma.maquina.findFirst({
+                  where: { id: maquinaM1Id, tenantId },
+                  include: maquinaInclude,
+                })
+              : null,
+            perfilM1Id
+              ? this.prisma.maquinaPerfilOperativo.findFirst({
+                  where: { id: perfilM1Id, tenantId },
+                })
+              : null,
+            centroCostoId
+              ? this.prisma.centroCosto.findFirst({
+                  where: { id: centroCostoId, tenantId },
+                  select: { id: true, codigo: true, nombre: true },
+                })
+              : null,
+            candidataIds.length
+              ? this.prisma.maquina.findMany({
+                  where: { id: { in: candidataIds }, tenantId },
+                  include: maquinaInclude,
+                })
+              : [],
+          ]);
+        const candidataMap = new Map(
+          maquinasCandidatas.map((maquina) => [maquina.id, maquina]),
+        );
+        const row = {
+          id: item.clave,
+          familiaCodigo: item.familiaCodigo,
+          nombreVisible: item.nombre,
+          modoActivacion:
+            typeof cfg.modoActivacion === 'string'
+              ? cfg.modoActivacion
+              : 'OBLIGATORIO',
+          condicionActivacionJson: cfg.condicionActivacionJson ?? null,
+          modoTiempo:
+            typeof cfg.modoTiempo === 'string' ? cfg.modoTiempo : null,
+          mecanismoCantidad:
+            typeof cfg.mecanismoCantidad === 'string'
+              ? cfg.mecanismoCantidad
+              : null,
+          mecanismoCantidadConfigJson: cfg.mecanismoCantidadConfigJson ?? null,
+          multiplicadoresActivos: Array.isArray(cfg.multiplicadoresActivos)
+            ? cfg.multiplicadoresActivos.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
+          paramsPasoJson: cfg.paramsPasoJson ?? null,
+          maquinaM1Id,
+          perfilM1Id,
+          centroCostoId,
+          setupOverrideMin: cfg.setupOverrideMin ?? null,
+          cleanupOverrideMin: cfg.cleanupOverrideMin ?? null,
+          tiempoFijoOverrideMin: cfg.tiempoFijoOverrideMin ?? null,
+          configSlotsMaterialesJson: item.slots,
+          configMaquinasCandidatasJson: candidatas,
+          configCargosDirectosJson: [],
+          maquinaM1,
+          perfilM1,
+          centroCosto,
+        };
+        const cargado = await this.mapPasoExtraToPasoCargado(
+          row as never,
+          tenantId,
+          new Map(),
+          candidataMap,
+        );
+        return {
+          ...cargado,
+          rutaPasoOrden: item.orden,
+          contenedorClave:
+            typeof cfg.contenedorClave === 'string'
+              ? cfg.contenedorClave
+              : null,
+          pasoInternoCodigo:
+            typeof cfg.pasoInternoCodigo === 'string'
+              ? cfg.pasoInternoCodigo
+              : null,
+          componentesCodigos: Array.isArray(cfg.componentesCodigos)
+            ? cfg.componentesCodigos.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
+          dotacionOperarios: Number(cfg.dotacionOperarios ?? 1),
+          requiereRutaPasoIds: Array.isArray(cfg.requiereCodigos)
+            ? cfg.requiereCodigos.filter(
+                (value): value is string => typeof value === 'string',
+              )
+            : [],
+          tercerizado: cfg.tercerizado === true,
+          proveedorId:
+            typeof cfg.proveedorId === 'string' ? cfg.proveedorId : null,
+          fuenteCostoTercerizado:
+            typeof cfg.fuenteCostoTercerizado === 'string'
+              ? cfg.fuenteCostoTercerizado
+              : null,
+          tercerizadoConfigJson: cfg.tercerizadoConfigJson ?? null,
+          plazoProveedorDias:
+            cfg.plazoProveedorDias == null
+              ? null
+              : Number(cfg.plazoProveedorDias),
+          tercerizadoEntradas: Array.isArray(cfg.tercerizadoEntradas)
+            ? (cfg.tercerizadoEntradas as PasoCargado['tercerizadoEntradas'])
+            : [],
+        };
+      }),
+    );
+  }
+
   /**
    * E.1 — Carga los defaults declarados (FamiliaPasoDefaults) de un set de
    * familias, con el centro de costo resuelto para display/tarifa. Devuelve
@@ -9683,7 +11754,15 @@ export class MotorUniversalService {
             include: {
               materiaPrimaVariante: {
                 include: {
-                  materiaPrima: { select: { activo: true } };
+                  materiaPrima: {
+                    select: {
+                      activo: true;
+                      unidadStock: true;
+                      unidadUso: true;
+                      unidadCompra: true;
+                      templateId: true;
+                    };
+                  };
                 };
               };
             };
@@ -9697,6 +11776,7 @@ export class MotorUniversalService {
                       nombre: true;
                       activo: true;
                       unidadStock: true;
+                      unidadUso: true;
                       templateId: true;
                       tipoTecnico: true;
                     };
@@ -9758,7 +11838,8 @@ export class MotorUniversalService {
               codigo: maquina.codigo,
               nombre: maquina.nombre,
               plantilla: maquina.plantilla,
-              anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
+              espesorMaximo: maquina.espesorMaximo != null ? Number(maquina.espesorMaximo) : null,
+            anchoUtil: maquina.anchoUtil ? Number(maquina.anchoUtil) : null,
               largoUtil: maquina.largoUtil ? Number(maquina.largoUtil) : null,
               centroCostoPrincipalId: maquina.centroCostoPrincipalId,
               centroCostoPrincipalNombre:
@@ -9854,6 +11935,7 @@ export class MotorUniversalService {
           formula: s.formula ?? '',
           cantidadFactor:
             s.cantidadFactor === undefined ? null : s.cantidadFactor,
+          mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),
           cantidadBase: s.cantidadBase ?? null,
           fuenteMedida: s.fuenteMedida ?? null,
           aplicaMultiCaras: s.aplicaMultiCaras ?? false,

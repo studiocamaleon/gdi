@@ -1,5 +1,10 @@
 "use client";
+import { NativeButton, NativeInput } from "./nodos-ui";
 
+import {
+  OperacionesCorteFields,
+  type MaquinaOperacionesCorte,
+} from "./operaciones-corte-fields";
 import type { FamiliaListItem } from "@/lib/productos-servicios";
 import {
   DESCRIPCIONES_VALOR_PARAM,
@@ -61,8 +66,10 @@ export function ParamsFamiliaFields({
   familia,
   params,
   onChange,
+  maquina,
 }: {
   familia: FamiliaListItem;
+  maquina?: MaquinaOperacionesCorte | null;
   params: Record<string, unknown>;
   /** Patch shallow sobre `paramsPasoJson`. */
   onChange: (patch: Record<string, unknown>) => void;
@@ -93,8 +100,12 @@ export function ParamsFamiliaFields({
       return (
         <span className={`${s.ctl} ${s.sel}`}>
           <select
-            value={typeof valor === "string" ? valor : String(param.default ?? "")}
-            onChange={(e) => onChange(patchParaEnum(param.campo, e.target.value))}
+            value={
+              typeof valor === "string" ? valor : String(param.default ?? "")
+            }
+            onChange={(e) =>
+              onChange(patchParaEnum(param.campo, e.target.value))
+            }
           >
             {(param.valoresPermitidos ?? []).map((opcion) => (
               <option key={opcion} value={opcion}>
@@ -109,7 +120,7 @@ export function ParamsFamiliaFields({
     if (param.tipo === "number") {
       return (
         <span className={s.ctl}>
-          <input
+          <NativeInput
             className={s.num}
             inputMode="decimal"
             value={typeof valor === "number" ? String(valor) : ""}
@@ -133,19 +144,24 @@ export function ParamsFamiliaFields({
           {permitidos.map((opcion) => {
             const on = actuales.includes(opcion);
             return (
-              <button
+              <NativeButton
                 key={opcion}
                 type="button"
                 className={s.chip}
                 aria-pressed={on}
                 onClick={() =>
                   onChange({
-                    [param.campo]: toggleMultiEnum(permitidos, valor, opcion, !on),
+                    [param.campo]: toggleMultiEnum(
+                      permitidos,
+                      valor,
+                      opcion,
+                      !on,
+                    ),
                   })
                 }
               >
                 {etiquetaValorParam(opcion)}
-              </button>
+              </NativeButton>
             );
           })}
         </span>
@@ -155,7 +171,7 @@ export function ParamsFamiliaFields({
     if (param.tipo === "boolean") {
       const on = valorBooleanoParam(valor, param.default);
       return (
-        <button
+        <NativeButton
           type="button"
           className={s.tog}
           aria-pressed={on}
@@ -163,7 +179,7 @@ export function ParamsFamiliaFields({
         >
           <span className={s.tr} />
           <span className={s.togt}>{on ? "Sí" : "No"}</span>
-        </button>
+        </NativeButton>
       );
     }
 
@@ -189,15 +205,18 @@ export function ParamsFamiliaFields({
         <span className={s.lb}>
           <span className={s.a}>
             {param.etiqueta}
-            {param.requerido ? <span className={s.req}>obligatorio</span> : null}
+            {param.requerido ? (
+              <span className={s.req}>obligatorio</span>
+            ) : null}
           </span>
           {descripcion ? <span className={s.b}>{descripcion}</span> : null}
         </span>
         {renderControl(param)}
-        <button
+        <NativeButton
           type="button"
           className={s.lock}
           aria-pressed={editable}
+          disabled={param.campo === "cotizarOperacionesVectoriales"}
           title={
             expuesto
               ? "La familia sugiere abrirlo; podés fijarlo igual."
@@ -211,11 +230,11 @@ export function ParamsFamiliaFields({
         >
           {editable ? OPEN : LOCK}
           {editable ? "Editable" : "Fijo"}
-        </button>
+        </NativeButton>
         {faltaObligatorio ? (
           <span className={s.reqmsg}>
-            Elegí al menos un lado: sin lados el paso no puede calcular nada y la
-            cotización va a cortar.
+            Elegí al menos un lado: sin lados el paso no puede calcular nada y
+            la cotización va a cortar.
           </span>
         ) : null}
       </div>
@@ -230,6 +249,11 @@ export function ParamsFamiliaFields({
         <span className={`${s.k} ${s.kr}`}>Al cotizar</span>
       </div>
       {schema.map(renderRow)}
+      <OperacionesCorteFields
+        params={params}
+        maquina={maquina}
+        onChange={onChange}
+      />
       <div className={s.foot}>
         <svg
           width="13"

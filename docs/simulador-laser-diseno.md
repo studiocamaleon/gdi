@@ -1,5 +1,7 @@
 # Simulador de impresión láser — diseño
 
+> **Retirado el 11/09/2026 por decisión del usuario.** Este documento conserva el diseño histórico; sus pantallas y API ya no están disponibles. El [análisis de colas, tandas y operarios](produccion-colas-tandas-y-operarios-analisis-2026-09-11.md) describe el retiro y las alternativas todavía en evaluación.
+
 > 2026-07-17, rama `feat/simulador-laser`. Hermano del simulador por área
 > (docs/simulador-impresion-diseno.md) para la digital POR HOJA. Boceto de
 > referencia del usuario en claude.ai/design (laser.jsx del proyecto

@@ -1,0 +1,330 @@
+.section {
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #dedad4;
+  border-radius: 14px;
+  background: #fff;
+}
+.section > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #ebe7e2;
+  background: #faf8f5;
+}
+.section > header svg {
+  width: 18px;
+  color: #f2692f;
+}
+.section > header div {
+  display: grid;
+  gap: 2px;
+}
+.section > header strong {
+  font-size: 13px;
+}
+.section > header span {
+  color: #7f7975;
+  font-size: 11px;
+}
+.cards {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+.card {
+  overflow: hidden;
+  border: 1px solid #e6e1db;
+  border-radius: 10px;
+}
+.card summary {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  list-style: none;
+}
+.card summary::-webkit-details-marker {
+  display: none;
+}
+.card summary div {
+  display: grid;
+  gap: 2px;
+}
+.card summary strong {
+  font-size: 12px;
+}
+.card summary span {
+  color: #837c78;
+  font-size: 10.5px;
+}
+.card summary svg {
+  width: 15px;
+  transition: transform 0.15s ease;
+}
+.card[open] summary svg {
+  transform: rotate(180deg);
+}
+.occurrenceList {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid #ebe7e2;
+  background: #fcfbf9;
+}
+
+.occurrence {
+  overflow: hidden;
+  border: 1px solid #e3ddd6;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.occurrence[data-single="true"] {
+  border: 0;
+  background: transparent;
+}
+
+.occurrence[data-single="true"] > .fields:first-child,
+.occurrence[data-single="true"] > .resolvedMessage:first-child {
+  border-top: 0;
+}
+
+.occurrenceHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.occurrenceHead > div {
+  display: grid;
+  gap: 2px;
+}
+
+.occurrenceHead strong {
+  font-size: 11.5px;
+}
+
+.occurrenceHead span {
+  color: #817a76;
+  font-size: 10px;
+}
+
+.occurrenceHead button {
+  color: #8a6252;
+}
+
+.nameField {
+  width: min(420px, 100%);
+}
+
+.nameField input {
+  height: 36px;
+}
+
+.resolvedMessage {
+  margin: 0;
+  padding: 11px 12px;
+  border-top: 1px solid #eee9e4;
+  color: #7b7571;
+  font-size: 11px;
+}
+
+.addOccurrence {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.addOccurrence span {
+  color: #817a76;
+  font-size: 10.5px;
+}
+.fields {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border-top: 1px solid #ebe7e2;
+  background: #fff;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.fields .valueField,
+.fields label {
+  display: grid;
+  gap: 5px;
+}
+.fields label,
+.fields label span {
+  color: #5f5956;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.fields .inputGroup,
+.fields select {
+  width: 100%;
+  height: 37px;
+  border: 1px solid #dcd6d0;
+  border-radius: 8px;
+  background: #fff;
+}
+.fields select {
+  padding: 0 10px;
+}
+.fields .inputGroup input {
+  height: 100%;
+  padding: 0 10px;
+}
+.fields .inputGroup [data-slot="input-group-addon"] {
+  min-width: 38px;
+  justify-content: center;
+  border-left: 1px solid #ebe7e2;
+  color: #5f5956;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fields .booleanField {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 11px;
+  border: 1px solid #e0d9d2;
+  border-radius: 9px;
+  background: #fff;
+}
+.booleanField > span {
+  display: grid;
+  gap: 2px;
+}
+.booleanField > span strong {
+  color: #29252a;
+  font-size: 11px;
+}
+.booleanField > span small {
+  color: #817a76;
+  font-size: 10px;
+  font-weight: 500;
+}
+.fields .booleanField input {
+  width: 20px;
+  height: 20px;
+  accent-color: #f2692f;
+}
+.fields .vectorField {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+.vectorField > small {
+  color: #817a76;
+  font-size: 10px;
+}
+.vectorField > .vectorError {
+  color: #b53e1c;
+}
+.vectorLoaded {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #eee4dc;
+  border-radius: 9px;
+  background: #fff;
+}
+.vectorMeasures {
+  display: grid;
+  gap: 9px;
+  align-items: end;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(160px, 1fr) minmax(
+      150px,
+      0.8fr
+    );
+}
+.vectorMeasureField {
+  display: grid;
+  gap: 6px;
+}
+.vectorMeasureField > span:first-child {
+  color: #4e4946;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.vectorInputGroup {
+  display: grid;
+  overflow: hidden;
+  height: 36px;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  border: 1px solid #ded8d2;
+  border-radius: 8px;
+  background: #fff;
+}
+.vectorMeasureInput {
+  min-width: 0;
+  padding: 0 10px;
+  border: 0;
+  outline: none;
+  color: #1f1c1b;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.vectorInputGroup > span {
+  display: grid;
+  border-left: 1px solid #e8e1db;
+  color: #5f5956;
+  background: #f7f4f0;
+  font-size: 10.5px;
+  font-weight: 700;
+  place-items: center;
+}
+.axisSwitch {
+  display: grid;
+  overflow: hidden;
+  height: 36px;
+  border: 1px solid #ded8d2;
+  border-radius: 8px;
+  background: #f7f5f2;
+  grid-template-columns: 1fr 1fr;
+}
+.axisSwitch button {
+  border: 0;
+  color: #77716d;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+.axisSwitch button[data-active="true"] {
+  color: #fff;
+  background: #1b1b20;
+  font-weight: 700;
+  box-shadow: inset 0 -2px 0 #ff642b;
+}
+.resultMeasure {
+  display: grid;
+  gap: 1px;
+  min-height: 52px;
+  align-content: center;
+  padding: 6px 10px;
+  border-left: 1px solid #ebe4de;
+}
+.resultMeasure span,
+.resultMeasure small {
+  color: #817a76;
+  font-size: 9px;
+}
+.resultMeasure strong {
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .vectorMeasures {
+    grid-template-columns: 1fr;
+  }
+}

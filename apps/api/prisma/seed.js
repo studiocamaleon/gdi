@@ -609,6 +609,27 @@ async function main() {
   // MODELO UNIVERSAL V2 — Bloques nuevos de F.1.5
   // ============================================================================
 
+  // Los productos de ejemplo de corte necesitan su propio centro productivo.
+  // Debe existir también al inicializar una base vacía, no sólo en el taller demo.
+  const centroCorte = await prisma.centroCosto.create({
+    data: {
+      tenantId: tenant.id,
+      plantaId: planta.id,
+      codigo: "IMP-003",
+      nombre: "Corte y terminaciones",
+      tipoCentro: TipoCentroCosto.PRODUCTIVO,
+      activo: true,
+    },
+  });
+  await seedPlanillaCentro(centroCorte, 160, [{
+    seccion: SeccionCentroCostoLinea.EMPLEADO,
+    nombre: "Operador de corte (ejemplo)",
+    ocupacion: "Operador",
+    dedicacionPct: "100.00",
+    salarioMensual: "500000.00",
+    cargasPct: "40.000000",
+  }]);
+
   await seedCargosDirectosCatalogo(prisma, tenant.id);
 
   const catalogoComercial = await seedCatalogoComercial(prisma);

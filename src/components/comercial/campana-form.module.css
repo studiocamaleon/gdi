@@ -1,0 +1,128 @@
+.body {
+  min-height: 0;
+  padding: 22px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  background: var(--surface);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 16px;
+}
+.grid > *,
+.body > label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+.span2 {
+  grid-column: 1 / -1;
+}
+.label {
+  letter-spacing: 0.01em;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.input,
+.select {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+}
+.input {
+  height: 40px;
+}
+.select > button {
+  min-height: 40px;
+  height: 40px;
+  font-size: 13px;
+}
+.textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  font-size: 13px;
+}
+.required {
+  color: var(--accent-soft-foreground);
+}
+.error {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
+.teamList {
+  display: grid;
+  gap: 10px;
+}
+.teamRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+}
+.teamPerson {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.grid > .checkRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.checkRow strong,
+.checkRow small {
+  display: block;
+  font-size: 12px;
+}
+.checkRow small {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+@media (max-width: 639px) {
+  .body {
+    padding: 18px 16px;
+  }
+  .footer {
+    padding: 14px 16px;
+  }
+  .grid,
+  .teamRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dialogTitle {
+  font-size: 23px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}

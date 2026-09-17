@@ -20,6 +20,106 @@
   letter-spacing: -0.005em;
 }
 
+/* Misma presentación en valores predeterminados y pasos de producto. */
+:global([data-node-editor]) .root {
+  container: node-work / inline-size;
+}
+:global([data-node-editor]) .root .sw2 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  max-width: 740px;
+  height: auto;
+  min-height: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--canvas-background);
+  white-space: normal;
+  text-align: left;
+}
+:global([data-node-editor]) .sw2 > span:last-child {
+  min-width: 0;
+  flex: 1;
+}
+:global([data-node-editor]) .sw2 .sw2d {
+  max-width: none;
+  line-height: 1.55;
+}
+:global([data-node-editor]) .sw2[aria-pressed="true"] .tr {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+:global([data-node-editor]) .root .subtog {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+  margin: 16px 0 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+:global([data-node-editor]) .subtog .prow2 {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.65fr);
+}
+:global([data-node-editor]) .root .pill {
+  border-color: var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+:global([data-node-editor]) .root .ctl {
+  min-height: 36px;
+  height: auto;
+  border-radius: 6px;
+}
+:global([data-node-editor]) .root .ctl input,
+:global([data-node-editor]) .root .ctl select {
+  height: 34px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+:global([data-node-editor]) .root .ctl:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+@container node-work (max-width: 950px) {
+  :global([data-node-editor]) .root .subtog {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :global([data-node-editor]) .root .mgrp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  :global([data-node-editor]) .root .mfields {
+    justify-content: flex-start;
+  }
+}
+@container node-work (max-width: 520px) {
+  :global([data-node-editor]) .subtog .prow2 {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  :global([data-node-editor]) .root .subtog {
+    padding: 12px;
+  }
+  :global([data-node-editor]) .root .mfields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :global([data-node-editor]) .mfields .mf {
+    min-width: 0;
+  }
+  :global([data-node-editor]) .mfields .ctl {
+    width: 100%;
+  }
+}
+
 /* ── Secciones dentro de la card de "El trabajo" ─────────────── */
 .sec {
   padding: 14px 0;

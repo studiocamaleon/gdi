@@ -1,14 +1,13 @@
 import { Module } from '@nestjs/common';
-import { ProduccionModule } from '../produccion/produccion.module';
+import { EtaCalculoModule } from './eta-calculo.module';
 import { EtaController } from './eta.controller';
 import { EtaSnapshotScheduler } from './eta-snapshot.scheduler';
-import { EtaService } from './eta.service';
 
 @Module({
-  imports: [ProduccionModule],
+  imports: [EtaCalculoModule],
   controllers: [EtaController],
-  providers: [EtaService, EtaSnapshotScheduler],
+  providers: [EtaSnapshotScheduler],
   // OrdenesTrabajo captura la promesa al emitir y el cierre al finalizar.
-  exports: [EtaService],
+  exports: [EtaCalculoModule],
 })
 export class EtaModule {}

@@ -5,9 +5,33 @@
  */
 
 import type { CalendarioEstacion } from '../../produccion/calendario';
+export type { CalendarioEstacion } from '../../produccion/calendario';
 
 /** Estación tal como la lee el motor (subconjunto de lo que sirve el API). */
+export type EquipoProduccion = {
+  id: string;
+  nombre: string;
+  personas: number;
+  activo: boolean;
+  calendario: CalendarioEstacion | null;
+};
+
+export type PersonaProduccion = {
+  id: string;
+  activo?: boolean;
+  calendario: CalendarioEstacion | null;
+};
+
 export type Estacion = {
+  planificacionPorEmpleados?: boolean;
+  equipoProduccionId?: string | null;
+  equipoProduccion?: EquipoProduccion | null;
+  empleados?: Array<{
+    id: string;
+    activo?: boolean;
+    calendario?: CalendarioEstacion | null;
+  }>;
+  nombre?: string;
   id: string;
   activo: boolean;
   /** PUESTOS simultáneos: multiplican las horas del calendario. */
@@ -17,7 +41,11 @@ export type Estacion = {
   calendario: CalendarioEstacion | null;
   familias: string[];
   /** `id` habilita el ruteo "por máquina" del rediseño de estaciones. */
-  maquinas: Array<{ id?: string | null; centroCostoId: string | null }>;
+  maquinas: Array<{
+    id?: string | null;
+    centroCostoId: string | null;
+    operacionMaquina?: import('./demanda-humana').ModoOperacionMaquina | null;
+  }>;
   /** Reglas de captura (rediseño): 'tecnologia' | 'paso' (+ 'maquina'/'familia'). */
   reglas?: Array<{ tipo: string; valor: string }>;
 };

@@ -4,6 +4,7 @@ import { getCentrosCosto } from "@/lib/costos-api";
 import { CostosPanel } from "@/components/costos/costos-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { tienePermiso } from "@/lib/permisos-server";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ async function CentrosDeCostoPageContent() {
   ]);
 
   return (
-    <CostosPanel initialCentros={centros} puedeGestionar={puedeGestionar} />
+    <DesignSystemProvider theme="brand" appearance="light">
+      <CostosPanel initialCentros={centros} puedeGestionar={puedeGestionar} />
+    </DesignSystemProvider>
   );
 }

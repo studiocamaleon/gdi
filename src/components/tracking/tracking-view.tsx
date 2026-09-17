@@ -4,7 +4,6 @@ import * as React from "react";
 
 import {
   copyDePaso,
-  duracionTexto,
   estadoNarrativo,
   estadoPill,
   fechaLarga,
@@ -207,8 +206,8 @@ function Confetti() {
 /**
  * ¿El paso está REALMENTE en la máquina? Sólo `en_curso`/`pausado` cuentan.
  * "Pendiente" es el próximo de la fila, no algo que esté pasando: tratarlo como
- * activo hacía que un paso sin iniciar dijera "En curso" y que la animación de
- * producción apareciera entre dos pasos (uno hecho, el siguiente sin arrancar).
+ * activo hacía que un paso sin iniciar dijera "En curso" entre dos pasos
+ * (uno hecho, el siguiente sin arrancar).
  */
 function pasoEnProduccion(p: TrackingPaso): boolean {
   return p.estado === "en_curso" || p.estado === "pausado";
@@ -230,7 +229,6 @@ function ItemTimeline({ item }: { item: TrackingItem }) {
       {item.pasos.map((paso, i) => {
         const state = pasoEstadoVisual(item.pasos, i);
         const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
-        const dur = duracionTexto(paso.duracionEstimadaMin);
         return (
           <div key={paso.indice} className={`t-step ${state}`}>
             <span className="t-step-dot">
@@ -252,7 +250,7 @@ function ItemTimeline({ item }: { item: TrackingItem }) {
               {state === "current" ? (
                 <span className="ts live">
                   <span className="dot" />
-                  En curso{dur ? ` · estimado ${dur}` : ""}
+                  En curso
                 </span>
               ) : null}
               {state === "pending" ? (
@@ -260,7 +258,7 @@ function ItemTimeline({ item }: { item: TrackingItem }) {
                   className="desc"
                   style={{ color: "var(--t-muted-2)", fontSize: 12 }}
                 >
-                  {dur ? `Estimado: ${dur}` : "Pendiente"}
+                  Pendiente
                 </div>
               ) : null}
             </div>
@@ -280,52 +278,6 @@ function fmtMomento(iso: string): string {
   const hh = String(f.getHours()).padStart(2, "0");
   const mi = String(f.getMinutes()).padStart(2, "0");
   return `${dd}/${mm} · ${hh}:${mi}`;
-}
-
-// ── Hero de producción por item (animación neutra, nombra el paso) ───────
-
-function ProdHero({ item, total }: { item: TrackingItem; total: number }) {
-  // El paso que se está trabajando de verdad, no el próximo de la fila.
-  const idx = item.pasos.findIndex(pasoEnProduccion);
-  const paso = idx >= 0 ? item.pasos[idx] : null;
-  if (!paso) return null;
-  const copy = copyDePaso(paso.familiaCodigo, paso.plantillaCodigo);
-  const dur = duracionTexto(paso.duracionEstimadaMin);
-  return (
-    <div className="t-press-hero">
-      <div className="ph-eyebrow">
-        <span className="live-dot" />
-        EN PRODUCCIÓN · PASO {idx + 1} DE {total}
-      </div>
-      <h2>{copy.simple}</h2>
-
-      <div className="t-press-anim">
-        <div className="t-paper-line">
-          <span className="roller-l" />
-          <span className="roller-r" />
-          <span className="ink-pass c" />
-          <span className="ink-pass m" />
-        </div>
-        <div className="t-paper-line">
-          <span className="roller-l" />
-          <span className="roller-r" />
-          <span className="ink-pass y" />
-          <span className="ink-pass k" />
-        </div>
-      </div>
-
-      <div className="ph-foot">
-        <div className="col">
-          <div className="lbl">Etapa</div>
-          <div className="v">{item.estacionActual ?? paso.nombre}</div>
-        </div>
-        <div className="col">
-          <div className="lbl">Estimado</div>
-          <div className="v">{dur ?? "—"}</div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Panel de acordeón por item ───────────────────────────────────────────
@@ -377,10 +329,7 @@ function ItemPanel({
   onToggle: () => void;
   token: string;
 }) {
-  // La animación de producción aparece SÓLO si hay un paso en la máquina, no
-  // por progreso a medias: un item al 67% entre dos pasos no está "produciendo".
-  const enProduccion = item.pasos.some(pasoEnProduccion);
-  const listo = item.progresoPct >= 100;
+  const listo = item.progresoPct === 100;
   // Las specs (material, archivo, tamaño…) arrancan colapsadas: son el detalle
   // fino que el cliente casi nunca necesita y que, abierto, empuja la tarjeta.
   const [verSpecs, setVerSpecs] = React.useState(false);
@@ -406,19 +355,12 @@ function ItemPanel({
                 : "Por iniciar"}
           </div>
         </div>
-        <span className={`prog ${listo ? "ok" : ""}`}>{item.progresoPct}%</span>
         <span className="chev">
           <IcoChevron open={open} />
         </span>
       </button>
       {open ? (
         <div className="t-item-body">
-          <div className="t-item-track">
-            <span className="fill" style={{ width: `${item.progresoPct}%` }} />
-          </div>
-          {enProduccion ? (
-            <ProdHero item={item} total={item.pasos.length} />
-          ) : null}
           <ItemTimeline item={item} />
           {item.specs.length > 0 ? (
             <div style={{ marginTop: 12 }}>
@@ -539,7 +481,7 @@ export function TrackingView({
   // Abrimos el item en producción; si no hay, el primero.
   const abiertoInicial = React.useMemo(() => {
     const enProd = data.items.findIndex(
-      (i) => i.progresoPct > 0 && i.progresoPct < 100,
+      (i) => i.progresoPct != null && i.progresoPct > 0 && i.progresoPct < 100,
     );
     return new Set<string>(
       [data.items[enProd >= 0 ? enProd : 0]?.id].filter(Boolean) as string[],
@@ -662,7 +604,7 @@ export function TrackingView({
           .
         </h1>
         <div className="t-hero-sub">
-          {resumenEstadoTracking(data.estado, data.progresoPct)}
+          {resumenEstadoTracking(data.estado)}
         </div>
 
         {data.fidelizacion.puntos > 0 ? (
@@ -703,7 +645,7 @@ export function TrackingView({
           </div>
         ) : null}
 
-        {/* Entrega + progreso global */}
+        {/* Fecha de entrega, sin métricas internas de producción. */}
         <div className="t-deliver">
           <div className="cal">
             <span className="m">{entrega?.mes ?? "—"}</span>
@@ -714,8 +656,7 @@ export function TrackingView({
             <div className="v">{entrega?.dia ?? "A confirmar"}</div>
             <div className="sub">
               {data.items.length}{" "}
-              {data.items.length === 1 ? "producto" : "productos"} ·{" "}
-              {data.progresoPct}% del total
+              {data.items.length === 1 ? "producto" : "productos"}
             </div>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import type { MaterialUnitContext } from '../inventario/material-units';
 /**
  * Tipos del Motor Universal por Pasos.
  *
@@ -8,12 +9,24 @@
  */
 
 import type { CapacidadEmitida } from '../productos-servicios/pasos/capacidades';
+import type { BloquePrecioCompuestoOutput } from '../productos-servicios/precio/aplicar-precio.types';
+import type {
+  DesgloseCostosPricingCompuesto,
+  PoliticaPricingComponente,
+} from '../productos-servicios/precio/pricing-compuesto';
+import type {
+  DemandaNesting,
+  SolucionNesting,
+} from './geometria-vectorial/contrato-nesting';
+import type { ResultadoCommonLineTrabajo } from '../workers/colas';
 
 // ============================================================================
 // INPUT — Lo que el motor recibe
 // ============================================================================
 
 export interface CotizarInput {
+  tipoCambioId?: string;
+  usuarioId?: string;
   /** ID del tenant (multi-tenant). */
   tenantId: string;
   /** ID del producto a cotizar. */
@@ -73,6 +86,15 @@ export interface MutacionAplicada {
  * que ejecuta pasos (los pasos PRE pueden modificar medidas, etc.).
  */
 export interface JobContext {
+  /** Colecciones por diseño del padre, consumidas por los bindings existentes. */
+  coleccionesVectoriales?: Record<string, NonNullable<JobContext['disenosVectoriales']>>;
+  /** Piezas del componente o diseños cargados al cotizar un producto simple. */
+  disenosVectoriales?: Array<{
+    id: string;
+    nombre: string;
+    cantidadPorUnidad: number;
+    fuente: NonNullable<JobContext['disenoVectorialFuente']>;
+  }>;
   /** Cantidad pedida (talonarios, tarjetas, etc.). */
   cantidad: number;
   /** Fuente geométrica elegida en familias que admiten vector opcional. */
@@ -80,12 +102,17 @@ export interface JobContext {
   /** Fuente vectorial. El motor vuelve a analizar el SVG y no
    * confía en métricas calculadas por el navegador. */
   disenoVectorialFuente?: {
+    procedencia?: import('../productos-servicios/geometrias/interpretar-vector').FuenteGuardada['procedencia'];
+    operaciones?: import('./geometria-vectorial/operaciones-vectoriales').OperacionVectorial[];
+    fabricacion?: import('./geometria-vectorial/fabricacion-vectorial').FabricacionVectorial;
     schemaVersion: 1 | 2;
     nombreArchivo: string;
     svg: string;
     anchoFinalMm: number;
     altoFinalMm?: number;
     configuracionCapas?: import('./geometria-vectorial/tipos').ConfiguracionCapasVectoriales;
+    formatoOrigen?: 'SVG' | 'DXF';
+    unidadOrigen?: string | null;
   };
   /** Clave opaca del análisis previo; el servidor verifica hash y parámetros. */
   disenoVectorialCacheKey?: string;
@@ -100,6 +127,10 @@ export interface JobContext {
   layout_produccion?: LayoutProduccionCompartido;
   /** Lista de piezas para nesting (gap H7 — multi-medida). */
   piezas?: Array<{
+    id?: string;
+    nombre?: string;
+    /** Presente cuando la cantidad corresponde a una colección por producto. */
+    cantidadPorUnidad?: number;
     cantidad: number;
     anchoMm: number;
     altoMm: number;
@@ -122,7 +153,11 @@ export interface JobContext {
    * describen el material y sí crecen con la demasía.
    * Ver `docs/modificaciones-fisicas-lona-diseno.md` §3.
    */
-  medidaVisibleMm?: { anchoMm: number; altoMm: number };
+  medidaVisibleMm?: {
+    anchoMm: number;
+    altoMm: number;
+    profundidadMm?: number;
+  };
   /**
    * Canon geométrico que PUBLICA un derivador de estructura para los pasos
    * siguientes (Ola #2, docs/estructura-bastidor-outputs-diseno.md §4). Igual
@@ -281,7 +316,151 @@ export interface CotizarOutput {
   cotizacion?: CotizacionResultado;
 }
 
+export type PoliticaNestingCompuesto =
+  | 'INDEPENDIENTE'
+  | 'CONSOLIDAR_COMPATIBLES';
+
+export interface LoteNestingCompuestoSnapshot {
+  id: string;
+  procesamientoCorte?: import('../maquinaria/procesamiento-corte').ProcesamientoCorteCosteado;
+  /** Operación posterior sobre las mismas placas; no compra otro sustrato. */
+  layoutOrigenLoteId?: string;
+  versionContrato: 1;
+  estado: 'CONGELADO';
+  firmaCompatibilidad: string;
+  materialVarianteId: string;
+  materialNombre: string;
+  participantes: Array<{
+    componenteCodigo: string;
+    productoId: string;
+    pasoClave: string;
+    rutaPasoId: string;
+    piezas: string[];
+    areaUtilMm2: number;
+    porcentajeAsignacion: number;
+    costoMaterialAsignado: number;
+    costoPreparacionAsignado: number;
+    esPasoOperativo: boolean;
+  }>;
+  /**
+   * Resultado autoritativo que se costeó. Se congela completo para que OT y
+   * frontend dibujen exactamente el mismo lote, sin volver a ejecutar el
+   * algoritmo ni reconstruir coordenadas.
+   */
+  nestingResult: NestingEjecutado;
+  /** Desglose exacto devuelto por la estrategia de costeo para este lote. */
+  costeoSustrato?: {
+    strategy: 'simple' | 'm2-exact' | 'consumed-length' | 'plate-segments';
+    /** Costo geométrico devuelto por la estrategia, antes de merma operativa. */
+    totalCost: number;
+    unitPrice: number;
+    pricePerM2: number;
+    fullUnits: number;
+    fullUnitsCost: number;
+    lastUnit: {
+      occupationPct: number;
+      segmentApplied: number | null;
+      cost: number;
+    } | null;
+    units: Array<{
+      index: number;
+      occupationPct: number;
+      segmentApplied: number | null;
+      cost: number;
+    }>;
+    /** Recargo de proceso aplicado después del costeo geométrico. */
+    mermaOperativa?: {
+      porcentaje: number;
+      costoBase: number;
+      costoMerma: number;
+      costoTotal: number;
+    };
+  };
+  costoMaterialTotal: number;
+  costoPreparacionTotal: number;
+  costoTotalAsignado: number;
+  duracionEstimadaMin: number;
+}
+
+/**
+ * F4.4.1/4.4.2 — comparación entre nesting individual y agrupado. En sombra
+ * no toca costos; aplicado incorpora además el lote congelado y su reparto.
+ */
+export interface AnalisisNestingCompuestoShadow {
+  version: 1;
+  modo: 'SOMBRA' | 'APLICADO';
+  politica: 'CONSOLIDAR_COMPATIBLES';
+  aplicadoACostos: boolean;
+  grupos: Array<{
+    id: string;
+    firmaVersion: 1;
+    firmaCompatibilidad: string;
+    participantes: Array<{
+      componenteCodigo: string;
+      productoId: string;
+      pasoClave: string;
+      rutaPasoId: string;
+      pasoNombre: string;
+      piezas: string[];
+    }>;
+    independiente: {
+      sustratos: number;
+      /** Consumo lineal total cuando el sustrato es rollo. */
+      largoMm?: number;
+      /** Área física de rollo consumida; permite comparar anchos distintos. */
+      areaMm2?: number;
+      aprovechamientoPct: number;
+    };
+    consolidado: {
+      algoritmo:
+        | 'grid-2d-multi'
+        | 'shelf-rollo'
+        | 'maxrects-rollo'
+        | 'irregular-2d-bottom-left-v1';
+      sustratos: number;
+      /** Largo real elegido por el motor para el lote de rollo. */
+      largoMm?: number;
+      areaMm2?: number;
+      aprovechamientoPct: number;
+      substrates: NestingEjecutado['substrates'];
+      placements: NestingEjecutado['placements'];
+    };
+    diferencia: {
+      sustratos: number;
+      /** Ahorro de largo cuando el sustrato es rollo. */
+      largoMm?: number;
+      areaMm2?: number;
+      ahorroPct: number;
+      ahorroPotencial: boolean;
+    };
+    aplicacion?: {
+      aplicado: boolean;
+      motivoNoAplicado?: string;
+      costoMaterialIndependiente: number;
+      costoMaterialConsolidado: number;
+      costoPreparacionIndependiente: number;
+      costoPreparacionConsolidado: number;
+      ahorroCostoTotal: number;
+    };
+    lote?: LoteNestingCompuestoSnapshot;
+  }>;
+  exclusiones: Array<{
+    componenteCodigo: string;
+    pasoClave?: string;
+    codigo:
+      | 'COMPONENTE_EXCLUIDO'
+      | 'SIN_NESTING_RECTANGULAR'
+      | 'CONFIGURACION_INCOMPLETA'
+      | 'SIN_MATERIAL_TRAZABLE'
+      | 'SIN_PAR_COMPATIBLE'
+      | 'CONSOLIDACION_NO_RESOLUBLE';
+    motivo: string;
+  }>;
+}
+
 export interface CotizacionResultado {
+  tipoCambio?: import('../cotizaciones/tipo-cambio.types').TipoCambioSnapshot;
+  costosMaterialesMoneda?: import('../cotizaciones/tipo-cambio.types').CostoMaterialMoneda[];
   /** Producto cotizado. */
   productoId: string;
   productoNombre: string;
@@ -308,6 +487,17 @@ export interface CotizacionResultado {
     unidadLabel: string;
     politica: string;
   } | null;
+  receta?: {
+    revisionId: string;
+    version: number;
+    huella: string;
+  } | null;
+  /** DAG productivo congelado de la receta usada para cotizar. */
+  grafoProduccion?: {
+    topologia?: 'LINEAL' | 'DAG';
+    nodos?: Array<{ clave: string; indice?: number }>;
+    aristas?: Array<{ desdeClave: string; haciaClave: string }>;
+  } | null;
   /** Costos por bucket (a-g del molde). */
   costos: {
     tiempoTotal: number;
@@ -324,9 +514,27 @@ export interface CotizacionResultado {
     cargosSinMargenTotal: number;
     /** Costo de pasos tercerizados (lo que se paga al proveedor). */
     tercerizadoTotal: number;
+    /** Costo productivo de subproductos fabricados declarados en la receta. */
+    componentesFabricadosTotal?: number;
+    /** Mano de obra de incorporación declarada en las relaciones BOM. */
+    incorporacionComponentesTotal?: number;
     total: number;
     unitario: number;
   };
+  /** Desglose recursivo de componentes fabricados, sin crear aún OTs hijas. */
+  componentesFabricados?: ComponenteFabricadoCosteado[];
+  /** Asignación reconciliada de costos previa al cálculo comercial F4.3. */
+  desgloseCostosPricingCompuesto?: DesgloseCostosPricingCompuesto;
+  /** Resultado comercial por bloques; sólo existe en MIXTO/POR_COMPONENTE. */
+  desglosePricingCompuesto?: {
+    version: 1;
+    estrategia: 'POR_COMPONENTE' | 'MIXTO';
+    bloques: BloquePrecioCompuestoOutput[];
+  };
+  /** F4.4.1 — comparación no vinculante entre nesting individual y agrupado. */
+  analisisNestingCompuesto?: AnalisisNestingCompuestoShadow;
+  /** Outputs planificados y públicos que otro componente puede consumir. */
+  outputsComposicion?: Record<string, unknown>;
   /** Proyección compatible del desglose autoritativo, expresada a neto. */
   precio?: {
     metodoUsado: string;
@@ -388,12 +596,107 @@ export interface CotizacionResultado {
   cargosDirectosCotizacion: CargoDirectoEjecutado[];
 }
 
+export interface ComponenteFabricadoCosteado {
+  productoId: string;
+  codigo: string;
+  /** Ocurrencia declarada en la receta que autorizó esta instancia. */
+  plantillaCodigo?: string;
+  /** Presente cuando el comercial agregó la ocurrencia al cotizar. */
+  ocurrenciaId?: string;
+  nombre: string;
+  politicaEjecucion: 'INLINE' | 'INDEPENDIENTE';
+  cantidad: number;
+  unidad: string;
+  /** Contexto normalizado y congelable con el que se costeó el hijo. */
+  jobContext: Record<string, unknown>;
+  /**
+   * Parámetros efectivos del hijo con etiquetas humanas. Incluye valores
+   * fijos, heredados, calculados y completados al cotizar; viaja dentro del
+   * snapshot para que la OT no dependa de consultar la receta viva.
+   */
+  especificacionesEfectivas?: Array<{
+    clave: string;
+    etiqueta: string;
+    tipoDato: string;
+    unidad?: string | null;
+    requerido: boolean;
+    origen: 'DEFAULT_HIJO' | 'FIJO' | 'PADRE' | 'FORMULA' | 'COTIZACION';
+    valor: unknown;
+    valorTexto: string;
+  }>;
+  recetaRevisionId: string;
+  recetaVersion: number;
+  recetaHuella: string;
+  costoUnitario: number;
+  costoTotal: number;
+  cantidadComercialPricing?: number;
+  unidadComercialPricing?: string;
+  costoSinMargenTotal?: number;
+  /** Política BOM efectiva, incluida la regla congelada al publicar. */
+  pricing?: PoliticaPricingComponente;
+  /** Exclusión explícita de este uso BOM del nesting compartido. */
+  nestingCompartido?: {
+    excluido: boolean;
+    motivo?: string | null;
+  };
+  /** Contrato público resultante, congelado junto con la cotización. */
+  outputsPublicos?: Record<string, unknown>;
+  /** Componentes cuyos outputs fueron necesarios para resolver este contexto. */
+  dependenciasCalculo?: string[];
+  /** Nodos del padre que habilitan el inicio de esta rama productiva. */
+  nodosPredecesoresClaves?: string[];
+  /** Nodo de la ruta padre en el que esta rama vuelve a incorporarse. */
+  nodoIncorporacionClave?: string | null;
+  /** DAG propio congelado de la receta hija. */
+  grafoProduccion?: CotizacionResultado['grafoProduccion'];
+  /** Subruta productiva real ejecutada para fabricar este componente. */
+  pasos?: PasoEjecutado[];
+  operacionesIncorporacion?: OperacionIncorporacionCosteada[];
+  componentes?: ComponenteFabricadoCosteado[];
+  /** Plan consolidado propio de este ámbito, conservado en compuestos anidados. */
+  analisisNestingCompuesto?: AnalisisNestingCompuestoShadow;
+}
+
+export interface OperacionIncorporacionCosteada {
+  codigo: string;
+  nombre: string;
+  /** Campos singulares conservados para snapshots iniciales de Fase 4.2. */
+  componenteCodigo?: string;
+  componenteNombre?: string;
+  componentesCodigos?: string[];
+  componentesNombres?: string[];
+  pasoTenantId?: string;
+  pasoNombre?: string;
+  nodoDestinoClave: string;
+  modoTiempo: 'FIJO' | 'POR_UNIDAD';
+  cantidadResuelta: number;
+  unidadCantidad?: string | null;
+  minutosFijos?: number | null;
+  minutosPorUnidad?: number | null;
+  duracionMin: number;
+  dotacionOperarios: number;
+  centroCostoId?: string | null;
+  centroCostoNombre?: string | null;
+  tarifaHora: number;
+  costo: number;
+}
+
 export interface PasoEjecutado {
+  requiereMaquina?: boolean;
+  plantillaCodigo?: string | null;
   rutaPasoId: string;
   rutaPasoOrden: number;
   familiaCodigo: string;
   /** Nombre operativo final para propuesta/OT. */
   nombreVisible?: string | null;
+  /** Etapa compuesta a la que pertenece este paso interno. */
+  contenedorClave?: string | null;
+  /** Nombre visible congelado de la etapa compuesta. */
+  contenedorNombre?: string | null;
+  /** Identidad estable dentro del contrato reutilizable de la etapa. */
+  pasoInternoCodigo?: string | null;
+  /** Componentes BOM sobre los que trabaja este paso interno. */
+  componentesCodigos?: string[];
   /** Configuración del producto para este paso. */
   configPasoId: string;
   /** Si se activó (true/false según D.1). */
@@ -435,8 +738,15 @@ export interface PasoEjecutado {
   };
   /** Tiempo calculado (si activado). */
   tiempo?: {
+    procesamientoCorte?: import('../maquinaria/procesamiento-corte').ProcesamientoCorteCosteado;
     setupMin: number;
     runMin: number;
+    /** Corrida necesaria para producir las unidades buenas. */
+    runTrabajoMin?: number;
+    /** Corrida esperada adicional por arranque, pruebas o rechazo. */
+    runMermaMin?: number;
+    /** Porcentaje operativo heredado del sustrato principal. */
+    mermaOperativaPct?: number;
     cleanupMin: number;
     tiempoFijoMin: number;
     /** Minutos de los bloques de tiempo extra (van dentro de `totalMin`). */
@@ -446,6 +756,10 @@ export interface PasoEjecutado {
      * con su centro y su dotación. El desglose los muestra bajo "Cargos".
      */
     tiemposExtra?: TiempoExtraEjecutado[];
+    /** Secuencia interna del run cotizado: ciclos y maniobras del operario. */
+    fasesRun?: import("../eta/motor/demanda-humana").FaseRun[];
+    operacionMaquina?: import("../eta/motor/demanda-humana").ModoOperacionMaquina | null;
+    demandaHumana?: import("../eta/motor/demanda-humana").DemandaHumana | null;
     totalMin: number;
     /** Centro de costo usado para tarifar este tiempo. */
     centroCostoId?: string | null;
@@ -468,6 +782,15 @@ export interface PasoEjecutado {
      */
     origenTiempo?: 'manual_comercial' | 'calculado';
   };
+  /** Subtareas aportadas por relaciones BOM al paso compuesto. */
+  operacionesIncorporacion?: OperacionIncorporacionCosteada[];
+  /**
+   * Desglose técnico privado de una etapa compuesta. Estas operaciones se
+   * calculan como pasos completos, pero NO se materializan con estado propio
+   * en la OT ni en el Tablero: explican el tiempo, materiales y costo del
+   * único paso operativo consolidado.
+   */
+  operacionesInternas?: OperacionInternaCosteada[];
   /** Materiales consumidos (si activado). */
   materiales?: MaterialEjecutado[];
   /** Cargos directos a nivel paso (si activado). */
@@ -480,6 +803,8 @@ export interface PasoEjecutado {
   nivelAplicado?: { codigo: string; nombre: string } | null;
   /** El paso lo compró un proveedor (no consume máquina ni tiempo interno). */
   tercerizado?: boolean;
+  /** Subtotal de proveedores en una etapa compuesta, sin materiales propios. */
+  costoTercerizado?: number;
   proveedorId?: string | null;
   plazoProveedorDias?: number | null;
   /** Detalle del costeo tercerizado, para desglose/UI. */
@@ -532,6 +857,40 @@ export interface PasoEjecutado {
   estructuraBastidor?: EstructuraBastidorEjecutada;
 }
 
+/**
+ * Proyección costeada de una operación privada de etapa. Conserva el mismo
+ * detalle económico que un paso normal, pero nunca crea un estado operativo
+ * independiente en la OT.
+ */
+export interface OperacionInternaCosteada {
+  codigo: string;
+  nombre: string;
+  familiaCodigo: string;
+  activada: boolean;
+  duracionMin: number;
+  costoTotal: number;
+  configPasoId?: string;
+  rutaPasoId?: string;
+  rutaPasoOrden?: number;
+  razonNoActivado?: string;
+  activadoPorDependencia?: { requeridoPorNombre: string };
+  centroCostoId?: string | null;
+  centroCostoNombre?: string | null;
+  tiempo?: PasoEjecutado['tiempo'];
+  tercerizado?: boolean;
+  costoTercerizado?: number;
+  materiales?: MaterialEjecutado[];
+  cargosDirectosPaso?: CargoDirectoEjecutado[];
+  mutacionAplicada?: MutacionAplicada;
+  componentesCodigos?: string[];
+  /**
+   * El acomodo pertenece a la operación interna, no al contenedor. Se
+   * conserva para que Producción pueda explicar el nesting de una etapa
+   * consolidada sin materializar sus subtareas como estados separados.
+   */
+  nestingResult?: NestingEjecutado;
+}
+
 /** El bastidor a fabricar, autosuficiente para dibujarlo en 3D. */
 export interface EstructuraBastidorEjecutada {
   /** simple = marco plano (frontlight) · doble = cajón (backlight). */
@@ -561,7 +920,15 @@ export interface NestingEjecutado {
     | 'secuencial-rollo'
     | 'grid-2d-single'
     | 'grid-2d-multi'
-    | 'irregular-2d-bottom-left-v1';
+    | 'irregular-2d-bottom-left-v1'
+    | 'manual-vector-estimate-v1';
+  /** Política configurada antes de resolver el algoritmo efectivo ganador. */
+  algorithmPolicy?:
+    | 'auto'
+    | 'shelf-rollo'
+    | 'maxrects-rollo'
+    | 'grid-2d-single'
+    | 'grid-2d-multi';
   /** Cantidad calculada en su unidad (m_lineales, pliegos, pouches, m2, piezas). */
   cantidadCalculada: number;
   unidad: 'm_lineales' | 'pliegos' | 'pouches' | 'm2' | 'piezas';
@@ -599,7 +966,39 @@ export interface NestingEjecutado {
   /** Metros recorridos por la máquina, separados del consumo de material. */
   machineRunLengthMm?: number;
   piezasAcomodadas: number;
+  /** Demanda exacta, no la capacidad visual de una hoja. */
+  demandaRectangular?: Array<{
+    pieceId: string;
+    cantidad: number;
+    anchoMm: number;
+    altoMm: number;
+  }>;
+  /** Demanda neutral que originó el resultado. Para polígonos conserva los
+   * contornos y la identidad de cada propietario/componente. */
+  demandaNesting?: DemandaNesting[];
+  /** Solución reproducible y versionada del motor irregular. */
+  solucionNesting?: SolucionNesting;
+  /** Tramos rectos que se ejecutan una sola vez para dos piezas. */
+  commonLine?: ResultadoCommonLineTrabajo;
+  /** Escalones efectivos cuando el costeo del sustrato usa plate-segments. */
+  costingSegmentSteps?: number[];
+  /** Perfil efectivo que participó de la firma productiva. */
+  perfil?: { id: string; nombre: string };
+  /** Decisiones de proceso necesarias para una firma de compatibilidad estricta. */
+  modoColor?: string | null;
+  tecnologia?: string | null;
+  carasProcesadas?: number;
+  tintasAdicionales?: string[];
+  /** Referencia del paso individual al lote común que gobierna su ejecución. */
+  loteNestingCompuesto?: {
+    loteId: string;
+    firmaCompatibilidad: string;
+    esPasoOperativo: boolean;
+  };
   estrategiaDisposicion?: 'composicion_original' | 'nesting_optimizado';
+  /** El layout debe permanecer registrado con un corte vectorial posterior. */
+  layoutVinculadoGeometriaVectorial?: boolean;
+  layoutRegistradoLoteId?: string;
   /** Datos normalizados para que el SVG muestre cómo pensó el motor. */
   visualConfig?: NestingVisualConfig;
   /** Outputs canónicos publicados por el paso que generó este nesting. */
@@ -646,7 +1045,7 @@ export interface NestingEjecutado {
 
 /**
  * Geometría del acomodo, en TRES niveles concéntricos. Confundirlos ya costó
- * caro (el simulador acomodaba con márgenes que no eran los del motor), así
+ * caro al representar márgenes distintos a los del motor, así
  * que conviene tenerlos claros:
  *
  *   substrato            600 mm  ── el rollo/pliego entero
@@ -656,7 +1055,7 @@ export interface NestingEjecutado {
  *
  * `margins` es el margen CRUDO de máquina (15), NO incluye la demasía. Quien
  * necesite el borde efectivo donde arrancan las piezas usa `usableArea`, o
- * suma `pieceBleedMm` (así lo hace `acomodarTanda` del simulador). Se reportan
+ * suma `pieceBleedMm`. Se reportan
  * separados porque la UI los muestra como dos cosas distintas.
  */
 export interface NestingVisualConfig {
@@ -690,6 +1089,23 @@ export interface NestingVisualConfig {
     yMm: number;
     widthMm: number;
     heightMm: number;
+  };
+  /**
+   * Instrucción física para una placa mayor que la cama. `workArea` es la
+   * única ventana donde puede haber cortes en esta carga; el sustrato del
+   * resultado sigue representando la placa completa comprada.
+   */
+  manejoPlaca?: {
+    modo: 'SOBRESALIENTE';
+    eje: 'x' | 'y';
+    excedenteMm: number;
+    workArea: {
+      xMm: number;
+      yMm: number;
+      widthMm: number;
+      heightMm: number;
+    };
+    mensaje: string;
   };
   panelizado?: {
     enabled: boolean;
@@ -750,14 +1166,44 @@ export interface MaterialEjecutado {
   materialSku: string;
   materialDisplayName: string;
   materiaPrimaNombre?: string | null;
+  materiaPrimaId?: string | null;
   materiaPrimaTemplateId?: string | null;
   materiaPrimaTipoTecnico?: string | null;
   atributosVarianteJson?: Record<string, unknown> | null;
+  /**
+   * Alternativas físicas que el motor podía elegir para un sustrato en rollo.
+   * Se congela únicamente cuando la selección fue automática y el comercial
+   * no fijó una variante. F4.4.3 la usa para reevaluar el mejor ancho sobre la
+   * demanda consolidada, en lugar de heredar el ganador de cada componente.
+   */
+  opcionesNestingRollo?: Array<{
+    materialVarianteId: string;
+    materialSku: string;
+    materialDisplayName: string;
+    materiaPrimaId: string | null;
+    materiaPrimaNombre: string | null;
+    materiaPrimaTemplateId: string | null;
+    materiaPrimaTipoTecnico: string | null;
+    atributosVarianteJson: Record<string, unknown> | null;
+    anchoMm: number;
+    unidad: 'm2' | 'm_lineales';
+    precioUnitario: number;
+  }>;
   tipoLineaCosto: 'MATERIAL' | 'CONSUMIBLE_MAQUINA' | 'DESGASTE_MAQUINA';
   cantidad: number;
   unidad: string;
   precioUnitario: number;
   costoTotal: number;
+  /**
+   * Pérdida operativa separada de la cantidad útil. En el sustrato sale de la
+   * receta; tinta y desgaste la heredan del sustrato principal del mismo paso.
+   * Se congela para explicar el costo sin reconstruir una receta mutable.
+   */
+  mermaAdicional?: {
+    porcentaje: number;
+    cantidadTrabajo: number;
+    cantidadMerma: number;
+  };
   /** Estrategia usada (simple, m2-exact, etc.). */
   estrategiaCosto: string;
   /** Desglose cuando el costo del material se calculó desde el nesting. */
@@ -779,6 +1225,13 @@ export interface MaterialEjecutado {
       segmentApplied: number | null;
       cost: number;
     }>;
+  };
+  /** F4.4.2 — reparto del costo real del lote entre sus componentes. */
+  asignacionNestingCompuesto?: {
+    loteId: string;
+    costoIndependiente: number;
+    costoAsignado: number;
+    porcentajeAsignacion: number;
   };
   /** Modo de selección que se aplicó. */
   modoSeleccion:
@@ -811,7 +1264,9 @@ export interface CargoDirectoEjecutado {
   cargoCodigo: string;
   cargoNombre: string;
   modoCalculo:
-    'MONTO_FIJO_PLANO' | 'PORCENTAJE_SOBRE_BASE' | 'POR_UNIDAD_INPUT';
+    | 'MONTO_FIJO_PLANO'
+    | 'PORCENTAJE_SOBRE_BASE'
+    | 'POR_UNIDAD_INPUT';
   monto: number;
   /** false = costo trasladado: recupera cargas internas/comisiones sin utilidad. */
   aplicaMargen: boolean;
@@ -852,6 +1307,7 @@ export interface ProductoCargado {
   productoNombre: string;
   unidadComercial: string;
   modoMedidas: 'FIJA' | 'LIBRE' | 'COMERCIAL_ELIGE' | 'MIXTA';
+  dimensionesRequeridas?: string[];
   minimoComercialPolitica: string;
   minimoComercialCantidad: number | null;
   minimoComercialBase: string;
@@ -864,7 +1320,9 @@ export interface ProductoCargado {
    */
   medidaDefaultAnchoMm: number | null;
   medidaDefaultAltoMm: number | null;
+  medidaDefaultProfundidadMm?: number | null;
   precioConfigJson?: unknown;
+  atributosComercialesJson?: unknown;
   rutaAlternativaId: string;
   rutaAlternativaNombre: string;
   rutaId: string;
@@ -895,6 +1353,14 @@ export interface PasoCargado {
   rutaPasoOrden: number;
   familiaCodigo: string;
   nombreVisible?: string | null;
+  /**
+   * Fase 4.2 — identifica un paso real materializado dentro de una etapa
+   * compuesta. Estos pasos se ejecutan después de resolver los componentes
+   * BOM, para que puedan consumir sus outputs públicos.
+   */
+  contenedorClave?: string | null;
+  pasoInternoCodigo?: string | null;
+  componentesCodigos?: string[];
   configPasoId: string;
   modoActivacion: string | null;
   condicionActivacionJson: unknown;
@@ -935,11 +1401,14 @@ export interface PasoCargado {
     costo: number;
   }>;
   /** Detalles de la máquina (cargados del JOIN). */
+  procesamientoCortePreparacion?: import('./procesamiento-corte').PreparacionCorte;
+  procesamientoCorteCosteado?: import('../maquinaria/procesamiento-corte').ProcesamientoCorteCosteado;
   maquina?: {
     id: string;
     codigo: string;
     nombre: string;
     plantilla: string;
+    espesorMaximo?: number | null;
     anchoUtil?: number | null;
     largoUtil?: number | null;
     centroCostoPrincipalId?: string | null;
@@ -993,6 +1462,7 @@ export interface PasoCargado {
       codigo: string;
       nombre: string;
       plantilla: string;
+      espesorMaximo?: number | null;
       anchoUtil?: number | null;
       largoUtil?: number | null;
       centroCostoPrincipalId?: string | null;
@@ -1092,6 +1562,7 @@ export interface ConsumibleMaquinaCargado {
     materiaPrimaTipoTecnico?: string | null;
     precioReferencia: number | null;
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     atributosVarianteJson?: Record<string, unknown> | null;
   };
 }
@@ -1123,6 +1594,7 @@ export interface SlotCargado {
   }>;
   formula: string;
   cantidadFactor?: number | string | null;
+  mermaAdicionalPct?: number | string | null;
   cantidadBase?: string | null;
   /** Fuente de medida del consumo de ESTE slot (override por-material del
    *  default a nivel paso). Mismo vocabulario que fuentePiezasMontaje:
@@ -1146,6 +1618,7 @@ export interface SlotCargado {
     atributosVarianteJson?: Record<string, unknown> | null;
     /** G-M9: unidad de stock heredada de la materia prima padre. */
     unidadStock?: string | null;
+    contextoUnidades?: MaterialUnitContext;
     /** Formato del sustrato (subfamilia de la MP padre) para rutear nesting. */
     subfamilia?: string | null;
   };

@@ -28,22 +28,23 @@
 /* ── Grupo por material (tarjeta) ───────────────────────────── */
 .group {
   border: 1px solid var(--c-border);
-  border-radius: 11px;
+  border-radius: var(--cotizador-radius, 11px);
   overflow: hidden;
   background: var(--c-surface);
 }
 .gh {
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: var(--cotizador-heading-weight, 700);
+  font-family: var(--cotizador-heading-font, inherit);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   /* Mismo encabezado papel-cálido que las secciones del sheet
    * (cotizador-seccion.module.css): tinte del naranja de marca a la derecha,
    * aclara a la izquierda, texto gris oscuro. */
   color: var(--ink-2, #2c2c33);
-  background:
+  background: var(--cotizador-heading-background,
     linear-gradient(90deg, transparent 34%, rgba(255, 106, 43, 0.13) 100%),
-    linear-gradient(180deg, #fbfaf8, #f4f2ee);
+    linear-gradient(180deg, #fbfaf8, #f4f2ee));
   border-bottom: 1px solid var(--hairline, #efece8);
   padding: 7px 12px;
 }
@@ -150,7 +151,7 @@
   background: var(--c-surface-2);
 }
 .srowOn {
-  background: var(--c-surface-2);
+  background: var(--cotizador-selection-background, var(--c-surface-2));
 }
 .radio {
   width: 15px;
@@ -162,14 +163,14 @@
   place-items: center;
 }
 .srowOn .radio {
-  border-color: var(--c-ink);
+  border-color: var(--cotizador-selection, var(--c-ink));
 }
 .srowOn .radio::after {
   content: "";
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--c-ink);
+  background: var(--cotizador-selection, var(--c-ink));
 }
 .st {
   font-size: 12.5px;

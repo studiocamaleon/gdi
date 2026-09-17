@@ -10,7 +10,7 @@ export async function getEstaciones() {
 }
 
 export type RecursosEstaciones = {
-  empleados: Array<{ id: string; nombreCompleto: string; sector: string }>;
+  empleados: import("./estaciones").EstacionEmpleadoRef[];
   maquinas: Array<{ id: string; codigo: string; nombre: string }>;
 };
 
@@ -52,7 +52,10 @@ export async function getDiasNoLaborables() {
   return apiRequest<DiaNoLaborable[]>("/produccion/dias-no-laborables");
 }
 
-export async function crearDiaNoLaborable(payload: { fecha: string; descripcion?: string }) {
+export async function crearDiaNoLaborable(payload: {
+  fecha: string;
+  descripcion?: string;
+}) {
   return apiRequest<DiaNoLaborable>("/produccion/dias-no-laborables", {
     method: "POST",
     body: JSON.stringify(payload),

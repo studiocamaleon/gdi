@@ -9,6 +9,11 @@
  */
 
 import type { CostingInput, CostingResult } from '../types';
+import {
+  consumedLengthAlongPlateLongAxis,
+  inferPlateTrailingMarginMm,
+  resolvePlateAxes,
+} from '../../helpers/plate-axis';
 import { round2, pricePerM2 } from './shared';
 
 export function costingConsumedLength<T = unknown>(
@@ -24,12 +29,13 @@ export function costingConsumedLength<T = unknown>(
   const columnas = metrics.columnas ?? 0;
   const filas = metrics.filas ?? 0;
   const largoConsumidoMmTotal = metrics.largoConsumidoMm ?? 0;
-  const sustratoAltoMm = substrate.heightMm;
+  const { longAxis: substrateLongAxis, longSideMm: substrateLongSideMm } =
+    resolvePlateAxes(substrate);
 
   const pricePerM2Value = pricePerM2(
     input.unitPrice,
     substrate.widthMm,
-    sustratoAltoMm,
+    substrate.heightMm,
   );
 
   // Multi-medida: no existe una capacidad uniforme por placa. Se cobra el
@@ -37,26 +43,25 @@ export function costingConsumedLength<T = unknown>(
   if (piezasPorSustrato <= 0) {
     const units: CostingResult['breakdown']['units'] = [];
     for (let index = 0; index < input.unitsNeeded; index++) {
+      const candidateSubstrate = input.nesting.substrates[index];
+      const unitSubstrate =
+        candidateSubstrate?.kind === 'sheet' ? candidateSubstrate : substrate;
       const placements = input.nesting.placements.filter(
         (placement) => (placement.substrateIndex ?? 0) === index,
       );
       const trailingMarginMm =
         metrics.trailingMarginMm ??
-        placements.reduce(
-          (min, placement) => Math.min(min, placement.yMm),
-          placements[0]?.yMm ?? 0,
-        );
+        inferPlateTrailingMarginMm(placements, unitSubstrate);
       const consumedLengthMm = placements.length
-        ? placements.reduce(
-            (max, placement) =>
-              Math.max(max, placement.yMm + placement.heightMm),
-            0,
-          ) + trailingMarginMm
+        ? consumedLengthAlongPlateLongAxis({
+            placements,
+            sheet: unitSubstrate,
+            trailingMarginMm,
+          })
         : 0;
-      const occupationPct = round2((consumedLengthMm / sustratoAltoMm) * 100);
-      const cost = round2(
-        input.unitPrice * (consumedLengthMm / sustratoAltoMm),
-      );
+      const { longSideMm } = resolvePlateAxes(unitSubstrate);
+      const occupationPct = round2((consumedLengthMm / longSideMm) * 100);
+      const cost = round2(input.unitPrice * (consumedLengthMm / longSideMm));
       units.push({ index, occupationPct, segmentApplied: null, cost });
     }
     const totalCost = round2(
@@ -114,21 +119,24 @@ export function costingConsumedLength<T = unknown>(
     );
     const trailingMarginMm =
       metrics.trailingMarginMm ??
-      placementsParciales.reduce(
-        (min, placement) => Math.min(min, placement.yMm),
-        placementsParciales[0]?.yMm ?? 0,
-      );
+      inferPlateTrailingMarginMm(placementsParciales, substrate);
     const largoConsumido = placementsParciales.length
-      ? placementsParciales.reduce(
-          (max, placement) => Math.max(max, placement.yMm + placement.heightMm),
-          0,
-        ) + trailingMarginMm
+      ? consumedLengthAlongPlateLongAxis({
+          placements: placementsParciales,
+          sheet: substrate,
+          trailingMarginMm,
+        })
       : largoConsumidoMmTotal > 0 && filas > 0
-        ? Math.ceil(piezasRestantes / columnas) *
-          (largoConsumidoMmTotal / filas)
+        ? substrateLongAxis === 'y'
+          ? Math.ceil(piezasRestantes / columnas) *
+            (largoConsumidoMmTotal / filas)
+          : Math.min(piezasRestantes, columnas) *
+            (largoConsumidoMmTotal / columnas)
         : 0;
-    lastUnitCost = round2(input.unitPrice * (largoConsumido / sustratoAltoMm));
-    occupationPct = round2((largoConsumido / sustratoAltoMm) * 100);
+    lastUnitCost = round2(
+      input.unitPrice * (largoConsumido / substrateLongSideMm),
+    );
+    occupationPct = round2((largoConsumido / substrateLongSideMm) * 100);
     units.push({
       index: fullUnits,
       occupationPct,

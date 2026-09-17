@@ -1,5 +1,7 @@
 "use client";
 
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -82,6 +84,8 @@ export default function CentroCopiadoPreciosSheet({
   items,
   moneda,
 }: Props) {
+  const designScope = useDesignScope();
+  const designClass = useDesignTheme();
   const [resumen, setResumen] = React.useState<Resumen | null>(null);
   const [cargando, setCargando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -254,7 +258,8 @@ export default function CentroCopiadoPreciosSheet({
     <>
       <div className={s.backdrop} onClick={onClose} />
       <div
-        className={s.sheet}
+        {...designScope}
+        className={`${designClass} ${s.sheet}`}
         role="dialog"
         aria-modal="true"
         aria-label="Precios de impresión"

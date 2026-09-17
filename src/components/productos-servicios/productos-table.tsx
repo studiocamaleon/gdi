@@ -1,14 +1,19 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
-  ArrowRightIcon,
+  ArrowUpRightIcon,
+  BadgeCheckIcon,
+  BoxesIcon,
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
   CopyIcon,
   Grid2X2Icon,
-  Loader2Icon,
   PackageCheckIcon,
   PackageIcon,
   PlusIcon,
@@ -19,48 +24,30 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button, buttonVariants } from "@/components/ui/button";
 import {
+  Alert,
   Card,
-  CardAction,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Chip,
+  Input,
+  Modal,
+  SearchField,
+  Tabs,
+  Tooltip,
+} from "@heroui/react";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { ListMetric } from "@/components/design-system/list-metric";
+import { SelectField } from "@/components/design-system/select-field";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { EstadoVacio } from "@/components/ui/estado-vacio";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import listPage from "@/components/design-system/list-page.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 import { duplicarProducto, listProductos } from "@/lib/productos-servicios-api";
 import type { ProductoListItem } from "@/lib/productos-servicios";
 import {
@@ -70,9 +57,12 @@ import {
 } from "@/lib/labels-humanos";
 
 import styles from "./productos-table.module.css";
+import brand from "@/components/crm/contactos-workspace.module.css";
+import { ProductoCatalogoGlyph } from "@/components/comercial/producto-catalogo-glyph";
 
 type OrdenProductos = "recientes" | "nombre_asc" | "nombre_desc";
 type VistaProductos = "tabla" | "categorias";
+type ComposicionProductos = "" | "simple" | "compuesto";
 
 export interface ProductosQueryInicial {
   page: number;
@@ -83,6 +73,7 @@ export interface ProductosQueryInicial {
   estado: "" | "activo" | "inactivo";
   orden: OrdenProductos;
   vista: VistaProductos;
+  composicion: ComposicionProductos;
 }
 
 interface SelectOption {
@@ -147,13 +138,26 @@ function highlightMatch(text: string, query: string): React.ReactNode {
 function estadoProducto(producto: ProductoListItem) {
   switch (producto.estadoCatalogo) {
     case "activo":
-      return { label: "Activo", variant: "default" as const };
+      return {
+        label: "Activo",
+        description: "Publicado y disponible para cotizar.",
+      };
     case "incompleto":
-      return { label: "Incompleto", variant: "destructive" as const };
+      return {
+        label: "Incompleto",
+        description: "Falta completar su configuración antes de publicarlo.",
+      };
     case "listo":
-      return { label: "Listo", variant: "outline" as const };
+      return {
+        label: "Listo para publicar",
+        description:
+          "La configuración está completa, pero aún no fue publicada.",
+      };
     default:
-      return { label: "Borrador", variant: "secondary" as const };
+      return {
+        label: "Borrador",
+        description: "Todavía está en preparación y no puede cotizarse.",
+      };
   }
 }
 
@@ -169,6 +173,7 @@ function queryString(query: ProductosQueryInicial) {
   if (query.estado) params.set("estado", query.estado);
   if (query.orden !== "recientes") params.set("orden", query.orden);
   if (query.vista === "categorias") params.set("vista", "categorias");
+  if (query.composicion) params.set("composicion", query.composicion);
   return params.toString();
 }
 
@@ -191,6 +196,8 @@ export function ProductosServiciosTable({
   categorias: CategoriaCatalogo[];
   canManage: boolean;
 }) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [productos, setProductos] = React.useState(initialProductos);
   const [total, setTotal] = React.useState(initialTotal);
   const [pages, setPages] = React.useState(initialPages);
@@ -246,6 +253,7 @@ export function ProductosServiciosTable({
             subcategoriaCodigo: query.subcategoriaCodigo || undefined,
             categoriaCodigo: query.categoriaCodigo || undefined,
             orden: query.orden,
+            composicion: query.composicion || undefined,
           });
           if (id !== requestId.current) return;
           setProductos(response.data);
@@ -288,82 +296,113 @@ export function ProductosServiciosTable({
   };
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
+    <main
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${listPage.page} ${styles.page}`}
+    >
+      <header className={listPage.header}>
         <div>
-          <span className={styles.eyebrow}>Productos y servicios</span>
-          <h1>Catálogo de productos</h1>
-          <p>
+          <span className={brand.eyebrow}>Costos · Oferta del taller</span>
+          <h1>
+            Catálogo de productos<span className={brand.titleDot}>.</span>
+          </h1>
+          <p className={listPage.subtitle}>
             Organizá la oferta comercial, su forma de cobro y la configuración
             productiva de cada producto.
           </p>
         </div>
         {canManage ? (
-          <Link
-            href="/productos-servicios/nuevo"
-            className={`${buttonVariants()} ${styles.primaryAction}`}
-          >
-            <PlusIcon data-icon="inline-start" />
+          <ActionLink href="/productos-servicios/nuevo">
+            <ArrowUpRightIcon data-icon="inline-start" />
             Nuevo producto
-          </Link>
+          </ActionLink>
         ) : null}
       </header>
 
-      <section className={styles.metrics} aria-label="Resumen del catálogo">
-        <article className={`${styles.metric} ${styles.metricPrimary}`}>
-          <span className={styles.metricIcon} aria-hidden="true">
-            <PackageIcon />
-          </span>
-          <div>
-            <span>Resultados</span>
-            <strong>{total}</strong>
-            <small>según los filtros actuales</small>
-          </div>
-        </article>
-        <article className={styles.metric}>
-          <span className={styles.metricIcon} aria-hidden="true">
-            <ShapesIcon />
-          </span>
-          <div>
-            <span>Categorías</span>
-            <strong>{categorias.length}</strong>
-            <small>familias comerciales</small>
-          </div>
-        </article>
-        <article className={styles.metric}>
-          <span className={styles.metricIcon} aria-hidden="true">
-            <TagsIcon />
-          </span>
-          <div>
-            <span>Subcategorías</span>
-            <strong>{subcategorias.length}</strong>
-            <small>segmentos configurados</small>
-          </div>
-        </article>
-        <article className={styles.metric}>
-          <span className={styles.metricIcon} aria-hidden="true">
-            <PackageCheckIcon />
-          </span>
-          <div>
-            <span>Vista actual</span>
-            <strong>{productos.length}</strong>
-            <small>productos en esta página</small>
-          </div>
-        </article>
+      <section
+        className={`${styles.metrics} ${brand.metrics}`}
+        aria-label="Resumen del catálogo"
+      >
+        <ListMetric
+          label="Resultados"
+          value={total}
+          hint="Según los filtros actuales"
+          icon={PackageIcon}
+          tone="brand"
+        />
+        <ListMetric
+          label="Categorías"
+          value={categorias.length}
+          hint="Familias comerciales"
+          icon={ShapesIcon}
+        />
+        <ListMetric
+          label="Subcategorías"
+          value={subcategorias.length}
+          hint="Segmentos configurados"
+          icon={TagsIcon}
+        />
+        <ListMetric
+          label="Vista actual"
+          value={productos.length}
+          hint="Productos en esta página"
+          icon={PackageCheckIcon}
+        />
       </section>
 
-      <section className={styles.filterBar} aria-label="Filtros del catálogo">
-        <div className={styles.search}>
-          <SearchIcon aria-hidden="true" />
-          <input
-            value={query.search}
-            onChange={(event) =>
-              updateQuery({ search: event.target.value, page: 1 })
-            }
-            placeholder="Buscar por nombre o código…"
-            aria-label="Buscar productos por nombre o código"
-          />
-        </div>
+      <Tabs
+        selectedKey={query.composicion || "todos"}
+        onSelectionChange={(key) =>
+          updateQuery({
+            composicion: key === "todos" ? "" : (key as ComposicionProductos),
+            page: 1,
+          })
+        }
+      >
+        <NavigationTabList
+          tone="graphite"
+          className={styles.compositionNav}
+          label="Tipo de producto"
+          variant="detailed"
+          items={[
+            {
+              id: "todos",
+              label: "Todos",
+              description: "Catálogo completo",
+              icon: <PackageIcon />,
+            },
+            {
+              id: "simple",
+              label: "Productos simples",
+              description: "Se fabrican con su propia ruta",
+              icon: <ShapesIcon />,
+            },
+            {
+              id: "compuesto",
+              label: "Productos compuestos",
+              description: "Integran componentes fabricados",
+              icon: <BoxesIcon />,
+            },
+          ]}
+        />
+      </Tabs>
+
+      <Card className={styles.filterBar} aria-label="Filtros del catálogo">
+        <SearchField
+          className={styles.search}
+          aria-label="Buscar productos por nombre o código"
+          value={query.search}
+          onChange={(value) => updateQuery({ search: value, page: 1 })}
+        >
+          <SearchField.Group className={listPage.searchGroup}>
+            <SearchField.SearchIcon>
+              <SearchIcon size={16} />
+            </SearchField.SearchIcon>
+            <SearchField.Input placeholder="Buscar por nombre o código…" />
+            <SearchField.ClearButton aria-label="Limpiar búsqueda" />
+          </SearchField.Group>
+        </SearchField>
         <CatalogSelect
           label="Cobro"
           value={query.unidadComercial || "all"}
@@ -443,15 +482,13 @@ export function ProductosServiciosTable({
             { value: "nombre_desc", label: "Nombre Z–A" },
           ]}
         />
-        <ToggleGroup
-          multiple={false}
-          variant="outline"
-          size="sm"
-          spacing={0}
-          value={[query.vista]}
-          onValueChange={(values) => {
-            const vista = values.at(-1) as VistaProductos | undefined;
-            if (vista) {
+        <div className={styles.viewToggle}>
+          <SegmentedControl
+            tone="graphite"
+            aria-label="Cambiar vista del catálogo"
+            value={query.vista}
+            onChange={(value) => {
+              const vista = value as VistaProductos;
               updateQuery({
                 vista,
                 page: 1,
@@ -459,37 +496,40 @@ export function ProductosServiciosTable({
                   ? { categoriaCodigo: "", subcategoriaCodigo: "" }
                   : {}),
               });
-            }
-          }}
-          aria-label="Cambiar vista del catálogo"
-          className={styles.viewToggle}
-        >
-          <ToggleGroupItem value="tabla" aria-label="Vista de tabla">
-            <Table2Icon />
-            Tabla
-          </ToggleGroupItem>
-          <ToggleGroupItem value="categorias" aria-label="Vista por categorías">
-            <Grid2X2Icon />
-            Categorías
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </section>
+            }}
+            options={[
+              { value: "tabla", label: "Tabla", icon: <Table2Icon /> },
+              {
+                value: "categorias",
+                label: "Categorías",
+                icon: <Grid2X2Icon />,
+              },
+            ]}
+          />
+        </div>
+      </Card>
 
       {error ? (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTitle>No se pudo actualizar el catálogo</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>No se pudo actualizar el catálogo</Alert.Title>
+            <Alert.Description>{error}</Alert.Description>
+          </Alert.Content>
         </Alert>
       ) : null}
 
       {query.vista === "categorias" ? (
-        <section className={styles.explorer} aria-busy={loading}>
+        <Card
+          className={`${listPage.results} ${styles.explorer}`}
+          aria-busy={loading}
+        >
           <header className={styles.explorerHeader}>
             {categoriaSeleccionada ? (
               <div className="flex items-start gap-3">
                 <Button
                   variant="outline"
-                  size="icon-sm"
+                  isIconOnly
                   aria-label="Volver a todas las categorías"
                   onClick={() => updateQuery({ categoriaCodigo: "", page: 1 })}
                 >
@@ -538,21 +578,21 @@ export function ProductosServiciosTable({
                           height={768}
                           className={styles.categoryImage}
                         />
-                        <CardHeader className={styles.categoryCardHeader}>
-                          <CardTitle>{subcategoria.nombre}</CardTitle>
-                          <CardDescription>
+                        <Card.Header className={styles.categoryCardHeader}>
+                          <Card.Title>{subcategoria.nombre}</Card.Title>
+                          <Card.Description>
                             {subcategoria.descripcion}
-                          </CardDescription>
-                          <CardAction className={styles.categoryArrow}>
-                            <ArrowRightIcon aria-hidden="true" />
-                          </CardAction>
+                          </Card.Description>
+                          <span className={styles.categoryArrow}>
+                            <ArrowUpRightIcon aria-hidden="true" />
+                          </span>
                           <div className={styles.categoryMeta}>
                             {subcategoria.productos}{" "}
                             {subcategoria.productos === 1
                               ? "producto"
                               : "productos"}
                           </div>
-                        </CardHeader>
+                        </Card.Header>
                       </Card>
                     </Link>
                   );
@@ -581,14 +621,14 @@ export function ProductosServiciosTable({
                           height={768}
                           className={styles.categoryImage}
                         />
-                        <CardHeader className={styles.categoryCardHeader}>
-                          <CardTitle>{categoria.nombre}</CardTitle>
-                          <CardDescription>
+                        <Card.Header className={styles.categoryCardHeader}>
+                          <Card.Title>{categoria.nombre}</Card.Title>
+                          <Card.Description>
                             {categoria.descripcion}
-                          </CardDescription>
-                          <CardAction className={styles.categoryArrow}>
-                            <ArrowRightIcon aria-hidden="true" />
-                          </CardAction>
+                          </Card.Description>
+                          <span className={styles.categoryArrow}>
+                            <ArrowUpRightIcon aria-hidden="true" />
+                          </span>
                           <div className={styles.categoryMeta}>
                             <span>
                               {categoria.productos}{" "}
@@ -599,17 +639,29 @@ export function ProductosServiciosTable({
                             <span aria-hidden="true">·</span>
                             <span>{categoria.subcategorias} subcategorías</span>
                           </div>
-                        </CardHeader>
+                        </Card.Header>
                       </Card>
                     </Link>
                   );
                 })}
           </div>
-        </section>
+        </Card>
       ) : total === 0 && !query.search ? (
         <EstadoVacio
-          titulo="Sin productos cargados"
-          descripcion="Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
+          titulo={
+            query.composicion === "compuesto"
+              ? "Todavía no hay productos compuestos"
+              : query.composicion === "simple"
+                ? "Todavía no hay productos simples"
+                : "Sin productos cargados"
+          }
+          descripcion={
+            query.composicion === "compuesto"
+              ? "Un producto aparecerá acá cuando su receta incorpore al menos un componente fabricado."
+              : query.composicion === "simple"
+                ? "Los productos sin componentes fabricados aparecerán en esta sección."
+                : "Empezá creando un producto. Se guardará como borrador hasta que esté listo para publicar."
+          }
           cta={
             canManage
               ? {
@@ -621,7 +673,7 @@ export function ProductosServiciosTable({
           }
         />
       ) : (
-        <section className={styles.catalogPanel} aria-busy={loading}>
+        <Card className={listPage.results} aria-busy={loading}>
           <header className={styles.catalogHeader}>
             <div>
               <span className={styles.catalogIcon} aria-hidden="true">
@@ -647,22 +699,20 @@ export function ProductosServiciosTable({
             </div>
           ) : (
             <div className={styles.tableFrame}>
-              <Table className={styles.table}>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[34%]">Nombre</TableHead>
-                    <TableHead className="w-[14%]">Categoría</TableHead>
-                    <TableHead className="w-[16%]">¿Cómo se cobra?</TableHead>
-                    <TableHead className="w-[19%]">Manejo de medidas</TableHead>
-                    <TableHead className="w-[9%]">Estado</TableHead>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className="w-[31%]">Nombre</th>
+                    <th className="w-[14%]">Tipo</th>
+                    <th className="w-[14%]">Categoría</th>
+                    <th className="w-[16%]">Unidad de venta</th>
+                    <th className="w-[17%]">Definición de medida</th>
                     {canManage ? (
-                      <TableHead className="w-[8%] text-right">
-                        Acciones
-                      </TableHead>
+                      <th className="w-[8%] text-right">Acciones</th>
                     ) : null}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                  </tr>
+                </thead>
+                <tbody>
                   {productos.map((producto) => {
                     const unidad = getLabel(
                       unidadComercialLabels,
@@ -673,57 +723,99 @@ export function ProductosServiciosTable({
                       producto.modoMedidas,
                     );
                     const estado = estadoProducto(producto);
+                    const EstadoIcon =
+                      producto.estadoCatalogo === "activo"
+                        ? BadgeCheckIcon
+                        : producto.estadoCatalogo === "incompleto"
+                          ? CircleAlertIcon
+                          : producto.estadoCatalogo === "listo"
+                            ? CircleCheckIcon
+                            : CircleDashedIcon;
                     return (
-                      <TableRow
+                      <tr
                         key={producto.id}
                         data-state={producto.estadoCatalogo}
                       >
-                        <TableCell
+                        <td
                           className={styles.productCell}
                           title={producto.descripcion ?? undefined}
                         >
-                          <Link
-                            className={styles.productName}
-                            href={`/productos-servicios/${producto.id}?tab=identidad`}
-                          >
-                            {highlightMatch(producto.nombre, query.search)}
-                          </Link>
-                          {producto.tercerizado ? (
-                            <span className={styles.outsourcedPill}>
-                              Tercerizado
+                          <span className={styles.productIdentity}>
+                            <span className={styles.productGlyph} aria-hidden>
+                              <ProductoCatalogoGlyph
+                                subcategoriaCodigo={
+                                  producto.subcategoriaComercial?.codigo
+                                }
+                                categoriaCodigo={
+                                  producto.subcategoriaComercial?.categoria
+                                    ?.codigo
+                                }
+                                compuesto={producto.esCompuesto}
+                                cobro={producto.unidadComercial}
+                              />
                             </span>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>
+                            <Tooltip delay={180}>
+                              <Button
+                                variant="ghost"
+                                isIconOnly
+                                className={styles.statusIcon}
+                                data-state={producto.estadoCatalogo}
+                                aria-label={`Estado: ${estado.label}`}
+                              >
+                                <EstadoIcon />
+                              </Button>
+                              <Tooltip.Content
+                                {...scope}
+                                placement="right"
+                                className={`${theme} ${styles.statusTooltip}`}
+                              >
+                                <strong>{estado.label}</strong>
+                                <span>{estado.description}</span>
+                              </Tooltip.Content>
+                            </Tooltip>
+                            <Link
+                              className={styles.productName}
+                              href={`/productos-servicios/${producto.id}?tab=identidad`}
+                            >
+                              {highlightMatch(producto.nombre, query.search)}
+                            </Link>
+                          </span>
+                        </td>
+                        <td>
+                          <Chip
+                            size="sm"
+                            variant="soft"
+                            className={styles.typePill}
+                            data-kind={
+                              producto.esCompuesto ? "compuesto" : "simple"
+                            }
+                          >
+                            {producto.esCompuesto
+                              ? "Producto compuesto"
+                              : "Producto simple"}
+                          </Chip>
+                        </td>
+                        <td>
                           <span className={styles.categoryPill}>
                             {producto.subcategoriaComercial?.nombre ??
                               "Sin categoría"}
                           </span>
-                        </TableCell>
-                        <TableCell title={unidad.descripcion}>
+                        </td>
+                        <td title={unidad.descripcion}>
                           <span className={styles.chargePill}>
                             {unidad.label}
                           </span>
-                        </TableCell>
-                        <TableCell title={medidas.descripcion}>
+                        </td>
+                        <td title={medidas.descripcion}>
                           <span className={styles.measurePill}>
                             {medidas.label}
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={styles.statusPill}
-                            data-state={producto.estadoCatalogo}
-                          >
-                            {estado.label}
-                          </span>
-                        </TableCell>
+                        </td>
                         {canManage ? (
-                          <TableCell className="text-right">
+                          <td className="text-right">
                             <Button
-                              className={styles.rowAction}
-                              variant="ghost"
-                              size="icon-sm"
+                              variant="outline"
+                              isIconOnly
                               aria-label={`Duplicar ${producto.nombre}`}
                               title="Duplicar como borrador"
                               onClick={() => {
@@ -733,16 +825,16 @@ export function ProductosServiciosTable({
                             >
                               <CopyIcon />
                             </Button>
-                          </TableCell>
+                          </td>
                         ) : null}
-                      </TableRow>
+                      </tr>
                     );
                   })}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
           )}
-        </section>
+        </Card>
       )}
 
       {query.vista === "tabla" ? (
@@ -754,7 +846,7 @@ export function ProductosServiciosTable({
             <Button
               variant="outline"
               size="sm"
-              disabled={query.page <= 1 || loading}
+              isDisabled={query.page <= 1 || loading}
               onClick={() => updateQuery({ page: Math.max(1, query.page - 1) })}
             >
               Anterior
@@ -762,7 +854,7 @@ export function ProductosServiciosTable({
             <Button
               variant="outline"
               size="sm"
-              disabled={query.page >= pages || loading}
+              isDisabled={query.page >= pages || loading}
               onClick={() => updateQuery({ page: query.page + 1 })}
             >
               Siguiente
@@ -771,33 +863,28 @@ export function ProductosServiciosTable({
         </div>
       ) : null}
 
-      <Dialog
-        open={Boolean(productoADuplicar)}
+      <FormDialog
+        className={brand.dialog}
+        isOpen={Boolean(productoADuplicar)}
+        isDismissable={!duplicando}
         onOpenChange={(open) => {
           if (!open && !duplicando) {
             setProductoADuplicar(null);
             setNombreCopia("");
           }
         }}
+        title="Duplicar producto"
+        description="La copia conservará su configuración y se guardará como borrador para revisarla antes de publicarla."
       >
-        <DialogContent
-          className="gp-modal gp-modal-compact"
-          overlayClassName="gp-modal-overlay"
-        >
-          <form onSubmit={duplicar} className="flex flex-col gap-4">
-            <DialogHeader>
-              <DialogTitle>Duplicar producto</DialogTitle>
-              <DialogDescription>
-                La copia conservará su configuración y se guardará como borrador
-                para revisarla antes de publicarla.
-              </DialogDescription>
-            </DialogHeader>
+        <form onSubmit={duplicar} className={styles.dialogForm}>
+          <Modal.Body className={styles.dialogBody}>
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="nombre-copia-producto">
                   Nombre de la copia
                 </FieldLabel>
                 <Input
+                  className={focus.singleBorder}
                   id="nombre-copia-producto"
                   autoFocus
                   value={nombreCopia}
@@ -806,33 +893,30 @@ export function ProductosServiciosTable({
                 />
               </Field>
             </FieldGroup>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={duplicando}
-                onClick={() => setProductoADuplicar(null)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={duplicando || !nombreCopia.trim()}
-              >
-                {duplicando ? (
-                  <Loader2Icon
-                    data-icon="inline-start"
-                    className="animate-spin"
-                  />
-                ) : (
-                  <CopyIcon data-icon="inline-start" />
-                )}
-                {duplicando ? "Duplicando…" : "Duplicar como borrador"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </Modal.Body>
+          <Modal.Footer className={styles.dialogFooter}>
+            <Button
+              type="button"
+              variant="outline"
+              isDisabled={duplicando}
+              onPress={() => setProductoADuplicar(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              isDisabled={duplicando || !nombreCopia.trim()}
+            >
+              {duplicando ? (
+                <GdiSpinner data-icon="inline-start" className="size-4" />
+              ) : (
+                <CopyIcon data-icon="inline-start" />
+              )}
+              {duplicando ? "Duplicando…" : "Duplicar como borrador"}
+            </Button>
+          </Modal.Footer>
+        </form>
+      </FormDialog>
     </main>
   );
 }
@@ -849,28 +933,39 @@ function CatalogSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <Select
-      items={options}
-      value={value}
-      onValueChange={(next) => next && onChange(next)}
-    >
-      <SelectTrigger
-        size="sm"
+    <div className={styles.filterSelect}>
+      <span>{label}</span>
+      <SelectField
         aria-label={label}
-        className={styles.filterSelect}
-      >
-        <span className="text-muted-foreground">{label}:</span>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        <SelectGroup>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
+        options={options}
+        value={value}
+        onChange={(next) => next && onChange(next)}
+      />
+    </div>
+  );
+}
+
+function EstadoVacio({
+  titulo,
+  descripcion,
+  cta,
+}: {
+  titulo: string;
+  descripcion: string;
+  variant?: "compacto";
+  cta?: { label: string; href: string; icon: React.ElementType };
+}) {
+  return (
+    <div className={listPage.empty}>
+      <PackageIcon size={28} aria-hidden />
+      <strong>{titulo}</strong>
+      <p>{descripcion}</p>
+      {cta && (
+        <ActionLink href={cta.href}>
+          <cta.icon />
+          {cta.label}
+        </ActionLink>
+      )}
+    </div>
   );
 }

@@ -17,7 +17,8 @@ import {
   crearSvgPlacaDesdeNesting,
   type NestingVectorialParaRecorrido,
 } from './nesting-svg';
-import { analizarSvgFabricacion } from '../motor-universal/geometria-vectorial/svg-parser';
+import { fuentesInstalacion } from './fuentes-instalacion';
+import { snapshotPasoProduccion } from '../produccion/snapshot-paso-produccion';
 import { segmentarPiezasConEncastres } from '../motor-universal/geometria-vectorial/segmentacion-encastres';
 import type { UnionVectorial } from '../motor-universal/geometria-vectorial/tipos';
 import {
@@ -35,6 +36,11 @@ import {
 } from './plantilla-instalacion-export';
 
 type NestingPersistido = NestingVectorialParaRecorrido;
+export type SeleccionRecorrido = {
+  rutaComponentes?: string[];
+  rutaPasoId?: string;
+  fuenteId?: string;
+};
 
 const ESTADOS_ACTIVOS: EstadoRevisionRecorridoVectorial[] = [
   EstadoRevisionRecorridoVectorial.BORRADOR,
@@ -50,27 +56,21 @@ export class PreparacionesRecorridoService {
     private readonly recorridos: RecorridosVectorialesService,
   ) {}
 
-  async asegurarParaItem(auth: CurrentAuth, itemId: string, forzar = false) {
-    const item = await this.prisma.ordenTrabajoItem.findFirst({
-      where: { id: itemId, tenantId: auth.tenantId },
-      select: {
-        id: true,
-        codigo: true,
-        nombre: true,
-        cotizacionItem: {
-          select: { trazabilidadJson: true, snapshotJson: true },
-        },
-      },
-    });
-    if (!item) throw new NotFoundException('No se encontró el item de la OT.');
-    if (!item.cotizacionItem) return [];
-
-    const paso = this.pasoCorte(item.cotizacionItem.trazabilidadJson);
+  async asegurarParaItem(
+    auth: CurrentAuth,
+    itemId: string,
+    forzar = false,
+    seleccion: SeleccionRecorrido = {},
+  ) {
+    const item = await this.leerItem(auth, itemId, seleccion);
+    const paso = item.pasoCotizado;
     if (!paso) return [];
     const nesting = this.nestingDelPaso(paso);
     const profile = await this.resolverPerfil(
       auth.tenantId,
-      item.cotizacionItem.snapshotJson,
+      item.cotizacionItem?.snapshotJson ?? null,
+      paso,
+      item.recetaSnapshotJson ?? item.recetaRevision?.snapshotJson ?? null,
     );
     const cantidadPlacas = nesting.substrates?.length ?? 0;
     if (cantidadPlacas === 0) {
@@ -82,8 +82,8 @@ export class PreparacionesRecorridoService {
     const prepared = [];
     for (let plateIndex = 0; plateIndex < cantidadPlacas; plateIndex += 1) {
       const svg = crearSvgPlacaDesdeNesting(nesting, plateIndex);
-      prepared.push(
-        await this.asegurarRevision({
+      prepared.push({
+        ...(await this.asegurarRevision({
           auth,
           itemId: item.id,
           itemName: item.nombre || item.codigo,
@@ -91,8 +91,9 @@ export class PreparacionesRecorridoService {
           svg,
           profile,
           forzar,
-        }),
-      );
+        })),
+        copias: nesting.substrates?.[plateIndex]?.count ?? 1,
+      });
     }
     return prepared;
   }
@@ -101,14 +102,18 @@ export class PreparacionesRecorridoService {
     auth: CurrentAuth,
     itemId: string,
     configuracion?: ConfiguracionPlantillaInstalacion,
+    seleccion: SeleccionRecorrido = {},
   ) {
     const result = await this.generarPlantillaInstalacion(
       auth,
       itemId,
       configuracion,
+      seleccion,
     );
     return {
       schemaVersion: result.plantilla.schemaVersion,
+      fuentes: result.fuentes,
+      fuenteId: result.fuenteId,
       nombreArchivo: result.nombreArchivo,
       anchoDisenoMm: result.plantilla.anchoDisenoMm,
       altoDisenoMm: result.plantilla.altoDisenoMm,
@@ -135,11 +140,13 @@ export class PreparacionesRecorridoService {
     itemId: string,
     panelIndex: number | null,
     configuracion?: ConfiguracionPlantillaInstalacion,
+    seleccion: SeleccionRecorrido = {},
   ) {
     const result = await this.generarPlantillaInstalacion(
       auth,
       itemId,
       configuracion,
+      seleccion,
     );
     if (panelIndex == null) {
       return {
@@ -172,11 +179,13 @@ export class PreparacionesRecorridoService {
       | 'pounce-dxf',
     panelIndex: number | null,
     configuracion?: ConfiguracionPlantillaInstalacion,
+    seleccion: SeleccionRecorrido = {},
   ) {
     const generated = await this.generarPlantillaInstalacion(
       auth,
       itemId,
       configuracion,
+      seleccion,
     );
     const exportInput = {
       nombre: generated.nombre,
@@ -378,58 +387,104 @@ export class PreparacionesRecorridoService {
     return this.proyectar(created);
   }
 
+  private async leerItem(
+    auth: CurrentAuth,
+    itemId: string,
+    seleccion: SeleccionRecorrido,
+  ) {
+    const select = {
+      id: true,
+      codigo: true,
+      nombre: true,
+      contieneLotesEntrega: true,
+      jobContextSnapshotJson: true,
+      trazabilidadSnapshotJson: true,
+      recetaSnapshotJson: true,
+      recetaRevision: { select: { snapshotJson: true } },
+      pasos: {
+        select: {
+          rutaPasoId: true,
+          nestingLoteRol: true,
+          nestingLoteSnapshotJson: true,
+        },
+      },
+      cotizacionItem: {
+        select: {
+          jobContextJson: true,
+          trazabilidadJson: true,
+          snapshotJson: true,
+        },
+      },
+    } satisfies Prisma.OrdenTrabajoItemSelect;
+    let item = await this.prisma.ordenTrabajoItem.findFirst({
+      where: { id: itemId, tenantId: auth.tenantId },
+      select,
+    });
+    if (!item) throw new NotFoundException('No se encontró el item de la OT.');
+    if (item.contieneLotesEntrega) throw new BadRequestException('Seleccioná un lote de entrega para preparar sus archivos de corte.');
+    for (const codigo of seleccion.rutaComponentes ?? []) {
+      item = await this.prisma.ordenTrabajoItem.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          parentItemId: item.id,
+          componenteCodigo: codigo,
+        },
+        select,
+      });
+      if (!item)
+        throw new NotFoundException('No se encontró el componente de la OT.');
+    }
+    let pasoCotizado = this.pasoCorte(
+      item.trazabilidadSnapshotJson ??
+        item.cotizacionItem?.trazabilidadJson ??
+        null,
+      seleccion.rutaPasoId,
+    );
+    const pasoOt = item.pasos?.find(
+      (p) => p.rutaPasoId === pasoCotizado?.rutaPasoId,
+    );
+    if (pasoOt?.nestingLoteRol === 'PARTICIPANTE') {
+      throw new BadRequestException(
+        'El recorrido se prepara desde la operación principal del lote de corte.',
+      );
+    }
+    if (pasoOt?.nestingLoteRol === 'OPERATIVO') {
+      pasoCotizado = snapshotPasoProduccion(item, pasoOt)
+        .paso as unknown as Record<string, unknown>;
+    }
+    return {
+      ...item,
+      pasoCotizado,
+      contexto:
+        this.record(
+          item.jobContextSnapshotJson ?? item.cotizacionItem?.jobContextJson,
+        ) ?? {},
+    };
+  }
+
   private async generarPlantillaInstalacion(
     auth: CurrentAuth,
     itemId: string,
     configuracion?: ConfiguracionPlantillaInstalacion,
+    seleccion: SeleccionRecorrido = {},
   ) {
-    const item = await this.prisma.ordenTrabajoItem.findFirst({
-      where: { id: itemId, tenantId: auth.tenantId },
-      select: {
-        id: true,
-        codigo: true,
-        nombre: true,
-        cotizacionItem: {
-          select: {
-            jobContextJson: true,
-            trazabilidadJson: true,
-          },
-        },
-      },
-    });
-    if (!item) throw new NotFoundException('No se encontró el item de la OT.');
-    const quoteItem = item.cotizacionItem;
-    if (!quoteItem) {
-      throw new BadRequestException(
-        'El item no conserva la fuente vectorial de la cotización.',
-      );
-    }
-    const paso = this.pasoCorte(quoteItem.trazabilidadJson);
+    const item = await this.leerItem(auth, itemId, seleccion);
+    const paso = item.pasoCotizado;
     if (!paso) {
       throw new BadRequestException(
         'La plantilla de instalación sólo está disponible para cortes vectoriales de Polyfan.',
       );
     }
-    const context = this.record(quoteItem.jobContextJson);
-    const source = this.record(context?.disenoVectorialFuente);
-    const svg = typeof source?.svg === 'string' ? source.svg : '';
-    const width = Number(source?.anchoFinalMm);
-    const height =
-      source?.altoFinalMm == null ? undefined : Number(source.altoFinalMm);
-    const sourceName =
-      typeof source?.nombreArchivo === 'string'
-        ? source.nombreArchivo
-        : item.nombre || item.codigo;
-    if (!svg || !Number.isFinite(width) || width <= 0) {
-      throw new BadRequestException(
-        'El item no contiene un SVG original válido para generar la plantilla.',
+    const fuentes = fuentesInstalacion(item.contexto);
+    const fuente = seleccion.fuenteId
+      ? fuentes.find((f) => f.id === seleccion.fuenteId)
+      : fuentes[0];
+    if (!fuente)
+      throw new NotFoundException(
+        'No se encontró el diseño de instalación seleccionado.',
       );
-    }
-    const geometria = analizarSvgFabricacion({
-      svg,
-      anchoFinalMm: width,
-      altoFinalMm: height,
-    }).geometria;
+    const geometria = fuente.geometria;
+    const sourceName = fuente.nombre || item.nombre || item.codigo;
     const nesting = this.nestingDelPaso(paso);
     const firstSubstrate = nesting.substrates?.[0];
     const visual = this.record(nesting.visualConfig);
@@ -458,7 +513,9 @@ export class PreparacionesRecorridoService {
       }).uniones;
     }
     return {
-      nombreArchivo: this.safeName(sourceName.replace(/\.svg$/i, '')),
+      fuentes: fuentes.map(({ id, nombre }) => ({ id, nombre })),
+      fuenteId: fuente.id,
+      nombreArchivo: this.safeName(sourceName.replace(/\.(svg|dxf)$/i, '')),
       nombre: item.nombre || item.codigo,
       nombreFuente: sourceName,
       geometria,
@@ -502,14 +559,17 @@ export class PreparacionesRecorridoService {
     };
   }
 
-  private pasoCorte(value: Prisma.JsonValue) {
+  private pasoCorte(value: Prisma.JsonValue, rutaPasoId?: string) {
     const root = this.record(value);
     const pasos = Array.isArray(root?.pasos) ? root.pasos : [];
     return pasos
       .map((item) => this.record(item))
       .find(
         (paso) =>
-          paso?.familiaCodigo === 'corte_hilo_caliente' && paso.nestingResult,
+          paso?.familiaCodigo === 'corte_hilo_caliente' &&
+          paso.activado !== false &&
+          (!rutaPasoId || paso.rutaPasoId === rutaPasoId) &&
+          paso.nestingResult,
       );
   }
 
@@ -536,21 +596,22 @@ export class PreparacionesRecorridoService {
     if (!Array.isArray(metricas?.uniones)) return null;
     return metricas.uniones
       .map((value) => this.record(value))
-      .filter(
-        (value): value is Record<string, unknown> =>
-          Boolean(
-            value &&
-              typeof value.id === 'string' &&
-              typeof value.piezaOrigenId === 'string' &&
-              (value.tipoEncastre === 'cola_milano' ||
-                value.tipoEncastre === 'recta'),
-          ),
+      .filter((value): value is Record<string, unknown> =>
+        Boolean(
+          value &&
+          typeof value.id === 'string' &&
+          typeof value.piezaOrigenId === 'string' &&
+          (value.tipoEncastre === 'cola_milano' ||
+            value.tipoEncastre === 'recta'),
+        ),
       ) as unknown as UnionVectorial[];
   }
 
   private async resolverPerfil(
     tenantId: string,
     snapshotValue: Prisma.JsonValue,
+    paso: Record<string, unknown>,
+    recetaSnapshotValue: Prisma.JsonValue,
   ): Promise<PerfilMaquinaCorte> {
     const snapshot = this.record(snapshotValue);
     const route = this.record(snapshot?.ruta);
@@ -558,22 +619,38 @@ export class PreparacionesRecorridoService {
     const cutting = pasos
       .map((item) => this.record(item))
       .find((paso) => paso?.familia === 'corte_hilo_caliente');
+    const nesting = this.record(paso.nestingResult);
+    const receta = this.record(recetaSnapshotValue);
+    const pasosReceta = Array.isArray(receta?.pasos) ? receta.pasos : [];
+    const pasoReceta = pasosReceta
+      .map((p) => this.record(p))
+      .find(
+        (p) =>
+          p?.clave === `ruta:${String(paso.rutaPasoId)}` ||
+          p?.clave === `extra:${String(paso.rutaPasoId)}`,
+      );
+    const recurso = this.record(pasoReceta?.recurso);
     const machineId =
-      typeof cutting?.maquinaId === 'string' ? cutting.maquinaId : undefined;
+      this.record(nesting?.maquina)?.id ??
+      this.record(paso.tiempo)?.maquinaId ??
+      this.record(recurso?.maquina)?.id ??
+      cutting?.maquinaId;
     const profileId =
-      typeof cutting?.perfilId === 'string' ? cutting.perfilId : undefined;
+      this.record(nesting?.perfil)?.id ??
+      this.record(recurso?.perfil)?.id ??
+      cutting?.perfilId;
     const machine = await this.prisma.maquina.findFirst({
       where: {
         tenantId,
         activo: true,
         plantilla: 'CORTE_HILO_CALIENTE',
-        ...(machineId ? { id: machineId } : {}),
+        ...(typeof machineId === 'string' ? { id: machineId } : {}),
       },
       include: {
         perfilesOperativos: {
           where: {
             activo: true,
-            ...(profileId ? { id: profileId } : {}),
+            ...(typeof profileId === 'string' ? { id: profileId } : {}),
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -601,13 +678,19 @@ export class PreparacionesRecorridoService {
         'La máquina no tiene un postprocesador TAP compatible.',
       );
     }
+    const recorridoCotizado = Array.isArray(paso.recorridoCorte)
+      ? this.record(paso.recorridoCorte[0])
+      : null;
     return {
       id: profile.id,
       nombre: `${machine.nombre} · ${profile.nombre}`,
       postprocesador: 'HOTWIRE_TAP_V1',
       anchoUtilMm: Number(machine.anchoUtil),
       altoUtilMm: Number(machine.largoUtil),
-      velocidadMmMin: Number(profile.productivityValue),
+      velocidadMmMin: this.positiveNumber(
+        recorridoCotizado?.velocidadMmMin,
+        Number(profile.productivityValue),
+      ),
       decimales: this.positiveInt(params.decimalesTap, 6),
       entradaMm: this.positiveNumber(params.entradaMm, 8),
       origen: this.origin(params.origenMaquina),

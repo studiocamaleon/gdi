@@ -1,3 +1,4 @@
+export declare const HOTWIRE_ENGINE_VERSION = "1.0.1";
 export type Point = {
     x: number;
     y: number;

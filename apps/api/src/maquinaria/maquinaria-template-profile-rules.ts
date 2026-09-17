@@ -1,4 +1,9 @@
 import {
+  CAMPOS_PERFIL_CORTE,
+  erroresPerfilCorte,
+  PLANTILLAS_PROCESAMIENTO_CORTE,
+} from './procesamiento-corte';
+import {
   type MaquinaPerfilOperativoItemDto,
   PlantillaMaquinariaDto,
   TipoPerfilOperativoMaquinaDto,
@@ -75,7 +80,9 @@ function buildRule(params: {
 
 const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §5 IMPRESORA_LASER ─────────────────────────────────────────
-  // Discriminantes (detalle): caras, modo dúplex, colores y gramajeMaxGr.
+  // Discriminantes (detalle): caras, colores y gramajeMaxGr.
+  // modoDobleFaz y origenProductividad son campos obsoletos, retirados del
+  // editor el 2026-09-16. Se toleran para guardar perfiles existentes.
   [PlantillaMaquinariaDto.impresora_laser]: buildRule({
     detalleKeys: [
       'caras',
@@ -196,7 +203,14 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // (productivityValue) va en la unidad nativa (mm/s láser, mm/min CNC) y el motor
   // la aplica al recorrido de las piezas.
   [PlantillaMaquinariaDto.corte_laser]: buildRule({
-    detalleKeys: ['tipoOperacion', 'material', 'espesorMinMm', 'espesorMaxMm'],
+    detalleKeys: [
+      'tipoOperacion',
+      'material',
+      'espesorMinMm',
+      'espesorMaxMm',
+      'anchoCorteMm',
+      ...CAMPOS_PERFIL_CORTE,
+    ],
     requiredFieldKeys: [
       'nombre',
       'tipoOperacion',
@@ -213,7 +227,14 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
   // ─── §12 ROUTER_CNC ─────────────────────────────────────────────
   // Perfil único "Estándar". Productividad nominal m²/h para T-3.
   [PlantillaMaquinariaDto.router_cnc]: buildRule({
-    detalleKeys: ['tipoOperacion', 'material', 'espesorMinMm', 'espesorMaxMm'],
+    detalleKeys: [
+      'tipoOperacion',
+      'material',
+      'espesorMinMm',
+      'espesorMaxMm',
+      'anchoCorteMm',
+      ...CAMPOS_PERFIL_CORTE,
+    ],
     requiredFieldKeys: [
       'nombre',
       'tipoOperacion',
@@ -248,7 +269,7 @@ const RULES: Record<PlantillaMaquinariaDto, PerfilTemplateRule> = {
 
   // ─── MESA_DE_CORTE (postergada — evaluar) ────────────────────────
   [PlantillaMaquinariaDto.mesa_de_corte]: buildRule({
-    detalleKeys: ['tipoCorte', 'modoOperacion'],
+    detalleKeys: ['tipoCorte', 'modoOperacion', ...CAMPOS_PERFIL_CORTE],
     requiredFieldKeys: ['nombre'],
     allowedProfileTypes: [TipoPerfilOperativoMaquinaDto.corte],
   }),
@@ -315,9 +336,11 @@ function getPerfilFieldValue(
 function operacionLaserCoincideConTipo(
   perfil: MaquinaPerfilOperativoItemDto,
 ): boolean {
-  const operacion = String(getPerfilFieldValue(perfil, 'tipoOperacion') ?? '')
-    .trim()
-    .toUpperCase();
+  const valorOperacion = getPerfilFieldValue(perfil, 'tipoOperacion');
+  const operacion =
+    typeof valorOperacion === 'string'
+      ? valorOperacion.trim().toUpperCase()
+      : '';
   if (perfil.tipoPerfil === TipoPerfilOperativoMaquinaDto.corte) {
     return operacion === 'CORTE';
   }
@@ -337,6 +360,24 @@ function esPerfilCorteLaser(
   );
 }
 
+function requiereAnchoCommonLine(
+  plantilla: PlantillaMaquinariaDto,
+  perfil: MaquinaPerfilOperativoItemDto,
+  parametrosTecnicos?: Record<string, unknown>,
+) {
+  if (parametrosTecnicos?.commonLineHabilitado !== true) return false;
+  if (
+    plantilla !== PlantillaMaquinariaDto.corte_laser &&
+    plantilla !== PlantillaMaquinariaDto.router_cnc
+  )
+    return false;
+  const valorOperacion = getPerfilFieldValue(perfil, 'tipoOperacion');
+  return (
+    typeof valorOperacion === 'string' &&
+    valorOperacion.trim().toUpperCase() === 'CORTE'
+  );
+}
+
 const CAMPOS_REQUERIDOS_CORTE_LASER = [
   'material',
   'espesorMinMm',
@@ -348,6 +389,35 @@ export function validatePerfilOperativoByTemplate(
   perfil: MaquinaPerfilOperativoItemDto,
   parametrosTecnicos?: Record<string, unknown>,
 ) {
+  // Compatibilidad con el control experimental retirado: no guardar ni aplicar
+  // ese campo. La atención se deriva de los tiempos cotizados.
+  if (perfil.detalle) delete perfil.detalle.atencionOperario;
+  if (perfil.detalle?.procesamientoCorteVersion === 1) {
+    if (
+      !PLANTILLAS_PROCESAMIENTO_CORTE.includes(plantilla) ||
+      perfil.tipoPerfil !==
+        (plantilla === PlantillaMaquinariaDto.router_cnc
+          ? 'mecanizado'
+          : 'corte')
+    )
+      throw new Error(
+        'El perfil por herramienta no corresponde al tipo de máquina.',
+      );
+    const desconocidos = Object.keys(perfil.detalle).filter(
+      (k) => !CAMPOS_PERFIL_CORTE.includes(k) && k !== 'tipoOperacion',
+    );
+    if (desconocidos.length)
+      throw new Error(
+        `Campos de perfil no admitidos: ${desconocidos.join(', ')}.`,
+      );
+    const errores = erroresPerfilCorte(
+      perfil,
+      parametrosTecnicos?.procesamientoCorte,
+    );
+    if (errores.length)
+      throw new Error(`Perfil ${perfil.nombre}: ${errores.join(' ')}`);
+    return;
+  }
   const rule = RULES[plantilla];
   const perfilName = perfil.nombre.trim() || 'sin nombre';
   const allowedProfileTypes = new Set(rule.allowedProfileTypes);
@@ -401,6 +471,15 @@ export function validatePerfilOperativoByTemplate(
     }
   }
 
+  if (requiereAnchoCommonLine(plantilla, perfil, parametrosTecnicos)) {
+    const anchoCorteMm = Number(getPerfilFieldValue(perfil, 'anchoCorteMm'));
+    if (!Number.isFinite(anchoCorteMm) || anchoCorteMm <= 0) {
+      throw new Error(
+        `El perfil operativo ${perfilName} debe indicar un ancho efectivo de corte mayor a 0 para utilizar Common Line.`,
+      );
+    }
+  }
+
   if (plantilla === PlantillaMaquinariaDto.laminadora_bopp_rollo) {
     const pasadas = Number(getPerfilFieldValue(perfil, 'pasadasDobleFaz'));
     if (pasadas !== 1 && pasadas !== 2) {
@@ -445,6 +524,7 @@ export function getPerfilOperativoConfigurationIssues(
   perfil: MaquinaPerfilOperativoItemDto,
   parametrosTecnicos?: Record<string, unknown>,
 ) {
+  if (perfil.detalle?.procesamientoCorteVersion === 1) return [];
   const rule = RULES[plantilla];
   if (!rule) return [{ tipo: 'plantilla' as const }];
 
@@ -511,6 +591,18 @@ export function getPerfilOperativoConfigurationIssues(
       ) {
         issues.push({ tipo: 'campo', fieldKey: 'espesorMaxMm' });
       }
+    }
+  }
+
+  if (requiereAnchoCommonLine(plantilla, perfil, parametrosTecnicos)) {
+    const anchoCorteMm = Number(getPerfilFieldValue(perfil, 'anchoCorteMm'));
+    if (
+      (!Number.isFinite(anchoCorteMm) || anchoCorteMm <= 0) &&
+      !issues.some(
+        (issue) => issue.tipo === 'campo' && issue.fieldKey === 'anchoCorteMm',
+      )
+    ) {
+      issues.push({ tipo: 'campo', fieldKey: 'anchoCorteMm' });
     }
   }
 

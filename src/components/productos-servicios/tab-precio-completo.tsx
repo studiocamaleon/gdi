@@ -1,4 +1,5 @@
 "use client";
+import { useProductoVisual } from "./producto-ui";
 
 /**
  * <TabPrecioCompleto /> — Tab Precio del producto con las 5 secciones
@@ -25,31 +26,46 @@
 import * as React from "react";
 import Link from "next/link";
 import {
+  ArrowUpRightIcon,
+  BadgeDollarSignIcon,
   ExternalLinkIcon,
+  HandCoinsIcon,
   InfoIcon,
   PencilIcon,
   PlusIcon,
-  SaveIcon,
+  ReceiptTextIcon,
   Trash2Icon,
+  UsersRoundIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge } from "./producto-ui";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "./producto-ui";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
+} from "./producto-ui";
+import { Checkbox } from "./producto-ui";
+import { ConfirmacionDestructiva } from "./producto-ui";
 import { EstadoVacio } from "@/components/ui/estado-vacio";
-import { HumanSelect } from "@/components/ui/human-select";
-import { Label } from "@/components/ui/label";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import { Switch } from "@/components/ui/switch";
+import { HumanSelect } from "./producto-ui";
+import { LabelConTooltip } from "./producto-ui";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldTitle,
+} from "@/components/ui/field";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "./producto-ui";
 import {
   Table,
   TableBody,
@@ -58,7 +74,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "./producto-ui";
 import { TabPrecioEditor, type TabPrecioConfig } from "./tab-precio-editor";
+import { PricingSectionHeader } from "./pricing-section-header";
+import pricingStyles from "./pricing-visual.module.css";
 import {
   actualizarPrecioEspecialCliente,
   crearPrecioEspecialCliente,
@@ -77,7 +96,7 @@ import {
 } from "@/lib/productos-servicios-api";
 import { getClientes } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
-import { cn } from "@/lib/utils";
+import { getLabel, metodoPrecioLabels } from "@/lib/labels-humanos";
 
 interface Props {
   /** ID del producto; si es null el producto aún no existe (crear mode no guardado). */
@@ -89,6 +108,8 @@ interface Props {
   precioDirty?: boolean;
   guardandoPrecio?: boolean;
   onGuardarPrecio?: () => Promise<void> | void;
+  /** Editor opcional de la estrategia y los bloques de un producto compuesto. */
+  pricingCompuestoSection?: React.ReactNode;
 }
 
 type PricingSaveState = {
@@ -113,9 +134,13 @@ export function TabPrecioCompleto({
   precioDirty = false,
   guardandoPrecio = false,
   onGuardarPrecio,
+  pricingCompuestoSection,
 }: Props) {
-  const [impuestosState, setImpuestosState] = React.useState<PricingSaveState>(idleSaveState);
-  const [comisionesState, setComisionesState] = React.useState<PricingSaveState>(idleSaveState);
+  const productoVisual = useProductoVisual();
+  const [impuestosState, setImpuestosState] =
+    React.useState<PricingSaveState>(idleSaveState);
+  const [comisionesState, setComisionesState] =
+    React.useState<PricingSaveState>(idleSaveState);
   const [guardandoTodo, setGuardandoTodo] = React.useState(false);
 
   const hasUnifiedSave = !!onGuardarPrecio;
@@ -124,78 +149,114 @@ export function TabPrecioCompleto({
     (impuestosState.loaded && impuestosState.dirty) ||
     (comisionesState.loaded && comisionesState.dirty);
   const isSaving =
-    guardandoTodo || guardandoPrecio || impuestosState.saving || comisionesState.saving;
+    guardandoTodo ||
+    guardandoPrecio ||
+    impuestosState.saving ||
+    comisionesState.saving;
 
   const guardarCambios = async () => {
     if (!onGuardarPrecio || !productoId || !isDirty || isSaving) return;
     setGuardandoTodo(true);
     try {
-      if (impuestosState.loaded && impuestosState.dirty) await impuestosState.save();
-      if (comisionesState.loaded && comisionesState.dirty) await comisionesState.save();
+      if (impuestosState.loaded && impuestosState.dirty)
+        await impuestosState.save();
+      if (comisionesState.loaded && comisionesState.dirty)
+        await comisionesState.save();
       if (precioDirty) await onGuardarPrecio();
-      toast.success("Cambios de pricing guardados");
+      toast.success("Cambios de precio guardados");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando cambios");
+      toast.error(
+        err instanceof Error ? err.message : "Error guardando cambios",
+      );
     } finally {
       setGuardandoTodo(false);
     }
   };
 
   return (
-    <div className="pricing-flow">
+    <div className={pricingStyles.root}>
       {/* Sección 1 — Método de cálculo (siempre visible, no requiere productoId) */}
-      <Card className="wiz-section pricing-section">
-        <CardHeader className="wiz-section-head">
-          <CardTitle>Método de cálculo</CardTitle>
-          <CardDescription>
-            Cómo se calcula el precio de venta a partir del costo del motor.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Card className={pricingStyles.section}>
+        <PricingSectionHeader
+          step="01"
+          eyebrow="Regla base"
+          title="Regla de precio"
+          description="Define cómo el costo productivo se convierte en precio de venta."
+          icon={BadgeDollarSignIcon}
+        />
+        <CardContent className={pricingStyles.sectionContent}>
           <TabPrecioEditor
             value={precioConfig}
-            onChange={onChangePrecioConfig}
+            onChange={(next) =>
+              onChangePrecioConfig({
+                ...next,
+                ...(precioConfig.compuesto
+                  ? { compuesto: precioConfig.compuesto }
+                  : {}),
+              })
+            }
             unidadComercial={unidadComercial}
           />
         </CardContent>
       </Card>
 
+      {pricingCompuestoSection}
+
       {productoId == null ? (
-        <Card className="bg-muted/30">
-          <CardContent className="flex items-start gap-3 pt-6">
-            <InfoIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-            <div className="text-sm">
-              <div className="font-medium">Guardá el producto para configurar el resto.</div>
-              <p className="text-muted-foreground mt-1 text-xs">
-                Las secciones de impuestos, comisiones y precios especiales por cliente requieren
-                que el producto exista primero. Volvé al step 1 y tocá &quot;Crear producto&quot;.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <Alert>
+          <InfoIcon />
+          <AlertTitle>
+            Guardá el producto para completar su arquitectura de precio
+          </AlertTitle>
+          <AlertDescription>
+            Impuestos, comisiones y excepciones por cliente requieren que el
+            producto exista.
+          </AlertDescription>
+        </Alert>
       ) : (
         <>
-          <SeccionImpuestos
-            productoId={productoId}
-            onStateChange={hasUnifiedSave ? setImpuestosState : undefined}
-          />
-          <SeccionComisiones
-            productoId={productoId}
-            onStateChange={hasUnifiedSave ? setComisionesState : undefined}
-          />
+          <div className={pricingStyles.commercialGrid}>
+            <SeccionImpuestos
+              productoId={productoId}
+              step={pricingCompuestoSection ? "03" : "02"}
+              onStateChange={hasUnifiedSave ? setImpuestosState : undefined}
+            />
+            <SeccionComisiones
+              productoId={productoId}
+              step={pricingCompuestoSection ? "03" : "02"}
+              onStateChange={hasUnifiedSave ? setComisionesState : undefined}
+            />
+          </div>
           <PreciosEspecialesClientesCard
             productoId={productoId}
+            step={pricingCompuestoSection ? "04" : "03"}
             unidadComercial={unidadComercial}
           />
         </>
       )}
       {hasUnifiedSave && (isDirty || isSaving) && (
-        <div className="save-sticky-footer pricing-sticky-footer">
-          <div className="pricing-sticky-footer-copy">
-            {isDirty ? "Hay cambios sin guardar en pricing." : "No hay cambios pendientes."}
+        <div
+          className={
+            productoVisual
+              ? pricingStyles.saveFooter
+              : "save-sticky-footer pricing-sticky-footer"
+          }
+        >
+          <div className={pricingStyles.stickyCopy}>
+            <span className={pricingStyles.stickyDot} aria-hidden="true" />
+            {isDirty
+              ? "Hay cambios sin guardar en el precio."
+              : "No hay cambios pendientes."}
           </div>
-          <Button onClick={guardarCambios} disabled={!productoId || !isDirty || isSaving}>
-            <SaveIcon className="mr-2 size-4" />
+          <Button
+            onClick={guardarCambios}
+            disabled={!productoId || !isDirty || isSaving}
+          >
+            {isSaving ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <ArrowUpRightIcon data-icon="inline-start" />
+            )}
             {isSaving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </div>
@@ -216,9 +277,11 @@ const CATEGORIA_FISCAL_OPCIONES = [
 
 function SeccionImpuestos({
   productoId,
+  step,
   onStateChange,
 }: {
   productoId: string;
+  step: string;
   onStateChange?: (state: PricingSaveState) => void;
 }) {
   const [catalogo, setCatalogo] = React.useState<ImpuestoCatalogoItem[]>([]);
@@ -266,86 +329,115 @@ function SeccionImpuestos({
       const res = await setCategoriaFiscal(productoId, categoria);
       setOriginal(res.categoriaFiscal);
       setCategoria(res.categoriaFiscal);
-      if (!onStateChange) toast.success("Categoría fiscal del producto actualizada");
+      if (!onStateChange)
+        toast.success("Categoría fiscal del producto actualizada");
     } finally {
       setGuardando(false);
     }
   }, [onStateChange, productoId, categoria]);
 
   React.useEffect(() => {
-    onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
+    onStateChange?.({
+      dirty: !cargando && dirty,
+      loaded: !cargando,
+      saving: guardando,
+      save: guardar,
+    });
   }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
-    <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head pricing-section-head">
-        <div className="body">
-          <CardTitle>Impuestos</CardTitle>
-          <CardDescription>
-            El IVA se resuelve según la categoría del producto y tu condición
-            fiscal. Los impuestos de empresa se aplican solos a todo.
-          </CardDescription>
-        </div>
-        <CardAction className="pricing-section-action">
-          <Link href="/configuracion/impuestos"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
+    <Card
+      className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}
+    >
+      <PricingSectionHeader
+        step={step}
+        eyebrow="Cargas comerciales"
+        title="Impuestos"
+        description="Define el tratamiento fiscal del precio final del producto."
+        icon={ReceiptTextIcon}
+        action={
+          <Button
+            render={<Link href="/configuracion/impuestos" />}
+            nativeButton={false}
+            variant="outline"
+            size="sm"
           >
-            <ExternalLinkIcon className="mr-2 size-3" />
-            Administrar catálogo
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pricing-section-content">
+            <ArrowUpRightIcon data-icon="inline-start" />
+            Catálogo
+          </Button>
+        }
+      />
+      <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <p className="text-muted-foreground text-sm italic">Cargando...</p>
+          <div
+            className={pricingStyles.loading}
+            aria-label="Cargando impuestos"
+          >
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-10 w-4/5" />
+          </div>
         ) : (
           <>
-            <div className="checkpill-row">
+            <ToggleGroup
+              aria-label="Tratamiento de IVA del producto"
+              multiple={false}
+              value={[categoria]}
+              onValueChange={(values) => {
+                const next = values.at(-1);
+                if (next) setCategoria(next);
+              }}
+              variant="outline"
+              className={`${pricingStyles.segmented} ${pricingStyles.taxSegmented} grid w-full grid-cols-2`}
+            >
               {CATEGORIA_FISCAL_OPCIONES.map((op) => {
-                const on = categoria === op.value;
                 return (
-                  <label key={op.value} className={`checkpill ${on ? "on" : ""}`}>
-                    <span className="cb">{on ? "●" : ""}</span>
-                    <input
-                      type="radio"
-                      name={`categoria-fiscal-${productoId}`}
-                      checked={on}
-                      onChange={() => setCategoria(op.value)}
-                    />
-                    <div className="body">
-                      <div className="name">{op.nombre}</div>
-                      <div className="sub">{op.sub}</div>
-                    </div>
+                  <ToggleGroupItem key={op.value} value={op.value}>
+                    <span className={pricingStyles.optionName}>
+                      {op.nombre}
+                    </span>
+                    <span className={pricingStyles.optionDescription}>
+                      {op.sub}
+                    </span>
                     {op.value === "general" && ivaGeneralPct != null && (
-                      <Badge variant="outline" className="pct">
+                      <Badge
+                        variant="outline"
+                        className={pricingStyles.optionBadge}
+                      >
                         {ivaGeneralPct.toFixed(2)}%
                       </Badge>
                     )}
-                  </label>
+                  </ToggleGroupItem>
                 );
               })}
-            </div>
+            </ToggleGroup>
             {impuestosEmpresa.length > 0 && (
-              <p className="text-muted-foreground mt-1 text-xs">
-                Se aplican a todo automáticamente:{" "}
-                {impuestosEmpresa
-                  .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
-                  .join(" · ")}
-                .
-              </p>
+              <Alert className={pricingStyles.automaticNote}>
+                <InfoIcon />
+                <AlertTitle>Aplicación automática</AlertTitle>
+                <AlertDescription>
+                  {impuestosEmpresa
+                    .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
+                    .join(" · ")}
+                </AlertDescription>
+              </Alert>
             )}
             {!onStateChange && (
-              <div className="pricing-total-row">
+              <div className={pricingStyles.summaryRow}>
+                <span className="text-sm text-muted-foreground">
+                  Tratamiento fiscal del producto
+                </span>
                 <Button
-                  className="btn btn-primary"
                   onClick={() => {
                     guardar().catch((err) =>
-                      toast.error(err instanceof Error ? err.message : "Error guardando"),
+                      toast.error(
+                        err instanceof Error ? err.message : "Error guardando",
+                      ),
                     );
                   }}
                   disabled={!dirty || guardando}
                   size="sm"
                 >
+                  {guardando ? <Spinner data-icon="inline-start" /> : null}
                   {guardando ? "Guardando..." : "Guardar categoría"}
                 </Button>
               </div>
@@ -363,9 +455,11 @@ function SeccionImpuestos({
 
 function SeccionComisiones({
   productoId,
+  step,
   onStateChange,
 }: {
   productoId: string;
+  step: string;
   onStateChange?: (state: PricingSaveState) => void;
 }) {
   const [catalogo, setCatalogo] = React.useState<ComisionCatalogoItem[]>([]);
@@ -377,7 +471,10 @@ function SeccionComisiones({
   React.useEffect(() => {
     let cancelled = false;
     setCargando(true);
-    Promise.all([getComisionesCatalogo(true), getComisionesAplicadas(productoId)])
+    Promise.all([
+      getComisionesCatalogo(true),
+      getComisionesAplicadas(productoId),
+    ])
       .then(([cat, apli]) => {
         if (cancelled) return;
         setCatalogo(cat);
@@ -436,31 +533,45 @@ function SeccionComisiones({
   }, [onStateChange, productoId, seleccionadas]);
 
   React.useEffect(() => {
-    onStateChange?.({ dirty: !cargando && dirty, loaded: !cargando, saving: guardando, save: guardar });
+    onStateChange?.({
+      dirty: !cargando && dirty,
+      loaded: !cargando,
+      saving: guardando,
+      save: guardar,
+    });
   }, [cargando, dirty, guardando, guardar, onStateChange]);
 
   return (
-    <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head pricing-section-head">
-        <div className="body">
-          <CardTitle>Comisiones</CardTitle>
-          <CardDescription>
-            Comisiones de vendedor que se asignan a este producto. La de
-            pasarela de pago se aplica sola a todo, no hace falta tildarla.
-          </CardDescription>
-        </div>
-        <CardAction className="pricing-section-action">
-          <Link href="/configuracion/comisiones"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "btn")}
+    <Card
+      className={`${pricingStyles.section} ${pricingStyles.sectionCompact}`}
+    >
+      <PricingSectionHeader
+        step={step}
+        eyebrow="Cargas comerciales"
+        title="Comisiones"
+        description="Selecciona las comisiones variables asociadas a la venta."
+        icon={HandCoinsIcon}
+        action={
+          <Button
+            render={<Link href="/configuracion/comisiones" />}
+            nativeButton={false}
+            variant="outline"
+            size="sm"
           >
-            <ExternalLinkIcon className="mr-2 size-3" />
-            Administrar catálogo
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pricing-section-content">
+            <ArrowUpRightIcon data-icon="inline-start" />
+            Catálogo
+          </Button>
+        }
+      />
+      <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <p className="text-muted-foreground text-sm italic">Cargando...</p>
+          <div
+            className={pricingStyles.loading}
+            aria-label="Cargando comisiones"
+          >
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-10 w-3/4" />
+          </div>
         ) : catalogoVendedor.length === 0 ? (
           <EstadoVacio
             variant="compacto"
@@ -474,51 +585,75 @@ function SeccionComisiones({
           />
         ) : (
           <>
-            <div className="checkpill-row">
+            <FieldGroup
+              data-slot="checkbox-group"
+              className={`${pricingStyles.checkGrid} ${pricingStyles.checkGridSingle}`}
+            >
               {catalogoVendedor.map((c) => {
                 const checked = seleccionadas.includes(c.id);
                 return (
-                  <label key={c.id} className={`checkpill ${checked ? "on" : ""}`}>
-                    <span className="cb">{checked ? "✓" : ""}</span>
-                    <input type="checkbox" checked={checked} onChange={() => toggle(c.id)} />
-                    <div className="body">
-                      <div className="name">{c.nombre}</div>
-                    </div>
-                    <Badge variant="outline" className="pct">
-                      {c.porcentaje.toFixed(2)}%
-                    </Badge>
-                  </label>
+                  <Field
+                    key={c.id}
+                    orientation="horizontal"
+                    className={pricingStyles.checkOption}
+                  >
+                    <Checkbox
+                      aria-label={`Aplicar ${c.nombre}`}
+                      id={`comision-${c.id}`}
+                      checked={checked}
+                      onCheckedChange={() => toggle(c.id)}
+                    />
+                    <FieldContent>
+                      <div className="flex items-center justify-between gap-2">
+                        <FieldLabel htmlFor={`comision-${c.id}`}>
+                          {c.nombre}
+                        </FieldLabel>
+                        <Badge variant="outline">
+                          {c.porcentaje.toFixed(2)}%
+                        </Badge>
+                      </div>
+                      <FieldDescription>
+                        Se aplica al precio de esta venta.
+                      </FieldDescription>
+                    </FieldContent>
+                  </Field>
                 );
               })}
-            </div>
-            <div className="pricing-total-row">
-              <div className="text-sm">
-                <span className="text-muted-foreground">Total comisiones seleccionadas:</span>{" "}
-                <span className="font-mono font-semibold">{totalPct.toFixed(2)}%</span>
+            </FieldGroup>
+            <div className={pricingStyles.summaryRow}>
+              <div className={pricingStyles.commissionTotal}>
+                <span>Total seleccionado</span>
+                <span className={pricingStyles.summaryValue}>
+                  {totalPct.toFixed(2)}%
+                </span>
               </div>
               {!onStateChange && (
                 <Button
-                  className="btn btn-primary"
                   onClick={() => {
                     guardar().catch((err) =>
-                      toast.error(err instanceof Error ? err.message : "Error guardando"),
+                      toast.error(
+                        err instanceof Error ? err.message : "Error guardando",
+                      ),
                     );
                   }}
                   disabled={!dirty || guardando}
                   size="sm"
                 >
+                  {guardando ? <Spinner data-icon="inline-start" /> : null}
                   {guardando ? "Guardando..." : "Guardar selección"}
                 </Button>
               )}
             </div>
             {pasarelas.length > 0 && (
-              <p className="text-muted-foreground mt-2 text-xs">
-                Se aplican solas a todo:{" "}
-                {pasarelas
-                  .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
-                  .join(" · ")}
-                .
-              </p>
+              <Alert className={pricingStyles.automaticNote}>
+                <InfoIcon />
+                <AlertTitle>Aplicación automática</AlertTitle>
+                <AlertDescription>
+                  {pasarelas
+                    .map((c) => `${c.nombre} (${c.porcentaje.toFixed(2)}%)`)
+                    .join(" · ")}
+                </AlertDescription>
+              </Alert>
             )}
           </>
         )}
@@ -533,19 +668,23 @@ function SeccionComisiones({
 
 export function PreciosEspecialesClientesCard({
   productoId,
+  step = "04",
   unidadComercial,
   descripcion = "Reemplaza el precio estándar cuando el cliente seleccionado compra este producto. Cada cliente puede tener su propio método de cálculo.",
 }: {
   productoId: string;
+  step?: string;
   unidadComercial?: string;
   descripcion?: string;
 }) {
   const [items, setItems] = React.useState<PrecioEspecialClienteItem[]>([]);
   const [clientes, setClientes] = React.useState<ClienteDetalle[]>([]);
   const [cargando, setCargando] = React.useState(true);
-  const [editando, setEditando] = React.useState<PrecioEspecialClienteItem | null>(null);
+  const [editando, setEditando] =
+    React.useState<PrecioEspecialClienteItem | null>(null);
   const [creandoNuevo, setCreandoNuevo] = React.useState(false);
-  const [aBorrar, setABorrar] = React.useState<PrecioEspecialClienteItem | null>(null);
+  const [aBorrar, setABorrar] =
+    React.useState<PrecioEspecialClienteItem | null>(null);
 
   // Form state (para nuevo o edit)
   const [clienteId, setClienteId] = React.useState("");
@@ -617,7 +756,10 @@ export function PreciosEspecialesClientesCard({
     }
   };
 
-  const togglearActivo = async (item: PrecioEspecialClienteItem, nuevoActivo: boolean) => {
+  const togglearActivo = async (
+    item: PrecioEspecialClienteItem,
+    nuevoActivo: boolean,
+  ) => {
     try {
       await actualizarPrecioEspecialCliente(item.id, { activo: nuevoActivo });
       recargar();
@@ -640,142 +782,194 @@ export function PreciosEspecialesClientesCard({
 
   // Clientes disponibles para nuevo: todos los que no tengan ya un precio
   // especial activo (excepto el que está editando)
-  const clientesUsadosIds = new Set(items.filter((i) => i.id !== editando?.id).map((i) => i.clienteId));
-  const clientesDisponibles = clientes.filter((c) => !clientesUsadosIds.has(c.id));
+  const clientesUsadosIds = new Set(
+    items.filter((i) => i.id !== editando?.id).map((i) => i.clienteId),
+  );
+  const clientesDisponibles = clientes.filter(
+    (c) => !clientesUsadosIds.has(c.id),
+  );
 
   return (
-    <Card className="wiz-section pricing-section">
-      <CardHeader className="wiz-section-head pricing-section-head">
-        <div className="body">
-          <CardTitle>Precios especiales por cliente</CardTitle>
-          <CardDescription>{descripcion}</CardDescription>
-        </div>
-        <CardAction className="pricing-section-action">
+    <Card className={pricingStyles.section}>
+      <PricingSectionHeader
+        step={step}
+        eyebrow="Excepciones comerciales"
+        title="Precios especiales por cliente"
+        description={descripcion}
+        icon={UsersRoundIcon}
+        action={
           <Button
             size="sm"
             onClick={abrirNuevo}
             disabled={creandoNuevo || clientesDisponibles.length === 0}
           >
-            <PlusIcon className="mr-2 size-3" />
-            Agregar
+            <PlusIcon data-icon="inline-start" />
+            Precio especial
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="pricing-section-content">
+        }
+      />
+      <CardContent className={pricingStyles.sectionContent}>
         {cargando ? (
-          <p className="text-muted-foreground text-sm italic">Cargando...</p>
+          <div
+            className={pricingStyles.loading}
+            aria-label="Cargando precios especiales"
+          >
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : items.length === 0 && !creandoNuevo ? (
           <EstadoVacio
             variant="compacto"
+            className={pricingStyles.specialEmpty}
+            icon={<UsersRoundIcon aria-hidden="true" />}
             titulo="Sin precios especiales configurados"
-            descripcion="Por default todos los clientes pagan el precio standard. Si querés cobrar distinto a algún cliente puntual, agregalo acá."
+            descripcion="Todos los clientes usan la regla general. Agregá una excepción cuando necesites acordar un precio distinto."
           />
         ) : items.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Método</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => {
-                const cfg = item.configJson as TabPrecioConfig;
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <div className="font-medium">{item.cliente.nombre}</div>
-                      {item.cliente.razonSocial && (
-                        <div className="text-muted-foreground text-xs">
-                          {item.cliente.razonSocial}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {cfg.metodoCalculo.replace(/_/g, " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={item.activo}
-                        onCheckedChange={(c) => togglearActivo(item, c)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => abrirEditar(item)}>
-                        <PencilIcon className="size-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setABorrar(item)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2Icon className="size-3" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className={pricingStyles.tableShell}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Método</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => {
+                  const cfg = item.configJson as TabPrecioConfig;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <div className="font-medium">{item.cliente.nombre}</div>
+                        {item.cliente.razonSocial && (
+                          <div className="text-muted-foreground text-xs">
+                            {item.cliente.razonSocial}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {
+                            getLabel(metodoPrecioLabels, cfg.metodoCalculo)
+                              .label
+                          }
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          aria-label={`${item.activo ? "Desactivar" : "Activar"} precio especial de ${item.cliente.nombre}`}
+                          checked={item.activo}
+                          onCheckedChange={(c) => togglearActivo(item, c)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          aria-label={`Editar precio especial de ${item.cliente.nombre}`}
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => abrirEditar(item)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                        <Button
+                          aria-label={`Eliminar precio especial de ${item.cliente.nombre}`}
+                          variant="destructive"
+                          size="icon-sm"
+                          onClick={() => setABorrar(item)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         ) : null}
 
         {creandoNuevo && (
-          <Card className="bg-muted/30 border-dashed">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">
+          <Card className={pricingStyles.specialEditor}>
+            <CardHeader className={pricingStyles.specialEditorHeader}>
+              <CardTitle>
                 {editando ? "Editar precio especial" : "Nuevo precio especial"}
               </CardTitle>
+              <CardDescription>
+                Esta regla reemplaza la configuración general sólo para el
+                cliente elegido.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <LabelConTooltip
-                  label="Cliente"
-                  required
-                  tooltip="El cliente que va a recibir este precio especial cuando se le cotice este producto."
-                />
-                <HumanSelect
-                  value={clienteId}
-                  onValueChange={(v) => setClienteId(v ?? "")}
-                  disabled={!!editando}
-                  options={(editando ? clientes : clientesDisponibles).map((c) => ({
-                    value: c.id,
-                    label: c.nombre,
-                    code: c.razonSocial,
-                    description: [c.email, c.ciudad].filter(Boolean).join(" · ") || undefined,
-                  }))}
-                  placeholder="Elegí un cliente"
-                  contentClassName="max-h-80"
-                />
-                {editando && (
-                  <p className="text-muted-foreground text-xs">
-                    El cliente no se puede cambiar. Si querés cambiarlo, eliminá este y creá otro.
-                  </p>
-                )}
-              </div>
+            <CardContent className={pricingStyles.specialEditorContent}>
+              <FieldGroup>
+                <Field>
+                  <LabelConTooltip
+                    label="Cliente"
+                    required
+                    tooltip="El cliente que va a recibir este precio especial cuando se le cotice este producto."
+                  />
+                  <HumanSelect
+                    value={clienteId}
+                    onValueChange={(v) => setClienteId(v ?? "")}
+                    disabled={!!editando}
+                    options={(editando ? clientes : clientesDisponibles).map(
+                      (c) => ({
+                        value: c.id,
+                        label: c.nombre,
+                        code: c.razonSocial,
+                        description:
+                          [c.email, c.ciudad].filter(Boolean).join(" · ") ||
+                          undefined,
+                      }),
+                    )}
+                    placeholder="Elegí un cliente"
+                    contentClassName="max-h-80"
+                  />
+                  {editando && (
+                    <FieldDescription>
+                      El cliente no se puede cambiar. Si querés cambiarlo,
+                      eliminá este y creá otro.
+                    </FieldDescription>
+                  )}
+                </Field>
 
-              <div className="space-y-2">
-                <Label>Método de cálculo del precio especial</Label>
-                <TabPrecioEditor
-                  value={config}
-                  onChange={setConfig}
-                  unidadComercial={unidadComercial}
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 border-t pt-3">
-                <Button variant="outline" size="sm" onClick={cancelar} disabled={guardando}>
-                  Cancelar
-                </Button>
-                <Button size="sm" onClick={guardar} disabled={guardando || !clienteId}>
-                  {guardando ? "Guardando..." : editando ? "Guardar cambios" : "Crear"}
-                </Button>
-              </div>
+                <Field>
+                  <FieldTitle>Regla especial</FieldTitle>
+                  <TabPrecioEditor
+                    value={config}
+                    onChange={setConfig}
+                    unidadComercial={unidadComercial}
+                  />
+                </Field>
+              </FieldGroup>
             </CardContent>
+            <CardFooter className={pricingStyles.specialEditorFooter}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={cancelar}
+                disabled={guardando}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={guardar}
+                disabled={guardando || !clienteId}
+              >
+                {guardando ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <ArrowUpRightIcon data-icon="inline-start" />
+                )}
+                {guardando
+                  ? "Guardando..."
+                  : editando
+                    ? "Guardar cambios"
+                    : "Crear"}
+              </Button>
+            </CardFooter>
           </Card>
         )}
       </CardContent>
@@ -787,8 +981,8 @@ export function PreciosEspecialesClientesCard({
         descripcion={
           aBorrar ? (
             <>
-              Vas a eliminar el precio especial de <strong>{aBorrar.cliente.nombre}</strong>{" "}
-              para este producto.
+              Vas a eliminar el precio especial de{" "}
+              <strong>{aBorrar.cliente.nombre}</strong> para este producto.
             </>
           ) : null
         }

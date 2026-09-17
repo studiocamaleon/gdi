@@ -85,3 +85,27 @@ describe("resolverConfiguracionEncastresVectoriales", () => {
     });
   });
 });
+
+describe("archivos de instalación del componente seleccionado", () => {
+  const config = { bordeMm: 50, anchoPanelMm: 1200, altoPanelMm: 600, solapeMm: 20 };
+  const seleccion = { rutaComponentes: ["cartel", "polyfan #2"], rutaPasoId: "corte", fuenteId: "archivo-2" };
+  it("conserva componente, paso, archivo y panel en todas las descargas", () => {
+    for (const href of [
+      descargaArchivoInstalacionHref("ot-item", config, "rigida-dxf", 2, seleccion),
+      descargaPlantillaInstalacionHref("ot-item", config, 2, seleccion),
+    ]) {
+      const url = new URL(href, "http://localhost");
+      expect(JSON.parse(url.searchParams.get("componentes")!)).toEqual(seleccion.rutaComponentes);
+      expect(url.searchParams.get("paso")).toBe("corte");
+      expect(url.searchParams.get("fuente")).toBe("archivo-2");
+      expect(url.searchParams.get("panel")).toBe("2");
+      expect(url.searchParams.get("bordeMm")).toBe("50");
+    }
+  });
+  it("mantiene compatibles las descargas de productos simples", () => {
+    const url = new URL(descargaArchivoInstalacionHref("simple", config, "paquete"), "http://localhost");
+    expect(url.searchParams.has("componentes")).toBe(false);
+    expect(url.searchParams.has("fuente")).toBe(false);
+    expect(url.searchParams.has("panel")).toBe(false);
+  });
+});

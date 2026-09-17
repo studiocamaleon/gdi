@@ -18,6 +18,7 @@
  */
 
 import * as React from "react";
+import styles from "./costos-orden-tab.module.css";
 
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
@@ -407,14 +408,14 @@ function Cascada({
               {fila.label}
               {fila.hint ? <small>{fila.hint}</small> : null}
             </span>
-            <span className="cw-tipo">{fila.tipo}</span>
+            <span className={`cw-tipo ${styles.typeBadge}`}>{fila.tipo}</span>
             <span className="cw-pct">{pctDelNeto(fila.monto)}</span>
             <span className="cw-amount">{fmt(fila.monto)}</span>
           </div>
         ))}
         <div className="cw-row">
           <span className="cw-label">Margen</span>
-          <span className="cw-tipo">Rentabilidad</span>
+          <span className={`cw-tipo ${styles.typeBadge}`}>Rentabilidad</span>
           <span className="cw-pct">{pctDelNeto(consolidado.margenMonto)}</span>
           <span
             className={`cw-amount ${
@@ -436,7 +437,7 @@ function Cascada({
               Impuestos al cliente
               <small>se agregan al neto y se discriminan en factura</small>
             </span>
-            <span className="cw-tipo">Impuesto</span>
+            <span className={`cw-tipo ${styles.typeBadge}`}>Impuesto</span>
             <span className="cw-pct">+ {pctDelNeto(consolidado.ivaTotal)}</span>
             <span className="cw-amount">+ {fmt(consolidado.ivaTotal)}</span>
           </div>

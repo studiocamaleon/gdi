@@ -1,3 +1,4 @@
+import type { ProgresoProduccion } from "./progreso-produccion";
 /**
  * Órdenes de Trabajo — contrato de datos.
  *
@@ -106,6 +107,7 @@ export type OrdenTrabajoListItem = {
   clienteNombre: string;
   vendedorEmpleadoId: string | null;
   vendedorNombre: string;
+  proyectoCampana: { id: string; codigo: string; nombre: string } | null;
   estado: OrdenTrabajoEstado;
   /** Fecha de creación (ISO). */
   creadaEl: string;
@@ -119,13 +121,10 @@ export type OrdenTrabajoListItem = {
   itemsCount: number;
   /** Total bruto ARS de la orden. */
   total: number;
-  /**
-   * Avance de producción 0–100. Hasta que exista el tablero real el backend
-   * lo deriva del estado (borrador/pendiente → 0 · finalizada/entregada →
-   * 100 · produccion → lo que informe producción, o null si no hay dato).
-   * null ⇒ la vista muestra "—".
-   */
+  /** Avance derivado de operaciones completadas y sus tiempos estimados.
+   * null si no hay operaciones o la OT está en borrador/cancelada. */
   progresoPct: number | null;
+  progreso?: ProgresoProduccion;
   /** Resumen corto de contenido: "Tarjetas · Vinilo c/ instalación". */
   resumen: string;
 };
@@ -187,6 +186,8 @@ export type OrdenTrabajoItemSnapshot = {
 
 /** Producto (item) de la OT — proyección del snapshot de CotizacionItem. */
 export type OrdenTrabajoProducto = {
+  fechaEntrega?: string | null;
+  distribucionEntregas?: import("./planificacion-entregas").ResumenDistribucion | null;
   /** Id del OrdenTrabajoItem persistido (para editar/quitar). */
   id?: string;
   cotizacionItemId?: string | null;
@@ -251,9 +252,10 @@ export type OrdenTrabajoPago = {
  * del snapshot de `CotizacionItem` referenciado.
  */
 export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
+  progresoLotes?: import("./progreso-produccion").ProgresoLote[];
   cotizacionId: string | null;
   observaciones: string | null;
-  /** 'mostrador' | 'web' | 'vendedor_externo' | 'telefono' o null. */
+  /** Canal de venta registrado; conserva valores históricos. Sin dato = null. */
   canalVenta: string | null;
   /** Cargos directos a nivel orden (viático, flete…). */
   cargosDirectos: number;
@@ -532,10 +534,13 @@ export function getMockOrdenDetalle(id: string): OrdenTrabajoDetalle | null {
 }
 
 function completarMockOrdenes(
-  ordenes: Array<Omit<OrdenTrabajoListItem, "fechaEmision" | "version">>,
+  ordenes: Array<
+    Omit<OrdenTrabajoListItem, "fechaEmision" | "version" | "proyectoCampana">
+  >,
 ): OrdenTrabajoListItem[] {
   return ordenes.map((orden) => ({
     ...orden,
+    proyectoCampana: null,
     fechaEmision: orden.estado === "borrador" ? null : orden.creadaEl,
     version: `${orden.creadaEl}T12:00:00.000Z`,
   }));

@@ -136,7 +136,7 @@ async function seedRutasYProductos(
     where: {
       tenantId,
       maquinaId: maquinas.skycut.id,
-      nombre: 'Corte completo - rollo',
+      nombre: 'Corte fácil',
     },
   });
   const mimakiCMYKPerfil = await prisma.maquinaPerfilOperativo.findFirstOrThrow(

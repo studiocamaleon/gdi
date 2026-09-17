@@ -1,45 +1,120 @@
 "use client";
 
+import { TipoCambioPanel } from "./tipo-cambio-panel";
+import type { TipoCambioSnapshot } from "@/lib/tipo-cambio-api";
+import {
+  useMotorConTipoCambio,
+  useTipoCambioDocumento,
+  TipoCambioDocumentoProvider,
+} from "./tipo-cambio-documento";
+
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import {
+  fechaFinalDistribucion,
+  fechaFinalItems,
+} from "@/lib/planificacion-entregas";
+
+import { getContextoPrevision } from "@/lib/eta-api";
+import { itemHipoteticoDesdeCotizacion } from "@/lib/eta-cotizacion";
+import { describirEta, fechaRecomendadaEta } from "@/lib/eta-fechas";
+import fechasStyles from "./propuesta-fechas.module.css";
+
+import { DesgloseOperacionesCorte } from "./desglose-operaciones-corte";
+
+import { CampanaSelectorOrden } from "./campana-selector-orden";
+import { OrdenWorkspace, type OrdenWorkspaceHandle } from "./orden-workspace";
+import { CanalVentaSelector } from "./canal-venta-selector";
+import { canalVentaValido, nombreCanalVenta } from "@/lib/canales-venta";
+import workspaceStyles from "./orden-workspace.module.css";
+import itemStyles from "./orden-item-detalle.module.css";
+import itemCostStyles from "./orden-item-costos.module.css";
+import workspaceTheme from "@/components/ui/workspace-theme.module.css";
+import { cn } from "@/lib/utils";
+import { Chip, Input as HeroInput, Tabs as HeroTabs } from "@heroui/react";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import { IdentityAvatar } from "@/components/design-system/identity-avatar";
+import { ActionButton as HeroButton } from "@/components/design-system/action-button";
+import { DesignSystemProvider, useLegacyDesignScope } from "@/components/design-system/appearance";
+import designTheme from "@/components/design-system/brand-workspace-theme.module.css";
+import {
+  calcularResumenOrden,
+  descuentoMontoDeItem,
+  getItemOrderVisibleAmounts,
+} from "@/lib/orden-productos-presentacion";
+import { OrdenSummaryDetails } from "./orden-summary-details";
+import { OrdenProductosTable } from "./orden-productos-table";
+import {
+  OrdenSegmented,
+  OrdenTabs,
+  FieldCard,
+  type OrdenTab,
+} from "./orden-ficha-presentacion";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardAction,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { esFamiliaCorteNesting } from "@/lib/nesting-procesos";
+import { NestingPatronesDescargas } from "@/components/nesting/nesting-patrones-descargas";
+import { vincularFuentesFabricacion } from "@/lib/fabricacion-export";
+
 import * as React from "react";
+import issued from "./orden-issued.module.css";
+import { OrdenSectionHeading } from "./orden-section-heading";
+import { PlanificacionEntregas } from "./planificacion-entregas";
+import {
+  useEntregasPrevias,
+  type EntregasPreviasProps,
+} from "./use-entregas-previas";
+import type { VinculoPlanEntrega } from "@/lib/planificacion-entregas";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeftIcon,
+  CircleDollarSignIcon,
+  Grid2X2Icon,
+  Layers3Icon,
+  PaletteIcon,
+  PrinterIcon,
+  RulerIcon,
+  SlidersHorizontalIcon,
   BadgePercentIcon,
+  BlocksIcon,
   CalendarIcon,
   ClockIcon,
   CheckIcon,
   ChevronRightIcon,
-  CircleDollarSignIcon,
-  CreditCardIcon,
   DownloadIcon,
   Edit3Icon,
   XCircleIcon,
   ExternalLinkIcon,
   ExpandIcon,
   FactoryIcon,
-  FileIcon,
   FileXIcon,
-  EyeIcon,
   FolderIcon,
-  HistoryIcon,
+  GitCommitHorizontalIcon,
   PackageCheckIcon,
   PackageIcon,
   PlusIcon,
   QrCodeIcon,
   LinkIcon,
-  ReceiptTextIcon,
   SaveIcon,
-  SearchIcon,
-  StarIcon,
-  TicketPercentIcon,
-  Trash2Icon,
   TriangleAlertIcon,
   UserIcon,
-  XIcon,
-  ZapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCambiosSistema } from "@/components/notificaciones/notificaciones-provider";
 
 import type { ClienteDetalle } from "@/lib/clientes";
 import type { CurrentUser } from "@/lib/auth";
@@ -47,27 +122,26 @@ import type {
   CargoDirectoCatalogo,
   ProductoListItem,
 } from "@/lib/productos-servicios";
-import {
-  cotizar,
-  cotizarYGuardar,
-  recotizarCotizacionItem,
-  type NestingViewerInput,
-} from "@/lib/productos-servicios-api";
+import { type NestingViewerInput } from "@/lib/productos-servicios-api";
 import {
   cambiarEstadoOrdenTrabajo,
   cancelarOrdenTrabajo,
   crearOrdenTrabajo,
   editarOrdenTrabajoLote,
   getOrdenTrabajo,
-  getTableroProduccion,
   setTratamientoFiscalOrden,
 } from "@/lib/ordenes-trabajo-api";
 import {
   emitirPresupuesto,
   getConfigPresupuestos,
 } from "@/lib/presupuestos-api";
-import { validarCupon, type ValidarCuponResultado } from "@/lib/cupones-api";
+import { type ValidarCuponResultado } from "@/lib/cupones-api";
+import { validarYAplicarCuponOrden } from "@/lib/cupones-orden";
 import { CLIENTE_ESCANEADO_EVENT } from "@/lib/clientes-api";
+import {
+  getCampanasOpciones,
+  type CampanaReferencia,
+} from "@/lib/campanas-api";
 import { parsearDniArgentino } from "@/lib/dni-argentino";
 import { esNumeroOrden } from "@/components/mostrador/entrega-escaneo-watcher";
 import { EntregaModal } from "@/components/mostrador/entrega-modal";
@@ -90,21 +164,11 @@ import {
   eliminarArchivo,
 } from "@/lib/archivos-api";
 import type { BriefDisenoArchivoPendiente } from "@/lib/brief-diseno";
-import {
-  getConfiguracionProduccion,
-  getDiasNoLaborables,
-  getDuracionesFamilias,
-  getEstaciones,
-} from "@/lib/estaciones-api";
-import type { Estacion } from "@/lib/estaciones";
-import type { TableroItemData } from "@/lib/tablero-produccion";
 import { ProduccionOrdenTab } from "@/components/comercial/produccion-orden-tab";
 import { BastidorVisor } from "@/components/carteleria/bastidor-visor";
 import { StepperOt } from "@/components/comercial/stepper-ot";
 import {
   estimarDemoraNuevos,
-  etiquetaEta,
-  sumarDiasHabiles,
   type SimulacionItem,
 } from "@/lib/flujo-produccion";
 import {
@@ -130,11 +194,9 @@ import {
 import {
   calcularCostoTotal,
   calcularResumen,
-  CANALES_VENTA,
   formatCurrency,
   formatMaterialUnitPrice,
   formatUnidad,
-  formatUnitPrice,
   offsetDate,
   type CotizacionPropuestaSnapshot,
   type PropuestaCargoDirecto,
@@ -146,26 +208,34 @@ import {
   calcularCostoItem,
   getCostoTiempoPaso,
   getVisibleCostSteps,
+  proyectarPasoOperacionInterna,
   sumCargosPaso,
   sumCargosYTiempoExtraPaso,
   sumMaterialesPaso,
   consolidarCostosOrden,
 } from "@/lib/costos-orden";
+import {
+  construirWorkflowCotizacion,
+  type ComponenteWorkflowCotizacion,
+} from "@/lib/workflow-cotizacion";
+import {
+  calcularCostoMermaTiempo,
+  calcularItemsMermaMaterial,
+} from "@/lib/desglose-merma-material";
 import { FidelizacionCotizador } from "@/components/comercial/fidelizacion-cotizador";
 import { type Moneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { AgregarProductoSheet } from "@/components/comercial/agregar-producto-sheet";
+import { ComponentesEspecificaciones } from "@/components/comercial/componentes-especificaciones";
+import { componentesTienenMaterialEfectivo } from "@/lib/especificaciones-componentes";
 import {
   BriefDisenoDialog,
   BriefDisenoEspecificaciones,
-  BriefDisenoProduccion,
 } from "@/components/comercial/brief-diseno-resumen";
 import { briefDisenoTieneContenido, leerBriefDiseno } from "@/lib/brief-diseno";
 import CentroCopiadoSheet from "@/components/comercial/centro-copiado-sheet";
 import CentroCopiadoPreciosSheet from "@/components/comercial/centro-copiado-precios-sheet";
-import ccFicha from "@/components/comercial/centro-copiado-ficha.module.css";
 import {
-  guardarTomoCentroCopiado,
   cantidadLibrosCentroCopiado,
   dimsDeFormato,
   estadoCentroCopiado,
@@ -174,13 +244,32 @@ import {
 import { CostosOrdenTab } from "@/components/comercial/costos-orden-tab";
 import { Button } from "@/components/ui/button";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   type MutacionAplicadaView,
   demasiaPorLado,
@@ -194,12 +283,13 @@ import {
   tieneDemasia,
 } from "@/lib/modificaciones-fisicas";
 import { ArchivosOrdenTab } from "@/components/archivos/archivos-orden-tab";
+import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
+import { ProduccionEntregas } from "./produccion-entregas";
 import { NestingViewer } from "@/components/nesting/nesting-viewer";
+import nestingStyles from "@/components/nesting/nesting-viewer.module.css";
 import { RecorridoCortePanel } from "@/components/produccion/recorrido-corte-panel";
 import { PlantillaInstalacionPanel } from "@/components/produccion/plantilla-instalacion-panel";
 import {
-  crearSvgDePlaca,
-  crearDxfDePlaca,
   descargarTexto,
   nombreBaseSvg,
   obtenerFuenteVectorial,
@@ -209,11 +299,20 @@ import {
   type LayoutPliegosEnHoja,
 } from "@/lib/nesting-compra-pliego";
 import { NestingCompraPliegoModal } from "./nesting-compra-pliego-viewer";
-import nestC from "./nesting-compra-pliego-viewer.module.css";
-import descM from "./descuento-modal.module.css";
-import { ConstelacionCanvas } from "@/components/constelacion-canvas";
-import resumenBar from "./resumen-financiero-bar.module.css";
-import { listClientes } from "@/lib/clientes-api";
+import costC from "./propuesta-ficha-costos.module.css";
+import { netoListaDeItem, type DescuentoInput } from "@/lib/descuentos-orden";
+import { CargoOrdenDialog } from "./cargo-orden-dialog";
+import { OrdenCargosList } from "./orden-cargos-list";
+import {
+  DescuentoOrdenDialog,
+  type DescuentoTarget,
+} from "./descuento-orden-dialog";
+import { OrdenCuponField } from "./orden-cupon-field";
+import { ResumenBar, OrdenSaveActions } from "./orden-resumen-financiero";
+import { OrdenFinancialActions } from "./orden-financial-actions";
+import { OrdenDatosSections } from "./orden-datos-sections";
+import { ClienteLista } from "./cliente-selector-orden";
+import { useClientesOrden } from "./use-clientes-orden";
 import { getCurrentPeriodo } from "@/lib/costos";
 import { technologyCodeLabel } from "@/lib/maquinaria-tecnologias";
 import { usePuede } from "@/components/navigation/permisos-provider";
@@ -242,17 +341,10 @@ type PropuestaFichaProps = {
    * taller. Ver <AvisoOtEnBorrador />.
    */
   recienConvertida?: boolean;
+  initialDocumentos?: EstadoDocumentalOrden | null;
 };
 
-type OrdenTab =
-  | "productos"
-  | "produccion"
-  | "pagos"
-  | "comprobantes"
-  | "archivos"
-  | "costos"
-  | "historial";
-type InnerTab = "specs" | "costos" | "produccion";
+type InnerTab = "specs" | "costos" | "produccion" | "aprovechamiento";
 type PasoCosteo = CotizacionPropuestaSnapshot["pasos"][number];
 type MaterialCosteo = NonNullable<PasoCosteo["materiales"]>[number];
 type CargoPasoCosteo = NonNullable<PasoCosteo["cargosDirectosPaso"]>[number];
@@ -337,8 +429,7 @@ export function getCotizacionPasos(cotizacion: CotizacionExitosa) {
 
 function requierePreparacionPolyfan(item: PropuestaItem) {
   return item.cotizacion.pasos.some(
-    (paso) =>
-      paso.activado && paso.familiaCodigo === "corte_hilo_caliente",
+    (paso) => paso.activado && paso.familiaCodigo === "corte_hilo_caliente",
   );
 }
 
@@ -814,497 +905,6 @@ function applyPanelRuntimeOverride(args: {
   return next;
 }
 
-function OrdenSegmented({
-  value,
-  onChange,
-}: {
-  value: "orden" | "presupuesto";
-  onChange: (value: "orden" | "presupuesto") => void;
-}) {
-  return (
-    <div className="orden-toggle">
-      <button
-        type="button"
-        className={`oseg ${value === "orden" ? "on" : ""}`}
-        onClick={() => onChange("orden")}
-      >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.7}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-          <path d="M8 9h8M8 13h8M8 17h5" />
-        </svg>
-        Orden de trabajo
-      </button>
-      <button
-        type="button"
-        className={`oseg ${value === "presupuesto" ? "on" : ""}`}
-        onClick={() => onChange("presupuesto")}
-      >
-        <FileIcon />
-        Presupuesto
-      </button>
-    </div>
-  );
-}
-
-function OrdenTabs({
-  value,
-  onChange,
-  count,
-  historialCount,
-  comprobantesCount,
-  archivosCount,
-}: {
-  value: OrdenTab;
-  onChange: (value: OrdenTab) => void;
-  count: number;
-  /** Presente sólo en modo orden: agrega el tab Historial. */
-  historialCount?: number;
-  /** Presente sólo en modo orden: agrega el tab Comprobantes. */
-  comprobantesCount?: number;
-  /** null hasta que el tab de Archivos se abre y los cuenta. */
-  archivosCount?: number | null;
-}) {
-  const verMargenes = usePuede("finanzas.ver_margenes");
-  const tabs: Array<{
-    key: OrdenTab;
-    label: string;
-    count?: number;
-    icon: React.ReactNode;
-  }> = [
-    { key: "productos", label: "Productos", count, icon: <PackageIcon /> },
-    { key: "produccion", label: "Producción", icon: <FactoryIcon /> },
-    { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
-    ...(comprobantesCount !== undefined
-      ? [
-          {
-            key: "comprobantes" as const,
-            label: "Comprobantes",
-            icon: <ReceiptTextIcon />,
-          },
-        ]
-      : []),
-    {
-      key: "archivos",
-      label: "Archivos",
-      // Sin badge hasta que se sepa el número de verdad: un contador que
-      // miente es peor que no tenerlo.
-      count: archivosCount ?? undefined,
-      icon: <FolderIcon />,
-    },
-    // El tab Costos es el desglose de lo que le sale a la imprenta: material,
-    // máquina, mano de obra. Quien no puede ver márgenes tampoco lo ve — y el
-    // API ya le manda la orden sin esos campos, así que el tab estaría vacío.
-    ...(verMargenes
-      ? [
-          {
-            key: "costos" as const,
-            label: "Costos",
-            icon: <CircleDollarSignIcon />,
-          },
-        ]
-      : []),
-    ...(historialCount !== undefined
-      ? [
-          {
-            key: "historial" as const,
-            label: "Historial",
-            count: historialCount,
-            icon: <HistoryIcon />,
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <div
-      className="orden-tabs"
-      role="tablist"
-      // overflow-x:auto (scroll horizontal de pestañas) fuerza overflow-y a
-      // `auto` y saca una barra vertical fantasma por 1px de desborde. Inline
-      // para no depender del recompile de globals.css (Turbopack lo saltea).
-      style={{ overflowY: "hidden" }}
-    >
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          className={`otab ${value === tab.key ? "on" : ""}`}
-          onClick={() => onChange(tab.key)}
-        >
-          <span className="ic">{tab.icon}</span>
-          <span>{tab.label}</span>
-          {tab.count != null ? <span className="ct">{tab.count}</span> : null}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FieldCard({
-  label,
-  icon,
-  children,
-  hint,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div className="ofield">
-      <div className="ofield-lbl">
-        <span className="ic">{icon}</span>
-        <span>{label}</span>
-      </div>
-      <div className="ofield-ctrl">{children}</div>
-      {hint ? <div className="ofield-hint">{hint}</div> : null}
-    </div>
-  );
-}
-
-function normalizeClienteQuery(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function sortClientesByName(clientes: ClienteDetalle[]) {
-  return [...clientes].sort((a, b) => a.nombre.localeCompare(b.nombre));
-}
-
-function mergeClientes(current: ClienteDetalle[], incoming: ClienteDetalle[]) {
-  const map = new Map<string, ClienteDetalle>();
-  for (const cliente of [...current, ...incoming]) {
-    map.set(cliente.id, cliente);
-  }
-  return sortClientesByName([...map.values()]);
-}
-
-function ClienteCombobox({
-  value,
-  onChange,
-  initialClientes,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  initialClientes: ClienteDetalle[];
-}) {
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const listboxId = React.useId();
-  const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState("");
-  const [options, setOptions] = React.useState(() =>
-    sortClientesByName(initialClientes),
-  );
-  const [total, setTotal] = React.useState(initialClientes.length);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [debouncedQuery, setDebouncedQuery] = React.useState("");
-  const [activeIndex, setActiveIndex] = React.useState(0);
-
-  const selectedCliente = React.useMemo(
-    () => options.find((cliente) => cliente.id === value) ?? null,
-    [options, value],
-  );
-
-  const visibleOptions = React.useMemo(() => {
-    const normalized = normalizeClienteQuery(query);
-    if (!normalized) return options;
-    return options.filter((cliente) => {
-      const haystack = [
-        cliente.nombre,
-        cliente.razonSocial,
-        cliente.email,
-        cliente.contacto,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(normalized);
-    });
-  }, [options, query]);
-
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(query), 220);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-
-  React.useEffect(() => {
-    setActiveIndex(0);
-  }, [query, open]);
-
-  React.useEffect(() => {
-    setOptions((current) => mergeClientes(current, initialClientes));
-    setTotal((current) => Math.max(current, initialClientes.length));
-  }, [initialClientes]);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    window.setTimeout(() => inputRef.current?.focus(), 0);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    listClientes({ q: debouncedQuery, limit: 30 })
-      .then((response) => {
-        if (cancelled) return;
-        setOptions((current) => mergeClientes(current, response.data));
-        setTotal(response.total);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("No se pudieron cargar clientes.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery, open]);
-
-  const selectCliente = (cliente: ClienteDetalle) => {
-    setOptions((current) => mergeClientes(current, [cliente]));
-    onChange(cliente.id);
-    setQuery("");
-    setOpen(false);
-  };
-
-  return (
-    <div className="cliente-combobox" ref={rootRef}>
-      <button
-        type="button"
-        className="cliente-combobox-trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span className={selectedCliente ? "" : "placeholder"}>
-          {selectedCliente?.nombre ?? "Seleccionar cliente"}
-        </span>
-        <ChevronRightIcon />
-      </button>
-
-      {open ? (
-        <div className="cliente-combobox-popover">
-          <div className="cliente-combobox-search">
-            <SearchIcon />
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por nombre, razón social o email..."
-              aria-label="Buscar cliente"
-              role="combobox"
-              aria-expanded={open}
-              aria-controls={listboxId}
-              aria-activedescendant={
-                visibleOptions[activeIndex]
-                  ? `${listboxId}-${visibleOptions[activeIndex].id}`
-                  : undefined
-              }
-              onKeyDown={(event) => {
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  setActiveIndex((current) =>
-                    visibleOptions.length === 0
-                      ? 0
-                      : Math.min(current + 1, visibleOptions.length - 1),
-                  );
-                } else if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  setActiveIndex((current) => Math.max(0, current - 1));
-                } else if (
-                  event.key === "Enter" &&
-                  visibleOptions[activeIndex]
-                ) {
-                  event.preventDefault();
-                  selectCliente(visibleOptions[activeIndex]);
-                }
-              }}
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Limpiar búsqueda"
-              >
-                <XIcon />
-              </button>
-            ) : null}
-          </div>
-
-          <div
-            id={listboxId}
-            className="cliente-combobox-results"
-            role="listbox"
-          >
-            {visibleOptions.map((cliente, index) => (
-              <button
-                key={cliente.id}
-                id={`${listboxId}-${cliente.id}`}
-                type="button"
-                className={`cliente-option ${cliente.id === value ? "selected" : ""}${index === activeIndex ? " keyboard" : ""}`}
-                role="option"
-                aria-selected={cliente.id === value}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => selectCliente(cliente)}
-              >
-                <span className="cliente-option-main">
-                  <strong>{cliente.nombre}</strong>
-                  <small>
-                    {[cliente.razonSocial, cliente.email]
-                      .filter(Boolean)
-                      .join(" · ") || "Sin datos adicionales"}
-                  </small>
-                </span>
-                {cliente.id === value ? <CheckIcon /> : null}
-              </button>
-            ))}
-
-            {!loading && visibleOptions.length === 0 ? (
-              <div className="cliente-combobox-empty">
-                No encontramos clientes con esa búsqueda.
-              </div>
-            ) : null}
-          </div>
-
-          <div className="cliente-combobox-foot">
-            <span>
-              {loading
-                ? "Buscando clientes..."
-                : `Mostrando ${Math.min(visibleOptions.length, total)} de ${total}`}
-            </span>
-            {error ? <span className="error">{error}</span> : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function CanalVentaSelect({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = React.useState(false);
-  const selected = CANALES_VENTA.find((canal) => canal.value === value);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  const selectCanal = (nextValue: string) => {
-    onChange(nextValue);
-    setOpen(false);
-  };
-
-  return (
-    <div className="cliente-combobox canal-combobox" ref={rootRef}>
-      <button
-        type="button"
-        className="cliente-combobox-trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span>{selected?.label ?? "Seleccionar canal"}</span>
-        <ChevronRightIcon />
-      </button>
-
-      {open ? (
-        <div className="cliente-combobox-popover canal-combobox-popover">
-          <div
-            className="cliente-combobox-results canal-combobox-results"
-            role="listbox"
-          >
-            {CANALES_VENTA.map((canal) => (
-              <button
-                key={canal.value}
-                type="button"
-                className={`cliente-option canal-option ${canal.value === value ? "selected" : ""}`}
-                role="option"
-                aria-selected={canal.value === value}
-                onClick={() => selectCanal(canal.value)}
-              >
-                <span className="cliente-option-main">
-                  <strong>{canal.label}</strong>
-                </span>
-                {canal.value === value ? <CheckIcon /> : null}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function formatCantidadItem(item: PropuestaItem) {
-  const acceptsDecimals =
-    item.unidadMedida === "m2" || item.unidadMedida === "metro_lineal";
-  const maximumFractionDigits = acceptsDecimals ? 2 : 0;
-  const minimumFractionDigits =
-    acceptsDecimals && !Number.isInteger(item.cantidad) ? 2 : 0;
-
-  return item.cantidad.toLocaleString("es-AR", {
-    minimumFractionDigits,
-    maximumFractionDigits,
-  });
-}
-
 function isDuplicateModoColorSpec(item: PropuestaItem, key: string) {
   if (!["impresion", "impresion_color", "color"].includes(key)) return false;
   const value = item.especificaciones[key]?.trim().toLowerCase();
@@ -1683,7 +1283,9 @@ function formatUnidadCosto(unidad: string, cantidad = 1) {
   const isSingular = Math.abs(cantidad) === 1;
   const pluralizable: Record<string, { singular: string; plural: string }> = {
     gramo: { singular: "gramo", plural: "gramos" },
+    botella: { singular: "botella", plural: "botellas" },
     hoja: { singular: "hoja", plural: "hojas" },
+    placa: { singular: "placa", plural: "placas" },
     pliego: { singular: "hoja", plural: "hojas" },
     rollo: { singular: "rollo", plural: "rollos" },
     caja: { singular: "caja", plural: "cajas" },
@@ -1750,6 +1352,324 @@ function nestingTabLabel(result: NestingViewerInput | undefined) {
   return "Acomodado";
 }
 
+type ComponenteNestingRecursivo = {
+  jobContext?: Record<string, unknown>;
+  codigo?: string;
+  nombre?: string;
+  pasos?: Array<
+    Partial<PasoCosteo> & {
+      rutaPasoOrden: number;
+      familiaCodigo: string;
+      activado: boolean;
+      costoTotal: number;
+      nestingResult?: NestingViewerInput;
+      operacionesInternas?: Array<{
+        codigo: string;
+        nombre: string;
+        familiaCodigo: string;
+        activada: boolean;
+        duracionMin: number;
+        costoTotal: number;
+        centroCostoId?: string | null;
+        centroCostoNombre?: string | null;
+        materiales?: PasoCosteo["materiales"];
+        nestingResult?: NestingViewerInput;
+      }>;
+    }
+  >;
+  componentes?: ComponenteNestingRecursivo[];
+};
+
+type FuenteNesting = {
+  key: string;
+  label: string;
+  paso: PanelEditorPaso;
+  /** Sólo el paso raíz pertenece al editor de paneles del item padre. */
+  editable: boolean;
+  /** Metadatos internos para reemplazar participantes por su lote común. */
+  componenteCodigo?: string;
+  rutaComponentes?: string[];
+  pasoClave?: string;
+  orden: number;
+};
+
+/**
+ * El nesting puede pertenecer a un paso raíz, una operación interna de una
+ * etapa consolidada o cualquier nivel fabricado del BOM. La cotización ya
+ * conserva esos resultados: esta función evita que Producción mire solamente
+ * el primer nivel y haga desaparecer los acomodos de componentes/etapas.
+ */
+function recolectarNestingsCotizacion(
+  cotizacion: CotizacionPropuestaSnapshot,
+  jobContext?: Record<string, unknown>,
+): FuenteNesting[] {
+  const fuentes: FuenteNesting[] = [];
+  let secuencia = 0;
+
+  const agregarPaso = (
+    paso: PasoCosteo,
+    contexto: string | null,
+    editable: boolean,
+    componenteCodigo?: string,
+    contextoVectorial?: Record<string, unknown>,
+    rutaComponentes?: string[],
+  ) => {
+    if (paso.nestingResult)
+      paso = {
+        ...paso,
+        nestingResult: vincularFuentesFabricacion(
+          paso.nestingResult,
+          contextoVectorial,
+        ),
+      };
+    if (paso.nestingResult) {
+      secuencia += 1;
+      fuentes.push({
+        key: `${contexto ?? "raiz"}-${nestingPasoKey(paso)}-${secuencia}`,
+        label: [contexto, nestingTabLabel(paso.nestingResult)]
+          .filter(Boolean)
+          .join(" · "),
+        paso: paso as PanelEditorPaso,
+        editable,
+        componenteCodigo,
+        rutaComponentes,
+        pasoClave: paso.configPasoId,
+        orden: secuencia,
+      });
+    }
+
+    for (const operacion of paso.operacionesInternas ?? []) {
+      if (!operacion.nestingResult) continue;
+      secuencia += 1;
+      const pasoInterno = {
+        rutaPasoOrden: paso.rutaPasoOrden,
+        familiaCodigo: operacion.familiaCodigo,
+        nombreVisible: operacion.nombre,
+        activado: operacion.activada,
+        costoTotal: operacion.costoTotal,
+        tiempo: {
+          totalMin: operacion.duracionMin,
+          centroCostoId: operacion.centroCostoId ?? null,
+          centroCostoNombre: operacion.centroCostoNombre ?? null,
+          tarifaHora: 0,
+          costo: 0,
+        },
+        materiales: operacion.materiales ?? [],
+        nestingResult: vincularFuentesFabricacion(
+          operacion.nestingResult,
+          contextoVectorial,
+        ),
+      } as PanelEditorPaso;
+      fuentes.push({
+        key: `${contexto ?? "etapa"}-${operacion.codigo}-${secuencia}`,
+        label: [
+          contexto,
+          paso.nombreVisible?.trim() || "Etapa",
+          operacion.nombre,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        paso: pasoInterno,
+        editable: false,
+        componenteCodigo,
+        rutaComponentes,
+        orden: secuencia,
+      });
+    }
+  };
+
+  cotizacion.pasos.forEach((paso) =>
+    agregarPaso(paso, null, true, undefined, jobContext),
+  );
+
+  const recorrerComponentes = (
+    componentes: ComponenteNestingRecursivo[],
+    rutaPadre: string[] = [],
+    codigosPadre: string[] = [],
+  ) => {
+    for (const componente of componentes) {
+      const nombre =
+        componente.nombre?.trim() || componente.codigo || "Componente";
+      const ruta = [...rutaPadre, nombre];
+      const codigos = [...codigosPadre, componente.codigo ?? ""];
+      for (const paso of componente.pasos ?? []) {
+        agregarPaso(
+          paso as PasoCosteo,
+          ruta.join(" › "),
+          false,
+          componente.codigo,
+          componente.jobContext,
+          codigos,
+        );
+      }
+      recorrerComponentes(componente.componentes ?? [], ruta, codigos);
+    }
+  };
+
+  recorrerComponentes(
+    (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteNestingRecursivo[],
+  );
+
+  const gruposAplicados =
+    cotizacion.analisisNestingCompuesto?.grupos.filter(
+      (grupo) => grupo.aplicacion?.aplicado === true && grupo.lote,
+    ) ?? [];
+  if (gruposAplicados.length === 0) return fuentes;
+
+  const suprimidas = new Set<string>();
+  const consolidadas: FuenteNesting[] = [];
+  const nombresPorCodigo = new Map<string, string>();
+  const indexarNombres = (componentes: ComponenteNestingRecursivo[]) => {
+    for (const componente of componentes) {
+      if (componente.codigo) {
+        nombresPorCodigo.set(
+          componente.codigo,
+          componente.nombre?.trim() || componente.codigo,
+        );
+      }
+      indexarNombres(componente.componentes ?? []);
+    }
+  };
+  indexarNombres(
+    (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteNestingRecursivo[],
+  );
+
+  for (const grupo of gruposAplicados) {
+    const lote = grupo.lote!;
+    const participantes = grupo.participantes.map((participante) =>
+      fuentes.find(
+        (fuente) =>
+          fuente.componenteCodigo === participante.componenteCodigo &&
+          (fuente.pasoClave === participante.pasoClave ||
+            fuente.paso.rutaPasoId === participante.rutaPasoId),
+      ),
+    );
+    // Ante un snapshot incompleto conservamos los resultados individuales: es
+    // preferible mostrar más información que inventar una asociación.
+    if (participantes.some((participante) => !participante)) continue;
+    const fuentesParticipantes = participantes as FuenteNesting[];
+    const base = fuentesParticipantes[0];
+    const baseResult = base.paso.nestingResult;
+    const snapshot = lote.nestingResult;
+    const cantidadSustratos = snapshot.substrates.reduce(
+      (total, substrate) =>
+        total + (substrate.kind === "sheet" ? substrate.count : 1),
+      0,
+    );
+    const placements = snapshot.placements.map((placement) => {
+      const meta =
+        placement.meta &&
+        typeof placement.meta === "object" &&
+        !Array.isArray(placement.meta)
+          ? (placement.meta as Record<string, unknown>)
+          : {};
+      const codigo =
+        typeof meta.componenteCodigo === "string"
+          ? meta.componenteCodigo
+          : null;
+      return {
+        ...placement,
+        meta: {
+          ...meta,
+          ...(codigo ? { label: nombresPorCodigo.get(codigo) ?? codigo } : {}),
+        },
+      };
+    });
+    const nestingResult: NestingViewerInput = {
+      ...baseResult,
+      ...snapshot,
+      algorithm: snapshot.algorithm,
+      cantidadCalculada: snapshot.cantidadCalculada ?? cantidadSustratos,
+      unidad:
+        snapshot.unidad ??
+        (snapshot.substrates.some((substrate) => substrate.kind === "roll")
+          ? "m_lineales"
+          : "pliegos"),
+      aprovechamientoPct: snapshot.aprovechamientoPct,
+      maquina: snapshot.maquina ?? baseResult.maquina,
+      sustrato: snapshot.sustrato ?? baseResult.sustrato,
+      substrates: snapshot.substrates,
+      placements,
+      piezasAcomodadas: snapshot.piezasAcomodadas ?? placements.length,
+      visualConfig: snapshot.visualConfig ?? baseResult.visualConfig,
+      costingPreview: snapshot.costingPreview,
+      composicionCompuesta: {
+        participantes: grupo.participantes.length,
+        sustratosIndependientes: grupo.independiente.sustratos,
+        sustratosConsolidados: grupo.consolidado.sustratos,
+        ahorroPct: grupo.diferencia.ahorroPct,
+      },
+    };
+
+    const materialBase = base.paso.materiales?.find(
+      (material) =>
+        material.materialVarianteId === lote.materialVarianteId &&
+        (material.detalleCosteoNesting ||
+          material.asignacionNestingCompuesto?.loteId === lote.id),
+    );
+    const costeo = lote.costeoSustrato;
+    const detalleExacto = costeo
+      ? {
+          strategy: costeo.strategy,
+          totalCost: costeo.totalCost,
+          unitPrice: costeo.unitPrice,
+          pricePerM2: costeo.pricePerM2,
+          fullUnits: costeo.fullUnits,
+          fullUnitsCost: costeo.fullUnitsCost,
+          lastUnit: costeo.lastUnit,
+          units: costeo.units,
+        }
+      : materialBase?.detalleCosteoNesting
+        ? {
+            ...materialBase.detalleCosteoNesting,
+            totalCost: lote.costoMaterialTotal,
+            fullUnits: 0,
+            fullUnitsCost: 0,
+            lastUnit: null,
+            units: [],
+          }
+        : null;
+    const materiales =
+      materialBase && detalleExacto
+        ? [
+            {
+              ...materialBase,
+              materialNombre: lote.materialNombre,
+              materialDisplayName: lote.materialNombre,
+              cantidad:
+                detalleExacto.unitPrice > 0
+                  ? detalleExacto.totalCost / detalleExacto.unitPrice
+                  : materialBase.cantidad,
+              costoTotal: detalleExacto.totalCost,
+              detalleCosteoNesting: detalleExacto,
+            },
+          ]
+        : [];
+
+    fuentesParticipantes.forEach((fuente) => suprimidas.add(fuente.key));
+    consolidadas.push({
+      key: `lote-${lote.id}`,
+      label: `${lote.layoutOrigenLoteId ? "Corte láser consolidado" : "Nesting consolidado"} · ${nestingTabLabel(nestingResult)}`,
+      paso: {
+        ...base.paso,
+        nombreVisible: `${lote.layoutOrigenLoteId ? "Corte compartido" : "Nesting consolidado"} de ${grupo.participantes.length} componentes`,
+        costoTotal: lote.costoTotalAsignado,
+        materiales,
+        nestingResult,
+      },
+      editable: false,
+      orden: Math.min(...fuentesParticipantes.map((fuente) => fuente.orden)),
+    });
+  }
+
+  return [
+    ...fuentes.filter((fuente) => !suprimidas.has(fuente.key)),
+    ...consolidadas,
+  ].sort((a, b) => a.orden - b.orden);
+}
+
 function formatMinutos(min: number) {
   return `${min.toLocaleString("es-AR", { maximumFractionDigits: 1 })} min`;
 }
@@ -1760,12 +1680,14 @@ function formatTiempoPaso(paso: PasoCosteo) {
 }
 
 function formatTarifaCentroCosto(paso: PasoCosteo, moneda: Moneda) {
+  if (paso.tercerizado) return "Costo tercerizado";
   if (!paso.tiempo?.tarifaHora) return "Sin tarifa";
   return `${formatCurrency(paso.tiempo.tarifaHora, moneda)}/h`;
 }
 
 function getCentroCostoLabel(paso: PasoCosteo) {
   if (!paso.activado) return "No aplica";
+  if (paso.tercerizado) return "Proveedor";
   if (paso.tiempo?.centroCostoNombre) return paso.tiempo.centroCostoNombre;
   if (paso.tiempo?.costo && paso.tiempo.costo > 0) return "Centro tarifado";
   if (paso.tiempo) return "Sin costo";
@@ -1858,39 +1780,30 @@ function acomodadoDeLinea(
 
 function MaterialesPasoTable({
   materiales,
-  nesting,
+  costosMoneda,
 }: {
   materiales: MaterialCosteo[];
-  nesting?: PasoCosteo["nestingResult"];
+  costosMoneda: CotizacionPropuestaSnapshot["costosMaterialesMoneda"];
 }) {
   const { moneda } = useConfigRegional();
-  const [abierto, setAbierto] = React.useState<string | null>(null);
-  const pliego = pliegoDePaso(nesting);
   const visibles = materiales.filter((material) => material.costoTotal > 0);
   if (visibles.length === 0) {
     return (
-      <div className="cost-empty-line">
+      <div className={cn(itemCostStyles["cost-empty-line"])}>
         Este paso no consumió materiales ni consumibles con costo.
       </div>
     );
   }
 
-  const abierta = visibles
-    .map((material, index) => ({
-      key: `${material.slotCodigo}-${material.materialVarianteId}-${index}`,
-      material,
-      layout: acomodadoDeLinea(material, pliego),
-    }))
-    .find((row) => row.key === abierto && row.layout);
-
   return (
-    <div className="cost-detail-table-wrap">
-      <table className="cost-detail-table">
+    <div className={cn(itemCostStyles["cost-detail-table-wrap"])}>
+      <table className={cn(itemCostStyles["cost-detail-table"])}>
         <thead>
           <tr>
             <th>Material</th>
             <th>Tipo</th>
             <th className="num">Cantidad</th>
+            <th className="num">Tipo de cambio USD</th>
             <th className="num">Costo unit.</th>
             <th className="num">Costo</th>
           </tr>
@@ -1898,40 +1811,28 @@ function MaterialesPasoTable({
         <tbody>
           {visibles.map((material, index) => {
             const key = `${material.slotCodigo}-${material.materialVarianteId}-${index}`;
-            const tieneAcomodado = Boolean(acomodadoDeLinea(material, pliego));
+            const conversion = costosMoneda?.find(
+              (costo) =>
+                costo.varianteId === material.materialVarianteId &&
+                costo.monedaOrigen === "USD",
+            );
             return (
               <tr key={key}>
                 <td>
                   <strong>{getMaterialCosteoLabel(material)}</strong>
-                  {tieneAcomodado ? (
-                    <button
-                      type="button"
-                      className={nestC.trigger}
-                      onClick={() => setAbierto(key)}
-                      title="Ver cómo entran los pliegos en la hoja de compra"
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        aria-hidden="true"
-                      >
-                        <rect x="3" y="3" width="18" height="18" rx="1.5" />
-                        <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
-                      </svg>
-                    </button>
-                  ) : null}
                 </td>
                 <td>
-                  <span className="cost-chip">
+                  <span className={cn(itemCostStyles["cost-chip"])}>
                     {formatModoSeleccion(material.modoSeleccion)}
                   </span>
                 </td>
                 <td className="num">
                   {formatCantidadCosto(material.cantidad, material.unidad)}
+                </td>
+                <td className="num">
+                  {conversion
+                    ? `${conversion.monedaDestino} ${conversion.factorCambio.toLocaleString(moneda.locale, { maximumFractionDigits: 8 })}`
+                    : "—"}
                 </td>
                 <td className="num">
                   {formatCostoUnitarioMaterial(
@@ -1948,14 +1849,201 @@ function MaterialesPasoTable({
           })}
         </tbody>
       </table>
-      {abierta && abierta.layout && pliego ? (
+    </div>
+  );
+}
+
+/** El acomodo del pliego en su hoja de compra pertenece a Aprovechamiento. */
+function PliegosCompraItem({ paso }: { paso: PasoCosteo }) {
+  const [abierto, setAbierto] = React.useState<number | null>(null);
+  const pliego = pliegoDePaso(paso.nestingResult);
+  const materiales = (paso.materiales ?? []).flatMap((material, index) => {
+    const layout = acomodadoDeLinea(material, pliego);
+    const hoja = hojaDeCompraDeMaterial(material);
+    return layout && hoja ? [{ material, layout, hoja, index }] : [];
+  });
+  const seleccion = materiales.find((linea) => linea.index === abierto);
+  if (!materiales.length || !pliego) return null;
+  return (
+    <div className={itemStyles.actions}>
+      {materiales.map(({ material, index }) => (
+        <Button
+          key={index}
+          variant="outline"
+          size="sm"
+          onClick={() => setAbierto(index)}
+        >
+          <ExpandIcon data-icon="inline-start" />
+          Hoja de compra · {getMaterialCosteoLabel(material)}
+        </Button>
+      ))}
+      {seleccion ? (
         <NestingCompraPliegoModal
-          hoja={hojaDeCompraDeMaterial(abierta.material)!}
-          pliego={{ anchoMm: pliego.anchoMm, altoMm: pliego.altoMm }}
-          layout={abierta.layout}
+          hoja={seleccion.hoja}
+          pliego={pliego}
+          layout={seleccion.layout}
           onClose={() => setAbierto(null)}
         />
       ) : null}
+    </div>
+  );
+}
+
+type ItemMermaPasoVista = {
+  key: string;
+  titulo: string;
+  detalle: string;
+  cantidad: number;
+  unidad: string;
+  porcentaje: number;
+  costo: number;
+};
+
+function tituloMermaOperativa(material: MaterialCosteo) {
+  if (material.tipoLineaCosto === "CONSUMIBLE_MAQUINA") {
+    return "Consumo adicional de tinta o tóner";
+  }
+  if (material.tipoLineaCosto === "DESGASTE_MAQUINA") {
+    return "Desgaste adicional de máquina";
+  }
+  return "Merma operativa de sustrato";
+}
+
+function itemsMermaDelPaso(
+  paso: PasoCosteo,
+  cotizacion: CotizacionPropuestaSnapshot,
+): ItemMermaPasoVista[] {
+  const items: ItemMermaPasoVista[] = [];
+
+  (paso.materiales ?? [])
+    .filter((material) => material.costoTotal > 0)
+    .forEach((material, materialIndex) => {
+      const asignacion = material.asignacionNestingCompuesto;
+      const loteCompartido = asignacion
+        ? cotizacion.analisisNestingCompuesto?.grupos.find(
+            (grupo) => grupo.lote?.id === asignacion.loteId,
+          )?.lote
+        : null;
+      const participante = loteCompartido?.participantes.find(
+        (item) =>
+          item.pasoClave === paso.configPasoId ||
+          item.rutaPasoId === paso.rutaPasoId,
+      );
+      const detalles = calcularItemsMermaMaterial({
+        material,
+        costeoNesting:
+          loteCompartido?.nestingResult.costingPreview ??
+          paso.nestingResult?.costingPreview,
+        porcentajeAsignacion:
+          participante?.porcentajeAsignacion ??
+          asignacion?.porcentajeAsignacion ??
+          100,
+        consolidado: Boolean(loteCompartido),
+      });
+
+      detalles.forEach((detalle, detalleIndex) => {
+        const nombreMaterial = getMaterialCosteoLabel(material);
+        const esGeometrica = detalle.origen === "NESTING_GEOMETRICA";
+        items.push({
+          key: `${material.slotCodigo}-${material.materialVarianteId}-${materialIndex}-${detalleIndex}`,
+          titulo: esGeometrica
+            ? "Desperdicio geométrico del nesting"
+            : tituloMermaOperativa(material),
+          detalle: esGeometrica
+            ? `${nombreMaterial} · ${detalle.consolidado ? "lote consolidado" : "acomodo individual"}`
+            : `${nombreMaterial} · ${formatDecimal(detalle.porcentaje, 2)}% sobre el consumo productivo`,
+          cantidad: detalle.cantidadMerma,
+          unidad: detalle.unidad,
+          porcentaje: detalle.porcentaje,
+          costo: detalle.costoMerma,
+        });
+      });
+    });
+
+  const tiempo = paso.tiempo;
+  const runMermaMin = Math.max(0, Number(tiempo?.runMermaMin ?? 0));
+  if (tiempo && runMermaMin > 0) {
+    items.push({
+      key: `tiempo-${paso.configPasoId ?? paso.rutaPasoId ?? paso.rutaPasoOrden}`,
+      titulo: "Tiempo adicional de corrida",
+      detalle: `${tiempo.centroCostoNombre ?? "Centro de costo del paso"} · ${formatDecimal(tiempo.mermaOperativaPct ?? 0, 2)}% sobre la corrida productiva`,
+      cantidad: runMermaMin,
+      unidad: "min",
+      porcentaje: Math.max(0, Number(tiempo.mermaOperativaPct ?? 0)),
+      costo: calcularCostoMermaTiempo(tiempo),
+    });
+  }
+
+  return items.filter(
+    (item) =>
+      Number.isFinite(item.cantidad) &&
+      item.cantidad > 0 &&
+      Number.isFinite(item.costo) &&
+      item.costo >= 0,
+  );
+}
+
+function MermaPasoCollapsible({
+  paso,
+  cotizacion,
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const { moneda } = useConfigRegional();
+  const [open, setOpen] = React.useState(false);
+  const items = itemsMermaDelPaso(paso, cotizacion);
+  if (items.length === 0) return null;
+
+  const costoTotal = items.reduce((total, item) => total + item.costo, 0);
+  const cantidadConceptos = items.length;
+
+  return (
+    <div className={cn(itemCostStyles["cost-detail-block"])}>
+      <Collapsible
+        open={open}
+        onOpenChange={setOpen}
+        className={costC.collapsible}
+      >
+        <CollapsibleTrigger
+          render={<button type="button" className={costC.trigger} />}
+        >
+          <ChevronRightIcon
+            data-icon="inline-start"
+            className={costC.chevron}
+            style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
+          />
+          <span className={costC.triggerCopy}>
+            <strong>Merma</strong>
+            <small>
+              {cantidadConceptos}{" "}
+              {cantidadConceptos === 1 ? "concepto" : "conceptos"}
+            </small>
+          </span>
+          <strong className={costC.triggerTotal}>
+            {formatCurrency(costoTotal, moneda)}
+          </strong>
+        </CollapsibleTrigger>
+        <CollapsibleContent className={costC.content}>
+          {items.map((item) => (
+            <div className={costC.item} key={item.key}>
+              <div className={costC.itemCopy}>
+                <strong>{item.titulo}</strong>
+                <small>{item.detalle}</small>
+              </div>
+              <div className={costC.itemQuantity}>
+                <strong>
+                  {formatCantidadCosto(item.cantidad, item.unidad)}
+                </strong>
+                <small>{formatDecimal(item.porcentaje, 1)}%</small>
+              </div>
+              <strong className={costC.itemCost}>
+                {formatCurrency(item.costo, moneda)}
+              </strong>
+            </div>
+          ))}
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
@@ -1966,10 +2054,10 @@ function CargosPasoList({ cargos }: { cargos: CargoPasoCosteo[] }) {
   if (visibles.length === 0) return null;
 
   return (
-    <div className="cost-charges">
+    <div className={cn(itemCostStyles["cost-charges"])}>
       {visibles.map((cargo) => (
         <div
-          className="cost-charge"
+          className={cn(itemCostStyles["cost-charge"])}
           key={`${cargo.cargoCodigo}-${cargo.cargoNombre}`}
         >
           <span>{cargo.cargoNombre}</span>
@@ -1998,7 +2086,7 @@ function TiemposExtraPasoList({
   if (visibles.length === 0) return null;
 
   return (
-    <div className="cost-charges">
+    <div className={cn(itemCostStyles["cost-charges"])}>
       {visibles.map((bloque) => {
         const horas = bloque.minutos / 60;
         const personas =
@@ -2006,7 +2094,7 @@ function TiemposExtraPasoList({
             ? ` × ${bloque.dotacionOperarios} pers`
             : "";
         return (
-          <div className="cost-charge" key={bloque.id}>
+          <div className={cn(itemCostStyles["cost-charge"])} key={bloque.id}>
             <span>{bloque.etiqueta}</span>
             <small>
               {formatDecimal(horas, 2)} h{personas} ×{" "}
@@ -2024,36 +2112,255 @@ function TiemposExtraPasoList({
 /** Clave del tab del visor 3D del bastidor dentro de "Disposición de piezas". */
 const TAB_BASTIDOR_3D = "__bastidor3d__";
 
-function ProduccionItemView({
+type ComponenteWorkflowVista = ComponenteWorkflowCotizacion<PasoCosteo> & {
+  politicaEjecucion?: "INLINE" | "INDEPENDIENTE";
+  jobContext?: {
+    disenosVectoriales?: unknown[];
+    piezas?: Array<{ cantidadPorUnidad?: number }>;
+  };
+};
+
+function WorkflowCotizacion({
+  cotizacion,
+}: {
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const workflow = React.useMemo(
+    () =>
+      construirWorkflowCotizacion({
+        pasos: cotizacion.pasos,
+        componentes: (cotizacion.componentesFabricados ??
+          []) as unknown as ComponenteWorkflowVista[],
+        grafoProduccion: cotizacion.grafoProduccion,
+      }),
+    [
+      cotizacion.componentesFabricados,
+      cotizacion.grafoProduccion,
+      cotizacion.pasos,
+    ],
+  );
+
+  if (workflow.columnas.length === 0) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Sin pasos de producción</EmptyTitle>
+          <EmptyDescription>
+            Esta cotización no tiene operaciones activas.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <div className={itemStyles.workflowViewport}>
+      <div className={itemStyles.workflowCanvas}>
+        <div className={itemStyles.workflowTerminal} aria-hidden="true">
+          <span />
+          <small>Inicio</small>
+        </div>
+        {workflow.columnas.map((columna, indiceColumna) => (
+          <React.Fragment key={`momento-${indiceColumna}`}>
+            {indiceColumna > 0 ? (
+              <div className={itemStyles.workflowLink} aria-hidden="true">
+                <span />
+              </div>
+            ) : null}
+            <section className={itemStyles.workflowMoment}>
+              <header>
+                <span>Etapa {String(indiceColumna + 1).padStart(2, "0")}</span>
+                {columna.length > 1 ? (
+                  <small>{columna.length} en paralelo</small>
+                ) : null}
+              </header>
+              <div className={itemStyles.workflowStack}>
+                {columna.map((nodo) => {
+                  if (nodo.tipo === "COMPONENTE") {
+                    const componente = nodo.componente;
+                    const pasosActivos =
+                      componente.pasos?.filter((p) => p.activado).length ?? 0;
+                    const esColeccion = Boolean(
+                      componente.jobContext?.disenosVectoriales?.length ||
+                        componente.jobContext?.piezas?.some(
+                          (p) => p.cantidadPorUnidad != null,
+                        ),
+                    );
+                    return (
+                      <article
+                        className={itemStyles.workflowNode}
+                        key={nodo.clave}
+                      >
+                        <span className={itemStyles.workflowIcon}>
+                          <PackageIcon />
+                        </span>
+                        <span className={itemStyles.workflowCopy}>
+                          <small>Componente fabricado</small>
+                          <strong>{componente.nombre}</strong>
+                          <span>
+                            {componente.cantidad ?? 1}{" "}
+                            {esColeccion
+                              ? "conjuntos"
+                              : (componente.unidad ?? "u.")}
+                            {pasosActivos
+                              ? ` · ${pasosActivos} ${pasosActivos === 1 ? "paso" : "pasos"}`
+                              : ""}
+                          </span>
+                        </span>
+                      </article>
+                    );
+                  }
+
+                  const paso = nodo.paso;
+                  const esEtapa = nodo.tipo === "ETAPA";
+                  return (
+                    <article
+                      className={itemStyles.workflowNode}
+                      key={nodo.clave}
+                    >
+                      <span className={itemStyles.workflowIcon}>
+                        {esEtapa ? <BlocksIcon /> : <GitCommitHorizontalIcon />}
+                      </span>
+                      <span className={itemStyles.workflowCopy}>
+                        <small>
+                          {esEtapa ? "Etapa consolidada" : "Operación"}
+                        </small>
+                        <strong>
+                          {paso.nombreVisible?.trim() ||
+                            humanizeCodigo(paso.familiaCodigo)}
+                        </strong>
+                        <span>
+                          {paso.tiempo
+                            ? `${formatTiempoPaso(paso)} · ${getCentroCostoLabel(paso)}`
+                            : getCentroCostoLabel(paso)}
+                        </span>
+                      </span>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          </React.Fragment>
+        ))}
+        <div className={itemStyles.workflowLink} aria-hidden="true">
+          <span />
+        </div>
+        <div className={itemStyles.workflowTerminal} aria-hidden="true">
+          <span />
+          <small>Fin</small>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type VistaFabricacionItem = "produccion" | "aprovechamiento";
+type FabricacionItemProps = {
+  item: PropuestaItem;
+  calculoPendiente: boolean;
+  vista: VistaFabricacionItem;
+  onEditPanels?: (paso: PanelEditorPaso) => void;
+  onExpand?: () => void;
+  ampliada?: boolean;
+  prepararCorte?: boolean;
+  loteId?: string;
+  onLoteChange?: (id: string) => void;
+};
+
+function FabricacionItemView(props: FabricacionItemProps) {
+  const renderVista = (
+    item: PropuestaItem,
+    ampliada = props.ampliada,
+    esLote = false,
+  ) =>
+    props.vista === "produccion" ? (
+      <ProduccionItemSinLotesView
+        {...props}
+        item={item}
+        onExpand={esLote ? undefined : props.onExpand}
+      />
+    ) : (
+      <AprovechamientoItemSinLotesView
+        {...props}
+        item={item}
+        ampliada={ampliada}
+        onExpand={esLote ? undefined : props.onExpand}
+        onEditPanels={esLote ? undefined : props.onEditPanels}
+      />
+    );
+  const lotes = props.item.distribucionEntregas?.lotes;
+  if (lotes?.length)
+    return (
+      <ProduccionEntregas
+        item={props.item}
+        lotes={lotes}
+        vista={props.vista}
+        loteId={props.loteId}
+        onLoteChange={props.onLoteChange}
+        render={(item, ampliada) => renderVista(item, ampliada, true)}
+      />
+    );
+  return renderVista(props.item);
+}
+
+function ProduccionItemSinLotesView({
+  item,
+  calculoPendiente,
+  onExpand,
+}: FabricacionItemProps) {
+  if (calculoPendiente)
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Producción pendiente de cotización</EmptyTitle>
+          <EmptyDescription>
+            Cotizá el producto para ver sus operaciones y tiempos.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  return (
+    <div className={itemStyles.production}>
+      {item.notaProduccion ? (
+        <Alert>
+          <TriangleAlertIcon />
+          <AlertTitle>Nota para producción</AlertTitle>
+          <AlertDescription className="whitespace-pre-wrap">
+            {item.notaProduccion}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <Card size="sm" className={itemStyles.technicalCard}>
+        <CardHeader>
+          <CardTitle className={itemStyles.sectionTitle}>
+            <FactoryIcon aria-hidden="true" />
+            Flujo de producción
+          </CardTitle>
+          {onExpand ? (
+            <CardAction>
+              <HeroButton variant="outline" size="sm" onPress={onExpand}>
+                <ExpandIcon data-icon="inline-start" />
+                Ampliar
+              </HeroButton>
+            </CardAction>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          <WorkflowCotizacion cotizacion={item.cotizacion} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AprovechamientoItemSinLotesView({
   item,
   calculoPendiente,
   onEditPanels,
   onExpand,
-  onOpenBrief,
   ampliada = false,
   prepararCorte = false,
-}: {
-  item: PropuestaItem;
-  calculoPendiente: boolean;
-  /** Ausente en modo lectura: el layout de paneles no se puede editar. */
-  onEditPanels?: (paso: PanelEditorPaso) => void;
-  /** Abre la producción por encima del resto de la orden. */
-  onExpand?: () => void;
-  /** Abre el brief compartido de la ficha sin duplicar su contenido. */
-  onOpenBrief?: () => void;
-  /** Aprovecha el espacio extra del diálogo para agrandar el nesting. */
-  ampliada?: boolean;
-  /** La preparación de máquina sólo existe cuando el item ya pertenece a una OT. */
-  prepararCorte?: boolean;
-}) {
-  const briefDiseno = React.useMemo(
-    () => leerBriefDiseno(item.jobContext?.briefDiseno),
-    [item.jobContext],
-  );
-  const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
-  const tieneBrief = briefDisenoTieneContenido(briefDiseno);
-  const pasosCosteoActivos = getVisibleCostSteps(item.cotizacion.pasos);
-  const pasosActivos = pasosCosteoActivos;
+}: FabricacionItemProps) {
   // Cartelería con estructura de bastidor: se muestra el visor 3D del marco a
   // fabricar. El visor pide la estructura del snapshot y se auto-oculta si no
   // la hay (ítem sin OT emitida todavía).
@@ -2066,18 +2373,17 @@ function ProduccionItemView({
   const estructuraBastidorLocal =
     item.cotizacion.pasos.find((paso) => paso.estructuraBastidor)
       ?.estructuraBastidor ?? null;
-  const pasosConNesting = pasosCosteoActivos.filter(
-    (paso): paso is PanelEditorPaso => Boolean(paso.nestingResult),
+  const fuentesNesting = React.useMemo(
+    () => recolectarNestingsCotizacion(item.cotizacion, item.jobContext),
+    [item.cotizacion, item.jobContext],
   );
   const fuenteVectorial = React.useMemo(
     () => obtenerFuenteVectorial(item.jobContext),
     [item.jobContext],
   );
-  const nestingTabs = pasosConNesting.map((paso, index) => ({
-    key: nestingPasoKey(paso),
-    label: nestingTabLabel(paso.nestingResult),
+  const nestingTabs = fuentesNesting.map((fuente, index) => ({
+    ...fuente,
     index: index + 1,
-    paso,
   }));
   // Overlay de modificaciones físicas: la demasía y los ojales viven en pasos
   // HERMANOS del que trae el nesting (`modificacion_pre` y `colocacion_ojales`
@@ -2098,6 +2404,13 @@ function ProduccionItemView({
     : (nestingTabs.find((tab) => tab.key === activeNestingKey) ??
       nestingTabs[0] ??
       null);
+  const seleccionRecorrido = React.useMemo(
+    () => ({
+      rutaComponentes: activeNestingTab?.rutaComponentes,
+      rutaPasoId: activeNestingTab?.paso.rutaPasoId,
+    }),
+    [activeNestingTab?.rutaComponentes, activeNestingTab?.paso.rutaPasoId],
+  );
 
   // Los tabs de "Disposición de piezas": los del nesting primero y el visor 3D
   // del bastidor al final (cuando el ítem lo tiene). Comparten la misma tira.
@@ -2113,251 +2426,170 @@ function ProduccionItemView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNestingKey, tabsDisposicion.map((tab) => tab.key).join()]);
 
-  if (calculoPendiente) {
+  if (calculoPendiente)
     return (
-      <div className="op-empty">
-        <div className="ttl">Producción pendiente de cotización</div>
-        <div className="sub">
-          Cotizá el producto para ver ruta activa, tiempos y nesting calculado
-          por el Motor Universal.
-        </div>
-      </div>
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Aprovechamiento pendiente de cotización</EmptyTitle>
+          <EmptyDescription>
+            Cotizá el producto para ver la disposición de las piezas y el
+            consumo de material.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
-  }
 
   return (
-    <div className="op-production">
-      {item.notaProduccion ? (
-        <div className="production-note">
-          <span className="production-note-icon" aria-hidden="true">
-            <TriangleAlertIcon />
-          </span>
-          <div>
-            <strong>Nota para producción</strong>
-            <p>{item.notaProduccion}</p>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="cost-section">
-        <div className="flex items-center justify-between gap-3">
-          <div className="cost-title">Ruta de producción</div>
-          {onExpand ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={onExpand}
-              aria-label="Ampliar vista de producción"
-              title="Ampliar vista de producción"
-            >
-              <ExpandIcon />
-              <span className="sr-only">Ampliar vista de producción</span>
-            </Button>
-          ) : null}
-        </div>
-        <div className="production-route">
-          {pasosActivos.map((paso, index) => {
-            const title =
-              paso.nombreVisible?.trim() || humanizeCodigo(paso.familiaCodigo);
-            const esTiempoManual =
-              paso.tiempo?.origenTiempo === "manual_comercial";
-            const detail = paso.tiempo
-              ? `${formatTiempoPaso(paso)}${
-                  esTiempoManual ? " (estimado por el comercial)" : ""
-                } · ${getCentroCostoLabel(paso)}`
-              : getCentroCostoLabel(paso);
-            return (
-              <div className="production-step" key={`${title}-${index}`}>
-                <span>{index + 1}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <small>{detail}</small>
-                  {paso.familiaCodigo === "diseno_grafico" &&
-                  tieneBrief &&
-                  onOpenBrief ? (
-                    <BriefDisenoProduccion
-                      brief={briefDiseno}
-                      caras={carasBrief}
-                      onOpen={onOpenBrief}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {pasosConNesting.length > 0 || esBastidor ? (
-        <div className="cost-section">
-          {/* Con tabs (nesting + bastidor), la tira de tabs ES el encabezado
-              de la sección: el título grande repetía lo que ya dice el tab.
-              Con una sola disposición (sin tabs) se mantiene el título. */}
-          {tabsDisposicion.length > 1 ? null : (
-            <div className="mb-[18px] flex flex-wrap items-end gap-4">
-              <div className="min-w-0 flex-1 basis-80">
-                <div className="cost-title mb-1">Nesting del item</div>
-                <h1 className="m-0 text-[22px] font-semibold leading-[1.2] tracking-[-0.018em] text-[var(--ink)]">
-                  Disposición de piezas
-                </h1>
-                <div className="mt-1 text-[13px] text-[var(--muted)]">
-                  Acomodo calculado por la ruta activa para controlar consumo,
-                  demasía y cortes.
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="production-nestings">
-            {tabsDisposicion.length > 1 ? (
-              <div
-                className="production-nesting-tabs"
-                role="tablist"
-                aria-label="Disposición de piezas"
-              >
-                {tabsDisposicion.map((tab) => {
-                  const selected = tab.key === activeNestingKey;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      className={selected ? "on" : ""}
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => setActiveNestingKey(tab.key)}
-                    >
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+    <div className={itemStyles.production}>
+      {fuentesNesting.length > 0 || esBastidor ? (
+        <section
+          className={itemStyles.nesting}
+          aria-label="Aprovechamiento del material"
+        >
+          <div className={itemStyles.sectionHeading}>
+            <span className={itemStyles.sectionTitle}>
+              <Grid2X2Icon aria-hidden="true" />
+              Disposición de piezas
+            </span>
+            {onExpand ? (
+              <HeroButton variant="outline" size="sm" onPress={onExpand}>
+                <ExpandIcon data-icon="inline-start" />
+                Ampliar
+              </HeroButton>
             ) : null}
-            {bastidorActivo ? (
-              <div className="production-nesting" key="bastidor3d">
-                {/* Estructura local primero (cotización en memoria); el fetch
+          </div>
+          <div className={nestingStyles.itemNestings}>
+            <Tabs
+              value={activeNestingKey}
+              onValueChange={(value) => setActiveNestingKey(String(value))}
+            >
+              {tabsDisposicion.length > 1 ? (
+                <TabsList
+                  className={itemStyles.scrollTabs}
+                  aria-label="Proceso y componente"
+                >
+                  {tabsDisposicion.map((tab) => (
+                    <TabsTrigger key={tab.key} value={tab.key}>
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              ) : null}
+              <TabsContent
+                value={activeNestingKey}
+                aria-label={
+                  bastidorActivo ? "Bastidor 3D" : activeNestingTab?.label
+                }
+              >
+                {bastidorActivo ? (
+                  <div className={itemStyles.nestingContent} key="bastidor3d">
+                    {/* Estructura local primero (cotización en memoria); el fetch
                     por CotizacionItem/OT-item queda de fallback para ítems
                     rehidratados sin cotización en mano. */}
-                <BastidorVisor
-                  itemId={item.cotizacionItemId ?? item.id}
-                  estructuraLocal={estructuraBastidorLocal}
-                />
-              </div>
-            ) : activeNestingTab ? (
-              <div className="production-nesting" key={activeNestingTab.key}>
-                {activeNestingTab.paso.nestingResult?.algorithm ===
-                "irregular-2d-bottom-left-v1" ? (
-                  <div className="mb-3 flex flex-wrap justify-end gap-2">
-                    {fuenteVectorial ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          descargarTexto(
-                            fuenteVectorial.svg,
-                            fuenteVectorial.nombreArchivo,
-                          )
-                        }
-                      >
-                        <DownloadIcon />
-                        SVG original
-                      </Button>
+                    <BastidorVisor
+                      itemId={item.cotizacionItemId ?? item.id}
+                      estructuraLocal={estructuraBastidorLocal}
+                    />
+                  </div>
+                ) : activeNestingTab ? (
+                  <div
+                    className={itemStyles.nestingContent}
+                    key={activeNestingTab.key}
+                  >
+                    {onEditPanels &&
+                    activeNestingTab.editable &&
+                    isPanelEditableStep(activeNestingTab.paso) ? (
+                      <div className="mb-3 flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onEditPanels(activeNestingTab.paso)}
+                        >
+                          <Edit3Icon data-icon="inline-start" />
+                          Editar paneles
+                        </Button>
+                      </div>
                     ) : null}
-                    {activeNestingTab.paso.nestingResult.substrates.map(
-                      (_, substrateIndex) => {
-                        const base = `${nombreBaseSvg(fuenteVectorial?.nombreArchivo ?? item.productoNombre)}-placa-${substrateIndex + 1}`;
-                        const preparaSvgDxf =
-                          activeNestingTab.paso.familiaCodigo === "cnc" ||
-                          activeNestingTab.paso.familiaCodigo === "corte_laser";
-                        return (
-                          <React.Fragment key={substrateIndex}>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const result =
-                                  activeNestingTab.paso.nestingResult!;
-                                descargarTexto(
-                                  crearSvgDePlaca(result, substrateIndex),
-                                  `${base}.svg`,
-                                );
-                              }}
-                            >
-                              <DownloadIcon />
-                              Placa {substrateIndex + 1} SVG
-                            </Button>
-                            {preparaSvgDxf ? (
+                    <PliegosCompraItem
+                      key={activeNestingTab.key}
+                      paso={activeNestingTab.paso}
+                    />
+                    <NestingViewer
+                      archivos={
+                        esFamiliaCorteNesting(
+                          activeNestingTab.paso.familiaCodigo,
+                        ) &&
+                        activeNestingTab.paso.nestingResult?.algorithm ===
+                          "irregular-2d-bottom-left-v1" ? (
+                          <div className="flex flex-col gap-3">
+                            {fuenteVectorial ? (
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  const result =
-                                    activeNestingTab.paso.nestingResult!;
+                                onClick={() =>
                                   descargarTexto(
-                                    crearDxfDePlaca(result, substrateIndex),
-                                    `${base}.dxf`,
-                                    "application/dxf;charset=utf-8",
-                                  );
-                                }}
+                                    fuenteVectorial.svg,
+                                    fuenteVectorial.nombreArchivo,
+                                  )
+                                }
                               >
                                 <DownloadIcon />
-                                Placa {substrateIndex + 1} DXF
+                                SVG original
                               </Button>
                             ) : null}
-                          </React.Fragment>
-                        );
-                      },
-                    )}
+                            <NestingPatronesDescargas
+                              result={activeNestingTab.paso.nestingResult}
+                              nombreBase={nombreBaseSvg(item.productoNombre)}
+                              permitirDxf
+                            />
+                          </div>
+                        ) : undefined
+                      }
+                      result={activeNestingTab.paso.nestingResult!}
+                      copias={getCopiasItem(item)}
+                      costingDetails={activeNestingTab.paso.materiales ?? []}
+                      maxPx={
+                        ampliada
+                          ? 900
+                          : activeNestingTab.paso.nestingResult?.substrates[0]
+                                ?.kind === "sheet"
+                            ? 420
+                            : 560
+                      }
+                      modificaciones={modificacionesOverlay}
+                    />
+                    {prepararCorte &&
+                    activeNestingTab.paso.familiaCodigo ===
+                      "corte_hilo_caliente" ? (
+                      <>
+                        <RecorridoCortePanel
+                          key={`corte-${activeNestingTab.key}`}
+                          itemId={item.id}
+                          seleccion={seleccionRecorrido}
+                        />
+                        <PlantillaInstalacionPanel
+                          key={`instalacion-${activeNestingTab.key}`}
+                          itemId={item.id}
+                          seleccion={seleccionRecorrido}
+                        />
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
-                {onEditPanels && isPanelEditableStep(activeNestingTab.paso) ? (
-                  <div className="mb-3 flex justify-end">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => onEditPanels(activeNestingTab.paso)}
-                    >
-                      <Edit3Icon />
-                      Editar paneles
-                    </button>
-                  </div>
-                ) : null}
-                <NestingViewer
-                  result={activeNestingTab.paso.nestingResult!}
-                  copias={getCopiasItem(item)}
-                  costingDetails={activeNestingTab.paso.materiales ?? []}
-                  maxPx={
-                    ampliada
-                      ? 900
-                      : activeNestingTab.paso.nestingResult?.substrates[0]
-                            ?.kind === "sheet"
-                        ? 420
-                        : 560
-                  }
-                  modificaciones={modificacionesOverlay}
-                />
-                {prepararCorte &&
-                activeNestingTab.paso.familiaCodigo ===
-                  "corte_hilo_caliente" ? (
-                  <>
-                    <RecorridoCortePanel itemId={item.id} />
-                    <PlantillaInstalacionPanel itemId={item.id} />
-                  </>
-                ) : null}
-              </div>
-            ) : null}
+              </TabsContent>
+            </Tabs>
           </div>
-        </div>
+        </section>
       ) : (
-        <div className="op-empty">
-          <div className="ttl">Sin nesting para este item</div>
-          <div className="sub">
-            La ruta activa no generó un gráfico de nesting para los pasos
-            calculados.
-          </div>
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Sin aprovechamiento calculado</EmptyTitle>
+            <EmptyDescription>
+              Este ítem no tiene una disposición de piezas para mostrar.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
     </div>
   );
@@ -2472,21 +2704,23 @@ function PanelesManualEditor({
   if (!layout) {
     return (
       <PanelEditorShell title="Editar paneles" onClose={onClose}>
-        <div className="op-empty">
-          <div className="ttl">No se pudo reconstruir el panelizado</div>
-          <div className="sub">
-            El item no tiene piezas suficientes para armar un layout manual.
-          </div>
-        </div>
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No se pudo reconstruir el panelizado</EmptyTitle>
+            <EmptyDescription>
+              El ítem no tiene piezas suficientes para armar un layout manual.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </PanelEditorShell>
     );
   }
 
   return (
     <PanelEditorShell title="Editar paneles" onClose={onClose}>
-      <div className="panel-editor-grid">
+      <div className={itemStyles["panel-editor-grid"]}>
         {editableSourceIds.length > 1 ? (
-          <div className="panel-editor-list">
+          <div className={itemStyles["panel-editor-list"]}>
             {editableSourceIds.map((sourceId, index) => (
               <button
                 type="button"
@@ -2500,8 +2734,8 @@ function PanelesManualEditor({
           </div>
         ) : null}
 
-        <div className="panel-editor-stage">
-          <div className="panel-editor-meta">
+        <div className={itemStyles["panel-editor-stage"]}>
+          <div className={itemStyles["panel-editor-meta"]}>
             <strong>
               {selected
                 ? `${formatMmAsCm(selected.pieceWidthMm)} x ${formatMmAsCm(
@@ -2516,7 +2750,7 @@ function PanelesManualEditor({
             </span>
           </div>
 
-          <div className="panel-bar" ref={barRef}>
+          <div className={itemStyles["panel-bar"]} ref={barRef}>
             {selected?.panels.map((panel, index) => {
               const size =
                 selected.axis === "vertical"
@@ -2525,7 +2759,7 @@ function PanelesManualEditor({
               const pct = totalAxis > 0 ? (size / totalAxis) * 100 : 0;
               return (
                 <div
-                  className="panel-segment"
+                  className={itemStyles["panel-segment"]}
                   key={panel.panelIndex}
                   style={{ width: `${pct}%` }}
                 >
@@ -2538,7 +2772,7 @@ function PanelesManualEditor({
                   {index < selected.panels.length - 1 ? (
                     <button
                       type="button"
-                      className="panel-handle"
+                      className={itemStyles["panel-handle"]}
                       aria-label={`Mover división ${index + 1}`}
                       onPointerDown={(event) => {
                         event.preventDefault();
@@ -2554,7 +2788,7 @@ function PanelesManualEditor({
             })}
           </div>
 
-          <div className="panel-editor-table">
+          <div className={itemStyles["panel-editor-table"]}>
             {selected?.panels.map((panel) => (
               <div key={panel.panelIndex}>
                 <span>Panel {panel.panelIndex}</span>
@@ -2567,36 +2801,37 @@ function PanelesManualEditor({
           </div>
 
           {invalidMessage ? (
-            <div className="panel-editor-error">{invalidMessage}</div>
+            <div className={itemStyles["panel-editor-error"]}>
+              {invalidMessage}
+            </div>
           ) : null}
         </div>
       </div>
 
-      <div className="panel-editor-actions">
-        <button
+      <div className={itemStyles["panel-editor-actions"]}>
+        <Button
           type="button"
-          className="btn"
+          variant="outline"
           onClick={onClose}
           disabled={saving}
         >
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn"
+          variant="outline"
           onClick={onRestoreAutomatic}
           disabled={saving}
         >
           Restaurar automático
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn btn-primary"
           onClick={() => onSave(layout)}
           disabled={saving || Boolean(invalidMessage)}
         >
           {saving ? "Recotizando..." : "Guardar y recotizar"}
-        </button>
+        </Button>
       </div>
     </PanelEditorShell>
   );
@@ -2611,21 +2846,27 @@ function PanelEditorShell({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
   return (
-    <div className="panel-editor-overlay" role="dialog" aria-modal="true">
-      <div className="panel-editor-modal">
-        <div className="panel-editor-head">
-          <div>
-            <div className="cost-title">Panelizado manual</div>
-            <h2>{title}</h2>
-          </div>
-          <button type="button" className="btn" onClick={onClose}>
-            Cerrar
-          </button>
-        </div>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        {...legacyScope}
+        className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.panelEditorDialog)}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            Ajustá las divisiones sin superar el ancho imprimible de la máquina.
+          </DialogDescription>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2677,9 +2918,11 @@ function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
   const extra = porcentajeMaterialExtra(mutacion);
 
   return (
-    <div className="cost-detail-block">
-      <div className="cost-detail-title">Medida modificada</div>
-      <div className="cost-detail-lines">
+    <div className={cn(itemCostStyles["cost-detail-block"])}>
+      <div className={cn(itemCostStyles["cost-detail-title"])}>
+        Medida modificada
+      </div>
+      <div className={cn(itemCostStyles["cost-detail-lines"])}>
         <div>{resumenModificacion(mutacion)}</div>
         {medidas ? (
           <div>
@@ -2705,29 +2948,234 @@ function MutacionPasoDetail({ mutacion }: { mutacion: MutacionAplicadaView }) {
   );
 }
 
-function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
+function pasoTieneDetalleCosteo(paso: PasoCosteo) {
+  return (
+    paso.activado &&
+    (Boolean(paso.tiempo) ||
+      Boolean(paso.mutacionAplicada) ||
+      Boolean(paso.tiempo?.procesamientoCorte) ||
+      (paso.materiales?.length ?? 0) > 0 ||
+      (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
+      (paso.cargosDirectosPaso?.length ?? 0) > 0)
+  );
+}
+
+function operacionTieneDetalleDesplegable(paso: PasoCosteo) {
+  return (
+    paso.activado &&
+    (Boolean(paso.mutacionAplicada) ||
+      Boolean(paso.tiempo?.procesamientoCorte) ||
+      (paso.materiales?.length ?? 0) > 0 ||
+      (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
+      Number(paso.tiempo?.runMermaMin ?? 0) > 0 ||
+      (paso.cargosDirectosPaso?.length ?? 0) > 0)
+  );
+}
+
+function OperacionesEtapaTable({
+  etapa,
+  cotizacion,
+}: {
+  etapa: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+}) {
+  const { moneda } = useConfigRegional();
+  const operaciones = etapa.operacionesInternas ?? [];
+  const [abiertas, setAbiertas] = React.useState<Set<string>>(() => new Set());
+
+  const alternar = (key: string) => {
+    setAbiertas((actuales) => {
+      const siguientes = new Set(actuales);
+      if (siguientes.has(key)) siguientes.delete(key);
+      else siguientes.add(key);
+      return siguientes;
+    });
+  };
+
+  return (
+    <div className={cn(itemCostStyles["cost-detail-block"])}>
+      <div className={cn(itemCostStyles["cost-detail-title"])}>
+        Desglose por operación
+      </div>
+      <div
+        className={`${itemCostStyles["cost-detail-table-wrap"]} ${costC.stageTableWrap}`}
+      >
+        <Table
+          className={`${itemCostStyles["cost-detail-table"]} ${costC.stageTable}`}
+        >
+          <TableHeader>
+            <TableRow>
+              <TableHead>Operación</TableHead>
+              <TableHead>Centro de costo</TableHead>
+              <TableHead className="num">Tiempo</TableHead>
+              <TableHead className="num">Materiales</TableHead>
+              <TableHead className="num">Cargos</TableHead>
+              <TableHead className="num">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {operaciones.map((operacion, index) => {
+              const key = `${operacion.codigo}-${index}`;
+              const pasoOperacion = proyectarPasoOperacionInterna(
+                etapa,
+                operacion,
+                index,
+              );
+              const materialesTotal = sumMaterialesPaso(pasoOperacion);
+              const cargosTotal = sumCargosYTiempoExtraPaso(pasoOperacion);
+              const puedeExpandir =
+                operacionTieneDetalleDesplegable(pasoOperacion);
+              const abierta = abiertas.has(key);
+              const centroCosto =
+                operacion.tiempo?.centroCostoNombre ??
+                operacion.centroCostoNombre ??
+                (operacion.activada ? "Sin centro asignado" : "No aplica");
+              const tiempoMin =
+                operacion.tiempo?.totalMin ?? operacion.duracionMin;
+
+              return (
+                <React.Fragment key={key}>
+                  <TableRow
+                    className={`${costC.stageRow} ${
+                      operacion.activada ? "" : costC.inactiveRow
+                    }`}
+                  >
+                    <TableCell className={costC.operationCell}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={costC.operationTrigger}
+                        disabled={!puedeExpandir}
+                        aria-expanded={puedeExpandir ? abierta : undefined}
+                        onClick={() => puedeExpandir && alternar(key)}
+                      >
+                        <ChevronRightIcon
+                          data-icon="inline-start"
+                          data-open={abierta ? "true" : "false"}
+                          aria-hidden="true"
+                          className={`${costC.operationChevron} ${
+                            puedeExpandir ? "" : costC.hiddenChevron
+                          }`}
+                        />
+                        <span className={costC.operationIndex}>
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        <strong>{operacion.nombre}</strong>
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <div className={cn(itemCostStyles["cost-step-center"])}>
+                        <strong>{centroCosto}</strong>
+                        <span>
+                          {operacion.tiempo
+                            ? formatTarifaCentroCosto(pasoOperacion, moneda)
+                            : "Sin detalle tarifario"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="num">
+                      {tiempoMin > 0 ? (
+                        <>
+                          <strong>
+                            {operacion.tiempo
+                              ? formatCurrency(
+                                  getCostoTiempoPaso(pasoOperacion),
+                                  moneda,
+                                )
+                              : "—"}
+                          </strong>
+                          <span>{formatMinutos(tiempoMin)}</span>
+                        </>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell className="num">
+                      {materialesTotal > 0
+                        ? formatCurrency(materialesTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="num">
+                      {cargosTotal > 0
+                        ? formatCurrency(cargosTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="num strong">
+                      {operacion.costoTotal > 0
+                        ? formatCurrency(operacion.costoTotal, moneda)
+                        : "-"}
+                    </TableCell>
+                  </TableRow>
+                  {puedeExpandir && abierta ? (
+                    <TableRow className={costC.operationDetailRow}>
+                      <TableCell colSpan={6} className={costC.detailCell}>
+                        <div>
+                          <PasoCostDetail
+                            paso={pasoOperacion}
+                            cotizacion={cotizacion}
+                            contexto="operación"
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function PasoCostDetail({
+  paso,
+  cotizacion,
+  contexto = "paso",
+}: {
+  paso: PasoCosteo;
+  cotizacion: CotizacionPropuestaSnapshot;
+  contexto?: "paso" | "operación";
+}) {
+  if ((paso.operacionesInternas?.length ?? 0) > 0) {
+    return (
+      <div className={cn(itemCostStyles["cost-step-expanded"])}>
+        <OperacionesEtapaTable etapa={paso} cotizacion={cotizacion} />
+      </div>
+    );
+  }
+
   const materiales = paso.materiales ?? [];
   const cargos = paso.cargosDirectosPaso ?? [];
   const cargosTotal = sumCargosPaso(paso);
   const tiemposExtra = paso.tiempo?.tiemposExtra ?? [];
 
   return (
-    <div className="cost-step-expanded">
+    <div className={cn(itemCostStyles["cost-step-expanded"])}>
       {paso.mutacionAplicada ? (
         <MutacionPasoDetail mutacion={paso.mutacionAplicada} />
       ) : null}
 
-      <div className="cost-detail-block">
-        <div className="cost-detail-title">Materiales del paso</div>
+      <div className={cn(itemCostStyles["cost-detail-block"])}>
+        <div className={cn(itemCostStyles["cost-detail-title"])}>
+          {contexto === "paso"
+            ? "Materiales del paso"
+            : "Materiales de la operación"}
+        </div>
         <MaterialesPasoTable
           materiales={materiales}
-          nesting={paso.nestingResult}
+          costosMoneda={cotizacion.costosMaterialesMoneda}
         />
       </div>
 
+      <DesgloseOperacionesCorte valor={paso.tiempo?.procesamientoCorte} />
+      <MermaPasoCollapsible paso={paso} cotizacion={cotizacion} />
+
       {tiemposExtra.length > 0 ? (
-        <div className="cost-detail-block">
-          <div className="cost-detail-title">
+        <div className={cn(itemCostStyles["cost-detail-block"])}>
+          <div className={cn(itemCostStyles["cost-detail-title"])}>
             Tiempo extra del paso (no depende de la cantidad)
           </div>
           <TiemposExtraPasoList bloques={tiemposExtra} />
@@ -2735,13 +3183,114 @@ function PasoCostDetail({ paso }: { paso: PasoCosteo }) {
       ) : null}
 
       {cargosTotal > 0 ? (
-        <div className="cost-detail-block">
-          <div className="cost-detail-title">Cargos directos del paso</div>
+        <div className={cn(itemCostStyles["cost-detail-block"])}>
+          <div className={cn(itemCostStyles["cost-detail-title"])}>
+            Cargos directos del paso
+          </div>
           <CargosPasoList cargos={cargos} />
         </div>
       ) : null}
     </div>
   );
+}
+
+type ComponenteCostoVista = {
+  codigo: string;
+  nombre: string;
+  cantidad?: number;
+  unidad?: string;
+  costoTotal: number;
+  nodoIncorporacionClave?: string | null;
+  nodosPredecesoresClaves?: string[];
+  grafoProduccion?: ComponenteWorkflowVista["grafoProduccion"];
+  pasos?: unknown[];
+  componentes?: ComponenteCostoVista[];
+};
+
+type FilaCostoArbol =
+  | {
+      tipo: "componente";
+      key: string;
+      componente: ComponenteCostoVista;
+      nivel: number;
+    }
+  | {
+      tipo: "paso";
+      key: string;
+      paso: PasoCosteo;
+      nivel: number;
+      indice: number;
+    };
+
+function construirFilasCostoArbol(
+  cotizacion: CotizacionPropuestaSnapshot,
+): FilaCostoArbol[] {
+  const filas: FilaCostoArbol[] = [];
+
+  const recorrerWorkflow = ({
+    pasos,
+    componentes,
+    grafoProduccion,
+    nivel,
+    prefijo,
+  }: {
+    pasos: PasoCosteo[];
+    componentes: ComponenteCostoVista[];
+    grafoProduccion?: ComponenteWorkflowVista["grafoProduccion"];
+    nivel: number;
+    prefijo: string;
+  }) => {
+    const workflow = construirWorkflowCotizacion({
+      pasos,
+      componentes: componentes as unknown as ComponenteWorkflowVista[],
+      grafoProduccion,
+    });
+    let indicePaso = 0;
+
+    for (const columna of workflow.columnas) {
+      for (const nodo of columna) {
+        if (nodo.tipo === "COMPONENTE") {
+          const componente = nodo.componente as unknown as ComponenteCostoVista;
+          const clave = `${prefijo}-componente-${componente.codigo}-${filas.length}`;
+          filas.push({
+            tipo: "componente",
+            key: clave,
+            componente,
+            nivel,
+          });
+          recorrerWorkflow({
+            pasos: (componente.pasos ?? []) as PasoCosteo[],
+            componentes: componente.componentes ?? [],
+            grafoProduccion: componente.grafoProduccion,
+            nivel: nivel + 1,
+            prefijo: clave,
+          });
+          continue;
+        }
+
+        const paso = nodo.paso;
+        if (getVisibleCostSteps([paso]).length === 0) continue;
+        indicePaso += 1;
+        filas.push({
+          tipo: "paso",
+          key: `${prefijo}-paso-${paso.rutaPasoId ?? `${paso.rutaPasoOrden}-${paso.familiaCodigo}`}`,
+          paso,
+          nivel,
+          indice: indicePaso,
+        });
+      }
+    }
+  };
+
+  recorrerWorkflow({
+    pasos: cotizacion.pasos,
+    componentes: (cotizacion.componentesFabricados ??
+      []) as unknown as ComponenteCostoVista[],
+    grafoProduccion: cotizacion.grafoProduccion,
+    nivel: 0,
+    prefijo: "raiz",
+  });
+  return filas;
 }
 
 function CostosItemView({
@@ -2770,7 +3319,10 @@ function CostosItemView({
     contribucionMonto: margenContribucionMonto,
     contribucionPct: margenContribucionPct,
   } = desglose;
-  const visibleCostSteps = getVisibleCostSteps(item.cotizacion.pasos);
+  const filasCosteo = React.useMemo(
+    () => construirFilasCostoArbol(item.cotizacion),
+    [item.cotizacion],
+  );
   const [expandedCostSteps, setExpandedCostSteps] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -2786,13 +3338,14 @@ function CostosItemView({
 
   if (calculoPendiente) {
     return (
-      <div className="op-empty">
-        <div className="ttl">Costo pendiente de cotización</div>
-        <div className="sub">
-          Cotizá el producto para ver materiales, producción y opcionales con
-          costos reales del Motor Universal.
-        </div>
-      </div>
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Costo pendiente de cotización</EmptyTitle>
+          <EmptyDescription>
+            Cotizá el producto para ver el desglose de sus costos.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -2804,114 +3357,110 @@ function CostosItemView({
       : "—";
 
   return (
-    <div className="op-costs">
-      <div className="cost-waterfall">
-        {filasNeto.map((fila) => (
-          <div className="cw-row" key={fila.key}>
-            <span className="cw-label">
-              {fila.label}
-              {fila.hint ? <small>{fila.hint}</small> : null}
-            </span>
-            <span className="cw-tipo">{fila.tipo}</span>
-            <span className="cw-pct">{pctDelNeto(fila.monto)}</span>
-            <span className={`cw-amount ${fila.warn ? "cw-margen warn" : ""}`}>
-              {fmt(fila.monto)}
-            </span>
-          </div>
-        ))}
-        <div className="cw-row cw-subtotal">
-          <span className="cw-label">Precio neto (sin IVA)</span>
-          <span className="cw-tipo" />
-          <span className="cw-pct">100%</span>
-          <span className="cw-amount">{fmt(precioNeto)}</span>
-        </div>
-        {ivaTotal > 0 && !sinComprobante ? (
-          <div className="cw-row">
-            <span className="cw-label">
-              {impuestosPorFueraNombres || "IVA"}
-              <small>se agrega al neto y se discrimina en factura</small>
-            </span>
-            <span className="cw-tipo">Impuesto</span>
-            <span className="cw-pct">+ {pctDelNeto(ivaTotal)}</span>
-            <span className="cw-amount">+ {fmt(ivaTotal)}</span>
-          </div>
-        ) : null}
-        <div className="cw-row cw-total">
-          <span className="cw-label">
-            Precio de venta
-            {sinComprobante ? <small>sin comprobante fiscal</small> : null}
-          </span>
-          <span className="cw-tipo" />
-          <span className="cw-pct" />
-          <span className="cw-amount">
-            {fmt(sinComprobante ? precioNeto : precioBruto)}
-          </span>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 20,
-          marginTop: 12,
-          padding: "14px 16px",
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          background: "rgba(62, 207, 142, 0.07)",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            minWidth: 0,
-          }}
-        >
-          <span style={{ fontWeight: 650, color: "var(--ink)" }}>
-            Margen de contribución
-          </span>
-          <span
-            style={{
-              fontSize: 11.5,
-              lineHeight: 1.4,
-              color: "var(--muted)",
-              maxWidth: "60ch",
-            }}
+    <div className={cn(itemCostStyles["op-costs"])}>
+      <div className={itemStyles.costOverview}>
+        <div className={cn(itemCostStyles["cost-waterfall"])}>
+          <h3 className={itemCostStyles.waterfallHeading}>
+            <CircleDollarSignIcon aria-hidden="true" />
+            Composición del precio
+          </h3>
+          {filasNeto.map((fila) => (
+            <div className={cn(itemCostStyles["cw-row"])} key={fila.key}>
+              <span className={cn(itemCostStyles["cw-label"])}>
+                {fila.label}
+                {fila.hint ? <small>{fila.hint}</small> : null}
+              </span>
+              <span className={cn(itemCostStyles["cw-tipo"])}>{fila.tipo}</span>
+              <span className={cn(itemCostStyles["cw-pct"])}>
+                {pctDelNeto(fila.monto)}
+              </span>
+              <span
+                className={`${itemCostStyles["cw-amount"]} ${fila.warn ? cn(itemCostStyles["cw-margen"], "warn") : ""}`}
+              >
+                {fmt(fila.monto)}
+              </span>
+            </div>
+          ))}
+          <div
+            className={cn(
+              itemCostStyles["cw-row"],
+              itemCostStyles["cw-subtotal"],
+            )}
           >
-            Indicador de gestión — no forma parte de la composición del precio.
-            Precio neto − costos variables (materiales, proveedor, cargos,
-            impuestos internos, comisiones). Es lo que queda para cubrir la
-            estructura fija (centro de costo) y dejar ganancia.
-          </span>
+            <span className={cn(itemCostStyles["cw-label"])}>
+              Precio neto (sin IVA)
+            </span>
+            <span className={cn(itemCostStyles["cw-tipo"])} />
+            <span className={cn(itemCostStyles["cw-pct"])}>100%</span>
+            <span className={cn(itemCostStyles["cw-amount"])}>
+              {fmt(precioNeto)}
+            </span>
+          </div>
+          {ivaTotal > 0 && !sinComprobante ? (
+            <div className={cn(itemCostStyles["cw-row"])}>
+              <span className={cn(itemCostStyles["cw-label"])}>
+                {impuestosPorFueraNombres || "IVA"}
+                <small>se agrega al neto y se discrimina en factura</small>
+              </span>
+              <span className={cn(itemCostStyles["cw-tipo"])}>Impuesto</span>
+              <span className={cn(itemCostStyles["cw-pct"])}>
+                + {pctDelNeto(ivaTotal)}
+              </span>
+              <span className={cn(itemCostStyles["cw-amount"])}>
+                + {fmt(ivaTotal)}
+              </span>
+            </div>
+          ) : null}
+          <div
+            className={cn(itemCostStyles["cw-row"], itemCostStyles["cw-total"])}
+          >
+            <span className={cn(itemCostStyles["cw-label"])}>
+              Precio de venta
+              {sinComprobante ? <small>sin comprobante fiscal</small> : null}
+            </span>
+            <span className={cn(itemCostStyles["cw-tipo"])} />
+            <span className={cn(itemCostStyles["cw-pct"])} />
+            <span className={cn(itemCostStyles["cw-amount"])}>
+              {fmt(sinComprobante ? precioNeto : precioBruto)}
+            </span>
+          </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: 2,
-            flex: "0 0 auto",
-          }}
-        >
-          <span style={{ fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
-            {fmt(margenContribucionMonto)}
-          </span>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>
-            {margenContribucionPct.toLocaleString("es-AR", {
-              maximumFractionDigits: 1,
-            })}
-            % del neto
-          </span>
-        </div>
+
+        <Card size="sm" className={itemStyles.contribution}>
+          <CardHeader>
+            <CardTitle className={itemStyles.contributionTitle}>
+              Margen de contribución
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={itemStyles.contributionValue}>
+              {fmt(margenContribucionMonto)}
+            </div>
+            <p className={itemStyles.contributionHint}>
+              {margenContribucionPct.toLocaleString("es-AR", {
+                maximumFractionDigits: 1,
+              })}
+              % del neto
+            </p>
+            <details className={itemStyles.explanation}>
+              <summary>Cómo se calcula</summary>
+              <p>
+                Precio neto menos costos variables: materia prima, proveedor,
+                cargos, impuestos internos y comisiones. Es lo que queda para
+                cubrir la estructura fija y dejar ganancia. Este indicador no se
+                suma al precio.
+              </p>
+            </details>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="cost-section">
-        <div className="cost-title">Desglose por paso</div>
-        <div className="cost-steps-table-wrap">
-          <table className="cost-steps-table">
+      <div className={cn(itemCostStyles["cost-section"])}>
+        <div className={cn(itemCostStyles["cost-title"])}>
+          Desglose por paso
+        </div>
+        <div className={cn(itemCostStyles["cost-steps-table-wrap"])}>
+          <table className={cn(itemCostStyles["cost-steps-table"])}>
             <thead>
               <tr>
                 <th>Paso</th>
@@ -2923,23 +3472,53 @@ function CostosItemView({
               </tr>
             </thead>
             <tbody>
-              {visibleCostSteps.map((paso, visibleIndex) => {
-                const stepKey = `${paso.rutaPasoOrden}-${paso.familiaCodigo}`;
+              {filasCosteo.map((fila) => {
+                if (fila.tipo === "componente") {
+                  const { componente, nivel } = fila;
+                  return (
+                    <tr
+                      className={cn(itemCostStyles["cost-component-row"])}
+                      key={fila.key}
+                    >
+                      <td colSpan={5}>
+                        <div
+                          className={cn(itemCostStyles["cost-component-name"])}
+                          style={{
+                            paddingLeft: `${Math.max(0, nivel - 1) * 18}px`,
+                          }}
+                        >
+                          <PackageIcon aria-hidden="true" />
+                          <span>
+                            <strong>{componente.nombre}</strong>
+                            <small>
+                              Componente fabricado
+                              {componente.cantidad != null
+                                ? ` · ${formatDecimal(componente.cantidad, 2)} ${componente.unidad ?? "u."}`
+                                : ""}
+                            </small>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="num strong">
+                        {componente.costoTotal > 0
+                          ? fmt(componente.costoTotal)
+                          : "-"}
+                      </td>
+                    </tr>
+                  );
+                }
+
+                const { paso, nivel, indice: visibleIndex } = fila;
+                const stepKey = fila.key;
                 const materialesTotal = sumMaterialesPaso(paso);
                 // La columna Cargos junta los cargos monetarios y el costo de
                 // los bloques de tiempo extra: así se distingue del tiempo de
                 // TRABAJO del paso, que es la columna Tiempo.
                 const cargosTotal = sumCargosYTiempoExtraPaso(paso);
-                const puedeExpandir =
-                  paso.activado &&
-                  (Boolean(paso.tiempo) ||
-                    Boolean(paso.mutacionAplicada) ||
-                    (paso.materiales?.length ?? 0) > 0 ||
-                    (paso.tiempo?.tiemposExtra?.length ?? 0) > 0 ||
-                    (paso.cargosDirectosPaso?.length ?? 0) > 0);
+                const puedeExpandir = pasoTieneDetalleCosteo(paso);
                 const expanded = expandedCostSteps.has(stepKey);
                 return (
-                  <React.Fragment key={stepKey}>
+                  <React.Fragment key={fila.key}>
                     <tr
                       className={`${paso.activado ? "" : "muted-row"} ${
                         puedeExpandir ? "clickable" : ""
@@ -2950,24 +3529,28 @@ function CostosItemView({
                           : undefined
                       }
                     >
-                      <td>
-                        <div className="cost-step-name">
-                          <span className="cost-step-title">
+                      <td style={{ paddingLeft: `${12 + nivel * 22}px` }}>
+                        <div className={cn(itemCostStyles["cost-step-name"])}>
+                          <span
+                            className={cn(itemCostStyles["cost-step-title"])}
+                          >
                             {puedeExpandir ? (
                               <ChevronRightIcon
-                                className="cost-row-chevron"
+                                className={cn(
+                                  itemCostStyles["cost-row-chevron"],
+                                )}
                                 aria-hidden="true"
                               />
                             ) : null}
                             <span>
-                              {visibleIndex + 1}.{" "}
+                              {visibleIndex}.{" "}
                               {paso.nombreVisible?.trim() ||
                                 humanizeCodigo(paso.familiaCodigo)}
                             </span>
                           </span>
                           {paso.tiempo?.origenTiempo === "manual_comercial" ? (
                             <span
-                              className="cost-chip"
+                              className={cn(itemCostStyles["cost-chip"])}
                               title="El tiempo de este paso lo estimó el comercial al cotizar; no sale del cálculo del motor."
                             >
                               <ClockIcon aria-hidden="true" />
@@ -2976,7 +3559,7 @@ function CostosItemView({
                           ) : null}
                           {paso.activadoPorDependencia ? (
                             <span
-                              className="cost-chip"
+                              className={cn(itemCostStyles["cost-chip"])}
                               title={`Se activó automáticamente porque "${paso.activadoPorDependencia.requeridoPorNombre}" lo necesita. No se puede quitar mientras ese paso esté activo.`}
                             >
                               <LinkIcon aria-hidden="true" />
@@ -2986,7 +3569,7 @@ function CostosItemView({
                           ) : null}
                           {paso.mutacionAplicada ? (
                             <span
-                              className="cost-chip"
+                              className={cn(itemCostStyles["cost-chip"])}
                               title={`${resumenModificacion(
                                 paso.mutacionAplicada,
                               )}. El material se corta más grande que la medida pedida; abrí el paso para ver el detalle.`}
@@ -2998,7 +3581,7 @@ function CostosItemView({
                         </div>
                       </td>
                       <td>
-                        <div className="cost-step-center">
+                        <div className={cn(itemCostStyles["cost-step-center"])}>
                           <strong>{getCentroCostoLabel(paso)}</strong>
                           <span>{formatTarifaCentroCosto(paso, moneda)}</span>
                         </div>
@@ -3024,9 +3607,14 @@ function CostosItemView({
                       </td>
                     </tr>
                     {puedeExpandir && expanded ? (
-                      <tr className="cost-step-detail-row">
-                        <td colSpan={7}>
-                          <PasoCostDetail paso={paso} />
+                      <tr
+                        className={cn(itemCostStyles["cost-step-detail-row"])}
+                      >
+                        <td colSpan={6}>
+                          <PasoCostDetail
+                            paso={paso}
+                            cotizacion={item.cotizacion}
+                          />
                         </td>
                       </tr>
                     ) : null}
@@ -3046,11 +3634,14 @@ function CostosItemView({
  * son la proyección `specs` que persiste el item de la OT al emitir — la OT
  * muestra exactamente lo que el comercial vio al armarla.
  */
-function buildOrdenItemSpecs(
+export function buildOrdenItemSpecs(
   item: PropuestaItem,
 ): Array<{ lbl: string; val: string }> {
   const mainMaterial = getMainCommercialMaterial(item);
   const montajeSustrato = getMontajeSustratoMaterial(item);
+  const materialEnComponentes =
+    !mainMaterial &&
+    componentesTienenMaterialEfectivo(item.cotizacion.componentesFabricados);
 
   const specsBase = item.atributosSchema
     .filter(
@@ -3059,6 +3650,10 @@ function buildOrdenItemSpecs(
         !["tipo_pieza", "tipoPieza", "tipo_de_pieza"].includes(attr.key),
     )
     .filter((attr) => !isDuplicateModoColorSpec(item, attr.key))
+    .filter(
+      (attr) =>
+        !(materialEnComponentes && isMaterialSpecKey(attr.key, attr.label)),
+    )
     // Con sustrato de montaje, el espesor pertenece a ESE material y se muestra
     // dentro del bloque "Montaje" (con su nombre); quitamos el ESPESOR suelto
     // para no dejar un "3 mm" huérfano que no dice de qué material es.
@@ -3219,147 +3814,62 @@ const TECNOLOGIA_TERCERIZADO_LABEL: Record<string, string> = {
   otra: "Otra",
 };
 
-function claveFechaEta(fecha: Date) {
-  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
-}
-
-/**
- * Lectura de una ETA simulada contra la fecha elegida: "≈ mar 21/07" (o
- * "~" si corrió con supuestos), la fecha SUGERIDA con el margen del taller
- * (D13: ETA + días hábiles de colchón) y el nivel de alerta — "tarde" si
- * la fecha elegida es anterior a la ETA cruda (no llega), "sin-margen" si
- * cae entre la ETA y la sugerida (llega, pero sin colchón).
- */
-function describirEta(
-  eta: SimulacionItem | null | undefined,
-  fechaElegida: string | null,
-  opts?: { margenDias?: number; noLaborables?: Set<string>; zona?: string },
-): {
-  etiqueta: string;
-  sugeridaEtiqueta: string | null;
-  nivel: "ok" | "sin-margen" | "tarde";
-  aprox: boolean;
-  motivo: string;
-} | null {
-  if (!eta || !eta.finEstimado) return null;
-  const fin = eta.finEstimado;
-  const margen = opts?.margenDias ?? 0;
-  const sugerida =
-    margen > 0
-      ? sumarDiasHabiles(fin, margen, opts?.noLaborables, opts?.zona)
-      : null;
-  const elegida = fechaElegida ? fechaElegida.slice(0, 10) : null;
-  const nivel =
-    elegida && elegida < claveFechaEta(fin)
-      ? "tarde"
-      : elegida && sugerida && elegida < claveFechaEta(sugerida)
-        ? "sin-margen"
-        : "ok";
-  const aprox = eta.parcial || eta.asumeDesbloqueo || eta.sinEstimar;
-  const motivo = [
-    eta.parcial ? "estación sin calendario en la ruta" : null,
-    eta.asumeDesbloqueo ? "asume que lo bloqueado se destraba ya" : null,
-    eta.sinEstimar ? "hay pasos sin tiempo estimado" : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  return {
-    etiqueta: `${aprox ? "~" : "≈"} ${etiquetaEta(fin)}`,
-    sugeridaEtiqueta: sugerida ? etiquetaEta(sugerida) : null,
-    nivel,
-    aprox,
-    motivo,
-  };
-}
-
-/**
- * Fecha (YYYY-MM-DD) que el sistema recomienda comprometer: la ETA cruda más
- * el colchón de días hábiles del taller — la MISMA fecha "sugerida" que
- * describirEta muestra como recomendación. Es la que sale por defecto en el
- * item y en la OT (el usuario después la puede cambiar).
- */
-function fechaRecomendadaEta(
-  eta: SimulacionItem | null | undefined,
-  opts?: { margenDias?: number; noLaborables?: Set<string>; zona?: string },
-): string | null {
-  if (!eta || !eta.finEstimado) return null;
-  const margen = opts?.margenDias ?? 0;
-  const fecha =
-    margen > 0
-      ? sumarDiasHabiles(
-          eta.finEstimado,
-          margen,
-          opts?.noLaborables,
-          opts?.zona,
-        )
-      : eta.finEstimado;
-  return claveFechaEta(fecha);
-}
-
-/** Columnas de la fila/encabezado de productos SIN la columna Imp. (se saca el
- *  110px del IVA). Se aplica inline cuando la orden es sin comprobante, para no
- *  agregar una clase global nueva (rompe css:guard). §6 cuaderno de margen. */
-const ORDEN_COLS_SIN_IMP =
-  "36px 22px minmax(220px, 1fr) 110px 130px 140px 130px 36px";
-
-export function ProductRow({
+export function OrdenProductoDetalle({
   item,
-  index,
   expanded,
   etaSistema,
+  ahoraEta,
   margenEtaDias = 0,
   noLaborables,
-  onToggle,
-  onRemove,
   onEdit,
   onDescuento,
-  onVerPrecios,
   onEditPanels,
   onChangeFechaEntrega,
   fechaEstimada,
   readOnly = false,
+  editarFecha = false,
   prepararCorte = false,
+  planificarEntregas = false,
+  entregasPrevias,
+  onDistribucionGuardada,
   sinComprobante = false,
 }: {
   item: PropuestaItem;
-  index: number;
   expanded: boolean;
   /** ETA simulada del item contra las colas del taller (fase 3); null = sin dato. */
   etaSistema?: SimulacionItem | null;
+  ahoraEta?: Date;
   /** Margen del taller en días hábiles (D13) para el nivel "sin margen". */
   margenEtaDias?: number;
   noLaborables?: Set<string>;
-  onToggle: () => void;
   /** Ausentes en modo lectura (OT emitida): la fila no se puede mutar. */
-  onRemove?: () => void;
   onEdit?: () => void;
   /** Abre el modal de descuento con esta línea como objetivo. */
   onDescuento?: () => void;
   /** Sólo para ítems de centro de copiado: abre el resumen de precios por hoja. */
-  onVerPrecios?: () => void;
   onEditPanels?: (item: PropuestaItem, paso: PanelEditorPaso) => void;
   onChangeFechaEntrega?: (fechaEntrega: string) => void;
   fechaEstimada: string;
   readOnly?: boolean;
+  editarFecha?: boolean;
   /** El ítem ya existe en la OT y puede consultarse para preparar TAP/plantillas. */
   prepararCorte?: boolean;
+  planificarEntregas?: boolean;
+  entregasPrevias?: EntregasPreviasProps;
+  onDistribucionGuardada?: () => void;
   /** Orden sin comprobante fiscal: la fila oculta Imp. y muestra Total neto. */
   sinComprobante?: boolean;
 }) {
-  const { moneda, zonaHoraria } = useConfigRegional();
+  const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
+  const { zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
-  const [produccionAmpliada, setProduccionAmpliada] = React.useState(false);
+  const [loteId, setLoteId] = React.useState<string>();
+  const [vistaAmpliada, setVistaAmpliada] =
+    React.useState<VistaFabricacionItem | null>(null);
   const [briefAbierto, setBriefAbierto] = React.useState(false);
   const fechaInputRef = React.useRef<HTMLInputElement | null>(null);
   const costo = calcularCostoTotal(item);
   const calculoPendiente = item.precioUnitario === 0 && item.total === 0;
-  const tienePrecioEspecial = Boolean(
-    item.cotizacion?.desglosePrecio?.precioEspecialCliente,
-  );
-  const visibleAmounts = React.useMemo(
-    () => getItemOrderVisibleAmounts(item),
-    [item],
-  );
   const optionalMaterialDetails = React.useMemo(
     () =>
       new Map(
@@ -3382,305 +3892,159 @@ export function ProductRow({
     () => leerBriefDiseno(item.jobContext?.briefDiseno),
     [item.jobContext],
   );
+  const componentesFabricados = item.cotizacion.componentesFabricados ?? [];
+  const tieneComponentesFabricados = componentesFabricados.length > 0;
+  const tieneEspecificacionesRaiz =
+    specs.length > 0 || briefDisenoTieneContenido(briefDiseno);
   const carasBrief = getCarasItem(item) === 2 ? 2 : 1;
 
-  // Neto por ítem cuando la orden es sin comprobante: Total = subtotal (sin
-  // IVA) y el unitario se recalcula sobre el neto. El snapshot no se toca.
-  const totalItemVisible = sinComprobante
-    ? visibleAmounts.subtotal
-    : visibleAmounts.total;
-
   return (
-    <div className={`oprow ${expanded ? "open" : ""}`}>
-      <button
-        type="button"
-        className="oprow-head"
-        onClick={onToggle}
-        style={
-          sinComprobante
-            ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
-            : undefined
-        }
-      >
-        <span className="ix">{index + 1}</span>
-        <span className="chev">
-          <ChevronRightIcon
-            style={{
-              transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform .15s ease",
-            }}
-          />
-        </span>
-        <div className="prod">
-          <div className="nm">
-            {item.productoNombre}
-            {item.varianteNombre ? (
-              <span className={ccFicha.variante}>· {item.varianteNombre}</span>
-            ) : null}
-            {onVerPrecios ? (
-              <span
-                role="button"
-                tabIndex={0}
-                className={ccFicha.verPrecios}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onVerPrecios();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onVerPrecios();
-                  }
-                }}
-                title="Ver precios de impresión por hoja"
-              >
-                <EyeIcon />
-              </span>
-            ) : null}
-            {tienePrecioEspecial ? (
-              <span
-                className="op-especial"
-                title="Cotizado con el precio especial configurado para el cliente de la orden."
-              >
-                <StarIcon aria-hidden="true" />
-                Precio especial
-              </span>
-            ) : null}
-          </div>
-          <div className="cd">
-            <span className="fam">
-              {item.categoriaComercialNombre} ·{" "}
-              {item.subcategoriaComercialNombre}
-            </span>
-          </div>
-        </div>
-        <div className="num qty">
-          <span className="v">{formatCantidadItem(item)}</span>
-          <span className="u">{formatUnidad(item.unidadMedida)}</span>
-        </div>
-        <div className="num">
-          {calculoPendiente ? (
-            "A cotizar"
-          ) : item.cotizacion.desglosePrecio?.descuento?.aplicado ? (
-            <span className={descM.cellDesc}>
-              <span className={descM.cellLista}>
-                {formatCurrency(
-                  visibleAmounts.subtotal +
-                    Math.round(
-                      item.cotizacion.desglosePrecio.descuento.montoTotal,
-                    ),
-                  moneda,
-                )}
-              </span>
-              <span className={descM.cellRow}>
-                <span className={descM.cellTag}>
-                  {item.descuentoInput?.tipo === "PORCENTAJE"
-                    ? `−${formatDecimal(item.descuentoInput.valor, 1)}%`
-                    : `−${formatCurrency(item.cotizacion.desglosePrecio.descuento.montoTotal, moneda)}`}
-                </span>
-                <span>{formatCurrency(visibleAmounts.subtotal, moneda)}</span>
-              </span>
-            </span>
-          ) : (
-            formatCurrency(visibleAmounts.subtotal, moneda)
-          )}
-        </div>
-        {sinComprobante ? null : (
-          <div className="num">
-            {calculoPendiente
-              ? "-"
-              : formatCurrency(visibleAmounts.impuestos, moneda)}
-          </div>
-        )}
-        {/* Precio por unidad de la magnitud cotizada (m², ml, u., hoja): el
-            total dividido por la cantidad. Le da al comercial "¿cuánto sale el
-            m²/cada folleto?" sin sacar la cuenta a mano. Usa el total visible,
-            así unitario × cantidad = total mostrado. */}
-        <div className="num">
-          {calculoPendiente || item.cantidad <= 0
-            ? "—"
-            : `${formatUnitPrice(totalItemVisible / item.cantidad, moneda)} / ${formatUnidad(item.unidadMedida)}`}
-        </div>
-        <div className={`num total${tienePrecioEspecial ? " especial" : ""}`}>
-          {calculoPendiente
-            ? "Pendiente"
-            : formatCurrency(totalItemVisible, moneda)}
-        </div>
-        {!onRemove ? (
-          <span className="x" aria-hidden="true" />
-        ) : (
-          <span
-            className="x"
-            role="button"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRemove();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                event.stopPropagation();
-                onRemove();
-              }
-            }}
-            title="Quitar producto"
-          >
-            <Trash2Icon />
-          </span>
-        )}
-      </button>
-
+    <div>
       {expanded ? (
-        <div className="oprow-body">
-          <div className="op-sub">
-            {/* Tabs + acciones agrupados a la izquierda: como op-sub queda con un
-                único hijo, las acciones caen "a continuación" de los tabs en vez
-                de colgar a la derecha. Layout inline para no depender de globals.css
-                (Turbopack no recompila ese archivo de forma confiable). */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div className="op-subnav">
-                <button
-                  type="button"
-                  className={innerTab === "specs" ? "on" : ""}
-                  onClick={() => setInnerTab("specs")}
-                >
-                  Especificaciones
-                </button>
-                <button
-                  type="button"
-                  className={innerTab === "costos" ? "on" : ""}
-                  onClick={() => setInnerTab("costos")}
-                >
-                  Costos
-                </button>
-                <button
-                  type="button"
-                  className={innerTab === "produccion" ? "on" : ""}
-                  onClick={() => setInnerTab("produccion")}
-                >
-                  Producción
-                </button>
-              </div>
+        <HeroTabs
+          {...legacyScope}
+          className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.detail)}
+          selectedKey={innerTab}
+          onSelectionChange={(value) => setInnerTab(value as InnerTab)}
+        >
+          <div className={itemStyles.toolbar}>
+            <NavigationTabList
+              variant="inset"
+              className={itemStyles.detailNavigation}
+              label={`Detalle de ${item.productoNombre}`}
+              items={[
+                { id: "specs", label: "Especificaciones", icon: <SlidersHorizontalIcon /> },
+                { id: "costos", label: "Costos", icon: <CircleDollarSignIcon /> },
+                { id: "produccion", label: "Flujo de producción", icon: <FactoryIcon /> },
+                { id: "aprovechamiento", label: "Aprovechamiento", icon: <Grid2X2Icon /> },
+              ]}
+            />
+            <div className={itemStyles.actions}>
               {onEdit ? (
-                <button type="button" className="btn-link" onClick={onEdit}>
-                  <Edit3Icon />
+                <HeroButton variant="outline" size="sm" onPress={onEdit}>
+                  <Edit3Icon data-icon="inline-start" />
                   Editar especificaciones
-                </button>
+                </HeroButton>
+              ) : null}
+              {onDescuento ? (
+                <HeroButton variant="ghost" size="sm" onPress={onDescuento}>
+                  <BadgePercentIcon data-icon="inline-start" />
+                  {item.descuentoInput ? "Editar descuento" : "Descuento"}
+                </HeroButton>
               ) : null}
             </div>
-            {/* Descuento al final (derecha). `marginLeft: auto` lo empuja al
-                borde sin depender del `justify-content` de op-sub en globals.css
-                (Turbopack lo cachea y no lo recompila de forma confiable). */}
-            {onDescuento ? (
-              <button
-                type="button"
-                className="btn-link"
-                onClick={onDescuento}
-                style={{ color: "#c2410c", marginLeft: "auto" }}
-              >
-                <BadgePercentIcon />
-                {item.descuentoInput ? "Editar descuento" : "Descuento"}
-              </button>
-            ) : null}
           </div>
 
-          {innerTab === "specs" ? (
-            <>
-              {(() => {
-                // Cortas: grilla compacta que se estira al ancho (auto-fit).
-                // Largas (caras/modo de color por paso): filas plenas debajo,
-                // FUERA de la grilla — un span 1/-1 dentro impediría que
-                // auto-fit colapse las columnas vacías de la fila de arriba.
-                const esLarga = (spec: (typeof specs)[number]) =>
-                  spec.val.length > 40;
-                const cortas = specs.filter((spec) => !esLarga(spec));
-                const largas = specs.filter(esLarga);
-                const renderSpec = (
-                  spec: (typeof specs)[number],
-                  idx: number,
-                ) => {
-                  const isMedidasSpec = spec.lbl
-                    .toLowerCase()
-                    .includes("medida");
-                  const isModoColorSpec =
-                    spec.lbl.toLowerCase().includes("modo de color") ||
-                    // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
-                    spec.lbl.toLowerCase() === "color";
-                  const isCarasSpec =
-                    spec.lbl.toLowerCase() === "caras" ||
-                    // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
-                    spec.lbl.toLowerCase() === "faz";
-                  // "Estampas": una personalización por línea (multilínea, como
-                  // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
-                  const isEstampasSpec = spec.lbl.toLowerCase() === "estampas";
-                  return (
-                    <div
-                      className={`spec ${
-                        isModoColorSpec ? "color-mode-spec" : ""
-                      } ${esLarga(spec) ? "spec-long" : ""}`}
-                      key={`${spec.lbl}-${idx}`}
-                    >
-                      <div className="spec-head">
-                        <div className="lbl">{spec.lbl}</div>
-                      </div>
+          <HeroTabs.Panel id="specs" className={itemStyles.panel}>
+            {tieneEspecificacionesRaiz
+              ? (() => {
+                  // Cortas: grilla compacta que se estira al ancho (auto-fit).
+                  // Largas (caras/modo de color por paso): filas plenas debajo,
+                  // FUERA de la grilla — un span 1/-1 dentro impediría que
+                  // auto-fit colapse las columnas vacías de la fila de arriba.
+                  const esLarga = (spec: (typeof specs)[number]) =>
+                    spec.val.length > 40;
+                  const cortas = specs.filter((spec) => !esLarga(spec));
+                  const largas = specs.filter(esLarga);
+                  const renderSpec = (
+                    spec: (typeof specs)[number],
+                    idx: number,
+                  ) => {
+                    const isMedidasSpec = spec.lbl
+                      .toLowerCase()
+                      .includes("medida");
+                    const isModoColorSpec =
+                      spec.lbl.toLowerCase().includes("modo de color") ||
+                      // Centro de copiado usa "Color" (mismo valor CMYK/B/N).
+                      spec.lbl.toLowerCase() === "color";
+                    const isCarasSpec =
+                      spec.lbl.toLowerCase() === "caras" ||
+                      // Centro de copiado usa "Faz" (simple/doble, mismo ícono).
+                      spec.lbl.toLowerCase() === "faz";
+                    // "Estampas": una personalización por línea (multilínea, como
+                    // "Medidas"). Ver docs/ot-merchandising-info-diseno.md
+                    const isEstampasSpec =
+                      spec.lbl.toLowerCase() === "estampas";
+                    const SpecIcon = isMedidasSpec
+                      ? RulerIcon
+                      : isModoColorSpec ? PaletteIcon
+                      : /material|montaje/i.test(spec.lbl) ? Layers3Icon
+                      : /tecnolog|impresi/i.test(spec.lbl) ? PrinterIcon
+                      : isCarasSpec || isEstampasSpec ? Grid2X2Icon
+                      : SlidersHorizontalIcon;
+                    return (
                       <div
-                        className={`val ${
-                          isMedidasSpec || isEstampasSpec ? "multi" : ""
-                        } ${
-                          isModoColorSpec || isCarasSpec || spec.val.length > 28
-                            ? "wrap"
-                            : ""
-                        }`}
-                      >
-                        {isModoColorSpec ? (
-                          <ModoColorSpecValue value={spec.val} />
-                        ) : isCarasSpec ? (
-                          <CarasSpecValue value={spec.val} />
-                        ) : (
-                          spec.val
+                        className={cn(
+                          itemStyles.spec,
+                          esLarga(spec) && itemStyles.specWide,
                         )}
+                        key={`${spec.lbl}-${idx}`}
+                      >
+                        <div className={itemStyles.specHeading}>
+                          <SpecIcon aria-hidden="true" />
+                          <div className={itemStyles.specLabel}>{spec.lbl}</div>
+                        </div>
+                        <div
+                          className={cn(
+                            itemStyles.specValue,
+                            (isMedidasSpec || isEstampasSpec) &&
+                              itemStyles.multiline,
+                          )}
+                        >
+                          {isModoColorSpec ? (
+                            <ModoColorSpecValue value={spec.val} />
+                          ) : isCarasSpec ? (
+                            <CarasSpecValue value={spec.val} />
+                          ) : (
+                            spec.val
+                          )}
+                        </div>
                       </div>
+                    );
+                  };
+                  return (
+                    <div className={itemStyles.specs}>
+                      {cortas.length > 0 ? (
+                        <div className={itemStyles.specGrid}>
+                          {cortas.map(renderSpec)}
+                        </div>
+                      ) : null}
+                      {largas.map(renderSpec)}
+                      <BriefDisenoEspecificaciones
+                        brief={briefDiseno}
+                        caras={carasBrief}
+                        onOpen={() => setBriefAbierto(true)}
+                      />
                     </div>
                   );
-                };
-                return (
-                  <div className="op-specs">
-                    {cortas.length > 0 ? (
-                      <div className="op-specs-grid">
-                        {cortas.map(renderSpec)}
-                      </div>
-                    ) : null}
-                    {largas.map(renderSpec)}
-                    <BriefDisenoEspecificaciones
-                      brief={briefDiseno}
-                      caras={carasBrief}
-                      onOpen={() => setBriefAbierto(true)}
-                    />
-                  </div>
-                );
-              })()}
+                })()
+              : null}
 
-              <div className="op-extras">
-                <div className="op-adicionales">
-                  <div className="op-adi-head">
+            <ComponentesEspecificaciones componentes={componentesFabricados} />
+
+            <div className={itemStyles.extras}>
+              {item.adicionales.length > 0 || !tieneComponentesFabricados ? (
+                <div className={itemStyles.extrasSection}>
+                  <div className={itemStyles.extrasHeading}>
                     <PlusIcon />
                     <span>Opcionales activados</span>
                   </div>
-                  <div className="op-chips">
+                  <div className={itemStyles.chips}>
                     {item.adicionales.length > 0 ? (
                       item.adicionales.map((adicional) => {
                         const details =
                           optionalMaterialDetails.get(adicional) ?? [];
                         return (
-                          <span key={adicional} className="adi-chip-detail">
-                            <span className="adi-chip">
-                              <CheckIcon />
+                          <span
+                            key={adicional}
+                            className={itemStyles.chipDetail}
+                          >
+                            <span className={itemStyles.optionalChip}>
+                              <CheckIcon aria-hidden="true" />
                               {adicional}
                             </span>
                             {details.length > 0 ? (
-                              <span className="adi-chip-variant">
+                              <span className={itemStyles.chipHint}>
                                 {details.join(" · ")}
                               </span>
                             ) : null}
@@ -3688,129 +4052,194 @@ export function ProductRow({
                         );
                       })
                     ) : (
-                      <span className="adi-chip">Sin opcionales activados</span>
+                      <p className={itemStyles.emptyOptional}>
+                        Sin opcionales activados
+                      </p>
                     )}
                   </div>
                 </div>
+              ) : componentMaterialDetails.length === 0 ? (
+                <span aria-hidden="true" />
+              ) : null}
 
-                {componentMaterialDetails.length > 0 ? (
-                  <div className="op-adicionales">
-                    <div className="op-adi-head">
-                      <PackageIcon />
-                      <span>Componentes</span>
-                    </div>
-                    <div className="op-chips">
-                      {componentMaterialDetails.map((detail) => (
-                        <span key={detail} className="adi-chip-detail">
-                          <span className="adi-chip">{detail}</span>
-                        </span>
-                      ))}
-                    </div>
+              {componentMaterialDetails.length > 0 ? (
+                <div className={itemStyles.extrasSection}>
+                  <div className={itemStyles.extrasHeading}>
+                    <PackageIcon />
+                    <span>Componentes</span>
                   </div>
-                ) : null}
-
-                <div className="op-mini">
-                  <div className="op-mini-row">
-                    <span className="mlbl">Fecha estimada</span>
-                    {readOnly ? (
-                      <span className="mval mono">
-                        {item.fechaEntrega ?? fechaEstimada}
+                  <div className={itemStyles.chips}>
+                    {componentMaterialDetails.map((detail) => (
+                      <span key={detail} className={itemStyles.chipDetail}>
+                        <Badge variant="secondary">{detail}</Badge>
                       </span>
-                    ) : (
-                      <input
-                        ref={fechaInputRef}
-                        className="op-date-input"
-                        type="date"
-                        value={item.fechaEntrega ?? fechaEstimada}
-                        onClick={() => fechaInputRef.current?.showPicker?.()}
-                        onChange={(event) =>
-                          onChangeFechaEntrega?.(event.target.value)
-                        }
-                        aria-label={`Fecha estimada de ${item.productoNombre}`}
-                      />
-                    )}
+                    ))}
                   </div>
-                  {(() => {
-                    const eta = describirEta(
-                      etaSistema,
-                      item.fechaEntrega ?? fechaEstimada,
-                      {
-                        margenDias: margenEtaDias,
-                        noLaborables,
-                        zona: zonaHoraria,
-                      },
-                    );
-                    if (!eta) return null;
-                    return (
-                      <div className="op-mini-row">
-                        <span className="mlbl">Sistema estima</span>
-                        <span
-                          className={`mval mono ${eta.nivel === "tarde" ? "eta-tarde" : eta.nivel === "sin-margen" ? "eta-justo" : ""}`}
-                          title={
-                            eta.motivo ||
-                            "Simulado contra las colas actuales del taller"
-                          }
-                        >
-                          {eta.etiqueta}
-                          {eta.nivel === "tarde"
-                            ? " · después de la fecha"
-                            : eta.nivel === "sin-margen"
-                              ? " · sin margen"
-                              : ""}
-                        </span>
-                      </div>
-                    );
-                  })()}
                 </div>
-              </div>
-            </>
-          ) : null}
+              ) : null}
 
-          {innerTab === "costos" ? (
+              <div className={itemStyles.delivery}>
+                <div className={itemStyles.extrasHeading}>
+                  <CalendarIcon aria-hidden="true" />
+                  <span>Entrega del producto</span>
+                </div>
+                {!(entregasPrevias?.distribucion ?? item.distribucionEntregas)
+                  ?.entregas.length ? (
+                  <>
+                    <div className={itemStyles.deliveryRow}>
+                      <span className={itemStyles.deliveryLabel}>
+                        Entrega prevista
+                      </span>
+                      {readOnly && !editarFecha ? (
+                        <span className={itemStyles.deliveryValue}>
+                          {formatFechaOrden(item.fechaEntrega ?? fechaEstimada)}
+                        </span>
+                      ) : (
+                        <Input
+                          ref={fechaInputRef}
+                          className={itemStyles.dateInput}
+                          type="date"
+                          value={item.fechaEntrega ?? fechaEstimada}
+                          onClick={() => fechaInputRef.current?.showPicker?.()}
+                          onChange={(event) =>
+                            onChangeFechaEntrega?.(event.target.value)
+                          }
+                          aria-label={`Entrega prevista de ${item.productoNombre}`}
+                        />
+                      )}
+                    </div>
+                    {(() => {
+                      const eta = describirEta(
+                        etaSistema,
+                        item.fechaEntrega ?? fechaEstimada,
+                        {
+                          margenDias: margenEtaDias,
+                          noLaborables,
+                          zona: zonaHoraria,
+                          ahora: ahoraEta,
+                        },
+                      );
+                      if (!eta) return null;
+                      return (
+                        <div
+                          className={cn(
+                            itemStyles.deliveryRow,
+                            itemStyles.deliveryEstimate,
+                            fechasStyles.filaTiempo,
+                          )}
+                        >
+                          <span className={itemStyles.deliveryLabel}>
+                            Producción lista
+                          </span>
+                          <span
+                            className={cn(
+                              itemStyles.deliveryValue,
+                              fechasStyles.valorTiempo,
+                              eta.nivel === "tarde" && itemStyles.late,
+                              eta.nivel === "sin-margen" && itemStyles.tight,
+                            )}
+                            title={
+                              eta.motivo ||
+                              "Simulado contra las colas actuales del taller"
+                            }
+                          >
+                            {eta.etiqueta}
+                            {eta.nivel === "tarde"
+                              ? " · después de la fecha"
+                              : eta.nivel === "sin-margen"
+                                ? " · sin margen"
+                                : ""}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </>
+                ) : null}
+                {planificarEntregas ||
+                entregasPrevias ||
+                item.distribucionEntregas ? (
+                  <PlanificacionEntregas
+                    itemId={item.id}
+                    nombre={item.productoNombre}
+                    cantidad={item.cantidad}
+                    previa={entregasPrevias}
+                    distribucion={item.distribucionEntregas}
+                    editable={!!planificarEntregas || !!entregasPrevias}
+                    onGuardada={onDistribucionGuardada}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </HeroTabs.Panel>
+
+          <HeroTabs.Panel id="costos" className={itemStyles.panel}>
             <CostosItemView
               item={item}
               costo={costo}
               calculoPendiente={calculoPendiente}
               sinComprobante={sinComprobante}
             />
-          ) : null}
+          </HeroTabs.Panel>
 
-          {innerTab === "produccion" ? (
-            <ProduccionItemView
-              item={item}
-              calculoPendiente={calculoPendiente}
-              prepararCorte={prepararCorte}
-              onExpand={() => setProduccionAmpliada(true)}
-              onOpenBrief={() => setBriefAbierto(true)}
-              onEditPanels={
-                readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
-              }
-            />
-          ) : null}
-        </div>
-      ) : null}
-
-      <Dialog open={produccionAmpliada} onOpenChange={setProduccionAmpliada}>
-        <DialogContent className="inset-3 top-3 left-3 h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-none translate-x-0 translate-y-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-none">
-          <DialogHeader className="px-6 py-4 pr-14">
-            <DialogTitle>Producción · {item.productoNombre}</DialogTitle>
-            <DialogDescription>
-              Ruta, tiempos y disposición de piezas del ítem.
-            </DialogDescription>
-          </DialogHeader>
-          <Separator />
-          <div className="min-h-0 overflow-y-auto bg-muted/30 p-4 sm:p-6">
-            <div className="ot-v1 mx-auto w-full max-w-[1600px]">
-              <ProduccionItemView
+          {(["produccion", "aprovechamiento"] as const).map((vista) => (
+            <HeroTabs.Panel key={vista} id={vista} className={itemStyles.panel}>
+              <FabricacionItemView
+                vista={vista}
+                loteId={loteId}
+                onLoteChange={setLoteId}
                 item={item}
                 calculoPendiente={calculoPendiente}
-                ampliada
                 prepararCorte={prepararCorte}
-                onOpenBrief={() => setBriefAbierto(true)}
+                onExpand={() => setVistaAmpliada(vista)}
                 onEditPanels={
                   readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
                 }
               />
+            </HeroTabs.Panel>
+          ))}
+        </HeroTabs>
+      ) : null}
+
+      <Dialog
+        open={vistaAmpliada !== null}
+        onOpenChange={(open) => {
+          if (!open) setVistaAmpliada(null);
+        }}
+      >
+        <DialogContent
+          {...legacyScope}
+          className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.dialog)}
+        >
+          <DialogHeader className={itemStyles.dialogHeader}>
+            <DialogTitle>
+              {vistaAmpliada === "aprovechamiento"
+                ? "Aprovechamiento"
+                : "Flujo de producción"}{" "}
+              · {item.productoNombre}
+            </DialogTitle>
+            <DialogDescription>
+              {vistaAmpliada === "aprovechamiento"
+                ? "Disposición de piezas, consumo y archivos de fabricación."
+                : "Operaciones y tiempos del ítem."}
+            </DialogDescription>
+          </DialogHeader>
+          <Separator />
+          <div className={itemStyles.dialogBody}>
+            <div className={itemStyles.expandedContent}>
+              {vistaAmpliada ? (
+                <FabricacionItemView
+                  vista={vistaAmpliada}
+                  loteId={loteId}
+                  onLoteChange={setLoteId}
+                  item={item}
+                  calculoPendiente={calculoPendiente}
+                  ampliada
+                  prepararCorte={prepararCorte}
+                  onEditPanels={
+                    readOnly ? undefined : (paso) => onEditPanels?.(item, paso)
+                  }
+                />
+              ) : null}
             </div>
           </div>
         </DialogContent>
@@ -3842,60 +4271,6 @@ function EmptyTab({
   );
 }
 
-type ImpuestoResumenLinea = {
-  key: string;
-  nombre: string;
-  porcentaje: number;
-  monto: number;
-};
-
-function getImpuestosItemResumen(item: PropuestaItem) {
-  const desglose = item.cotizacion.desglosePrecio;
-  const lineas: ImpuestoResumenLinea[] = [];
-  let ocultos = 0;
-
-  if (!desglose) {
-    return { visibles: lineas, ocultos };
-  }
-
-  // Solo los impuestos POR_FUERA (IVA) son líneas que se agregan al neto y
-  // pueden mostrarse/ocultarse al cliente: su monto es % del neto. Los
-  // POR_DENTRO (IIBB, imp. al cheque) son costos ya embebidos en el precio
-  // neto — nunca se listan ni ajustan el subtotal.
-  const netoTotal = desglose.precioNetoTotal ?? 0;
-  for (const impuesto of desglose.impuestos ?? []) {
-    if ((impuesto.traslado ?? "POR_DENTRO") !== "POR_FUERA") continue;
-    const monto = netoTotal * (impuesto.porcentaje / 100);
-    if (monto <= 0) continue;
-    if (impuesto.desglosarCliente === false) {
-      ocultos += monto;
-      continue;
-    }
-
-    lineas.push({
-      key: impuesto.catalogoId || impuesto.codigo || impuesto.nombre,
-      nombre: impuesto.nombre,
-      porcentaje: impuesto.porcentaje,
-      monto,
-    });
-  }
-
-  return { visibles: lineas, ocultos };
-}
-
-function roundVisibleCurrency(value: number) {
-  return Math.round(value);
-}
-
-/** Input crudo de un descuento comercial (lo que pide el vendedor). Con
- * `cuponId` viene de un cupón: exento del gate y redimido al emitir. */
-type DescuentoInput = {
-  tipo: "PORCENTAJE" | "MONTO";
-  valor: number;
-  cuponId?: string;
-  cuponCodigo?: string;
-};
-
 /**
  * Proyección del descuento para el MOTOR: sólo { tipo, valor }. El cupón
  * (cuponId/cuponCodigo) es asunto comercial — el DTO del motor no lo conoce
@@ -3913,115 +4288,6 @@ function descuentoParaMotor(
  * (`aprobacionDescuentoMaxPct`). Ver docs/descuentos-diseno.md §10.
  */
 const DESCUENTO_MARGEN_ALERTA_PCT = 15;
-
-/**
- * Neto de LISTA de la línea (antes del descuento): base para prorratear un
- * descuento de orden por peso. Cae al neto normal / subtotal en snapshots que
- * no traen el bloque de descuento.
- */
-function netoListaDeItem(item: PropuestaItem): number {
-  const desglose = item.cotizacion.desglosePrecio;
-  return (
-    desglose?.descuento?.netoListaTotal ??
-    desglose?.precioNetoTotal ??
-    item.subtotal ??
-    0
-  );
-}
-
-/** Monto del descuento ya resuelto por el motor para la línea (0 si no hubo). */
-function descuentoMontoDeItem(item: PropuestaItem): number {
-  const descuento = item.cotizacion.desglosePrecio?.descuento;
-  return descuento?.aplicado ? descuento.montoTotal : 0;
-}
-
-function getItemOrderVisibleAmounts(item: PropuestaItem) {
-  const impuestosResumen = getImpuestosItemResumen(item);
-  const subtotal = roundVisibleCurrency(
-    item.subtotal + impuestosResumen.ocultos,
-  );
-  const impuestos = roundVisibleCurrency(
-    Math.max(0, item.impuestoMonto - impuestosResumen.ocultos),
-  );
-  return {
-    subtotal,
-    impuestos,
-    total: roundVisibleCurrency(item.total),
-  };
-}
-
-function asNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function getCargoConfig(cargo: CargoDirectoCatalogo | null) {
-  return (cargo?.configJson ?? {}) as Record<string, unknown>;
-}
-
-function getCargoDefaultMonto(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-  const firstZona = zonas[0] as { monto?: unknown } | undefined;
-  return asNumber(config.monto ?? firstZona?.monto, 0);
-}
-
-function getCargoDefaultPorcentaje(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  return asNumber(config.porcentaje ?? config.porcentajeDefault, 0);
-}
-
-function getCargoDefaultPrecioUnidad(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  return asNumber(config.precioPorUnidad, 0);
-}
-
-function getCargoInputLabel(cargo: CargoDirectoCatalogo | null) {
-  const config = getCargoConfig(cargo);
-  const inputCantidad =
-    typeof config.inputCantidad === "string"
-      ? config.inputCantidad
-      : "cantidad";
-  const unidad = typeof config.unidad === "string" ? config.unidad : "";
-  const labels: Record<string, string> = {
-    distanciaKm: "Distancia",
-    bultos: "Bultos",
-    horas: "Horas",
-    viajes: "Viajes",
-    paradas: "Paradas",
-    cajas: "Cajas",
-    cantidad: "Cantidad",
-  };
-  const label = labels[inputCantidad] ?? humanizeCodigo(inputCantidad);
-  return unidad ? `${label} (${unidad})` : label;
-}
-
-function calcularResumenOrden(
-  items: PropuestaItem[],
-  cargosOrden: PropuestaCargoDirecto[],
-) {
-  const productos = calcularResumen(items);
-  const cargosSubtotal = cargosOrden.reduce(
-    (acc, cargo) => acc + cargo.montoNeto,
-    0,
-  );
-  const cargosImpuestos = cargosOrden.reduce(
-    (acc, cargo) => acc + cargo.impuestoMonto,
-    0,
-  );
-  const cargosTotal = cargosOrden.reduce((acc, cargo) => acc + cargo.total, 0);
-
-  return {
-    productos,
-    cargosSubtotal,
-    cargosImpuestos,
-    cargosTotal,
-    subtotal: productos.subtotal + cargosSubtotal,
-    impuestos: productos.impuestos + cargosImpuestos,
-    total: productos.total + cargosTotal,
-    cantidadItems: productos.cantidadItems,
-  };
-}
 
 /**
  * Overlay de emisión (diseño Grafo V2 · ordenes.jsx): pasos animados mientras
@@ -4141,7 +4407,7 @@ function EmitOverlay({
                             <path d="M5 13l4 4L19 7" />
                           </svg>
                         ) : state === "run" ? (
-                          <span className="es-spin" />
+                          <GdiSpinner />
                         ) : null}
                       </span>
                       <span className="es-lbl">{lbl}</span>
@@ -4169,1126 +4435,10 @@ function EmitOverlay({
  *  cuaderno de margen — nada oculto, se ve de frente. */
 function ChipSinComprobante() {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        fontSize: 12,
-        fontWeight: 600,
-        padding: "2px 10px",
-        borderRadius: 999,
-        background: "#fff7ed",
-        color: "#c2410c",
-        border: "1px solid #fed7aa",
-      }}
-      title="Orden sin comprobante fiscal en el sistema."
-    >
-      <FileXIcon size={13} /> Sin comprobante
-    </span>
-  );
-}
-
-export function ResumenBar({
-  items,
-  cargosOrden,
-  tipo,
-  onEmitir,
-  onEmitirPresupuesto,
-  emitiendo = false,
-  onGuardarBorrador,
-  guardandoBorrador = false,
-  onDescuentoOrden,
-  onCuponOrden,
-  sinComprobante = false,
-  fidelizacionCanjeMonto = 0,
-  onToggleTratamientoFiscal,
-  togglingFiscal = false,
-  readOnly = false,
-  resumenPersistido,
-  accionesOrden,
-}: {
-  items: PropuestaItem[];
-  cargosOrden: PropuestaCargoDirecto[];
-  tipo: "orden" | "presupuesto";
-  /** Ausente en modo lectura (OT emitida): sin acciones de guardado/emisión. */
-  onEmitir?: () => void;
-  /** Emisión del PRESUPUESTO (toggle en "Presupuesto"). */
-  onEmitirPresupuesto?: () => void;
-  emitiendo?: boolean;
-  onGuardarBorrador?: () => void;
-  guardandoBorrador?: boolean;
-  /** Abre el modal de descuento a nivel orden (ausente en modo lectura). */
-  onDescuentoOrden?: () => void;
-  /** Abre el modal directo en modo escaneo de cupón (F4). */
-  onCuponOrden?: () => void;
-  /** Orden marcada SIN comprobante fiscal: el desglose oculta el IVA y el
-   *  total baja al neto. §6 del cuaderno de margen. */
-  sinComprobante?: boolean;
-  /** Bonificación comercial aplicada mediante el canje de puntos. */
-  fidelizacionCanjeMonto?: number;
-  /** Alterna el tratamiento fiscal (FISCAL ↔ SIN_COMPROBANTE). Ausente cuando
-   *  la orden ya no admite el cambio (facturada / no editable). */
-  onToggleTratamientoFiscal?: () => void;
-  togglingFiscal?: boolean;
-  readOnly?: boolean;
-  resumenPersistido?: {
-    subtotal: number;
-    impuestos: number;
-    descuentoTotal: number;
-    total: number;
-  };
-  /** Acciones de la OT emitida (Editar / Cancelar): van acá, no en el header,
-   *  para ganar alto. Sólo en modo lectura. */
-  accionesOrden?: React.ReactNode;
-}) {
-  const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatCurrency(v, moneda);
-  const resumen = calcularResumenOrden(items, cargosOrden);
-  const productosVisibles = items.reduce(
-    (acc, item) => {
-      const amounts = getItemOrderVisibleAmounts(item);
-      return {
-        subtotal: acc.subtotal + amounts.subtotal,
-        impuestos: acc.impuestos + amounts.impuestos,
-        total: acc.total + amounts.total,
-      };
-    },
-    { subtotal: 0, impuestos: 0, total: 0 },
-  );
-  // Los cargos DEL PASO ya integran el precio neto de cada producto: volver a
-  // mostrarlos como sumando sería contarlos visualmente dos veces. Sólo los
-  // cargos cargados a nivel ORDEN viven fuera del subtotal de los ítems.
-  const subtotal = productosVisibles.subtotal;
-  const impuestosVisibles = productosVisibles.impuestos;
-  const cargosOrdenMostrados = sinComprobante
-    ? resumen.cargosSubtotal
-    : resumen.cargosTotal;
-  const totalConCargos = productosVisibles.total + resumen.cargosTotal;
-
-  // Las comisiones ya están dentro del subtotal (son parte del precio): no se
-  // muestran como línea aparte ni en la barra ni en el desglose del item.
-  // Descuento comercial total: suma de lo que resolvió el motor por línea. El
-  // subtotal de arriba YA está descontado (el motor lo restó del neto); esta
-  // línea es informativa, para que el precio de lista quede a la vista.
-  const descuentoTotal = items.reduce(
-    (acc, item) => acc + descuentoMontoDeItem(item),
-    0,
-  );
-  // Sin comprobante: se oculta el IVA y el total cae al neto (§6 del cuaderno
-  // de margen). Se suman el subtotal neto de productos y los cargos netos DE
-  // LA ORDEN; no se usa `total − IVA`, porque arrastra redondeos.
-  const impuestosMostrados = sinComprobante ? 0 : impuestosVisibles;
-  const totalSinComprobante = subtotal + resumen.cargosSubtotal;
-  const totalAntesCanje =
-    readOnly && resumenPersistido
-      ? resumenPersistido.total
-      : sinComprobante
-        ? totalSinComprobante
-        : totalConCargos;
-  // En una OT persistida `resumenPersistido.total` ya incluye el canje. En el
-  // cotizador todavía hay que reflejar la simulación en esta barra.
-  const canjeMostrado = readOnly ? 0 : Math.max(0, fidelizacionCanjeMonto);
-  const totalMostrado = Math.max(0, totalAntesCanje - canjeMostrado);
-  const descuentoMostrado =
-    readOnly && resumenPersistido
-      ? resumenPersistido.descuentoTotal
-      : descuentoTotal;
-  const subtotalMostrado =
-    readOnly && resumenPersistido ? resumenPersistido.subtotal : subtotal;
-  const brk = [
-    {
-      k: descuentoMostrado > 0 ? "Subtotal de lista" : "Subtotal",
-      v: subtotalMostrado + descuentoMostrado,
-    },
-    ...(descuentoMostrado > 0
-      ? [{ k: "Descuento", v: -descuentoMostrado }]
-      : []),
-    {
-      k: "Impuestos",
-      v:
-        readOnly && resumenPersistido
-          ? resumenPersistido.impuestos
-          : impuestosMostrados,
-    },
-    ...(cargosOrdenMostrados > 0
-      ? [{ k: "Cargos de la orden", v: cargosOrdenMostrados }]
-      : []),
-    ...(canjeMostrado > 0 ? [{ k: "Canje de puntos", v: -canjeMostrado }] : []),
-  ];
-
-  // Toggle "sin comprobante fiscal" (FileX). Estado, no acción de una vez:
-  // aria-pressed + relleno naranja cuando está activo. §6 cuaderno de margen.
-  const toggleFiscalBtn = onToggleTratamientoFiscal ? (
-    <button
-      type="button"
-      className="btn"
-      onClick={onToggleTratamientoFiscal}
-      disabled={togglingFiscal || items.length === 0}
-      aria-pressed={sinComprobante}
-      aria-label="Sin comprobante fiscal en el sistema"
-      title={
-        sinComprobante
-          ? "Sin comprobante fiscal en el sistema — click o tecla X para volver a fiscal"
-          : "Marcar la orden sin comprobante fiscal en el sistema (tecla X)"
-      }
-      style={
-        sinComprobante
-          ? { color: "#fff", background: "#c2410c", borderColor: "#c2410c" }
-          : { color: "#c2410c" }
-      }
-    >
-      <FileXIcon />
-    </button>
-  ) : null;
-
-  // Modelo C del diseño: barra anclada al fondo del scroll, con el papel y la
-  // constelación del encabezado. La lista de productos corre por detrás y el
-  // total nunca se pierde de vista. Ver producto/Resumen financiero.html.
-  return (
-    <div className={resumenBar.wrap}>
-      <ConstelacionCanvas
-        className={resumenBar.canvas}
-        nodes={34}
-        pulses={3}
-        cx={0.88}
-        cy={0.5}
-        radius={1.5}
-      />
-      <span className={resumenBar.veil} />
-      <div className={resumenBar.in}>
-        <span className={resumenBar.tot}>
-          <span className={resumenBar.totK}>
-            Total{sinComprobante ? " (sin comprobante)" : ""}
-          </span>
-          <span className={resumenBar.totV}>{fmt(totalMostrado)}</span>
-        </span>
-        <span className={resumenBar.brk}>
-          {brk.map((c) => (
-            <span
-              key={c.k}
-              className={`${resumenBar.cell}${c.v !== 0 ? "" : ` ${resumenBar.zero}`}`}
-            >
-              <span className={resumenBar.cellK}>{c.k}</span>
-              <span className={resumenBar.cellV}>{fmt(c.v)}</span>
-            </span>
-          ))}
-        </span>
-        {readOnly ? (
-          accionesOrden || toggleFiscalBtn ? (
-            <span className={resumenBar.acts}>
-              {toggleFiscalBtn}
-              {accionesOrden}
-            </span>
-          ) : null
-        ) : (
-          <span className={resumenBar.acts}>
-            {toggleFiscalBtn}
-            {onDescuentoOrden ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={onDescuentoOrden}
-                disabled={emitiendo || items.length === 0}
-                aria-label="Aplicar un descuento a toda la orden"
-                title={
-                  descuentoTotal > 0
-                    ? "Descuento aplicado — editar"
-                    : "Aplicar un descuento a toda la orden"
-                }
-                style={{ color: "#c2410c" }}
-              >
-                <BadgePercentIcon />
-              </button>
-            ) : null}
-            {onCuponOrden ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={onCuponOrden}
-                disabled={emitiendo || items.length === 0}
-                aria-label="Escanear o ingresar un cupón"
-                title="Cupón: escaneá el QR o tecleá el código"
-                style={{ color: "#c2410c" }}
-              >
-                <TicketPercentIcon />
-              </button>
-            ) : null}
-            {tipo === "orden" ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={onGuardarBorrador}
-                disabled={guardandoBorrador || emitiendo || items.length === 0}
-              >
-                <SaveIcon />
-                {guardandoBorrador ? "Guardando…" : "Borrador"}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={emitiendo || items.length === 0}
-              onClick={tipo === "orden" ? onEmitir : onEmitirPresupuesto}
-            >
-              {tipo === "orden" ? (
-                <>
-                  <CheckIcon />
-                  {emitiendo ? "Emitiendo…" : "Emitir OT"}
-                </>
-              ) : (
-                <>
-                  <ExternalLinkIcon />
-                  {emitiendo ? "Emitiendo…" : "Emitir presupuesto"}
-                </>
-              )}
-            </button>
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function buildCargoOrdenSnapshot({
-  cargo,
-  monto,
-  porcentaje,
-  precioUnidad,
-  cantidadInput,
-  zonaCodigo,
-  subtotalBase,
-  nota,
-  moneda,
-}: {
-  cargo: CargoDirectoCatalogo;
-  monto: number;
-  porcentaje: number;
-  precioUnidad: number;
-  cantidadInput: number;
-  zonaCodigo: string;
-  subtotalBase: number;
-  nota: string;
-  moneda: Moneda;
-}): PropuestaCargoDirecto {
-  const config = getCargoConfig(cargo);
-  const zonas = Array.isArray(config.zonas) ? config.zonas : [];
-  const zona =
-    zonaCodigo && zonas.length > 0
-      ? (zonas.find(
-          (candidate) =>
-            typeof candidate === "object" &&
-            candidate !== null &&
-            "codigo" in candidate &&
-            String((candidate as { codigo: unknown }).codigo) === zonaCodigo,
-        ) as { codigo?: string; nombre?: string; monto?: number } | undefined)
-      : undefined;
-  let montoNeto = monto;
-  let detalle = "Monto fijo";
-  const nextConfig: Record<string, unknown> = { ...config };
-
-  if (cargo.modoCalculo === "MONTO_FIJO_PLANO") {
-    montoNeto = zona ? asNumber(zona.monto, monto) : monto;
-    nextConfig.montoAplicado = montoNeto;
-    if (zona) {
-      nextConfig.zonaAplicada = {
-        codigo: zona.codigo,
-        nombre: zona.nombre,
-        monto: montoNeto,
-      };
-      detalle = zona.nombre ? `Zona ${zona.nombre}` : `Zona ${zona.codigo}`;
-    }
-  }
-
-  if (cargo.modoCalculo === "PORCENTAJE_SOBRE_BASE") {
-    montoNeto = (subtotalBase * porcentaje) / 100;
-    nextConfig.porcentajeAplicado = porcentaje;
-    detalle = `${porcentaje.toLocaleString("es-AR", { maximumFractionDigits: 2 })}% sobre subtotal`;
-  }
-
-  if (cargo.modoCalculo === "POR_UNIDAD_INPUT") {
-    montoNeto = precioUnidad * cantidadInput;
-    nextConfig.precioPorUnidadAplicado = precioUnidad;
-    nextConfig.cantidadAplicada = cantidadInput;
-    detalle = `${cantidadInput.toLocaleString("es-AR")} x ${formatCurrency(precioUnidad, moneda)}`;
-  }
-
-  const montoRedondeado = Math.max(0, Math.round(montoNeto));
-  const impuestoPorcentaje = 21;
-  const impuestoMonto = Math.round(
-    montoRedondeado * (impuestoPorcentaje / 100),
-  );
-
-  return {
-    id: `cargo-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    cargoDirectoCatalogoId: cargo.id,
-    codigoSnapshot: cargo.codigo,
-    nombreSnapshot: cargo.nombre,
-    descripcionSnapshot: cargo.descripcion,
-    modoCalculoSnapshot:
-      cargo.modoCalculo as PropuestaCargoDirecto["modoCalculoSnapshot"],
-    configSnapshot: nextConfig,
-    baseCalculo: subtotalBase,
-    cantidadInput:
-      cargo.modoCalculo === "POR_UNIDAD_INPUT" ? cantidadInput : undefined,
-    montoNeto: montoRedondeado,
-    impuestoPorcentaje,
-    impuestoMonto,
-    total: montoRedondeado + impuestoMonto,
-    detalle,
-    nota: nota.trim() || undefined,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function CargoOrdenSheet({
-  open,
-  cargos,
-  subtotalBase,
-  onClose,
-  onAdd,
-}: {
-  open: boolean;
-  cargos: CargoDirectoCatalogo[];
-  subtotalBase: number;
-  onClose: () => void;
-  onAdd: (cargo: PropuestaCargoDirecto) => void;
-}) {
-  const { moneda } = useConfigRegional();
-  const [cargoId, setCargoId] = React.useState("");
-  const selectedCargo = React.useMemo(
-    () => cargos.find((cargo) => cargo.id === cargoId) ?? null,
-    [cargos, cargoId],
-  );
-  const zonas = React.useMemo(() => {
-    const selectedConfig = getCargoConfig(selectedCargo);
-    return Array.isArray(selectedConfig.zonas)
-      ? (selectedConfig.zonas as Array<{
-          codigo?: string;
-          nombre?: string;
-          monto?: number;
-        }>)
-      : [];
-  }, [selectedCargo]);
-  const [monto, setMonto] = React.useState(0);
-  const [porcentaje, setPorcentaje] = React.useState(0);
-  const [precioUnidad, setPrecioUnidad] = React.useState(0);
-  const [cantidadInput, setCantidadInput] = React.useState(1);
-  const [zonaCodigo, setZonaCodigo] = React.useState("");
-  const [nota, setNota] = React.useState("");
-
-  React.useEffect(() => {
-    if (!open) return;
-    const first = cargos[0];
-    setCargoId(first?.id ?? "");
-  }, [cargos, open]);
-
-  React.useEffect(() => {
-    setMonto(getCargoDefaultMonto(selectedCargo));
-    setPorcentaje(getCargoDefaultPorcentaje(selectedCargo));
-    setPrecioUnidad(getCargoDefaultPrecioUnidad(selectedCargo));
-    setCantidadInput(1);
-    setZonaCodigo(zonas[0]?.codigo ?? "");
-    setNota("");
-  }, [selectedCargo, zonas]);
-
-  if (!open) return null;
-
-  const preview = selectedCargo
-    ? buildCargoOrdenSnapshot({
-        cargo: selectedCargo,
-        monto,
-        porcentaje,
-        precioUnidad,
-        cantidadInput,
-        zonaCodigo,
-        subtotalBase,
-        nota,
-        moneda,
-      })
-    : null;
-
-  const handleAdd = () => {
-    if (!selectedCargo || !preview) {
-      toast.error("Seleccioná un cargo del catálogo.");
-      return;
-    }
-    if (preview.montoNeto <= 0) {
-      toast.error("El monto del cargo debe ser mayor a cero.");
-      return;
-    }
-    onAdd(preview);
-  };
-
-  return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose} />
-      <aside
-        className="sheet sheet-ap cargo-sheet"
-        aria-modal="true"
-        role="dialog"
-      >
-        <div className="sheet-head">
-          <span className="sheet-ico">
-            <CircleDollarSignIcon />
-          </span>
-          <div className="body">
-            <h2>Agregar cargo a la OT</h2>
-            <div className="sub">
-              Usa el catálogo de Costos, pero guarda un snapshot para esta
-              orden.
-            </div>
-          </div>
-          <button
-            type="button"
-            className="close"
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        <div className="sheet-body cargo-sheet-body">
-          {cargos.length === 0 ? (
-            <div className="orden-tab-empty">
-              <div className="ttl">Sin cargos disponibles</div>
-              <div className="sub">
-                Creá cargos en Costos &gt; Cargos directos.
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="cargo-field">
-                <label>Cargo</label>
-                <select
-                  value={cargoId}
-                  onChange={(event) => setCargoId(event.target.value)}
-                >
-                  {cargos.map((cargo) => (
-                    <option key={cargo.id} value={cargo.id}>
-                      {cargo.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedCargo ? (
-                <div className="cargo-calc-card">
-                  <div>
-                    <span className="lbl">Tipo de cálculo</span>
-                    <strong>
-                      {selectedCargo.modoCalculo.replaceAll("_", " ")}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="lbl">Base actual</span>
-                    <strong>{formatCurrency(subtotalBase, moneda)}</strong>
-                  </div>
-                </div>
-              ) : null}
-
-              {selectedCargo?.modoCalculo === "MONTO_FIJO_PLANO" ? (
-                <>
-                  {zonas.length > 0 ? (
-                    <div className="cargo-field">
-                      <label>Zona</label>
-                      <select
-                        value={zonaCodigo}
-                        onChange={(event) => setZonaCodigo(event.target.value)}
-                      >
-                        {zonas.map((zona) => (
-                          <option key={zona.codigo} value={zona.codigo}>
-                            {zona.nombre ?? zona.codigo} ·{" "}
-                            {formatCurrency(asNumber(zona.monto), moneda)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {zonas.length === 0 ? (
-                    <div className="cargo-field">
-                      <label>Monto neto</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={monto}
-                        onChange={(event) =>
-                          setMonto(Number(event.target.value) || 0)
-                        }
-                      />
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
-
-              {selectedCargo?.modoCalculo === "PORCENTAJE_SOBRE_BASE" ? (
-                <div className="cargo-field">
-                  <label>Porcentaje sobre subtotal</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={porcentaje}
-                    onChange={(event) =>
-                      setPorcentaje(Number(event.target.value) || 0)
-                    }
-                  />
-                </div>
-              ) : null}
-
-              {selectedCargo?.modoCalculo === "POR_UNIDAD_INPUT" ? (
-                <div className="cargo-grid-2">
-                  <div className="cargo-field">
-                    <label>{getCargoInputLabel(selectedCargo)}</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={cantidadInput}
-                      onChange={(event) =>
-                        setCantidadInput(Number(event.target.value) || 0)
-                      }
-                    />
-                  </div>
-                  <div className="cargo-field">
-                    <label>Precio por unidad</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={precioUnidad}
-                      onChange={(event) =>
-                        setPrecioUnidad(Number(event.target.value) || 0)
-                      }
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="cargo-field">
-                <label>Nota interna</label>
-                <textarea
-                  rows={3}
-                  value={nota}
-                  onChange={(event) => setNota(event.target.value)}
-                  placeholder="Opcional"
-                />
-              </div>
-
-              {preview ? (
-                <div className="cargo-preview">
-                  <span>
-                    {preview.nombreSnapshot}
-                    <small>{preview.detalle}</small>
-                  </span>
-                  <strong>{formatCurrency(preview.total, moneda)}</strong>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-
-        <div className="sheet-foot">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancelar
-          </button>
-          <div className="spacer" />
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleAdd}
-            disabled={cargos.length === 0}
-          >
-            <PlusIcon />
-            Agregar cargo
-          </button>
-        </div>
-      </aside>
-    </>
-  );
-}
-
-/** Qué se va a descontar: abierto desde una fila (item) o desde la barra
- * (orden). `cupon` abre directo en modo escaneo de cupón. */
-type DescuentoTarget = {
-  scope: "item" | "orden";
-  itemId: string | null;
-  cupon?: boolean;
-};
-
-/**
- * Modal de descuento comercial (F1). Alcance item u orden, % o monto. El preview
- * es sólo monetario (neto de lista → descontado); el margen efectivo y su aviso
- * los resuelve el motor al aplicar (recotización). Ver §10 del diseño.
- */
-function DescuentoModal({
-  target,
-  items,
-  clienteId,
-  aplicando,
-  onClose,
-  onApply,
-  onApplyCupon,
-  onAviso,
-}: {
-  /** null = cerrado. `scope`/`itemId` fijan el estado inicial del formulario. */
-  target: DescuentoTarget | null;
-  /** Sólo los items recotizables (con jobContext + motor). */
-  items: PropuestaItem[];
-  /** Para validar cupones con alcance CLIENTE. */
-  clienteId: string | null;
-  aplicando: boolean;
-  onClose: () => void;
-  onApply: (
-    scope: "item" | "orden",
-    targetItemId: string | null,
-    descuento: DescuentoInput | null,
-  ) => void;
-  /** Cupón validado por el backend, listo para materializar por línea. */
-  onApplyCupon: (resultado: ValidarCuponResultado) => void;
-  /** Los errores de cupón se muestran en el modal centrado, no en toast. */
-  onAviso: (aviso: AvisoCupon) => void;
-}) {
-  const { moneda } = useConfigRegional();
-  const [tipo, setTipo] = React.useState<"PORCENTAJE" | "MONTO">("PORCENTAJE");
-  const [valor, setValor] = React.useState(0);
-  // Cupón (sólo alcance orden): el código define su propio alcance, el
-  // backend valida y dice qué líneas toca. El lector 2D tipea + Enter.
-  const [modo, setModo] = React.useState<"manual" | "cupon">("manual");
-  const [codigoCupon, setCodigoCupon] = React.useState("");
-  const [validandoCupon, setValidandoCupon] = React.useState(false);
-  const [cuponValidado, setCuponValidado] =
-    React.useState<ValidarCuponResultado | null>(null);
-  // Modo ESCANEO: input invisible con foco capturando lo que tipea el lector;
-  // al Enter valida y aplica directo, sin mostrar el código.
-  const [escaneando, setEscaneando] = React.useState(false);
-  const scanRef = React.useRef<HTMLInputElement | null>(null);
-  const abierto = target != null;
-
-  // Ref con los items para leerlos en el efecto de init sin volverlo a disparar.
-  const itemsRefDescuento = React.useRef(items);
-  itemsRefDescuento.current = items;
-
-  // El alcance y el item los fija el punto de entrada (la fila o la barra), no el
-  // usuario. Init en el flanco de apertura: precarga tipo/valor desde el descuento
-  // existente del objetivo (o de cualquiera, si es a nivel orden) para editarlo.
-  React.useEffect(() => {
-    if (!target) return;
-    const itemsRecotizables = itemsRefDescuento.current;
-    const ref =
-      target.scope === "item"
-        ? itemsRecotizables.find((item) => item.id === target.itemId)
-        : itemsRecotizables.find((item) => item.descuentoInput);
-    if (ref?.descuentoInput) {
-      setTipo(ref.descuentoInput.tipo);
-      setValor(ref.descuentoInput.valor);
-    } else {
-      setTipo("PORCENTAJE");
-      setValor(0);
-    }
-    setModo(target.cupon ? "cupon" : "manual");
-    setEscaneando(Boolean(target.cupon));
-    setCodigoCupon("");
-    setCuponValidado(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.scope, target?.itemId, target?.cupon]);
-
-  // El input de escaneo pelea por el foco mientras dura el modo: el lector
-  // tipea "a ciegas" y cualquier click no puede robárselo.
-  React.useEffect(() => {
-    if (!abierto || !escaneando) return;
-    const focus = () => scanRef.current?.focus();
-    focus();
-    const timer = setInterval(focus, 400);
-    return () => clearInterval(timer);
-  }, [abierto, escaneando]);
-
-  React.useEffect(() => {
-    if (!abierto) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [abierto, onClose]);
-
-  if (!abierto) return null;
-
-  const scope = target.scope;
-  const itemObjetivo =
-    scope === "item"
-      ? (items.find((item) => item.id === target.itemId) ?? null)
-      : null;
-  const objetivoLabel =
-    scope === "item"
-      ? (itemObjetivo?.productoNombre ?? "Producto")
-      : `Toda la orden · ${items.length} ${items.length === 1 ? "producto" : "productos"}`;
-  const netoLista =
-    scope === "item"
-      ? itemObjetivo
-        ? netoListaDeItem(itemObjetivo)
-        : 0
-      : items.reduce((acc, item) => acc + netoListaDeItem(item), 0);
-  const descuentoInput: DescuentoInput | null =
-    valor > 0 ? { tipo, valor } : null;
-  // Preview monetario (no es la matemática de precio del motor, sólo la resta
-  // sobre el neto de lista para que el vendedor vea el orden de magnitud).
-  const montoPreview =
-    tipo === "PORCENTAJE"
-      ? (netoLista * Math.min(Math.max(valor, 0), 100)) / 100
-      : Math.min(Math.max(valor, 0), netoLista);
-  const netoDescontado = Math.max(0, netoLista - montoPreview);
-  const hayDescuentoActivo =
-    scope === "item"
-      ? Boolean(itemObjetivo?.descuentoInput)
-      : items.some((item) => item.descuentoInput);
-
-  const handleApply = () => {
-    if (scope === "item" && !itemObjetivo) {
-      toast.error("No se pudo identificar el producto a descontar.");
-      return;
-    }
-    if (!descuentoInput) {
-      toast.error("Ingresá un descuento mayor a cero.");
-      return;
-    }
-    if (tipo === "PORCENTAJE" && valor > 100) {
-      toast.error("El porcentaje no puede superar el 100%.");
-      return;
-    }
-    onApply(scope, scope === "item" ? target.itemId : null, descuentoInput);
-  };
-
-  // Función plana a propósito: vive después del early return del modal
-  // cerrado, así que NO puede ser un hook (rompería el orden de hooks).
-  const validarContraCarrito = (codigo: string) =>
-    validarCupon({
-      codigo,
-      clienteId: clienteId ?? undefined,
-      items: items.map((item) => ({
-        key: item.id,
-        productoId: item.motorCodigo || undefined,
-        productoCodigo: item.productoCodigo || undefined,
-        categoriaCodigo: item.categoriaComercialCodigo || undefined,
-        subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
-        neto: netoListaDeItem(item),
-      })),
-    });
-
-  const handleValidarCupon = async () => {
-    const codigo = codigoCupon.trim();
-    if (!codigo) {
-      onAviso({
-        tipo: "aviso",
-        titulo: "Falta el código",
-        detalle: "Escaneá el QR del cupón o tecleá su código.",
-      });
-      return;
-    }
-    setValidandoCupon(true);
-    setCuponValidado(null);
-    try {
-      setCuponValidado(await validarContraCarrito(codigo));
-    } catch (error) {
-      onAviso({
-        tipo: "error",
-        titulo: "Cupón no válido",
-        detalle:
-          error instanceof Error
-            ? error.message
-            : "No se pudo validar el cupón.",
-      });
-    } finally {
-      setValidandoCupon(false);
-    }
-  };
-
-  /** Escaneo: valida y APLICA de una, sin mostrar el código. Si el cupón no
-   * pasa, avisa y sigue escuchando (el buffer se limpia solo). */
-  const handleEscaneado = async (codigo: string) => {
-    if (!codigo.trim() || validandoCupon) return;
-    setValidandoCupon(true);
-    try {
-      const resultado = await validarContraCarrito(codigo.trim());
-      onApplyCupon(resultado);
-    } catch (error) {
-      onAviso({
-        tipo: "error",
-        titulo: "Cupón no válido",
-        detalle:
-          error instanceof Error
-            ? error.message
-            : "No se pudo validar el cupón.",
-      });
-    } finally {
-      setCodigoCupon("");
-      setValidandoCupon(false);
-    }
-  };
-
-  return (
-    <div className={descM.overlay} onClick={onClose}>
-      <div
-        className={descM.modal}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Aplicar descuento"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button
-          type="button"
-          className={descM.close}
-          onClick={onClose}
-          aria-label="Cerrar"
-        >
-          <XIcon />
-        </button>
-
-        <div className={descM.head}>
-          <span className={descM.ico}>
-            <BadgePercentIcon />
-          </span>
-          <div>
-            <h2>Aplicar descuento</h2>
-            <div className={descM.sub}>
-              Reduce la base antes de impuestos. El costo no baja: come margen.
-            </div>
-          </div>
-        </div>
-
-        <div className={descM.body}>
-          <div className={descM.target}>
-            <span className={descM.targetLbl}>Descuento para</span>
-            <strong>{objetivoLabel}</strong>
-          </div>
-
-          {/* El cupón define su propio alcance → sólo se ofrece al entrar
-              por la orden. Desde una fila, siempre manual. */}
-          {scope === "orden" ? (
-            <div className={descM.modos}>
-              <button
-                type="button"
-                className={modo === "manual" ? descM.modoOn : ""}
-                onClick={() => setModo("manual")}
-              >
-                Manual
-              </button>
-              <button
-                type="button"
-                className={modo === "cupon" ? descM.modoOn : ""}
-                onClick={() => setModo("cupon")}
-              >
-                Cupón
-              </button>
-            </div>
-          ) : null}
-
-          {modo === "manual" ? (
-            <>
-              <div className={descM.grid2}>
-                <div className={descM.field}>
-                  <label>Tipo</label>
-                  <select
-                    value={tipo}
-                    onChange={(event) =>
-                      setTipo(event.target.value as "PORCENTAJE" | "MONTO")
-                    }
-                  >
-                    <option value="PORCENTAJE">Porcentaje (%)</option>
-                    <option value="MONTO">Monto ($)</option>
-                  </select>
-                </div>
-                <div className={descM.field}>
-                  <label>
-                    {tipo === "PORCENTAJE" ? "Porcentaje" : "Monto neto"}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step={tipo === "PORCENTAJE" ? "0.5" : "1"}
-                    max={tipo === "PORCENTAJE" ? "100" : undefined}
-                    value={valor}
-                    onChange={(event) =>
-                      setValor(Number(event.target.value) || 0)
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className={descM.calc}>
-                <div>
-                  <span className={descM.lbl}>Neto de lista</span>
-                  <strong>{formatCurrency(netoLista, moneda)}</strong>
-                </div>
-                <div className={descM.neg}>
-                  <span className={descM.lbl}>Descuento</span>
-                  <strong>−{formatCurrency(montoPreview, moneda)}</strong>
-                </div>
-                <div>
-                  <span className={descM.lbl}>Neto con descuento</span>
-                  <strong>{formatCurrency(netoDescontado, moneda)}</strong>
-                </div>
-              </div>
-
-              <div className={descM.note}>
-                {scope === "orden"
-                  ? tipo === "MONTO"
-                    ? "Se reparte entre los productos según su peso."
-                    : "Se aplica el mismo porcentaje a cada producto."
-                  : "El margen resultante se recalcula al aplicar."}
-                <small>
-                  Impuestos y comisiones se recalculan sobre el neto descontado.
-                </small>
-              </div>
-            </>
-          ) : escaneando ? (
-            <>
-              {/* Escaneo: input invisible que captura al lector; el código
-                  nunca se muestra — valida y aplica de una. */}
-              <div className={descM.scan}>
-                <input
-                  ref={scanRef}
-                  className={descM.scanInput}
-                  type="text"
-                  value={codigoCupon}
-                  onChange={(event) =>
-                    setCodigoCupon(event.target.value.toUpperCase())
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleEscaneado(codigoCupon);
-                    }
-                  }}
-                  aria-label="Escaneá el cupón"
-                />
-                <span
-                  className={`${descM.scanBox}${validandoCupon ? ` ${descM.scanOk}` : ""}`}
-                >
-                  <TicketPercentIcon />
-                  <span className={descM.scanLine} />
-                </span>
-                <strong>
-                  {validandoCupon ? "Validando…" : "Escaneá el cupón"}
-                </strong>
-                <small>Apuntá el lector al QR: se valida y aplica solo.</small>
-                <button
-                  type="button"
-                  className="btn-link"
-                  onClick={() => {
-                    setEscaneando(false);
-                    setCodigoCupon("");
-                  }}
-                >
-                  Ingresar el código a mano
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={descM.field}>
-                <label>Código del cupón</label>
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Tecleá o escaneá el QR…"
-                  value={codigoCupon}
-                  onChange={(event) => {
-                    setCodigoCupon(event.target.value.toUpperCase());
-                    setCuponValidado(null);
-                  }}
-                  onKeyDown={(event) => {
-                    // El lector 2D tipea el código y manda Enter: valida solo.
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleValidarCupon();
-                    }
-                  }}
-                />
-              </div>
-              {cuponValidado ? (
-                <div className={descM.calc}>
-                  <div>
-                    <span className={descM.lbl}>Cupón</span>
-                    <strong>{cuponValidado.cupon.codigo}</strong>
-                  </div>
-                  <div className={descM.neg}>
-                    <span className={descM.lbl}>Descuento</span>
-                    <strong>
-                      {cuponValidado.cupon.tipo === "PORCENTAJE"
-                        ? `−${cuponValidado.cupon.valor.toLocaleString("es-AR")}%`
-                        : `−${formatCurrency(cuponValidado.cupon.valor, moneda)}`}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className={descM.lbl}>Alcanza</span>
-                    <strong>
-                      {cuponValidado.alcanzadas.length} de {items.length}
-                    </strong>
-                  </div>
-                </div>
-              ) : null}
-              <div className={descM.note}>
-                {cuponValidado
-                  ? (cuponValidado.cupon.descripcion ??
-                    "Validado: se aplica a las líneas del alcance y se redime al emitir la orden.")
-                  : "El cupón valida vigencia, usos y alcance contra esta orden. Si alguna línea tenía descuento manual, el cupón lo reemplaza."}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className={descM.foot}>
-          <button type="button" className="btn" onClick={onClose}>
-            Cancelar
-          </button>
-          {hayDescuentoActivo ? (
-            <button
-              type="button"
-              className="btn"
-              disabled={aplicando}
-              onClick={() =>
-                onApply(scope, scope === "item" ? target.itemId : null, null)
-              }
-            >
-              <Trash2Icon />
-              Quitar
-            </button>
-          ) : null}
-          <div className={descM.spacer} />
-          {modo === "manual" ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleApply}
-              disabled={aplicando || items.length === 0}
-            >
-              <BadgePercentIcon />
-              {aplicando ? "Aplicando…" : "Aplicar descuento"}
-            </button>
-          ) : cuponValidado ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={aplicando}
-              onClick={() => onApplyCupon(cuponValidado)}
-            >
-              <TicketPercentIcon />
-              {aplicando ? "Aplicando…" : "Aplicar cupón"}
-            </button>
-          ) : escaneando ? null : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={validandoCupon || codigoCupon.trim().length === 0}
-              onClick={() => void handleValidarCupon()}
-            >
-              {validandoCupon ? "Validando…" : "Validar cupón"}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <Chip size="sm" color="warning" variant="soft">
+      <FileXIcon className="size-3" />
+      Sin comprobante
+    </Chip>
   );
 }
 
@@ -5313,6 +4463,7 @@ function unidadDesdeCorta(cantidadUnidad: string): UnidadPropuesta {
 function itemToOrdenItemPayload(
   item: PropuestaItem,
   cotizacionItemId: string | undefined,
+  planEntrega?: VinculoPlanEntrega,
 ) {
   const amounts = getItemOrderVisibleAmounts(item);
   // El descuento YA está dentro de `subtotal` (el motor lo aplicó sobre el
@@ -5321,6 +4472,8 @@ function itemToOrdenItemPayload(
   const descuento = item.cotizacion.desglosePrecio?.descuento;
   return {
     cotizacionItemId,
+    fechaEntrega: item.fechaEntrega,
+    ...(planEntrega ? { planEntrega } : {}),
     descuentoTipo: item.descuentoInput?.tipo ?? null,
     descuentoValor: item.descuentoInput?.valor ?? null,
     descuentoMonto:
@@ -5399,7 +4552,38 @@ function vendedorOrdenNombre(orden: OrdenTrabajoDetalle) {
  * Nota badge NUEVA: vive en el LISTADO (ordenes-trabajo-view, 24h+pendiente).
  * En el detalle, "RECIÉN EMITIDA" es de sesión: sólo al llegar de emitir.
  */
+function solicitudTomo(
+  meta: NonNullable<ReturnType<typeof metaCentroCopiado>>,
+  clienteId: string,
+) {
+  return {
+    clienteId: clienteId || undefined,
+    documentos: (meta.segmentos ?? []).map((segmento, indice) => ({
+      ...segmento,
+      id: `s${indice}`,
+      nombre: segmento.nombre ?? undefined,
+      copias: 1,
+      tamanoAnchoMm:
+        segmento.tamanoAnchoMm ?? dimsDeFormato(segmento.tamano).anchoMm,
+      tamanoAltoMm:
+        segmento.tamanoAltoMm ?? dimsDeFormato(segmento.tamano).altoMm,
+      grupoId: "T",
+    })),
+    grupos: [
+      {
+        id: "T",
+        juegos: meta.juegos ?? 1,
+        nombre: meta.tomoNombre ?? undefined,
+        terminaciones: meta.terminaciones ?? [],
+        tipoAnillo: meta.tipoAnillo ?? undefined,
+      },
+    ],
+  };
+}
+
 type SnapshotResumenOrden = {
+  tipoCambio?: import("@/lib/tipo-cambio-api").TipoCambioSnapshot;
+  costosMaterialesMoneda?: import("@/lib/tipo-cambio-api").CostoMaterialMoneda[];
   producto?: { id?: string; codigo?: string; nombre?: string };
   ruta?: { nombre?: string; alternativa?: string | null };
   ejecucion?: {
@@ -5415,6 +4599,7 @@ type SnapshotResumenOrden = {
 
 type SnapshotTrazabilidadOrden = {
   pasos?: CotizacionPropuestaSnapshot["pasos"];
+  componentesFabricados?: CotizacionPropuestaSnapshot["componentesFabricados"];
   cargosDirectosCotizacion?: CotizacionPropuestaSnapshot["cargosDirectosCotizacion"];
 };
 
@@ -5499,6 +4684,8 @@ function rehidratarOrdenItem(
     Math.max(0, brutoUnit - netoUnit) + costosInternosUnit;
 
   const cotizacion = {
+    tipoCambio: resumen?.tipoCambio,
+    costosMaterialesMoneda: resumen?.costosMaterialesMoneda,
     productoId: snap?.productoId ?? producto.codigo,
     productoNombre: producto.nombre,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
@@ -5519,6 +4706,11 @@ function rehidratarOrdenItem(
       null,
     costos: resumen?.ejecucion?.costos ?? costosVacios,
     pasos: trazabilidad?.pasos ?? [],
+    // La cotización persiste el árbol completo de componentes dentro de la
+    // trazabilidad. Rehidratar sólo los pasos del producto raíz conservaba el
+    // total, pero borraba el origen de los costos de los hijos: la vista de
+    // Costos terminaba enviándolos a "Sin desglosar" al reabrir una OT.
+    componentesFabricados: trazabilidad?.componentesFabricados ?? [],
     cargosDirectosCotizacion: trazabilidad?.cargosDirectosCotizacion ?? [],
     desglosePrecio: snap
       ? ({
@@ -5566,6 +4758,8 @@ function rehidratarOrdenItem(
     // sólo para órdenes previas al campo.
     id: producto.id ?? `ot-item-${index}`,
     cotizacionItemId: producto.cotizacionItemId ?? undefined,
+    fechaEntrega: producto.fechaEntrega ?? undefined,
+    distribucionEntregas: producto.distribucionEntregas,
     productoNombre: producto.nombre,
     productoCodigo: producto.codigo,
     motorCodigo: snap?.productoId ?? "",
@@ -5600,6 +4794,10 @@ function rehidratarOrdenItem(
     adicionales: producto.adicionales,
     rutaAlternativaId: snap?.rutaAlternativaId ?? null,
     jobContext,
+    notaProduccion:
+      typeof jobContext?.notasProduccion === "string"
+        ? jobContext.notasProduccion
+        : undefined,
     // Descuento que aplicó el vendedor (para reeditarlo si se recotiza el ítem).
     descuentoInput:
       producto.descuentoTipo && producto.descuentoValor != null
@@ -5612,7 +4810,25 @@ function rehidratarOrdenItem(
   };
 }
 
-export function PropuestaFicha({
+export function PropuestaFicha(props: PropuestaFichaProps) {
+  const inicial = props.orden?.productos
+    .map(
+      (p) =>
+        (
+          p.snapshot?.resumen as {
+            tipoCambio?: import("@/lib/tipo-cambio-api").TipoCambioSnapshot;
+          } | null
+        )?.tipoCambio,
+    )
+    .find(Boolean);
+  return (
+    <TipoCambioDocumentoProvider inicial={inicial}>
+      <PropuestaFichaContenido {...props} />
+    </TipoCambioDocumentoProvider>
+  );
+}
+
+function PropuestaFichaContenido({
   initialClientes = [],
   initialProductos = [],
   initialCargosDirectos = [],
@@ -5621,7 +4837,16 @@ export function PropuestaFicha({
   orden: ordenProp,
   recienEmitida = false,
   recienConvertida = false,
+  initialDocumentos = null,
 }: PropuestaFichaProps) {
+  const {
+    cotizar,
+    cotizarYGuardar,
+    recotizarCotizacionItem,
+    guardarTomoCentroCopiado,
+    construirItemsCentroCopiado,
+  } = useMotorConTipoCambio();
+  const cambioDocumento = useTipoCambioDocumento();
   const { moneda, zonaHoraria } = useConfigRegional();
   const formatEventoFecha = useFormatEventoFecha();
   // La OT vive en estado local (inicializada desde el prop del server) para
@@ -5638,6 +4863,15 @@ export function PropuestaFicha({
       .catch(() => {});
   }, [ordenProp?.id]);
   const modoOrden = Boolean(orden);
+  const [editandoOrden, setEditandoOrden] = React.useState(false);
+  const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  // Única puerta para las mutaciones de esta ficha; los permisos y estados
+  // de cada operación siguen aplicándose además de este modo de presentación.
+  const puedeEditarOrden = !orden || (editandoOrden && !guardandoEdicion && orden.estado !== "cancelada");
+  const permisoEdicionRef = React.useRef(puedeEditarOrden);
+  React.useLayoutEffect(() => {
+    permisoEdicionRef.current = puedeEditarOrden;
+  }, [puedeEditarOrden]);
   // Sin comprobante fiscal (§6 cuaderno de margen). En creación es estado de
   // cliente que viaja en el payload de crear; en una OT persistida se sincroniza
   // desde el flag y se alterna vía endpoint.
@@ -5649,6 +4883,7 @@ export function PropuestaFicha({
   }, [orden]);
   const [togglingFiscal, setTogglingFiscal] = React.useState(false);
   const toggleTratamientoFiscal = React.useCallback(async () => {
+    if (!permisoEdicionRef.current) return;
     const siguiente = sinComprobante ? "FISCAL" : "SIN_COMPROBANTE";
     if (orden?.id) {
       setTogglingFiscal(true);
@@ -5673,8 +4908,8 @@ export function PropuestaFicha({
     }
   }, [orden?.id, sinComprobante]);
   const puedeToggleFiscal =
-    !modoOrden ||
-    (orden ? ["borrador", "pendiente"].includes(orden.estado) : false);
+    puedeEditarOrden && (!modoOrden ||
+    (orden ? ["borrador", "pendiente"].includes(orden.estado) : false));
   // Atajo de teclado: X alterna sin comprobante, para quien prefiere no ir al
   // botón. Se ignora mientras se escribe (input/textarea/select/editable) y con
   // modificadoras (no pisar Ctrl/Cmd+X).
@@ -5724,7 +4959,9 @@ export function PropuestaFicha({
   }, [recienConvertida]);
   const [tipo, setTipo] = React.useState<TipoPropuesta>("orden_trabajo");
   const ordenTipo = tipoMap[tipo];
-  const [tab, setTab] = React.useState<OrdenTab>("productos");
+  const [tab, setTab] = React.useState<OrdenTab>(
+    ordenProp ? "productos" : "datos",
+  );
   // QR que el cliente presenta en el mostrador para retirar.
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
   // Acceso manual al mismo circuito de mostrador cuando no se usa el QR.
@@ -5738,6 +4975,7 @@ export function PropuestaFicha({
   const { fechaHora } = useFecha();
   // Acreditar una factura ante ARCA no es cosa de cualquiera: es el mismo
   // permiso que rige anular comprobantes.
+  const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
   const puedeEntregar = usePuede("produccion.gestionar");
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
@@ -5823,6 +5061,9 @@ export function PropuestaFicha({
     PropuestaItem[] | null
   >(null);
   const [cargoOpen, setCargoOpen] = React.useState(false);
+  const [cuponAbierto, setCuponAbierto] = React.useState(false);
+  const [cuponValidando, setCuponValidando] = React.useState(false);
+  const cuponEnCurso = React.useRef(false);
   const [descuentoTarget, setDescuentoTarget] =
     React.useState<DescuentoTarget | null>(null);
   const [descuentoAplicando, setDescuentoAplicando] = React.useState(false);
@@ -5838,6 +5079,34 @@ export function PropuestaFicha({
   } | null>(null);
   const [panelSaving, setPanelSaving] = React.useState(false);
   const [clienteId, setClienteId] = React.useState(orden?.clienteId ?? "");
+  const [proyectoCampanaId, setProyectoCampanaId] = React.useState(
+    orden?.proyectoCampana?.id ?? "",
+  );
+  const [campanasCliente, setCampanasCliente] = React.useState<
+    CampanaReferencia[]
+  >([]);
+  React.useEffect(() => {
+    let vigente = true;
+    if (!clienteId) {
+      setCampanasCliente([]);
+      setProyectoCampanaId("");
+      return;
+    }
+    void getCampanasOpciones(clienteId)
+      .then((rows) => {
+        if (!vigente) return;
+        setCampanasCliente(rows);
+        setProyectoCampanaId((actual) =>
+          actual && rows.some((c) => c.id === actual) ? actual : "",
+        );
+      })
+      .catch(() => {
+        if (vigente) setCampanasCliente([]);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [clienteId]);
   // Clientes dados de alta escaneando el DNI durante ESTA sesión: no vienen
   // en `initialClientes` (se cargó en el server) y sin esto el combobox no
   // tendría cómo mostrar al recién creado.
@@ -5850,6 +5119,7 @@ export function PropuestaFicha({
   // cliente de la orden.
   React.useEffect(() => {
     const onEscaneado = (event: Event) => {
+      if (!permisoEdicionRef.current) return;
       const cliente = (event as CustomEvent<ClienteDetalle>).detail;
       if (!cliente?.id) return;
       setClientesEscaneados((prev) =>
@@ -5870,77 +5140,104 @@ export function PropuestaFicha({
         : [...initialClientes, ...clientesEscaneados],
     [initialClientes, clientesEscaneados],
   );
-  const [canalVenta, setCanalVenta] = React.useState(
-    orden?.canalVenta ?? "mostrador",
-  );
+  // La caché sobrevive al cierre del panel de datos en móvil.
+  const selectorClientes = useClientesOrden(clientesDisponibles);
+  const [canalVenta, setCanalVenta] = React.useState(orden?.canalVenta ?? "");
+  const datosOrdenRef = React.useRef<OrdenWorkspaceHandle>(null);
+  const canalSelectorId = React.useId();
+  const [errorCanalVenta, setErrorCanalVenta] = React.useState(false);
+  const validarCanalVenta = React.useCallback(() => {
+    if (canalVentaValido(canalVenta, orden?.canalVenta)) return true;
+    setErrorCanalVenta(true);
+    setNavPendiente(null);
+    setConfirmBorradorConCobros(false);
+    datosOrdenRef.current?.mostrarDatos();
+    toast.error("Elegí un canal de venta para guardar.");
+    window.requestAnimationFrame(() => {
+      const campo = document.getElementById(canalSelectorId);
+      campo?.scrollIntoView({ block: "nearest" });
+      campo?.querySelector("button")?.focus();
+    });
+    return false;
+  }, [canalVenta, orden?.canalVenta, canalSelectorId]);
   const [fechaEstimada, setFechaEstimada] = React.useState(
-    () => orden?.fechaEntrega ?? offsetDate(7),
+    () => orden?.fechaEntrega ?? offsetDate(7, zonaHoraria),
   );
   const creacionDefaultsRef = React.useRef({
     canalVenta,
     fechaEstimada,
   });
 
+  const entregasPrevias = useEntregasPrevias((item) => ({
+    productoId: item.motorCodigo!,
+    tipoCambioId:
+      item.cotizacion?.tipoCambio?.id ?? cambioDocumento?.cambio?.id,
+    rutaAlternativaId: item.rutaAlternativaId ?? null,
+    jobContext: { ...item.jobContext, cantidad: item.cantidad } as never,
+    clienteId: clienteId || null,
+    periodo: getCurrentPeriodo(),
+    descuento: descuentoParaMotor(item.descuentoInput),
+  }));
+
+  /** La OT termina con su última entrega; una fecha global vieja no la retiene. */
+  const fechaEntregaOrden = React.useCallback(
+    () =>
+      fechaFinalItems(
+        items.map(
+          (item) =>
+            (!orden && ordenTipo === "orden"
+              ? entregasPrevias.fechaPara(item)
+              : fechaFinalDistribucion(item.distribucionEntregas)) ??
+            item.fechaEntrega ??
+            fechaEstimada,
+        ),
+        fechaEstimada,
+      ),
+    [items, fechaEstimada, orden, ordenTipo, entregasPrevias],
+  );
+  const fechaFinalVisible =
+    ordenTipo === "orden" ? fechaEntregaOrden() : fechaEstimada;
+
   // ── Demora estimada por el sistema (fase 3, simulación de flujo) ──────
   // Sólo en creación/borrador: una orden emitida ya está EN las colas del
   // tablero — volver a simularla la contaría dos veces (D10 del doc).
   const conDemoraSistema = !orden || orden.estado === "borrador";
-  const [colasTaller, setColasTaller] = React.useState<{
-    enCola: TableroItemData[];
-    estaciones: Estacion[];
-    medianas: Map<string, number>;
-    noLaborables: Set<string>;
-  } | null>(null);
+  const [colasTaller, setColasTaller] = React.useState<Awaited<
+    ReturnType<typeof getContextoPrevision>
+  > | null>(null);
   const [margenEtaDias, setMargenEtaDias] = React.useState(0);
   React.useEffect(() => {
     if (!conDemoraSistema) return;
     let vigente = true;
-    void Promise.all([
-      getTableroProduccion(),
-      getEstaciones(),
-      getDuracionesFamilias(),
-      getDiasNoLaborables(),
-      getConfiguracionProduccion(),
-    ])
-      .then(([tablero, estaciones, duraciones, diasNoLaborables, config]) => {
+    let timer: ReturnType<typeof setTimeout>;
+    const actualizar = async () => {
+      try {
+        const contexto = await getContextoPrevision();
         if (!vigente) return;
-        setMargenEtaDias(config.margenEtaDias);
-        setColasTaller({
-          enCola: tablero.items,
-          estaciones,
-          medianas: new Map(
-            duraciones.map((d) => [d.familiaCodigo, d.medianaMin]),
-          ),
-          noLaborables: new Set(diasNoLaborables.map((dia) => dia.fecha)),
-        });
-      })
-      .catch(() => {
-        // Sin datos de colas no hay sugerencia; la ficha sigue funcionando.
-      });
+        setMargenEtaDias(contexto.margenEtaDias);
+        setColasTaller(contexto);
+      } catch {
+        if (vigente) setColasTaller(null);
+      } finally {
+        // Renueva carga y reloj también si la ficha queda abierta al cambiar el día.
+        if (vigente) timer = setTimeout(actualizar, 60_000);
+      }
+    };
+    void actualizar();
     return () => {
       vigente = false;
+      clearTimeout(timer);
     };
   }, [conDemoraSistema]);
 
   /** ETA por item de la ficha, simulada contra las colas reales de HOY. */
   const demoraPorItem = React.useMemo(() => {
     if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
-    const nuevos = items.map((item) => ({
-      id: item.id,
-      pasos: (item.cotizacion?.pasos ?? [])
-        .filter((paso) => paso.activado)
-        .map((paso) => ({
-          familiaCodigo: paso.familiaCodigo || "trabajo_manual",
-          centroCostoId: paso.tiempo?.centroCostoId ?? null,
-          duracionMin: paso.tiempo?.totalMin ?? null,
-          nombre: paso.nombreVisible ?? undefined,
-          // Un tercerizado no ocupa el taller: aporta el plazo del proveedor.
-          tercerizado: paso.tercerizado === true,
-          plazoProveedorDias: paso.plazoProveedorDias ?? null,
-        })),
-    }));
-    return estimarDemoraNuevos({ nuevos, ...colasTaller, zona: zonaHoraria });
-  }, [conDemoraSistema, colasTaller, items, zonaHoraria]);
+    const nuevos = items.map((item) =>
+      itemHipoteticoDesdeCotizacion(item.id, item.cotizacion),
+    );
+    return estimarDemoraNuevos({ nuevos, ...colasTaller });
+  }, [conDemoraSistema, colasTaller, items]);
 
   /** ETA de la ORDEN completa = el item que termina último. */
   const demoraOrden = React.useMemo<SimulacionItem | null>(() => {
@@ -5955,13 +5252,23 @@ export function PropuestaFicha({
       parcial ||= eta.parcial;
       asumeDesbloqueo ||= eta.asumeDesbloqueo;
     }
-    return { finEstimado: fin, sinEstimar, parcial, asumeDesbloqueo };
+    return {
+      finEstimado: sinEstimar ? null : fin,
+      sinEstimar,
+      parcial,
+      asumeDesbloqueo,
+    };
   }, [demoraPorItem]);
 
   // Fechas que el usuario fijó a mano (o que ya venían en la OT persistida):
   // la ETA no las vuelve a pisar. El resto sigue a la estimación del sistema.
   const otFechaTocadaRef = React.useRef(Boolean(orden?.fechaEntrega));
-  const itemFechaTocadaRef = React.useRef<Set<string>>(new Set());
+  const itemFechaTocadaRef = React.useRef<Set<string>>(
+    new Set(
+      orden?.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])) ??
+        [],
+    ),
+  );
 
   // Por defecto, cada item se compromete en la fecha que el sistema estima
   // (ETA + colchón). Sigue a la estimación hasta que el usuario la toca.
@@ -5975,7 +5282,7 @@ export function PropuestaFicha({
         const fecha = fechaRecomendadaEta(demoraPorItem.get(item.id), {
           margenDias: margenEtaDias,
           noLaborables,
-          zona: zonaHoraria,
+          zona: colasTaller?.zona ?? zonaHoraria,
         });
         if (!fecha || item.fechaEntrega === fecha) return item;
         cambio = true;
@@ -5983,7 +5290,13 @@ export function PropuestaFicha({
       });
       return cambio ? next : current;
     });
-  }, [demoraPorItem, margenEtaDias, colasTaller?.noLaborables, zonaHoraria]);
+  }, [
+    demoraPorItem,
+    margenEtaDias,
+    colasTaller?.noLaborables,
+    colasTaller?.zona,
+    zonaHoraria,
+  ]);
 
   // La fecha de la OT sigue a la ETA de la orden completa (el item que termina
   // último) hasta que el usuario la fija a mano.
@@ -5992,10 +5305,16 @@ export function PropuestaFicha({
     const fecha = fechaRecomendadaEta(demoraOrden, {
       margenDias: margenEtaDias,
       noLaborables: colasTaller?.noLaborables,
-      zona: zonaHoraria,
+      zona: colasTaller?.zona ?? zonaHoraria,
     });
     if (fecha) setFechaEstimada((prev) => (prev === fecha ? prev : fecha));
-  }, [demoraOrden, margenEtaDias, colasTaller?.noLaborables, zonaHoraria]);
+  }, [
+    demoraOrden,
+    margenEtaDias,
+    colasTaller?.noLaborables,
+    colasTaller?.zona,
+    zonaHoraria,
+  ]);
 
   const router = useRouter();
   const [emitiendo, setEmitiendo] = React.useState(false);
@@ -6004,8 +5323,45 @@ export function PropuestaFicha({
   const emisionIdempotencyRef = React.useRef<string | null>(null);
   const borradorIdempotencyRef = React.useRef<string | null>(null);
   const tomosIdempotencyRef = React.useRef<Map<string, string>>(new Map());
-  const [editandoOrden, setEditandoOrden] = React.useState(false);
-  const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
+  const cambioRemotoPendiente = React.useRef(false);
+  const bloqueaCambioRemoto =
+    editandoOrden ||
+    guardandoEdicion ||
+    panelSaving ||
+    emitiendo ||
+    cancelando ||
+    togglingFiscal;
+
+  const aplicarCambioRemoto = React.useCallback(() => {
+    if (!ordenProp?.id) return;
+    if (bloqueaCambioRemoto) {
+      cambioRemotoPendiente.current = true;
+      return;
+    }
+    cambioRemotoPendiente.current = false;
+    recargarOrden();
+    router.refresh();
+  }, [bloqueaCambioRemoto, ordenProp?.id, recargarOrden, router]);
+
+  useCambiosSistema(
+    (cambio) => {
+      if (ordenProp?.id && cambio.topicos.includes(`orden:${ordenProp.id}`)) {
+        aplicarCambioRemoto();
+      }
+    },
+    [aplicarCambioRemoto, ordenProp?.id],
+  );
+
+  React.useEffect(() => {
+    if (!bloqueaCambioRemoto && cambioRemotoPendiente.current) {
+      aplicarCambioRemoto();
+    }
+  }, [aplicarCambioRemoto, bloqueaCambioRemoto]);
+  React.useEffect(() => {
+    if (puedeEditarOrden) return;
+    setConfirmCancelar(false);
+    setEntregaManualOpen(false);
+  }, [puedeEditarOrden]);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
 
   // Copia el link público de seguimiento del cliente (/t/<token>).
@@ -6027,8 +5383,8 @@ export function PropuestaFicha({
   );
   /** En modo orden, si el campo NO está en edición se muestra estático. */
   const campoEditable = React.useCallback(
-    (campo: string) => !orden || camposEdicion.has(campo),
-    [orden, camposEdicion],
+    (campo: string) => !orden || (puedeEditarOrden && camposEdicion.has(campo)),
+    [orden, puedeEditarOrden, camposEdicion],
   );
 
   /** Items tocables sólo antes de que el taller arranque (espejo backend). */
@@ -6039,7 +5395,22 @@ export function PropuestaFicha({
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
    * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
-  const itemsEnEdicion = puedeTocarItems && editandoOrden;
+  const itemsEnEdicion = puedeTocarItems && puedeEditarOrden;
+  // Misma puerta para botones, atajos y confirmación de ambos sheets.
+  const puedeModificarProductos =
+    !guardandoEdicion &&
+    !cuponValidando &&
+    !descuentoAplicando &&
+    (!modoOrden || itemsEnEdicion);
+  const permisoProductosRef = React.useRef(puedeModificarProductos);
+  React.useLayoutEffect(() => {
+    permisoProductosRef.current = puedeModificarProductos;
+    if (puedeModificarProductos) return;
+    setAddOpen(false);
+    setEditingItem(null);
+    setCopiadoOpen(false);
+    setCopiadoEditItems(null);
+  }, [puedeModificarProductos]);
 
   /** Ids reales de los items persistidos (para diferenciar altas locales). */
   const persistedItemIds = React.useMemo(
@@ -6067,6 +5438,10 @@ export function PropuestaFicha({
     ordenSyncRef.current = orden;
     if (editandoOrden || !ordenCambio) return;
     setItems(orden.productos.map(rehidratarOrdenItem));
+    setFechaEstimada(orden.fechaEntrega ?? "");
+    itemFechaTocadaRef.current = new Set(
+      orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
+    );
   }, [orden, editandoOrden]);
 
   /** Cambios de items en staging (altas, ediciones y bajas pendientes). */
@@ -6105,14 +5480,14 @@ export function PropuestaFicha({
     if (clienteId && clienteId !== (orden.clienteId ?? "")) {
       payload.clienteId = clienteId;
     }
-    if (canalVenta !== (orden.canalVenta ?? "mostrador")) {
+    if (canalVenta !== (orden.canalVenta ?? "")) {
       payload.canalVenta = canalVenta;
     }
-    if (fechaEstimada && fechaEstimada !== (orden.fechaEntrega ?? "")) {
-      payload.fechaEntrega = fechaEstimada;
+    if (fechaFinalVisible && fechaFinalVisible !== (orden.fechaEntrega ?? "")) {
+      payload.fechaEntrega = fechaFinalVisible;
     }
     return payload;
-  }, [orden, editandoOrden, clienteId, canalVenta, fechaEstimada]);
+  }, [orden, editandoOrden, clienteId, canalVenta, fechaFinalVisible]);
 
   const cambiosCreacion = !orden
     ? items.length +
@@ -6160,7 +5535,7 @@ export function PropuestaFicha({
     }
     if ((orden.progresoPct ?? 0) > 0) {
       puntos.push(
-        `El taller ya hizo el ${orden.progresoPct}% del trabajo: esas horas quedan registradas y siguen contando para el equipo.`,
+        `La OT tiene un ${orden.progresoPct}% de avance estimado por operaciones completadas. El trabajo y los tiempos registrados se conservan.`,
       );
     }
     return puntos;
@@ -6168,11 +5543,12 @@ export function PropuestaFicha({
 
   const cancelarOrden = React.useCallback(
     async (motivo: string) => {
-      if (!orden || cancelando) return;
+      if (!permisoEdicionRef.current || !orden || cancelando || cambiosSinGuardar > 0) return;
       setCancelando(true);
       try {
         await cancelarOrdenTrabajo(orden.id, motivo, acreditaYCancela);
         setConfirmCancelar(false);
+        setEditandoOrden(false);
         toast.success(
           acreditaYCancela
             ? `Orden ${orden.numero} cancelada y facturación acreditada.`
@@ -6189,7 +5565,7 @@ export function PropuestaFicha({
         setCancelando(false);
       }
     },
-    [orden, cancelando, acreditaYCancela, router],
+    [orden, cancelando, acreditaYCancela, router, cambiosSinGuardar],
   );
 
   /**
@@ -6389,10 +5765,8 @@ export function PropuestaFicha({
   );
 
   /**
-   * Persiste alta/edición de un item: primero el snapshot del cotizador
-   * (recotizar si ya existía, cotizar-y-guardar encadenado a la Cotizacion
-   * de origen si es nuevo), después la proyección. Lanza en error — el
-   * guardado en lote decide qué reportar.
+   * Prepara snapshots nuevos para las altas y ediciones sin sobrescribir los
+   * históricos. El guardado en lote aplica después toda la proyección.
    */
   const prepararItemOrden = React.useCallback(
     async (item: PropuestaItem) => {
@@ -6402,6 +5776,24 @@ export function PropuestaFicha({
           `"${item.productoNombre}" no tiene datos de cotización para persistir.`,
         );
       }
+      const meta = metaCentroCopiado(item.jobContext);
+      if (meta?.esTomo) {
+        const huella = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(meta)}`;
+        const key =
+          tomosIdempotencyRef.current.get(huella) ?? crypto.randomUUID();
+        tomosIdempotencyRef.current.set(huella, key);
+        const guardado = await guardarTomoCentroCopiado({
+          ...solicitudTomo(meta, clienteId),
+          idempotencyKey: key,
+        });
+        if (guardado.error || !guardado.cotizacionItemId)
+          throw new Error(guardado.error || "No se pudo guardar el tomo.");
+        return {
+          item,
+          cotizacionItemId: guardado.cotizacionItemId,
+          payload: itemToOrdenItemPayload(item, guardado.cotizacionItemId),
+        };
+      }
       const request = {
         rutaAlternativaId: item.rutaAlternativaId ?? null,
         jobContext: item.jobContext as never,
@@ -6409,36 +5801,23 @@ export function PropuestaFicha({
         periodo: getCurrentPeriodo(),
         descuento: descuentoParaMotor(item.descuentoInput),
       };
-      let cotizacionItemId = item.cotizacionItemId;
-      if (cotizacionItemId) {
-        const respuesta = await recotizarCotizacionItem(
-          cotizacionItemId,
-          request,
+      // Una edición prepara una revisión nueva; la OT sólo cambia al confirmar
+      // el lote y la cotización anterior queda disponible para trazabilidad.
+      const respuesta = await cotizarYGuardar({
+        productoId: item.motorCodigo,
+        ...request,
+      });
+      if (!respuesta.result.exitoso) {
+        throw new Error(
+          respuesta.result.errores?.[0]?.mensaje ??
+            `No se pudo guardar la cotización de "${item.productoNombre}".`,
         );
-        if (!respuesta.result.exitoso) {
-          throw new Error(
-            respuesta.result.errores?.[0]?.mensaje ??
-              `No se pudo recotizar "${item.productoNombre}".`,
-          );
-        }
-      } else {
-        const respuesta = await cotizarYGuardar({
-          productoId: item.motorCodigo,
-          ...request,
-          cotizacionId: orden.cotizacionId ?? undefined,
-        });
-        if (!respuesta.result.exitoso) {
-          throw new Error(
-            respuesta.result.errores?.[0]?.mensaje ??
-              `No se pudo guardar la cotización de "${item.productoNombre}".`,
-          );
-        }
-        cotizacionItemId = respuesta.cotizacionItemId;
       }
+      const cotizacionItemId = respuesta.cotizacionItemId;
       const payload = itemToOrdenItemPayload(item, cotizacionItemId);
       return { item, cotizacionItemId, payload };
     },
-    [orden, clienteId],
+    [orden, clienteId, cotizarYGuardar, guardarTomoCentroCopiado],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -6455,18 +5834,29 @@ export function PropuestaFicha({
   }, []);
 
   const cancelarEdicion = React.useCallback(() => {
-    if (!orden) return;
+    if (!orden || togglingFiscal || cancelando) return;
     // Descarta TODO el staging: field-cards e items vuelven a lo persistido.
     setClienteId(orden.clienteId ?? "");
-    setCanalVenta(orden.canalVenta ?? "mostrador");
+    setCanalVenta(orden.canalVenta ?? "");
+    setErrorCanalVenta(false);
     setFechaEstimada(orden.fechaEntrega ?? orden.creadaEl.slice(0, 10));
     // Vuelve a seguir a la ETA salvo que la OT ya tuviera fecha comprometida.
     otFechaTocadaRef.current = Boolean(orden.fechaEntrega);
-    itemFechaTocadaRef.current.clear();
+    itemFechaTocadaRef.current = new Set(
+      orden.productos.flatMap((p) => (p.id && p.fechaEntrega ? [p.id] : [])),
+    );
     setItems(orden.productos.map(rehidratarOrdenItem));
+    cambioDocumento?.establecer(
+      orden.productos
+        .map(
+          (p) =>
+            (p.snapshot?.resumen as SnapshotResumenOrden | null)?.tipoCambio,
+        )
+        .find(Boolean) ?? null,
+    );
     setEditadosIds(new Set());
     setEditandoOrden(false);
-  }, [orden]);
+  }, [orden, togglingFiscal, cancelando, cambioDocumento]);
 
   /**
    * Commit atómico del staging. Los snapshots se recalculan primero y luego
@@ -6475,7 +5865,12 @@ export function PropuestaFicha({
    */
   const guardarEdicion = React.useCallback(
     async (opciones?: { destino?: string }) => {
-      if (!orden) return;
+      if (!permisoEdicionRef.current || !orden) return;
+      if (
+        camposEditablesOrden(orden.estado).has("canalVenta") &&
+        !validarCanalVenta()
+      )
+        return;
       const destino = opciones?.destino;
       if (cambiosSinGuardar === 0) {
         setEditandoOrden(false);
@@ -6485,6 +5880,9 @@ export function PropuestaFicha({
       setGuardandoEdicion(true);
       try {
         const tocados = [...cambiosItems.editados, ...cambiosItems.agregados];
+        const cambioAlGuardar = tocados.length
+          ? await cambioDocumento?.resolver()
+          : cambioDocumento?.cambio;
         const preparados = [];
         for (const item of tocados) {
           preparados.push(await prepararItemOrden(item));
@@ -6515,6 +5913,7 @@ export function PropuestaFicha({
             : undefined;
         const detalle = await editarOrdenTrabajoLote(orden.id, {
           expectedVersion: orden.version,
+          tipoCambioId: cambioAlGuardar?.id,
           ...cambiosFields,
           items: itemsFinales,
         });
@@ -6579,6 +5978,8 @@ export function PropuestaFicha({
     },
     [
       orden,
+      cambioDocumento,
+      validarCanalVenta,
       cambiosSinGuardar,
       cambiosItems,
       cambiosFields,
@@ -6631,14 +6032,26 @@ export function PropuestaFicha({
    */
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(async () => {
-    if (!orden) return;
+    if (!permisoEdicionRef.current || !orden || cambiosSinGuardar > 0) return;
+    if (!canalVentaValido(orden.canalVenta ?? "", orden.canalVenta)) {
+      setEditandoOrden(true);
+      setErrorCanalVenta(true);
+      datosOrdenRef.current?.mostrarDatos();
+      toast.error(
+        "Elegí un canal de venta y guardá los cambios antes de emitir.",
+      );
+      return;
+    }
     if (!orden.clienteId) {
       toast.error(
         "Asigná un cliente antes de emitir (Editar orden → Cliente).",
       );
       return;
     }
-    if (!orden.fechaEntrega || orden.fechaEntrega < offsetDate(0)) {
+    if (
+      !orden.fechaEntrega ||
+      orden.fechaEntrega < offsetDate(0, zonaHoraria)
+    ) {
       toast.error(
         "Definí una fecha de entrega vigente antes de emitir (Editar orden → Fecha).",
       );
@@ -6649,6 +6062,7 @@ export function PropuestaFicha({
       await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
       toast.success(`${orden.numero} emitida al taller.`);
       setMostrarRecienEmitida(true);
+      setEditandoOrden(false);
       router.refresh();
     } catch (error) {
       toast.error(
@@ -6657,15 +6071,13 @@ export function PropuestaFicha({
     } finally {
       setEmitiendoBorrador(false);
     }
-  }, [orden, router]);
+  }, [orden, router, zonaHoraria, cambiosSinGuardar]);
 
-  // Emitir desde el aviso de recién convertida. Se cierra pase lo que pase:
-  // si faltaba cliente o fecha, emitirBorrador ya avisó por toast y lo que
-  // corresponde es dejar la orden a la vista para corregirla.
-  const emitirDesdeAviso = React.useCallback(async () => {
-    await emitirBorrador();
+  // El aviso lleva a edición; la emisión se confirma desde la cabecera.
+  const emitirDesdeAviso = React.useCallback(() => {
     setAvisoBorradorAbierto(false);
-  }, [emitirBorrador]);
+    setEditandoOrden(true);
+  }, []);
 
   const descartarYSalir = React.useCallback(() => {
     if (!navPendiente) return;
@@ -6678,9 +6090,9 @@ export function PropuestaFicha({
     router.push(destino);
   }, [navPendiente, router]);
   const fechaEstimadaInputRef = React.useRef<HTMLInputElement | null>(null);
-  const rowRefs = React.useRef(new Map<string, HTMLDivElement>());
+  const rowRefs = React.useRef(new Map<string, HTMLElement>());
 
-  const focusProductRow = React.useCallback((itemId: string) => {
+  const focusOrdenProductoDetalle = React.useCallback((itemId: string) => {
     window.requestAnimationFrame(() => {
       rowRefs.current.get(itemId)?.scrollIntoView({
         behavior: "smooth",
@@ -6690,15 +6102,17 @@ export function PropuestaFicha({
   }, []);
 
   const abrirAgregarProducto = React.useCallback(() => {
+    if (!puedeModificarProductos) return;
     setEditingItem(null);
     setTab("productos");
     setAddOpen(true);
-  }, []);
+  }, [puedeModificarProductos]);
 
   const abrirCentroCopiado = React.useCallback(() => {
+    if (!puedeModificarProductos || !ccActivo) return;
     setCopiadoEditItems(null);
     setCopiadoOpen(true);
-  }, []);
+  }, [puedeModificarProductos, ccActivo]);
 
   /** Un renglón que salió del centro de copiado (para rutear su edición). */
   const esCentroCopiado = React.useCallback(
@@ -6734,6 +6148,7 @@ export function PropuestaFicha({
    */
   const abrirEdicion = React.useCallback(
     (item: PropuestaItem) => {
+      if (!puedeModificarProductos) return;
       if (esCentroCopiado(item)) {
         const carga = cargaDeItem(item);
         const deLaCarga = carga
@@ -6746,7 +6161,7 @@ export function PropuestaFicha({
         setAddOpen(true);
       }
     },
-    [esCentroCopiado, cargaDeItem, items],
+    [puedeModificarProductos, esCentroCopiado, cargaDeItem, items],
   );
 
   /**
@@ -6754,13 +6169,23 @@ export function PropuestaFicha({
    * misma Cotizacion). Los que ya se guardaron (recotizaciones) conservan
    * su cotizacionItemId. Compartido por Emitir OT y Guardar borrador.
    */
+
   const persistirSnapshotsItems = React.useCallback(async () => {
     let cotizacionId: string | undefined;
     const itemsConSnapshot: Array<{
       item: PropuestaItem;
       cotizacionItemId?: string;
+      planEntrega?: VinculoPlanEntrega;
     }> = [];
     for (const item of items) {
+      const previa =
+        !orden && ordenTipo === "orden"
+          ? await entregasPrevias.paraGuardar(item)
+          : null;
+      if (previa) {
+        itemsConSnapshot.push({ item, ...previa });
+        continue;
+      }
       if (item.cotizacionItemId) {
         itemsConSnapshot.push({
           item,
@@ -6772,7 +6197,7 @@ export function PropuestaFicha({
       // sintético; no pasa por cotizarYGuardar (que cotiza un solo jobContext).
       const metaTomo = metaCentroCopiado(item.jobContext);
       if (metaTomo?.esTomo) {
-        const huellaTomo = `${item.id}:${JSON.stringify(metaTomo)}`;
+        const huellaTomo = `${item.id}:${item.cotizacion?.tipoCambio?.id ?? ""}:${JSON.stringify(metaTomo)}`;
         const idempotencyKey =
           tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
         tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
@@ -6845,21 +6270,23 @@ export function PropuestaFicha({
         cotizacionItemId: response.cotizacionItemId,
       });
     }
-    return { itemsConSnapshot, cotizacionId };
-  }, [items, clienteId]);
-
-  /** Fecha comprometida: la más tardía entre items y la estimada global. */
-  const fechaEntregaOrden = React.useCallback(
-    () =>
-      items.reduce(
-        (max, item) =>
-          item.fechaEntrega && item.fechaEntrega > max
-            ? item.fechaEntrega
-            : max,
-        fechaEstimada,
-      ),
-    [items, fechaEstimada],
-  );
+    // Cada ítem conserva su cotización de origen. Las preparadas antes del
+    // guardado pueden pertenecer a distintos snapshots comerciales.
+    return {
+      itemsConSnapshot,
+      cotizacionId: itemsConSnapshot.some((i) => i.planEntrega)
+        ? undefined
+        : cotizacionId,
+    };
+  }, [
+    items,
+    clienteId,
+    orden,
+    ordenTipo,
+    entregasPrevias,
+    cotizarYGuardar,
+    guardarTomoCentroCopiado,
+  ]);
 
   /**
    * Emitir OT: snapshots + OrdenTrabajo en `pendiente`. El overlay muestra
@@ -6873,6 +6300,7 @@ export function PropuestaFicha({
    */
   const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async () => {
+    if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error(
         "Agregá al menos un producto antes de emitir el presupuesto.",
@@ -6893,12 +6321,13 @@ export function PropuestaFicha({
       const presupuesto = await emitirPresupuesto({
         cotizacionId,
         clienteId,
+        proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         canalVenta,
         fechaEntrega: fechaEntregaOrden(),
         cargos: cargosOrden.map(cargoToOrdenInput),
-        items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
-          itemToOrdenItemPayload(item, cotizacionItemId),
+        items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) =>
+          itemToOrdenItemPayload(item, cotizacionItemId, planEntrega),
         ),
       });
       // El backend emite y envía de una; si las reglas de aprobación
@@ -6928,14 +6357,17 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
+    validarCanalVenta,
     persistirSnapshotsItems,
     fechaEntregaOrden,
     router,
   ]);
 
   const emitirOrden = React.useCallback(async () => {
+    if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error("Agregá al menos un producto antes de emitir la orden.");
       return;
@@ -6947,7 +6379,7 @@ export function PropuestaFicha({
       return;
     }
     const fechaEntrega = fechaEntregaOrden();
-    if (fechaEntrega < offsetDate(0)) {
+    if (fechaEntrega < offsetDate(0, zonaHoraria)) {
       toast.error(
         "La fecha de entrega no puede ser anterior a hoy. Revisá la fecha estimada.",
       );
@@ -6965,14 +6397,15 @@ export function PropuestaFicha({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
+        proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "pendiente",
         fechaEntrega,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
-        items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
-          itemToOrdenItemPayload(item, cotizacionItemId),
+        items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) =>
+          itemToOrdenItemPayload(item, cotizacionItemId, planEntrega),
         ),
       });
 
@@ -7042,12 +6475,15 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
+    validarCanalVenta,
     cobrosStaged,
     moneda,
     persistirSnapshotsItems,
     fechaEntregaOrden,
+    zonaHoraria,
     publicarArtes,
     subirArchivosCentroCopiado,
     mapaArchivosCC,
@@ -7072,6 +6508,7 @@ export function PropuestaFicha({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
+    if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error("Agregá al menos un producto antes de guardar el borrador.");
       return;
@@ -7089,14 +6526,15 @@ export function PropuestaFicha({
         idempotencyKey,
         clienteId: clienteId || undefined,
         cotizacionId,
+        proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         estado: "borrador",
         fechaEntrega: fechaEntrega || undefined,
         canalVenta,
         cargos: cargosOrden.map(cargoToOrdenInput),
         tratamientoFiscal: sinComprobante ? "SIN_COMPROBANTE" : "FISCAL",
-        items: itemsConSnapshot.map(({ item, cotizacionItemId }) =>
-          itemToOrdenItemPayload(item, cotizacionItemId),
+        items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) =>
+          itemToOrdenItemPayload(item, cotizacionItemId, planEntrega),
         ),
       });
       const adjuntos = await Promise.allSettled([
@@ -7137,8 +6575,10 @@ export function PropuestaFicha({
     items,
     cargosOrden,
     clienteId,
+    proyectoCampanaId,
     fidelizacionCanjePuntos,
     canalVenta,
+    validarCanalVenta,
     persistirSnapshotsItems,
     fechaEntregaOrden,
     publicarArtes,
@@ -7165,6 +6605,8 @@ export function PropuestaFicha({
   // re-disparos del efecto por cada actualización progresiva).
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
+  const contextoCuponRef = React.useRef({ clienteId, items });
+  contextoCuponRef.current = { clienteId, items };
 
   const recotizarItemsPorCliente = React.useCallback(
     async (targetClienteId: string) => {
@@ -7256,7 +6698,7 @@ export function PropuestaFicha({
         );
       }
     },
-    [],
+    [cotizar, recotizarCotizacionItem],
   );
 
   // ── Descuento comercial (F1) ──────────────────────────────────────────────
@@ -7306,7 +6748,7 @@ export function PropuestaFicha({
         cotizacionItemId: response.cotizacionItemId ?? item.cotizacionItemId,
       };
     },
-    [clienteId],
+    [clienteId, cotizar, recotizarCotizacionItem],
   );
 
   // Umbral de aprobación por descuento del tenant (F3): se busca una sola vez
@@ -7481,7 +6923,7 @@ export function PropuestaFicha({
           detalle:
             "Ningún producto de la orden entra en el alcance de este cupón.",
         });
-        return;
+        return false;
       }
       const pisadas = objetivo.filter(
         (item) => item.descuentoInput && !item.descuentoInput.cuponId,
@@ -7529,7 +6971,7 @@ export function PropuestaFicha({
                 ? `${cause.message} Se restauraron las líneas anteriores.`
                 : "La recotización falló y se restauraron las líneas anteriores.",
           });
-          return;
+          return false;
         }
         setItems((current) =>
           current.map(
@@ -7554,7 +6996,7 @@ export function PropuestaFicha({
               ? `−${formatCurrency(descontado, moneda)}`
               : undefined,
         });
-        setDescuentoTarget(null);
+        return true;
       } finally {
         setDescuentoAplicando(false);
       }
@@ -7562,53 +7004,67 @@ export function PropuestaFicha({
     [recotizarItemConDescuento, moneda],
   );
 
-  /**
-   * Cupón escaneado SIN abrir nada: valida contra el carrito y aplica. Lo
-   * dispara el detector de lector 2D (ver useEscaneoCodigo); el modal sigue
-   * disponible para tipear el código a mano.
-   */
-  const aplicarCuponEscaneado = React.useCallback(
-    async (codigo: string) => {
-      const recotizables = itemsRef.current.filter(
+  /** Código manual o del lector: valida y aplica el mismo plan del backend. */
+  const aplicarCuponCodigo = React.useCallback(
+    async (codigo: string): Promise<boolean> => {
+      if (
+        cuponEnCurso.current ||
+        descuentoAplicando ||
+        modoOrden ||
+        emitiendo ||
+        emitiendoPresupuesto ||
+        guardandoBorrador
+      )
+        return false;
+      const contexto = contextoCuponRef.current;
+      const recotizables = contexto.items.filter(
         (item) => item.jobContext && item.motorCodigo,
       );
       if (recotizables.length === 0) {
         setAvisoCupon({
           tipo: "aviso",
           titulo: "Agregá productos primero",
-          detalle:
-            "El cupón descuenta sobre los productos de la orden, y todavía no hay ninguno.",
+          detalle: "No hay productos con datos para aplicar un cupón.",
         });
-        return;
+        return false;
       }
+      cuponEnCurso.current = true;
+      setCuponValidando(true);
       try {
-        const resultado = await validarCupon({
+        const aplicado = await validarYAplicarCuponOrden({
           codigo,
-          clienteId: clienteId || undefined,
-          items: recotizables.map((item) => ({
-            key: item.id,
-            productoId: item.motorCodigo || undefined,
-            productoCodigo: item.productoCodigo || undefined,
-            categoriaCodigo: item.categoriaComercialCodigo || undefined,
-            subcategoriaCodigo: item.subcategoriaComercialCodigo || undefined,
-            neto: netoListaDeItem(item),
-          })),
+          clienteId: contexto.clienteId,
+          items: recotizables,
+          contextoVigente: () =>
+            contextoCuponRef.current.clienteId === contexto.clienteId &&
+            contextoCuponRef.current.items === contexto.items,
+          aplicar: aplicarCupon,
         });
-        await aplicarCupon(resultado);
+        if (aplicado) setCuponAbierto(false);
+        return aplicado;
       } catch (error) {
-        // El motivo del backend ya viene sin el código ("está vencido", "no
-        // tiene usos disponibles"…), así que se muestra tal cual.
         setAvisoCupon({
           tipo: "error",
           titulo: "Cupón no válido",
           detalle:
             error instanceof Error
               ? error.message
-              : "No se pudo validar el cupón escaneado.",
+              : "No se pudo validar el cupón.",
         });
+        return false;
+      } finally {
+        cuponEnCurso.current = false;
+        setCuponValidando(false);
       }
     },
-    [clienteId, aplicarCupon],
+    [
+      aplicarCupon,
+      descuentoAplicando,
+      modoOrden,
+      emitiendo,
+      emitiendoPresupuesto,
+      guardandoBorrador,
+    ],
   );
 
   // Escaneo global: el vendedor apunta el lector y listo. Se apaga en modo
@@ -7620,6 +7076,9 @@ export function PropuestaFicha({
     activo:
       !modoOrden &&
       descuentoTarget == null &&
+      !cuponAbierto &&
+      !cuponValidando &&
+      !descuentoAplicando &&
       !addOpen &&
       !copiadoOpen &&
       !cargoOpen &&
@@ -7630,7 +7089,7 @@ export function PropuestaFicha({
       // los mandaba a validar como cupón y devolvía "no existe" — mientras
       // el watcher global, en paralelo, hacía lo correcto.
       if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return;
-      void aplicarCuponEscaneado(codigo);
+      void aplicarCuponCodigo(codigo);
     },
   });
 
@@ -7644,6 +7103,8 @@ export function PropuestaFicha({
 
   React.useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (!puedeModificarProductos || event.defaultPrevented || event.repeat)
+        return;
       const target = event.target as HTMLElement | null;
       const isEditableTarget =
         target?.closest("input, textarea, select, [contenteditable='true']") !=
@@ -7670,6 +7131,7 @@ export function PropuestaFicha({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
+    puedeModificarProductos,
     abrirAgregarProducto,
     abrirCentroCopiado,
     addOpen,
@@ -7762,835 +7224,330 @@ export function PropuestaFicha({
     }
   }
 
+  async function aplicarTipoCambio(cambio: TipoCambioSnapshot) {
+    if (!puedeModificarProductos)
+      throw new Error("Activá la edición para cambiar el tipo de cambio.");
+    const anteriores = itemsRef.current;
+    const nuevos: PropuestaItem[] = [];
+    // Staging completo: si falla una línea, no se modifica ninguna.
+    for (const item of anteriores) {
+      if (!item.jobContext || !item.motorCodigo)
+        throw new Error(
+          `Volvé a configurar "${item.productoNombre}" antes de actualizar el cambio.`,
+        );
+      const meta = metaCentroCopiado(item.jobContext);
+      let resultado: CotizacionPropuestaSnapshot | undefined;
+      if (meta?.esTomo) {
+        const construido = await construirItemsCentroCopiado({
+          tipoCambioId: cambio.id,
+          clienteId: clienteId || undefined,
+          documentos: (meta.segmentos ?? []).map((segmento, indice) => ({
+            ...segmento,
+            id: `s${indice}`,
+            nombre: segmento.nombre ?? undefined,
+            copias: 1,
+            tamanoAnchoMm:
+              segmento.tamanoAnchoMm ?? dimsDeFormato(segmento.tamano).anchoMm,
+            tamanoAltoMm:
+              segmento.tamanoAltoMm ?? dimsDeFormato(segmento.tamano).altoMm,
+            grupoId: "T",
+          })),
+          grupos: [
+            {
+              id: "T",
+              juegos: meta.juegos ?? 1,
+              nombre: meta.tomoNombre ?? undefined,
+              terminaciones: meta.terminaciones ?? [],
+              tipoAnillo: meta.tipoAnillo ?? undefined,
+            },
+          ],
+        });
+        resultado = construido.items[0]?.cotizacion ?? undefined;
+      } else {
+        const respuesta = await cotizar({
+          tipoCambioId: cambio.id,
+          productoId: item.motorCodigo,
+          rutaAlternativaId: item.rutaAlternativaId ?? null,
+          jobContext: { ...item.jobContext, tipoCambioId: cambio.id } as never,
+          clienteId: clienteId || null,
+          periodo: getCurrentPeriodo(),
+          descuento: descuentoParaMotor(item.descuentoInput),
+        });
+        if (!respuesta.exitoso)
+          throw new Error(
+            respuesta.errores?.[0]?.mensaje ||
+              `No se pudo cotizar ${item.productoNombre}.`,
+          );
+        resultado = respuesta.cotizacion;
+      }
+      if (!resultado)
+        throw new Error(`No se pudo actualizar ${item.productoNombre}.`);
+      nuevos.push({
+        ...applyCotizacionToItem(item, resultado, {
+          ...item.jobContext,
+          tipoCambioId: cambio.id,
+        }),
+        cotizacionItemId: undefined,
+      });
+    }
+    if (itemsRef.current !== anteriores)
+      throw new Error(
+        "Los productos cambiaron durante el cálculo. Volvé a aplicar el tipo de cambio.",
+      );
+    setItems(nuevos);
+    setEditadosIds(new Set(nuevos.map((item) => item.id)));
+  }
+
   return (
-    <section className="ot-v1 flex flex-1 flex-col p-4 md:p-6">
-      {initialLoadErrors.length > 0 ? (
-        <div className="orden-load-warning" role="alert">
-          No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
-          recargando antes de emitir para no trabajar con un catálogo
-          incompleto.
-        </div>
-      ) : null}
-      <div className="orden-head">
-        <div className="left">
-          {modoOrden ? (
-            <nav className="orden-breadcrumb" aria-label="Ubicación">
-              <span className="bc-item">
-                <FactoryIcon />
-                Comercial
-              </span>
-              <span className="bc-sep">›</span>
-              <Link className="bc-item bc-link" href="/produccion/ordenes">
-                <ArrowLeftIcon />
-                Órdenes de trabajo
-              </Link>
-            </nav>
-          ) : null}
-          {orden ? (
-            <h1
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              <span style={{ fontFamily: "var(--font-mono)" }}>
-                {orden.numero}
-              </span>
-              <EstadoOtBadge estado={orden.estado} />
-              {sinComprobante ? <ChipSinComprobante /> : null}
-              {mostrarRecienEmitida ? (
-                <span className="otd-new-tag-lg">RECIÉN EMITIDA</span>
-              ) : null}
-            </h1>
-          ) : (
-            <h1>
-              Nueva {ordenTipo === "orden" ? "orden de trabajo" : "propuesta"}
-              <span className="status-chip">
-                <span className="d" />
-                Borrador
-              </span>
-              {sinComprobante ? <ChipSinComprobante /> : null}
-            </h1>
-          )}
-          {/* En una OT emitida el cliente ya está en su card y el producto en
-              la tabla: el subtítulo repetía. Se deja sólo la guía del alta. */}
-          {!orden ? (
-            <div className="sub">
-              {ordenTipo === "orden"
-                ? "Confirma productos, especificaciones y pagos para emitir la OT al taller."
-                : "Arma la propuesta para enviar al cliente antes de confirmar la OT."}
-            </div>
-          ) : null}
-        </div>
-        <div className="right" style={{ alignItems: "center" }}>
-          <div className="orden-meta">
-            {/* El N° ya está grande a la izquierda; acá sólo la fecha. */}
-            <span className="meta-row">
-              <span className="ml">
-                {modoOrden
-                  ? orden?.fechaEmision
-                    ? "Emitida"
-                    : "Creada"
-                  : "Creado"}
-              </span>
-              <span className="mv mono">
-                {orden
-                  ? formatFechaOrden(orden.fechaEmision ?? orden.creadaEl)
-                  : "hoy"}
-              </span>
-            </span>
-          </div>
-          {!modoOrden ? (
-            <OrdenSegmented
-              value={ordenTipo}
-              onChange={(value) => setTipo(fromOrdenTipo(value))}
-            />
-          ) : orden && orden.estado !== "cancelada" ? (
-            // Sólo las acciones "rápidas" arriba (Seguimiento, QR, y Emitir si
-            // es borrador). Editar/Cancelar bajaron a la barra de total para
-            // ganar alto. Facturar quedó sólo en el tab Comprobantes.
-            <div style={{ display: "flex", gap: 8 }}>
-              {orden.estado === "borrador" ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => void emitirBorrador()}
-                  disabled={emitiendoBorrador}
-                >
-                  <CheckIcon />
-                  {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
-                </button>
-              ) : null}
-              {orden.estado === "finalizada" && puedeEntregar ? (
-                <Button
-                  size="lg"
-                  onClick={() => setEntregaManualOpen(true)}
-                  title="Registrar la entrega al cliente"
-                >
-                  <PackageCheckIcon data-icon="inline-start" />
-                  Entregar
-                </Button>
-              ) : null}
-              {publicToken ? (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={compartirSeguimiento}
-                  title="Copiar el link público de seguimiento para el cliente"
-                >
-                  {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
-                  {trackCopiado ? "Copiado" : "Seguimiento"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn"
-                onClick={() => setQrRetiroOpen(true)}
-                title="QR que el cliente presenta para retirar el trabajo"
-              >
-                <QrCodeIcon />
-                QR
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Cancelada: en vez del stepper —que mostraría un recorrido que no va a
-          seguir— se cuenta qué pasó. El motivo es lo primero que pregunta
-          cualquiera que abre una orden cancelada. */}
-      {orden?.cancelacion ? (
-        <div className="prf-cancelada">
-          <div className="prf-cancelada-t">
-            <XCircleIcon width={15} height={15} />
-            Cancelada
-            {orden.cancelacion.estadoAlCancelar
-              ? ` cuando estaba ${(
-                  ORDEN_TRABAJO_ESTADOS[
-                    orden.cancelacion
-                      .estadoAlCancelar as keyof typeof ORDEN_TRABAJO_ESTADOS
-                  ]?.label ?? orden.cancelacion.estadoAlCancelar
-                ).toLowerCase()}`
-              : ""}
-          </div>
-          <div className="prf-cancelada-m">“{orden.cancelacion.motivo}”</div>
-          <div className="prf-cancelada-f">
-            {orden.cancelacion.por ? `${orden.cancelacion.por} · ` : ""}
-            {fechaHora(orden.cancelacion.fecha)}
-            {orden.cancelacion.pasosTotal > 0
-              ? ` · ${orden.cancelacion.pasosHechos} de ${orden.cancelacion.pasosTotal} pasos hechos`
-              : ""}
-            {orden.cancelacion.minutosReales > 0
-              ? ` · ${Math.round(orden.cancelacion.minutosReales)} min trabajados`
-              : ""}
-          </div>
-        </div>
-      ) : null}
-
-      {orden && !orden.cancelacion ? (
-        <div style={{ marginBottom: 12 }}>
-          <StepperOt estado={orden.estado} fechasEstado={orden.fechasEstado} />
-        </div>
-      ) : null}
-
-      <div className="orden-form">
-        <FieldCard label="Cliente" icon={<UserIcon />}>
-          {campoEditable("clienteId") ? (
-            <ClienteCombobox
-              value={clienteId}
-              onChange={setClienteId}
-              initialClientes={clientesDisponibles}
-            />
-          ) : (
-            <div className="ctrl-input">
-              <span>{orden?.clienteNombre}</span>
-            </div>
-          )}
-        </FieldCard>
-
-        <FieldCard label="Vendedor" icon={<UserIcon />}>
-          <div className="ctrl-input has-avatar">
-            {orden ? (
-              <>
-                <span className="av-sm">
-                  {vendedorOrdenNombre(orden).slice(0, 2).toUpperCase()}
-                </span>
-                <span>{vendedorOrdenNombre(orden)}</span>
-              </>
-            ) : (
-              <>
-                <span className="av-sm">
-                  {(currentUser?.nombreCompleto ?? currentUser?.email ?? "US")
-                    .slice(0, 2)
-                    .toUpperCase()}
-                </span>
-                <span>
-                  {currentUser?.nombreCompleto ??
-                    currentUser?.email ??
-                    "Usuario actual"}
-                </span>
-              </>
-            )}
-          </div>
-        </FieldCard>
-
-        <FieldCard label="Canal de venta" icon={<PackageIcon />}>
-          {campoEditable("canalVenta") ? (
-            <CanalVentaSelect value={canalVenta} onChange={setCanalVenta} />
-          ) : (
-            <div className="ctrl-input">
-              <span>
-                {CANALES_VENTA.find((canal) => canal.value === canalVenta)
-                  ?.label ?? "Mostrador"}
-              </span>
-            </div>
-          )}
-        </FieldCard>
-
-        <FieldCard
-          label={modoOrden ? "Fecha de entrega" : "Fecha estimada"}
-          icon={<CalendarIcon />}
-        >
-          {campoEditable("fechaEntrega") ? (
-            <div className="ctrl-input">
-              <input
-                ref={fechaEstimadaInputRef}
-                type="date"
-                value={fechaEstimada}
-                onClick={() => fechaEstimadaInputRef.current?.showPicker?.()}
-                onChange={(event) => {
-                  otFechaTocadaRef.current = true;
-                  setFechaEstimada(event.target.value);
-                }}
-                aria-label="Fecha de entrega"
-              />
-            </div>
-          ) : (
-            <div className="ctrl-input">
-              <span>{formatFechaOrden(orden?.fechaEntrega ?? null)}</span>
-            </div>
-          )}
-          {(() => {
-            const eta = describirEta(demoraOrden, fechaEstimada, {
-              margenDias: margenEtaDias,
-              noLaborables: colasTaller?.noLaborables,
-              zona: zonaHoraria,
-            });
-            if (!eta) return null;
-            return (
-              <div
-                className={`eta-sugerida ${eta.nivel === "tarde" ? "tarde" : eta.nivel === "sin-margen" ? "justo" : ""}`}
-                title={
-                  eta.motivo || "Simulado contra las colas actuales del taller"
-                }
-              >
-                <ClockIcon />
-                <span>
-                  El taller la terminaría <strong>{eta.etiqueta}</strong>
-                  {eta.sugeridaEtiqueta ? (
-                    <>
-                      {" "}
-                      · prometé desde <strong>{eta.sugeridaEtiqueta}</strong>
-                    </>
-                  ) : null}
-                  {eta.nivel === "tarde"
-                    ? " — después de la fecha elegida"
-                    : eta.nivel === "sin-margen"
-                      ? " — la fecha elegida queda sin margen"
-                      : ""}
-                </span>
-              </div>
-            );
-          })()}
-        </FieldCard>
-      </div>
-
-      {/* Columna flex que llena el alto disponible: deja que el resumen
-          financiero de la pestaña Productos caiga anclado al fondo (margin-top
-          auto) aun con la OT vacía, y que el `sticky` lo mantenga abajo al
-          scrollear cuando hay muchos productos. */}
-      <div
-        className="orden-main-full"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flex: "1 1 auto",
-          minHeight: 0,
-        }}
+    <DesignSystemProvider appearance="light" theme="brand">
+      <section
+        data-ui="heroui"
+        data-appearance="light"
+        className={cn(
+          designTheme.theme,
+          "flex min-h-0 min-w-0 flex-1 flex-col bg-background",
+          workspaceStyles.page,
+          orden && issued.page,
+        )}
       >
-        <div className="orden-tabs-row">
-          <OrdenTabs
-            value={tab}
-            onChange={setTab}
-            count={items.length}
-            historialCount={orden ? orden.eventosTotal : undefined}
-            comprobantesCount={orden ? 0 : undefined}
-            archivosCount={archivosCount}
-          />
-          {!modoOrden || itemsEnEdicion ? (
-            <div className="orden-actions">
-              {!modoOrden ? (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setCargoOpen(true)}
-                >
-                  <CircleDollarSignIcon />
-                  Agregar cargo
-                </button>
-              ) : null}
-              {ccActivo ? (
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={abrirCentroCopiado}
-                  title="Carga rápida (C)"
-                >
-                  {/* Rayo en el naranja de acento del sistema. */}
-                  <ZapIcon style={{ color: "#c2410c" }} />
-                  Carga rápida
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={abrirAgregarProducto}
-                title="Agregar producto (P)"
-              >
-                <PlusIcon />
-                Agregar producto
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        <div className={resumenBar.scroll}>
-          {tab === "productos" ? (
-            <div className="orden-table">
-              <div
-                className="ohead"
-                style={
-                  sinComprobante
-                    ? { gridTemplateColumns: ORDEN_COLS_SIN_IMP }
-                    : undefined
+        {initialLoadErrors.length > 0 ? (
+          <div className="orden-load-warning" role="alert">
+            No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
+            recargando antes de emitir para no trabajar con un catálogo
+            incompleto.
+          </div>
+        ) : null}
+        <HeroTabs
+          selectedKey={tab}
+          onSelectionChange={(key) => setTab(String(key) as OrdenTab)}
+          className={workspaceStyles.tabs}
+        >
+          <OrdenWorkspace
+            activeSection={tab}
+            onShowData={() => setTab("datos")}
+            navigation={
+              <OrdenTabs
+                clientePendiente={!clienteId}
+                verMargenes={verMargenes}
+                count={items.length}
+                historialCount={orden ? orden.eventosTotal : undefined}
+                comprobantesCount={orden ? 0 : undefined}
+                archivosCount={archivosCount}
+                archivosPendientesCount={
+                  initialDocumentos?.gates.filter((gate) => !gate.cumplido).length
                 }
+              />
+            }
+            summary={
+              <OrdenSummaryDetails
+                cliente={
+                  orden?.clienteNombre ??
+                  selectorClientes.options.find((c) => c.id === clienteId)
+                    ?.nombre
+                }
+                campana={
+                  campanasCliente.find((c) => c.id === proyectoCampanaId)
+                    ?.nombre ??
+                  (proyectoCampanaId &&
+                  orden?.proyectoCampana?.id === proyectoCampanaId
+                    ? orden.proyectoCampana.nombre
+                    : undefined)
+                }
+                fecha={formatFechaOrden(
+                  fechaFinalVisible || orden?.fechaEntrega || null,
+                )}
+                vendedor={
+                  orden
+                    ? vendedorOrdenNombre(orden)
+                    : (currentUser?.nombreCompleto ??
+                      currentUser?.email ??
+                      "Usuario actual")
+                }
+                onShowData={puedeEditarOrden ? () => setTab("datos") : undefined}
               >
-                <span className="ix">#</span>
-                <span className="chev" />
-                <span className="prod">Producto</span>
-                <span className="num qty">Cantidad</span>
-                <span className="num">Subtotal</span>
-                {sinComprobante ? null : <span className="num">Imp.</span>}
-                <span className="num">Unitario</span>
-                <span className="num">Total</span>
-                <span className="x" />
-              </div>
-              {recotizandoIds.size > 0 ? (
-                <div
-                  className="orden-recotizando"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span className="spin" aria-hidden="true" />
-                  Recotizando {recotizandoIds.size}{" "}
-                  {recotizandoIds.size === 1 ? "producto" : "productos"} con los
-                  precios del cliente seleccionado…
-                </div>
-              ) : null}
-              <div className="orows">
-                {items.map((item, index) => {
-                  const tomo = tomoDeItem(item);
-                  const iniciaTomo =
-                    !!tomo && tomo !== tomoDeItem(items[index - 1]);
-                  const cuentaTomo = tomo
-                    ? items.filter((x) => tomoDeItem(x) === tomo).length
-                    : 0;
-                  return (
-                    <React.Fragment key={item.id}>
-                      {iniciaTomo && (
-                        <div className={ccFicha.tomoHead}>
-                          Tomo anillado
-                          {tomoNombreDeItem(item)
-                            ? ` · ${tomoNombreDeItem(item)}`
-                            : ""}
-                          <span className={ccFicha.cuenta}>
-                            · {cuentaTomo} documentos
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        className={`order-row-wrap${recotizandoIds.has(item.id) ? " is-requoting" : ""}${tomo ? ` ${ccFicha.enTomo}` : ""}`}
-                        ref={(node) => {
-                          if (node) {
-                            rowRefs.current.set(item.id, node);
-                          } else {
-                            rowRefs.current.delete(item.id);
-                          }
-                        }}
-                      >
-                        <ProductRow
-                          item={item}
-                          index={index}
-                          sinComprobante={sinComprobante}
-                          expanded={openIds.has(item.id)}
-                          etaSistema={demoraPorItem?.get(item.id) ?? null}
-                          margenEtaDias={margenEtaDias}
-                          noLaborables={colasTaller?.noLaborables}
-                          onToggle={() => toggle(item.id)}
-                          onRemove={
-                            modoOrden
-                              ? itemsEnEdicion
-                                ? () => quitarItemDeOrden(item)
-                                : undefined
-                              : () =>
-                                  setItems((current) =>
-                                    current.filter(
-                                      (candidate) => candidate.id !== item.id,
-                                    ),
-                                  )
-                          }
-                          onEdit={
-                            modoOrden
-                              ? itemsEnEdicion &&
-                                item.jobContext &&
-                                item.motorCodigo
-                                ? () => abrirEdicion(item)
-                                : undefined
-                              : () => abrirEdicion(item)
-                          }
-                          onDescuento={
-                            !modoOrden && item.jobContext && item.motorCodigo
-                              ? () =>
-                                  setDescuentoTarget({
-                                    scope: "item",
-                                    itemId: item.id,
-                                  })
-                              : undefined
-                          }
-                          onVerPrecios={
-                            esCentroCopiado(item)
-                              ? () => setPreciosOpen(true)
-                              : undefined
-                          }
-                          onEditPanels={(targetItem, paso) => {
-                            setPanelEditor({ item: targetItem, paso });
-                          }}
-                          onChangeFechaEntrega={(fechaEntrega) => {
-                            itemFechaTocadaRef.current.add(item.id);
-                            setItems((current) =>
-                              current.map((candidate) =>
-                                candidate.id === item.id
-                                  ? {
-                                      ...candidate,
-                                      fechaEntrega:
-                                        fechaEntrega || fechaEstimada,
-                                    }
-                                  : candidate,
-                              ),
-                            );
-                          }}
-                          fechaEstimada={fechaEstimada}
-                          readOnly={modoOrden}
-                          prepararCorte={
-                            modoOrden && persistedItemIds.has(item.id)
-                          }
-                        />
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-              {!modoOrden || itemsEnEdicion ? (
-                <button
-                  type="button"
-                  className="orden-add-ghost"
-                  onClick={abrirAgregarProducto}
-                >
-                  <PlusIcon />
-                  Agregar otro producto a la{" "}
-                  {modoOrden || ordenTipo === "orden" ? "orden" : "propuesta"}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {tab === "productos" && cargosOrden.length > 0 ? (
-            <section className="orden-cargos-card">
-              <div className="orden-cargos-head">
-                <div>
-                  <div className="ttl">Cargos de la orden</div>
-                  <div className="sub">
-                    Aplicados al total general con snapshot del catálogo.
-                  </div>
-                </div>
-                {!modoOrden ? (
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setCargoOpen(true)}
-                  >
-                    <PlusIcon />
-                    Agregar cargo
-                  </button>
-                ) : null}
-              </div>
-              <div className="orden-cargos-list">
-                {cargosOrden.map((cargo) => (
-                  <div className="orden-cargo-row" key={cargo.id}>
-                    <div className="cargo-main">
-                      <strong>{cargo.nombreSnapshot}</strong>
-                      <small>{cargo.detalle}</small>
-                      {cargo.nota ? <em>{cargo.nota}</em> : null}
-                    </div>
-                    <div className="cargo-num">
-                      <span>Neto</span>
-                      <strong>{formatCurrency(cargo.montoNeto, moneda)}</strong>
-                    </div>
-                    <div className="cargo-num">
-                      <span>IVA</span>
-                      <strong>
-                        {formatCurrency(cargo.impuestoMonto, moneda)}
-                      </strong>
-                    </div>
-                    <div className="cargo-num total">
-                      <span>Total</span>
-                      <strong>{formatCurrency(cargo.total, moneda)}</strong>
-                    </div>
-                    {!modoOrden ? (
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        onClick={() =>
-                          setCargosOrden((current) =>
-                            current.filter(
-                              (candidate) => candidate.id !== cargo.id,
-                            ),
-                          )
-                        }
-                        aria-label={`Eliminar cargo ${cargo.nombreSnapshot}`}
-                      >
-                        <Trash2Icon />
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {tab === "produccion" ? (
-            orden ? (
-              <ProduccionOrdenTab
-                ordenId={orden.id}
-                onOrdenActualizada={recargarOrden}
-              />
-            ) : (
-              <EmptyTab
-                title="Programación de producción"
-                description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
-              />
-            )
-          ) : null}
-          {tab === "pagos" ? (
-            orden ? (
-              <div className="otd-page" style={{ padding: 0 }}>
-                <PagosTab
-                  pago={orden.pago}
-                  total={orden.total}
-                  ordenId={orden.id}
-                  puedeCobrar={orden.estado !== "borrador"}
-                  sinComprobante={orden.tratamientoFiscal === "SIN_COMPROBANTE"}
+                <TipoCambioPanel
+                  editable={puedeModificarProductos}
+                  onAplicar={aplicarTipoCambio}
                 />
-              </div>
-            ) : (
-              <div className="otd-page" style={{ padding: 0 }}>
-                <PagosStagingTab
-                  total={totalPropuesta}
+                <OrdenFinancialActions
+                  empty={items.length === 0}
+                  emitiendo={emitiendo || emitiendoPresupuesto}
+                  guardandoBorrador={guardandoBorrador}
                   sinComprobante={sinComprobante}
-                  cobros={cobrosStaged}
-                  onAgregar={(draft) =>
-                    setCobrosStaged((prev) => [...prev, draft])
+                  onAgregarCargo={
+                    !modoOrden ? () => setCargoOpen(true) : undefined
                   }
-                  onQuitar={(index) =>
-                    setCobrosStaged((prev) =>
-                      prev.filter((_, i) => i !== index),
-                    )
+                  onDescuentoOrden={
+                    modoOrden
+                      ? undefined
+                      : () =>
+                          setDescuentoTarget({ scope: "orden", itemId: null })
+                  }
+                  onCuponOrden={
+                    modoOrden
+                      ? undefined
+                      : () => setCuponAbierto((value) => !value)
+                  }
+                  cuponAbierto={cuponAbierto}
+                  cuponFieldId="orden-cupon"
+                  operacionPendiente={cuponValidando || descuentoAplicando}
+                  onToggleTratamientoFiscal={
+                    puedeToggleFiscal ? toggleTratamientoFiscal : undefined
+                  }
+                  togglingFiscal={togglingFiscal}
+                />
+                {cuponAbierto && !modoOrden && (
+                  <OrdenCuponField
+                    id="orden-cupon"
+                    isDisabled={
+                      !items.length ||
+                      emitiendo ||
+                      emitiendoPresupuesto ||
+                      guardandoBorrador ||
+                      descuentoAplicando
+                    }
+                    onValidar={aplicarCuponCodigo}
+                  />
+                )}
+                <ResumenBar
+                  layout="sidebar"
+                  items={items}
+                  cargosOrden={cargosOrden}
+                  sinComprobante={sinComprobante}
+                  fidelizacionCanjeMonto={fidelizacionCanjeMonto}
+                  readOnly={modoOrden}
+                  resumenPersistido={
+                    orden
+                      ? {
+                          subtotal: orden.subtotal,
+                          impuestos: orden.impuestos,
+                          descuentoTotal: orden.descuentoTotal,
+                          total: orden.total,
+                        }
+                      : undefined
                   }
                 />
-              </div>
-            )
-          ) : null}
-          {tab === "comprobantes" && orden ? (
-            <div className="otd-page" style={{ padding: 0 }}>
-              <ComprobantesOrdenTab
-                ordenId={orden.id}
-                numero={orden.numero}
-                total={orden.total}
-                facturadoInicial={orden.facturadoTotal}
-                cobradoInicial={orden.cobradoTotal}
-                puedeFacturar={orden.estado !== "borrador"}
-                recargarToken={0}
-              />
-            </div>
-          ) : null}
-          {tab === "archivos" ? (
-            orden ? (
-              <ArchivosOrdenTab
-                ordenId={orden.id}
-                onTotalCambio={setArchivosCount}
-              />
-            ) : (
-              // Todavía es una propuesta sin persistir: los items son
-              // borradores locales sin fila en la base, así que no hay dónde
-              // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
-              <EmptyTab
-                title="Archivos"
-                description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
-              />
-            )
-          ) : null}
-          {tab === "costos" ? (
-            <CostosOrdenTab
-              items={items}
-              cargosOrden={cargosOrden}
-              ordenId={orden?.id}
-              sinComprobante={sinComprobante}
-            />
-          ) : null}
-          {tab === "historial" && orden ? (
-            <div className="otd-card">
-              <div className="otd-card-head">
-                <span className="ttl">
-                  Historial <span className="ct">{orden.eventosTotal}</span>
-                </span>
-              </div>
-              {orden.eventos.length === 0 ? (
-                <div className="otd-noprod">Sin eventos registrados.</div>
-              ) : (
-                <div className="otd-timeline">
-                  {orden.eventosTotal > orden.eventos.length ? (
-                    <div className="otd-noprod">
-                      Se muestran los 200 eventos más recientes de{" "}
-                      {orden.eventosTotal}.
-                    </div>
-                  ) : null}
-                  {orden.eventos.map((ev, i) => {
-                    const { Icono, tone } =
-                      EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
-                    return (
-                      <div key={i} className={`otd-ev ${tone ?? ""}`}>
-                        <span className="otd-ev-ico">
-                          <Icono />
-                        </span>
-                        <div className="otd-ev-body">
-                          <div className="otd-ev-txt">{ev.descripcion}</div>
-                          <div className="otd-ev-meta">
-                            <span className="mono">
-                              {formatEventoFecha(ev.fecha)}
-                            </span>{" "}
-                            · {ev.usuarioNombre}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        {tab === "productos" ? (
-          <div className="space-y-4">
-            {modoOrden &&
-            orden &&
-            (orden.fidelizacion.canjePuntos > 0 ||
-              orden.fidelizacion.puntosEstimados > 0) ? (
-              <div className="rounded-xl border bg-card p-4 text-sm">
-                <div className="font-semibold">Fidelización</div>
-                <div className="mt-1 text-muted-foreground">
-                  {orden.fidelizacion.canjePuntos > 0
-                    ? `${orden.fidelizacion.canjePuntos} puntos · −${formatCurrency(orden.fidelizacion.canjeMonto, moneda)}`
-                    : `Esta orden suma ${orden.fidelizacion.puntosEstimados} puntos cuando esté entregada y pagada con fondos acreditados.`}
-                </div>
-              </div>
-            ) : null}
-            {!modoOrden ? (
-              <FidelizacionCotizador
-                clienteId={clienteId}
-                margen={costosFidelizacion.margenMonto}
-                total={totalPropuestaAntesCanje}
-                moneda={moneda}
-                value={fidelizacionCanjePuntos}
-                onChange={setFidelizacionCanjePuntos}
-                onSimulation={actualizarSimulacionFidelizacion}
-              />
-            ) : null}
-            {modoOrden &&
-            editandoOrden &&
-            polyfanPendientesDeGuardar.length > 0 ? (
-              <div
-                role="status"
-                className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-950"
-              >
-                <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-700">
-                  <SaveIcon className="size-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold">
-                    Preparación de corte pendiente de guardar
-                  </div>
-                  <div className="mt-0.5 text-xs leading-relaxed text-emerald-800">
-                    Al guardar la orden se prepararán automáticamente los
-                    recorridos y archivos TAP de{" "}
-                    {polyfanPendientesDeGuardar.length === 1
-                      ? `“${polyfanPendientesDeGuardar[0].productoNombre}”`
-                      : `${polyfanPendientesDeGuardar.length} productos de Polyfan`}
-                    . Luego quedarán disponibles en Producción.
-                  </div>
-                </div>
-              </div>
-            ) : null}
-            <ResumenBar
-              items={items}
-              cargosOrden={cargosOrden}
-              tipo={ordenTipo}
-              onEmitir={emitirOrden}
-              onEmitirPresupuesto={emitirPresupuestoCb}
-              emitiendo={emitiendo || emitiendoPresupuesto}
-              onGuardarBorrador={() =>
-                cobrosStaged.length > 0
-                  ? setConfirmBorradorConCobros(true)
-                  : void guardarBorrador()
-              }
-              guardandoBorrador={guardandoBorrador}
-              onDescuentoOrden={
-                modoOrden
-                  ? undefined
-                  : () => setDescuentoTarget({ scope: "orden", itemId: null })
-              }
-              onCuponOrden={
-                modoOrden
-                  ? undefined
-                  : () =>
-                      setDescuentoTarget({
-                        scope: "orden",
-                        itemId: null,
-                        cupon: true,
-                      })
-              }
-              sinComprobante={sinComprobante}
-              fidelizacionCanjeMonto={fidelizacionCanjeMonto}
-              onToggleTratamientoFiscal={
-                puedeToggleFiscal ? toggleTratamientoFiscal : undefined
-              }
-              togglingFiscal={togglingFiscal}
-              readOnly={modoOrden}
-              resumenPersistido={
-                orden
-                  ? {
-                      subtotal: orden.subtotal,
-                      impuestos: orden.impuestos,
-                      descuentoTotal: orden.descuentoTotal,
-                      total: orden.total,
-                    }
-                  : undefined
-              }
-              accionesOrden={
-                modoOrden &&
-                orden &&
-                orden.estado !== "cancelada" &&
-                (camposEditablesOrden(orden.estado).size > 0 ||
-                  esCancelable(orden.estado)) ? (
-                  editandoOrden ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={cancelarEdicion}
-                        disabled={guardandoEdicion}
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => void guardarEdicion()}
-                        disabled={guardandoEdicion}
-                      >
-                        <CheckIcon />
-                        {guardandoEdicion
-                          ? "Guardando…"
-                          : cambiosSinGuardar > 0
-                            ? `Guardar cambios (${cambiosSinGuardar})`
-                            : "Guardar cambios"}
-                      </button>
-                    </>
+              </OrdenSummaryDetails>
+            }
+            ref={datosOrdenRef}
+            header={
+              <div className={workspaceStyles.heading}>
+                <div className={workspaceStyles.identity}>
+                  <nav
+                    aria-label="Ruta de navegación"
+                    className={workspaceStyles.breadcrumb}
+                  >
+                    <span>Comercial</span>
+                    <ChevronRightIcon />
+                    <Link href="/produccion/ordenes">Órdenes de trabajo</Link>
+                    <ChevronRightIcon />
+                    <span aria-current="page">
+                      {orden?.numero ?? "Nueva orden"}
+                    </span>
+                  </nav>
+                  {orden ? (
+                    <h1 className={workspaceStyles.title}>
+                      <span className={workspaceStyles.titleText}>
+                        {orden.numero}
+                      </span>
+                      <EstadoOtBadge estado={orden.estado} />
+                      {sinComprobante ? <ChipSinComprobante /> : null}
+                      {mostrarRecienEmitida ? (
+                        <Chip size="sm" color="success" variant="soft">
+                          Recién emitida
+                        </Chip>
+                      ) : null}
+                    </h1>
                   ) : (
-                    <>
-                      {camposEditablesOrden(orden.estado).size > 0 ? (
-                        <button
+                    <h1 className={workspaceStyles.title}>
+                      <span className={workspaceStyles.titleText}>
+                        Nueva{" "}
+                        {ordenTipo === "orden"
+                          ? "orden de trabajo"
+                          : "propuesta"}
+                      </span>
+                      {sinComprobante ? <ChipSinComprobante /> : null}
+                    </h1>
+                  )}
+                  {orden && (
+                    <p className={issued.orderContext}>
+                      {orden.clienteNombre || "Sin cliente"}
+                      <span aria-hidden="true">/</span>
+                      {items.length} {items.length === 1 ? "producto" : "productos"}
+                    </p>
+                  )}
+                  {!orden && (
+                    <p className={workspaceStyles.description}>
+                      {ordenTipo === "orden"
+                        ? "Creá una orden de trabajo, agregá productos y definí todos los detalles."
+                        : "Armá la propuesta para enviar al cliente antes de confirmar la OT."}
+                    </p>
+                  )}
+                </div>
+                <div className={workspaceStyles.identity}>
+                  {!modoOrden ? (
+                    <OrdenSaveActions
+                      operacionPendiente={cuponValidando || descuentoAplicando}
+                      tipo={ordenTipo}
+                      clienteSeleccionado={Boolean(clienteId)}
+                      empty={items.length === 0}
+                      onEmitir={emitirOrden}
+                      onEmitirPresupuesto={emitirPresupuestoCb}
+                      emitiendo={emitiendo || emitiendoPresupuesto}
+                      guardandoBorrador={guardandoBorrador}
+                      onGuardarBorrador={() =>
+                        cobrosStaged.length > 0
+                          ? setConfirmBorradorConCobros(true)
+                          : void guardarBorrador()
+                      }
+                    />
+                  ) : orden && orden.estado !== "cancelada" ? (
+                    // Acciones de la orden en la cabecera fija; facturación en Comprobantes.
+                    <div className={workspaceStyles.quickActions}>
+                      {editandoOrden ? (
+                        <>
+                          <HeroButton
+                            type="button"
+                            variant="tertiary"
+                            size="sm"
+                            onPress={cancelarEdicion}
+                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                          >
+                            Cancelar
+                          </HeroButton>
+                          <HeroButton
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            onPress={() => void guardarEdicion()}
+                            isDisabled={guardandoEdicion || togglingFiscal || cancelando || emitiendoBorrador}
+                          >
+                            <CheckIcon />
+                            {guardandoEdicion
+                              ? "Guardando…"
+                              : cambiosSinGuardar > 0
+                                ? `Guardar cambios (${cambiosSinGuardar})`
+                                : "Finalizar edición"}
+                          </HeroButton>
+                        </>
+                      ) : (
+                        <HeroButton
                           type="button"
-                          className="btn btn-primary"
-                          onClick={() => setEditandoOrden(true)}
+                          variant="primary"
+                          size="sm"
+                          onPress={() => setEditandoOrden(true)}
                         >
                           <Edit3Icon />
                           Editar orden
-                        </button>
-                      ) : null}
-                      {esCancelable(orden.estado) ? (
-                        <button
+                        </HeroButton>
+                      )}
+                      {puedeEditarOrden && esCancelable(orden.estado) ? (
+                        <HeroButton
                           type="button"
-                          className="btn"
-                          style={{
-                            background: "#ea580c",
-                            color: "#fff",
-                            borderColor: "#ea580c",
-                          }}
-                          onClick={() => setConfirmCancelar(true)}
-                          disabled={cancelando || (facturaViva && !puedeAnular)}
+                          variant="tertiary"
+                          size="sm"
+                          onPress={() => setConfirmCancelar(true)}
+                          isDisabled={cancelando || cambiosSinGuardar > 0 || (facturaViva && !puedeAnular)}
                           title={
                             facturaViva && !puedeAnular
                               ? "La orden está facturada: administración tiene que emitir la nota de crédito antes de cancelarla"
@@ -8601,260 +7558,944 @@ export function PropuestaFicha({
                         >
                           <XCircleIcon />
                           Cancelar orden
-                        </button>
+                        </HeroButton>
                       ) : null}
+                      {puedeEditarOrden && orden.estado === "borrador" ? (
+                        <HeroButton
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onPress={() => void emitirBorrador()}
+                          isDisabled={
+                            emitiendoBorrador ||
+                            cambiosSinGuardar > 0 ||
+                            !orden.clienteId
+                          }
+                          title={
+                            !orden.clienteId
+                              ? "Asigná un cliente y guardá el borrador para emitir"
+                              : undefined
+                          }
+                        >
+                          <CheckIcon />
+                          {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
+                        </HeroButton>
+                      ) : null}
+                      {puedeEditarOrden && orden.estado === "finalizada" && puedeEntregar ? (
+                        <Button
+                          size="lg"
+                          onClick={() => setEntregaManualOpen(true)}
+                          title="Registrar la entrega al cliente"
+                        >
+                          <PackageCheckIcon data-icon="inline-start" />
+                          Entregar
+                        </Button>
+                      ) : null}
+                      {publicToken ? (
+                        <HeroButton
+                          type="button"
+                          variant="tertiary"
+                          size="sm"
+                          onPress={compartirSeguimiento}
+                          title="Copiar el link público de seguimiento para el cliente"
+                        >
+                          {trackCopiado ? <CheckIcon /> : <ExternalLinkIcon />}
+                          {trackCopiado ? "Copiado" : "Seguimiento"}
+                        </HeroButton>
+                      ) : null}
+                      <HeroButton
+                        type="button"
+                        variant="tertiary"
+                        size="sm"
+                        onPress={() => setQrRetiroOpen(true)}
+                        title="QR que el cliente presenta para retirar el trabajo"
+                      >
+                        <QrCodeIcon />
+                        QR
+                      </HeroButton>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            }
+            sidebar={
+              <>
+                {/* Cancelada: en vez del stepper —que mostraría un recorrido que no va a
+                seguir— se cuenta qué pasó. El motivo es lo primero que pregunta
+                cualquiera que abre una orden cancelada. */}
+                {orden?.cancelacion ? (
+                  <div className="prf-cancelada">
+                    <div className="prf-cancelada-t">
+                      <XCircleIcon width={15} height={15} />
+                      Cancelada
+                      {orden.cancelacion.estadoAlCancelar
+                        ? ` cuando estaba ${(
+                            ORDEN_TRABAJO_ESTADOS[
+                              orden.cancelacion
+                                .estadoAlCancelar as keyof typeof ORDEN_TRABAJO_ESTADOS
+                            ]?.label ?? orden.cancelacion.estadoAlCancelar
+                          ).toLowerCase()}`
+                        : ""}
+                    </div>
+                    <div className="prf-cancelada-m">
+                      “{orden.cancelacion.motivo}”
+                    </div>
+                    <div className="prf-cancelada-f">
+                      {orden.cancelacion.por
+                        ? `${orden.cancelacion.por} · `
+                        : ""}
+                      {fechaHora(orden.cancelacion.fecha)}
+                      {orden.cancelacion.pasosTotal > 0
+                        ? ` · ${orden.cancelacion.pasosHechos} de ${orden.cancelacion.pasosTotal} pasos hechos`
+                        : ""}
+                      {orden.cancelacion.minutosReales > 0
+                        ? ` · ${Math.round(orden.cancelacion.minutosReales)} min trabajados`
+                        : ""}
+                    </div>
+                  </div>
+                ) : null}
+
+                {orden && !orden.cancelacion ? (
+                  <div className={workspaceStyles.progress}>
+                    <StepperOt
+                      estado={orden.estado}
+                      fechasEstado={orden.fechasEstado}
+                      orientation="horizontal"
+                    />
+                  </div>
+                ) : null}
+
+                <OrdenDatosSections
+                  tipo={
+                    !modoOrden ? (
+                      <OrdenSegmented
+                        value={ordenTipo}
+                        onChange={(value) => setTipo(fromOrdenTipo(value))}
+                      />
+                    ) : (
+                      <span className="text-sm font-medium">
+                        Orden de trabajo
+                      </span>
+                    )
+                  }
+                  vendedor={
+                    <FieldCard label="Vendedor" icon={<UserIcon />}>
+                      <div className="flex items-center gap-2 text-sm">
+                        {orden ? (
+                          <>
+                            <IdentityAvatar name={vendedorOrdenNombre(orden)} />
+                            <span>{vendedorOrdenNombre(orden)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <IdentityAvatar
+                              name={
+                                currentUser?.nombreCompleto ??
+                                currentUser?.email ??
+                                "Usuario actual"
+                              }
+                            />
+                            <span>
+                              {currentUser?.nombreCompleto ??
+                                currentUser?.email ??
+                                "Usuario actual"}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </FieldCard>
+                  }
+                  cliente={
+                    <FieldCard label="Cliente" icon={<UserIcon />}>
+                      {campoEditable("clienteId") ? (
+                        <ClienteLista
+                          value={clienteId}
+                          onChange={setClienteId}
+                          {...selectorClientes}
+                        />
+                      ) : (
+                        <div className="text-sm text-foreground">
+                          <span>{orden?.clienteNombre}</span>
+                        </div>
+                      )}
+                    </FieldCard>
+                  }
+                  campana={
+                    <FieldCard
+                      label="Campaña"
+                      icon={<FolderIcon />}
+                      hint={
+                        !orden && !clienteId
+                          ? "Elegí primero un cliente"
+                          : undefined
+                      }
+                    >
+                      {!orden ? (
+                        <CampanaSelectorOrden
+                          value={proyectoCampanaId}
+                          onChange={setProyectoCampanaId}
+                          options={campanasCliente}
+                          isDisabled={!clienteId}
+                        />
+                      ) : orden.proyectoCampana ? (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Link
+                                className="flex min-h-9 w-full items-center justify-between gap-2 rounded-field border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-default aria-disabled:opacity-60 [&_svg]:size-4"
+                                data-active="true"
+                                href={`/comercial/campanas/${orden.proyectoCampana.id}`}
+                                aria-label={`Abrir campaña ${orden.proyectoCampana.nombre}`}
+                              />
+                            }
+                          >
+                            <span>{orden.proyectoCampana.nombre}</span>
+                            <ExternalLinkIcon aria-hidden="true" />
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            {orden.proyectoCampana.codigo} ·{" "}
+                            {orden.proyectoCampana.nombre}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span
+                                className="flex min-h-9 w-full items-center justify-between gap-2 rounded-field border border-border bg-surface px-3 py-2 text-sm text-foreground hover:bg-default aria-disabled:opacity-60 [&_svg]:size-4"
+                                aria-label="Sin campaña"
+                                aria-disabled="true"
+                              />
+                            }
+                          >
+                            <span>Sin campaña</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Sin campaña
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </FieldCard>
+                  }
+                  canalVenta={
+                    campoEditable("canalVenta") ? (
+                      <CanalVentaSelector
+                        id={canalSelectorId}
+                        value={canalVenta}
+                        invalid={errorCanalVenta}
+                        onChange={(value) => {
+                          setCanalVenta(value);
+                          setErrorCanalVenta(false);
+                        }}
+                      />
+                    ) : (
+                      <FieldCard label="Canal de venta" icon={<PackageIcon />}>
+                        <div className="text-sm text-foreground">
+                          <span>{nombreCanalVenta(canalVenta)}</span>
+                        </div>
+                      </FieldCard>
+                    )
+                  }
+                  entrega={
+                    <>
+                      <FieldCard
+                        label="Entrega prevista"
+                        icon={<CalendarIcon />}
+                      >
+                        {campoEditable("fechaEntrega") ? (
+                          <div className="text-sm text-foreground">
+                            <HeroInput
+                              className="w-full"
+                              ref={fechaEstimadaInputRef}
+                              type="date"
+                              value={fechaFinalVisible}
+                              readOnly={
+                                ordenTipo === "orden" && items.length > 0
+                              }
+                              onClick={() => {
+                                if (ordenTipo !== "orden" || !items.length)
+                                  fechaEstimadaInputRef.current?.showPicker?.();
+                              }}
+                              onChange={(event) => {
+                                otFechaTocadaRef.current = true;
+                                setFechaEstimada(event.target.value);
+                              }}
+                              aria-label="Entrega prevista"
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-sm text-foreground">
+                            <span>
+                              {formatFechaOrden(orden?.fechaEntrega ?? null)}
+                            </span>
+                          </div>
+                        )}
+                      </FieldCard>
+                      {(() => {
+                        const porProducto = items.some((i) =>
+                          !orden
+                            ? !!entregasPrevias.fechaPara(i)
+                            : !!fechaFinalDistribucion(i.distribucionEntregas),
+                        );
+                        const eta = porProducto
+                          ? null
+                          : describirEta(demoraOrden, fechaFinalVisible, {
+                              margenDias: margenEtaDias,
+                              noLaborables: colasTaller?.noLaborables,
+                              zona: colasTaller?.zona ?? zonaHoraria,
+                              ahora: colasTaller?.ahora,
+                            });
+                        return (
+                          <>
+                            <FieldCard
+                              label="Producción estimada"
+                              icon={<FactoryIcon />}
+                            >
+                              <div className={fechasStyles.valorConsulta}>
+                                {eta?.fechaProduccion ? (
+                                  <time dateTime={eta?.fechaProduccion}>
+                                    {formatFechaOrden(eta?.fechaProduccion)}
+                                  </time>
+                                ) : porProducto ? (
+                                  "Según cada producto"
+                                ) : (
+                                  "Sin estimación completa"
+                                )}
+                              </div>
+                            </FieldCard>
+                            <FieldCard
+                              label="Entrega sugerida"
+                              icon={<PackageCheckIcon />}
+                            >
+                              <div className={fechasStyles.valorConsulta}>
+                                {eta?.fechaSugerida ? (
+                                  <time dateTime={eta?.fechaSugerida}>
+                                    {formatFechaOrden(eta?.fechaSugerida)}
+                                  </time>
+                                ) : porProducto ? (
+                                  "Según cada producto"
+                                ) : (
+                                  "Sin estimación completa"
+                                )}
+                              </div>
+                            </FieldCard>
+                            <FieldCard
+                              label="Margen de producción"
+                              icon={<ClockIcon />}
+                            >
+                              <div className={fechasStyles.valorConsulta}>
+                                {margenEtaDias}{" "}
+                                {margenEtaDias === 1
+                                  ? "día hábil"
+                                  : "días hábiles"}
+                              </div>
+                            </FieldCard>
+                            {eta && (eta.motivo || eta.nivel !== "ok") ? (
+                              <div
+                                className={cn(
+                                  fechasStyles.notas,
+                                  workspaceStyles.deliveryNotes,
+                                )}
+                              >
+                                {eta.motivo ? (
+                                  <p className={fechasStyles.condicion}>
+                                    Proyección condicionada. {eta.motivo}
+                                  </p>
+                                ) : null}
+                                {eta.nivel !== "ok" ? (
+                                  <p className={fechasStyles.alerta}>
+                                    {eta.nivel === "tarde"
+                                      ? "La producción terminaría después de la fecha elegida."
+                                      : "La fecha elegida queda sin el margen del taller."}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </>
+                        );
+                      })()}
                     </>
-                  )
-                ) : undefined
-              }
-            />
-          </div>
+                  }
+                />
+
+                {orden ? (
+                  <div className={workspaceStyles.sidebarFooter}>
+                    <div className={workspaceStyles.meta}>
+                      <span>{orden.fechaEmision ? "Emitida" : "Creada"}</span>
+                      <span className={workspaceStyles.metaValue}>
+                        {formatFechaOrden(orden.fechaEmision ?? orden.creadaEl)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            }
+          >
+            {orden && <OrdenSectionHeading section={tab} />}
+            {tab === "productos" ? (
+              <OrdenProductosTable
+                catalogo={initialProductos}
+                items={items}
+                sinComprobante={sinComprobante}
+                expandedIds={openIds}
+                onToggle={toggle}
+                recotizandoIds={recotizandoIds}
+                onAdd={
+                  puedeModificarProductos
+                    ? () => abrirAgregarProducto()
+                    : undefined
+                }
+                onPrint={
+                  puedeModificarProductos
+                    ? ccActivo
+                      ? abrirCentroCopiado
+                      : undefined
+                    : undefined
+                }
+                getTomo={(item) => ({
+                  id: tomoDeItem(item),
+                  nombre: tomoNombreDeItem(item),
+                })}
+                rowRef={(id, node) => {
+                  if (node) rowRefs.current.set(id, node);
+                  else rowRefs.current.delete(id);
+                }}
+                getActions={(item) => ({
+                  onRemove: modoOrden
+                    ? itemsEnEdicion
+                      ? () => quitarItemDeOrden(item)
+                      : undefined
+                    : () =>
+                        setItems((current) =>
+                          current.filter(
+                            (candidate) => candidate.id !== item.id,
+                          ),
+                        ),
+                  onVerPrecios: esCentroCopiado(item)
+                    ? () => setPreciosOpen(true)
+                    : undefined,
+                })}
+                renderDetail={(item) => (
+                  <OrdenProductoDetalle
+                    item={item}
+                    sinComprobante={sinComprobante}
+                    expanded={openIds.has(item.id)}
+                    etaSistema={demoraPorItem?.get(item.id) ?? null}
+                    ahoraEta={colasTaller?.ahora}
+                    margenEtaDias={margenEtaDias}
+                    noLaborables={colasTaller?.noLaborables}
+                    onEdit={
+                      modoOrden
+                        ? itemsEnEdicion && item.jobContext && item.motorCodigo
+                          ? () => abrirEdicion(item)
+                          : undefined
+                        : () => abrirEdicion(item)
+                    }
+                    onDescuento={
+                      !modoOrden && item.jobContext && item.motorCodigo
+                        ? () =>
+                            setDescuentoTarget({
+                              scope: "item",
+                              itemId: item.id,
+                            })
+                        : undefined
+                    }
+                    onEditPanels={(targetItem, paso) => {
+                      setPanelEditor({ item: targetItem, paso });
+                    }}
+                    onChangeFechaEntrega={(fechaEntrega) => {
+                      itemFechaTocadaRef.current.add(item.id);
+                      if (itemsEnEdicion && persistedItemIds.has(item.id))
+                        setEditadosIds((prev) => new Set([...prev, item.id]));
+                      setItems((current) =>
+                        current.map((candidate) =>
+                          candidate.id === item.id
+                            ? {
+                                ...candidate,
+                                fechaEntrega: fechaEntrega || fechaEstimada,
+                              }
+                            : candidate,
+                        ),
+                      );
+                    }}
+                    fechaEstimada={fechaEstimada}
+                    readOnly={modoOrden}
+                    editarFecha={itemsEnEdicion}
+                    prepararCorte={modoOrden && puedeEditarOrden && persistedItemIds.has(item.id)}
+                    onDistribucionGuardada={
+                      orden ? () => {
+                        void getOrdenTrabajo(orden.id).then((actualizada) => {
+                          setOrden(actualizada);
+                          setItems(actualizada.productos.map(rehidratarOrdenItem));
+                          setFechaEstimada(actualizada.fechaEntrega ?? "");
+                        }).catch(() => router.refresh());
+                      } : undefined
+                    }
+                    planificarEntregas={
+                      !!orden &&
+                      puedeEditarOrden && cambiosSinGuardar === 0 &&
+                      (orden.estado === "borrador" ||
+                        orden.estado === "pendiente") &&
+                      persistedItemIds.has(item.id)
+                    }
+                    entregasPrevias={
+                      !orden &&
+                      ordenTipo === "orden" &&
+                      item.motorCodigo &&
+                      item.jobContext &&
+                      item.unidadMedida === "unidad" &&
+                      !esCentroCopiado(item)
+                        ? entregasPrevias.propsPara(item)
+                        : undefined
+                    }
+                  />
+                )}
+              />
+            ) : null}
+
+            {tab === "productos" && (
+              <OrdenCargosList
+                cargos={cargosOrden}
+                isDisabled={cuponValidando || descuentoAplicando}
+                onRemove={
+                  modoOrden
+                    ? undefined
+                    : (id) =>
+                        setCargosOrden((current) =>
+                          current.filter((cargo) => cargo.id !== id),
+                        )
+                }
+              />
+            )}
+
+            {tab === "produccion" ? (
+              orden ? (
+                <ProduccionOrdenTab
+                  ordenId={orden.id}
+                  onOrdenActualizada={recargarOrden}
+                  soloLectura={!puedeEditarOrden}
+                />
+              ) : (
+                <EmptyTab
+                  title="Programación de producción"
+                  description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
+                />
+              )
+            ) : null}
+            {tab === "pagos" ? (
+              orden ? (
+                <div className="otd-page" style={{ padding: 0 }}>
+                  <PagosTab
+                    pago={orden.pago}
+                    total={orden.total}
+                    ordenId={orden.id}
+                    puedeCobrar={orden.estado !== "borrador"}
+                    soloLectura={!puedeEditarOrden}
+                    sinComprobante={
+                      orden.tratamientoFiscal === "SIN_COMPROBANTE"
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="otd-page" style={{ padding: 0 }}>
+                  <PagosStagingTab
+                    total={totalPropuesta}
+                    sinComprobante={sinComprobante}
+                    cobros={cobrosStaged}
+                    onAgregar={(draft) =>
+                      setCobrosStaged((prev) => [...prev, draft])
+                    }
+                    onQuitar={(index) =>
+                      setCobrosStaged((prev) =>
+                        prev.filter((_, i) => i !== index),
+                      )
+                    }
+                  />
+                </div>
+              )
+            ) : null}
+            {tab === "comprobantes" && orden ? (
+              <div className="otd-page" style={{ padding: 0 }}>
+                <ComprobantesOrdenTab
+                  ordenId={orden.id}
+                  numero={orden.numero}
+                  total={orden.total}
+                  facturadoInicial={orden.facturadoTotal}
+                  cobradoInicial={orden.cobradoTotal}
+                  puedeFacturar={orden.estado !== "borrador"}
+                  soloLectura={!puedeEditarOrden}
+                  recargarToken={0}
+                />
+              </div>
+            ) : null}
+            {tab === "archivos" ? (
+              orden ? (
+                <ArchivosOrdenTab
+                  ordenId={orden.id}
+                  estadoDocumental={initialDocumentos}
+                  soloLectura={!puedeEditarOrden}
+                  onTotalCambio={setArchivosCount}
+                />
+              ) : (
+                // Todavía es una propuesta sin persistir: los items son
+                // borradores locales sin fila en la base, así que no hay dónde
+                // colgar un archivo. Ver docs/archivos-r2-diseno.md §4.
+                <EmptyTab
+                  title="Archivos"
+                  description="Guardá la propuesta o emitila como orden para poder adjuntar el arte y las referencias del cliente."
+                />
+              )
+            ) : null}
+            {tab === "costos" ? (
+              <CostosOrdenTab
+                items={items}
+                cargosOrden={cargosOrden}
+                ordenId={orden?.id}
+                sinComprobante={sinComprobante}
+              />
+            ) : null}
+            {tab === "historial" && orden ? (
+              <section className={issued.history} aria-label="Actividad de la orden">
+                <header className={issued.historyHeader}>
+                  <span>Registro de actividad</span>
+                  <span className={issued.counter}>{orden.eventosTotal} eventos</span>
+                </header>
+                {orden.eventos.length === 0 ? (
+                  <p className={issued.empty}>Sin eventos registrados.</p>
+                ) : (
+                  <>
+                    {orden.eventosTotal > orden.eventos.length && (
+                      <p className={issued.empty}>
+                        Se muestran los 200 eventos más recientes de {orden.eventosTotal}.
+                      </p>
+                    )}
+                    <ol className={issued.timeline}>
+                      {orden.eventos.map((ev, i) => {
+                        const { Icono } = EVENTO_ICONOS[ev.tipo] ?? EVENTO_ICONOS.nota;
+                        return (
+                          <li key={i} className={issued.event}>
+                            <span className={issued.eventIcon} aria-hidden="true"><Icono /></span>
+                            <div>
+                              <p>{ev.descripcion}</p>
+                              <div className={issued.eventMeta}>
+                                <time dateTime={ev.fecha}>{formatEventoFecha(ev.fecha)}</time>
+                                <span>{ev.usuarioNombre}</span>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </>
+                )}
+              </section>
+            ) : null}
+
+            {tab === "productos" ? (
+              <div className="flex shrink-0 flex-col gap-4">
+                {modoOrden &&
+                orden &&
+                (orden.fidelizacion.canjePuntos > 0 ||
+                  orden.fidelizacion.puntosEstimados > 0) ? (
+                  <div className="rounded-xl border bg-card p-4 text-sm">
+                    <div className="font-semibold">Fidelización</div>
+                    <div className="mt-1 text-muted-foreground">
+                      {orden.fidelizacion.canjePuntos > 0
+                        ? `${orden.fidelizacion.canjePuntos} puntos · −${formatCurrency(orden.fidelizacion.canjeMonto, moneda)}`
+                        : `Esta orden suma ${orden.fidelizacion.puntosEstimados} puntos cuando esté entregada y pagada con fondos acreditados.`}
+                    </div>
+                  </div>
+                ) : null}
+                {!modoOrden ? (
+                  <FidelizacionCotizador
+                    clienteId={clienteId}
+                    margen={costosFidelizacion.margenMonto}
+                    total={totalPropuestaAntesCanje}
+                    moneda={moneda}
+                    value={fidelizacionCanjePuntos}
+                    onChange={setFidelizacionCanjePuntos}
+                    onSimulation={actualizarSimulacionFidelizacion}
+                  />
+                ) : null}
+                {modoOrden &&
+                editandoOrden &&
+                polyfanPendientesDeGuardar.length > 0 ? (
+                  <div
+                    role="status"
+                    className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-950"
+                  >
+                    <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg border border-emerald-200 bg-white text-emerald-700">
+                      <SaveIcon className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold">
+                        Preparación de corte pendiente de guardar
+                      </div>
+                      <div className="mt-0.5 text-xs leading-relaxed text-emerald-800">
+                        Al guardar la orden se prepararán automáticamente los
+                        recorridos y archivos TAP de{" "}
+                        {polyfanPendientesDeGuardar.length === 1
+                          ? `“${polyfanPendientesDeGuardar[0].productoNombre}”`
+                          : `${polyfanPendientesDeGuardar.length} productos de Polyfan`}
+                        . Luego quedarán disponibles en Producción.
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </OrdenWorkspace>
+        </HeroTabs>
+
+        {emitiendo ? (
+          <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
         ) : null}
-      </div>
 
-      {emitiendo ? (
-        <EmitOverlay numero={emisionNumero} onDone={finalizarEmision} />
-      ) : null}
-
-      {/* Montado SIEMPRE y controlado por `open`, igual que los demás
+        {/* Montado SIEMPRE y controlado por `open`, igual que los demás
           modales de la ficha: montarlo condicionalmente agrega/saca un
           consumidor de useId y desalinea los ids generados entre server y
           cliente (hydration mismatch en el menú de usuario del topbar). */}
-      <AvisoOtEnBorrador
-        open={avisoBorradorAbierto && orden?.estado === "borrador"}
-        numero={orden?.numero ?? ""}
-        emitiendo={emitiendoBorrador}
-        onEmitirAhora={emitirDesdeAviso}
-        onEmitirDespues={() => setAvisoBorradorAbierto(false)}
-      />
-
-      <ConfirmacionSalida
-        open={navPendiente !== null}
-        cambios={cambiosSinGuardar}
-        guardando={guardandoEdicion}
-        onGuardarYSalir={() => {
-          if (orden) {
-            void guardarEdicion({ destino: navPendiente ?? undefined });
-            return;
-          }
-          if (cobrosStaged.length > 0) {
-            setNavPendiente(null);
-            setConfirmBorradorConCobros(true);
-            return;
-          }
-          void guardarBorrador();
-        }}
-        onDescartarYSalir={descartarYSalir}
-        onSeguirEditando={() => setNavPendiente(null)}
-      />
-
-      <ConfirmacionDestructiva
-        open={confirmBorradorConCobros}
-        onOpenChange={setConfirmBorradorConCobros}
-        titulo="El borrador no guarda los cobros"
-        descripcion={`Tenés ${cobrosStaged.length} cobro${cobrosStaged.length === 1 ? "" : "s"} cargado${cobrosStaged.length === 1 ? "" : "s"} en la pestaña Pagos. Los cobros se registran recién al emitir la orden: un borrador no puede recibir plata.`}
-        impacto={[
-          "El borrador se guarda con productos, cliente y condiciones.",
-          "Los cobros cargados se descartan (volvé a cargarlos al emitir).",
-        ]}
-        requiereTipear={false}
-        accionLabel="Guardar borrador igualmente"
-        onConfirmar={() => guardarBorrador()}
-      />
-
-      <ConfirmacionDestructiva
-        open={confirmCancelar}
-        onOpenChange={setConfirmCancelar}
-        titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
-        descripcion={
-          acreditaYCancela
-            ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
-            : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
-        }
-        impacto={impactoCancelacion}
-        requiereTipear={false}
-        motivo={{
-          label: "¿Por qué se cancela? Queda en el historial de la orden.",
-          placeholder:
-            "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
-        }}
-        accionLabel="Cancelar la orden"
-        onConfirmar={(motivo) => cancelarOrden(motivo)}
-      />
-
-      <AgregarProductoSheet
-        open={addOpen}
-        onOpenChange={(open) => {
-          setAddOpen(open);
-          if (!open) setEditingItem(null);
-        }}
-        productos={initialProductos}
-        clienteId={clienteId || null}
-        fechaEntregaDefault={fechaEstimada}
-        editingItem={editingItem}
-        onAddItem={(item) => {
-          // En modo orden es staging: la fila queda local y el POST real va
-          // recién en "Guardar cambios".
-          setItems((current) => [...current, item]);
-          // Se agrega COLAPSADO: la fila aparece cerrada (igual que el centro
-          // de copiado) y el comercial la expande si la necesita. Antes se
-          // abría sola y ocupaba media pantalla en cada alta.
-          setAddOpen(false);
-          setEditingItem(null);
-          focusProductRow(item.id);
-        }}
-        onSaveItem={(item) => {
-          // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
-          // sobre la nueva config (recotización) para no perderlo.
-          const descuentoPrevio =
-            items.find((candidate) => candidate.id === item.id)
-              ?.descuentoInput ?? null;
-          if (descuentoPrevio) {
-            void recotizarItemConDescuento(item, descuentoPrevio)
-              .then((actualizado) =>
-                setItems((current) =>
-                  current.map((candidate) =>
-                    candidate.id === item.id
-                      ? (actualizado ?? {
-                          ...item,
-                          descuentoInput: descuentoPrevio,
-                        })
-                      : candidate,
-                  ),
-                ),
-              )
-              .catch(() => {
-                setItems((current) =>
-                  current.map((candidate) =>
-                    candidate.id === item.id ? item : candidate,
-                  ),
-                );
-                toast.warning(
-                  "El producto se guardó, pero no se pudo reaplicar el descuento. Volvé a cargarlo.",
-                );
-              });
-          } else {
-            setItems((current) =>
-              current.map((candidate) =>
-                candidate.id === item.id ? item : candidate,
-              ),
-            );
-          }
-          if (modoOrden && persistedItemIds.has(item.id)) {
-            // Marca el item persistido como editado en el staging.
-            setEditadosIds((prev) => new Set(prev).add(item.id));
-          }
-          setOpenIds(new Set([item.id]));
-          setAddOpen(false);
-          setEditingItem(null);
-          focusProductRow(item.id);
-        }}
-      />
-      <CentroCopiadoSheet
-        open={copiadoOpen}
-        clienteId={clienteId || null}
-        editItems={copiadoEditItems}
-        onOpenChange={(open) => {
-          setCopiadoOpen(open);
-          if (!open) setCopiadoEditItems(null);
-        }}
-        onAgregar={(nuevos) => {
-          if (nuevos.length === 0) return;
-          // En edición se reemplaza la CARGA completa (todos sus renglones).
-          const cargaEditada = copiadoEditItems?.length
-            ? cargaDeItem(copiadoEditItems[0])
-            : null;
-          const nuevosConHerencia = cargaEditada
-            ? nuevos.map((nuevo, indice) => ({
-                ...nuevo,
-                archivosOrigenItemIds: copiadoEditItems!
-                  .filter(
-                    (_, origenIndice) =>
-                      Math.min(origenIndice, nuevos.length - 1) === indice,
-                  )
-                  .map((origen) => origen.id)
-                  .filter((id) => persistedItemIds.has(id)),
-              }))
-            : nuevos;
-          setItems((current) => {
-            const base = cargaEditada
-              ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
-              : current;
-            return [...base, ...nuevosConHerencia];
-          });
-          // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
-          // demasiado). Se los diferencia por la referencia (varianteNombre).
-          setCopiadoOpen(false);
-          setCopiadoEditItems(null);
-          focusProductRow(nuevosConHerencia[0].id);
-        }}
-      />
-      <CentroCopiadoPreciosSheet
-        open={preciosOpen}
-        onClose={() => setPreciosOpen(false)}
-        items={items}
-        moneda={moneda}
-      />
-      <CargoOrdenSheet
-        open={cargoOpen}
-        cargos={initialCargosDirectos}
-        subtotalBase={calcularResumen(items).subtotal}
-        onClose={() => setCargoOpen(false)}
-        onAdd={(cargo) => {
-          setCargosOrden((current) => [...current, cargo]);
-          setCargoOpen(false);
-          toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);
-        }}
-      />
-      <DescuentoModal
-        target={descuentoTarget}
-        items={items.filter((item) => item.jobContext && item.motorCodigo)}
-        clienteId={clienteId || null}
-        aplicando={descuentoAplicando}
-        onClose={() => setDescuentoTarget(null)}
-        onApply={(scope, targetItemId, descuento) =>
-          void aplicarDescuento(scope, targetItemId, descuento)
-        }
-        onApplyCupon={(resultado) => void aplicarCupon(resultado)}
-        onAviso={setAvisoCupon}
-      />
-
-      {/* Va fuera del modal de descuento a propósito: el aviso sobrevive a
-          que ese modal se cierre al aplicar. */}
-      <CuponAvisoModal
-        aviso={avisoCupon}
-        onCerrar={() => setAvisoCupon(null)}
-      />
-
-      {qrRetiroOpen && orden ? (
-        <QrRetiroModal
-          numero={orden.numero}
-          cliente={orden.clienteNombre}
-          onClose={() => setQrRetiroOpen(false)}
+        <AvisoOtEnBorrador
+          open={avisoBorradorAbierto && orden?.estado === "borrador"}
+          numero={orden?.numero ?? ""}
+          emitiendo={emitiendoBorrador}
+          onEmitirAhora={emitirDesdeAviso}
+          emitirLabel="Revisar y emitir"
+          onEmitirDespues={() => setAvisoBorradorAbierto(false)}
         />
-      ) : null}
-      {entregaManualOpen && orden ? (
-        <EntregaModal
-          codigo={orden.numero}
-          onClose={() => setEntregaManualOpen(false)}
-        />
-      ) : null}
-      {panelEditor ? (
-        <PanelesManualEditor
-          item={panelEditor.item}
-          paso={panelEditor.paso}
-          saving={panelSaving}
-          onClose={() => {
-            if (!panelSaving) setPanelEditor(null);
+
+        <ConfirmacionSalida
+          open={navPendiente !== null}
+          cambios={cambiosSinGuardar}
+          guardando={guardandoEdicion}
+          onGuardarYSalir={() => {
+            if (orden) {
+              void guardarEdicion({ destino: navPendiente ?? undefined });
+              return;
+            }
+            if (cobrosStaged.length > 0) {
+              setNavPendiente(null);
+              setConfirmBorradorConCobros(true);
+              return;
+            }
+            void guardarBorrador();
           }}
-          onSave={(layout) =>
-            void recotizarPaneles(panelEditor.item, panelEditor.paso, layout)
+          onDescartarYSalir={descartarYSalir}
+          onSeguirEditando={() => setNavPendiente(null)}
+        />
+
+        <ConfirmacionDestructiva
+          open={confirmBorradorConCobros}
+          onOpenChange={setConfirmBorradorConCobros}
+          titulo="El borrador no guarda los cobros"
+          descripcion={`Tenés ${cobrosStaged.length} cobro${cobrosStaged.length === 1 ? "" : "s"} cargado${cobrosStaged.length === 1 ? "" : "s"} en la pestaña Pagos. Los cobros se registran recién al emitir la orden: un borrador no puede recibir plata.`}
+          impacto={[
+            "El borrador se guarda con productos, cliente y condiciones.",
+            "Los cobros cargados se descartan (volvé a cargarlos al emitir).",
+          ]}
+          requiereTipear={false}
+          accionLabel="Guardar borrador igualmente"
+          onConfirmar={() => guardarBorrador()}
+        />
+
+        <ConfirmacionDestructiva
+          open={puedeEditarOrden && confirmCancelar}
+          onOpenChange={setConfirmCancelar}
+          titulo={`Cancelar la orden ${orden?.numero ?? ""}`}
+          descripcion={
+            acreditaYCancela
+              ? "Esta orden está facturada, así que el sistema emite primero la nota de crédito que la acredita ante ARCA y recién entonces la cancela. Si ARCA rechaza la nota, no se cancela nada."
+              : "La orden sale del taller y deja de contar como venta. El trabajo que ya se hizo queda registrado: las horas del equipo no se borran."
           }
-          onRestoreAutomatic={() =>
-            void recotizarPaneles(panelEditor.item, panelEditor.paso, null)
+          impacto={impactoCancelacion}
+          requiereTipear={false}
+          motivo={{
+            label: "¿Por qué se cancela? Queda en el historial de la orden.",
+            placeholder:
+              "Ej.: el cliente se arrepintió · error de carga · no aprobó el arte",
+          }}
+          accionLabel="Cancelar la orden"
+          onConfirmar={(motivo) => cancelarOrden(motivo)}
+        />
+
+        <AgregarProductoSheet
+          open={addOpen && puedeModificarProductos}
+          onOpenChange={(open) => {
+            if (open && !permisoProductosRef.current) return;
+            setAddOpen(open);
+            if (!open) setEditingItem(null);
+          }}
+          productos={initialProductos}
+          clienteId={clienteId || null}
+          fechaEntregaDefault={fechaEstimada}
+          editingItem={editingItem}
+          onAddItem={(item) => {
+            if (!permisoProductosRef.current) return false;
+            // En modo orden es staging: la fila queda local y el POST real va
+            // recién en "Guardar cambios".
+            setItems((current) => [...current, item]);
+            // Se agrega COLAPSADO: la fila aparece cerrada (igual que el centro
+            // de copiado) y el comercial la expande si la necesita. Antes se
+            // abría sola y ocupaba media pantalla en cada alta.
+            setAddOpen(false);
+            setEditingItem(null);
+            focusOrdenProductoDetalle(item.id);
+          }}
+          onSaveItem={(item) => {
+            if (!permisoProductosRef.current) return false;
+            // El sheet recotiza SIN descuento: si la línea tenía uno, se reaplica
+            // sobre la nueva config (recotización) para no perderlo.
+            const descuentoPrevio =
+              items.find((candidate) => candidate.id === item.id)
+                ?.descuentoInput ?? null;
+            if (descuentoPrevio) {
+              void recotizarItemConDescuento(item, descuentoPrevio)
+                .then((actualizado) => {
+                  if (!permisoProductosRef.current) return;
+                  setItems((current) =>
+                    current.map((candidate) =>
+                      candidate.id === item.id
+                        ? (actualizado ?? {
+                            ...item,
+                            descuentoInput: descuentoPrevio,
+                          })
+                        : candidate,
+                    ),
+                  );
+                })
+                .catch(() => {
+                  if (!permisoProductosRef.current) return;
+                  setItems((current) =>
+                    current.map((candidate) =>
+                      candidate.id === item.id ? item : candidate,
+                    ),
+                  );
+                  toast.warning(
+                    "El producto se guardó, pero no se pudo reaplicar el descuento. Volvé a cargarlo.",
+                  );
+                });
+            } else {
+              setItems((current) =>
+                current.map((candidate) =>
+                  candidate.id === item.id ? item : candidate,
+                ),
+              );
+            }
+            if (modoOrden && persistedItemIds.has(item.id)) {
+              // Marca el item persistido como editado en el staging.
+              setEditadosIds((prev) => new Set(prev).add(item.id));
+            }
+            setOpenIds(new Set([item.id]));
+            setAddOpen(false);
+            setEditingItem(null);
+            focusOrdenProductoDetalle(item.id);
+          }}
+        />
+        <CentroCopiadoSheet
+          open={copiadoOpen && puedeModificarProductos}
+          clienteId={clienteId || null}
+          editItems={copiadoEditItems}
+          onOpenChange={(open) => {
+            if (open && !permisoProductosRef.current) return;
+            setCopiadoOpen(open);
+            if (!open) setCopiadoEditItems(null);
+          }}
+          onAgregar={(nuevos) => {
+            if (!permisoProductosRef.current) return false;
+            if (nuevos.length === 0) return;
+            // En edición se reemplaza la CARGA completa (todos sus renglones).
+            const cargaEditada = copiadoEditItems?.length
+              ? cargaDeItem(copiadoEditItems[0])
+              : null;
+            const nuevosConHerencia = cargaEditada
+              ? nuevos.map((nuevo, indice) => ({
+                  ...nuevo,
+                  archivosOrigenItemIds: copiadoEditItems!
+                    .filter(
+                      (_, origenIndice) =>
+                        Math.min(origenIndice, nuevos.length - 1) === indice,
+                    )
+                    .map((origen) => origen.id)
+                    .filter((id) => persistedItemIds.has(id)),
+                }))
+              : nuevos;
+            setItems((current) => {
+              const base = cargaEditada
+                ? current.filter((i) => cargaDeItem(i) !== cargaEditada)
+                : current;
+              return [...base, ...nuevosConHerencia];
+            });
+            // Se agregan COLAPSADOS (son varios renglones; expandir todos ocupa
+            // demasiado). Se los diferencia por la referencia (varianteNombre).
+            setCopiadoOpen(false);
+            setCopiadoEditItems(null);
+            focusOrdenProductoDetalle(nuevosConHerencia[0].id);
+          }}
+        />
+        <CentroCopiadoPreciosSheet
+          open={preciosOpen}
+          onClose={() => setPreciosOpen(false)}
+          items={items}
+          moneda={moneda}
+        />
+        <CargoOrdenDialog
+          open={cargoOpen}
+          cargos={initialCargosDirectos}
+          subtotalBase={calcularResumen(items).subtotal}
+          onClose={() => setCargoOpen(false)}
+          onAdd={(cargo) => {
+            setCargosOrden((current) => [...current, cargo]);
+            setCargoOpen(false);
+            toast.success(`${cargo.nombreSnapshot} agregado a la orden.`);
+          }}
+        />
+        <DescuentoOrdenDialog
+          target={descuentoTarget}
+          items={items.filter((item) => item.jobContext && item.motorCodigo)}
+          aplicando={descuentoAplicando}
+          onClose={() => setDescuentoTarget(null)}
+          onApply={(scope, targetItemId, descuento) =>
+            void aplicarDescuento(scope, targetItemId, descuento)
           }
         />
-      ) : null}
-    </section>
+
+        {/* Va fuera del modal de descuento a propósito: el aviso sobrevive a
+          que ese modal se cierre al aplicar. */}
+        <CuponAvisoModal
+          aviso={avisoCupon}
+          onCerrar={() => setAvisoCupon(null)}
+        />
+
+        {qrRetiroOpen && orden ? (
+          <QrRetiroModal
+            numero={orden.numero}
+            cliente={orden.clienteNombre}
+            onClose={() => setQrRetiroOpen(false)}
+          />
+        ) : null}
+        {puedeEditarOrden && entregaManualOpen && orden ? (
+          <EntregaModal
+            codigo={orden.numero}
+            onClose={() => setEntregaManualOpen(false)}
+          />
+        ) : null}
+        {panelEditor ? (
+          <PanelesManualEditor
+            item={panelEditor.item}
+            paso={panelEditor.paso}
+            saving={panelSaving}
+            onClose={() => {
+              if (!panelSaving) setPanelEditor(null);
+            }}
+            onSave={(layout) =>
+              void recotizarPaneles(panelEditor.item, panelEditor.paso, layout)
+            }
+            onRestoreAutomatic={() =>
+              void recotizarPaneles(panelEditor.item, panelEditor.paso, null)
+            }
+          />
+        ) : null}
+      </section>
+    </DesignSystemProvider>
   );
 }

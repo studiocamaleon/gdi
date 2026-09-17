@@ -9,14 +9,14 @@ import { NavigationFeedbackProvider } from "@/components/navigation/navigation-f
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PasosEnCursoWidget } from "@/components/produccion/pasos-en-curso-widget";
 import { EntregaEscaneoWatcher } from "@/components/mostrador/entrega-escaneo-watcher";
-import { LogoutButton } from "@/components/logout-button";
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import { SuscripcionGlobalBanner } from "@/components/suscripcion/suscripcion-global-banner";
+import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
+import { SidebarInset } from "@/components/ui/sidebar";
 import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+  DashboardFrame,
+  DashboardTopbar,
+} from "@/components/navigation/dashboard-frame";
 
 export default async function DashboardLayout({
   children,
@@ -57,41 +57,28 @@ export default async function DashboardLayout({
     <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
       <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
         <NavigationFeedbackProvider>
-          <ImpersonacionBanner currentUser={currentUser} />
-          <SidebarProvider
-            defaultOpen
-            style={
-              {
-                height: "100dvh",
-                overflow: "hidden",
-                "--sidebar-width": "262px",
-                "--sidebar-width-icon": "66px",
-              } as React.CSSProperties
-            }
-          >
-            <AppSidebar currentUser={currentUser} />
-            <SidebarInset className="main" style={{ minHeight: 0 }}>
-              <header className="topbar">
-                <SidebarTrigger className="icon-btn" />
-                <div className="ml-auto">
-                  <LogoutButton />
-                </div>
-              </header>
+          <NotificacionesProvider>
+            <ImpersonacionBanner currentUser={currentUser} />
+            <DashboardFrame>
+              <AppSidebar currentUser={currentUser} />
+              <SidebarInset className="main" style={{ minHeight: 0 }}>
+                <DashboardTopbar />
 
-              <SuscripcionGlobalBanner currentUser={currentUser} />
+                <SuscripcionGlobalBanner currentUser={currentUser} />
 
-              <main
-                className="gp-main flex flex-1"
-                style={{ minHeight: 0, overflowY: "auto" }}
-              >
-                {children}
-              </main>
-            </SidebarInset>
-            <PasosEnCursoWidget />
-            {/* Escanear el QR del cliente abre la entrega desde cualquier
+                <main
+                  className="gp-main flex flex-1"
+                  style={{ minHeight: 0, overflowY: "auto" }}
+                >
+                  {children}
+                </main>
+              </SidebarInset>
+              <PasosEnCursoWidget />
+              {/* Escanear el QR del cliente abre la entrega desde cualquier
               pantalla. */}
-            <EntregaEscaneoWatcher />
-          </SidebarProvider>
+              <EntregaEscaneoWatcher />
+            </DashboardFrame>
+          </NotificacionesProvider>
         </NavigationFeedbackProvider>
       </ConfigRegionalProvider>
     </PermisosProvider>

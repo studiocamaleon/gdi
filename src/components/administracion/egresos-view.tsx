@@ -16,6 +16,12 @@
  * Ver docs/egresos-y-cuentas-por-pagar-diseno.md
  */
 
+import egresosResumen from "./egresos-resumen.module.css";
+import { CuentasPagarWorkspace } from "./cuentas-pagar-workspace";
+import { EgresosBrand, useEgresosBrand, EgresoDialog, EgresoButton, EgresoSelect as SelectBuscable, EgresoConfirmacionSalida as ConfirmacionSalida } from "./egreso-dialog";
+import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import listPage from "@/components/design-system/list-page.module.css";
+import pagarStyles from "./cuentas-pagar.module.css";
 import * as React from "react";
 import {
   CalendarClockIcon,
@@ -36,11 +42,9 @@ import { ArchivoUploader } from "@/components/archivos/archivo-uploader";
 import { formatBytes, validarArchivo } from "@/lib/archivos";
 import { subirArchivo } from "@/lib/archivos-api";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
-import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MoneyInput } from "@/components/ui/money-input";
 import {
-  SelectBuscable,
   type OpcionSelect,
 } from "@/components/ui/select-buscable";
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
@@ -350,14 +354,15 @@ export function repartirEntreEgresos(
  * lista no tiene que cerrar el formulario entero.
  */
 function useCerrarConEscape(onCerrar: () => void, activo = true) {
+  const brand = useEgresosBrand();
   React.useEffect(() => {
-    if (!activo) return;
+    if (!activo || brand) return;
     const alTeclear = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCerrar();
     };
     window.addEventListener("keydown", alTeclear);
     return () => window.removeEventListener("keydown", alTeclear);
-  }, [onCerrar, activo]);
+  }, [onCerrar, activo, brand]);
 }
 
 /** Catálogos fijos: no cambian por tenant, así que se arman una sola vez. */
@@ -454,13 +459,16 @@ export function EgresosView({
   /** Permite abrir el alta desde una acción contextual, por ejemplo el Panel. */
   altaInicial?: boolean;
 }) {
+  const brand = modo === "cuentas-por-pagar";
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const tabsVisibles = TABS_POR_MODO[modo];
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
   // API es el que manda, esto sólo evita ofrecer botones que van a dar 403.
   const puedeGestionar = usePuede("administracion.gestionar");
   const puedeAnular = usePuede("administracion.anular");
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
   const hoy = React.useMemo(() => hoyIso(), []);
 
   const [tab, setTab] = React.useState<Tab>(tabsVisibles[0]);
@@ -488,8 +496,8 @@ export function EgresosView({
       try {
         const [lista, res] = await Promise.all([
           getEgresos(
-            t === "por-pagar"
-              ? { soloPendientes: true, texto: texto || undefined }
+            (t === "por-pagar" || brand)
+              ? { soloPendientes: true, texto: brand ? undefined : texto || undefined }
               : { texto: texto || undefined },
           ),
           getResumenEgresos(),
@@ -504,16 +512,17 @@ export function EgresosView({
         setCargando(false);
       }
     },
-    [tab, texto],
+    [tab, texto, brand],
   );
 
   const cambiarTab = (t: Tab) => {
     setTab(t);
+    setError(null);
     if (t === "proveedores") {
       setSaldos(null);
       getSaldosProveedores()
         .then((r) => setSaldos(r.proveedores))
-        .catch(() => setSaldos([]));
+        .catch((e) => { setError(e instanceof Error ? e.message : "No se pudieron cargar los saldos."); });
       return;
     }
     if (t === "recurrentes") {
@@ -560,11 +569,21 @@ export function EgresosView({
     seleccionados.length > 0 && proveedoresSeleccion.size === 1;
 
   return (
-    <div className="egr-page">
-      <div className="egr-wrap">
+    <EgresosBrand value={brand}>
+    <div {...(brand ? scope : {})} className={brand ? `${theme} ${listPage.page} ${pagarStyles.page}` : "egr-page"}>
+      <div className={brand ? undefined : "egr-wrap"}>
+        {brand ? <CuentasPagarWorkspace
+          resumen={resumen} tab={tab === "proveedores" ? "proveedores" : "por-pagar"} onTab={cambiarTab}
+          egresos={visibles} saldos={saldos} texto={texto} onTexto={setTexto}
+          seleccion={seleccion} onSeleccion={setSeleccion} seleccionados={seleccionados}
+          seleccionPagable={seleccionPagable} totalSeleccion={totalSeleccion}
+          puedeGestionar={puedeGestionar} cargando={cargando} error={error}
+          onReintentar={() => cambiarTab(tab)} hoy={hoy} endosar={!!valorEndosoInicialId}
+          onAlta={() => setAltaAbierta(true)} onPago={() => setPagoAbierto(true)} onDetalle={setDetalle}
+        /> : <>
         <div className="egr-head">
           <div>
-            <span className="egr-eyebrow">Administración financiera</span>
+            <span className={egresosResumen["egr-eyebrow"]}>Administración financiera</span>
             <h1>{ENCABEZADO[modo].titulo}</h1>
             <div className="sub">{ENCABEZADO[modo].sub}</div>
           </div>
@@ -583,8 +602,8 @@ export function EgresosView({
         {resumen ? (
           <div className="egr-kpis">
             <div className={`egr-kpi ${resumen.vencido > 0 ? "mal" : ""}`}>
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <CalendarClockIcon />
                 </span>
                 <span className="l">Vencido</span>
@@ -593,8 +612,8 @@ export function EgresosView({
               <span className="h">ya se pasó la fecha</span>
             </div>
             <div className="egr-kpi">
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <CalendarClockIcon />
                 </span>
                 <span className="l">Vence esta semana</span>
@@ -603,8 +622,8 @@ export function EgresosView({
               <span className="h">próximos 7 días</span>
             </div>
             <div className="egr-kpi">
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <CircleDollarSignIcon />
                 </span>
                 <span className="l">Total a pagar</span>
@@ -620,8 +639,8 @@ export function EgresosView({
             <div
               className={`egr-kpi ${resumen.cuentas < resumen.aPagar ? "alerta" : "bien"}`}
             >
-              <div className="egr-kpi-top">
-                <span className="egr-kpi-icon" aria-hidden="true">
+              <div className={egresosResumen["egr-kpi-top"]}>
+                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
                   <WalletCardsIcon />
                 </span>
                 <span className="l">En las cuentas</span>
@@ -830,6 +849,7 @@ export function EgresosView({
         )}
 
         {cargando ? <div className="egr-cargando">Actualizando…</div> : null}
+        </>}
 
         {altaAbierta ? (
           <AltaEgreso
@@ -893,6 +913,7 @@ export function EgresosView({
         ) : null}
 
         <ConfirmacionDestructiva
+          apariencia={brand ? "heroui" : undefined}
           open={anulando !== null}
           onOpenChange={(v) => {
             if (!v) setAnulando(null);
@@ -915,6 +936,7 @@ export function EgresosView({
         />
       </div>
     </div>
+    </EgresosBrand>
   );
 }
 
@@ -1610,8 +1632,9 @@ function AltaEgreso({
   /** Devuelve el id para que el listado pueda abrir el detalle recién creado. */
   onListo: (creadoId: string) => void;
 }) {
+  const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
   const activas = categorias.filter((c) => c.activo);
   const opcionesCategoria = React.useMemo(
     () => opcionesDeCategorias(categorias),
@@ -1826,14 +1849,8 @@ function AltaEgreso({
     (!yaPagado || (metodoPagoId && cuentaUsadaId));
 
   return (
-    <div className="mod-bg" role="dialog" aria-modal="true">
-      <div className="mod">
-        <div className="mod-head">
-          <h2>Registrar egreso</h2>
-          <button type="button" className="mod-x" onClick={pedirCierre}>
-            ×
-          </button>
-        </div>
+    <>
+      <EgresoDialog title="Registrar egreso" description="La obligación, su comprobante y las condiciones de pago." onCerrar={pedirCierre} bloqueado={guardando}>
 
         <div className="mod-body">
           {/* El switch primero: define qué pide el resto del formulario. */}
@@ -1866,7 +1883,7 @@ function AltaEgreso({
             <label className="egr-f">
               <span>Categoría</span>
               <SelectBuscable
-                value={categoriaId}
+                ariaLabel="Categoría" value={categoriaId}
                 onChange={setCategoriaId}
                 opciones={opcionesCategoria}
                 placeholder="Elegir categoría"
@@ -1881,7 +1898,7 @@ function AltaEgreso({
             <label className="egr-f">
               <span>Proveedor</span>
               <SelectBuscable
-                value={proveedorId}
+                ariaLabel="Proveedor" value={proveedorId}
                 onChange={setProveedorId}
                 opciones={opcionesProveedor}
                 placeholder="Sin proveedor"
@@ -2000,7 +2017,7 @@ function AltaEgreso({
               <label className="egr-f">
                 <span>Comprobante</span>
                 <SelectBuscable
-                  value={tipoComprobante}
+                  ariaLabel="Comprobante" value={tipoComprobante}
                   onChange={setTipoComprobante}
                   opciones={OPCIONES_COMPROBANTE}
                 />
@@ -2069,7 +2086,7 @@ function AltaEgreso({
                 <label className="egr-f">
                   <span>Método de pago</span>
                   <SelectBuscable
-                    value={metodoPagoId}
+                    ariaLabel="Método de pago" value={metodoPagoId}
                     onChange={setMetodoPagoId}
                     opciones={opcionesMetodo}
                     placeholderBusqueda="Buscar método…"
@@ -2078,7 +2095,7 @@ function AltaEgreso({
                 <label className="egr-f">
                   <span>Salió de</span>
                   <SelectBuscable
-                    value={cuentaUsadaId}
+                    ariaLabel="Cuenta de fondos" value={cuentaUsadaId}
                     onChange={setCuentaId}
                     opciones={opcionesCuenta}
                     placeholderBusqueda="Buscar cuenta…"
@@ -2122,19 +2139,19 @@ function AltaEgreso({
         </div>
 
         <div className="mod-foot">
-          <button type="button" className="btn" onClick={pedirCierre}>
+          <EgresoButton type="button" className="btn" onClick={pedirCierre}>
             Cancelar
-          </button>
-          <button
+          </EgresoButton>
+          <EgresoButton
             type="button"
             className="btn btn-primary"
             disabled={!listo || guardando}
             onClick={() => void guardar()}
           >
             {guardando ? "Guardando…" : "Registrar"}
-          </button>
+          </EgresoButton>
         </div>
-      </div>
+      </EgresoDialog>
 
       <ConfirmacionSalida
         open={confirmandoSalida}
@@ -2151,7 +2168,7 @@ function AltaEgreso({
         }}
         onSeguirEditando={() => setConfirmandoSalida(false)}
       />
-    </div>
+    </>
   );
 }
 
@@ -2173,8 +2190,9 @@ function RegistrarPago({
   onCerrar: () => void;
   onListo: () => void;
 }) {
+  const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
   const opcionesMetodo = React.useMemo(
     () => opcionesDeMetodos(metodosPago),
     [metodosPago],
@@ -2393,14 +2411,8 @@ function RegistrarPago({
   };
 
   return (
-    <div className="mod-bg" role="dialog" aria-modal="true">
-      <div className="mod">
-        <div className="mod-head">
-          <h2>Registrar pago</h2>
-          <button type="button" className="mod-x" onClick={pedirCierre}>
-            ×
-          </button>
-        </div>
+    <>
+      <EgresoDialog title="Registrar pago" description="Definí cuánto pagar, el medio y las retenciones que correspondan." onCerrar={pedirCierre} bloqueado={guardando}>
         <div className="mod-body">
           <div className="egr-pago-lista">
             {egresos.map((e) => (
@@ -2426,7 +2438,7 @@ function RegistrarPago({
             <label className="egr-f">
               <span>Método de pago</span>
               <SelectBuscable
-                value={metodoPagoId}
+                ariaLabel="Método de pago" value={metodoPagoId}
                 onChange={setMetodoPagoId}
                 opciones={opcionesMetodo}
                 placeholderBusqueda="Buscar método…"
@@ -2436,7 +2448,7 @@ function RegistrarPago({
               <label className="egr-f">
                 <span>Sale de</span>
                 <SelectBuscable
-                  value={cuentaUsadaId}
+                  ariaLabel="Cuenta de fondos" value={cuentaUsadaId}
                   onChange={setCuentaId}
                   opciones={opcionesCuenta}
                   placeholderBusqueda="Buscar cuenta…"
@@ -2475,20 +2487,22 @@ function RegistrarPago({
                   taller las dos cosas pasan, y con el cheque del cliente la
                   plata nunca pasa por el banco. */}
               <div className="usr-niveles" style={{ marginBottom: 12 }}>
-                <button
+                <EgresoButton
                   type="button"
                   className={`usr-nivel${chequeModo === "propio" ? " on" : ""}`}
+                  aria-pressed={chequeModo === "propio"}
                   onClick={() => setChequeModo("propio")}
                 >
                   Emito uno propio
-                </button>
-                <button
+                </EgresoButton>
+                <EgresoButton
                   type="button"
                   className={`usr-nivel${chequeModo === "endoso" ? " on" : ""}`}
+                  aria-pressed={chequeModo === "endoso"}
                   onClick={() => setChequeModo("endoso")}
                 >
                   Endoso uno de la cartera
-                </button>
+                </EgresoButton>
               </div>
             </div>
           ) : null}
@@ -2508,7 +2522,7 @@ function RegistrarPago({
                   <label className="egr-f">
                     <span>Cheque</span>
                     <SelectBuscable
-                      value={valorId}
+                      ariaLabel="Cheque a endosar" value={valorId}
                       onChange={setValorId}
                       opciones={opcionesValores}
                       placeholder="Elegir cheque"
@@ -2535,13 +2549,13 @@ function RegistrarPago({
                       <>
                         El cheque cubre {fmt(valorElegido.importe)} de los{" "}
                         {fmt(neto)} seleccionados.{" "}
-                        <button
+                        <EgresoButton
                           type="button"
                           className="egr-link"
                           onClick={ajustarAlCheque}
                         >
                           Pagar sólo lo del cheque
-                        </button>{" "}
+                        </EgresoButton>{" "}
                         y el resto queda pendiente para otro pago.
                       </>
                     ) : (
@@ -2576,7 +2590,7 @@ function RegistrarPago({
                 <label className="egr-f">
                   <span>Formato</span>
                   <SelectBuscable
-                    value={chequeFormato}
+                    ariaLabel="Formato de cheque" value={chequeFormato}
                     onChange={setChequeFormato}
                     opciones={OPCIONES_CHEQUE}
                   />
@@ -2584,7 +2598,7 @@ function RegistrarPago({
                 <label className="egr-f">
                   <span>Modalidad</span>
                   <SelectBuscable
-                    value={chequeModalidad}
+                    ariaLabel="Modalidad de cheque" value={chequeModalidad}
                     onChange={(valor) => {
                       setChequeModalidad(valor as "comun" | "diferido");
                       if (valor === "comun") setChequeFechaPago("");
@@ -2628,7 +2642,7 @@ function RegistrarPago({
           <div className="egr-sub-bloque">
             <div className="egr-panel-t">
               Retenciones practicadas
-              <button
+              <EgresoButton
                 type="button"
                 className="egr-link egr-mini"
                 onClick={() =>
@@ -2646,7 +2660,7 @@ function RegistrarPago({
                 }
               >
                 + Agregar
-              </button>
+              </EgresoButton>
             </div>
             {retenciones.length === 0 ? (
               <div className="egr-sub">
@@ -2751,7 +2765,7 @@ function RegistrarPago({
                       }
                     />
                   </label>
-                  <button
+                  <EgresoButton
                     type="button"
                     className="egr-link egr-ret-quitar"
                     onClick={() =>
@@ -2759,7 +2773,7 @@ function RegistrarPago({
                     }
                   >
                     Quitar
-                  </button>
+                  </EgresoButton>
                 </div>
               ))
             )}
@@ -2797,10 +2811,10 @@ function RegistrarPago({
           {error ? <div className="egr-error mod-suelto">{error}</div> : null}
         </div>
         <div className="mod-foot">
-          <button type="button" className="btn" onClick={pedirCierre}>
+          <EgresoButton type="button" className="btn" onClick={pedirCierre}>
             Cancelar
-          </button>
-          <button
+          </EgresoButton>
+          <EgresoButton
             type="button"
             className="btn btn-primary"
             disabled={
@@ -2830,9 +2844,9 @@ function RegistrarPago({
                 : esCheque
                   ? `Emitir cheque por ${fmt(neto)}`
                   : `Pagar ${fmt(neto)}`}
-          </button>
+          </EgresoButton>
         </div>
-      </div>
+      </EgresoDialog>
 
       <ConfirmacionSalida
         open={confirmandoSalida}
@@ -2849,7 +2863,7 @@ function RegistrarPago({
         }}
         onSeguirEditando={() => setConfirmandoSalida(false)}
       />
-    </div>
+    </>
   );
 }
 
@@ -2872,8 +2886,9 @@ function DetalleEgreso({
   onCambio: () => void;
 }) {
   useCerrarConEscape(onCerrar);
+  const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
   const [pagos, setPagos] = React.useState<PagoDeEgreso[] | null>(null);
   const [archivos, setArchivos] = React.useState<Archivo[]>([]);
   const [anulandoPago, setAnulandoPago] = React.useState<PagoDeEgreso | null>(
@@ -2935,17 +2950,9 @@ function DetalleEgreso({
   React.useEffect(() => cargar(), [cargar]);
 
   return (
-    <div className="mod-bg" role="dialog" aria-modal="true">
-      <div className="mod mod-sm">
-        <div className="mod-head">
-          <h2>
-            {egreso.descripcion}
-            <span className="egr-sub mono">{egreso.numero}</span>
-          </h2>
-          <button type="button" className="mod-x" onClick={onCerrar}>
-            ×
-          </button>
-        </div>
+    <>
+      <EgresoDialog compact legacySubtitle={egreso.numero} title={egreso.descripcion} description={`${egreso.numero} · ${egreso.beneficiarioNombre}`} onCerrar={onCerrar} bloqueado={guardandoEdicion}>
+        {brand && <div className={pagarStyles.detailSummary}><div><span>Total</span><strong>{fmt(egreso.total)}</strong></div><div><span>Pagado</span><strong>{fmt(egreso.pagadoTotal)}</strong></div><div><span>Pendiente</span><strong>{fmt(egreso.saldo)}</strong></div></div>}
         <div className="mod-body">
           {editando ? (
             <div className="egr-grid">
@@ -2959,7 +2966,7 @@ function DetalleEgreso({
               <label className="egr-f">
                 <span>Categoría</span>
                 <SelectBuscable
-                  value={categoriaId}
+                  ariaLabel="Categoría" value={categoriaId}
                   onChange={setCategoriaId}
                   opciones={opcionesDeCategorias(categorias)}
                 />
@@ -3065,12 +3072,12 @@ function DetalleEgreso({
                   <dd className="mono">{fmt(egreso.otrosImpuestos)}</dd>
                 </>
               ) : null}
-              <dt>Total</dt>
-              <dd className="mono">
-                <strong>{fmt(egreso.total)}</strong>
-              </dd>
-              <dt>Pagado</dt>
-              <dd className="mono">{fmt(egreso.pagadoTotal)}</dd>
+              {!brand && <>
+                <dt>Total</dt>
+                <dd className="mono"><strong>{fmt(egreso.total)}</strong></dd>
+                <dt>Pagado</dt>
+                <dd className="mono">{fmt(egreso.pagadoTotal)}</dd>
+              </>}
               {egreso.registradoPorNombre ? (
                 <>
                   <dt>Cargado por</dt>
@@ -3138,13 +3145,13 @@ function DetalleEgreso({
                     </a>
                   ) : null}
                   {!p.anuladoEl && puedeAnular ? (
-                    <button
+                    <EgresoButton
                       type="button"
                       className="egr-link"
                       onClick={() => setAnulandoPago(p)}
                     >
                       Anular
-                    </button>
+                    </EgresoButton>
                   ) : null}
                 </div>
               ))
@@ -3155,15 +3162,15 @@ function DetalleEgreso({
           {puedeGestionar && egreso.estado !== "anulado" ? (
             editando ? (
               <>
-                <button
+                <EgresoButton
                   type="button"
                   className="btn"
                   onClick={() => setEditando(false)}
                   disabled={guardandoEdicion}
                 >
                   Cancelar edición
-                </button>
-                <button
+                </EgresoButton>
+                <EgresoButton
                   type="button"
                   className="btn btn-primary"
                   onClick={() => void guardarEdicion()}
@@ -3176,30 +3183,31 @@ function DetalleEgreso({
                   }
                 >
                   {guardandoEdicion ? "Guardando…" : "Guardar cambios"}
-                </button>
+                </EgresoButton>
               </>
             ) : (
-              <button
+              <EgresoButton
                 type="button"
                 className="btn"
                 onClick={() => setEditando(true)}
               >
                 Editar
-              </button>
+              </EgresoButton>
             )
           ) : null}
           {puedeAnular && egreso.estado !== "anulado" ? (
-            <button type="button" className="btn btn-danger" onClick={onAnular}>
+            <EgresoButton type="button" className="btn btn-danger" onClick={onAnular}>
               Anular egreso
-            </button>
+            </EgresoButton>
           ) : null}
-          <button type="button" className="btn" onClick={onCerrar}>
+          <EgresoButton type="button" className="btn" onClick={onCerrar}>
             Cerrar
-          </button>
+          </EgresoButton>
         </div>
-      </div>
+      </EgresoDialog>
 
       <ConfirmacionDestructiva
+        apariencia={brand ? "heroui" : undefined}
         open={anulandoPago !== null}
         onOpenChange={(v) => {
           if (!v) setAnulandoPago(null);
@@ -3220,6 +3228,6 @@ function DetalleEgreso({
           onCambio();
         }}
       />
-    </div>
+    </>
   );
 }

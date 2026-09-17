@@ -1,4 +1,9 @@
 "use client";
+import styles from "../maquinaria.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
+import { SelectField } from "@/components/design-system/select-field";
+import { HerramientasCorteEditor } from "./herramientas-corte-editor";
+import { OperacionMaquinaEditor } from "./operacion-maquina-editor";
 
 /**
  * Cuerpo del editor de una máquina, en dos piezas que la ficha reparte en
@@ -14,30 +19,22 @@
  */
 
 import * as React from "react";
+import {
+  CogIcon,
+  RulerIcon,
+  Settings2Icon,
+  LayersIcon,
+  WrenchIcon,
+} from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card } from "@heroui/react";
+import { Input } from "@heroui/react";
 import { Label } from "@/components/ui/label";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { MaquinaFieldLabel as LabelConTooltip } from "./maquina-field-label";
+import { TextArea as Textarea } from "@heroui/react";
 import {
   estadoMaquinaItems,
   geometriaTrabajoMaquinaItems,
-  getEstadoMaquinaLabel,
-  getGeometriaTrabajoMaquinaLabel,
   type MaquinaPayload,
   type MaquinariaTemplateField,
 } from "@/lib/maquinaria";
@@ -47,7 +44,6 @@ import type { CentroCosto, Planta } from "@/lib/costos";
 import {
   FieldInput,
   STRUCTURED_MARGIN_FIELDS,
-  SelectDisplay,
   cmToMmForPayload,
   getFriendlyFieldDescription,
   getMaquinaFieldValue,
@@ -87,36 +83,44 @@ export function MaquinaEditorIdentidad({
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Identidad</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="min-w-0 space-y-1">
+    <Card className={styles.card}>
+      <Card.Header>
+        <Card.Title>
+          <CogIcon aria-hidden="true" /> Identidad del equipo
+        </Card.Title>
+        <Card.Description>
+          Datos de la máquina, ubicación y centro que define su tarifa.
+        </Card.Description>
+      </Card.Header>
+      <Card.Content className="flex flex-col gap-3">
+        <div className={styles.identityGrid}>
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="nombre">Nombre *</Label>
             <Input
+              className={focus.singleBorder}
               id="nombre"
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <LabelConTooltip
               label="Tipo"
               required
               tooltip="Tipo de máquina. Se elige al crearla y no se cambia: define qué campos y perfiles tiene."
             />
             <Input
+              className={focus.singleBorder}
               value={getPlantillaMaquinariaLabel(form.plantilla)}
               disabled
             />
           </div>
           {/* Fabricante y modelo venían del seed y no tenían dónde editarse:
               aparecían bajo el nombre en la lista como si fueran magia. */}
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="maquina-fabricante">Fabricante</Label>
             <Input
+              className={focus.singleBorder}
               id="maquina-fabricante"
               placeholder="Ej: Ricoh"
               value={form.fabricante ?? ""}
@@ -125,9 +129,10 @@ export function MaquinaEditorIdentidad({
               }
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="maquina-modelo">Modelo</Label>
             <Input
+              className={focus.singleBorder}
               id="maquina-modelo"
               placeholder="Ej: PRO C5100s"
               value={form.modelo ?? ""}
@@ -136,9 +141,10 @@ export function MaquinaEditorIdentidad({
               }
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="maquina-serie">Número de serie</Label>
             <Input
+              className={focus.singleBorder}
               id="maquina-serie"
               value={form.numeroSerie ?? ""}
               onChange={(e) =>
@@ -146,36 +152,31 @@ export function MaquinaEditorIdentidad({
               }
             />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label>Estado</Label>
-            <Select
+            <SelectField
               value={form.estado}
-              onValueChange={(v) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
                   estado: (v ?? "activa") as MaquinaPayload["estado"],
                 })
               }
-            >
-              <SelectTrigger className="w-full min-w-0">
-                <SelectDisplay label={getEstadoMaquinaLabel(form.estado)} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {estadoMaquinaItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              aria-label="Estado"
+              className="w-full min-w-0"
+              options={[
+                ...(estadoMaquinaItems.map((item) => ({
+                  value: item.value,
+                  label: item.label,
+                })) ?? []),
+              ]}
+            />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label>Planta</Label>
-            <Select
+            <SelectField
               value={form.plantaId}
-              onValueChange={(v) => {
+              onChange={(v) => {
                 const plantaId = v ?? "";
                 setForm({
                   ...form,
@@ -186,62 +187,53 @@ export function MaquinaEditorIdentidad({
                       : undefined,
                 });
               }}
-            >
-              <SelectTrigger className="w-full min-w-0">
-                <SelectDisplay
-                  label={
-                    plantas.find((planta) => planta.id === form.plantaId)
-                      ?.nombre
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {plantas.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              aria-label="Planta"
+              className="w-full min-w-0"
+              options={[
+                ...(plantas.map((p) => ({ value: p.id, label: p.nombre })) ??
+                  []),
+              ]}
+            />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label>Centro de costo</Label>
-            <Select
+            <SelectField
               value={form.centroCostoPrincipalId ?? SIN_CENTRO}
-              onValueChange={(v) =>
+              onChange={(v) =>
                 setForm({
                   ...form,
                   centroCostoPrincipalId:
                     !v || v === SIN_CENTRO ? undefined : v,
                 })
               }
-            >
-              <SelectTrigger className="w-full min-w-0">
-                <SelectDisplay
-                  label={centroSeleccionado?.nombre}
-                  placeholder="Sin asignar"
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value={SIN_CENTRO}>Sin asignar</SelectItem>
-                  {centrosDeLaPlanta.map((cc) => (
-                    <SelectItem key={cc.id} value={cc.id}>
-                      {cc.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+              aria-label="Centro de costo"
+              className="w-full min-w-0"
+              options={[
+                { value: SIN_CENTRO, label: "Sin asignar" },
+                ...(centrosDeLaPlanta.map((cc) => ({
+                  value: cc.id,
+                  label: cc.nombre,
+                })) ?? []),
+                ...(centroSeleccionado &&
+                !centrosDeLaPlanta.some((cc) => cc.id === centroSeleccionado.id)
+                  ? [
+                      {
+                        value: centroSeleccionado.id,
+                        label: centroSeleccionado.nombre,
+                        disabled: true,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className={styles.tariffField}>
             <LabelConTooltip
               label="Tarifa / hora"
               tooltip="Lo que cuesta una hora de esta máquina según la última planilla publicada de su centro de costo. Se edita en Centros de costo, no acá."
             />
             <Input
+              className={focus.singleBorder}
               value={
                 typeof centroSeleccionado?.ultimaTarifaTotal === "number"
                   ? fmtTarifa.format(centroSeleccionado.ultimaTarifaTotal)
@@ -251,43 +243,37 @@ export function MaquinaEditorIdentidad({
             />
           </div>
           {form.plantilla !== "impresora_gran_formato_por_area" ? (
-            <div className="min-w-0 space-y-1">
+            <div className="flex min-w-0 flex-col gap-2">
               <LabelConTooltip
                 label="Geometría de trabajo"
                 tooltip="Forma del sustrato sobre el que opera la máquina. Pliego = hojas precortadas; Rollo = bobina continua; Plano/Cilindrico/Volumen = piezas tridimensionales."
               />
-              <Select
+              <SelectField
                 value={form.geometriaTrabajo}
-                onValueChange={(v) =>
+                onChange={(v) =>
                   setForm({
                     ...form,
                     geometriaTrabajo: (v ??
                       "pliego") as MaquinaPayload["geometriaTrabajo"],
                   })
                 }
-              >
-                <SelectTrigger className="w-full min-w-0">
-                  <SelectDisplay
-                    label={getGeometriaTrabajoMaquinaLabel(
-                      form.geometriaTrabajo,
-                    )}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {geometriaTrabajoMaquinaItems.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+                aria-label="Geometría de trabajo"
+                className="w-full min-w-0"
+                options={[
+                  ...(geometriaTrabajoMaquinaItems.map((item) => ({
+                    value: item.value,
+                    label: item.label,
+                  })) ?? []),
+                ]}
+              />
             </div>
           ) : null}
-          <div className="min-w-0 space-y-1 md:col-span-2">
+          <div
+            className={`flex min-w-0 flex-col gap-2 ${styles.identityDescription}`}
+          >
             <Label htmlFor="maquina-descripcion">Descripción</Label>
             <Textarea
+              className={focus.singleBorder}
               id="maquina-descripcion"
               rows={4}
               placeholder="Notas sobre la máquina: estado, mantenimiento, particularidades…"
@@ -298,7 +284,7 @@ export function MaquinaEditorIdentidad({
             />
           </div>
         </div>
-      </CardContent>
+      </Card.Content>
     </Card>
   );
 }
@@ -325,21 +311,54 @@ export function MaquinaEditorSecciones({
   // Las tintas y el tóner se configuran desde la tabla de perfiles (modal por
   // fila), así que la sección Consumibles ya no tiene nada que mostrar.
   const secciones =
-    template?.sections.filter((sec) => sec.id !== "consumibles") ?? [];
+    template?.sections.filter(
+      (sec) =>
+        sec.id !== "consumibles" &&
+        !(
+          sec.id === "desgaste_repuestos" &&
+          form.parametrosTecnicos?.procesamientoCorte
+        ),
+    ) ?? [];
 
   return (
     <>
+      <OperacionMaquinaEditor editor={editor} />
+      <HerramientasCorteEditor editor={editor} />
       {secciones.map((sec) => (
-        <Card key={sec.id}>
-          <CardHeader>
-            <CardTitle className="text-base">{sec.title}</CardTitle>
+        <Card
+          key={sec.id}
+          className={
+            sec.id !== "perfiles_operativos" && sec.id !== "desgaste_repuestos"
+              ? styles.technicalCard
+              : styles.card
+          }
+        >
+          <Card.Header>
+            <Card.Title>
+              {sec.id === "perfiles_operativos" ? (
+                <LayersIcon aria-hidden="true" />
+              ) : sec.id === "desgaste_repuestos" ? (
+                <WrenchIcon aria-hidden="true" />
+              ) : sec.id === "capacidades_fisicas" ? (
+                <RulerIcon aria-hidden="true" />
+              ) : (
+                <Settings2Icon aria-hidden="true" />
+              )}
+              {sec.id === "perfiles_operativos" &&
+              form.parametrosTecnicos?.procesamientoCorte
+                ? "Perfiles por herramienta y material"
+                : sec.title}
+            </Card.Title>
             {sec.description ? (
-              <CardDescription className="text-xs">
-                {sec.description}
-              </CardDescription>
+              <Card.Description className="text-xs">
+                {sec.id === "perfiles_operativos" &&
+                form.parametrosTecnicos?.procesamientoCorte
+                  ? "Recetas de trabajo para cada operación y rango de espesor."
+                  : sec.description}
+              </Card.Description>
             ) : null}
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </Card.Header>
+          <Card.Content className="flex flex-col gap-3">
             {sec.id === "perfiles_operativos" ? (
               <PerfilesOperativosEditor
                 perfiles={perfiles}
@@ -379,11 +398,12 @@ export function MaquinaEditorSecciones({
                     return (
                       <div
                         key={field.key}
-                        className={`space-y-1 ${fullWidth ? "md:col-span-2" : ""}`}
+                        className={`flex min-w-0 flex-col gap-2 ${fullWidth ? "md:col-span-2" : ""}`}
                       >
                         {descripcion ? (
                           <LabelConTooltip
                             label={field.label}
+                            htmlFor={`field-${field.scope}-${field.key}`}
                             required={field.required}
                             tooltip={descripcion}
                             iconSize="sm"
@@ -421,7 +441,7 @@ export function MaquinaEditorSecciones({
                   })}
               </div>
             )}
-          </CardContent>
+          </Card.Content>
         </Card>
       ))}
     </>

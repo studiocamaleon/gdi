@@ -424,6 +424,7 @@ export class ConfigPasosService {
                 s.cantidadFactor === null || s.cantidadFactor === undefined
                   ? 1
                   : s.cantidadFactor,
+              mermaAdicionalPct: s.mermaAdicionalPct ?? 0,
               cantidadBase: s.cantidadBase ?? null,
               fuenteMedida: s.fuenteMedida ?? null,
               aplicaMultiCaras: s.aplicaMultiCaras ?? false,

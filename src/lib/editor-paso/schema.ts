@@ -93,12 +93,7 @@ export type EjePaso =
   | "tiempo";
 
 export type SeccionPaso =
-  | "quien"
-  | "activacion"
-  | "tiempo"
-  | "maquina"
-  | "materiales"
-  | "oficio";
+  "quien" | "activacion" | "tiempo" | "maquina" | "materiales" | "oficio";
 
 /** Otro paso de la misma ruta (para co-ejecución y herencia). */
 export interface PasoVecino {
@@ -166,10 +161,7 @@ export type PatchOpcion =
   | { tipo: "slot"; patch: Partial<UpsertSlotMaterialPayload> };
 
 export type OrigenValor =
-  | "config"
-  | "default-paso"
-  | "default-maquina"
-  | "sin-definir";
+  "config" | "default-paso" | "default-maquina" | "sin-definir";
 
 export type ControlOpcion =
   | {
@@ -193,7 +185,9 @@ export type ControlOpcion =
     }
   | {
       tipo: "toggles";
-      opciones: (ctx: ContextoOpcion) => Array<{ value: string; label: string }>;
+      opciones: (
+        ctx: ContextoOpcion,
+      ) => Array<{ value: string; label: string }>;
       activos: (ctx: ContextoOpcion) => string[];
       aplicar: (ctx: ContextoOpcion, valores: string[]) => PatchOpcion;
     }
@@ -339,15 +333,28 @@ export const MODO_ACTIVACION_CONSECUENCIA: Record<string, string> = {
 
 export { MODO_ACTIVACION_LABELS };
 
-// Los multiplicadores llegan como claves técnicas del motor (caras,
-// tipoCopia): acá se traducen a idioma de taller (feedback del usuario).
+// Los multiplicadores llegan como claves técnicas del motor. Esta es la
+// ÚNICA frontera que puede convertirlas en texto de interfaz: incluso una
+// clave nueva debe caer en una etiqueta legible, nunca filtrarse tal cual.
 const MULTIPLICADOR_LABELS: Record<string, string> = {
-  caras: "Las caras (simple o doble faz)",
-  tipoCopia: "El tipo de copia (original, duplicado…)",
+  caras: "Caras",
+  tipoCopia: "Tipo de copia",
+  hojasPorLibro: "Hojas por libro",
+  cantidadModificacionesPorPieza: "Modificaciones por pieza",
 };
 
-function labelMultiplicador(valor: string): string {
-  return MULTIPLICADOR_LABELS[valor] ?? valor;
+export function labelMultiplicador(valor: string): string {
+  const conocida = MULTIPLICADOR_LABELS[valor];
+  if (conocida) return conocida;
+
+  const humana = valor
+    .replace(/([a-záéíóúñ0-9])([A-ZÁÉÍÓÚÑ])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!humana) return "Variable del pedido";
+  const normalizada = humana.toLocaleLowerCase("es-AR");
+  return normalizada.charAt(0).toLocaleUpperCase("es-AR") + normalizada.slice(1);
 }
 
 /** Derivadores (E2): el slot declarado por la familia puede traer la
@@ -382,9 +389,7 @@ function numOpcional(v: unknown): number | null {
 
 /** Modo de tiempo efectivo: el elegido, o el primero que soporta el paso. */
 function modoTiempoEfectivo(ctx: ContextoOpcion): string | null {
-  return (
-    ctx.cfg.modoTiempo ?? ctx.familia?.modosTiempoSoportados?.[0] ?? null
-  );
+  return ctx.cfg.modoTiempo ?? ctx.familia?.modosTiempoSoportados?.[0] ?? null;
 }
 
 /** Capa comercial del árbol de tiempo (⑤): no / puede / debe.
@@ -565,7 +570,11 @@ function fuenteRitmoEfectiva(ctx: ContextoOpcion): string {
     crudo === "cantidad"
       ? "cantidad_montaje"
       : crudo;
-  const opciones = getT2QuantitySourceOptions(unidad, ctx.familia, ctx.paramsPaso);
+  const opciones = getT2QuantitySourceOptions(
+    unidad,
+    ctx.familia,
+    ctx.paramsPaso,
+  );
   return opciones.some((o) => o.value === normalizado)
     ? normalizado
     : getDefaultT2QuantitySource(ctx.familia, unidad);
@@ -630,8 +639,8 @@ function maquinaElegida(ctx: ContextoOpcion) {
 /** Perfiles de corte de la máquina del paso, ordenados fácil → complejo
  *  (más m²/h primero) — el mismo orden que usa el sheet. */
 function perfilesCorteDeMaquina(ctx: ContextoOpcion) {
-  const perfiles = (maquinaElegida(ctx)?.perfilesOperativos ?? []).filter(
-    (p) => ["corte", "mixto"].includes((p.tipoPerfil ?? "").toLowerCase()),
+  const perfiles = (maquinaElegida(ctx)?.perfilesOperativos ?? []).filter((p) =>
+    ["corte", "mixto"].includes((p.tipoPerfil ?? "").toLowerCase()),
   );
   return [...perfiles].sort((a, b) => {
     const pa = Number(a.productivityValue ?? NaN);
@@ -1036,12 +1045,15 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
   },
   {
     clave: "activacion.multiplicadores",
+    eje: "identidad",
+    grupo: "multiplicadores",
+    anchoCompleto: true,
+    etiqueta: "Variables habilitadas",
     seccion: "activacion",
     pregunta: "¿Qué variables multiplican el trabajo acá?",
     ayuda:
-      "Caras, tipo de copia… multiplican el tiempo del paso. En materiales, las caras se definen por slot.",
-    visible: (ctx) =>
-      (ctx.familia?.multiplicadoresSoportados?.length ?? 0) > 0,
+      "Estas variables pueden multiplicar el trabajo del paso. Más adelante, cada material define si también modifican su consumo.",
+    visible: (ctx) => (ctx.familia?.multiplicadoresSoportados?.length ?? 0) > 0,
     resumen: (ctx) => {
       const activos = ctx.cfg.multiplicadoresActivos ?? [];
       return activos.length > 0
@@ -1501,9 +1513,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     visible: () => false,
     resumen: (ctx) => {
       const modo = ritmoModoEfectivo(ctx);
-      return (
-        T2_RITMO_OPTIONS.find((o) => o.value === modo)?.label ?? modo
-      );
+      return T2_RITMO_OPTIONS.find((o) => o.value === modo)?.label ?? modo;
     },
     origenValor: (ctx) =>
       typeof ctx.paramsPaso.timeCalculationMode === "string"
@@ -1635,8 +1645,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     // herencias — la etiqueta no debe mentir (feedback del usuario: "¿'El
     // ritmo cuenta' y 'se multiplica por' no es lo mismo?").
     etiqueta: (ctx) =>
-      esRitmoConOracionInline(ctx) &&
-      fuenteRitmoEfectiva(ctx) !== "cantidad"
+      esRitmoConOracionInline(ctx) && fuenteRitmoEfectiva(ctx) !== "cantidad"
         ? "La cantidad del paso"
         : "El ritmo se multiplica por",
     pregunta: "¿Sobre cuántas piezas trabaja?",
@@ -1747,7 +1756,11 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     resumen: (ctx) => {
       const fuente = fuenteRitmoEfectiva(ctx);
       const base =
-        getT2QuantitySourceOptions(unidadRitmoEfectiva(ctx), ctx.familia, ctx.paramsPaso).find((o) => o.value === fuente)?.label ?? fuente;
+        getT2QuantitySourceOptions(
+          unidadRitmoEfectiva(ctx),
+          ctx.familia,
+          ctx.paramsPaso,
+        ).find((o) => o.value === fuente)?.label ?? fuente;
       // "Cantidad efectiva del paso" es un misterio cuando la efectiva es
       // derivada o heredada: se aclara QUÉ cuenta (H2 del relevamiento).
       const unidad = fuente === "cantidad" ? unidadCantidadEfectiva(ctx) : null;
@@ -1770,7 +1783,9 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
         ).map((o) => ({
           value: o.value,
           label:
-            o.value === "cantidad" && unidad ? `${o.label} (${unidad})` : o.label,
+            o.value === "cantidad" && unidad
+              ? `${o.label} (${unidad})`
+              : o.label,
           descripcion: o.description,
         }));
       },
@@ -2382,7 +2397,7 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       Boolean(ctx.slot) &&
       Boolean(
         ctx.familia?.multiplicadoresSoportados?.includes("caras") ||
-          ctx.slot?.payload.aplicaMultiCaras,
+        ctx.slot?.payload.aplicaMultiCaras,
       ),
     resumen: (ctx) =>
       ctx.slot?.payload.aplicaMultiCaras
@@ -2423,12 +2438,12 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     visible: (ctx) =>
       Boolean(
         familiaConParamsEditables(ctx.familia) &&
-          // `modoTalonarioIncompleto` no cuenta: lo edita el control de
-          // Imposición del pliego, no esta tabla (evita una tabla vacía en
-          // impresión por hoja, cuyo único param propio es ese).
-          (ctx.familia?.paramsPasoSchema?.filter(
-            (p) => p.campo !== "modoTalonarioIncompleto",
-          ).length ?? 0) > 0,
+        // `modoTalonarioIncompleto` no cuenta: lo edita el control de
+        // Imposición del pliego, no esta tabla (evita una tabla vacía en
+        // impresión por hoja, cuyo único param propio es ese).
+        (ctx.familia?.paramsPasoSchema?.filter(
+          (p) => p.campo !== "modoTalonarioIncompleto",
+        ).length ?? 0) > 0,
       ),
     resumen: (ctx) => {
       // Nombra los VALORES (regla T3b: el resumen dice lo que hay, no un
@@ -2593,7 +2608,8 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
       // Imposición de cuadernillo (H14): si el paso la tiene configurada,
       // es LO más importante del acomodo — nombrarla, no "Acomodo estándar".
       const imposicion = (
-        nesting as { imposicion?: { esquema?: unknown; hojas?: unknown } } | undefined
+        nesting as
+          { imposicion?: { esquema?: unknown; hojas?: unknown } } | undefined
       )?.imposicion;
       if (imposicion?.esquema === "caballete") {
         const hojas =
@@ -2652,6 +2668,7 @@ export const GRUPOS_DONDE: GrupoEje[] = [
     id: "donde",
     estilo: "campos",
     columnas: "minmax(0, 1fr) 168px",
+    alinearItems: "end",
   },
 ];
 
@@ -2731,6 +2748,15 @@ const GRUPOS_IDENTIDAD: GrupoEje[] = [
     // auto-fit para que apilen prolijo cuando el panel es angosto.
     encabezado: "arriba",
     columnas: "repeat(auto-fit, minmax(240px, 1fr))",
+  },
+  {
+    id: "multiplicadores",
+    titulo: "Variables que afectan al paso",
+    ayuda:
+      "Habilitá sólo los datos del pedido que cambian la cantidad de trabajo de esta operación.",
+    estilo: "campos",
+    encabezado: "arriba",
+    columnas: "minmax(0, 1fr)",
   },
   {
     // El proveedor se renderiza como su PROPIA card (EjeGuiado aparte en el
@@ -2820,9 +2846,8 @@ export const GRUPOS_MATERIAL: GrupoEje[] = [
   },
   {
     id: "descuento",
-    titulo: "Cómo se calcula el consumo",
-    ayuda:
-      "El consumo se declara de una de tres formas y se lee como una regla: lo mide el paso, una regla propia (N por base), o lo deriva la geometría. Abajo, sobre qué mide y cómo se cobra lo que sobra.",
+    // El constructor controlado se autoexplica: repetir acá un título y una
+    // taxonomía técnica volvía a mostrar dos encabezados para la misma regla.
     estilo: "campos",
     columnas: "minmax(0, 1fr) minmax(0, 260px)",
     encabezado: "arriba",
@@ -2842,10 +2867,7 @@ export const GRUPOS_EJE: Record<EjePaso, GrupoEje[]> = {
 };
 
 /** Las opciones visibles de un EJE, en orden de declaración. */
-export function opcionesDeEje(
-  eje: EjePaso,
-  ctx: ContextoOpcion,
-): OpcionPaso[] {
+export function opcionesDeEje(eje: EjePaso, ctx: ContextoOpcion): OpcionPaso[] {
   return ESQUEMA_PASO.filter((op) => op.eje === eje && op.visible(ctx));
 }
 
@@ -2865,9 +2887,7 @@ export function opcionesDeSeccion(
   seccion: SeccionPaso,
   ctx: ContextoOpcion,
 ): OpcionPaso[] {
-  return ESQUEMA_PASO.filter(
-    (op) => op.seccion === seccion && op.visible(ctx),
-  );
+  return ESQUEMA_PASO.filter((op) => op.seccion === seccion && op.visible(ctx));
 }
 
 /** Secciones ya migradas al esquema (crece por sub-fase). Con la D

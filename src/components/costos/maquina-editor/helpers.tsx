@@ -1,3 +1,9 @@
+"use client";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import styles from "../maquinaria.module.css";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import focus from "@/components/design-system/field-focus.module.css";
+import { SelectField } from "@/components/design-system/select-field";
 /**
  * Helpers puros + renderer genérico de campos del editor de máquinas.
  *
@@ -8,15 +14,9 @@
 
 import * as React from "react";
 
-import { Input } from "@/components/ui/input";
+import { Input } from "@heroui/react";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { TextArea as Textarea } from "@heroui/react";
 import type {
   Maquina,
   MaquinaConsumible,
@@ -241,6 +241,7 @@ function prepararDetallePerfil(
   detalle: Record<string, unknown> | null | undefined,
   parametrosTecnicos: Record<string, unknown> | null | undefined,
 ) {
+  if (detalle?.procesamientoCorteVersion === 1) return structuredClone(detalle);
   const retiradas = PERFIL_DETALLE_RETIRADO[plantilla] ?? [];
   const heredadas = PERFIL_DETALLE_HEREDADO[plantilla] ?? [];
   if (!detalle && heredadas.length === 0) return undefined;
@@ -793,15 +794,6 @@ export function setPerfilFieldValueForTemplate(
   value: unknown,
 ): LocalPerfil {
   const next = setPerfilFieldValue(perfil, key, value);
-  if (form.plantilla === "impresora_laser" && key === "productivityValue") {
-    return {
-      ...next,
-      detalle: {
-        ...(next.detalle ?? {}),
-        origenProductividad: "CALIBRADO_TALLER",
-      },
-    };
-  }
   // El plotter de corte cotiza siempre en m²/h.
   if (form.plantilla === "plotter_de_corte" && key === "productivityValue") {
     return { ...next, productivityUnit: "m2_h" };
@@ -813,6 +805,7 @@ export function normalizePerfilTypeForTemplate(
   perfil: LocalPerfil,
   form: MaquinaPayload,
 ): LocalPerfil {
+  if (perfil.detalle?.procesamientoCorteVersion === 1) return perfil;
   const allowedTypes = getAllowedProfileTypes(form);
   const allowedUnits = getAllowedProductivityUnits(form);
   const defaultUnit = getDefaultProductivityUnit(form);
@@ -848,6 +841,12 @@ export function shouldShowMaquinaField(
   field: MaquinariaTemplateField,
   form: MaquinaPayload,
 ) {
+  if (
+    field.key === "ejeSobresalientePlaca" &&
+    getMaquinaFieldValue(form, "placaSobresalientePermitida") !== true
+  ) {
+    return false;
+  }
   if (form.plantilla === "corte_hilo_caliente") {
     const tipoUnion = getMaquinaFieldValue(form, "tipoUnionVectorial");
     const modoCantidad = getMaquinaFieldValue(form, "modoCantidadEncastres");
@@ -1083,6 +1082,7 @@ export function FieldInput({
             </Label>
             <div className="flex items-center gap-2">
               <Input
+                className={focus.singleBorder}
                 id={`${id}-${definition.key}`}
                 type="number"
                 inputMode="decimal"
@@ -1115,6 +1115,7 @@ export function FieldInput({
     case "text":
       return (
         <Input
+          className={focus.singleBorder}
           id={id}
           value={typeof value === "string" ? value : ""}
           placeholder={field.placeholder}
@@ -1125,6 +1126,7 @@ export function FieldInput({
     case "textarea":
       return (
         <Textarea
+          className={focus.singleBorder}
           id={id}
           rows={3}
           value={
@@ -1150,6 +1152,7 @@ export function FieldInput({
       return (
         <div className="flex items-center gap-2">
           <Input
+            className={focus.singleBorder}
             id={id}
             type="number"
             inputMode="decimal"
@@ -1180,44 +1183,38 @@ export function FieldInput({
       // Segmented chico Sí | No en lugar de checkbox.
       const activo = Boolean(value);
       return (
-        <div className="maq-seg" role="group" aria-label={field.label}>
-          <button
-            type="button"
-            className={activo ? "activo" : ""}
-            aria-pressed={activo}
-            onClick={() => onChange(true)}
-          >
-            Sí
-          </button>
-          <button
-            type="button"
-            className={!activo ? "activo" : ""}
-            aria-pressed={!activo}
-            onClick={() => onChange(false)}
-          >
-            No
-          </button>
-        </div>
+        <SegmentedControl
+          aria-label={field.label}
+          value={activo ? "si" : "no"}
+          options={[
+            { value: "si", label: "Sí", icon: null },
+            { value: "no", label: "No", icon: null },
+          ]}
+          onChange={(value) => onChange(value === "si")}
+        />
       );
     }
 
     case "select":
       return (
-        <Select
+        <SelectField
           value={typeof value === "string" ? value : ""}
-          onValueChange={(v) => onChange(v ?? "")}
-        >
-          <SelectTrigger id={id} className="w-full min-w-0">
-            <SelectDisplay label={getOptionLabel(field.options, value)} />
-          </SelectTrigger>
-          <SelectContent>
-            {field.options?.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onChange(v ?? "")}
+          aria-label={field.label}
+          id={id}
+          className="w-full min-w-0"
+          options={[
+            ...(field.options?.map((opt) => ({
+              value: opt.value,
+              label: opt.label,
+            })) ?? []),
+            ...(typeof value === "string" &&
+            value &&
+            !field.options?.some((option) => option.value === value)
+              ? [{ value, label: value, disabled: true }]
+              : []),
+          ]}
+        />
       );
 
     case "multiselect": {
@@ -1229,13 +1226,14 @@ export function FieldInput({
       if (renderColorModeCards && isColorModeMultiselect(field)) {
         // Pills compactas de una línea: puntos de color superpuestos + nombre.
         return (
-          <div className="maq-colores">
+          <div className={`${styles["maq-colores"]}`}>
             {field.options?.map((opt) => {
               const selected = current.includes(opt.value);
               const channels = getColorModeChannels(opt.value);
 
               return (
-                <button
+                <Button
+                  variant={selected ? "secondary" : "outline"}
                   key={opt.value}
                   type="button"
                   aria-pressed={selected}
@@ -1247,21 +1245,23 @@ export function FieldInput({
                       : [...current, opt.value];
                     onChange(next);
                   }}
-                  className={`maq-color-pill ${selected ? "activo" : ""}`}
+                  className={`${styles["maq-color-pill"]} ${selected ? "activo" : ""}`}
                 >
-                  <span className="maq-color-pila">
+                  <span className={`${styles["maq-color-pila"]}`}>
                     {channels.map((channel) => (
                       <span
                         key={channel}
-                        className="maq-color-punto"
+                        className={`${styles["maq-color-punto"]}`}
                         style={{ background: COLOR_CHANNEL_META[channel].dot }}
                       />
                     ))}
                   </span>
                   {compactColorModeLabels ? null : (
-                    <span className="maq-color-etiqueta">{opt.label}</span>
+                    <span className={`${styles["maq-color-etiqueta"]}`}>
+                      {opt.label}
+                    </span>
                   )}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -1270,11 +1270,16 @@ export function FieldInput({
       // Botones tipo selector (pills) en lugar de checkboxes: misma estética que
       // el resto de la app (reusa las clases de las pills de color).
       return (
-        <div className="maq-colores" role="group" aria-label={field.label}>
+        <div
+          className={`${styles["maq-colores"]}`}
+          role="group"
+          aria-label={field.label}
+        >
           {field.options?.map((opt) => {
             const selected = current.includes(opt.value);
             return (
-              <button
+              <Button
+                variant={selected ? "secondary" : "outline"}
                 key={opt.value}
                 type="button"
                 aria-pressed={selected}
@@ -1284,10 +1289,12 @@ export function FieldInput({
                     : [...current, opt.value];
                   onChange(next);
                 }}
-                className={`maq-color-pill ${selected ? "activo" : ""}`}
+                className={`${styles["maq-color-pill"]} ${selected ? "activo" : ""}`}
               >
-                <span className="maq-color-etiqueta">{opt.label}</span>
-              </button>
+                <span className={`${styles["maq-color-etiqueta"]}`}>
+                  {opt.label}
+                </span>
+              </Button>
             );
           })}
         </div>

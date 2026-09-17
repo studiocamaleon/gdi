@@ -19,16 +19,54 @@ export const ETAPAS_ESTACION: Array<{
   order: number;
   color: string;
 }> = [
-  { key: "preprensa", nm: "Pre-prensa", desc: "Diseño, verificación de archivos, CTP y planchas", order: 1, color: "#1d4ed8" },
-  { key: "impresion", nm: "Impresión", desc: "Offset, digital, ploteo y gran formato", order: 2, color: "#14141a" },
-  { key: "postprensa", nm: "Post-prensa", desc: "Secado, estabilización, refilado preliminar", order: 3, color: "#92929b" },
-  { key: "terminaciones", nm: "Terminaciones", desc: "Laminado, troquel, corte, plegado, encuadernación, armado", order: 4, color: "#c08025" },
-  { key: "instalacion", nm: "Instalación", desc: "Instalación en obra, montaje en sitio", order: 5, color: "#16794a" },
-  { key: "qa-despacho", nm: "QA & Despacho", desc: "Control de calidad, empaque, retiro y flete", order: 6, color: "#c2410c" },
+  {
+    key: "preprensa",
+    nm: "Pre-prensa",
+    desc: "Diseño, revisión y preparación de archivos para producción",
+    order: 1,
+    color: "#1d4ed8",
+  },
+  {
+    key: "impresion",
+    nm: "Impresión",
+    desc: "Impresión digital, gran formato, DTF y ploteo",
+    order: 2,
+    color: "#14141a",
+  },
+  {
+    key: "postprensa",
+    nm: "Post-prensa",
+    desc: "Laminado, plastificado y preparación del material impreso",
+    order: 3,
+    color: "#92929b",
+  },
+  {
+    key: "terminaciones",
+    nm: "Terminaciones",
+    desc: "Corte, plegado, encuadernación y armado de productos",
+    order: 4,
+    color: "#c08025",
+  },
+  {
+    key: "instalacion",
+    nm: "Instalación",
+    desc: "Colocación de vinilos, montaje de cartelería e instalación en obra",
+    order: 5,
+    color: "#16794a",
+  },
+  {
+    key: "qa-despacho",
+    nm: "QA & Despacho",
+    desc: "Revisión del trabajo terminado, embalaje y preparación para la entrega",
+    order: 6,
+    color: "#c2410c",
+  },
 ];
 
 export function etapaDeEstacion(key: string) {
-  return ETAPAS_ESTACION.find((entry) => entry.key === key) ?? ETAPAS_ESTACION[0];
+  return (
+    ETAPAS_ESTACION.find((entry) => entry.key === key) ?? ETAPAS_ESTACION[0]
+  );
 }
 
 // ── Calendario semanal operativo ─────────────────────────────────────────
@@ -38,7 +76,15 @@ export function etapaDeEstacion(key: string) {
 // (una franja suelta) a lista, así que acá sólo existe el nuevo.
 // Ver docs/capacidad-estaciones-diseno.md D2.
 
-export const DIAS_SEMANA = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"] as const;
+export const DIAS_SEMANA = [
+  "lun",
+  "mar",
+  "mie",
+  "jue",
+  "vie",
+  "sab",
+  "dom",
+] as const;
 
 export type DiaSemana = (typeof DIAS_SEMANA)[number];
 
@@ -65,7 +111,15 @@ export const DIAS_SEMANA_LABEL: Record<DiaSemana, string> = {
 export function calendarioDefault(): CalendarioEstacion {
   const franja = { desde: "09:00", hasta: "18:00" };
   return {
-    dias: { lun: [{ ...franja }], mar: [{ ...franja }], mie: [{ ...franja }], jue: [{ ...franja }], vie: [{ ...franja }], sab: null, dom: null },
+    dias: {
+      lun: [{ ...franja }],
+      mar: [{ ...franja }],
+      mie: [{ ...franja }],
+      jue: [{ ...franja }],
+      vie: [{ ...franja }],
+      sab: null,
+      dom: null,
+    },
   };
 }
 
@@ -85,9 +139,15 @@ function etiquetaFranjas(franjas: CalendarioDia) {
  * Label compacto del calendario: agrupa días consecutivos con las mismas
  * franjas — "L–V 8:00–18:00 · S 9:00–13:00". null si no hay calendario.
  */
-export function etiquetaCalendario(calendario: CalendarioEstacion | null | undefined): string | null {
+export function etiquetaCalendario(
+  calendario: CalendarioEstacion | null | undefined,
+): string | null {
   if (!calendario) return null;
-  const grupos: Array<{ desdeDia: DiaSemana; hastaDia: DiaSemana; franjas: CalendarioDia }> = [];
+  const grupos: Array<{
+    desdeDia: DiaSemana;
+    hastaDia: DiaSemana;
+    franjas: CalendarioDia;
+  }> = [];
   for (const dia of DIAS_SEMANA) {
     const franjas = calendario.dias[dia];
     if (!franjas || franjas.length === 0) continue;
@@ -124,7 +184,9 @@ function minutosDesdeMedianoche(hora: string) {
 function minutosDeDia(franjas: CalendarioDia) {
   return franjas.reduce(
     (acc, franja) =>
-      acc + minutosDesdeMedianoche(franja.hasta) - minutosDesdeMedianoche(franja.desde),
+      acc +
+      minutosDesdeMedianoche(franja.hasta) -
+      minutosDesdeMedianoche(franja.desde),
     0,
   );
 }
@@ -174,7 +236,11 @@ export function proyectarColaDias(
   let restante = colaMin;
   let dias = 0;
   for (let i = 0; i < 365; i += 1) {
-    const fecha = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + i);
+    const fecha = new Date(
+      desde.getFullYear(),
+      desde.getMonth(),
+      desde.getDate() + i,
+    );
     if (noLaborables.has(claveFechaLocal(fecha))) continue;
     const franjas = calendario.dias[JS_DIA[fecha.getDay()]];
     if (!franjas || franjas.length === 0) continue;
@@ -185,7 +251,9 @@ export function proyectarColaDias(
       const ahora = desde.getHours() * 60 + desde.getMinutes();
       const restanMin = franjas.reduce((acc, franja) => {
         const arranque = Math.max(ahora, minutosDesdeMedianoche(franja.desde));
-        return acc + Math.max(0, minutosDesdeMedianoche(franja.hasta) - arranque);
+        return (
+          acc + Math.max(0, minutosDesdeMedianoche(franja.hasta) - arranque)
+        );
       }, 0);
       disponibles = restanMin * puestosEfectivos;
     }
@@ -200,28 +268,52 @@ export function proyectarColaDias(
 
 /** "1,8 d" (coma decimal; sin decimales desde 10 jornadas). */
 export function etiquetaDias(dias: number): string {
-  const valor = dias >= 10 ? `${Math.round(dias)}` : `${Math.round(dias * 10) / 10}`.replace(".", ",");
+  const valor =
+    dias >= 10
+      ? `${Math.round(dias)}`
+      : `${Math.round(dias * 10) / 10}`.replace(".", ",");
   return `${valor} d`;
 }
 
 export type EstacionEmpleadoRef = {
+  activo?: boolean;
+  calendario?: CalendarioEstacion | null;
   id: string;
   nombreCompleto: string;
   sector: string;
 };
 
 export type EstacionMaquinaRef = {
+  operacionMaquina?: import("./demanda-humana").ModoOperacionMaquina | null;
+  activo?: boolean;
   id: string;
   codigo: string;
   nombre: string;
   /**
-   * Centro de costo principal de la máquina: el vínculo real paso→máquina
-   * (la trazabilidad del paso guarda centroCostoId, no maquinaId).
+   * Centro de costo principal de la máquina, conservado para el cálculo.
+   * La asignación de tareas usa el id de la máquina cotizada.
    */
   centroCostoId: string | null;
 };
 
+export type EquipoProduccion = {
+  id: string;
+  nombre: string;
+  personas: number;
+  activo: boolean;
+  calendario: CalendarioEstacion | null;
+};
+
+export type PersonaProduccion = {
+  id: string;
+  activo?: boolean;
+  calendario: CalendarioEstacion | null;
+};
+
 export type Estacion = {
+  planificacionPorEmpleados?: boolean;
+  equipoProduccionId?: string | null;
+  equipoProduccion?: EquipoProduccion | null;
   id: string;
   nombre: string;
   descripcion: string;
@@ -230,19 +322,20 @@ export type Estacion = {
   etapa: string;
   /** Clave del set de iconos del tablero (Printer, Cut, Shield, …). */
   icono: string | null;
-  /** PUESTOS de trabajo simultáneos: multiplican las horas del calendario. */
+  /** Puestos físicos para trabajos SIN máquina. Cada máquina aporta capacidad propia. */
   capacidadConcurrente: number;
   /**
-   * Minutos para traer el material hasta acá y dejarlo listo. Ocupa un PUESTO
-   * (lo hace el operario) pero no la máquina. null = default del tenant.
+   * Separación entre trabajos: ocupa al equipo y al recurso que se está liberando.
+   * null = default del tenant.
    */
   tiempoPreparacionMin: number | null;
   /** Calendario semanal operativo; null = sin proyección de cola en días. */
   calendario: CalendarioEstacion | null;
+  /** Lista normalizada para editar, sin reglas de máquina retiradas. */
+  pasosSinMaquina?: string[];
   /** Códigos de familias de pasos asignadas. */
   familias: string[];
-  /** Reglas de captura nuevas (tecnología / paso). Ver
-   *  docs/estaciones-reglas-diseno.md. */
+  /** Asignaciones explícitas de pasos conservadas por compatibilidad. */
   reglas?: ReglaEstacion[];
   empleados: EstacionEmpleadoRef[];
   maquinas: EstacionMaquinaRef[];
@@ -257,6 +350,12 @@ export type ReglaEstacion = {
 };
 
 export type EstacionPayload = {
+  planificacionPorEmpleados?: boolean;
+  horariosEmpleados?: Array<{
+    empleadoId: string;
+    calendario: CalendarioEstacion;
+  }>;
+  equipoProduccionId?: string | null;
   nombre: string;
   descripcion?: string;
   activo: boolean;
@@ -276,8 +375,8 @@ export type EstacionPayload = {
 
 /**
  * Fila del catálogo de familias con sus dueñas actuales (para el picker).
- * Una familia puede estar en varias estaciones si tienen máquinas (filtran);
- * a lo sumo una estación general (sin máquinas) por familia.
+ * Incluye sólo pasos que admiten ejecución sin máquina. Cada asignación
+ * explícita pertenece a una estación, aunque ésta contenga máquinas.
  */
 export type FamiliaPasoCatalogo = {
   codigo: string;
@@ -294,7 +393,7 @@ export function createEmptyEstacion(): EstacionPayload {
     activo: true,
     etapa: "preprensa",
     icono: "Tool",
-    capacidadConcurrente: 1,
+    planificacionPorEmpleados: true,
     tiempoPreparacionMin: null,
     calendario: calendarioDefault(),
     familias: [],
@@ -303,4 +402,3 @@ export function createEmptyEstacion(): EstacionPayload {
     reglas: [],
   };
 }
-

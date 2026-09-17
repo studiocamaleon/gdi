@@ -4,9 +4,16 @@ import * as React from "react";
 import { CircleAlertIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { ActionButton as Button } from "@/components/design-system/action-button";
+import { NodosVisualProvider } from "./nodos-ui";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import listPage from "@/components/design-system/list-page.module.css";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfigPasosEditorView } from "@/components/productos-servicios/config-pasos-editor-view";
+import { PasoCompuestoConfiguracion } from "@/components/productos-servicios/paso-compuesto-configuracion";
 import {
   getCatalogoFamilias,
   getLookupsConfigPaso,
@@ -16,11 +23,14 @@ import {
 } from "@/lib/productos-servicios-api";
 import type {
   CatalogoFamilias,
+  PasoTenant,
   ProductoDetalle,
   RutaAlternativaDetalle,
 } from "@/lib/productos-servicios";
 
 export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const [datos, setDatos] = React.useState<{
     producto: ProductoDetalle;
     ruta: RutaAlternativaDetalle;
@@ -28,6 +38,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
     lookups: LookupsConfigPaso;
   } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [pasoCompuesto, setPasoCompuesto] = React.useState<PasoTenant | null>(
+    null,
+  );
   const [intento, setIntento] = React.useState(0);
 
   React.useEffect(() => {
@@ -45,7 +58,11 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
           (item) => item.codigo === pasoId && item.origen === "sistema",
         );
         if (!pasoTenant && !familiaSistema) {
-          throw new Error("El paso no existe o no está disponible.");
+          throw new Error("El nodo no existe o no está disponible.");
+        }
+        if (pasoTenant?.tipoPaso === "COMPUESTO") {
+          setPasoCompuesto(pasoTenant);
+          return;
         }
         const paso = pasoTenant
           ? {
@@ -74,7 +91,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
         const plantilla = catalogo.familias.find(
           (item) => item.codigo === paso.plantillaCodigo,
         );
-        const familia = familiaSistema ?? heredada ??
+        const familia =
+          familiaSistema ??
+          heredada ??
           (plantilla
             ? {
                 ...plantilla,
@@ -87,7 +106,7 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
               }
             : null);
         if (!familia) {
-          throw new Error("La plantilla de este paso ya no está disponible.");
+          throw new Error("La plantilla de este nodo ya no está disponible.");
         }
         const base = paso.configBase as
           | {
@@ -198,7 +217,9 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
       })
       .catch((err: unknown) => {
         if (vivo) {
-          setError(err instanceof Error ? err.message : "No se pudo cargar el paso.");
+          setError(
+            err instanceof Error ? err.message : "No se pudo cargar el nodo.",
+          );
         }
       });
     return () => {
@@ -208,38 +229,47 @@ export function PasoTenantConfiguracionPage({ pasoId }: { pasoId: string }) {
 
   if (error) {
     return (
-      <div className="content">
+      <div {...scope} className={`${theme} ${listPage.page}`}>
         <Alert variant="destructive">
           <CircleAlertIcon />
           <AlertTitle>No se pudo abrir la configuración</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button className="mt-4" onClick={() => setIntento((value) => value + 1)}>
+        <Button
+          className="mt-4"
+          onClick={() => setIntento((value) => value + 1)}
+        >
           Reintentar
         </Button>
       </div>
     );
   }
   if (!datos) {
+    if (pasoCompuesto) {
+      return <PasoCompuestoConfiguracion paso={pasoCompuesto} />;
+    }
     return (
-      <div className="content flex flex-col gap-3">
+      <div {...scope} className={`${theme} ${listPage.page}`}>
         <Skeleton className="h-8 w-72" />
         <Skeleton className="h-[520px] w-full" />
       </div>
     );
   }
   return (
-    <ConfigPasosEditorView
-      producto={datos.producto}
-      rutaAlternativa={datos.ruta}
-      catalogoFamilias={datos.catalogo}
-      lookups={datos.lookups}
-      configuracionBase={{
-        familiaCodigo: pasoId,
-        origen: datos.catalogo.familias.find((item) => item.codigo === pasoId)
-          ?.origen ?? "sistema",
-        volverHref: "/productos-servicios/pasos",
-      }}
-    />
+    <NodosVisualProvider>
+      <ConfigPasosEditorView
+        producto={datos.producto}
+        rutaAlternativa={datos.ruta}
+        catalogoFamilias={datos.catalogo}
+        lookups={datos.lookups}
+        configuracionBase={{
+          familiaCodigo: pasoId,
+          origen:
+            datos.catalogo.familias.find((item) => item.codigo === pasoId)
+              ?.origen ?? "sistema",
+          volverHref: "/productos-servicios/pasos",
+        }}
+      />
+    </NodosVisualProvider>
   );
 }

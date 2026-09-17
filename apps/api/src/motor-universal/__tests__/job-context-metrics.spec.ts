@@ -67,6 +67,23 @@ describe('congelarMedidaVisible', () => {
     expect(jc.medidaVisibleMm).toEqual({ anchoMm: 1500, altoMm: 1000 });
   });
 
+  it('congela también la profundidad publicada por un producto 3D', () => {
+    const jc: JobContext = {
+      cantidad: 1,
+      piezas: [{ cantidad: 1, anchoMm: 1500, altoMm: 1000 }],
+      medidaCustomMm: { anchoMm: 1500, altoMm: 1000 },
+      profundidadMm: 120,
+    };
+
+    congelarMedidaVisible(jc);
+
+    expect(jc.medidaVisibleMm).toEqual({
+      anchoMm: 1500,
+      altoMm: 1000,
+      profundidadMm: 120,
+    });
+  });
+
   it('la copia visible NO comparte referencia con las piezas mutables', () => {
     const jc: JobContext = {
       cantidad: 1,

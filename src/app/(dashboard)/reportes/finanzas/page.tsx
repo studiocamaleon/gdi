@@ -1,4 +1,4 @@
-import { MetaPie, TabFinanzas } from "@/components/panel/panel-general";
+import { ReporteFinanzas } from "@/components/panel/reporte-finanzas";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { getPanelFinanzas } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
@@ -24,11 +24,8 @@ export default async function Page({
   }
 
   const parametros = await searchParams;
-  const d = await getPanelFinanzas(rangoDeParametros(parametros, await zonaHorariaDelTenant()));
-  return (
-    <>
-      <TabFinanzas d={d} />
-      <MetaPie meta={d.meta} />
-    </>
+  const d = await getPanelFinanzas(
+    rangoDeParametros(parametros, await zonaHorariaDelTenant()),
   );
+  return <ReporteFinanzas d={d} />;
 }

@@ -1,52 +1,19 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRightIcon,
-  BanknoteArrowDownIcon,
-  BoxesIcon,
-  CheckCircle2Icon,
-  ClipboardListIcon,
-  FactoryIcon,
-  FileTextIcon,
-  PanelsTopLeftIcon,
-  PlusCircleIcon,
-  ReceiptTextIcon,
-  RefreshCwIcon,
-  TriangleAlertIcon,
-  WalletCardsIcon,
-} from "lucide-react";
-
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
+import { useDesignScope } from "@/components/design-system/appearance";
+import theme from "@/components/design-system/brand-theme.module.css";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { formatearMoneda } from "@/lib/moneda";
-import {
   getPanelGeneral,
-  type PanelGeneralAccion,
   type PanelGeneralData,
-  type PanelGeneralVista,
 } from "@/lib/panel-general-api";
-import s from "./panel-general-view.module.css";
+import { PanelAdminView } from "./panel-admin-view";
+import s from "./panel-admin-view.module.css";
 
 const POLL_MS = 30_000;
-
-const ICONOS: Record<
-  PanelGeneralAccion["icono"],
-  React.ComponentType<{ size?: number }>
-> = {
-  orden: PlusCircleIcon,
-  presupuesto: ClipboardListIcon,
-  produccion: FactoryIcon,
-  estaciones: BoxesIcon,
-  egreso: BanknoteArrowDownIcon,
-  facturacion: ReceiptTextIcon,
-};
 
 function primeraPalabra(nombre: string) {
   return nombre.trim().split(/\s+/)[0] || "";
@@ -84,164 +51,7 @@ export function saludoSegunMomento(iso: string, zonaHoraria: string) {
   return "Buenas noches";
 }
 
-function formatoPaso(estado: string) {
-  if (estado === "en_curso") return "En curso";
-  if (estado === "pausado") return "Pausado";
-  if (estado === "bloqueado") return "Bloqueado";
-  return "Por iniciar";
-}
-
-function TrabajoEntrega({
-  entrega,
-}: {
-  entrega: PanelGeneralData["proximasEntregas"][number];
-}) {
-  if (entrega.productos.length <= 1) {
-    return <span className={s.product}>{entrega.producto}</span>;
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={(props) => (
-          <span
-            {...props}
-            className={s.productTrigger}
-            tabIndex={0}
-            aria-label={`${entrega.producto}. Ver avance de cada producto`}
-          >
-            {entrega.producto}
-          </span>
-        )}
-      />
-      <TooltipContent
-        side="bottom"
-        align="start"
-        className="block w-80 max-w-[calc(100vw-2rem)] p-3"
-      >
-        <p className="mb-2 font-medium">Productos de la orden</p>
-        <ol className="grid gap-2">
-          {entrega.productos.map((producto, index) => (
-            <li key={producto.id} className="flex min-w-0 items-center gap-2">
-              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-background/15 text-[10px] font-semibold">
-                {index + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-3">
-                  <span className="min-w-0 flex-1 truncate">
-                    {producto.nombre}
-                  </span>
-                  <span className="shrink-0 font-mono text-[10px] opacity-75">
-                    {producto.progresoPct}%
-                  </span>
-                </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-background/20">
-                  <div
-                    className="h-full rounded-full bg-background"
-                    style={{ width: `${producto.progresoPct}%` }}
-                  />
-                </div>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function ProximasEntregas({
-  data,
-  onAbrir,
-}: {
-  data: PanelGeneralData;
-  onAbrir: (href: string) => void;
-}) {
-  return (
-    <section className={s.card} aria-labelledby="entregas-title">
-      <div className={s.cardHead}>
-        <WalletCardsIcon size={16} />
-        <div>
-          <h2 id="entregas-title">Próximas entregas</h2>
-          <p>Atrasadas primero · próximos siete días</p>
-        </div>
-        <span className={s.grow} />
-        <span className={s.count}>{data.proximasEntregasTotal}</span>
-      </div>
-      {data.proximasEntregas.length === 0 ? (
-        <div className={s.empty} style={{ minHeight: 130 }}>
-          <div>
-            <strong>Sin entregas próximas</strong>No hay órdenes comprometidas
-            para los próximos siete días.
-          </div>
-        </div>
-      ) : (
-        <div className={s.tableWrap}>
-          <table className={s.deliveries}>
-            <thead>
-              <tr>
-                <th>Orden</th>
-                <th>Trabajo</th>
-                <th>Etapa actual</th>
-                <th>Entrega</th>
-                <th>Avance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.proximasEntregas.map((entrega) => (
-                <tr
-                  key={entrega.id}
-                  tabIndex={0}
-                  onClick={() => onAbrir(entrega.href)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      onAbrir(entrega.href);
-                    }
-                  }}
-                >
-                  <td>
-                    <span className={s.order}>{entrega.numero}</span>
-                    <div className={s.secondary}>{entrega.cliente}</div>
-                  </td>
-                  <td>
-                    <TrabajoEntrega entrega={entrega} />
-                  </td>
-                  <td>
-                    {entrega.pasoActual ?? "Lista para retirar"}
-                    <div className={s.secondary}>
-                      {entrega.estacionActual ?? "—"}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={s.risk} data-risk={entrega.riesgo}>
-                      {entrega.riesgo === "atrasada"
-                        ? "Atrasada"
-                        : entrega.riesgo === "hoy"
-                          ? "Hoy"
-                          : fechaHumana(entrega.fechaEntrega)}
-                    </span>
-                  </td>
-                  <td>
-                    <div className={s.progress}>
-                      <div className={s.track}>
-                        <div
-                          className={s.fill}
-                          style={{ width: `${entrega.progresoPct}%` }}
-                        />
-                      </div>
-                      <span>{entrega.progresoPct}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
+/** Único Panel general. La API resuelve el alcance de datos y acciones. */
 export function PanelGeneralView({
   initialData,
   nombreUsuario,
@@ -250,45 +60,42 @@ export function PanelGeneralView({
   nombreUsuario: string;
 }) {
   const router = useRouter();
-  const { moneda, zonaHoraria } = useConfigRegional();
+  const scope = useDesignScope();
+  const { zonaHoraria } = useConfigRegional();
   const [data, setData] = React.useState(initialData);
   const [cargando, setCargando] = React.useState(initialData == null);
   const [error, setError] = React.useState<string | null>(null);
-  const [ahora, setAhora] = React.useState(() => Date.now());
-  const vistaRef = React.useRef<PanelGeneralVista>(
-    initialData?.vistaActual ?? "actual",
+  // El servidor y la primera renderización del cliente comparten el reloj.
+  const [ahora, setAhora] = React.useState(() =>
+    initialData ? Date.parse(initialData.generadoEl) : 0,
   );
 
-  const refrescar = React.useCallback(async (vista = vistaRef.current) => {
+  const ultimaConsulta = React.useRef(0);
+  const refrescar = React.useCallback(async () => {
+    const consulta = ++ultimaConsulta.current;
     setCargando(true);
     try {
-      const siguiente = await getPanelGeneral(vista);
-      vistaRef.current = siguiente.vistaActual;
+      const siguiente = await getPanelGeneral();
+      if (consulta !== ultimaConsulta.current) return;
       setData(siguiente);
       setError(null);
     } catch (e) {
+      if (consulta !== ultimaConsulta.current) return;
       setError(
         e instanceof Error
           ? e.message
           : "No pudimos actualizar la información del Panel.",
       );
     } finally {
-      setCargando(false);
-      setAhora(Date.now());
+      if (consulta === ultimaConsulta.current) {
+        setCargando(false);
+        setAhora(Date.now());
+      }
     }
   }, []);
 
-  const cambiarVista = React.useCallback(
-    (vista: PanelGeneralVista) => {
-      vistaRef.current = vista;
-      const href = vista === "actual" ? "/" : `/?vista=${vista}`;
-      router.replace(href, { scroll: false });
-      void refrescar(vista);
-    },
-    [refrescar, router],
-  );
-
   React.useEffect(() => {
+    const relojInicial = window.setTimeout(() => setAhora(Date.now()), 0);
     if (!initialData) void refrescar();
     const tick = window.setInterval(() => {
       setAhora(Date.now());
@@ -299,338 +106,47 @@ export function PanelGeneralView({
     };
     document.addEventListener("visibilitychange", alVolver);
     return () => {
+      window.clearTimeout(relojInicial);
       window.clearInterval(tick);
       document.removeEventListener("visibilitychange", alVolver);
     };
   }, [initialData, refrescar]);
 
-  const fecha = data
-    ? fechaHumana(data.fechaLocal)
-    : new Intl.DateTimeFormat("es-AR", {
-        weekday: "long",
-        day: "numeric",
-        month: "long",
-      }).format(new Date());
-  const saludo = saludoSegunMomento(
-    data?.generadoEl ?? new Date(ahora).toISOString(),
-    zonaHoraria,
-  );
+  if (!data) {
+    return (
+      <div {...scope} className={`${theme.theme} ${s.page}`}>
+        <header className={s.head}>
+          <div>
+            <h1>
+              Panel general<span className={s.period}>.</span>
+            </h1>
+            <p className={s.sub}>Tu industria gráfica, en movimiento.</p>
+          </div>
+        </header>
+        {error ? (
+          <p className={s.error} role="alert">
+            No pudimos cargar el panel. Volveremos a intentarlo automáticamente.
+          </p>
+        ) : (
+          <div className={s.loading} role="status">
+            <GdiSpinner /> Cargando Panel general…
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className={s.page}>
-      <header className={s.head}>
-        <div>
-          <p className={s.eyebrow}>{fecha}</p>
-          <h1>
-            {saludo}
-            {nombreUsuario ? `, ${primeraPalabra(nombreUsuario)}` : ""}
-          </h1>
-          <p className={s.sub}>Lo que necesita atención en tu taller, ahora.</p>
-        </div>
-        <div className={s.refreshArea}>
-          {data && data.vistasDisponibles.length > 1 ? (
-            <label className={s.viewPicker}>
-              <PanelsTopLeftIcon size={14} />
-              <span>Vista</span>
-              <select
-                aria-label="Vista del Panel general"
-                value={data.vistaActual}
-                onChange={(event) =>
-                  cambiarVista(event.target.value as PanelGeneralVista)
-                }
-                disabled={cargando}
-              >
-                {data.vistasDisponibles.map((vista) => (
-                  <option key={vista.id} value={vista.id}>
-                    {vista.etiqueta}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {data ? (
-            <span aria-live="polite">
-              Actualizado {haceCuanto(data.generadoEl, ahora)}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className={s.refresh}
-            onClick={() => void refrescar()}
-            disabled={cargando}
-          >
-            <RefreshCwIcon
-              size={14}
-              className={cargando ? s.spinning : undefined}
-            />
-            Actualizar
-          </button>
-        </div>
-      </header>
-
-      {data?.previsualizando ? (
-        <div className={s.previewNotice} role="status">
-          <PanelsTopLeftIcon size={15} />
-          Estás previsualizando el Panel como{" "}
-          {
-            data.vistasDisponibles.find(
-              (vista) => vista.id === data.vistaActual,
-            )?.etiqueta
-          }
-          . Tus permisos no cambiaron.
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className={s.error} role="status">
-          <TriangleAlertIcon size={15} />
-          {data
-            ? "No pudimos actualizar; conservamos la última información disponible."
-            : error}
-        </div>
-      ) : null}
-
-      {!data ? (
-        <div aria-label="Cargando Panel general">
-          <div className={s.kpis}>
-            {Array.from({ length: 5 }, (_, i) => (
-              <div className={s.skeleton} key={i} />
-            ))}
-          </div>
-          <div className={s.layout}>
-            <div className={s.skeleton} style={{ minHeight: 310 }} />
-            <div className={s.skeleton} style={{ minHeight: 310 }} />
-          </div>
-        </div>
-      ) : (
-        <>
-          {data.kpis.length > 0 ? (
-            <section className={s.kpis} aria-label="Indicadores de hoy">
-              {data.kpis.map((kpi) => (
-                <Link
-                  className={s.kpi}
-                  data-tone={kpi.tono}
-                  href={kpi.href}
-                  key={kpi.id}
-                >
-                  <div className={s.kpiLabel}>{kpi.etiqueta}</div>
-                  <div className={s.kpiValue}>
-                    {kpi.formato === "moneda"
-                      ? formatearMoneda(kpi.valor, moneda, { decimales: 0 })
-                      : kpi.valor.toLocaleString("es-AR")}
-                  </div>
-                  <div className={s.kpiDetail}>{kpi.detalle}</div>
-                </Link>
-              ))}
-            </section>
-          ) : null}
-
-          {data.accionesRapidas.length > 0 ? (
-            <nav className={s.actions} aria-label="Acciones rápidas">
-              {data.accionesRapidas.map((accion) => {
-                const Icono = ICONOS[accion.icono] ?? FileTextIcon;
-                return (
-                  <Link className={s.action} href={accion.href} key={accion.id}>
-                    <Icono size={15} />
-                    {accion.etiqueta}
-                  </Link>
-                );
-              })}
-            </nav>
-          ) : null}
-
-          <ProximasEntregas data={data} onAbrir={router.push} />
-
-          <div className={s.layout}>
-            <section className={s.card} aria-labelledby="atencion-title">
-              <div className={s.cardHead}>
-                <TriangleAlertIcon size={16} />
-                <div>
-                  <h2 id="atencion-title">Requieren atención</h2>
-                  <p>Ordenado por urgencia</p>
-                </div>
-                <span className={s.grow} />
-                <span className={s.count}>{data.atencionTotal}</span>
-              </div>
-              {data.atencion.length === 0 ? (
-                <div className={s.empty}>
-                  <div>
-                    <CheckCircle2Icon size={25} />
-                    <strong>Todo bajo control</strong>
-                    No hay pendientes urgentes para este momento.
-                  </div>
-                </div>
-              ) : (
-                <div className={s.attentionList}>
-                  {data.atencion.map((alerta) => (
-                    <Link
-                      className={s.attention}
-                      data-severity={alerta.severidad}
-                      href={alerta.href}
-                      key={alerta.id}
-                    >
-                      <span className={s.signal} />
-                      <span>
-                        <span className={s.attTitle}>
-                          {alerta.titulo}
-                          <span className={s.domain}>{alerta.dominio}</span>
-                        </span>
-                        <span className={s.attDetail}>{alerta.detalle}</span>
-                      </span>
-                      <span className={s.attCount}>{alerta.cantidad}</span>
-                      <ArrowRightIcon size={15} />
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {data.trabajoPersonal.total > 0 ||
-            (!data.taller && !data.administracion) ? (
-              <section className={s.card} aria-labelledby="mesa-title">
-                <div className={s.cardHead}>
-                  <FactoryIcon size={16} />
-                  <div>
-                    <h2 id="mesa-title">Mi mesa</h2>
-                    <p>Trabajo tomado por vos</p>
-                  </div>
-                  <span className={s.grow} />
-                  <span className={s.count}>{data.trabajoPersonal.total}</span>
-                </div>
-                {data.trabajoPersonal.tareas.length === 0 ? (
-                  <div className={s.empty}>
-                    <div>
-                      <strong>Tu mesa está libre</strong>Abrí Producción para
-                      tomar el próximo trabajo.
-                    </div>
-                  </div>
-                ) : (
-                  <div className={s.workList}>
-                    {data.trabajoPersonal.tareas.map((tarea) => (
-                      <Link
-                        className={s.work}
-                        href={tarea.href}
-                        key={tarea.pasoId}
-                      >
-                        <span className={s.workTop}>
-                          <strong>{tarea.ordenNumero}</strong>
-                          <span>· {formatoPaso(tarea.estado)}</span>
-                          {tarea.activa ? (
-                            <span className={s.activeTag}>Ahora</span>
-                          ) : null}
-                        </span>
-                        <span className={s.workName}>{tarea.pasoNombre}</span>
-                        <span className={s.workSub}>
-                          {tarea.itemNombre}
-                          {tarea.motivoBloqueo
-                            ? ` · ${tarea.motivoBloqueo}`
-                            : ""}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </section>
-            ) : data.taller ? (
-              <section className={s.card} aria-labelledby="taller-title">
-                <div className={s.cardHead}>
-                  <FactoryIcon size={16} />
-                  <div>
-                    <h2 id="taller-title">Estado del taller</h2>
-                    <p>Foto operativa actual</p>
-                  </div>
-                </div>
-                <div className={s.workshop}>
-                  <div className={s.workshopGrid}>
-                    <div className={s.workshopMetric}>
-                      <strong>{data.taller.itemsActivos}</strong>
-                      <span>ítems activos</span>
-                    </div>
-                    <div className={s.workshopMetric}>
-                      <strong>{data.taller.pasosEnCurso}</strong>
-                      <span>pasos en curso</span>
-                    </div>
-                    <div className={s.workshopMetric}>
-                      <strong>{data.taller.pasosBloqueados}</strong>
-                      <span>bloqueados</span>
-                    </div>
-                  </div>
-                  {data.taller.cuelloBotella ? (
-                    <div className={s.bottleneck}>
-                      <TriangleAlertIcon size={16} />
-                      <div>
-                        <strong>
-                          Mayor carga: {data.taller.cuelloBotella.estacion}
-                        </strong>
-                        <span>
-                          {data.taller.cuelloBotella.pasos} pasos ·{" "}
-                          {data.taller.cuelloBotella.colaMin} min en cola ·{" "}
-                          {Math.round(data.taller.cuelloBotella.utilizacionPct)}
-                          % de utilización
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      className={s.empty}
-                      style={{ minHeight: 95, padding: 16 }}
-                    >
-                      La planificación todavía no generó una foto de carga para
-                      hoy.
-                    </div>
-                  )}
-                </div>
-              </section>
-            ) : data.administracion ? (
-              <section
-                className={s.card}
-                aria-labelledby="administracion-title"
-              >
-                <div className={s.cardHead}>
-                  <ReceiptTextIcon size={16} />
-                  <div>
-                    <h2 id="administracion-title">
-                      Pendientes administrativos
-                    </h2>
-                    <p>Acciones abiertas ahora</p>
-                  </div>
-                </div>
-                <div className={s.workshop}>
-                  <div className={s.workshopGrid}>
-                    <div className={s.workshopMetric}>
-                      <strong>{data.administracion.cobrosVencidos}</strong>
-                      <span>cobros vencidos</span>
-                    </div>
-                    <div className={s.workshopMetric}>
-                      <strong>{data.administracion.porFacturar}</strong>
-                      <span>por facturar</span>
-                    </div>
-                    <div className={s.workshopMetric}>
-                      <strong>{data.administracion.pagosVencidos}</strong>
-                      <span>pagos vencidos</span>
-                    </div>
-                  </div>
-                  <Link
-                    className={s.bottleneck}
-                    href="/administracion/tesoreria/acreditaciones"
-                  >
-                    <WalletCardsIcon size={16} />
-                    <div>
-                      <strong>
-                        {data.administracion.acreditacionesPendientes} cobros
-                        por acreditar
-                      </strong>
-                      <span>
-                        Revisar fecha estimada y estado de acreditación
-                      </span>
-                    </div>
-                  </Link>
-                </div>
-              </section>
-            ) : null}
-          </div>
-        </>
-      )}
-    </div>
+    <PanelAdminView
+      data={data}
+      nombre={primeraPalabra(nombreUsuario)}
+      fecha={fechaHumana(data.fechaLocal)}
+      saludo={saludoSegunMomento(data.generadoEl, zonaHoraria)}
+      actualizado={haceCuanto(data.generadoEl, ahora)}
+      ahora={ahora}
+      cargando={cargando}
+      error={error}
+      abrir={router.push}
+    />
   );
 }

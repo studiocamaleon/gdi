@@ -110,10 +110,13 @@ export async function subirArchivo(
     publico?: boolean;
     /** Marca de automatismo: lo produjo el sistema, no una persona. */
     autogeneradoPor?: string;
+    /** Calcula SHA-256 antes de subir; requerido para una revisión controlada. */
+    calcularHash?: boolean;
   },
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<Archivo> {
+  const hash = destino.calcularHash ? await sha256Archivo(file) : undefined;
   const inicio = await apiRequest<IniciarRespuesta>("/archivos/iniciar", {
     method: "POST",
     body: JSON.stringify({
@@ -125,6 +128,7 @@ export async function subirArchivo(
       descripcion: destino.descripcion,
       publico: destino.publico,
       autogeneradoPor: destino.autogeneradoPor,
+      hash,
     }),
   });
 
@@ -137,6 +141,13 @@ export async function subirArchivo(
     method: "POST",
     body: JSON.stringify(partes.length > 0 ? { partes } : {}),
   });
+}
+
+async function sha256Archivo(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 /**

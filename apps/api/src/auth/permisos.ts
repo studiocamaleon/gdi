@@ -50,7 +50,7 @@ export const MODULOS = [
   {
     clave: 'produccion',
     label: 'Producción',
-    descripcion: 'Tablero, mesa de trabajo, simuladores y estaciones.',
+    descripcion: 'Tablero, mesa de trabajo, planificación y estaciones.',
   },
   {
     clave: 'administracion',

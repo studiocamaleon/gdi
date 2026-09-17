@@ -19,6 +19,10 @@ export const unidadComercialProductoItems: Array<{
 export type ModoMedidasProducto =
   "FIJA" | "LIBRE" | "COMERCIAL_ELIGE" | "MIXTA";
 
+export type DimensionProducto = "ANCHO" | "ALTO" | "PROFUNDIDAD";
+
+export type EstructuraProducto = "SIMPLE" | "COMPUESTO";
+
 export type MinimoComercialPolitica =
   "NONE" | "ADVERTIR_FACTURAR_MINIMO" | "BLOQUEAR";
 
@@ -30,6 +34,7 @@ export interface MedidaPredefinidaProducto {
   /** Para tipo "pliego_util" es 0 hasta que el sheet la resuelve en runtime. */
   anchoMm: number;
   altoMm: number;
+  profundidadMm?: number;
   esDefault: boolean;
   /**
    * Origen del valor. Ausente/"fija" = la pieza la declara el modelador.
@@ -94,9 +99,12 @@ export interface ProductoListItem {
   codigo: string;
   nombre: string;
   descripcion: string | null;
+  estructuraProducto: EstructuraProducto;
   atributosComercialesJson: Record<string, unknown> | null;
   medidaDefaultAnchoMm: string | null;
   medidaDefaultAltoMm: string | null;
+  medidaDefaultProfundidadMm?: string | null;
+  dimensionesRequeridas?: DimensionProducto[];
   medidasPredefinidasJson: MedidaPredefinidaProducto[] | null;
   /** Personalizaciones (áreas de decoración) con medida propia. Raw JSON: usar
    *  getPersonalizaciones() de producto-personalizaciones.ts para parsear. */
@@ -112,6 +120,10 @@ export interface ProductoListItem {
   estadoCatalogo?: "activo" | "incompleto" | "listo" | "borrador";
   /** Derivado: algún paso de alguna ruta es tercerizado (para el badge). */
   tercerizado?: boolean;
+  /** Alias de compatibilidad de `estructuraProducto === \"COMPUESTO\"`. */
+  esCompuesto?: boolean;
+  /** El producto participa como hijo en al menos una BOM. */
+  usadoComoComponente?: boolean;
   subcategoriaComercial: ProductoSubcategoriaComercial & {
     categoria: Omit<ProductoCategoriaComercial, "subcategorias">;
   };
@@ -296,6 +308,7 @@ export interface SlotMaterialDetalle {
   criterioMotorAuto: string | null;
   formula: string;
   cantidadFactor: string | number | null;
+  mermaAdicionalPct?: string | number | null;
   cantidadBase: string | null;
   aplicaMultiCaras: boolean;
   materialVariante: {
@@ -447,7 +460,36 @@ export interface RutaListItem {
     nombreVisible?: string | null;
     icono?: string | null;
   }>;
+  workflow?: RutaWorkflow;
   _count: { productosAlternativas: number };
+}
+
+export type TipoNodoRutaWorkflow = "PASO" | "ETAPA" | "COMPONENTE";
+
+export type NodoRutaWorkflow =
+  | {
+      clave: string;
+      tipo: "PASO" | "ETAPA";
+      orden: number;
+      familiaCodigo: string;
+      nombreVisible?: string | null;
+      icono?: string | null;
+    }
+  | {
+      clave: string;
+      tipo: "COMPONENTE";
+      orden: number;
+      productoComponenteId: string;
+      codigo: string;
+      nombre: string;
+      requerido: boolean;
+    };
+
+export interface RutaWorkflow {
+  contractVersion: 1;
+  topologia: "LINEAL" | "DAG";
+  nodos: NodoRutaWorkflow[];
+  aristas: Array<{ desdeClave: string; haciaClave: string }>;
 }
 
 // ============================================================================
@@ -646,7 +688,26 @@ export interface PasoTenant {
   estacionHeredada?: boolean;
   defaults?: DefaultsFamiliaPaso | null;
   configBase?: Record<string, unknown> | null;
+  tipoPaso: "SIMPLE" | "COMPUESTO";
+  operacionesCompuestas?: DefinicionOperacionCompuesta[];
+  pasosInternos?: DefinicionPasoInternoCompuesto[];
 }
+
+export interface DefinicionOperacionCompuesta {
+  codigo: string;
+  nombre: string;
+  descripcion?: string | null;
+  dimension: "FIJO" | "UNIDAD" | "LONGITUD" | "SUPERFICIE" | "CANTIDAD";
+  requerida: boolean;
+  orden: number;
+  familiaCodigo?: string | null;
+  requiereCodigos?: string[];
+}
+
+export type DefinicionPasoInternoCompuesto = DefinicionOperacionCompuesta & {
+  familiaCodigo: string;
+  requiereCodigos: string[];
+};
 
 /** Plantilla instanciable que ofrece el modal de alta. */
 export interface PlantillaPaso {
@@ -664,6 +725,9 @@ export interface UpsertPasoTenantInput {
   icono?: string | null;
   activo?: boolean;
   defaults?: Partial<DefaultsFamiliaPaso> | null;
+  tipoPaso?: "SIMPLE" | "COMPUESTO";
+  operacionesCompuestas?: DefinicionOperacionCompuesta[];
+  pasosInternos?: DefinicionPasoInternoCompuesto[];
 }
 
 export interface PreviewCosteoFamilia {

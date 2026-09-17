@@ -9,6 +9,18 @@ import { Permiso } from '../auth/permiso.decorator';
 export class EtaController {
   constructor(private readonly eta: EtaService) {}
 
+  /** Contexto y reloj del servidor para la previsión comercial. No reserva capacidad. */
+  @Get('contexto-prevision')
+  async contextoPrevision(@CurrentSession() auth: CurrentAuth) {
+    const contexto = await this.eta.contextoSimulacion(auth.tenantId);
+    return {
+      ...contexto,
+      ahora: contexto.ahora.toISOString(),
+      medianas: [...contexto.medianas],
+      noLaborables: [...contexto.noLaborables],
+    };
+  }
+
   /** Precisión de las promesas cerradas (opcional: rango por congeladaEl). */
   @Get('precision')
   precision(

@@ -14,6 +14,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -343,6 +344,13 @@ export class UpsertSlotMaterialDto {
   @IsNumber()
   @Min(0)
   cantidadFactor?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0)
+  @Max(1000)
+  mermaAdicionalPct?: number;
 
   @IsOptional()
   @IsString()

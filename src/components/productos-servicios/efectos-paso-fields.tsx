@@ -1,7 +1,8 @@
 "use client";
+import { Input, LabelConTooltip, NativeButton } from "./nodos-ui";
 
-import { Input } from "@/components/ui/input";
-import { LabelConTooltip } from "@/components/ui/label-con-tooltip";
+
+
 import {
   ETIQUETA_LADO,
   LADOS_PIEZA,
@@ -61,7 +62,7 @@ export function EfectosPasoFields({
           Este paso trabaja sobre la medida que le llega. Si necesita que la
           pieza venga más grande, pedilo acá.
         </p>
-        <button
+        <NativeButton
           type="button"
           className="btn btn-outline btn-sm w-fit"
           onClick={() =>
@@ -75,7 +76,7 @@ export function EfectosPasoFields({
           }
         >
           + Necesita material extra alrededor
-        </button>
+        </NativeButton>
       </div>
     );
   }
@@ -162,13 +163,13 @@ export function EfectosPasoFields({
       </div>
 
       <div className="md:col-span-full">
-        <button
+        <NativeButton
           type="button"
           className="btn btn-ghost btn-sm"
           onClick={apagar}
         >
           Este paso no exige nada
-        </button>
+        </NativeButton>
       </div>
     </div>
   );

@@ -1,0 +1,6 @@
+{
+  "verificador": "polygon-clipping independiente, áreas de intersección de todas las parejas por plantilla",
+  "pares": 636,
+  "maxInterseccionMm2": 0,
+  "solapamientosMayores0_000001Mm2": []
+}

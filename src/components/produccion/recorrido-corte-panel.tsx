@@ -1,5 +1,6 @@
 "use client";
 
+import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import {
   CheckCircle2Icon,
@@ -18,13 +19,14 @@ import {
   getPreparacionesRecorridoCorte,
   regenerarPreparacionesRecorridoCorte,
   type PreparacionRecorridoCorte,
+  type SeleccionRecorrido,
 } from "@/lib/recorridos-vectoriales-api";
 import {
   distanciasAcumuladasRecorrido,
   tramoVisibleRecorrido,
 } from "@/lib/recorrido-simulacion";
 
-export function RecorridoCortePanel({ itemId }: { itemId: string }) {
+export function RecorridoCortePanel({ itemId, seleccion }: { itemId: string; seleccion?: SeleccionRecorrido }) {
   const [items, setItems] = React.useState<PreparacionRecorridoCorte[]>([]);
   const [active, setActive] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
@@ -36,7 +38,7 @@ export function RecorridoCortePanel({ itemId }: { itemId: string }) {
     setLoading(true);
     setError("");
     try {
-      setItems(await getPreparacionesRecorridoCorte(itemId));
+      setItems(await getPreparacionesRecorridoCorte(itemId, seleccion));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -46,7 +48,7 @@ export function RecorridoCortePanel({ itemId }: { itemId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [itemId]);
+  }, [itemId, seleccion]);
 
   React.useEffect(() => void load(), [load]);
 
@@ -77,7 +79,7 @@ export function RecorridoCortePanel({ itemId }: { itemId: string }) {
     setRegenerating(true);
     setError("");
     try {
-      setItems(await regenerarPreparacionesRecorridoCorte(itemId));
+      setItems(await regenerarPreparacionesRecorridoCorte(itemId, seleccion));
       setActive(0);
     } catch (cause) {
       setError(
@@ -124,7 +126,7 @@ export function RecorridoCortePanel({ itemId }: { itemId: string }) {
             disabled={regenerating}
             onClick={regenerate}
           >
-            <RefreshCwIcon className={regenerating ? "animate-spin" : ""} />
+            {regenerating ? <GdiSpinner /> : <RefreshCwIcon />}
             Regenerar
           </Button>
         ) : null}
@@ -139,7 +141,7 @@ export function RecorridoCortePanel({ itemId }: { itemId: string }) {
               size="sm"
               onClick={() => setActive(index)}
             >
-              Placa {item.placaIndice + 1}
+              Placa {item.placaIndice + 1}{(item.copias ?? 1) > 1 ? ` · ×${item.copias}` : ""}
             </Button>
           ))}
         </div>
@@ -148,6 +150,7 @@ export function RecorridoCortePanel({ itemId }: { itemId: string }) {
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <SimuladorRecorrido preparation={current} />
         <aside className="flex flex-col gap-3">
+          {(current.copias ?? 1) > 1 ? <p className="text-sm">Repetir este archivo en {current.copias} placas.</p> : null}
           <div className="grid grid-cols-2 gap-2 text-sm">
             <Metric
               label="Recorrido"

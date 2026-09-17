@@ -1,3 +1,4 @@
+import { productosComercialesConTrabajo } from './productos-comerciales';
 import {
   BadRequestException,
   Injectable,
@@ -45,7 +46,7 @@ export function normalizarNumeroOrden(crudo: string): string {
  *  - **Un ítem se entrega sólo si terminó.** "Terminado" no es un campo:
  *    es que todos sus pasos estén en `hecho` (mismo criterio que el tablero
  *    y el tracking público). Un ítem sin ruta materializada se considera
- *    listo — no tiene nada que esperar.
+ *    listo sólo si tampoco tiene componentes pendientes.
  */
 @Injectable()
 export class EntregaService {
@@ -80,7 +81,7 @@ export class EntregaService {
           include: {
             pasos: {
               orderBy: { indice: 'asc' },
-              select: { estado: true, nombre: true },
+              select: { estado: true, nombre: true, nestingLoteRol: true },
             },
           },
         },
@@ -123,7 +124,7 @@ export class EntregaService {
       // Lo que falta cobrar. Nunca negativo: un cobro de más no es un saldo
       // a favor de la orden, es un tema de cuenta corriente.
       saldo: Math.max(0, Math.round((total - cobrado) * 100) / 100),
-      items: orden.items.map((item) => this.proyectarItem(item)),
+      items: productosComercialesConTrabajo(orden.items, true).map((item) => this.proyectarItem(item)),
     };
   }
 
@@ -137,13 +138,14 @@ export class EntregaService {
     entregadoEl: Date | null;
     entregadoPorNombre: string | null;
     retiradoPorNombre: string | null;
-    pasos: Array<{ estado: string; nombre: string }>;
+    pasos: Array<{ estado: string; nombre: string; nestingLoteRol?: string | null }>;
   }) {
-    const total = item.pasos.length;
-    const hechos = item.pasos.filter((p) => p.estado === 'hecho').length;
+    const operativos = item.pasos.filter(p => p.nestingLoteRol !== 'PARTICIPANTE');
+    const total = operativos.length;
+    const hechos = operativos.filter((p) => p.estado === 'hecho').length;
     // Sin ruta materializada no hay nada que esperar: se considera listo
     // (mismo criterio que el tablero para los ítems sin pasos).
-    const listo = total === 0 || hechos === total;
+    const listo = item.pasos.every(p => p.estado === 'hecho');
     const enCurso = item.pasos.find((p) => p.estado !== 'hecho');
     const specs = Array.isArray(item.specsJson)
       ? (item.specsJson as Array<{ etiqueta: string; valor: string }>)
@@ -184,7 +186,7 @@ export class EntregaService {
       where: { id: ordenId, tenantId: auth.tenantId },
       include: {
         items: {
-          include: { pasos: { select: { estado: true } } },
+          include: { pasos: { select: { estado: true, nestingLoteRol: true } } },
         },
       },
     });
@@ -195,7 +197,8 @@ export class EntregaService {
       );
     }
 
-    const porId = new Map(orden.items.map((i) => [i.id, i]));
+    const productos = productosComercialesConTrabajo(orden.items, true);
+    const porId = new Map(productos.map((i) => [i.id, i]));
     const aEntregar = dto.itemIds.map((id) => {
       const item = porId.get(id);
       if (!item) {
@@ -246,7 +249,7 @@ export class EntregaService {
 
       // La orden se cierra sola cuando ya no queda nada por retirar.
       const pendientes = await tx.ordenTrabajoItem.count({
-        where: { ordenId: orden.id, entregadoEl: null },
+        where: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: null, entregadoEl: null },
       });
       const cerrada = pendientes === 0;
       if (cerrada) {
@@ -269,7 +272,7 @@ export class EntregaService {
           tipo: cerrada ? 'estado' : 'nota',
           descripcion: cerrada
             ? `Entrega completa (${ids.length} producto${ids.length === 1 ? '' : 's'}): ${nombres}`
-            : `Entrega parcial (${ids.length} de ${orden.items.length}): ${nombres}. Quedan ${pendientes} sin retirar.`,
+            : `Entrega parcial (${ids.length} de ${productos.length}): ${nombres}. Quedan ${pendientes} sin retirar.`,
           usuarioNombre: firma,
           usuarioId: auth.userId,
           origen: 'usuario',
@@ -295,7 +298,7 @@ export class EntregaService {
       entregados: ids.length,
       ordenCerrada:
         (await this.prisma.ordenTrabajoItem.count({
-          where: { ordenId: orden.id, entregadoEl: null },
+          where: { tenantId: auth.tenantId, ordenId: orden.id, parentItemId: null, entregadoEl: null },
         })) === 0,
       cobro: cobroCreado
         ? { id: cobroCreado.id, numeroRecibo: cobroCreado.numeroRecibo }
@@ -321,6 +324,7 @@ export class EntregaService {
       where: {
         id: { in: dto.itemIds },
         ordenId: orden.id,
+        parentItemId: null,
         tenantId: auth.tenantId,
       },
       select: { id: true, nombre: true, entregadoEl: true },

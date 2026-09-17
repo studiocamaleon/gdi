@@ -1,11 +1,13 @@
 import { getSessionToken } from "@/lib/session";
+// Codec puro compartido con el API; este módulo no importa Nest ni Node.
+import { restaurarJson } from "../../apps/api/src/common/json-compartido";
 
 const DEFAULT_API_URL = "http://localhost:3001/api";
 
 export class ApiError extends Error {
   status: number;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, readonly retryAfterSeconds?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -29,6 +31,9 @@ export async function apiRequest<T>(
 ) {
   const headers = new Headers(init?.headers ?? {});
   headers.set("Content-Type", "application/json");
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/vnd.grafoprint.snapshot+json, application/json");
+  }
 
   // Del lado servidor adjuntamos el token directamente (leyendo la cookie
   // httpOnly vía next/headers). Del lado cliente el token lo inyecta el proxy
@@ -75,12 +80,20 @@ export async function apiRequest<T>(
       } catch {}
     }
 
-    throw new ApiError(message, response.status);
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterSeconds = retryAfter === null ? undefined : Number(retryAfter);
+    throw new ApiError(
+      message,
+      response.status,
+      retryAfterSeconds !== undefined && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? retryAfterSeconds
+        : undefined,
+    );
   }
 
   if (response.status === 204) {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  return restaurarJson<T>(await response.json());
 }

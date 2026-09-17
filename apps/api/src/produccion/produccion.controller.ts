@@ -15,7 +15,6 @@ import { ProduccionService } from './produccion.service';
 import { UpsertEstacionDto } from './dto/upsert-estacion.dto';
 import { CrearDiaNoLaborableDto } from './dto/crear-dia-no-laborable.dto';
 import { ActualizarConfiguracionProduccionDto } from './dto/actualizar-configuracion-produccion.dto';
-import { SimularNestingDto } from './dto/simular-nesting.dto';
 import { Permiso } from '../auth/permiso.decorator';
 
 @Permiso('produccion.ver')
@@ -48,31 +47,6 @@ export class ProduccionController {
   @Get('duraciones-familias')
   findDuracionesFamilias(@CurrentSession() auth: CurrentAuth) {
     return this.service.findDuracionesFamilias(auth.tenantId);
-  }
-
-  /**
-   * Re-acomodo de la tanda con el MOTOR real, por ancho de rollo candidato.
-   * El simulador no tiene packer propio: acomoda con el mismo nesting que
-   * cotizó, para que el ahorro compare dos acomodos equivalentes.
-   */
-  @Post('simulador/nesting')
-  simuladorNesting(
-    @CurrentSession() auth: CurrentAuth,
-    @Body() dto: SimularNestingDto,
-  ) {
-    return this.service.simuladorNesting(auth, dto);
-  }
-
-  /** Cola real del simulador de impresión (por área, en frontera). */
-  @Get('simulador')
-  simulador(@CurrentSession() auth: CurrentAuth) {
-    return this.service.simulador(auth);
-  }
-
-  /** Cola real del simulador de impresión LÁSER (por hoja, en frontera). */
-  @Get('simulador-laser')
-  simuladorLaser(@CurrentSession() auth: CurrentAuth) {
-    return this.service.simuladorLaser(auth);
   }
 
   /**

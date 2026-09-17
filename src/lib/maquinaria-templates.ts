@@ -61,18 +61,6 @@ const carasOptions = [
   option("DOBLE_FAZ", "Doble faz"),
 ];
 
-const modoDobleFazOptions = [
-  option("NO_APLICA", "No aplica"),
-  option("AUTOMATICO", "Automático"),
-  option("MANUAL_DOS_PASADAS", "Manual (dos pasadas)"),
-];
-
-const origenProductividadOptions = [
-  option("FABRICANTE", "Fabricante"),
-  option("ESTIMACION_GRAFOPRINT", "Estimación Grafoprint"),
-  option("CALIBRADO_TALLER", "Calibrado por el taller"),
-];
-
 const tecnologiaGranFormatoOptions = [
   option("LATEX", "Látex"),
   option("SOLVENTE", "Solvente"),
@@ -366,15 +354,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
             "Caras impresas por minuto equivalentes a una página A4. Usá la velocidad A4 publicada por el fabricante.",
         }),
         field({
-          key: "origenProductividad",
-          label: "Origen PPM",
-          scope: "perfil_operativo",
-          kind: "select",
-          options: origenProductividadOptions,
-          description:
-            "Distingue un dato publicado, una estimación inicial de Grafoprint o una calibración del taller.",
-        }),
-        field({
           key: "setupMin",
           label: "Setup",
           scope: "perfil_operativo",
@@ -401,15 +380,6 @@ function buildLaserSections(): MaquinariaTemplateSection[] {
           required: true,
           options: carasOptions,
           description: "Discriminante: simple o doble faz.",
-        }),
-        field({
-          key: "modoDobleFaz",
-          label: "Modo doble faz",
-          scope: "perfil_operativo",
-          kind: "select",
-          options: modoDobleFazOptions,
-          description:
-            "Indica si el pliego se gira automáticamente o se reinserta para imprimir la segunda cara.",
         }),
         field({
           key: "colores",
@@ -1177,13 +1147,34 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
         }),
         field({
           key: "largoUtil",
-          label: "Largo de mesa",
+          label: "Fondo útil (eje Y)",
           scope: "maquina",
           kind: "number",
           unit: "mm",
           required: true,
-          placeholder: "2500",
-          description: "Largo útil de la mesa (ej. 2500mm).",
+          placeholder: "1000",
+          description:
+            "Recorrido útil de adelante hacia atrás, eje Y en vista superior.",
+        }),
+        field({
+          key: "placaSobresalientePermitida",
+          label: "Permite placas sobresalientes",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "La placa puede ser mayor que la cama en un eje y quedar parcialmente fuera. El nesting sólo utilizará la zona alcanzable por el cabezal.",
+        }),
+        field({
+          key: "ejeSobresalientePlaca",
+          label: "Eje abierto para el excedente",
+          scope: "maquina",
+          kind: "select",
+          options: [
+            option("X", "Eje X · lateral"),
+            option("Y", "Eje Y · frente/fondo"),
+          ],
+          description:
+            "Indica hacia qué eje puede continuar físicamente la placa fuera de la cama.",
         }),
         field({
           key: "espesorMaximo",
@@ -1200,6 +1191,42 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           kind: "textarea",
           description:
             "Borde de la placa que el cabezal no puede usar en cada lado; el nesting descuenta estos márgenes del área útil.",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Optimización de corte",
+      description:
+        "Permite compartir una única trayectoria entre bordes rectos compatibles.",
+      fields: [
+        field({
+          key: "commonLineHabilitado",
+          label: "Admite líneas de corte compartidas",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "Declara que la máquina puede ejecutar Common Line. Cada paso decide si desea utilizarlo.",
+        }),
+        field({
+          key: "commonLineLongitudMinimaMm",
+          label: "Longitud mínima compartida",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "20",
+          description:
+            "Evita compartir segmentos demasiado cortos, donde la entrada y la precisión no compensan el ahorro.",
+        }),
+        field({
+          key: "commonLineToleranciaMm",
+          label: "Tolerancia geométrica",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "0,1",
+          description:
+            "Máxima diferencia admitida al comparar longitudes, paralelismo y coincidencia de extremos.",
         }),
       ],
     }),
@@ -1256,6 +1283,16 @@ function buildCorteLaserSections(): MaquinariaTemplateSection[] {
           placeholder: "33",
           description:
             "Velocidad de recorrido en mm/s. Referencia CO2: acrílico 3mm ~125, 5mm ~33, 10mm ~8; grabado ~400.",
+        }),
+        field({
+          key: "anchoCorteMm",
+          label: "Ancho efectivo de corte",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          placeholder: "0,2",
+          description:
+            "Kerf real de este material y espesor. GrafoNest lo usa para ubicar la trayectoria compartida sin alterar la medida terminada.",
         }),
         field({
           key: "setupMin",
@@ -1316,6 +1353,38 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
           kind: "textarea",
           description:
             "Borde de la placa que la fresa no puede usar en cada lado (clamps, sacrificio); el nesting descuenta estos márgenes del área útil.",
+        }),
+      ],
+    }),
+    section({
+      id: "parametros_tecnicos",
+      title: "Optimización de corte",
+      description:
+        "Permite compartir una única trayectoria entre bordes rectos compatibles.",
+      fields: [
+        field({
+          key: "commonLineHabilitado",
+          label: "Admite líneas de corte compartidas",
+          scope: "maquina",
+          kind: "boolean",
+          description:
+            "Declara que la máquina puede ejecutar Common Line. Cada paso decide si desea utilizarlo.",
+        }),
+        field({
+          key: "commonLineLongitudMinimaMm",
+          label: "Longitud mínima compartida",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "20",
+        }),
+        field({
+          key: "commonLineToleranciaMm",
+          label: "Tolerancia geométrica",
+          scope: "maquina",
+          kind: "number",
+          unit: "mm",
+          placeholder: "0,1",
         }),
       ],
     }),
@@ -1381,6 +1450,16 @@ function buildRouterCncSections(): MaquinariaTemplateSection[] {
           placeholder: "1700",
           description:
             "Feed rate de recorrido en mm/min. Referencia: MDF 3mm ~1700, 9mm ~500, 18mm ~170; grabado ~16000.",
+        }),
+        field({
+          key: "anchoCorteMm",
+          label: "Ancho efectivo de corte",
+          scope: "perfil_operativo",
+          kind: "number",
+          unit: "mm",
+          placeholder: "6",
+          description:
+            "Diámetro efectivo de la fresa para esta operación. GrafoNest lo usa como ancho físico del corte compartido.",
         }),
         field({
           key: "setupMin",
@@ -1475,12 +1554,12 @@ function buildCorteHiloCalienteSections(): MaquinariaTemplateSection[] {
           options: [
             option(
               "preserve-original-if-fits",
-              "Conservar la composición original",
+              "Conservar la composición original (sin optimizar)",
               "Mantiene posiciones y orientación para usar el negativo como molde.",
             ),
             option(
               "optimize-material",
-              "Optimizar el uso del material",
+              "Optimizar el material con GrafoNest",
               "Reacomoda las piezas para ocupar el menor espacio posible.",
             ),
           ],
@@ -1727,7 +1806,7 @@ function buildAnilladoraSections(): MaquinariaTemplateSection[] {
   ];
 }
 
-/** Plantilla provisional MESA_DE_CORTE — postergada (doc §15). */
+/** Capacidades comunes; herramientas y recetas se configuran en el editor dedicado. */
 function buildMesaCorteSections(): MaquinariaTemplateSection[] {
   return [
     section({
@@ -2288,7 +2367,7 @@ export const maquinariaTemplates: MaquinariaTemplateDefinition[] = [
     sections: buildMesaCorteSections(),
     help: {
       summary:
-        "Plantilla provisional (doc §15: postergada — evaluar si CORTE_LASER + PLOTTER cubren los casos).",
+        "Mesa digital con herramientas intercambiables. Permite cotizar corte completo, corte parcial e hendido desde los recorridos del producto.",
       tips: ["Configurá perfiles por herramienta y material."],
       examples: ["Mesa Zünd, Esko Kongsberg"],
     },

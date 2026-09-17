@@ -1,0 +1,479 @@
+.page {
+  --config-accent: #c83b0a;
+  --config-border: #e3ded8;
+  --config-muted: #74706c;
+  gap: 18px;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 22px 24px;
+  border: 1px solid #e6dfd8;
+  border-radius: 16px;
+  background: linear-gradient(110deg, #fff 55%, #fff3ec);
+}
+
+.headerIcon {
+  display: grid;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid #ffd9c5;
+  border-radius: 13px;
+  color: #e24c12;
+  background: #fff3eb;
+}
+.headerIcon svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 1.65;
+}
+.headerCopy {
+  min-width: 0;
+  flex: 1;
+}
+.eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: #bc400e;
+  font: 600 9px/1.4 var(--font-mono, monospace);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.header h1 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  color: #19191e;
+}
+.description {
+  margin-top: 6px;
+  max-width: 85ch;
+  color: #74706c;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.headerNavigation,
+.headerActions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.page :global(.card) {
+  border-color: var(--config-border);
+  border-radius: 14px;
+  box-shadow: none;
+}
+.page :global(.tbl) {
+  font-size: 12px;
+}
+.page :global(.tbl) thead th {
+  height: 42px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--config-border);
+  background: #f4f1ed;
+  color: #77716b;
+  font: 500 9px/1.5 var(--font-mono, monospace);
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+.page :global(.tbl) td {
+  padding: 10px 14px;
+  border-color: #eeeae5;
+}
+.page :global(.tbl) tbody tr:hover {
+  background: #fffaf6;
+}
+.page :global(.tbl) td:first-child {
+  font-weight: 550;
+}
+.page :global(.search-card-head) {
+  padding: 14px 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom-color: var(--config-border);
+  background: #fff;
+}
+.page :global(.search-inline) {
+  min-width: 180px;
+}
+
+/* El portal necesita su propio ámbito: no hereda la página que lo abre. */
+.centroSheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  height: calc(100dvh - 24px);
+  width: min(1080px, calc(100vw - 24px));
+  max-width: none;
+  overflow: hidden;
+  border: 1px solid #e6dfd8;
+  border-top: 4px solid #f56628;
+  border-radius: 18px;
+  background: #f8f6f3;
+  box-shadow: 0 24px 80px #17120f33;
+}
+.centroSheet > :global([data-slot="sheet-header"]) {
+  flex: none;
+  gap: 6px;
+  padding: 22px 62px 20px 24px;
+  border-bottom: 1px solid #e6dfd8;
+  background: linear-gradient(110deg, #fff, #fff4ed);
+}
+.centroSheet :global([data-slot="sheet-title"]) {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.centroSheet :global([data-slot="sheet-description"]) {
+  max-width: 75ch;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #746e68;
+}
+.centroSheet :global([data-slot="tabs-list"]) {
+  height: auto;
+  gap: 20px;
+  padding: 0;
+}
+.centroSheet :global([data-slot="tabs-trigger"]) {
+  padding: 12px 0;
+  font-size: 12px;
+}
+.centroSheet :global([data-slot="tabs-trigger"][data-active]) {
+  color: #c83b0a;
+}
+.centroSheet :global([data-slot="tabs-trigger"])::after {
+  background: #e75920;
+}
+.centroSheet :global(input:focus-visible) {
+  outline: 2px solid #ed8d5b;
+  outline-offset: 2px;
+}
+.centroSheet :global([data-slot="sheet-close"]) {
+  top: 18px;
+  right: 18px;
+  border: 1px solid #e6dfd8;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.editorSheet {
+  composes: centroSheet;
+  width: min(760px, calc(100vw - 24px));
+}
+.editorSheet > :global([data-slot="sheet-footer"]) {
+  flex: none;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid #e3ded8;
+  background: #fff;
+}
+.sheetBody {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
+}
+
+.modal:global(.gp-modal) > :global([data-slot="dialog-header"])::before,
+.modal:global(.gp-modal) > form > :global([data-slot="dialog-header"])::before {
+  content: "GRAFOPRINT · MAQUINARIA";
+}
+.modalForm {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal :global([data-slot="field-group"]) {
+  gap: 20px;
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 16px;
+  }
+  .header {
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 18px 16px;
+  }
+  .headerIcon {
+    flex-basis: 38px;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+  .header h1 {
+    font-size: 21px;
+  }
+  .headerCopy {
+    flex-basis: calc(100% - 54px);
+  }
+  .headerNavigation {
+    width: 100%;
+  }
+  .headerActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+  .centroSheet {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .centroSheet > :global([data-slot="sheet-header"]) {
+    padding: 20px 50px 16px 16px;
+  }
+}
+
+/* Editor operativo compartido: migrado desde globals.css. */
+
+.operationalEditor :global(.paso-config-workspace) {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.operationalEditor :global(.paso-config-intro) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 2px 2px 4px;
+}
+
+.operationalEditor :global(.paso-config-intro > div:first-child > span) {
+  color: #d85224;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.operationalEditor :global(.paso-config-intro h2) {
+  margin: 5px 0 3px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.operationalEditor :global(.paso-config-intro p) {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.operationalEditor :global(.paso-config-legend) {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 3px;
+  color: var(--muted-text);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.operationalEditor :global(.paso-config-legend span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.operationalEditor :global(.paso-config-legend i) {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d9aa56;
+  box-shadow: 0 0 0 3px rgb(217 170 86 / 14%);
+}
+
+.operationalEditor :global(.paso-config-legend i[data-tone="ready"]) {
+  background: #22a06b;
+  box-shadow: 0 0 0 3px rgb(34 160 107 / 12%);
+}
+
+.operationalEditor :global(.paso-config-flow) {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 16px;
+  counter-reset: paso-config-section;
+}
+
+.operationalEditor :global(.eje-guiado.is-fixed) {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid #ded9d2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgb(30 23 18 / 4%);
+  counter-increment: paso-config-section;
+}
+
+.operationalEditor :global(.eje-guiado.is-fixed.has-pending) {
+  border-color: color-mix(in srgb, #d89b35 54%, #ded9d2);
+  box-shadow:
+    inset 3px 0 0 #dfa331,
+    0 10px 28px rgb(30 23 18 / 4%);
+}
+
+.operationalEditor :global(.eje-guiado.is-fixed .eje-guiado-head) {
+  align-items: center !important;
+  padding: 17px 20px !important;
+  border-bottom: 1px solid #ebe7e1;
+  background: linear-gradient(105deg, #f7f5f2, #fff 54%);
+}
+
+.operationalEditor :global(.eje-guiado-title) {
+  gap: 9px !important;
+  color: var(--ink);
+  font-size: 15.5px !important;
+  font-weight: 690 !important;
+}
+
+.operationalEditor :global(.eje-guiado.is-fixed .eje-guiado-title::before) {
+  display: inline-flex;
+  width: 27px;
+  flex: 0 0 27px;
+  justify-content: center;
+  color: #9a9189;
+  font: 760 10px var(--font-mono);
+  letter-spacing: 0.07em;
+  content: counter(paso-config-section, decimal-leading-zero);
+}
+
+.operationalEditor :global(.eje-guiado-check) {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.operationalEditor :global(.eje-guiado-subtitle) {
+  max-width: 760px !important;
+  margin-top: 3px !important;
+  margin-left: 56px !important;
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+.operationalEditor :global(.eje-guiado-content) {
+  gap: 18px !important;
+  padding: 20px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+}
+
+.operationalEditor :global(.eje-guiado-content label) {
+  color: #4b4541 !important;
+  font-size: 11.5px !important;
+  font-weight: 620 !important;
+}
+
+.operationalEditor :global(.eje-guiado-content input),
+.operationalEditor :global(.eje-guiado-content select),
+.operationalEditor :global(.eje-guiado-content [data-slot="select-trigger"]) {
+  min-height: 40px;
+  border-color: #ded8d1;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.operationalEditor :global(.paso-config-group-head) {
+  margin-top: 2px;
+  padding: 17px 18px 12px !important;
+  border: 1px solid #ded9d2;
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(105deg, #f7f5f2, #fff 54%);
+}
+
+.operationalEditor
+  :global(.paso-config-group-head + div[style*="overflow: hidden"]) {
+  margin-top: -16px;
+  border-color: #ded9d2 !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: 0 10px 28px rgb(30 23 18 / 4%);
+}
+
+.operationalEditor :global(.paso-config-savebar) {
+  bottom: 0;
+  width: calc(100% + 64px);
+  justify-content: flex-end;
+  margin: 24px -32px 0;
+  padding: 13px 36px;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: rgb(250 249 247 / 94%);
+  box-shadow: 0 -10px 30px rgb(28 20 15 / 7%);
+  backdrop-filter: blur(14px);
+}
+
+.operationalEditor :global(.paso-config-savebar .btn-primary) {
+  min-height: 40px;
+  padding-inline: 17px;
+  border-radius: 10px;
+  background: #1b191d;
+  box-shadow: 0 7px 18px rgb(23 20 23 / 16%);
+}
+
+@media (max-width: 760px) {
+  .operationalEditor :global(.paso-config-intro) {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .operationalEditor :global(.paso-config-legend) {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 760px) {
+  .operationalEditor :global(.eje-guiado-content) {
+    padding: 16px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .operationalEditor :global(.eje-guiado-subtitle) {
+    margin-left: 0 !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .operationalEditor :global(.paso-config-savebar) {
+    width: calc(100% + 32px);
+    margin-right: -16px;
+    margin-left: -16px;
+    padding: 11px 16px;
+  }
+}

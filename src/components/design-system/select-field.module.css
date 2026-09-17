@@ -1,0 +1,17 @@
+/* La clase .select del proveedor coincide con un control legado global. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.root:hover {
+  border: 0;
+  background: transparent;
+}

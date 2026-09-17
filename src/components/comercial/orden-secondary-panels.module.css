@@ -1,0 +1,88 @@
+/* Alcance local de las secciones aún compartidas con administración/producción. */
+.scope :global(.arc-page) {
+  --info: var(--muted-text);
+  --info-bg: var(--surface-secondary);
+}
+.scope :global(.otd-card),
+.scope :global(.otc-card),
+.scope :global(.pk),
+.scope :global(.otc-kpi),
+.scope :global(.orden-tab-empty) {
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+.scope :global(.otc-card) {
+  padding: 22px;
+}
+.scope :global(.otc-ttl),
+.scope :global(.otd-card-head .ttl) {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.scope :global(.pagos-tab .pk .pk-l),
+.scope :global(.otc-kpi-lbl) {
+  font: 400 10px/1.5 var(--brand-mono);
+  letter-spacing: 0.04em;
+}
+.scope :global(.pagos-tab .pk .pk-v),
+.scope :global(.otc-kpi-val) {
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.scope :global(.arc-variant-note) {
+  color: var(--muted-text);
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  border-radius: var(--radius);
+}
+.scope :global(.btn) {
+  border-radius: var(--action-radius);
+  box-shadow: none;
+  font-family: inherit;
+  font-weight: 500;
+}
+.scope :global(.btn-primary) {
+  color: var(--action-primary-foreground);
+  background: var(--action-primary-gradient);
+  border-color: transparent;
+}
+.scope :global(.orden-tab-empty) {
+  padding: 48px 24px;
+}
+.scope :global(.orden-tab-empty .ttl) {
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+@container orden-content (max-width: 560px) {
+  .scope :global(.pagos-kpis) {
+    grid-template-columns: 1fr;
+  }
+  .scope :global(.otc-card) {
+    padding: 16px;
+  }
+  .scope :global(.otd-card-head) {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+
+.scope :global(.arc-card) {
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+.scope :global(.arc-money input) {
+  font-family: inherit;
+  font-weight: 500;
+}
+@container orden-content (max-width: 900px) {
+  .scope :global(.arc-grid) {
+    grid-template-columns: 1fr;
+  }
+}
