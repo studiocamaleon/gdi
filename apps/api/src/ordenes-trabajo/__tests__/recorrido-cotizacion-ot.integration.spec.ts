@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { MotorUniversalService } from '../../motor-universal/motor.service';
@@ -21,6 +22,8 @@ describe('cotización → emisión → ejecución completa (PostgreSQL)', () => 
           const tenant = await tx.tenant.findUniqueOrThrow({
             where: { slug: 'gdi-demo' },
           });
+          // La transacción revierte también la unidad declarada del seed histórico.
+          await declararUnidadPrecioFixture(tx, tenant.id);
           const user = await tx.user.findFirstOrThrow();
           const cliente = await tx.cliente.create({
             data: {

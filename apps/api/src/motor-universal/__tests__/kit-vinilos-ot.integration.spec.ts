@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { ProductosService } from '../../productos-servicios/productos.service';
 import { ProductoValidacionService } from '../../productos-servicios/producto-validacion.service';
@@ -41,6 +42,8 @@ describe('Kit de Vinilos: receta publicada → motor → OT (PostgreSQL)', () =>
           const { id: tenantId } = await tx.tenant.findUniqueOrThrow({
             where: { slug: 'gdi-demo' },
           });
+          // La transacción revierte también la unidad declarada del seed histórico.
+          await declararUnidadPrecioFixture(tx, tenantId);
           const user = await tx.user.findFirstOrThrow();
           const auth = {
             tenantId,

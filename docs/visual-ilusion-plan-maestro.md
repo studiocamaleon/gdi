@@ -3,7 +3,7 @@
 **Caso de referencia:** Visual Ilusión  
 **Estado:** Plan rector de implementación  
 **Versión inicial:** 1.0 — 29 de agosto de 2026  
-**Rama integradora:** `visual-ilusion/analisis`  
+**Rama integradora:** `main` ([hito de integración del 17/09/2026](integracion-main-2026-09-17.md))
 **Documento de diagnóstico:** `docs/visual-ilusion-analisis-readiness.md`  
 **Contrato visual vigente para vistas renovadas:** [Sistema visual Shadcn](sistema-visual-shadcn.md), aprobado el 11/09/2026. El [contrato anterior](visual-ilusion-lenguaje-visual.md) queda como referencia histórica de vistas no migradas.
 **Punto de restauración previo:** `/Users/lucasgomez/gdi-saas-backups/visual-ilusion-pre-plan-20260829-181912--03`
@@ -201,18 +201,23 @@ Los nombres definitivos se resolverán en los diseños de fase. El diagrama fija
 
 ### Rama integradora
 
-`visual-ilusion/analisis` será la rama de integración del programa hasta que el conjunto sea funcional y aceptado. No se fusionará a `main` por el mero cierre de una fase.
+Por decisión del usuario del 17/09/2026, el trabajo acumulado de
+`visual-ilusion/analisis` se consolida en `main`, que pasa a ser la base estable
+para las siguientes mejoras y fases. Esta decisión sustituye la estrategia
+inicial de mantener una rama integradora durante todo el programa.
+
+La integración de este hito no cierra las fases pendientes: se conservan sus
+estados, alcance y trabajos diferidos en este documento. Cada nueva integración
+requiere validar su funcionamiento y la compatibilidad del conjunto.
 
 ### Ramas de fase
 
-Cada fase nace desde la rama integradora actualizada:
+Cada fase o mejora nace desde `main` actualizado:
 
 ```text
-visual-ilusion/analisis
-  ├── visual-ilusion/fase-1-campanas
-  ├── visual-ilusion/fase-2-arte-aprobaciones
-  ├── visual-ilusion/fase-2-5-tiempo-real-notificaciones
-  ├── visual-ilusion/fase-3-recetas-bom
+main
+  ├── codex/fase-siguiente
+  ├── codex/mejora-independiente
   └── ...
 ```
 
@@ -220,9 +225,15 @@ Al finalizar una fase:
 
 1. se valida su Definition of Done;
 2. se actualiza este documento con estado y evidencia;
-3. se integra en `visual-ilusion/analisis`;
+3. se integra en `main`;
 4. se ejecuta la regresión acumulada;
-5. la fase siguiente nace desde esa integración.
+5. la fase siguiente nace desde `main` actualizado;
+6. se elimina la rama integrada, conservando sus commits en la historia de `main`.
+
+Excepción de limpieza acordada el 17/09/2026: `codex/grafo3d` se conserva local
+y remotamente porque contiene trabajo independiente todavía no integrado.
+Las ramas de la tabla histórica de ejecución identifican dónde se desarrolló
+cada fase; su eliminación posterior no borra la evidencia ni los commits.
 
 ### Regla de commits
 

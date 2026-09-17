@@ -2,7 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 
 /** Los fixtures anteriores a compra/uso cotizaban sus precios por unidad de uso. */
 export async function declararUnidadPrecioFixture(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'materiaPrimaVariante'>,
   tenantId: string,
 ) {
   const pendientes = await prisma.materiaPrimaVariante.findMany({

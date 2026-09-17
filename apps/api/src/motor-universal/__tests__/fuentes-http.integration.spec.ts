@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 import { randomUUID } from 'node:crypto';
 import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -40,6 +41,8 @@ describe('fuentes grandes por HTTP y persistencia real', () => {
           const { id: tenantId } = await tx.tenant.findUniqueOrThrow({
             where: { slug: 'gdi-demo' },
           });
+          // La transacción revierte también la unidad declarada del seed histórico.
+          await declararUnidadPrecioFixture(tx, tenantId);
           const producto = await tx.producto.findFirstOrThrow({
             where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
           });

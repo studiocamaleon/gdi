@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Centro de copiado NO cobra setup de máquina (decisión de negocio: se busca
  * volumen y precio por hoja claro). Se verifica de forma ESTRUCTURAL: TODA
@@ -13,6 +14,7 @@ import { PreciosEspecialesClientesService } from '../../productos-servicios/prec
 import { CentroCopiadoService } from '../centro-copiado.service';
 
 const prisma = new PrismaClient();
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 let tenantId: string;
 let service: CentroCopiadoService;
@@ -37,6 +39,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   const motor = new MotorUniversalService(
     prisma as never,
@@ -54,6 +57,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 

@@ -1,3 +1,4 @@
+import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Etapa F — E2E backend del camino de staging del modal:
  *   construir-items (payload del modal)
@@ -14,6 +15,7 @@ import { PreciosEspecialesClientesService } from '../../productos-servicios/prec
 import { CentroCopiadoService } from '../centro-copiado.service';
 
 const prisma = new PrismaClient();
+let restaurarUnidades: (() => Promise<void>) | undefined;
 
 let tenantId: string;
 let motor: MotorUniversalService;
@@ -26,6 +28,7 @@ beforeAll(async () => {
   });
   tenantId = tenant?.id ?? '';
   if (!tenantId) return;
+  restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
   motor = new MotorUniversalService(
     prisma as never,
@@ -43,6 +46,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await restaurarUnidades?.();
   await prisma.$disconnect();
 });
 
