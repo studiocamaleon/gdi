@@ -172,6 +172,91 @@ describe('envíos de documentos de una OT', () => {
       expect(f.leer).not.toHaveBeenCalled();
     },
   );
+  it('extrae únicamente los rangos cotizados y conserva orden, copias y auditoría', async () => {
+    const f = await fixture();
+    const original = await PDFDocument.create();
+    // Anchos distintos permiten verificar la identidad de cada página extraída.
+    for (let n = 1; n <= 20; n++) original.addPage([500 + n, 842]);
+    const bytes = Buffer.from(await original.save());
+    f.leer.mockResolvedValue(bytes);
+    f.orden.items[0].archivos[0].bytes = BigInt(bytes.length);
+    f.orden.items[0].jobContextSnapshotJson = job({
+      ...meta,
+      paginas: 13,
+      paginasOriginales: 20,
+      rangoPaginas: '1-7,9,12-16',
+      archivoNombre: 'original.pdf',
+      hojas: 14,
+    });
+    const r = await f.preparar();
+    const resultado = await PDFDocument.load(
+      Buffer.from(r.params.data[0].data, 'base64'),
+    );
+    expect(resultado.getPages().map((p) => p.getWidth() - 500)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 9, 12, 13, 14, 15, 16,
+    ]);
+    expect(r.params.options).toMatchObject({ copies: 2, duplex: 'long-edge' });
+    expect(r.intento).toMatchObject({
+      paginas: 13,
+      hojas: 14,
+      seleccionPaginas: [
+        { nombre: 'original.pdf', rango: '1-7,9,12-16', paginasOriginales: 20 },
+      ],
+    });
+  });
+  it('separa los segmentos impares de un tomo después de aplicar sus rangos', async () => {
+    const f = await fixture();
+    const item = f.orden.items[0];
+    item.archivos.push({
+      ...item.archivos[0],
+      id: 'archivo-2',
+      nombreOriginal: 'segundo.pdf',
+      key: 'tenant-a/segundo.pdf',
+    });
+    item.jobContextSnapshotJson = job({
+      esTomo: true,
+      tomoNombre: 'Tomo',
+      juegos: 2,
+      hojas: 6,
+      segmentos: [
+        { ...meta, archivoNombre: 'original.pdf' },
+        {
+          ...meta,
+          archivoNombre: 'segundo.pdf',
+          paginas: 1,
+          paginasOriginales: 3,
+          rangoPaginas: '2',
+        },
+      ],
+    });
+    const r = await f.preparar();
+    const resultado = await PDFDocument.load(
+      Buffer.from(r.params.data[0].data, 'base64'),
+    );
+    expect(resultado.getPageCount()).toBe(6); // 3+blanco, 1+blanco, por juego
+    expect(r.params.options.copies).toBe(2);
+    expect(r.intento.hojas).toBe(6);
+  });
+  it.each([
+    { paginas: 2, paginasOriginales: 3, rangoPaginas: '1-3' },
+    { paginas: 2, paginasOriginales: 3, rangoPaginas: '1,4' },
+    { paginas: 2, paginasOriginales: undefined, rangoPaginas: '1,3' },
+    { paginas: 3, paginasOriginales: 3, rangoPaginas: [1, 3] },
+  ])(
+    'no firma ni lee archivos cuando el rango guardado es inconsistente: %o',
+    async (seleccion) => {
+      const f = await fixture();
+      f.orden.items[0].jobContextSnapshotJson = job({
+        ...meta,
+        ...seleccion,
+        archivoNombre: 'original.pdf',
+        hojas: 2,
+      });
+      await expect(f.preparar()).rejects.toThrow();
+      expect(f.leer).not.toHaveBeenCalled();
+      expect(f.firmar).not.toHaveBeenCalled();
+    },
+  );
   it('rechaza un tenant ajeno antes de leer/firmar', async () => {
     const f = await fixture();
     f.buscarOrden.mockResolvedValue(null);

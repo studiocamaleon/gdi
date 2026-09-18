@@ -77,7 +77,15 @@ Secuencia de prueba: una copia simple faz (2 hojas), una copia doble faz (1 hoja
 
 ### Alcance
 
-PDF A4 B/N, simple o doble faz por borde largo, hasta 25 MB de originales por ítem, 2.000 páginas por original y 999 copias. Se validan páginas reales contra el snapshot. Los tomos con mismo papel/gramaje/faz se unen en orden, insertando un dorso vacío después de originales impares. Un tomo mixto o producto distribuido en entregas requiere impresión manual. El papel se prepara en la Ricoh; esta versión no selecciona bandejas por gramaje ni ejecuta terminaciones.
+PDF A4 B/N, simple o doble faz por borde largo, hasta 25 MB de originales por ítem, 2.000 páginas seleccionadas por documento y 999 copias. Se validan páginas reales contra el snapshot. Los tomos con mismo papel/gramaje/faz se unen en orden, insertando un dorso vacío después de segmentos con una cantidad impar de páginas seleccionadas. Un tomo mixto o producto distribuido en entregas requiere impresión manual. El papel se prepara en la Ricoh; esta versión no selecciona bandejas por gramaje ni ejecuta terminaciones.
+
+### Rangos de páginas del Centro de copiado
+
+- Cada archivo asociado permite seleccionar páginas por posición en el original, desde 1: `1-7,9,12-16`. Vacío significa todas. Se ordenan y se eliminan repeticiones; un rango invertido, incompleto o fuera del original bloquea la cotización.
+- `paginas` guarda la cantidad efectiva; `paginasOriginales` conserva el total del archivo y `rangoPaginas` la selección normalizada. Se guardan también en cada segmento de un tomo y se recuperan al editar la carga. Los originales adjuntos se conservan completos.
+- Cotización, consumo de papel y terminaciones usan las páginas seleccionadas. Ejemplo: 13 páginas × 2 copias a doble faz = 26 carillas, 14 hojas físicas. Cada documento/copia empieza en un frente.
+- Al preparar la impresión, el servidor verifica el total real del original, extrae las páginas seleccionadas y firma ese PDF. La cantidad de copias y la faz provienen del snapshot. Los rangos quedan en el registro de envío y se muestran en el modal de impresión.
+- Los trabajos anteriores sin rangos mantienen su comportamiento. Word y Excel permiten cotizar una selección ingresando su cantidad de páginas; la impresión directa por QZ sigue requiriendo PDF.
 
 Se corrigió el cómputo de doble faz impar: `ceil(páginas / faz) × copias`. Por ejemplo, 3 páginas × 2 copias a doble faz = 4 hojas. Las cotizaciones históricas que guardaron 3 hojas deben recotizarse antes de usar impresión directa.
 

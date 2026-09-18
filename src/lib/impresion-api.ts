@@ -98,6 +98,11 @@ export type DocumentoOrden = {
   motivo: string | null;
   archivos: string[];
   documentos: number;
+  seleccionPaginas?: Array<{
+    nombre: string;
+    rango: string;
+    paginasOriginales: number;
+  }>;
 };
 export type VistaDocumentos = {
   ordenId: string;

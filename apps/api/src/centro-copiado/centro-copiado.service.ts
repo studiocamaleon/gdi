@@ -1,5 +1,9 @@
 import { monedaCotizacionContext } from '../cotizaciones/material-moneda-context';
 import {
+  errorPaginasDocumento,
+  metadataRangoPaginas,
+} from '../common/rangos-paginas';
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -1332,6 +1336,10 @@ export class CentroCopiadoService {
     if (errorEstructura) throw new BadRequestException(errorEstructura);
 
     for (const doc of dto.documentos) {
+      const errorPaginas = errorPaginasDocumento(doc);
+      if (errorPaginas) {
+        throw new BadRequestException(`${doc.nombre ?? doc.id}: ${errorPaginas}`);
+      }
       const formato = CENTRO_COPIADO_FORMATOS.find(
         (candidato) => candidato.nombre === doc.tamano,
       );
@@ -2202,6 +2210,9 @@ export class CentroCopiadoService {
       Color: doc.color === 'COLOR' ? 'Color' : 'Blanco y negro',
       Faz: doc.faz === 2 ? 'Doble faz (2 caras)' : 'Simple faz (1 cara)',
       Páginas: String(doc.paginas),
+      ...(doc.rangoPaginas?.trim()
+        ? { 'Páginas seleccionadas': metadataRangoPaginas(doc).rangoPaginas! }
+        : {}),
       Copias: String(copias),
       // "Carillas" (= páginas × copias) es redundante con Páginas/Copias; se
       // muestra "Hojas físicas" (lo que realmente se imprime).

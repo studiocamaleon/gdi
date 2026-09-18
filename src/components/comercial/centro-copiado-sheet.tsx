@@ -1,20 +1,31 @@
 "use client";
 import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
-import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { SelectField } from "@/components/design-system/select-field";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { Select, ListBox } from "@heroui/react";
+import { FileText, Upload, Plus, Trash2, Layers, Printer } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { resolverRangoPaginas } from "@/lib/rangos-paginas";
 
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
-import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
 import type { PropuestaItem } from "@/lib/propuestas";
 import {
   opcionesCentroCopiado,
@@ -32,7 +43,8 @@ import {
   NIVEL_COBERTURA_LABELS,
 } from "@/lib/cobertura-toner";
 import s from "./centro-copiado-sheet.module.css";
-import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
+import selectStyles from "@/components/design-system/select-field.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 
 /** Un tamaño resuelto en una fila: nombre + medidas (para el payload y el motor). */
 type TamanoFila = {
@@ -46,7 +58,8 @@ type DocRow = TamanoFila & {
   nombre: string;
   archivoNombre?: string;
   paginas: number;
-  /** true = las páginas las leyó el sistema del PDF (se marcan en verde). */
+  rangoPaginas: string;
+  /** true = las páginas las leyó el sistema del PDF y no son editables. */
   paginasAuto: boolean;
   papelMateriaPrimaId: string;
   gramaje: number | null;
@@ -96,6 +109,22 @@ const nextId = () => `d${++seqRow}-${Date.now().toString(36)}`;
 const fmt = (n: number) =>
   "$" + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 
+const seleccionDe = (doc: DocRow) =>
+  resolverRangoPaginas(doc.rangoPaginas, doc.paginas);
+const paginasParaCotizar = (doc: DocRow) => ({
+  paginas: seleccionDe(doc).paginas,
+  ...(doc.file || doc.archivoNombre ? { paginasOriginales: doc.paginas } : {}),
+  ...(doc.rangoPaginas.trim() ? { rangoPaginas: seleccionDe(doc).rango } : {}),
+});
+const OPCIONES_COLOR = [
+  { value: "BN", label: "B/N", icon: null },
+  { value: "COLOR", label: "Color", icon: null },
+];
+const OPCIONES_FAZ = [
+  { value: "1", label: "Simple", icon: null },
+  { value: "2", label: "Doble", icon: null },
+];
+
 /** Fallback de medidas por nombre (para rehidratar cargas viejas sin dims). */
 const CC_FALLBACK_DIMS: Record<string, { anchoMm: number; altoMm: number }> = {
   A4: { anchoMm: 210, altoMm: 297 },
@@ -111,7 +140,7 @@ const dimsPorNombre = (
 ): { anchoMm: number; altoMm: number } | null =>
   CC_FALLBACK_DIMS[nombre] ?? null;
 
-/** Select con estética del sistema (base-ui) para las listas de la fila. */
+/** Select con estética del sistema para las listas de la fila. */
 function SysSelect({
   value,
   onChange,
@@ -128,31 +157,16 @@ function SysSelect({
   ariaLabel?: string;
   triggerClassName?: string;
 }) {
-  const current = options.find((o) => o.value === value)?.label;
   return (
-    <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")}>
-      <SelectTrigger
-        aria-label={ariaLabel}
-        className={cn("h-8", triggerClassName)}
+    <div className={triggerClassName}>
+      <SelectField
+        aria-label={ariaLabel ?? placeholder}
         disabled={options.length === 0}
-      >
-        <span
-          className={cn(
-            "flex flex-1 truncate text-left",
-            !current && "text-muted-foreground",
-          )}
-        >
-          {current || placeholder}
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        value={value}
+        onChange={onChange}
+        options={options}
+      />
+    </div>
   );
 }
 
@@ -176,6 +190,8 @@ function SysMultiSelect({
   ariaLabel?: string;
   triggerClassName?: string;
 }) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const elegidas = options
     .filter((o) => values.includes(o.value))
     .map((o) => o.label);
@@ -186,37 +202,44 @@ function SysMultiSelect({
         ? elegidas.join(", ")
         : `${elegidas.length} terminaciones`;
   return (
-    <Select
-      multiple
-      value={values}
-      onValueChange={(v) => onChange((v as string[]) ?? [])}
-    >
-      <SelectTrigger
+    <div className={triggerClassName}>
+      <Select
+        selectionMode="multiple"
         aria-label={ariaLabel}
-        className={cn("h-8", triggerClassName)}
-        disabled={options.length === 0}
+        className={selectStyles.root}
+        fullWidth
+        isDisabled={options.length === 0}
+        value={values}
+        onChange={(v) => onChange(v.map(String))}
       >
-        <span
-          className={cn(
-            "flex flex-1 truncate text-left",
-            elegidas.length === 0 && "text-muted-foreground",
-          )}
-        >
-          {resumen}
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        <Select.Trigger className={focus.singleBorder}>
+          <Select.Value>{resumen}</Select.Value>
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover {...scope} className={theme}>
+          <ListBox>
+            {options.map((o) => (
+              <ListBox.Item key={o.value} id={o.value} textValue={o.label}>
+                {o.label}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    </div>
   );
 }
 
-export default function CentroCopiadoSheet({
+export default function CentroCopiadoSheet(props: Props) {
+  return (
+    <DesignSystemProvider theme="brand" appearance="light">
+      <CentroCopiadoContenido {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function CentroCopiadoContenido({
   open,
   onOpenChange,
   onAgregar,
@@ -225,8 +248,6 @@ export default function CentroCopiadoSheet({
 }: Props) {
   const { cotizarCentroCopiado, construirItemsCentroCopiado } =
     useMotorConTipoCambio();
-  const designScope = useDesignScope();
-  const designClass = useDesignTheme();
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
   // Tamaños que la config del tenant ofrece; null = todos los producibles.
   const [tamanosOfrecidos, setTamanosOfrecidos] = React.useState<
@@ -292,6 +313,8 @@ export default function CentroCopiadoSheet({
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [dragActive, setDragActive] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
+  const [cotizando, setCotizando] = React.useState(false);
+  const [leyendo, setLeyendo] = React.useState(false);
   const [confirmarSalida, setConfirmarSalida] = React.useState(false);
   const previewSeq = React.useRef(0);
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -343,16 +366,6 @@ export default function CentroCopiadoSheet({
     };
   }, [open]);
 
-  // Bloquear el scroll del fondo mientras el modal está abierto.
-  React.useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
   // Al cerrar, limpiar el estado (así reabrir para "agregar" empieza en blanco).
   React.useEffect(() => {
     if (open) return;
@@ -396,8 +409,11 @@ export default function CentroCopiadoSheet({
             id: nextId(),
             nombre: seg.nombre ?? "Documento",
             archivoNombre: seg.archivoNombre,
-            paginas: Number(seg.paginas) || 1,
-            paginasAuto: true,
+            paginas: Number(seg.paginasOriginales ?? seg.paginas) || 1,
+            rangoPaginas: seg.rangoPaginas ?? "",
+            paginasAuto: (seg.archivoNombre ?? seg.nombre ?? "")
+              .toLowerCase()
+              .endsWith(".pdf"),
             tamano: tn,
             tamanoAnchoMm: d.anchoMm,
             tamanoAltoMm: d.altoMm,
@@ -422,8 +438,11 @@ export default function CentroCopiadoSheet({
           id: nextId(),
           nombre: meta.nombre ?? it.varianteNombre ?? "Documento",
           archivoNombre: meta.archivoNombre,
-          paginas: Number(meta.paginas) || 1,
-          paginasAuto: true,
+          paginas: Number(meta.paginasOriginales ?? meta.paginas) || 1,
+          rangoPaginas: meta.rangoPaginas ?? "",
+          paginasAuto: (meta.archivoNombre ?? meta.nombre ?? "")
+            .toLowerCase()
+            .endsWith(".pdf"),
           tamano: tn,
           tamanoAnchoMm: d.anchoMm,
           tamanoAltoMm: d.altoMm,
@@ -446,26 +465,17 @@ export default function CentroCopiadoSheet({
 
   // Cerrar: si hay carga, confirmar para no perderla.
   const intentarCerrar = React.useCallback(() => {
+    if (guardando || leyendo) return;
     if (docs.length > 0) setConfirmarSalida(true);
     else onOpenChange(false);
-  }, [docs.length, onOpenChange]);
+  }, [docs.length, onOpenChange, guardando, leyendo]);
 
-  // Esc cierra el modal (con confirmación si hay carga).
+  // Invalida también requests en vuelo si un rango queda incompleto.
   React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !confirmarSalida && !guardando) {
-        e.preventDefault();
-        e.stopPropagation();
-        intentarCerrar();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, confirmarSalida, guardando, intentarCerrar]);
-
-  // Precio en vivo (debounce).
-  React.useEffect(() => {
+    const seq = ++previewSeq.current;
+    setPreview(null);
+    setPreviewError(null);
+    setCotizando(false);
     if (!open) return;
     if (docs.length === 0) {
       setPreview(null);
@@ -473,12 +483,14 @@ export default function CentroCopiadoSheet({
     }
     // No cotizar si alguna fila está incompleta (sin papel o sin páginas): las
     // manuales / no-PDF arrancan en 0 y las tiene que completar el usuario.
-    const listos = docs.every((d) => d.papelMateriaPrimaId && d.paginas >= 1);
+    const listos = docs.every(
+      (d) => d.papelMateriaPrimaId && !seleccionDe(d).error,
+    );
     if (!listos) {
       setPreview(null);
       return;
     }
-    const seq = ++previewSeq.current;
+    setCotizando(true);
     const handle = setTimeout(() => {
       void cotizarCentroCopiado({
         clienteId: clienteId || undefined,
@@ -486,7 +498,7 @@ export default function CentroCopiadoSheet({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
           archivoNombre: d.file?.name ?? d.archivoNombre,
-          paginas: d.paginas,
+          ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
           tamanoAnchoMm: d.tamanoAnchoMm,
@@ -519,6 +531,9 @@ export default function CentroCopiadoSheet({
           setPreviewError(
             e instanceof Error ? e.message : "No se pudo calcular el precio.",
           );
+        })
+        .finally(() => {
+          if (seq === previewSeq.current) setCotizando(false);
         });
     }, 350);
     return () => clearTimeout(handle);
@@ -539,6 +554,7 @@ export default function CentroCopiadoSheet({
           id: nextId(),
           nombre: n.nombre,
           paginas: n.paginas,
+          rangoPaginas: "",
           paginasAuto: n.paginasAuto,
           tamano: defaults.tamano,
           tamanoAnchoMm: defaults.tamanoAnchoMm,
@@ -561,29 +577,35 @@ export default function CentroCopiadoSheet({
 
   const onArchivos = React.useCallback(
     async (files: FileList | File[]) => {
-      // Sólo el PDF se auto-lee (páginas en verde); DOC/Excel quedan en 0 para
+      // Sólo el PDF se auto-lee; DOC/Excel quedan en 0 para
       // cargar a mano, pero el archivo igual queda asociado a la fila (para R2).
+      if (leyendo || guardando) return;
       const lista = Array.from(files);
-      const lecturas = await leerMedidasPdf(lista);
-      // leerMedidasPdf preserva el orden ⇒ lecturas[i] ↔ lista[i].
-      const nuevos = lecturas.map((l, i) =>
-        l.ok
-          ? {
-              nombre: l.archivoNombre,
-              paginas: l.paginas[0]?.totalPaginas ?? 1,
-              paginasAuto: true,
-              file: lista[i] ?? null,
-            }
-          : {
-              nombre: l.archivoNombre,
-              paginas: 0,
-              paginasAuto: false,
-              file: lista[i] ?? null,
-            },
-      );
-      agregarDocs(nuevos);
+      setLeyendo(true);
+      try {
+        const lecturas = await leerMedidasPdf(lista);
+        // leerMedidasPdf preserva el orden ⇒ lecturas[i] ↔ lista[i].
+        const nuevos = lecturas.map((l, i) =>
+          l.ok
+            ? {
+                nombre: l.archivoNombre,
+                paginas: l.paginas[0]?.totalPaginas ?? 1,
+                paginasAuto: true,
+                file: lista[i] ?? null,
+              }
+            : {
+                nombre: l.archivoNombre,
+                paginas: 0,
+                paginasAuto: false,
+                file: lista[i] ?? null,
+              },
+        );
+        agregarDocs(nuevos);
+      } finally {
+        setLeyendo(false);
+      }
     },
-    [agregarDocs],
+    [agregarDocs, leyendo, guardando],
   );
 
   const agregarFilaManual = React.useCallback(() => {
@@ -737,8 +759,11 @@ export default function CentroCopiadoSheet({
 
   const agregar = React.useCallback(async () => {
     if (docs.length === 0) return;
-    if (docs.some((d) => d.paginas < 1 || !d.papelMateriaPrimaId)) {
-      toast.error("Completá las páginas y el papel de todas las filas.");
+    if (guardando || leyendo) return;
+    if (docs.some((d) => seleccionDe(d).error || !d.papelMateriaPrimaId)) {
+      toast.error(
+        "Revisá las páginas, los rangos y el papel de todas las filas.",
+      );
       return;
     }
     setGuardando(true);
@@ -749,7 +774,7 @@ export default function CentroCopiadoSheet({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
           archivoNombre: d.file?.name ?? d.archivoNombre,
-          paginas: d.paginas,
+          ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
           tamanoAnchoMm: d.tamanoAnchoMm,
@@ -818,11 +843,26 @@ export default function CentroCopiadoSheet({
     onAgregar,
     onOpenChange,
     construirItemsCentroCopiado,
+    guardando,
+    leyendo,
   ]);
 
   if (!open) return null;
 
   const t = preview?.totales;
+  const cantidades = docs.reduce(
+    (total, doc) => {
+      const paginas = seleccionDe(doc).paginas;
+      const copias = doc.grupoId
+        ? (grupos[doc.grupoId]?.juegos ?? 1)
+        : doc.copias;
+      return {
+        carillas: total.carillas + paginas * copias,
+        hojas: total.hojas + Math.ceil(paginas / doc.faz) * copias,
+      };
+    },
+    { carillas: 0, hojas: 0 },
+  );
   const anilladoNeto = preview
     ? [
         ...preview.documentos.map((documento) => documento.anillado),
@@ -836,7 +876,7 @@ export default function CentroCopiadoSheet({
   const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto);
   // Filas incompletas: sin páginas (manuales / no-PDF sin cargar) o sin papel.
   const incompletos = docs.filter(
-    (d) => d.paginas < 1 || !d.papelMateriaPrimaId,
+    (d) => !!seleccionDe(d).error || !d.papelMateriaPrimaId,
   ).length;
   const tieneErroresCotizacion =
     !!previewError ||
@@ -853,6 +893,8 @@ export default function CentroCopiadoSheet({
   }));
 
   const renderCard = (d: DocRow, index: number, enGrupo: boolean) => {
+    const seleccion = seleccionDe(d);
+    const tieneArchivo = !!(d.file || d.archivoNombre);
     const tamanos = tamanosDe(d.papelMateriaPrimaId, d.gramaje);
     const tamanoOptions = tamanos.map((tm) => ({
       value: tm.nombre,
@@ -860,7 +902,11 @@ export default function CentroCopiadoSheet({
     }));
     const gramajes = gramajesDe(d.papelMateriaPrimaId);
     return (
-      <div key={d.id} className={`${s.card} ${enGrupo ? s.cardGrupo : ""}`}>
+      <section
+        aria-label={`Documento ${index + 1}`}
+        key={d.id}
+        className={cn(s.card, enGrupo && s.cardGrupo)}
+      >
         <div className={s.cardTop}>
           {!enGrupo && (
             <input
@@ -901,32 +947,69 @@ export default function CentroCopiadoSheet({
               <span className={s.muted}>…</span>
             )}
           </span>
-          <button
+          <ActionButton
             type="button"
-            className={s.del}
-            onClick={() => eliminar(d.id)}
+            variant="tertiary"
+            isIconOnly
+            onPress={() => eliminar(d.id)}
             aria-label="Quitar"
           >
-            ✕
-          </button>
+            <Trash2 data-icon="inline-start" />
+          </ActionButton>
         </div>
+        {tieneArchivo && (
+          <div className={s.rangoFila}>
+            <label className={s.rangoCampo}>
+              <span>Páginas a imprimir</span>
+              <input
+                type="text"
+                value={d.rangoPaginas}
+                placeholder="Todas · ej. 1-7,9,12-16"
+                maxLength={2000}
+                onChange={(e) => editar(d.id, { rangoPaginas: e.target.value })}
+                onBlur={() => {
+                  if (!seleccion.error && d.rangoPaginas !== seleccion.rango)
+                    editar(d.id, { rangoPaginas: seleccion.rango });
+                }}
+                aria-invalid={!!seleccion.error && !!d.rangoPaginas}
+                aria-describedby={`${d.id}-rango-ayuda`}
+                className={s.rangoInput}
+              />
+            </label>
+            <div
+              id={`${d.id}-rango-ayuda`}
+              className={cn(s.rangoAyuda, seleccion.error && s.rangoError)}
+              aria-live="polite"
+            >
+              {seleccion.error ? (
+                seleccion.error
+              ) : (
+                <>
+                  <strong>
+                    {seleccion.paginas} de {d.paginas} páginas
+                  </strong>
+                  <span>En orden del archivo, sin repetir. Vacío = todas.</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         <div className={s.cardCtrls}>
           <label className={s.ctrl}>
-            <span>Págs</span>
+            <span>{tieneArchivo ? "Págs. del archivo" : "Páginas"}</span>
             <input
               type="number"
               min={0}
               value={d.paginas || ""}
               placeholder="0"
+              readOnly={tieneArchivo && d.paginasAuto}
               onChange={(e) =>
                 editar(d.id, {
                   paginas: Math.max(0, Number(e.target.value) || 0),
                   paginasAuto: false,
                 })
               }
-              className={`${s.inputMini} ${
-                d.paginas < 1 ? s.inputFalta : d.paginasAuto ? s.inputAuto : ""
-              }`}
+              className={`${s.inputMini} ${d.paginas < 1 ? s.inputFalta : ""}`}
               title={d.paginasAuto ? "Páginas leídas del PDF" : undefined}
             />
           </label>
@@ -992,44 +1075,26 @@ export default function CentroCopiadoSheet({
               triggerClassName="w-[88px]"
             />
           </label>
-          <label className={s.ctrl}>
+          <div className={s.ctrl}>
             <span>Color</span>
-            <div className={s.seg}>
-              <button
-                type="button"
-                className={d.color === "BN" ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { color: "BN" })}
-              >
-                B/N
-              </button>
-              <button
-                type="button"
-                className={d.color === "COLOR" ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { color: "COLOR" })}
-              >
-                Color
-              </button>
-            </div>
-          </label>
-          <label className={s.ctrl}>
+            <SegmentedControl
+              aria-label="Color"
+              options={OPCIONES_COLOR}
+              value={d.color}
+              onChange={(v) => editar(d.id, { color: v as ColorDoc })}
+              tone="graphite"
+            />
+          </div>
+          <div className={s.ctrl}>
             <span>Faz</span>
-            <div className={s.seg}>
-              <button
-                type="button"
-                className={d.faz === 1 ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { faz: 1 })}
-              >
-                Simple
-              </button>
-              <button
-                type="button"
-                className={d.faz === 2 ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { faz: 2 })}
-              >
-                Doble
-              </button>
-            </div>
-          </label>
+            <SegmentedControl
+              aria-label="Faz"
+              options={OPCIONES_FAZ}
+              value={String(d.faz)}
+              onChange={(v) => editar(d.id, { faz: Number(v) as FazDoc })}
+              tone="graphite"
+            />
+          </div>
           {/* Cobertura de tóner del documento (default Alta). Modula el consumo
               de tóner; el perfil de máquina lo resuelve el sistema. */}
           <label className={s.ctrl}>
@@ -1096,7 +1161,7 @@ export default function CentroCopiadoSheet({
               </span>
             </div>
           ))}
-      </div>
+      </section>
     );
   };
 
@@ -1106,393 +1171,412 @@ export default function CentroCopiadoSheet({
   const defTamanos = tamanosDe(defaults.papelMateriaPrimaId, defaults.gramaje);
   const defGramajes = gramajesDe(defaults.papelMateriaPrimaId);
 
-  // Se portala a document.body: si el modal se renderiza dentro de un ancestro con
-  // `transform`/`filter`/`will-change`, el position:fixed + max-height dejan de
-  // medir contra el viewport (el sheet no se acota y el scroll interno no captura
-  // el wheel → scrollea la página de atrás). En el body no hay ese ancestro.
-  const contenido = (
+  return (
     <>
-      <div className={s.backdrop} onClick={intentarCerrar} />
-      <div
-        {...designScope}
-        className={`${designClass} ${s.sheet}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Centro de copiado"
+      <FormDialog
+        isOpen={open}
+        onOpenChange={(next) => {
+          if (!next) intentarCerrar();
+        }}
+        isDismissable={!guardando && !leyendo && !confirmarSalida}
+        title={
+          <span className={s.modalTitle}>
+            <Printer aria-hidden="true" />
+            Centro de copiado
+          </span>
+        }
+        description={
+          editItems?.length
+            ? "Editá los documentos, sus páginas y las opciones de impresión."
+            : "Cargá archivos, elegí las páginas y prepará tu trabajo de impresión."
+        }
+        className={s.sheet}
       >
-        <ProductoSheetHeaderConstelacion
-          eyebrow={editItems?.length ? "Editar carga" : "Carga rápida"}
-          name="Centro de copiado"
-          desc="Cargá varios documentos de una vez. Seleccioná dos o más y agrupalos para anillar juntos."
-          onClose={intentarCerrar}
-        />
-
         <div className={s.body}>
-          <section className={s.cargar}>
-            <div
-              className={`${s.drop} ${dragActive ? s.dropActive : ""}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => fileRef.current?.click()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  fileRef.current?.click();
-                }
-              }}
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                if (e.dataTransfer.files?.length)
-                  void onArchivos(e.dataTransfer.files);
-              }}
-            >
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx"
-                multiple
-                hidden
-                onChange={(e) => {
-                  if (e.target.files?.length) void onArchivos(e.target.files);
-                  e.target.value = "";
+          <fieldset disabled={guardando || leyendo} className={s.bodyFields}>
+            <section className={s.cargar}>
+              <div
+                className={cn(s.drop, dragActive && s.dropActive)}
+                aria-label="Agregar archivos"
+                aria-busy={leyendo}
+                role="button"
+                tabIndex={0}
+                onClick={() => fileRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileRef.current?.click();
+                  }
                 }}
-              />
-              <div className={s.dropIcon}>⬦</div>
-              <div className={s.dropTitle}>
-                {dragActive
-                  ? "Soltá los archivos acá"
-                  : "Arrastrá o elegí archivos"}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                  if (e.dataTransfer.files?.length)
+                    void onArchivos(e.dataTransfer.files);
+                }}
+              >
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files?.length) void onArchivos(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                <span className={s.dropIcon}>
+                  <Upload aria-hidden="true" />
+                </span>
+                <div className={s.dropTitle}>
+                  {leyendo
+                    ? "Leyendo archivos…"
+                    : dragActive
+                      ? "Soltá los archivos acá"
+                      : "Arrastrá o elegí archivos"}
+                </div>
+                <div className={s.dropHint}>
+                  PDF, Word o Excel. Del PDF leemos las páginas; en el resto las
+                  cargás a mano.
+                </div>
               </div>
-              <div className={s.dropHint}>
-                PDF, Word o Excel. Del PDF leemos las páginas; en el resto las
-                cargás a mano.
-              </div>
-            </div>
 
-            <div className={s.defaults}>
-              <div className={s.defaultsHead}>Valores por defecto</div>
-              <div className={s.defaultsGrid}>
-                {/* Papel + gramaje primero (condicionan el tamaño), después Tamaño. */}
-                <label className={s.campo}>
-                  <span>Papel</span>
-                  <SysSelect
-                    value={defaults.papelMateriaPrimaId}
-                    onChange={(v) => {
-                      const g = gramajesDe(v)[0] ?? null;
-                      const t = resolverTamano(v, g, defaults.tamano);
-                      setDefaults({
-                        ...defaults,
-                        papelMateriaPrimaId: v,
-                        gramaje: g,
-                        ...(t ?? {}),
-                      });
-                    }}
-                    options={papelOptions}
-                    ariaLabel="Papel por defecto"
-                    triggerClassName="w-[190px]"
-                  />
-                </label>
-                {defGramajes.length > 1 && (
+              <div className={s.defaults}>
+                <div className={s.defaultsHead}>
+                  <span className={s.seccionNumero}>01</span>
+                  <div>
+                    <strong>Configuración inicial</strong>
+                    <p>Se aplica a los nuevos documentos.</p>
+                  </div>
+                </div>
+                <div className={s.defaultsGrid}>
+                  {/* Papel + gramaje primero (condicionan el tamaño), después Tamaño. */}
                   <label className={s.campo}>
-                    <span>Gramaje</span>
+                    <span>Papel</span>
                     <SysSelect
-                      value={
-                        defaults.gramaje != null ? String(defaults.gramaje) : ""
-                      }
+                      value={defaults.papelMateriaPrimaId}
                       onChange={(v) => {
-                        const g = Number(v);
-                        const t = resolverTamano(
-                          defaults.papelMateriaPrimaId,
-                          g,
-                          defaults.tamano,
-                        );
-                        setDefaults({ ...defaults, gramaje: g, ...(t ?? {}) });
-                      }}
-                      options={defGramajes.map((g) => ({
-                        value: String(g),
-                        label: `${g} g`,
-                      }))}
-                      ariaLabel="Gramaje por defecto"
-                      triggerClassName="w-[92px]"
-                    />
-                  </label>
-                )}
-                <label className={s.campo}>
-                  <span>Tamaño</span>
-                  <SysSelect
-                    value={defaults.tamano}
-                    onChange={(v) => {
-                      const f = defTamanos.find((x) => x.nombre === v);
-                      if (f)
+                        const g = gramajesDe(v)[0] ?? null;
+                        const t = resolverTamano(v, g, defaults.tamano);
                         setDefaults({
                           ...defaults,
-                          tamano: f.nombre,
-                          tamanoAnchoMm: f.anchoMm,
-                          tamanoAltoMm: f.altoMm,
+                          papelMateriaPrimaId: v,
+                          gramaje: g,
+                          ...(t ?? {}),
                         });
-                    }}
-                    options={defTamanos.map((tm) => ({
-                      value: tm.nombre,
-                      label: tm.nombre,
-                    }))}
-                    ariaLabel="Tamaño por defecto"
-                    placeholder="—"
-                    triggerClassName="w-[88px]"
-                  />
-                </label>
-                <label className={s.campo}>
-                  <span>Color</span>
-                  <div className={s.seg}>
-                    <button
-                      type="button"
-                      className={defaults.color === "BN" ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, color: "BN" })}
-                    >
-                      B/N
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        defaults.color === "COLOR" ? s.segOn : s.segOff
+                      }}
+                      options={papelOptions}
+                      ariaLabel="Papel por defecto"
+                      triggerClassName="w-[190px]"
+                    />
+                  </label>
+                  {defGramajes.length > 1 && (
+                    <label className={s.campo}>
+                      <span>Gramaje</span>
+                      <SysSelect
+                        value={
+                          defaults.gramaje != null
+                            ? String(defaults.gramaje)
+                            : ""
+                        }
+                        onChange={(v) => {
+                          const g = Number(v);
+                          const t = resolverTamano(
+                            defaults.papelMateriaPrimaId,
+                            g,
+                            defaults.tamano,
+                          );
+                          setDefaults({
+                            ...defaults,
+                            gramaje: g,
+                            ...(t ?? {}),
+                          });
+                        }}
+                        options={defGramajes.map((g) => ({
+                          value: String(g),
+                          label: `${g} g`,
+                        }))}
+                        ariaLabel="Gramaje por defecto"
+                        triggerClassName="w-[92px]"
+                      />
+                    </label>
+                  )}
+                  <label className={s.campo}>
+                    <span>Tamaño</span>
+                    <SysSelect
+                      value={defaults.tamano}
+                      onChange={(v) => {
+                        const f = defTamanos.find((x) => x.nombre === v);
+                        if (f)
+                          setDefaults({
+                            ...defaults,
+                            tamano: f.nombre,
+                            tamanoAnchoMm: f.anchoMm,
+                            tamanoAltoMm: f.altoMm,
+                          });
+                      }}
+                      options={defTamanos.map((tm) => ({
+                        value: tm.nombre,
+                        label: tm.nombre,
+                      }))}
+                      ariaLabel="Tamaño por defecto"
+                      placeholder="—"
+                      triggerClassName="w-[88px]"
+                    />
+                  </label>
+                  <div className={s.campo}>
+                    <span>Color</span>
+                    <SegmentedControl
+                      aria-label="Color por defecto"
+                      options={OPCIONES_COLOR}
+                      value={defaults.color}
+                      onChange={(v) =>
+                        setDefaults({ ...defaults, color: v as ColorDoc })
                       }
-                      onClick={() =>
-                        setDefaults({ ...defaults, color: "COLOR" })
+                      tone="graphite"
+                    />
+                  </div>
+                  <div className={s.campo}>
+                    <span>Faz</span>
+                    <SegmentedControl
+                      aria-label="Faz por defecto"
+                      options={OPCIONES_FAZ}
+                      value={String(defaults.faz)}
+                      onChange={(v) =>
+                        setDefaults({ ...defaults, faz: Number(v) as FazDoc })
                       }
-                    >
-                      Color
-                    </button>
+                      tone="graphite"
+                    />
                   </div>
-                </label>
-                <label className={s.campo}>
-                  <span>Faz</span>
-                  <div className={s.seg}>
-                    <button
-                      type="button"
-                      className={defaults.faz === 1 ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, faz: 1 })}
-                    >
-                      Simple
-                    </button>
-                    <button
-                      type="button"
-                      className={defaults.faz === 2 ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, faz: 2 })}
-                    >
-                      Doble
-                    </button>
-                  </div>
-                </label>
-                <label className={s.campo}>
-                  <span>Copias</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={defaults.copias}
-                    onChange={(e) =>
-                      setDefaults({
-                        ...defaults,
-                        copias: Math.max(1, Number(e.target.value) || 1),
-                      })
-                    }
-                    className={s.inputMini}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={aplicarATodos}
-                  disabled={docs.length === 0}
-                >
-                  Aplicar a todos
-                </button>
+                  <label className={s.campo}>
+                    <span>Copias</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={defaults.copias}
+                      onChange={(e) =>
+                        setDefaults({
+                          ...defaults,
+                          copias: Math.max(1, Number(e.target.value) || 1),
+                        })
+                      }
+                      className={s.inputMini}
+                    />
+                  </label>
+                  <ActionButton
+                    type="button"
+                    variant="outline"
+                    onPress={aplicarATodos}
+                    isDisabled={docs.length === 0}
+                  >
+                    Aplicar a todos
+                  </ActionButton>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section className={s.tablaWrap}>
-            <div className={s.tablaHead}>
-              <span>Documentos del trabajo</span>
-              <div className={s.tablaHeadBtns}>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={agregarFilaManual}
-                >
-                  + Fila manual
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={anillarJuntos}
-                  disabled={
-                    sel.size < 2 || !terminacionesDisp.includes("Anillado")
-                  }
-                  title={
-                    !terminacionesDisp.includes("Anillado")
-                      ? "Configurá una anilladora y anillos para crear tomos"
-                      : sel.size < 2
-                        ? "Seleccioná dos o más"
-                        : "Anillar juntos"
-                  }
-                >
-                  Anillar juntos ({sel.size})
-                </button>
+            <section className={s.tablaWrap}>
+              <div className={s.tablaHead}>
+                <span className={s.seccionTitulo}>
+                  <span className={s.seccionNumero}>02</span>Documentos del
+                  trabajo <span className={s.contador}>{docs.length}</span>
+                </span>
+                <div className={s.tablaHeadBtns}>
+                  <ActionButton
+                    type="button"
+                    variant="outline"
+                    onPress={agregarFilaManual}
+                  >
+                    <Plus data-icon="inline-start" /> Fila manual
+                  </ActionButton>
+                  <ActionButton
+                    type="button"
+                    variant="outline"
+                    onPress={anillarJuntos}
+                    isDisabled={
+                      sel.size < 2 || !terminacionesDisp.includes("Anillado")
+                    }
+                    title={
+                      !terminacionesDisp.includes("Anillado")
+                        ? "Configurá una anilladora y anillos para crear tomos"
+                        : sel.size < 2
+                          ? "Seleccioná dos o más"
+                          : "Anillar juntos"
+                    }
+                  >
+                    <Layers data-icon="inline-start" />
+                    Anillar juntos ({sel.size})
+                  </ActionButton>
+                </div>
               </div>
-            </div>
-            {docs.length === 0 ? (
-              <div className={s.vacio}>Todavía no cargaste documentos.</div>
-            ) : (
-              <div className={s.lista}>
-                {grupoIds.map((gid) => {
-                  const miembros = docs.filter((d) => d.grupoId === gid);
-                  const gprev = preview?.grupos.find((g) => g.id === gid);
-                  return (
-                    <div key={gid} className={s.tomo}>
-                      <div className={s.tomoHead}>
-                        <span className={s.tomoTitle}>Tomo anillado</span>
-                        <input
-                          type="text"
-                          value={grupos[gid]?.nombre ?? ""}
-                          onChange={(e) =>
-                            setGrupos((prev) => ({
-                              ...prev,
-                              [gid]: { ...prev[gid], nombre: e.target.value },
-                            }))
-                          }
-                          placeholder={`Nombre del tomo (${miembros.length} docs)`}
-                          className={s.tomoNombre}
-                          aria-label="Nombre del tomo"
-                        />
-                        <label className={s.tomoJuegos}>
-                          Juegos
+              {docs.length === 0 ? (
+                <Empty className={s.vacio}>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <FileText />
+                    </EmptyMedia>
+                    <EmptyTitle>Tu trabajo empieza con un documento</EmptyTitle>
+                    <EmptyDescription>
+                      Subí un archivo o agregá una fila manual.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <div className={s.lista}>
+                  {grupoIds.map((gid) => {
+                    const miembros = docs.filter((d) => d.grupoId === gid);
+                    const gprev = preview?.grupos.find((g) => g.id === gid);
+                    return (
+                      <div key={gid} className={s.tomo}>
+                        <div className={s.tomoHead}>
+                          <span className={s.tomoTitle}>Tomo anillado</span>
                           <input
-                            type="number"
-                            min={1}
-                            value={grupos[gid]?.juegos ?? 1}
+                            type="text"
+                            value={grupos[gid]?.nombre ?? ""}
                             onChange={(e) =>
                               setGrupos((prev) => ({
                                 ...prev,
-                                [gid]: {
-                                  ...prev[gid],
-                                  juegos: Math.max(
-                                    1,
-                                    Number(e.target.value) || 1,
-                                  ),
-                                },
+                                [gid]: { ...prev[gid], nombre: e.target.value },
                               }))
                             }
-                            className={s.inputMini}
+                            placeholder={`Nombre del tomo (${miembros.length} docs)`}
+                            className={s.tomoNombre}
+                            aria-label="Nombre del tomo"
                           />
-                        </label>
-                        {/* Terminaciones del tomo entero (un solo selector). */}
-                        {terminacionesDisp.length > 0 && (
-                          <SysMultiSelect
-                            values={grupos[gid]?.terminaciones ?? []}
-                            onChange={(v) =>
-                              setGrupos((prev) => ({
-                                ...prev,
-                                [gid]: { ...prev[gid], terminaciones: v },
-                              }))
-                            }
-                            options={terminacionesDisp.map((t) => ({
-                              value: t,
-                              label: t,
-                            }))}
-                            ariaLabel="Terminaciones del tomo"
-                            triggerClassName="w-[160px]"
-                          />
-                        )}
-                        {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
-                        {tiposAnilloDisp.length > 1 &&
-                          (grupos[gid]?.terminaciones ?? []).includes(
-                            "Anillado",
-                          ) && (
-                            <SysSelect
-                              value={
-                                grupos[gid]?.tipoAnillo ||
-                                tiposAnilloDisp[0].value
+                          <label className={s.tomoJuegos}>
+                            Juegos
+                            <input
+                              type="number"
+                              min={1}
+                              value={grupos[gid]?.juegos ?? 1}
+                              onChange={(e) =>
+                                setGrupos((prev) => ({
+                                  ...prev,
+                                  [gid]: {
+                                    ...prev[gid],
+                                    juegos: Math.max(
+                                      1,
+                                      Number(e.target.value) || 1,
+                                    ),
+                                  },
+                                }))
                               }
+                              className={s.inputMini}
+                            />
+                          </label>
+                          {/* Terminaciones del tomo entero (un solo selector). */}
+                          {terminacionesDisp.length > 0 && (
+                            <SysMultiSelect
+                              values={grupos[gid]?.terminaciones ?? []}
                               onChange={(v) =>
                                 setGrupos((prev) => ({
                                   ...prev,
-                                  [gid]: { ...prev[gid], tipoAnillo: v },
+                                  [gid]: { ...prev[gid], terminaciones: v },
                                 }))
                               }
-                              options={tiposAnilloDisp}
-                              ariaLabel="Tipo de anillo del tomo"
-                              triggerClassName="w-[150px]"
+                              options={terminacionesDisp.map((t) => ({
+                                value: t,
+                                label: t,
+                              }))}
+                              ariaLabel="Terminaciones del tomo"
+                              triggerClassName="w-[160px]"
                             />
                           )}
-                        <span className={s.tomoMeta}>
-                          {gprev ? `${gprev.hojasPorLibro} hojas/juego` : ""}
-                        </span>
-                        <span className={s.tomoSub}>
-                          {gprev
-                            ? `Hojas ${fmt(
-                                Math.max(
-                                  0,
-                                  gprev.subtotal -
-                                    (gprev.anillado?.subtotal ?? 0),
-                                ),
-                              )}`
-                            : "—"}
-                        </span>
-                        <button
-                          type="button"
-                          className={s.del}
-                          onClick={() => desagrupar(gid)}
-                          aria-label="Desagrupar tomo"
-                        >
-                          ✕
-                        </button>
+                          {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
+                          {tiposAnilloDisp.length > 1 &&
+                            (grupos[gid]?.terminaciones ?? []).includes(
+                              "Anillado",
+                            ) && (
+                              <SysSelect
+                                value={
+                                  grupos[gid]?.tipoAnillo ||
+                                  tiposAnilloDisp[0].value
+                                }
+                                onChange={(v) =>
+                                  setGrupos((prev) => ({
+                                    ...prev,
+                                    [gid]: { ...prev[gid], tipoAnillo: v },
+                                  }))
+                                }
+                                options={tiposAnilloDisp}
+                                ariaLabel="Tipo de anillo del tomo"
+                                triggerClassName="w-[150px]"
+                              />
+                            )}
+                          <span className={s.tomoMeta}>
+                            {gprev ? `${gprev.hojasPorLibro} hojas/juego` : ""}
+                          </span>
+                          <span className={s.tomoSub}>
+                            {gprev
+                              ? `Hojas ${fmt(
+                                  Math.max(
+                                    0,
+                                    gprev.subtotal -
+                                      (gprev.anillado?.subtotal ?? 0),
+                                  ),
+                                )}`
+                              : "—"}
+                          </span>
+                          <ActionButton
+                            type="button"
+                            variant="tertiary"
+                            isIconOnly
+                            onPress={() => desagrupar(gid)}
+                            aria-label="Desagrupar tomo"
+                          >
+                            <Trash2 data-icon="inline-start" />
+                          </ActionButton>
+                        </div>
+                        {gprev?.anillado &&
+                          (gprev.anillado.error ? (
+                            <div className={s.tomoAnilladoWarn}>
+                              ⚠ {gprev.anillado.error} No se puede agregar hasta
+                              corregirlo.
+                            </div>
+                          ) : (
+                            <div className={s.tomoAnillado}>
+                              <span className={s.tomoAnilladoLbl}>
+                                Anillado ·{" "}
+                                {labelTipoAnillo(gprev.anillado.tipoAnillo)}
+                                {gprev.anillado.diametroMm
+                                  ? ` Ø${gprev.anillado.diametroMm} mm`
+                                  : ""}
+                              </span>
+                              <span className={s.tomoAnilladoPrecio}>
+                                + {fmt(gprev.anillado.subtotal)} sin IVA
+                              </span>
+                            </div>
+                          ))}
+                        {miembros.map((d) => renderCard(d, idx++, true))}
                       </div>
-                      {gprev?.anillado &&
-                        (gprev.anillado.error ? (
-                          <div className={s.tomoAnilladoWarn}>
-                            ⚠ {gprev.anillado.error} No se puede agregar hasta
-                            corregirlo.
-                          </div>
-                        ) : (
-                          <div className={s.tomoAnillado}>
-                            <span className={s.tomoAnilladoLbl}>
-                              Anillado ·{" "}
-                              {labelTipoAnillo(gprev.anillado.tipoAnillo)}
-                              {gprev.anillado.diametroMm
-                                ? ` Ø${gprev.anillado.diametroMm} mm`
-                                : ""}
-                            </span>
-                            <span className={s.tomoAnilladoPrecio}>
-                              + {fmt(gprev.anillado.subtotal)} sin IVA
-                            </span>
-                          </div>
-                        ))}
-                      {miembros.map((d) => renderCard(d, idx++, true))}
-                    </div>
-                  );
-                })}
-                {sueltos.map((d) => renderCard(d, idx++, false))}
-              </div>
-            )}
-          </section>
+                    );
+                  })}
+                  {sueltos.map((d) => renderCard(d, idx++, false))}
+                </div>
+              )}
+            </section>
+          </fieldset>
         </div>
 
         {previewError && docs.length > 0 && (
-          <div className={s.errBanner}>
-            No se pudo calcular el precio: {previewError}
-          </div>
+          <Alert variant="destructive" className={s.errBanner}>
+            <AlertDescription>
+              No se pudo calcular el precio: {previewError}
+            </AlertDescription>
+          </Alert>
         )}
         <footer className={s.foot}>
           <div className={s.stats}>
@@ -1505,37 +1589,54 @@ export default function CentroCopiadoSheet({
               <span className={s.statLbl}>Tomos</span>
             </div>
             <div>
-              <span className={s.statNum}>{t?.carillas ?? 0}</span>
+              <span className={s.statNum}>{cantidades.carillas}</span>
               <span className={s.statLbl}>Carillas</span>
             </div>
             <div>
-              <span className={s.statNum}>{t?.hojasFisicas ?? 0}</span>
+              <span className={s.statNum}>{cantidades.hojas}</span>
               <span className={s.statLbl}>Hojas físicas</span>
             </div>
           </div>
           <div className={s.totalBox}>
             <div className={s.totalFinal}>
               <span>Total c/IVA</span>
-              <strong>{fmt((t?.subtotal ?? 0) + (t?.iva ?? 0))}</strong>
+              <strong aria-live="polite">
+                {cotizando
+                  ? "…"
+                  : t
+                    ? fmt(t.total)
+                    : docs.length
+                      ? "—"
+                      : fmt(0)}
+              </strong>
             </div>
             <div className={s.totalNetoSub}>
-              Hojas {fmt(impresionNeto)} · Anillado {fmt(anilladoNeto)} · IVA{" "}
-              {fmt(t?.iva ?? 0)}
+              {t ? (
+                <>
+                  Hojas {fmt(impresionNeto)} · Anillado {fmt(anilladoNeto)} ·
+                  IVA {fmt(t.iva)}
+                </>
+              ) : cotizando ? (
+                "Calculando precio…"
+              ) : (
+                ""
+              )}
             </div>
           </div>
-          <button
+          <ActionButton
             type="button"
-            className="btn btn-primary"
-            onClick={() => void agregar()}
-            disabled={
+            onPress={() => void agregar()}
+            isDisabled={
               docs.length === 0 ||
               incompletos > 0 ||
               tieneErroresCotizacion ||
-              guardando
+              guardando ||
+              leyendo ||
+              cotizando
             }
             title={
               incompletos > 0
-                ? `${incompletos} fila(s) sin páginas o sin papel`
+                ? `${incompletos} fila(s) con páginas, rangos o papel por completar`
                 : tieneErroresCotizacion
                   ? "Corregí los errores de cotización antes de agregar la carga"
                   : undefined
@@ -1543,35 +1644,66 @@ export default function CentroCopiadoSheet({
           >
             {guardando
               ? "Guardando…"
-              : incompletos > 0
-                ? `Completá ${incompletos} fila(s)`
-                : tieneErroresCotizacion
-                  ? "Corregí los errores"
-                  : editItems?.length
-                    ? "Guardar cambios"
-                    : "Agregar a la OT"}
-          </button>
+              : leyendo
+                ? "Leyendo archivos…"
+                : cotizando
+                  ? "Cotizando…"
+                  : incompletos > 0
+                    ? `Completá ${incompletos} fila(s)`
+                    : tieneErroresCotizacion
+                      ? "Corregí los errores"
+                      : editItems?.length
+                        ? "Guardar cambios"
+                        : "Agregar a la OT"}
+          </ActionButton>
         </footer>
-      </div>
-      <ConfirmacionSalida
-        open={confirmarSalida}
-        cambios={docs.length}
-        donde="el centro de copiado"
-        guardando={guardando}
-        onGuardarYSalir={async () => {
-          await agregar();
-          setConfirmarSalida(false);
-        }}
-        onDescartarYSalir={() => {
-          setConfirmarSalida(false);
-          onOpenChange(false);
-        }}
-        onSeguirEditando={() => setConfirmarSalida(false)}
-      />
+      </FormDialog>
+      <FormDialog
+        isOpen={confirmarSalida}
+        onOpenChange={setConfirmarSalida}
+        isDismissable={!guardando}
+        title="¿Cerrar Centro de copiado?"
+        description="Tenés documentos sin guardar en esta carga. Podés seguir editando, agregarlos a la orden o descartar los cambios."
+      >
+        <div className={s.confirmActions}>
+          <ActionButton
+            variant="tertiary"
+            isDisabled={guardando}
+            onPress={() => setConfirmarSalida(false)}
+          >
+            Seguir editando
+          </ActionButton>
+          <ActionButton
+            variant="outline"
+            isDisabled={guardando}
+            onPress={() => {
+              setConfirmarSalida(false);
+              onOpenChange(false);
+            }}
+          >
+            Descartar y salir
+          </ActionButton>
+          <ActionButton
+            isDisabled={
+              guardando ||
+              leyendo ||
+              cotizando ||
+              incompletos > 0 ||
+              tieneErroresCotizacion
+            }
+            onPress={async () => {
+              await agregar();
+              setConfirmarSalida(false);
+            }}
+          >
+            {guardando
+              ? "Guardando…"
+              : editItems?.length
+                ? "Guardar cambios"
+                : "Agregar a la OT"}
+          </ActionButton>
+        </div>
+      </FormDialog>
     </>
   );
-
-  return typeof document === "undefined"
-    ? null
-    : createPortal(contenido, document.body);
 }

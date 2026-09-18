@@ -18,6 +18,8 @@ export interface DocumentoInput {
   nombre?: string;
   archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   copias: number;
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;

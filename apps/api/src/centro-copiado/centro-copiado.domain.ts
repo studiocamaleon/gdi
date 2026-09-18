@@ -1,4 +1,5 @@
 import type { DocumentoInput } from './adaptador';
+import { metadataRangoPaginas } from '../common/rangos-paginas';
 
 export const CENTRO_COPIADO_TERMINACIONES_CATALOGO = [
   {
@@ -43,6 +44,8 @@ export interface CentroCopiadoSegmentoMeta {
   nombre: string | null;
   archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   tamano: string;
   tamanoAnchoMm: number;
   tamanoAltoMm: number;
@@ -66,6 +69,8 @@ export interface CentroCopiadoMeta {
   nombre?: string | null;
   archivoNombre?: string;
   paginas?: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   copias?: number;
   tamano?: string;
   tamanoAnchoMm?: number;
@@ -111,6 +116,7 @@ export function metaDocumentoCentroCopiado(args: {
     nombre: doc.nombre ?? null,
     ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
     paginas: doc.paginas,
+    ...metadataRangoPaginas(doc),
     copias: args.copias,
     tamano: doc.tamano,
     tamanoAnchoMm: doc.tamanoAnchoMm,
@@ -155,6 +161,7 @@ export function metaTomoCentroCopiado(args: {
       nombre: doc.nombre ?? null,
       ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
       paginas: doc.paginas,
+      ...metadataRangoPaginas(doc),
       tamano: doc.tamano,
       tamanoAnchoMm: doc.tamanoAnchoMm,
       tamanoAltoMm: doc.tamanoAltoMm,

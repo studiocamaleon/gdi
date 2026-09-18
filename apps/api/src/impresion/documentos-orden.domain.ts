@@ -1,7 +1,11 @@
 /** Contrato de impresión derivado exclusivamente del snapshot cotizado. */
+import { errorPaginasDocumento } from '../common/rangos-paginas';
+
 export type SegmentoImprimible = {
   nombre: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   faz: 1 | 2;
 };
 export type PlanDocumento = {
@@ -36,7 +40,7 @@ export function planDocumento(job: unknown): PlanDocumento | null {
     !segmentos.length ||
     segmentos.some((s) => s.tamano !== 'A4' || s.color !== 'BN')
   )
-    motivo = 'Esta prueba admite documentos completos en A4 blanco y negro.';
+    motivo = 'La impresión directa admite documentos en A4 blanco y negro.';
   else if (
     segmentos.some(
       (s) =>
@@ -61,6 +65,23 @@ export function planDocumento(job: unknown): PlanDocumento | null {
   )
     motivo =
       'Revisá las páginas y copias cotizadas (máximo 2.000 páginas por PDF y 999 copias).';
+  for (const s of segmentos) {
+    if (motivo) break;
+    if (s.rangoPaginas != null && typeof s.rangoPaginas !== 'string') {
+      motivo =
+        'El rango de páginas guardado es inválido. Volvé a cotizar el documento.';
+      break;
+    }
+    motivo = errorPaginasDocumento({
+      paginas: Number(s.paginas),
+      paginasOriginales:
+        s.paginasOriginales == null ? undefined : Number(s.paginasOriginales),
+      rangoPaginas:
+        typeof s.rangoPaginas === 'string' ? s.rangoPaginas : undefined,
+      archivoNombre:
+        typeof s.archivoNombre === 'string' ? s.archivoNombre : undefined,
+    });
+  }
   const paginas = segmentos.reduce((n, s) => n + Number(s.paginas || 0), 0);
   const hojas =
     segmentos.reduce((n, s) => n + Math.ceil(Number(s.paginas || 0) / faz), 0) *
@@ -82,6 +103,12 @@ export function planDocumento(job: unknown): PlanDocumento | null {
     segmentos: segmentos.map((s) => ({
       nombre: texto(s.archivoNombre, texto(s.nombre, '')),
       paginas: Number(s.paginas),
+      ...(s.paginasOriginales != null
+        ? { paginasOriginales: Number(s.paginasOriginales) }
+        : {}),
+      ...(typeof s.rangoPaginas === 'string'
+        ? { rangoPaginas: s.rangoPaginas }
+        : {}),
       faz,
     })),
   };

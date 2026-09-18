@@ -6216,32 +6216,7 @@ function PropuestaFichaContenido({
           tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
         tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
         const resp = await guardarTomoCentroCopiado({
-          documentos: (metaTomo.segmentos ?? []).map((s, i) => ({
-            id: `s${i}`,
-            nombre: s.nombre ?? undefined,
-            paginas: s.paginas,
-            copias: 1,
-            tamano: s.tamano,
-            // Cargas nuevas traen las medidas; para las viejas, se resuelven por
-            // el nombre del formato contra el catálogo del sistema.
-            tamanoAnchoMm: s.tamanoAnchoMm ?? dimsDeFormato(s.tamano).anchoMm,
-            tamanoAltoMm: s.tamanoAltoMm ?? dimsDeFormato(s.tamano).altoMm,
-            papelMateriaPrimaId: s.papelMateriaPrimaId,
-            gramaje: s.gramaje,
-            color: s.color,
-            faz: s.faz,
-            cobertura: s.cobertura,
-            grupoId: "T",
-          })),
-          grupos: [
-            {
-              id: "T",
-              nombre: metaTomo.tomoNombre ?? undefined,
-              juegos: metaTomo.juegos ?? 1,
-              terminaciones: metaTomo.terminaciones ?? [],
-              tipoAnillo: metaTomo.tipoAnillo ?? undefined,
-            },
-          ],
+          ...solicitudTomo(metaTomo, clienteId),
           cotizacionId,
           clienteId: clienteId || null,
           idempotencyKey,

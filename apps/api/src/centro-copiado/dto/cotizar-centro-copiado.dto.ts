@@ -10,6 +10,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -43,6 +44,17 @@ export class DocumentoCentroCopiadoDto {
   @IsInt()
   @Min(1)
   paginas!: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  paginasOriginales?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  rangoPaginas?: string;
 
   @IsInt()
   @Min(1)

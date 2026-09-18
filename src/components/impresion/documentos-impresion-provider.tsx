@@ -536,6 +536,13 @@ export function DocumentosImpresionProvider({
                       {doc.faz === 2 ? "Doble faz · borde largo" : "Simple faz"}{" "}
                       · {doc.hojas} hojas
                     </p>
+                    {doc.seleccionPaginas?.map((seleccion, i) => (
+                      <p key={i}>
+                        {doc.documentos > 1 ? `${seleccion.nombre} · ` : ""}
+                        Páginas {seleccion.rango} de{" "}
+                        {seleccion.paginasOriginales}
+                      </p>
+                    ))}
                     <div className={s.acciones}>
                       <Badge
                         variant={

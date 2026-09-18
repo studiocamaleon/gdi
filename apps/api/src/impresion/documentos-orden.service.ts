@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PDFDocument } from 'pdf-lib';
+import { resolverRangoPaginas } from '../common/rangos-paginas';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
@@ -156,6 +157,13 @@ export class DocumentosOrdenService {
         ...doc,
         archivos: archivos.filter((a) => a !== null).map((a) => a.id),
         documentos: segmentos.length,
+        seleccionPaginas: segmentos
+          .filter((s) => s.rangoPaginas)
+          .map((s) => ({
+            nombre: s.nombre,
+            rango: s.rangoPaginas!,
+            paginasOriginales: s.paginasOriginales!,
+          })),
       })),
       historial: historial.map((e) => ({
         ...objeto(e.datosJson),
@@ -183,6 +191,8 @@ export class DocumentosOrdenService {
       throw new BadRequestException(doc?.motivo ?? 'Documento no imprimible.');
 
     const unido = await PDFDocument.create();
+    const extraerPaginas =
+      doc.archivos.length > 1 || doc.segmentos.some((s) => !!s.rangoPaginas);
     let originalBytes: Buffer | null = null;
     for (const [i, archivo] of doc.archivos.entries()) {
       if (!archivo) throw new BadRequestException('Falta el archivo original.');
@@ -198,22 +208,35 @@ export class DocumentosOrdenService {
           'No se pudo leer el PDF. Revisá que sea válido y no tenga contraseña.',
         );
       }
-      if (pdf.getPageCount() !== doc.segmentos[i].paginas)
+      const segmento = doc.segmentos[i];
+      if (
+        pdf.getPageCount() !== (segmento.paginasOriginales ?? segmento.paginas)
+      )
         throw new BadRequestException(
           `Las páginas de ${archivo.nombreOriginal} no coinciden con las cotizadas. Volvé a cotizar el documento.`,
         );
-      if (doc.archivos.length > 1) {
-        const paginas = await unido.copyPages(pdf, pdf.getPageIndices());
+      if (extraerPaginas) {
+        const seleccion = resolverRangoPaginas(
+          segmento.rangoPaginas ?? '',
+          pdf.getPageCount(),
+        );
+        if (seleccion.error || seleccion.paginas !== segmento.paginas)
+          throw new BadRequestException(
+            'El rango no coincide con las páginas cotizadas. Volvé a cotizar el documento.',
+          );
+        const indices = seleccion.intervalos.flatMap(([desde, hasta]) =>
+          Array.from({ length: hasta - desde + 1 }, (_, n) => desde - 1 + n),
+        );
+        const paginas = await unido.copyPages(pdf, indices);
         paginas.forEach((p) => unido.addPage(p));
         // Cada original empieza en un frente y cada juego mantiene su orden.
-        if (doc.faz === 2 && pdf.getPageCount() % 2)
+        if (doc.archivos.length > 1 && doc.faz === 2 && seleccion.paginas % 2)
           unido.addPage([595.276, 841.89]);
       }
     }
-    const contenido =
-      doc.archivos.length === 1
-        ? originalBytes
-        : Buffer.from(await unido.save());
+    const contenido = extraerPaginas
+      ? Buffer.from(await unido.save())
+      : originalBytes;
     if (!contenido) throw new BadRequestException('El PDF no está disponible.');
     const jobName = `Grafo ${orden.numero} ${intentoId}`;
     const params = {
@@ -248,6 +271,13 @@ export class DocumentosOrdenService {
       hojas: doc.hojas,
       faz: doc.faz,
       archivos: doc.archivos.map((a) => a!.id),
+      seleccionPaginas: doc.segmentos
+        .filter((s) => s.rangoPaginas)
+        .map((s) => ({
+          nombre: s.nombre,
+          rango: s.rangoPaginas!,
+          paginasOriginales: s.paginasOriginales!,
+        })),
       host,
       impresora,
       jobName,

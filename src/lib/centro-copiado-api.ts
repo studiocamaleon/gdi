@@ -18,6 +18,8 @@ export interface CentroCopiadoSegmentoMeta {
   nombre?: string | null;
   archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   tamano: string;
   tamanoAnchoMm?: number;
   tamanoAltoMm?: number;
@@ -42,6 +44,8 @@ export interface CentroCopiadoMeta {
   nombre?: string | null;
   archivoNombre?: string;
   paginas?: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   copias?: number;
   tamano?: string;
   tamanoAnchoMm?: number;
@@ -84,7 +88,9 @@ export function cantidadLibrosCentroCopiado(
     meta.terminacion?.split(",").some((t) => t.trim() === "Anillado") === true;
   if (!esAnillado) return null;
   const cantidad = meta.esTomo ? meta.juegos : meta.copias;
-  return typeof cantidad === "number" && Number.isFinite(cantidad) && cantidad > 0
+  return typeof cantidad === "number" &&
+    Number.isFinite(cantidad) &&
+    cantidad > 0
     ? cantidad
     : null;
 }
@@ -94,6 +100,8 @@ export interface DocumentoCentroCopiado {
   nombre?: string;
   archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
   copias: number;
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;
