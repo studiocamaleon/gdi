@@ -1,7 +1,15 @@
 .sheet {
   display: flex;
   flex-direction: column;
-  max-width: 1320px;
+  max-width: 1560px;
+  height: min(860px, calc(100dvh - 32px));
+}
+.sheet :global(.modal__header) {
+  padding: 12px 52px 8px 20px;
+}
+.sheet :global(.modal__header) p {
+  font-size: 12px;
+  line-height: 16px;
 }
 .modalTitle {
   display: flex;
@@ -9,51 +17,47 @@
   gap: 10px;
 }
 .modalTitle svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   color: var(--accent-soft-foreground);
 }
 .body {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  flex: 1;
   min-height: 0;
   min-width: 0;
-  margin: 0;
-  padding: 24px;
-  border: 0;
-  overflow-y: auto;
+  padding: 14px 20px;
+  overflow: hidden;
 }
 .bodyFields {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
+  min-height: 0;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
-  flex-shrink: 0;
-}
-.bodyFields > section {
-  flex-shrink: 0;
 }
 .cargar {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: 154px minmax(0, 1fr);
+  gap: 12px;
+  flex: none;
 }
 .drop {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 5px;
+  padding: 10px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--canvas-background);
-  padding: 22px 18px;
-  text-align: center;
   cursor: pointer;
+  text-align: center;
 }
 .drop:is(:hover, :focus-visible),
 .dropActive {
@@ -64,99 +68,97 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-.dropIcon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
 .dropIcon svg {
   width: 18px;
   height: 18px;
 }
 .dropTitle {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 12px;
 }
 .dropHint {
-  font-size: 12px;
-  line-height: 1.5;
+  max-width: 130px;
+  font-size: 11px;
+  line-height: 1.3;
   color: var(--muted-text);
 }
 .defaults {
   min-width: 0;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px;
 }
 .defaultsHead {
+  margin-bottom: 8px;
+}
+.defaultsHead > div {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 18px;
+  align-items: baseline;
+  gap: 10px;
 }
 .defaultsHead strong {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
-.defaultsHead p {
-  margin: 3px 0 0;
+.defaultsHead span {
+  font-size: 11px;
   color: var(--muted-text);
-  font-size: 12px;
-}
-.seccionNumero {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 5px;
-  background: var(--brand-graphite);
-  color: var(--brand-on-graphite);
-  font: 10px var(--brand-mono);
 }
 .defaultsGrid {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 14px 12px;
+  gap: 8px;
 }
-.campo,
-.ctrl {
+.campo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   color: var(--muted-text);
 }
-.campo > span,
-.ctrl > span {
-  font-weight: 500;
+.compactSelect {
+  height: auto;
+}
+.compactSelect :global(.select__trigger) {
+  height: 28px;
+  min-height: 28px;
+  gap: 4px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+.compactSelect :global(.select__value) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compactSelect :global(.select__indicator) {
+  width: 12px;
+  height: 12px;
+  flex: none;
 }
 .inputMini,
 .rangoInput,
 .tomoNombre {
-  height: 36px;
+  height: 28px;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--field-radius);
+  padding: 0 7px;
+  font-size: 12px;
   background: var(--surface);
   color: var(--foreground);
-  padding: 0 10px;
-  font-size: 13px;
 }
 .inputMini {
-  width: 78px;
+  width: 56px;
   font-variant-numeric: tabular-nums;
-}
-.inputMini[readonly] {
-  background: var(--surface-secondary);
-  color: var(--muted-text);
 }
 .inputFalta {
   border-color: var(--warning);
+}
+.rangoInput[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 .inputMini:focus-visible,
 .rangoInput:focus-visible,
@@ -165,10 +167,11 @@
   outline: 2px solid var(--focus);
   outline-offset: 0;
 }
-.rangoInput[aria-invalid="true"] {
-  border-color: var(--danger);
-}
 .tablaWrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -176,224 +179,346 @@
 }
 .tablaHead {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-secondary);
 }
 .seccionTitulo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
   font-weight: 600;
 }
 .contador {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: 11px var(--brand-mono);
+  background: var(--canvas-background);
   color: var(--muted-text);
-  font: 12px var(--brand-mono);
 }
 .tablaHeadBtns {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 .vacio {
-  min-height: 156px;
+  flex: 1;
+  min-height: 130px;
 }
-.lista {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--canvas-background);
+.tableScroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
-.card {
-  min-width: 0;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+.tableScroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.documentsTable {
+  width: 100%;
+  min-width: 1080px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.documentsTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 34px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.documentsTable th small {
+  display: block;
+  font-size: 10px;
+  line-height: 10px;
+}
+.documentsTable :is(th, td) {
+  padding: 6px;
+}
+.documentsTable td {
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.colCheck {
+  width: 30px;
+}
+.colPages {
+  width: 165px;
+}
+.colCopies {
+  width: 64px;
+}
+.colPaper {
+  width: 170px;
+}
+.colSize {
+  width: 78px;
+}
+.colColor {
+  width: 78px;
+}
+.colFaces {
+  width: 88px;
+}
+.colPrice {
+  width: 104px;
+}
+.colAction {
+  width: 40px;
+}
+.documentRow {
   background: var(--surface);
 }
-.cardTop {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.documentRow:hover {
+  background: var(--canvas-background);
+}
+.documentRow[data-selected] {
+  background: var(--accent-soft);
+}
+.rowGrupo td:first-child {
+  box-shadow: inset 3px 0 var(--border-strong);
 }
 .chk {
-  flex: none;
-  width: 16px;
-  height: 16px;
+  display: block;
+  width: 15px;
+  height: 15px;
+  margin: auto;
   accent-color: var(--accent);
 }
-.docNum {
-  flex: none;
-  font: 11px var(--brand-mono);
+.grupoIcon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  margin: auto;
   color: var(--muted-text);
 }
 .docNombreInput {
-  flex: 1;
-  min-width: 80px;
   width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px;
   border: 1px solid transparent;
+  border-radius: 4px;
   background: transparent;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 5px 6px;
-  border-radius: 5px;
+  text-overflow: ellipsis;
 }
 .docNombreInput:hover {
   border-color: var(--border);
 }
 .docNombreInput::placeholder {
+  color: var(--muted-text);
   font-weight: 400;
+}
+.docMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+  padding-left: 4px;
+  font-size: 10px;
   color: var(--muted-text);
 }
-.cardPrecio {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+.docMeta > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cardUnit,
-.cardIva {
-  font-size: 11px;
-  color: var(--muted-text);
-}
-.cardSub {
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.cardCtrls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 14px 12px;
-}
-.rangoFila {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 20px;
-  padding: 12px 14px;
-  background: var(--canvas-background);
-  border: 1px solid var(--border);
-  border-radius: var(--field-radius);
-}
-.rangoCampo {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 0 1 290px;
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 500;
+.docNum {
+  flex: none;
+  font: 10px var(--brand-mono);
 }
 .rangoInput {
   width: 100%;
   font-family: var(--brand-mono);
 }
 .rangoInput::placeholder {
-  font: 12px var(--font-sans);
+  font: 11px var(--font-sans);
   color: var(--muted-text);
 }
 .rangoAyuda {
-  flex: 1;
-  min-width: 160px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.35;
   color: var(--muted-text);
-}
-.rangoAyuda strong {
-  font-size: 13px;
-  color: var(--foreground);
-  font-weight: 600;
 }
 .rangoError {
   color: var(--danger);
 }
-.delTomo {
-  height: 36px;
+.totalArchivo {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10px;
   color: var(--muted-text);
+}
+.totalArchivo .inputMini {
+  width: 48px;
+  height: 24px;
+}
+.gramajeFila {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.gramajeSelect {
+  width: 80px;
+}
+.gramajeFila .compactSelect :global(.select__trigger) {
+  height: 24px;
+  min-height: 24px;
+  font-size: 11px;
+  background: transparent;
+}
+.documentsTable .importeCell {
+  text-align: right;
+}
+.importeCell strong {
+  font-weight: 600;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.cellHint {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.delTomo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.delTomo small {
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.rowButton {
+  min-width: 26px;
+  width: 26px;
+  height: 28px;
+  padding: 0;
+}
+.rowButton svg {
+  width: 14px;
+  height: 14px;
+}
+.rowButton[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.detailRow {
+  background: var(--canvas-background);
+}
+.documentsTable .detailRow td {
+  padding: 0;
+}
+.rowOptions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px 10px 36px;
+}
+.optionsTitle {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+.rowError {
+  margin: 0;
+  padding: 8px 14px 8px 36px;
+  font-size: 12px;
+  color: var(--danger);
 }
 .muted {
   color: var(--muted-text);
 }
 .errChip {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--danger);
 }
 .errBanner {
-  margin: 0 24px 16px;
+  margin: 0 20px 12px;
   width: auto;
   flex-shrink: 0;
 }
-.tomo {
-  flex: none;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  overflow: hidden;
+.tomoRow {
+  background: var(--surface-secondary);
+}
+.documentsTable .tomoRow td {
+  padding: 0;
 }
 .tomoHead {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--surface-secondary);
+  gap: 10px;
+  padding: 8px 12px;
 }
 .tomoTitle {
+  font-size: 12px;
   font-weight: 600;
-  font-size: 13px;
 }
 .tomoNombre {
   flex: 1;
-  min-width: 160px;
-  max-width: 280px;
+  min-width: 150px;
+  max-width: 230px;
 }
 .tomoJuegos {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 11px;
 }
 .tomoMeta {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted-text);
 }
 .tomoSub {
   margin-left: auto;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.cardGrupo {
-  border: 0;
-  border-top: 1px solid var(--border);
-  border-radius: 0;
 }
 .tomoAnillado {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 16px;
-  font-size: 12px;
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  padding: 5px 12px 5px 36px;
+  font-size: 11px;
 }
 .tomoAnilladoLbl {
   color: var(--muted-text);
@@ -406,23 +531,16 @@
 .tomoAnilladoWarn {
   color: var(--danger);
   font-size: 12px;
-  padding: 10px 16px;
+  padding: 8px 12px;
 }
 .foot {
-  flex-shrink: 0;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 18px 24px;
+  gap: 18px;
+  padding: 10px 20px;
   border-top: 1px solid var(--border);
   background: var(--surface);
-}
-.confirmActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 20px 24px;
 }
 .stats {
   display: flex;
@@ -431,15 +549,15 @@
 .stats > div {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .statNum {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .statLbl {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted-text);
 }
 .totalBox {
@@ -451,64 +569,91 @@
   align-items: baseline;
   justify-content: flex-end;
   gap: 10px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted-text);
 }
 .totalFinal strong {
-  font-size: 26px;
+  font-size: 22px;
+  line-height: 1.2;
   font-weight: 600;
   letter-spacing: -0.03em;
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 .totalNetoSub {
-  margin-top: 4px;
-  font-size: 11px;
+  margin-top: 2px;
+  font-size: 10px;
   color: var(--muted-text);
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 1000px) {
-  .cargar {
-    grid-template-columns: 1fr;
-  }
-  .drop {
-    padding: 16px;
-  }
-  .foot {
-    flex-wrap: wrap;
-  }
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 24px;
 }
-@media (max-width: 600px) {
-  .body {
-    padding: 16px;
-    gap: 16px;
+@media (max-width: 1100px) {
+  .cargar {
+    grid-template-columns: 120px minmax(0, 1fr);
   }
-  .defaults {
-    padding: 14px;
-  }
-  .lista {
-    padding: 10px;
-  }
-  .card {
-    padding: 12px;
-  }
-  .cardTop {
-    flex-wrap: wrap;
-  }
-  .cardPrecio {
-    width: calc(100% - 42px);
-    margin-left: 0;
-  }
-  .cardUnit {
+  .defaultsHead span {
     display: none;
   }
+}
+@media (max-width: 700px) {
+  .sheet :global(.modal__header) {
+    padding: 12px 48px 10px 14px;
+  }
+  .body {
+    padding: 10px;
+  }
+  .bodyFields {
+    gap: 10px;
+  }
+  .cargar {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .drop {
+    flex-direction: row;
+    padding: 6px 10px;
+  }
+  .dropHint {
+    max-width: none;
+  }
+  .defaults {
+    padding: 8px;
+  }
+  .defaultsHead {
+    margin-bottom: 6px;
+  }
+  .defaultsGrid {
+    gap: 6px;
+  }
+  .defaultsGrid > label:first-child {
+    max-width: 170px;
+  }
+  .defaultsGrid > label:first-child > div {
+    max-width: 100%;
+  }
+  .campo {
+    gap: 2px;
+  }
+  .tablaHead {
+    padding: 6px 8px;
+  }
+  .seccionTitulo {
+    font-size: 12px;
+  }
   .foot {
-    padding: 14px 16px;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
   }
   .stats {
-    justify-content: space-between;
     width: 100%;
+    justify-content: space-between;
     gap: 12px;
   }
   .totalBox {
@@ -523,6 +668,6 @@
     display: none;
   }
   .errBanner {
-    margin-inline: 16px;
+    margin-inline: 10px;
   }
 }

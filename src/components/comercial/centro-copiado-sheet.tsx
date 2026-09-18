@@ -9,9 +9,16 @@ import {
 import { ActionButton } from "@/components/design-system/action-button";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { SelectField } from "@/components/design-system/select-field";
-import { SegmentedControl } from "@/components/design-system/choice-controls";
 import { Select, ListBox } from "@heroui/react";
-import { FileText, Upload, Plus, Trash2, Layers, Printer } from "lucide-react";
+import {
+  FileText,
+  Upload,
+  Plus,
+  Trash2,
+  Layers,
+  Printer,
+  SlidersHorizontal,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Empty,
@@ -165,6 +172,7 @@ function SysSelect({
         value={value}
         onChange={onChange}
         options={options}
+        className={s.compactSelect}
       />
     </div>
   );
@@ -206,7 +214,7 @@ function SysMultiSelect({
       <Select
         selectionMode="multiple"
         aria-label={ariaLabel}
-        className={selectStyles.root}
+        className={cn(selectStyles.root, s.compactSelect)}
         fullWidth
         isDisabled={options.length === 0}
         value={values}
@@ -308,6 +316,9 @@ function CentroCopiadoContenido({
     { value: string; label: string }[]
   >([]);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
+  const [opcionesAbiertas, setOpcionesAbiertas] = React.useState<Set<string>>(
+    new Set(),
+  );
   const [preview, setPreview] =
     React.useState<CotizarCentroCopiadoResponse | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
@@ -375,6 +386,7 @@ function CentroCopiadoContenido({
     setPreview(null);
     setPreviewError(null);
     setConfirmarSalida(false);
+    setOpcionesAbiertas(new Set());
   }, [open]);
 
   // Edición: rehidratar la CARGA completa — cada renglón suelto es un documento,
@@ -892,136 +904,141 @@ function CentroCopiadoContenido({
     label: p.nombre,
   }));
 
-  const renderCard = (d: DocRow, index: number, enGrupo: boolean) => {
+  const renderFila = (d: DocRow, index: number, enGrupo: boolean) => {
     const seleccion = seleccionDe(d);
     const tieneArchivo = !!(d.file || d.archivoNombre);
-    const tamanos = tamanosDe(d.papelMateriaPrimaId, d.gramaje);
-    const tamanoOptions = tamanos.map((tm) => ({
-      value: tm.nombre,
-      label: tm.nombre,
-    }));
     const gramajes = gramajesDe(d.papelMateriaPrimaId);
+    const opciones = opcionesAbiertas.has(d.id);
+    const anillado = !enGrupo ? previewDoc(d.id)?.anillado : null;
+    const error = errorDoc(d.id) || anillado?.error;
+    const nombre = d.nombre || `Documento ${index + 1}`;
     return (
-      <section
-        aria-label={`Documento ${index + 1}`}
-        key={d.id}
-        className={cn(s.card, enGrupo && s.cardGrupo)}
-      >
-        <div className={s.cardTop}>
-          {!enGrupo && (
+      <React.Fragment key={d.id}>
+        <tr
+          aria-label={`Documento ${index + 1}`}
+          className={cn(s.documentRow, enGrupo && s.rowGrupo)}
+          data-selected={sel.has(d.id) || undefined}
+        >
+          <td>
+            {!enGrupo ? (
+              <input
+                type="checkbox"
+                className={s.chk}
+                checked={sel.has(d.id)}
+                onChange={() => toggleSel(d.id)}
+                aria-label={`Seleccionar ${nombre}`}
+              />
+            ) : (
+              <Layers className={s.grupoIcon} aria-hidden="true" />
+            )}
+          </td>
+          <td>
             <input
-              type="checkbox"
-              className={s.chk}
-              checked={sel.has(d.id)}
-              onChange={() => toggleSel(d.id)}
-              aria-label={`Seleccionar ${d.nombre}`}
+              type="text"
+              value={d.nombre}
+              onChange={(e) => editar(d.id, { nombre: e.target.value })}
+              placeholder="Nombre del documento"
+              className={s.docNombreInput}
+              aria-label={`Nombre del documento ${index + 1}`}
+              title={nombre}
             />
-          )}
-          <span className={s.docNum}>{String(index + 1).padStart(2, "0")}</span>
-          <input
-            type="text"
-            value={d.nombre}
-            onChange={(e) => editar(d.id, { nombre: e.target.value })}
-            placeholder="Nombre del documento"
-            className={s.docNombreInput}
-            aria-label="Nombre del documento"
-          />
-          <span className={s.cardPrecio}>
-            {errorDoc(d.id) ? (
-              <span className={s.errChip} title={errorDoc(d.id)!}>
-                ⚠ sin precio
+            <div className={s.docMeta}>
+              <span className={s.docNum}>
+                {String(index + 1).padStart(2, "0")}
               </span>
-            ) : subtotalImpresionDoc(d.id) != null ? (
+              <span>
+                Cobertura{" "}
+                {NIVEL_COBERTURA_LABELS[
+                  d.cobertura as keyof typeof NIVEL_COBERTURA_LABELS
+                ] ?? d.cobertura}
+                {enGrupo
+                  ? " · del tomo"
+                  : d.terminaciones.length
+                    ? ` · ${d.terminaciones.join(", ")}`
+                    : ""}
+              </span>
+            </div>
+          </td>
+          <td>
+            {tieneArchivo ? (
               <>
-                {precioHojaDoc(d.id) != null ? (
-                  <span className={s.cardUnit}>
-                    {fmtHoja(precioHojaDoc(d.id)!)}/hoja
-                  </span>
-                ) : null}
-                <span className={s.cardSub}>
-                  Hojas {fmt(subtotalImpresionDoc(d.id)!)}
-                </span>
-                <span className={s.cardIva}>sin IVA</span>
+                <input
+                  type="text"
+                  value={d.rangoPaginas}
+                  placeholder="Todas · ej. 1-7,9"
+                  maxLength={2000}
+                  onChange={(e) =>
+                    editar(d.id, { rangoPaginas: e.target.value })
+                  }
+                  onBlur={() => {
+                    if (!seleccion.error && d.rangoPaginas !== seleccion.rango)
+                      editar(d.id, { rangoPaginas: seleccion.rango });
+                  }}
+                  aria-label={`Páginas a imprimir de ${nombre}`}
+                  aria-invalid={!!seleccion.error && !!d.rangoPaginas}
+                  aria-describedby={`${d.id}-rango-ayuda`}
+                  className={s.rangoInput}
+                  title="Ej.: 1-7,9,12-16. Vacío = todas. En orden del archivo, sin repetir."
+                />
+                {!d.paginasAuto && (
+                  <label className={s.totalArchivo}>
+                    Total del archivo{" "}
+                    <input
+                      aria-label={`Total de páginas de ${nombre}`}
+                      type="number"
+                      min={1}
+                      value={d.paginas || ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        editar(d.id, {
+                          paginas: Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                      className={s.inputMini}
+                    />
+                  </label>
+                )}
+                <div
+                  id={`${d.id}-rango-ayuda`}
+                  className={cn(s.rangoAyuda, seleccion.error && s.rangoError)}
+                  aria-live="polite"
+                >
+                  {seleccion.error ||
+                    `${seleccion.paginas} de ${d.paginas} páginas`}
+                </div>
               </>
             ) : (
-              <span className={s.muted}>…</span>
+              <>
+                <input
+                  type="number"
+                  min={1}
+                  value={d.paginas || ""}
+                  placeholder="Páginas"
+                  aria-label={`Páginas de ${nombre}`}
+                  onChange={(e) =>
+                    editar(d.id, {
+                      paginas: Math.max(0, Number(e.target.value) || 0),
+                      paginasAuto: false,
+                    })
+                  }
+                  className={cn(s.inputMini, d.paginas < 1 && s.inputFalta)}
+                />
+                <span className={s.cellHint}>Carga manual</span>
+              </>
             )}
-          </span>
-          <ActionButton
-            type="button"
-            variant="tertiary"
-            isIconOnly
-            onPress={() => eliminar(d.id)}
-            aria-label="Quitar"
-          >
-            <Trash2 data-icon="inline-start" />
-          </ActionButton>
-        </div>
-        {tieneArchivo && (
-          <div className={s.rangoFila}>
-            <label className={s.rangoCampo}>
-              <span>Páginas a imprimir</span>
-              <input
-                type="text"
-                value={d.rangoPaginas}
-                placeholder="Todas · ej. 1-7,9,12-16"
-                maxLength={2000}
-                onChange={(e) => editar(d.id, { rangoPaginas: e.target.value })}
-                onBlur={() => {
-                  if (!seleccion.error && d.rangoPaginas !== seleccion.rango)
-                    editar(d.id, { rangoPaginas: seleccion.rango });
-                }}
-                aria-invalid={!!seleccion.error && !!d.rangoPaginas}
-                aria-describedby={`${d.id}-rango-ayuda`}
-                className={s.rangoInput}
-              />
-            </label>
-            <div
-              id={`${d.id}-rango-ayuda`}
-              className={cn(s.rangoAyuda, seleccion.error && s.rangoError)}
-              aria-live="polite"
-            >
-              {seleccion.error ? (
-                seleccion.error
-              ) : (
-                <>
-                  <strong>
-                    {seleccion.paginas} de {d.paginas} páginas
-                  </strong>
-                  <span>En orden del archivo, sin repetir. Vacío = todas.</span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-        <div className={s.cardCtrls}>
-          <label className={s.ctrl}>
-            <span>{tieneArchivo ? "Págs. del archivo" : "Páginas"}</span>
-            <input
-              type="number"
-              min={0}
-              value={d.paginas || ""}
-              placeholder="0"
-              readOnly={tieneArchivo && d.paginasAuto}
-              onChange={(e) =>
-                editar(d.id, {
-                  paginas: Math.max(0, Number(e.target.value) || 0),
-                  paginasAuto: false,
-                })
-              }
-              className={`${s.inputMini} ${d.paginas < 1 ? s.inputFalta : ""}`}
-              title={d.paginasAuto ? "Páginas leídas del PDF" : undefined}
-            />
-          </label>
-          <label className={s.ctrl}>
-            <span>Copias</span>
+          </td>
+          <td>
             {enGrupo ? (
-              <span className={s.delTomo}>del tomo</span>
+              <span className={s.delTomo} title="Se define en Juegos del tomo">
+                {grupos[d.grupoId!]?.juegos ?? 1}
+                <small>juegos</small>
+              </span>
             ) : (
               <input
                 type="number"
                 min={1}
                 value={d.copias}
+                aria-label={`Copias de ${nombre}`}
                 onChange={(e) =>
                   editar(d.id, {
                     copias: Math.max(1, Number(e.target.value) || 1),
@@ -1030,138 +1047,194 @@ function CentroCopiadoContenido({
                 className={s.inputMini}
               />
             )}
-          </label>
-          {/* El tipo de papel + gramaje condicionan el tamaño → van primero. */}
-          <label className={s.ctrl}>
-            <span>Papel</span>
+          </td>
+          <td>
             <SysSelect
               value={d.papelMateriaPrimaId}
               onChange={(v) => cambiarPapel(d.id, v, d.tamano)}
               options={papelOptions}
-              ariaLabel="Papel"
-              triggerClassName="w-[190px]"
+              ariaLabel={`Papel de ${nombre}`}
             />
-          </label>
-          {gramajes.length > 1 && (
-            <label className={s.ctrl}>
-              <span>Gramaje</span>
-              <SysSelect
-                value={d.gramaje != null ? String(d.gramaje) : ""}
-                onChange={(v) =>
-                  cambiarGramaje(
-                    d.id,
-                    d.papelMateriaPrimaId,
-                    Number(v),
-                    d.tamano,
-                  )
-                }
-                options={gramajes.map((g) => ({
-                  value: String(g),
-                  label: `${g} g`,
-                }))}
-                ariaLabel="Gramaje"
-                triggerClassName="w-[92px]"
-              />
-            </label>
-          )}
-          <label className={s.ctrl}>
-            <span>Tamaño</span>
+            <div className={s.gramajeFila}>
+              {gramajes.length > 1 ? (
+                <SysSelect
+                  value={d.gramaje != null ? String(d.gramaje) : ""}
+                  onChange={(v) =>
+                    cambiarGramaje(
+                      d.id,
+                      d.papelMateriaPrimaId,
+                      Number(v),
+                      d.tamano,
+                    )
+                  }
+                  options={gramajes.map((g) => ({
+                    value: String(g),
+                    label: `${g} g`,
+                  }))}
+                  ariaLabel={`Gramaje de ${nombre}`}
+                  triggerClassName={s.gramajeSelect}
+                />
+              ) : (
+                <span>{d.gramaje != null ? `${d.gramaje} g` : "—"}</span>
+              )}
+            </div>
+          </td>
+          <td>
             <SysSelect
               value={d.tamano}
-              onChange={(v) => cambiarTamano(d.id, v, tamanos)}
-              options={tamanoOptions}
-              ariaLabel="Tamaño"
+              onChange={(v) =>
+                cambiarTamano(
+                  d.id,
+                  v,
+                  tamanosDe(d.papelMateriaPrimaId, d.gramaje),
+                )
+              }
+              options={tamanosDe(d.papelMateriaPrimaId, d.gramaje).map(
+                (tm) => ({ value: tm.nombre, label: tm.nombre }),
+              )}
+              ariaLabel={`Tamaño de ${nombre}`}
               placeholder="—"
-              triggerClassName="w-[88px]"
             />
-          </label>
-          <div className={s.ctrl}>
-            <span>Color</span>
-            <SegmentedControl
-              aria-label="Color"
-              options={OPCIONES_COLOR}
-              value={d.color}
-              onChange={(v) => editar(d.id, { color: v as ColorDoc })}
-              tone="graphite"
-            />
-          </div>
-          <div className={s.ctrl}>
-            <span>Faz</span>
-            <SegmentedControl
-              aria-label="Faz"
-              options={OPCIONES_FAZ}
-              value={String(d.faz)}
-              onChange={(v) => editar(d.id, { faz: Number(v) as FazDoc })}
-              tone="graphite"
-            />
-          </div>
-          {/* Cobertura de tóner del documento (default Alta). Modula el consumo
-              de tóner; el perfil de máquina lo resuelve el sistema. */}
-          <label className={s.ctrl}>
-            <span>Cobertura</span>
+          </td>
+          <td>
             <SysSelect
-              value={d.cobertura}
-              onChange={(v) => editar(d.id, { cobertura: v })}
-              options={NIVELES_COBERTURA.map((nivel) => ({
-                value: nivel,
-                label: NIVEL_COBERTURA_LABELS[nivel],
-              }))}
-              ariaLabel="Cobertura de tóner"
-              triggerClassName="w-[120px]"
+              value={d.color}
+              options={OPCIONES_COLOR}
+              onChange={(v) => editar(d.id, { color: v as ColorDoc })}
+              ariaLabel={`Color de ${nombre}`}
             />
-          </label>
-          {/* Terminaciones (pasos opcionales) del suelto; en el tomo van una sola
-              vez en el header del grupo. Sólo aparece si hay alguna ofrecida. */}
-          {!enGrupo && terminacionesDisp.length > 0 && (
-            <label className={s.ctrl}>
-              <span>Terminaciones</span>
-              <SysMultiSelect
-                values={d.terminaciones}
-                onChange={(v) => editar(d.id, { terminaciones: v })}
-                options={terminacionesDisp.map((t) => ({ value: t, label: t }))}
-                ariaLabel="Terminaciones"
-                triggerClassName="w-[130px]"
-              />
-            </label>
-          )}
-          {/* Tipo de anillo: sólo si hay más de uno instalado y el doc anilla. */}
-          {!enGrupo &&
-            tiposAnilloDisp.length > 1 &&
-            d.terminaciones.includes("Anillado") && (
-              <label className={s.ctrl}>
-                <span>Tipo de anillo</span>
-                <SysSelect
-                  value={d.tipoAnillo || tiposAnilloDisp[0].value}
-                  onChange={(v) => editar(d.id, { tipoAnillo: v })}
-                  options={tiposAnilloDisp}
-                  ariaLabel="Tipo de anillo"
-                  triggerClassName="w-[150px]"
-                />
-              </label>
+          </td>
+          <td>
+            <SysSelect
+              value={String(d.faz)}
+              options={OPCIONES_FAZ}
+              onChange={(v) => editar(d.id, { faz: Number(v) as FazDoc })}
+              ariaLabel={`Faz de ${nombre}`}
+            />
+          </td>
+          <td className={s.importeCell}>
+            {error ? (
+              <span className={s.errChip}>Sin precio</span>
+            ) : subtotalImpresionDoc(d.id) != null ? (
+              <>
+                <strong>{fmt(subtotalImpresionDoc(d.id)!)}</strong>
+                <span className={s.cellHint}>
+                  {precioHojaDoc(d.id) != null
+                    ? `${fmtHoja(precioHojaDoc(d.id)!)}/hoja`
+                    : ""}
+                </span>
+              </>
+            ) : (
+              <span className={s.muted}>{cotizando ? "…" : "—"}</span>
             )}
-        </div>
-        {!enGrupo &&
-          previewDoc(d.id)?.anillado &&
-          (previewDoc(d.id)!.anillado!.error ? (
-            <div className={s.tomoAnilladoWarn}>
-              ⚠ {previewDoc(d.id)!.anillado!.error} No se puede agregar hasta
-              corregirlo.
-            </div>
-          ) : (
-            <div className={s.tomoAnillado}>
-              <span className={s.tomoAnilladoLbl}>
-                Anillado ·{" "}
-                {labelTipoAnillo(previewDoc(d.id)!.anillado!.tipoAnillo)}
-                {previewDoc(d.id)!.anillado!.diametroMm
-                  ? ` Ø${previewDoc(d.id)!.anillado!.diametroMm} mm`
-                  : ""}
-              </span>
-              <span className={s.tomoAnilladoPrecio}>
-                + {fmt(previewDoc(d.id)!.anillado!.subtotal)} sin IVA
-              </span>
-            </div>
-          ))}
-      </section>
+          </td>
+          <td>
+            <ActionButton
+              variant="tertiary"
+              isIconOnly
+              className={s.rowButton}
+              aria-label={`Opciones de ${nombre}`}
+              aria-expanded={opciones}
+              aria-controls={`${d.id}-opciones`}
+              title="Cobertura y terminaciones"
+              onPress={() =>
+                setOpcionesAbiertas((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(d.id)) next.delete(d.id);
+                  else next.add(d.id);
+                  return next;
+                })
+              }
+            >
+              <SlidersHorizontal aria-hidden="true" />
+            </ActionButton>
+          </td>
+          <td>
+            <ActionButton
+              variant="tertiary"
+              isIconOnly
+              className={s.rowButton}
+              onPress={() => eliminar(d.id)}
+              aria-label={`Quitar ${nombre}`}
+            >
+              <Trash2 aria-hidden="true" />
+            </ActionButton>
+          </td>
+        </tr>
+        {(opciones || error || anillado) && (
+          <tr className={s.detailRow}>
+            <td colSpan={11}>
+              {opciones && (
+                <div className={s.rowOptions} id={`${d.id}-opciones`}>
+                  <span className={s.optionsTitle}>Opciones de {nombre}</span>
+                  <label className={s.campo}>
+                    <span>Cobertura</span>
+                    <SysSelect
+                      value={d.cobertura}
+                      onChange={(v) => editar(d.id, { cobertura: v })}
+                      options={NIVELES_COBERTURA.map((nivel) => ({
+                        value: nivel,
+                        label: NIVEL_COBERTURA_LABELS[nivel],
+                      }))}
+                      ariaLabel={`Cobertura de ${nombre}`}
+                      triggerClassName="w-[120px]"
+                    />
+                  </label>
+                  {!enGrupo && terminacionesDisp.length > 0 && (
+                    <label className={s.campo}>
+                      <span>Terminaciones</span>
+                      <SysMultiSelect
+                        values={d.terminaciones}
+                        onChange={(v) => editar(d.id, { terminaciones: v })}
+                        options={terminacionesDisp.map((t) => ({
+                          value: t,
+                          label: t,
+                        }))}
+                        ariaLabel={`Terminaciones de ${nombre}`}
+                        triggerClassName="w-[160px]"
+                      />
+                    </label>
+                  )}
+                  {!enGrupo &&
+                    tiposAnilloDisp.length > 1 &&
+                    d.terminaciones.includes("Anillado") && (
+                      <label className={s.campo}>
+                        <span>Tipo de anillo</span>
+                        <SysSelect
+                          value={d.tipoAnillo || tiposAnilloDisp[0].value}
+                          onChange={(v) => editar(d.id, { tipoAnillo: v })}
+                          options={tiposAnilloDisp}
+                          ariaLabel={`Tipo de anillo de ${nombre}`}
+                          triggerClassName="w-[150px]"
+                        />
+                      </label>
+                    )}
+                  {enGrupo && (
+                    <span className={s.cellHint}>
+                      Las terminaciones se definen en el tomo.
+                    </span>
+                  )}
+                </div>
+              )}
+              {error ? (
+                <p className={s.rowError} role="alert">
+                  {error}
+                </p>
+              ) : (
+                anillado && (
+                  <div className={s.tomoAnillado}>
+                    <span>
+                      Anillado · {labelTipoAnillo(anillado.tipoAnillo)}
+                      {anillado.diametroMm ? ` Ø${anillado.diametroMm} mm` : ""}
+                    </span>
+                    <strong>+ {fmt(anillado.subtotal)} sin IVA</strong>
+                  </div>
+                )
+              )}
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
     );
   };
 
@@ -1246,20 +1319,18 @@ function CentroCopiadoContenido({
                     ? "Leyendo archivos…"
                     : dragActive
                       ? "Soltá los archivos acá"
-                      : "Arrastrá o elegí archivos"}
+                      : "Agregar archivos"}
                 </div>
                 <div className={s.dropHint}>
-                  PDF, Word o Excel. Del PDF leemos las páginas; en el resto las
-                  cargás a mano.
+                  Arrastrá acá PDF, Word o Excel.
                 </div>
               </div>
 
               <div className={s.defaults}>
                 <div className={s.defaultsHead}>
-                  <span className={s.seccionNumero}>01</span>
                   <div>
                     <strong>Configuración inicial</strong>
-                    <p>Se aplica a los nuevos documentos.</p>
+                    <span>Para los nuevos archivos</span>
                   </div>
                 </div>
                 <div className={s.defaultsGrid}>
@@ -1339,26 +1410,26 @@ function CentroCopiadoContenido({
                   </label>
                   <div className={s.campo}>
                     <span>Color</span>
-                    <SegmentedControl
-                      aria-label="Color por defecto"
+                    <SysSelect
+                      ariaLabel="Color por defecto"
                       options={OPCIONES_COLOR}
                       value={defaults.color}
                       onChange={(v) =>
                         setDefaults({ ...defaults, color: v as ColorDoc })
                       }
-                      tone="graphite"
+                      triggerClassName="w-[88px]"
                     />
                   </div>
                   <div className={s.campo}>
                     <span>Faz</span>
-                    <SegmentedControl
-                      aria-label="Faz por defecto"
+                    <SysSelect
+                      ariaLabel="Faz por defecto"
                       options={OPCIONES_FAZ}
                       value={String(defaults.faz)}
                       onChange={(v) =>
                         setDefaults({ ...defaults, faz: Number(v) as FazDoc })
                       }
-                      tone="graphite"
+                      triggerClassName="w-[88px]"
                     />
                   </div>
                   <label className={s.campo}>
@@ -1391,8 +1462,8 @@ function CentroCopiadoContenido({
             <section className={s.tablaWrap}>
               <div className={s.tablaHead}>
                 <span className={s.seccionTitulo}>
-                  <span className={s.seccionNumero}>02</span>Documentos del
-                  trabajo <span className={s.contador}>{docs.length}</span>
+                  Documentos del trabajo{" "}
+                  <span className={s.contador}>{docs.length}</span>
                 </span>
                 <div className={s.tablaHeadBtns}>
                   <ActionButton
@@ -1435,136 +1506,203 @@ function CentroCopiadoContenido({
                   </EmptyHeader>
                 </Empty>
               ) : (
-                <div className={s.lista}>
-                  {grupoIds.map((gid) => {
-                    const miembros = docs.filter((d) => d.grupoId === gid);
-                    const gprev = preview?.grupos.find((g) => g.id === gid);
-                    return (
-                      <div key={gid} className={s.tomo}>
-                        <div className={s.tomoHead}>
-                          <span className={s.tomoTitle}>Tomo anillado</span>
-                          <input
-                            type="text"
-                            value={grupos[gid]?.nombre ?? ""}
-                            onChange={(e) =>
-                              setGrupos((prev) => ({
-                                ...prev,
-                                [gid]: { ...prev[gid], nombre: e.target.value },
-                              }))
-                            }
-                            placeholder={`Nombre del tomo (${miembros.length} docs)`}
-                            className={s.tomoNombre}
-                            aria-label="Nombre del tomo"
-                          />
-                          <label className={s.tomoJuegos}>
-                            Juegos
-                            <input
-                              type="number"
-                              min={1}
-                              value={grupos[gid]?.juegos ?? 1}
-                              onChange={(e) =>
-                                setGrupos((prev) => ({
-                                  ...prev,
-                                  [gid]: {
-                                    ...prev[gid],
-                                    juegos: Math.max(
-                                      1,
-                                      Number(e.target.value) || 1,
-                                    ),
-                                  },
-                                }))
-                              }
-                              className={s.inputMini}
-                            />
-                          </label>
-                          {/* Terminaciones del tomo entero (un solo selector). */}
-                          {terminacionesDisp.length > 0 && (
-                            <SysMultiSelect
-                              values={grupos[gid]?.terminaciones ?? []}
-                              onChange={(v) =>
-                                setGrupos((prev) => ({
-                                  ...prev,
-                                  [gid]: { ...prev[gid], terminaciones: v },
-                                }))
-                              }
-                              options={terminacionesDisp.map((t) => ({
-                                value: t,
-                                label: t,
-                              }))}
-                              ariaLabel="Terminaciones del tomo"
-                              triggerClassName="w-[160px]"
-                            />
-                          )}
-                          {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
-                          {tiposAnilloDisp.length > 1 &&
-                            (grupos[gid]?.terminaciones ?? []).includes(
-                              "Anillado",
-                            ) && (
-                              <SysSelect
-                                value={
-                                  grupos[gid]?.tipoAnillo ||
-                                  tiposAnilloDisp[0].value
-                                }
-                                onChange={(v) =>
-                                  setGrupos((prev) => ({
-                                    ...prev,
-                                    [gid]: { ...prev[gid], tipoAnillo: v },
-                                  }))
-                                }
-                                options={tiposAnilloDisp}
-                                ariaLabel="Tipo de anillo del tomo"
-                                triggerClassName="w-[150px]"
-                              />
-                            )}
-                          <span className={s.tomoMeta}>
-                            {gprev ? `${gprev.hojasPorLibro} hojas/juego` : ""}
-                          </span>
-                          <span className={s.tomoSub}>
-                            {gprev
-                              ? `Hojas ${fmt(
-                                  Math.max(
-                                    0,
-                                    gprev.subtotal -
-                                      (gprev.anillado?.subtotal ?? 0),
-                                  ),
-                                )}`
-                              : "—"}
-                          </span>
-                          <ActionButton
-                            type="button"
-                            variant="tertiary"
-                            isIconOnly
-                            onPress={() => desagrupar(gid)}
-                            aria-label="Desagrupar tomo"
-                          >
-                            <Trash2 data-icon="inline-start" />
-                          </ActionButton>
-                        </div>
-                        {gprev?.anillado &&
-                          (gprev.anillado.error ? (
-                            <div className={s.tomoAnilladoWarn}>
-                              ⚠ {gprev.anillado.error} No se puede agregar hasta
-                              corregirlo.
-                            </div>
-                          ) : (
-                            <div className={s.tomoAnillado}>
-                              <span className={s.tomoAnilladoLbl}>
-                                Anillado ·{" "}
-                                {labelTipoAnillo(gprev.anillado.tipoAnillo)}
-                                {gprev.anillado.diametroMm
-                                  ? ` Ø${gprev.anillado.diametroMm} mm`
-                                  : ""}
-                              </span>
-                              <span className={s.tomoAnilladoPrecio}>
-                                + {fmt(gprev.anillado.subtotal)} sin IVA
-                              </span>
-                            </div>
-                          ))}
-                        {miembros.map((d) => renderCard(d, idx++, true))}
-                      </div>
-                    );
-                  })}
-                  {sueltos.map((d) => renderCard(d, idx++, false))}
+                <div
+                  className={s.tableScroll}
+                  role="region"
+                  aria-label="Documentos y opciones de impresión"
+                  tabIndex={0}
+                >
+                  <table
+                    className={s.documentsTable}
+                    aria-label="Documentos del trabajo"
+                  >
+                    <colgroup>
+                      <col className={s.colCheck} />
+                      <col />
+                      <col className={s.colPages} />
+                      <col className={s.colCopies} />
+                      <col className={s.colPaper} />
+                      <col className={s.colSize} />
+                      <col className={s.colColor} />
+                      <col className={s.colFaces} />
+                      <col className={s.colPrice} />
+                      <col className={s.colAction} />
+                      <col className={s.colAction} />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th scope="col">
+                          <span className="sr-only">Seleccionar</span>
+                        </th>
+                        <th scope="col">Documento</th>
+                        <th scope="col">Páginas / rango</th>
+                        <th scope="col">Copias</th>
+                        <th scope="col">Papel / gramaje</th>
+                        <th scope="col">Tamaño</th>
+                        <th scope="col">Color</th>
+                        <th scope="col">Faz</th>
+                        <th scope="col" className={s.importeCell}>
+                          Importe <small>sin IVA</small>
+                        </th>
+                        <th scope="col">
+                          <span className="sr-only">Opciones</span>
+                        </th>
+                        <th scope="col">
+                          <span className="sr-only">Quitar</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grupoIds.map((gid) => {
+                        const miembros = docs.filter((d) => d.grupoId === gid);
+                        const gprev = preview?.grupos.find((g) => g.id === gid);
+                        return (
+                          <React.Fragment key={gid}>
+                            <tr className={s.tomoRow}>
+                              <td colSpan={11}>
+                                <div className={s.tomoHead}>
+                                  <span className={s.tomoTitle}>
+                                    Tomo anillado
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={grupos[gid]?.nombre ?? ""}
+                                    onChange={(e) =>
+                                      setGrupos((prev) => ({
+                                        ...prev,
+                                        [gid]: {
+                                          ...prev[gid],
+                                          nombre: e.target.value,
+                                        },
+                                      }))
+                                    }
+                                    placeholder={`Nombre del tomo (${miembros.length} docs)`}
+                                    className={s.tomoNombre}
+                                    aria-label="Nombre del tomo"
+                                  />
+                                  <label className={s.tomoJuegos}>
+                                    Juegos
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={grupos[gid]?.juegos ?? 1}
+                                      onChange={(e) =>
+                                        setGrupos((prev) => ({
+                                          ...prev,
+                                          [gid]: {
+                                            ...prev[gid],
+                                            juegos: Math.max(
+                                              1,
+                                              Number(e.target.value) || 1,
+                                            ),
+                                          },
+                                        }))
+                                      }
+                                      className={s.inputMini}
+                                    />
+                                  </label>
+                                  {/* Terminaciones del tomo entero (un solo selector). */}
+                                  {terminacionesDisp.length > 0 && (
+                                    <SysMultiSelect
+                                      values={grupos[gid]?.terminaciones ?? []}
+                                      onChange={(v) =>
+                                        setGrupos((prev) => ({
+                                          ...prev,
+                                          [gid]: {
+                                            ...prev[gid],
+                                            terminaciones: v,
+                                          },
+                                        }))
+                                      }
+                                      options={terminacionesDisp.map((t) => ({
+                                        value: t,
+                                        label: t,
+                                      }))}
+                                      ariaLabel="Terminaciones del tomo"
+                                      triggerClassName="w-[160px]"
+                                    />
+                                  )}
+                                  {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
+                                  {tiposAnilloDisp.length > 1 &&
+                                    (grupos[gid]?.terminaciones ?? []).includes(
+                                      "Anillado",
+                                    ) && (
+                                      <SysSelect
+                                        value={
+                                          grupos[gid]?.tipoAnillo ||
+                                          tiposAnilloDisp[0].value
+                                        }
+                                        onChange={(v) =>
+                                          setGrupos((prev) => ({
+                                            ...prev,
+                                            [gid]: {
+                                              ...prev[gid],
+                                              tipoAnillo: v,
+                                            },
+                                          }))
+                                        }
+                                        options={tiposAnilloDisp}
+                                        ariaLabel="Tipo de anillo del tomo"
+                                        triggerClassName="w-[150px]"
+                                      />
+                                    )}
+                                  <span className={s.tomoMeta}>
+                                    {gprev
+                                      ? `${gprev.hojasPorLibro} hojas/juego`
+                                      : ""}
+                                  </span>
+                                  <span className={s.tomoSub}>
+                                    {gprev
+                                      ? `Hojas ${fmt(
+                                          Math.max(
+                                            0,
+                                            gprev.subtotal -
+                                              (gprev.anillado?.subtotal ?? 0),
+                                          ),
+                                        )}`
+                                      : "—"}
+                                  </span>
+                                  <ActionButton
+                                    type="button"
+                                    variant="tertiary"
+                                    isIconOnly
+                                    onPress={() => desagrupar(gid)}
+                                    aria-label="Desagrupar tomo"
+                                  >
+                                    <Trash2 data-icon="inline-start" />
+                                  </ActionButton>
+                                </div>
+                                {gprev?.anillado &&
+                                  (gprev.anillado.error ? (
+                                    <div className={s.tomoAnilladoWarn}>
+                                      ⚠ {gprev.anillado.error} No se puede
+                                      agregar hasta corregirlo.
+                                    </div>
+                                  ) : (
+                                    <div className={s.tomoAnillado}>
+                                      <span className={s.tomoAnilladoLbl}>
+                                        Anillado ·{" "}
+                                        {labelTipoAnillo(
+                                          gprev.anillado.tipoAnillo,
+                                        )}
+                                        {gprev.anillado.diametroMm
+                                          ? ` Ø${gprev.anillado.diametroMm} mm`
+                                          : ""}
+                                      </span>
+                                      <span className={s.tomoAnilladoPrecio}>
+                                        + {fmt(gprev.anillado.subtotal)} sin IVA
+                                      </span>
+                                    </div>
+                                  ))}
+                              </td>
+                            </tr>
+                            {miembros.map((d) => renderFila(d, idx++, true))}
+                          </React.Fragment>
+                        );
+                      })}
+                      {sueltos.map((d) => renderFila(d, idx++, false))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </section>
