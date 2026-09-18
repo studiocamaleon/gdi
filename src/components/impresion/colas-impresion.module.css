@@ -1,0 +1,475 @@
+.dialog.dialog {
+  width: min(1420px, calc(100vw - 32px));
+  max-width: 1420px;
+  display: flex;
+  flex-direction: column;
+}
+.body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.asistente {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+.bot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 10px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--brand-graphite));
+}
+.bot svg {
+  width: 28px;
+  height: 28px;
+}
+.bot[data-enviando="true"] svg {
+  animation: trabajar 1.2s ease-in-out infinite alternate;
+}
+.mensaje {
+  flex: 1;
+  min-width: 0;
+}
+.mensaje strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+.mensaje p {
+  margin: 5px 0 0;
+  color: var(--brand-muted-on-graphite);
+  font-size: 12px;
+}
+.conexiones {
+  height: 26px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+.conexiones span {
+  height: 26px;
+  width: 66%;
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  margin-top: 13px;
+  position: relative;
+  border-radius: 6px 6px 0 0;
+}
+.conexiones span::before {
+  content: "";
+  position: absolute;
+  height: 26px;
+  border-left: 1px solid var(--border);
+  top: -14px;
+  left: 50%;
+}
+.columnas {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  align-items: flex-start;
+}
+.columna {
+  min-width: 285px;
+  flex: 1 0 285px;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.maquina {
+  padding: 16px;
+  background: var(--surface, #faf9f6);
+  border-bottom: 1px solid var(--border);
+}
+.maquina > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.maquina h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+.maquina svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--muted-text);
+}
+.maquina p {
+  color: var(--muted-text);
+  font-size: 11px;
+  margin: 6px 0;
+}
+.estadoMaquina {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted-text);
+  margin-top: 12px;
+}
+.estadoMaquina i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.estadoMaquina[data-activa="true"] {
+  color: var(--accent-soft-foreground);
+}
+.estadoMaquina[data-atencion="true"] {
+  color: var(--warning);
+}
+.trabajos {
+  list-style: none;
+  margin: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 51vh;
+  overflow-y: auto;
+}
+.trabajo {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 13px;
+  background: var(--surface, #faf9f6);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trabajo[data-activo="true"] {
+  border-left: 3px solid var(--accent);
+}
+.trabajo[data-verificado="true"] {
+  background: color-mix(
+    in srgb,
+    var(--success, #127348) 5%,
+    var(--surface, #faf9f6)
+  );
+}
+.trabajo[data-seleccionado="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.identidad {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--muted-text);
+  margin-bottom: 9px;
+}
+.nombre {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.nombre svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted-text);
+}
+.trabajo[data-verificado="true"] .nombre svg {
+  color: var(--success, #127348);
+}
+.resumen {
+  font-size: 11px;
+  color: var(--muted-text);
+  margin: 8px 0 4px;
+  line-height: 1.6;
+}
+.papel {
+  font-size: 11px;
+  color: var(--muted-text);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+.estado {
+  margin: 10px 0;
+}
+.estado svg {
+  width: 12px;
+  height: 12px;
+}
+.estado > * {
+  white-space: normal;
+  text-align: left;
+  line-height: 1.4;
+}
+.seleccionar {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12px;
+  margin: 12px 0;
+  cursor: pointer;
+}
+.seleccionar input {
+  accent-color: var(--accent);
+  margin-top: 2px;
+}
+.espera {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-text);
+  margin: 6px 0;
+}
+.detalles {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.detalles summary {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  cursor: pointer;
+  width: fit-content;
+}
+.detalles summary svg {
+  width: 12px;
+  height: 12px;
+}
+.detalles[open] summary svg {
+  transform: rotate(90deg);
+}
+.detalles p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.preparacion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 12px;
+  background: var(--surface);
+}
+.preparacion > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+.preparacion span {
+  flex: 1;
+  font-size: 12px;
+  min-width: 170px;
+}
+.preparacion small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+}
+.verificacion {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.verificacion[data-seleccionando="true"] {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.verificacionResumen {
+  flex: 1;
+  min-width: 220px;
+  font-size: 12px;
+}
+.verificacionResumen small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+}
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.nota {
+  margin-right: auto;
+  max-width: 600px;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.widget {
+  position: fixed;
+  bottom: 20px;
+  right: 24px;
+  z-index: 40;
+  max-width: calc(100vw - 32px);
+}
+.widgetTrigger.widgetTrigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-height: 64px;
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--brand-graphite-line);
+  border-radius: 12px;
+  box-shadow: var(--overlay-shadow);
+  white-space: normal;
+}
+.widgetBot.widgetBot {
+  width: 38px;
+  height: 38px;
+}
+.widgetBot.widgetBot svg {
+  width: 24px;
+  height: 24px;
+}
+.widgetTexto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+}
+.widgetTexto strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.widgetTexto > span {
+  color: var(--brand-muted-on-graphite);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.widgetCantidad {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding-inline: 5px;
+  border-radius: 6px;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.widgetAbrir {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.vacia {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  padding: 42px 12px;
+  text-align: center;
+  gap: 12px;
+}
+.vacia svg {
+  color: var(--muted-text);
+}
+.vacia p {
+  color: var(--muted-text);
+  font-size: 13px;
+  margin: 0;
+}
+.girar {
+  animation: girar 1s linear infinite;
+}
+@keyframes trabajar {
+  to {
+    transform: translateY(-3px);
+  }
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 680px) {
+  .dialog.dialog {
+    width: calc(100vw - 16px);
+  }
+  .body {
+    padding: 12px;
+  }
+  .asistente {
+    flex-wrap: wrap;
+    padding: 14px;
+  }
+  .mensaje {
+    flex-basis: calc(100% - 58px);
+  }
+  .asistente > button {
+    margin-left: 58px;
+  }
+  .columnas {
+    flex-direction: column;
+    overflow-x: visible;
+    margin-top: 12px;
+  }
+  .columna {
+    flex: auto;
+    width: 100%;
+    min-width: 0;
+  }
+  .trabajos {
+    max-height: none;
+  }
+  .conexiones {
+    display: none;
+  }
+  .footer {
+    padding: 12px;
+  }
+  .nota {
+    width: 100%;
+  }
+  .widget {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .girar,
+  .bot[data-enviando="true"] svg {
+    animation: none;
+  }
+}

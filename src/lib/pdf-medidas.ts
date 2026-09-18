@@ -2,6 +2,11 @@
 // desde CAD ("Plot to PDF") a escala 1:1 tiene el MediaBox = tamaño real de la
 // hoja, así que leerlo nos da la medida del plano sin backend.
 
+import {
+  orientacionPaginaPdf,
+  type OrientacionPagina,
+} from "./orientacion-pdf";
+
 const PT_TO_MM = 25.4 / 72;
 
 export type MedidaArchivoPagina = {
@@ -10,6 +15,9 @@ export type MedidaArchivoPagina = {
   totalPaginas: number;
   anchoMm: number;
   altoMm: number;
+  orientacion: OrientacionPagina;
+  /** Área visible del PDF, sin redondear; se usa para CAD en Centro de copiado. */
+  medidaVisible: { anchoMm: number; altoMm: number };
 };
 
 export type LecturaArchivoResultado =
@@ -55,12 +63,33 @@ async function leerUnArchivo(file: File): Promise<LecturaArchivoResultado> {
         // sin UserUnit → 1
       }
 
+      const media = page.getMediaBox();
+      const crop = page.getCropBox();
+      const visibleW =
+        Math.min(media.x + media.width, crop.x + crop.width) -
+        Math.max(media.x, crop.x);
+      const visibleH =
+        Math.min(media.y + media.height, crop.y + crop.height) -
+        Math.max(media.y, crop.y);
+      if (
+        ![visibleW, visibleH, userUnit].every(
+          (n) => Number.isFinite(n) && n > 0,
+        ) ||
+        ![0, 90, 180, 270].includes(rotacion)
+      )
+        throw new Error("Página PDF con geometría inválida");
+      const medidaVisible = {
+        anchoMm: (rotado ? visibleH : visibleW) * userUnit * PT_TO_MM,
+        altoMm: (rotado ? visibleW : visibleH) * userUnit * PT_TO_MM,
+      };
       const anchoPt = (rotado ? height : width) * userUnit;
       const altoPt = (rotado ? width : height) * userUnit;
       return {
         archivoNombre: file.name,
         pagina: index + 1,
         totalPaginas: total,
+        orientacion: orientacionPaginaPdf(page),
+        medidaVisible,
         anchoMm: Math.round(anchoPt * PT_TO_MM * 10) / 10,
         altoMm: Math.round(altoPt * PT_TO_MM * 10) / 10,
       };

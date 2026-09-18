@@ -33,8 +33,9 @@ const maquinaSelect = {
   estacion: { select: { id: true, nombre: true, activo: true } },
 } satisfies Prisma.MaquinaSelect;
 
-const pasoSelect = {
+export const pasoColaSelect = {
   id: true,
+  familiaCodigo: true,
   itemId: true,
   ordenId: true,
   maquinaId: true,
@@ -105,6 +106,7 @@ const pasoSelect = {
     },
   },
 } satisfies Prisma.OrdenTrabajoItemPasoSelect;
+const pasoSelect = pasoColaSelect;
 type Paso = Prisma.OrdenTrabajoItemPasoGetPayload<{
   select: typeof pasoSelect;
 }>;

@@ -150,6 +150,9 @@ import {
   CuponAvisoModal,
   type AvisoCupon,
 } from "@/components/comercial/cupon-aviso";
+import { useImpresionDocumentos } from "@/components/impresion/documentos-impresion-provider";
+import { EmisionDocumentosDialog } from "@/components/impresion/emision-documentos-dialog";
+import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
@@ -4963,6 +4966,11 @@ function PropuestaFichaContenido({
     ordenProp ? "productos" : "datos",
   );
   // QR que el cliente presenta en el mostrador para retirar.
+  const [etiquetaOpen, setEtiquetaOpen] = React.useState(false);
+  const impresionDocumentos = useImpresionDocumentos();
+  const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
+  const imprimirAlEmitirRef = React.useRef(false);
+  const puedeImprimirEtiqueta = usePuede("produccion.ver");
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
   // Acceso manual al mismo circuito de mostrador cuando no se usa el QR.
   const [entregaManualOpen, setEntregaManualOpen] = React.useState(false);
@@ -4984,6 +4992,8 @@ function PropuestaFichaContenido({
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
     orden ? orden.productos.map(rehidratarOrdenItem) : [],
   );
+  const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
+
   const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
     () =>
       orden?.cargos?.length
@@ -6031,7 +6041,7 @@ function PropuestaFichaContenido({
    * llegan con el Tablero — no van desde acá.
    */
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
-  const emitirBorrador = React.useCallback(async () => {
+  const emitirBorrador = React.useCallback(async (imprimir = false) => {
     if (!permisoEdicionRef.current || !orden || cambiosSinGuardar > 0) return;
     if (!canalVentaValido(orden.canalVenta ?? "", orden.canalVenta)) {
       setEditandoOrden(true);
@@ -6060,6 +6070,7 @@ function PropuestaFichaContenido({
     setEmitiendoBorrador(true);
     try {
       await cambiarEstadoOrdenTrabajo(orden.id, { estado: "pendiente" });
+      if (imprimir) impresionDocumentos.abrir(orden.id, true);
       toast.success(`${orden.numero} emitida al taller.`);
       setMostrarRecienEmitida(true);
       setEditandoOrden(false);
@@ -6071,7 +6082,7 @@ function PropuestaFichaContenido({
     } finally {
       setEmitiendoBorrador(false);
     }
-  }, [orden, router, zonaHoraria, cambiosSinGuardar]);
+  }, [orden, router, zonaHoraria, cambiosSinGuardar, impresionDocumentos]);
 
   // El aviso lleva a edición; la emisión se confirma desde la cabecera.
   const emitirDesdeAviso = React.useCallback(() => {
@@ -6202,32 +6213,7 @@ function PropuestaFichaContenido({
           tomosIdempotencyRef.current.get(huellaTomo) ?? crypto.randomUUID();
         tomosIdempotencyRef.current.set(huellaTomo, idempotencyKey);
         const resp = await guardarTomoCentroCopiado({
-          documentos: (metaTomo.segmentos ?? []).map((s, i) => ({
-            id: `s${i}`,
-            nombre: s.nombre ?? undefined,
-            paginas: s.paginas,
-            copias: 1,
-            tamano: s.tamano,
-            // Cargas nuevas traen las medidas; para las viejas, se resuelven por
-            // el nombre del formato contra el catálogo del sistema.
-            tamanoAnchoMm: s.tamanoAnchoMm ?? dimsDeFormato(s.tamano).anchoMm,
-            tamanoAltoMm: s.tamanoAltoMm ?? dimsDeFormato(s.tamano).altoMm,
-            papelMateriaPrimaId: s.papelMateriaPrimaId,
-            gramaje: s.gramaje,
-            color: s.color,
-            faz: s.faz,
-            cobertura: s.cobertura,
-            grupoId: "T",
-          })),
-          grupos: [
-            {
-              id: "T",
-              nombre: metaTomo.tomoNombre ?? undefined,
-              juegos: metaTomo.juegos ?? 1,
-              terminaciones: metaTomo.terminaciones ?? [],
-              tipoAnillo: metaTomo.tipoAnillo ?? undefined,
-            },
-          ],
+          ...solicitudTomo(metaTomo, clienteId),
           cotizacionId,
           clienteId: clienteId || null,
           idempotencyKey,
@@ -6366,7 +6352,7 @@ function PropuestaFichaContenido({
     router,
   ]);
 
-  const emitirOrden = React.useCallback(async () => {
+  const emitirOrden = React.useCallback(async (imprimir = false) => {
     if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error("Agregá al menos un producto antes de emitir la orden.");
@@ -6385,6 +6371,7 @@ function PropuestaFichaContenido({
       );
       return;
     }
+    imprimirAlEmitirRef.current = imprimir;
     setEmitiendo(true);
     setEmisionNumero(null);
     emisionOrdenIdRef.current = null;
@@ -6498,8 +6485,14 @@ function PropuestaFichaContenido({
     setEmitiendo(false);
     // ?emitida=1 → el detalle muestra el tag "RECIÉN EMITIDA" sólo en esta
     // llegada (la ficha limpia el param al montar).
-    if (ordenId) router.push(`/produccion/ordenes/${ordenId}?emitida=1`);
-  }, [router]);
+    if (ordenId) {
+      if (imprimirAlEmitirRef.current) {
+        imprimirAlEmitirRef.current = false;
+        impresionDocumentos.abrir(ordenId, true);
+      }
+      router.push(`/produccion/ordenes/${ordenId}?emitida=1`);
+    }
+  }, [router, impresionDocumentos]);
 
   /**
    * Guardar borrador: misma persistencia que emitir (snapshots + OT) pero
@@ -7088,8 +7081,9 @@ function PropuestaFichaContenido({
       // cupones. Sin este filtro, escanear un DNI o el QR de una orden acá
       // los mandaba a validar como cupón y devolvía "no existe" — mientras
       // el watcher global, en paralelo, hacía lo correcto.
-      if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return;
+      if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return false;
       void aplicarCuponCodigo(codigo);
+      return true;
     },
   });
 
@@ -7491,7 +7485,7 @@ function PropuestaFichaContenido({
                       tipo={ordenTipo}
                       clienteSeleccionado={Boolean(clienteId)}
                       empty={items.length === 0}
-                      onEmitir={emitirOrden}
+                      onEmitir={() => documentosCentroCopiado ? setConfirmarEmisionDocumentos("nueva") : void emitirOrden()}
                       onEmitirPresupuesto={emitirPresupuestoCb}
                       emitiendo={emitiendo || emitiendoPresupuesto}
                       guardandoBorrador={guardandoBorrador}
@@ -7565,7 +7559,7 @@ function PropuestaFichaContenido({
                           type="button"
                           variant="primary"
                           size="sm"
-                          onPress={() => void emitirBorrador()}
+                          onPress={() => documentosCentroCopiado ? setConfirmarEmisionDocumentos("borrador") : void emitirBorrador()}
                           isDisabled={
                             emitiendoBorrador ||
                             cambiosSinGuardar > 0 ||
@@ -7591,6 +7585,18 @@ function PropuestaFichaContenido({
                           Entregar
                         </Button>
                       ) : null}
+                      {orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado) && (
+                        <HeroButton variant="tertiary" onPress={() => impresionDocumentos.abrir(orden.id)}>
+                          <PrinterIcon />
+                          Impresión de documentos
+                        </HeroButton>
+                      )}
+                      {puedeImprimirEtiqueta && orden && !["borrador", "cancelada"].includes(orden.estado) && (
+                        <HeroButton variant="tertiary" onPress={() => setEtiquetaOpen(true)}>
+                          <PrinterIcon />
+                          Imprimir etiqueta
+                        </HeroButton>
+                      )}
                       {publicToken ? (
                         <HeroButton
                           type="button"
@@ -8466,6 +8472,21 @@ function PropuestaFichaContenido({
           onCerrar={() => setAvisoCupon(null)}
         />
 
+        {confirmarEmisionDocumentos && (
+          <EmisionDocumentosDialog
+            items={items}
+            onClose={() => setConfirmarEmisionDocumentos(null)}
+            onEmitir={(imprimir) => {
+              const modo = confirmarEmisionDocumentos;
+              setConfirmarEmisionDocumentos(null);
+              if (modo === "borrador") void emitirBorrador(imprimir);
+              else void emitirOrden(imprimir);
+            }}
+          />
+        )}
+        {etiquetaOpen && orden && (
+          <EtiquetaOrdenDialog ordenId={orden.id} onClose={() => setEtiquetaOpen(false)} />
+        )}
         {qrRetiroOpen && orden ? (
           <QrRetiroModal
             numero={orden.numero}

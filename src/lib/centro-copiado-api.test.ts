@@ -1,5 +1,54 @@
 import { describe, expect, it } from "vitest";
-import { cantidadLibrosCentroCopiado } from "./centro-copiado-api";
+import {
+  cantidadLibrosCentroCopiado,
+  itemConstruidoAPropuestaItem,
+  type ItemConstruido,
+} from "./centro-copiado-api";
+
+it("conserva el producto CAD, la ruta y la selección al agregarlo a una OT", () => {
+  const jobContext = {
+    _centroCopiado: {
+      modo: "CAD",
+      productoNombre: "Plano CAD impreso",
+      productoCodigo: "PLANO-CAD",
+      paginas: 2,
+      paginasOriginales: 3,
+      rangoPaginas: "1-2",
+      copias: 2,
+      cad: { perfilId: "perfil-color", versionPerfil: 2, versionDestino: 3 },
+    },
+  };
+  const item = itemConstruidoAPropuestaItem({
+    documentoId: "doc",
+    grupoTomoId: null,
+    nombre: "Planos.pdf",
+    productoId: "producto-cad",
+    jobContext,
+    especificaciones: { Escala: "100%" },
+    cantidad: 4,
+    unidad: "unidad",
+    precioUnitario: 100,
+    subtotal: 400,
+    impuestoPorcentaje: 21,
+    impuestoMonto: 84,
+    total: 484,
+    error: null,
+    cotizacion: {
+      rutaAlternativaId: "ruta-cad",
+    } as ItemConstruido["cotizacion"],
+  });
+  expect(item).toMatchObject({
+    productoNombre: "Plano CAD impreso",
+    productoCodigo: "PLANO-CAD",
+    motorCodigo: "producto-cad",
+    rutaAlternativaId: "ruta-cad",
+    cantidad: 4,
+    unidadMedida: "unidad",
+    precioUnitario: 100,
+    total: 484,
+    jobContext,
+  });
+});
 
 describe("cantidadLibrosCentroCopiado", () => {
   it("usa copias para un documento suelto anillado, no sus hojas físicas", () => {

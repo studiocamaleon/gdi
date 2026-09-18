@@ -12,6 +12,7 @@ import { EntregaEscaneoWatcher } from "@/components/mostrador/entrega-escaneo-wa
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import { SuscripcionGlobalBanner } from "@/components/suscripcion/suscripcion-global-banner";
 import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
+import { DocumentosImpresionProvider } from "@/components/impresion/documentos-impresion-provider";
 import { SidebarInset } from "@/components/ui/sidebar";
 import {
   DashboardFrame,
@@ -58,26 +59,31 @@ export default async function DashboardLayout({
       <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
         <NavigationFeedbackProvider>
           <NotificacionesProvider>
-            <ImpersonacionBanner currentUser={currentUser} />
-            <DashboardFrame>
-              <AppSidebar currentUser={currentUser} />
-              <SidebarInset className="main" style={{ minHeight: 0 }}>
-                <DashboardTopbar />
+            <DocumentosImpresionProvider
+              key={currentUser.tenantActual?.id}
+              tenantId={currentUser.tenantActual?.id ?? ""}
+            >
+              <ImpersonacionBanner currentUser={currentUser} />
+              <DashboardFrame>
+                <AppSidebar currentUser={currentUser} />
+                <SidebarInset className="main" style={{ minHeight: 0 }}>
+                  <DashboardTopbar />
 
-                <SuscripcionGlobalBanner currentUser={currentUser} />
+                  <SuscripcionGlobalBanner currentUser={currentUser} />
 
-                <main
-                  className="gp-main flex flex-1"
-                  style={{ minHeight: 0, overflowY: "auto" }}
-                >
-                  {children}
-                </main>
-              </SidebarInset>
-              <PasosEnCursoWidget />
-              {/* Escanear el QR del cliente abre la entrega desde cualquier
+                  <main
+                    className="gp-main flex flex-1"
+                    style={{ minHeight: 0, overflowY: "auto" }}
+                  >
+                    {children}
+                  </main>
+                </SidebarInset>
+                <PasosEnCursoWidget />
+                {/* Escanear el QR del cliente abre la entrega desde cualquier
               pantalla. */}
-              <EntregaEscaneoWatcher />
-            </DashboardFrame>
+                <EntregaEscaneoWatcher />
+              </DashboardFrame>
+            </DocumentosImpresionProvider>
           </NotificacionesProvider>
         </NavigationFeedbackProvider>
       </ConfigRegionalProvider>

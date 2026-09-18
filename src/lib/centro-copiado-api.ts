@@ -1,3 +1,6 @@
+import type { MedidaPagina } from "../../apps/api/src/common/medidas-documento";
+import type { CopiasPaginaCad } from "../../apps/api/src/common/copias-paginas-cad";
+import type { OrientacionPagina } from "./orientacion-pdf";
 /**
  * Cliente del TPV Centro de copiado.
  * Backend: apps/api/src/centro-copiado/ (controller + service).
@@ -16,7 +19,12 @@ export type FazDoc = 1 | 2;
 
 export interface CentroCopiadoSegmentoMeta {
   nombre?: string | null;
+  archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   tamano: string;
   tamanoAnchoMm?: number;
   tamanoAltoMm?: number;
@@ -29,7 +37,13 @@ export interface CentroCopiadoSegmentoMeta {
 
 /** Contrato de rehidratación; `version` es opcional para cargas históricas. */
 export interface CentroCopiadoMeta {
+  copiasPorPagina?: CopiasPaginaCad[];
+  modo?: "HOJAS" | "CAD";
+  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
   version?: 1;
+  productoNombre?: string;
+  productoCodigo?: string;
+  impresoraNombre?: string;
   grupoCargaId?: string | null;
   grupoTomoId?: string | null;
   esTomo?: boolean;
@@ -39,7 +53,12 @@ export interface CentroCopiadoMeta {
   terminaciones?: string[];
   tipoAnillo?: string | null;
   nombre?: string | null;
+  archivoNombre?: string;
   paginas?: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   copias?: number;
   tamano?: string;
   tamanoAnchoMm?: number;
@@ -82,15 +101,25 @@ export function cantidadLibrosCentroCopiado(
     meta.terminacion?.split(",").some((t) => t.trim() === "Anillado") === true;
   if (!esAnillado) return null;
   const cantidad = meta.esTomo ? meta.juegos : meta.copias;
-  return typeof cantidad === "number" && Number.isFinite(cantidad) && cantidad > 0
+  return typeof cantidad === "number" &&
+    Number.isFinite(cantidad) &&
+    cantidad > 0
     ? cantidad
     : null;
 }
 
 export interface DocumentoCentroCopiado {
+  copiasPorPagina?: CopiasPaginaCad[];
+  modo?: "HOJAS" | "CAD";
+  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
   id: string;
   nombre?: string;
+  archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   copias: number;
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;
@@ -191,7 +220,7 @@ export interface ItemConstruido {
   jobContext: Record<string, unknown>;
   especificaciones: Record<string, string>;
   cantidad: number;
-  /** Unidad comercial: "libros" cuando anilla, "hojas" si no. */
+  /** Unidad comercial: libros anillados, hojas láser o unidades de planos CAD. */
   unidad?: string;
   precioUnitario: number;
   subtotal: number;
@@ -531,10 +560,10 @@ export async function guardarTomoCentroCopiado(
  * El guardado real lo hace `persistirSnapshotsItems` con `motorCodigo`+`jobContext`.
  */
 /**
- * Nombre de producto ÚNICO para todo el centro de copiado (sueltos y tomos): así
+ * Nombre de producto para documentos en hojas (sueltos y tomos): así
  * las métricas agrupan por un solo producto, no por cada archivo/tomo. Lo que
  * distingue el renglón (archivo o tomo) va en `varianteNombre`, y el anillado
- * como adicional — no en el nombre del producto.
+ * como adicional — no en el nombre del producto. CAD conserva el producto de su receta.
  */
 export const CC_NOMBRE_PRODUCTO = "Impresión por hoja";
 
@@ -560,13 +589,20 @@ export function itemConstruidoAPropuestaItem(
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `cc-${ic.documentoId}-${Date.now()}`,
-    productoNombre: CC_NOMBRE_PRODUCTO,
+    productoNombre:
+      meta?.modo === "CAD"
+        ? (meta.productoNombre ?? "Planos CAD")
+        : CC_NOMBRE_PRODUCTO,
     // Referencia visual para diferenciar el renglón (archivo suelto o tomo).
     varianteNombre: refDocumento,
-    productoCodigo: "SYS-IMPRESION-DOC",
+    productoCodigo:
+      meta?.modo === "CAD" ? (meta.productoCodigo ?? "") : "SYS-IMPRESION-DOC",
+    rutaAlternativaId: ic.cotizacion?.rutaAlternativaId,
     motorCodigo: ic.productoId,
-    categoriaComercialCodigo: "impresion_hoja",
-    categoriaComercialNombre: "Impresión por hoja",
+    categoriaComercialCodigo:
+      meta?.modo === "CAD" ? "planos_cad" : "impresion_hoja",
+    categoriaComercialNombre:
+      meta?.modo === "CAD" ? "Planos CAD" : "Impresión por hoja",
     subcategoriaComercialCodigo: "papeleria_comercial",
     subcategoriaComercialNombre: "Centro de copiado",
     unidadMedida: (ic.unidad as PropuestaItem["unidadMedida"]) ?? "unidad",

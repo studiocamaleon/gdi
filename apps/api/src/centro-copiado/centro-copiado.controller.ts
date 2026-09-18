@@ -59,6 +59,11 @@ export class CentroCopiadoController {
   }
 
   /** GET /centro-copiado/opciones — papeles disponibles para el modal. */
+  @Get('opciones-cad')
+  async opcionesCad(@Req() req: RequestWithAuth) {
+    return this.centroCopiado.opcionesCad(await this.tenantHabilitado(req));
+  }
+
   @Get('opciones')
   async opciones(@Req() req: RequestWithAuth) {
     const tenantId = await this.tenantHabilitado(req);

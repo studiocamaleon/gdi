@@ -1,20 +1,59 @@
 "use client";
 import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
-import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
+import {
+  DesignSystemProvider,
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { ActionButton } from "@/components/design-system/action-button";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { SelectField } from "@/components/design-system/select-field";
+import { Select, ListBox, Tabs } from "@heroui/react";
+import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
+import {
+  FileText,
+  Upload,
+  Plus,
+  Trash2,
+  Layers,
+  Printer,
+  SlidersHorizontal,
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import {
+  opcionesCadCopiado,
+  perfilCadPreferido,
+  paginasCad,
+  medidasSeleccionadas,
+  resumenMedidas,
+  numeroMedida,
+  sugerirCad,
+  cantidadImpresionesCad,
+  type CopiasPaginaCad,
+  type PerfilCadCopiado,
+  type MedidaPagina,
+} from "@/lib/centro-copiado-cad";
+import { DetallePaginasCad } from "./detalle-paginas-cad";
+import { resolverRangoPaginas } from "@/lib/rangos-paginas";
 
 import * as React from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
-import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+  ORIENTACION_PDF_LABELS,
+  orientacionesSeleccionadas,
+  resumirOrientaciones,
+  type OrientacionPagina,
+} from "@/lib/orientacion-pdf";
 import type { PropuestaItem } from "@/lib/propuestas";
 import {
   opcionesCentroCopiado,
@@ -32,7 +71,8 @@ import {
   NIVEL_COBERTURA_LABELS,
 } from "@/lib/cobertura-toner";
 import s from "./centro-copiado-sheet.module.css";
-import { ProductoSheetHeaderConstelacion } from "./producto-sheet-header";
+import selectStyles from "@/components/design-system/select-field.module.css";
+import focus from "@/components/design-system/field-focus.module.css";
 
 /** Un tamaño resuelto en una fila: nombre + medidas (para el payload y el motor). */
 type TamanoFila = {
@@ -42,10 +82,16 @@ type TamanoFila = {
 };
 
 type DocRow = TamanoFila & {
+  modo: "HOJAS" | "CAD";
+  medidasPaginas?: MedidaPagina[];
+  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
   id: string;
   nombre: string;
+  archivoNombre?: string;
   paginas: number;
-  /** true = las páginas las leyó el sistema del PDF (se marcan en verde). */
+  rangoPaginas: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  /** true = las páginas las leyó el sistema del PDF y no son editables. */
   paginasAuto: boolean;
   papelMateriaPrimaId: string;
   gramaje: number | null;
@@ -54,6 +100,7 @@ type DocRow = TamanoFila & {
   /** Cobertura de tóner del documento ('borrador'|'normal'|'alta'). */
   cobertura: string;
   copias: number;
+  copiasPorPagina?: CopiasPaginaCad[];
   /** Terminaciones (pasos opcionales) del documento suelto. */
   terminaciones: string[];
   /** Tipo de anillo elegido (cuando la terminación Anillado está activa). */
@@ -95,6 +142,35 @@ const nextId = () => `d${++seqRow}-${Date.now().toString(36)}`;
 const fmt = (n: number) =>
   "$" + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 
+const seleccionDe = (doc: DocRow) =>
+  resolverRangoPaginas(doc.rangoPaginas, doc.paginas);
+const paginasParaCotizar = (doc: DocRow) => ({
+  paginas: seleccionDe(doc).paginas,
+  ...(doc.file || doc.archivoNombre ? { paginasOriginales: doc.paginas } : {}),
+  ...(doc.rangoPaginas.trim() ? { rangoPaginas: seleccionDe(doc).rango } : {}),
+  modo: doc.modo,
+  ...(doc.modo === "CAD"
+    ? { cad: doc.cad, copiasPorPagina: doc.copiasPorPagina }
+    : {}),
+  ...(doc.medidasPaginas ? { medidasPaginas: doc.medidasPaginas } : {}),
+  ...(doc.orientacionesPaginas
+    ? { orientacionesPaginas: doc.orientacionesPaginas }
+    : {}),
+});
+const faltaConfiguracion = (d: DocRow) =>
+  d.modo === "CAD"
+    ? !d.cad || !d.medidasPaginas?.length
+    : !d.papelMateriaPrimaId;
+
+const OPCIONES_COLOR = [
+  { value: "BN", label: "B/N", icon: null },
+  { value: "COLOR", label: "Color", icon: null },
+];
+const OPCIONES_FAZ = [
+  { value: "1", label: "Simple", icon: null },
+  { value: "2", label: "Doble", icon: null },
+];
+
 /** Fallback de medidas por nombre (para rehidratar cargas viejas sin dims). */
 const CC_FALLBACK_DIMS: Record<string, { anchoMm: number; altoMm: number }> = {
   A4: { anchoMm: 210, altoMm: 297 },
@@ -110,7 +186,7 @@ const dimsPorNombre = (
 ): { anchoMm: number; altoMm: number } | null =>
   CC_FALLBACK_DIMS[nombre] ?? null;
 
-/** Select con estética del sistema (base-ui) para las listas de la fila. */
+/** Select con estética del sistema para las listas de la fila. */
 function SysSelect({
   value,
   onChange,
@@ -127,33 +203,47 @@ function SysSelect({
   ariaLabel?: string;
   triggerClassName?: string;
 }) {
-  const current = options.find((o) => o.value === value)?.label;
   return (
-    <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")}>
-      <SelectTrigger
-        aria-label={ariaLabel}
-        className={cn("h-8", triggerClassName)}
+    <div className={triggerClassName}>
+      <SelectField
+        aria-label={ariaLabel ?? placeholder}
         disabled={options.length === 0}
-      >
-        <span
-          className={cn(
-            "flex flex-1 truncate text-left",
-            !current && "text-muted-foreground",
-          )}
-        >
-          {current || placeholder}
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        value={value}
+        onChange={onChange}
+        options={options}
+        className={s.compactSelect}
+      />
+    </div>
   );
 }
+
+const aplicarPerfilCad = (
+  d: DocRow,
+  perfil?: PerfilCadCopiado,
+): Partial<DocRow> => ({
+  modo: "CAD",
+  faz: 1,
+  grupoId: null,
+  terminaciones: [],
+  tipoAnillo: "",
+  tamano: "CAD",
+  cad: perfil
+    ? {
+        perfilId: perfil.perfilId,
+        versionPerfil: perfil.versionPerfil,
+        versionDestino: perfil.versionDestino,
+      }
+    : undefined,
+  ...(perfil
+    ? {
+        papelMateriaPrimaId: perfil.papelMateriaPrimaId,
+        gramaje: perfil.gramaje,
+        color: perfil.color,
+      }
+    : { papelMateriaPrimaId: "", gramaje: null }),
+  tamanoAnchoMm: d.medidasPaginas?.[0]?.anchoMm ?? 1,
+  tamanoAltoMm: d.medidasPaginas?.[0]?.altoMm ?? 1,
+});
 
 /**
  * Multi-select con estética del sistema para las terminaciones. Escala: el popup
@@ -175,6 +265,8 @@ function SysMultiSelect({
   ariaLabel?: string;
   triggerClassName?: string;
 }) {
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
   const elegidas = options
     .filter((o) => values.includes(o.value))
     .map((o) => o.label);
@@ -185,37 +277,44 @@ function SysMultiSelect({
         ? elegidas.join(", ")
         : `${elegidas.length} terminaciones`;
   return (
-    <Select
-      multiple
-      value={values}
-      onValueChange={(v) => onChange((v as string[]) ?? [])}
-    >
-      <SelectTrigger
+    <div className={triggerClassName}>
+      <Select
+        selectionMode="multiple"
         aria-label={ariaLabel}
-        className={cn("h-8", triggerClassName)}
-        disabled={options.length === 0}
+        className={cn(selectStyles.root, s.compactSelect)}
+        fullWidth
+        isDisabled={options.length === 0}
+        value={values}
+        onChange={(v) => onChange(v.map(String))}
       >
-        <span
-          className={cn(
-            "flex flex-1 truncate text-left",
-            elegidas.length === 0 && "text-muted-foreground",
-          )}
-        >
-          {resumen}
-        </span>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+        <Select.Trigger className={focus.singleBorder}>
+          <Select.Value>{resumen}</Select.Value>
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover {...scope} className={theme}>
+          <ListBox>
+            {options.map((o) => (
+              <ListBox.Item key={o.value} id={o.value} textValue={o.label}>
+                {o.label}
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    </div>
   );
 }
 
-export default function CentroCopiadoSheet({
+export default function CentroCopiadoSheet(props: Props) {
+  return (
+    <DesignSystemProvider theme="brand" appearance="light">
+      <CentroCopiadoContenido {...props} />
+    </DesignSystemProvider>
+  );
+}
+
+function CentroCopiadoContenido({
   open,
   onOpenChange,
   onAgregar,
@@ -224,8 +323,9 @@ export default function CentroCopiadoSheet({
 }: Props) {
   const { cotizarCentroCopiado, construirItemsCentroCopiado } =
     useMotorConTipoCambio();
-  const designScope = useDesignScope();
-  const designClass = useDesignTheme();
+  const [perfilesCad, setPerfilesCad] = React.useState<PerfilCadCopiado[]>([]);
+  const [errorPerfilesCad, setErrorPerfilesCad] = React.useState("");
+  const [cargandoCad, setCargandoCad] = React.useState(false);
   const [papeles, setPapeles] = React.useState<PapelOpcion[]>([]);
   // Tamaños que la config del tenant ofrece; null = todos los producibles.
   const [tamanosOfrecidos, setTamanosOfrecidos] = React.useState<
@@ -275,6 +375,18 @@ export default function CentroCopiadoSheet({
     [tamanosDe],
   );
 
+  const [tab, setTab] = React.useState<DocRow["modo"]>("HOJAS");
+  const [cadDefaults, setCadDefaults] = React.useState({
+    perfilId: "",
+    color: "BN" as ColorDoc,
+    copias: 1,
+  });
+  const [cargandoHojas, setCargandoHojas] = React.useState(true);
+  const perfilCadDefault =
+    perfilesCad.find(
+      (p) =>
+        p.perfilId === cadDefaults.perfilId && p.color === cadDefaults.color,
+    ) ?? perfilCadPreferido(perfilesCad, cadDefaults.color);
   const [docs, setDocs] = React.useState<DocRow[]>([]);
   const [grupos, setGrupos] = React.useState<Record<string, GrupoState>>({});
   // Terminaciones (pasos opcionales) disponibles; las trae el backend.
@@ -286,11 +398,16 @@ export default function CentroCopiadoSheet({
     { value: string; label: string }[]
   >([]);
   const [sel, setSel] = React.useState<Set<string>>(new Set());
+  const [opcionesAbiertas, setOpcionesAbiertas] = React.useState<Set<string>>(
+    new Set(),
+  );
   const [preview, setPreview] =
     React.useState<CotizarCentroCopiadoResponse | null>(null);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [dragActive, setDragActive] = React.useState(false);
   const [guardando, setGuardando] = React.useState(false);
+  const [cotizando, setCotizando] = React.useState(false);
+  const [leyendo, setLeyendo] = React.useState(false);
   const [confirmarSalida, setConfirmarSalida] = React.useState(false);
   const previewSeq = React.useRef(0);
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -299,6 +416,7 @@ export default function CentroCopiadoSheet({
   React.useEffect(() => {
     if (!open) return;
     let vivo = true;
+    setCargandoHojas(true);
     void opcionesCentroCopiado()
       .then((o) => {
         if (!vivo) return;
@@ -336,31 +454,68 @@ export default function CentroCopiadoSheet({
           );
         }
       })
-      .catch(() => toast.error("No se pudieron cargar los papeles."));
+      .catch(() => {
+        if (vivo) {
+          setPapeles([]);
+          toast.error(
+            "No se pudieron cargar los papeles. Podés elegir la pestaña para clasificar los archivos.",
+          );
+        }
+      })
+      .finally(() => {
+        if (vivo) setCargandoHojas(false);
+      });
     return () => {
       vivo = false;
     };
   }, [open]);
 
-  // Bloquear el scroll del fondo mientras el modal está abierto.
   React.useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    let vivo = true;
+    setCargandoCad(true);
+    setErrorPerfilesCad("");
+    void opcionesCadCopiado()
+      .then((r) => {
+        if (vivo) setPerfilesCad(r.perfiles);
+      })
+      .catch((e) => {
+        if (vivo) {
+          setPerfilesCad([]);
+          setErrorPerfilesCad(
+            e instanceof Error
+              ? e.message
+              : "No se pudieron cargar los perfiles CAD.",
+          );
+        }
+      })
+      .finally(() => {
+        if (vivo) setCargandoCad(false);
+      });
     return () => {
-      document.body.style.overflow = prev;
+      vivo = false;
     };
   }, [open]);
+
+  const formatosHojas = React.useMemo(
+    () =>
+      papeles.flatMap((p) =>
+        p.gramajes.flatMap((g) => tamanosProducibles(p, g, tamanosOfrecidos)),
+      ),
+    [papeles, tamanosOfrecidos],
+  );
 
   // Al cerrar, limpiar el estado (así reabrir para "agregar" empieza en blanco).
   React.useEffect(() => {
     if (open) return;
     setDocs([]);
+    setTab("HOJAS");
     setGrupos({});
     setSel(new Set());
     setPreview(null);
     setPreviewError(null);
     setConfirmarSalida(false);
+    setOpcionesAbiertas(new Set());
   }, [open]);
 
   // Edición: rehidratar la CARGA completa — cada renglón suelto es un documento,
@@ -394,8 +549,15 @@ export default function CentroCopiadoSheet({
           nuevosDocs.push({
             id: nextId(),
             nombre: seg.nombre ?? "Documento",
-            paginas: Number(seg.paginas) || 1,
-            paginasAuto: true,
+            archivoNombre: seg.archivoNombre,
+            paginas: Number(seg.paginasOriginales ?? seg.paginas) || 1,
+            rangoPaginas: seg.rangoPaginas ?? "",
+            orientacionesPaginas: seg.orientacionesPaginas,
+            medidasPaginas: seg.medidasPaginas,
+            modo: "HOJAS",
+            paginasAuto: (seg.archivoNombre ?? seg.nombre ?? "")
+              .toLowerCase()
+              .endsWith(".pdf"),
             tamano: tn,
             tamanoAnchoMm: d.anchoMm,
             tamanoAltoMm: d.altoMm,
@@ -419,8 +581,16 @@ export default function CentroCopiadoSheet({
         nuevosDocs.push({
           id: nextId(),
           nombre: meta.nombre ?? it.varianteNombre ?? "Documento",
-          paginas: Number(meta.paginas) || 1,
-          paginasAuto: true,
+          archivoNombre: meta.archivoNombre,
+          paginas: Number(meta.paginasOriginales ?? meta.paginas) || 1,
+          rangoPaginas: meta.rangoPaginas ?? "",
+          orientacionesPaginas: meta.orientacionesPaginas,
+          medidasPaginas: meta.medidasPaginas,
+          modo: meta.modo ?? "HOJAS",
+          cad: meta.cad,
+          paginasAuto: (meta.archivoNombre ?? meta.nombre ?? "")
+            .toLowerCase()
+            .endsWith(".pdf"),
           tamano: tn,
           tamanoAnchoMm: d.anchoMm,
           tamanoAltoMm: d.altoMm,
@@ -430,6 +600,8 @@ export default function CentroCopiadoSheet({
           faz: meta.faz ?? 1,
           cobertura: meta.cobertura ?? "alta",
           copias: Number(meta.copias) || 1,
+          copiasPorPagina:
+            meta.modo === "CAD" ? meta.copiasPorPagina : undefined,
           terminaciones: meta.terminaciones ?? [],
           tipoAnillo: meta.tipoAnillo ?? "",
           file: it.archivosPendientes?.[0] ?? null,
@@ -438,31 +610,23 @@ export default function CentroCopiadoSheet({
       }
     }
     setDocs(nuevosDocs);
+    setTab(nuevosDocs[0]?.modo ?? "HOJAS");
     setGrupos(nuevosGrupos);
   }, [open, editItems]);
 
   // Cerrar: si hay carga, confirmar para no perderla.
   const intentarCerrar = React.useCallback(() => {
+    if (guardando || leyendo) return;
     if (docs.length > 0) setConfirmarSalida(true);
     else onOpenChange(false);
-  }, [docs.length, onOpenChange]);
+  }, [docs.length, onOpenChange, guardando, leyendo]);
 
-  // Esc cierra el modal (con confirmación si hay carga).
+  // Invalida también requests en vuelo si un rango queda incompleto.
   React.useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !confirmarSalida && !guardando) {
-        e.preventDefault();
-        e.stopPropagation();
-        intentarCerrar();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, confirmarSalida, guardando, intentarCerrar]);
-
-  // Precio en vivo (debounce).
-  React.useEffect(() => {
+    const seq = ++previewSeq.current;
+    setPreview(null);
+    setPreviewError(null);
+    setCotizando(false);
     if (!open) return;
     if (docs.length === 0) {
       setPreview(null);
@@ -470,19 +634,22 @@ export default function CentroCopiadoSheet({
     }
     // No cotizar si alguna fila está incompleta (sin papel o sin páginas): las
     // manuales / no-PDF arrancan en 0 y las tiene que completar el usuario.
-    const listos = docs.every((d) => d.papelMateriaPrimaId && d.paginas >= 1);
+    const listos = docs.every(
+      (d) => !faltaConfiguracion(d) && !seleccionDe(d).error,
+    );
     if (!listos) {
       setPreview(null);
       return;
     }
-    const seq = ++previewSeq.current;
+    setCotizando(true);
     const handle = setTimeout(() => {
       void cotizarCentroCopiado({
         clienteId: clienteId || undefined,
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
-          paginas: d.paginas,
+          archivoNombre: d.file?.name ?? d.archivoNombre,
+          ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
           tamanoAnchoMm: d.tamanoAnchoMm,
@@ -515,6 +682,9 @@ export default function CentroCopiadoSheet({
           setPreviewError(
             e instanceof Error ? e.message : "No se pudo calcular el precio.",
           );
+        })
+        .finally(() => {
+          if (seq === previewSeq.current) setCotizando(false);
         });
     }, 350);
     return () => clearTimeout(handle);
@@ -526,60 +696,107 @@ export default function CentroCopiadoSheet({
         nombre: string;
         paginas: number;
         paginasAuto: boolean;
+        orientacionesPaginas?: OrientacionPagina[];
+        medidasPaginas?: MedidaPagina[];
         file?: File | null;
       }[],
     ) => {
-      setDocs((prev) => [
-        ...prev,
-        ...nuevos.map((n) => ({
+      const filas: DocRow[] = nuevos.map((n) => {
+        const esCad =
+          n.paginasAuto &&
+          !!n.medidasPaginas?.length &&
+          (tab === "CAD" ||
+            (formatosHojas.length > 0 &&
+              sugerirCad(n.medidasPaginas, formatosHojas)));
+        const base: DocRow = {
           id: nextId(),
+          modo: "HOJAS",
+          medidasPaginas: n.medidasPaginas,
           nombre: n.nombre,
           paginas: n.paginas,
+          rangoPaginas: "",
           paginasAuto: n.paginasAuto,
-          tamano: defaults.tamano,
-          tamanoAnchoMm: defaults.tamanoAnchoMm,
-          tamanoAltoMm: defaults.tamanoAltoMm,
-          papelMateriaPrimaId: defaults.papelMateriaPrimaId,
-          gramaje: defaults.gramaje,
-          color: defaults.color,
-          faz: defaults.faz,
+          orientacionesPaginas: n.orientacionesPaginas,
+          ...defaults,
           cobertura: "alta",
-          copias: defaults.copias,
           terminaciones: [],
           tipoAnillo: "",
           file: n.file ?? null,
           grupoId: null,
-        })),
-      ]);
+        };
+        if (!esCad) return base;
+        const perfil =
+          tab === "CAD"
+            ? perfilCadDefault
+            : perfilCadPreferido(perfilesCad, defaults.color);
+        return {
+          ...base,
+          color: tab === "CAD" ? cadDefaults.color : defaults.color,
+          copias: tab === "CAD" ? cadDefaults.copias : defaults.copias,
+          ...aplicarPerfilCad(base, perfil),
+        };
+      });
+      setDocs((prev) => [...prev, ...filas]);
+      const cad = filas.filter((d) => d.modo === "CAD").length;
+      if (tab === "HOJAS" && cad) {
+        toast.info(
+          `${cad === 1 ? "1 archivo pasó" : `${cad} archivos pasaron`} a Planos CAD por su tamaño.`,
+        );
+        if (cad === filas.length) setTab("CAD");
+      }
     },
-    [defaults],
+    [defaults, tab, formatosHojas, perfilesCad, perfilCadDefault, cadDefaults],
   );
 
   const onArchivos = React.useCallback(
     async (files: FileList | File[]) => {
-      // Sólo el PDF se auto-lee (páginas en verde); DOC/Excel quedan en 0 para
+      // Sólo el PDF se auto-lee; DOC/Excel quedan en 0 para
       // cargar a mano, pero el archivo igual queda asociado a la fila (para R2).
-      const lista = Array.from(files);
-      const lecturas = await leerMedidasPdf(lista);
-      // leerMedidasPdf preserva el orden ⇒ lecturas[i] ↔ lista[i].
-      const nuevos = lecturas.map((l, i) =>
-        l.ok
-          ? {
-              nombre: l.archivoNombre,
-              paginas: l.paginas[0]?.totalPaginas ?? 1,
-              paginasAuto: true,
-              file: lista[i] ?? null,
-            }
-          : {
-              nombre: l.archivoNombre,
-              paginas: 0,
-              paginasAuto: false,
-              file: lista[i] ?? null,
-            },
+      if (leyendo || guardando || cargandoHojas || cargandoCad) return;
+      const lista = Array.from(files).filter(
+        (file) => tab !== "CAD" || file.name.toLowerCase().endsWith(".pdf"),
       );
-      agregarDocs(nuevos);
+      if (lista.length < files.length)
+        toast.error(
+          "Planos CAD admite archivos PDF. Cargá Word o Excel en Documentos.",
+        );
+      if (!lista.length) return;
+      setLeyendo(true);
+      try {
+        const lecturas = await leerMedidasPdf(lista);
+        // leerMedidasPdf preserva el orden ⇒ lecturas[i] ↔ lista[i].
+        if (tab === "CAD" && lecturas.some((l) => !l.ok))
+          toast.error(
+            "No se pudieron leer algunos PDF. Revisá que sean válidos y no estén protegidos.",
+          );
+        const nuevos = lecturas.map((l, i) =>
+          l.ok
+            ? {
+                nombre: l.archivoNombre,
+                paginas: l.paginas[0]?.totalPaginas ?? 1,
+                paginasAuto: true,
+                orientacionesPaginas: l.paginas.map((p) => p.orientacion),
+                medidasPaginas: l.paginas.map(
+                  (p) =>
+                    p.medidaVisible ?? { anchoMm: p.anchoMm, altoMm: p.altoMm },
+                ),
+                file: lista[i] ?? null,
+              }
+            : {
+                nombre: l.archivoNombre,
+                paginas: 0,
+                paginasAuto: false,
+                file: lista[i] ?? null,
+              },
+        );
+        agregarDocs(
+          tab === "CAD" ? nuevos.filter((n) => n.paginasAuto) : nuevos,
+        );
+      } finally {
+        setLeyendo(false);
+      }
     },
-    [agregarDocs],
+    [agregarDocs, leyendo, guardando, cargandoHojas, cargandoCad, tab],
   );
 
   const agregarFilaManual = React.useCallback(() => {
@@ -589,6 +806,18 @@ export default function CentroCopiadoSheet({
   const aplicarATodos = React.useCallback(() => {
     setDocs((prev) =>
       prev.map((d) => {
+        if (d.modo !== tab) return d;
+        if (tab === "CAD")
+          return {
+            ...d,
+            ...aplicarPerfilCad(d, perfilCadDefault),
+            color: cadDefaults.color,
+            copias: cadDefaults.copias,
+            copiasPorPagina: d.copiasPorPagina?.map((p) => ({
+              ...p,
+              copias: cadDefaults.copias,
+            })),
+          };
         // El tamaño default puede no ser producible con el papel default de la
         // fila: se resuelve al primero producible si hace falta.
         const t = resolverTamano(
@@ -611,10 +840,49 @@ export default function CentroCopiadoSheet({
         };
       }),
     );
-  }, [defaults, resolverTamano]);
+  }, [defaults, resolverTamano, tab, perfilCadDefault, cadDefaults]);
 
   const editar = (id: string, patch: Partial<DocRow>) =>
     setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+
+  const cambiarModo = (d: DocRow, modo: DocRow["modo"]) => {
+    if (modo === "HOJAS" && d.copiasPorPagina) return;
+    setTab(modo);
+    if (modo === "CAD") {
+      editar(
+        d.id,
+        aplicarPerfilCad(d, perfilCadPreferido(perfilesCad, d.color)),
+      );
+      setSel((prev) => {
+        const next = new Set(prev);
+        next.delete(d.id);
+        return next;
+      });
+    } else
+      editar(d.id, {
+        modo: "HOJAS",
+        cad: undefined,
+        copiasPorPagina: undefined,
+        ...defaults,
+        copias: d.copias,
+        color: d.color,
+      });
+  };
+  const cambiarColorCad = (d: DocRow, color: ColorDoc) => {
+    const actual = perfilesCad.find((p) => p.perfilId === d.cad?.perfilId);
+    const mismaReceta = actual
+      ? perfilesCad.filter(
+          (p) =>
+            p.destinoId === actual.destinoId &&
+            p.rutaAlternativaId === actual.rutaAlternativaId &&
+            p.materialVarianteId === actual.materialVarianteId,
+        )
+      : perfilesCad;
+    editar(d.id, {
+      ...aplicarPerfilCad(d, perfilCadPreferido(mismaReceta, color)),
+      color,
+    });
+  };
 
   // Cambiar el tamaño de una fila: setea nombre + medidas del formato elegido.
   const cambiarTamano = (
@@ -664,7 +932,8 @@ export default function CentroCopiadoSheet({
   };
 
   const anillarJuntos = React.useCallback(() => {
-    if (sel.size < 2) return;
+    if (sel.size < 2 || docs.some((d) => sel.has(d.id) && d.modo === "CAD"))
+      return;
     const gid = `g${Date.now().toString(36)}`;
     // Un tomo nace Anillado (si el backend lo ofrece); el usuario puede cambiarlo.
     const termIni = terminacionesDisp.includes("Anillado") ? ["Anillado"] : [];
@@ -681,7 +950,7 @@ export default function CentroCopiadoSheet({
       prev.map((d) => (sel.has(d.id) ? { ...d, grupoId: gid } : d)),
     );
     setSel(new Set());
-  }, [sel, terminacionesDisp, tiposAnilloDisp]);
+  }, [sel, docs, terminacionesDisp, tiposAnilloDisp]);
 
   const desagrupar = (gid: string) => {
     setDocs((prev) =>
@@ -733,8 +1002,11 @@ export default function CentroCopiadoSheet({
 
   const agregar = React.useCallback(async () => {
     if (docs.length === 0) return;
-    if (docs.some((d) => d.paginas < 1 || !d.papelMateriaPrimaId)) {
-      toast.error("Completá las páginas y el papel de todas las filas.");
+    if (guardando || leyendo) return;
+    if (docs.some((d) => seleccionDe(d).error || faltaConfiguracion(d))) {
+      toast.error(
+        "Revisá las páginas, los rangos y el papel de todas las filas.",
+      );
       return;
     }
     setGuardando(true);
@@ -744,7 +1016,8 @@ export default function CentroCopiadoSheet({
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
-          paginas: d.paginas,
+          archivoNombre: d.file?.name ?? d.archivoNombre,
+          ...paginasParaCotizar(d),
           copias: d.copias,
           tamano: d.tamano,
           tamanoAnchoMm: d.tamanoAnchoMm,
@@ -813,11 +1086,33 @@ export default function CentroCopiadoSheet({
     onAgregar,
     onOpenChange,
     construirItemsCentroCopiado,
+    guardando,
+    leyendo,
   ]);
 
   if (!open) return null;
 
   const t = preview?.totales;
+  const cantidades = docs.reduce(
+    (total, doc) => {
+      if (doc.modo === "CAD") {
+        const cantidad = cantidadImpresionesCad(doc);
+        return {
+          carillas: total.carillas + cantidad,
+          hojas: total.hojas + cantidad,
+        };
+      }
+      const paginas = seleccionDe(doc).paginas;
+      const copias = doc.grupoId
+        ? (grupos[doc.grupoId]?.juegos ?? 1)
+        : doc.copias;
+      return {
+        carillas: total.carillas + paginas * copias,
+        hojas: total.hojas + Math.ceil(paginas / doc.faz) * copias,
+      };
+    },
+    { carillas: 0, hojas: 0 },
+  );
   const anilladoNeto = preview
     ? [
         ...preview.documentos.map((documento) => documento.anillado),
@@ -831,7 +1126,7 @@ export default function CentroCopiadoSheet({
   const impresionNeto = Math.max(0, (t?.subtotal ?? 0) - anilladoNeto);
   // Filas incompletas: sin páginas (manuales / no-PDF sin cargar) o sin papel.
   const incompletos = docs.filter(
-    (d) => d.paginas < 1 || !d.papelMateriaPrimaId,
+    (d) => !!seleccionDe(d).error || faltaConfiguracion(d),
   ).length;
   const tieneErroresCotizacion =
     !!previewError ||
@@ -841,99 +1136,218 @@ export default function CentroCopiadoSheet({
   const grupoIds = Array.from(
     new Set(docs.map((d) => d.grupoId).filter((g): g is string => !!g)),
   );
-  const sueltos = docs.filter((d) => !d.grupoId);
+  const docsVisibles = docs.filter((d) => d.modo === tab);
+  const sueltos = docsVisibles.filter((d) => !d.grupoId);
+  const avisoTab = (modo: DocRow["modo"]) =>
+    docs.some(
+      (d) =>
+        d.modo === modo &&
+        (faltaConfiguracion(d) || seleccionDe(d).error || errorDoc(d.id)),
+    )
+      ? "Revisar archivos"
+      : undefined;
   const papelOptions = papeles.map((p) => ({
     value: p.materiaPrimaId,
     label: p.nombre,
   }));
 
-  const renderCard = (d: DocRow, index: number, enGrupo: boolean) => {
-    const tamanos = tamanosDe(d.papelMateriaPrimaId, d.gramaje);
-    const tamanoOptions = tamanos.map((tm) => ({
-      value: tm.nombre,
-      label: tm.nombre,
-    }));
+  const renderFila = (d: DocRow, index: number, enGrupo: boolean) => {
+    const seleccion = seleccionDe(d);
+    const esCad = d.modo === "CAD";
+    const desglosado = esCad && d.copiasPorPagina !== undefined;
+    const abrirPaginas = () =>
+      setOpcionesAbiertas((prev) => new Set(prev).add(d.id));
+    const medidas = medidasSeleccionadas(d.medidasPaginas, d.rangoPaginas);
+    const perfilCad = perfilesCad.find((p) => p.perfilId === d.cad?.perfilId);
+    const perfilCadCambio =
+      esCad &&
+      perfilCad &&
+      (perfilCad.versionPerfil !== d.cad?.versionPerfil ||
+        perfilCad.versionDestino !== d.cad?.versionDestino);
+    const geometriaCad = esCad
+      ? paginasCad(d.medidasPaginas, d.rangoPaginas, perfilCad)
+      : [];
+    const errorGeometria = geometriaCad.find((p) => p.error);
+    const orientacion = resumirOrientaciones(
+      orientacionesSeleccionadas(d.orientacionesPaginas, d.rangoPaginas),
+    );
+    const tieneArchivo = !!(d.file || d.archivoNombre);
     const gramajes = gramajesDe(d.papelMateriaPrimaId);
+    const opciones = opcionesAbiertas.has(d.id);
+    const anillado = !enGrupo ? previewDoc(d.id)?.anillado : null;
+    const error =
+      (errorGeometria
+        ? `Página ${errorGeometria.pagina}: ${errorGeometria.error}`
+        : null) ||
+      errorDoc(d.id) ||
+      anillado?.error;
+    const nombre = d.nombre || `Documento ${index + 1}`;
     return (
-      <div key={d.id} className={`${s.card} ${enGrupo ? s.cardGrupo : ""}`}>
-        <div className={s.cardTop}>
-          {!enGrupo && (
+      <React.Fragment key={d.id}>
+        <tr
+          aria-label={`Documento ${index + 1}`}
+          className={cn(s.documentRow, enGrupo && s.rowGrupo)}
+          data-selected={sel.has(d.id) || undefined}
+        >
+          <td>
+            {!enGrupo ? (
+              <input
+                type="checkbox"
+                className={s.chk}
+                checked={sel.has(d.id)}
+                disabled={esCad}
+                onChange={() => toggleSel(d.id)}
+                aria-label={`Seleccionar ${nombre}`}
+              />
+            ) : (
+              <Layers className={s.grupoIcon} aria-hidden="true" />
+            )}
+          </td>
+          <td>
             <input
-              type="checkbox"
-              className={s.chk}
-              checked={sel.has(d.id)}
-              onChange={() => toggleSel(d.id)}
-              aria-label={`Seleccionar ${d.nombre}`}
+              type="text"
+              value={d.nombre}
+              onChange={(e) => editar(d.id, { nombre: e.target.value })}
+              placeholder="Nombre del documento"
+              className={s.docNombreInput}
+              aria-label={`Nombre del documento ${index + 1}`}
+              title={nombre}
             />
-          )}
-          <span className={s.docNum}>{String(index + 1).padStart(2, "0")}</span>
-          <input
-            type="text"
-            value={d.nombre}
-            onChange={(e) => editar(d.id, { nombre: e.target.value })}
-            placeholder="Nombre del documento"
-            className={s.docNombreInput}
-            aria-label="Nombre del documento"
-          />
-          <span className={s.cardPrecio}>
-            {errorDoc(d.id) ? (
-              <span className={s.errChip} title={errorDoc(d.id)!}>
-                ⚠ sin precio
+            <div className={s.docMeta}>
+              <span className={s.docNum}>
+                {String(index + 1).padStart(2, "0")}
               </span>
-            ) : subtotalImpresionDoc(d.id) != null ? (
-              <>
-                {precioHojaDoc(d.id) != null ? (
-                  <span className={s.cardUnit}>
-                    {fmtHoja(precioHojaDoc(d.id)!)}/hoja
-                  </span>
-                ) : null}
-                <span className={s.cardSub}>
-                  Hojas {fmt(subtotalImpresionDoc(d.id)!)}
+              {orientacion && (
+                <span
+                  className={s.orientacion}
+                  title="Orientación de las páginas seleccionadas"
+                  aria-label={`Orientación: ${ORIENTACION_PDF_LABELS[orientacion]}`}
+                >
+                  {ORIENTACION_PDF_LABELS[orientacion]}
                 </span>
-                <span className={s.cardIva}>sin IVA</span>
+              )}
+              {!esCad && (
+                <span>
+                  Cobertura{" "}
+                  {NIVEL_COBERTURA_LABELS[
+                    d.cobertura as keyof typeof NIVEL_COBERTURA_LABELS
+                  ] ?? d.cobertura}
+                  {enGrupo
+                    ? " · del tomo"
+                    : d.terminaciones.length
+                      ? ` · ${d.terminaciones.join(", ")}`
+                      : ""}
+                </span>
+              )}
+              {esCad && <span>Escala 100%</span>}
+              {esCad && d.paginas > 1 && !desglosado && (
+                <ActionButton
+                  variant="tertiary"
+                  className={s.desglosar}
+                  onPress={() => {
+                    editar(d.id, { copiasPorPagina: [] });
+                    abrirPaginas();
+                  }}
+                >
+                  Desglosar páginas
+                </ActionButton>
+              )}
+            </div>
+          </td>
+          <td>
+            {tieneArchivo ? (
+              <>
+                <input
+                  type="text"
+                  value={d.rangoPaginas}
+                  placeholder="Todas · ej. 1-7,9"
+                  maxLength={2000}
+                  onChange={(e) =>
+                    editar(d.id, { rangoPaginas: e.target.value })
+                  }
+                  onBlur={() => {
+                    if (!seleccion.error && d.rangoPaginas !== seleccion.rango)
+                      editar(d.id, { rangoPaginas: seleccion.rango });
+                  }}
+                  aria-label={`Páginas a imprimir de ${nombre}`}
+                  aria-invalid={!!seleccion.error && !!d.rangoPaginas}
+                  aria-describedby={`${d.id}-rango-ayuda`}
+                  className={s.rangoInput}
+                  title="Ej.: 1-7,9,12-16. Vacío = todas. En orden del archivo, sin repetir."
+                />
+                {!d.paginasAuto && (
+                  <label className={s.totalArchivo}>
+                    Total del archivo{" "}
+                    <input
+                      aria-label={`Total de páginas de ${nombre}`}
+                      type="number"
+                      min={1}
+                      value={d.paginas || ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        editar(d.id, {
+                          paginas: Math.max(0, Number(e.target.value) || 0),
+                        })
+                      }
+                      className={s.inputMini}
+                    />
+                  </label>
+                )}
+                <div
+                  id={`${d.id}-rango-ayuda`}
+                  className={cn(s.rangoAyuda, seleccion.error && s.rangoError)}
+                  aria-live="polite"
+                >
+                  {seleccion.error ||
+                    `${seleccion.paginas} de ${d.paginas} páginas`}
+                </div>
               </>
             ) : (
-              <span className={s.muted}>…</span>
+              <>
+                <input
+                  type="number"
+                  min={1}
+                  value={d.paginas || ""}
+                  placeholder="Páginas"
+                  aria-label={`Páginas de ${nombre}`}
+                  onChange={(e) =>
+                    editar(d.id, {
+                      paginas: Math.max(0, Number(e.target.value) || 0),
+                      paginasAuto: false,
+                    })
+                  }
+                  className={cn(
+                    s.inputMini,
+                    s.paginasManual,
+                    d.paginas < 1 && s.inputFalta,
+                  )}
+                />
+                <span className={s.cellHint}>Carga manual</span>
+              </>
             )}
-          </span>
-          <button
-            type="button"
-            className={s.del}
-            onClick={() => eliminar(d.id)}
-            aria-label="Quitar"
-          >
-            ✕
-          </button>
-        </div>
-        <div className={s.cardCtrls}>
-          <label className={s.ctrl}>
-            <span>Págs</span>
-            <input
-              type="number"
-              min={0}
-              value={d.paginas || ""}
-              placeholder="0"
-              onChange={(e) =>
-                editar(d.id, {
-                  paginas: Math.max(0, Number(e.target.value) || 0),
-                  paginasAuto: false,
-                })
-              }
-              className={`${s.inputMini} ${
-                d.paginas < 1 ? s.inputFalta : d.paginasAuto ? s.inputAuto : ""
-              }`}
-              title={d.paginasAuto ? "Páginas leídas del PDF" : undefined}
-            />
-          </label>
-          <label className={s.ctrl}>
-            <span>Copias</span>
+          </td>
+          <td>
             {enGrupo ? (
-              <span className={s.delTomo}>del tomo</span>
+              <span className={s.delTomo} title="Se define en Juegos del tomo">
+                {grupos[d.grupoId!]?.juegos ?? 1}
+                <small>juegos</small>
+              </span>
+            ) : desglosado ? (
+              <ActionButton
+                variant="tertiary"
+                className={s.copiasDesglosadas}
+                onPress={abrirPaginas}
+                aria-label={`Editar copias por página de ${nombre}`}
+              >
+                <strong>{cantidadImpresionesCad(d)}</strong>
+                <span>Por página</span>
+              </ActionButton>
             ) : (
               <input
                 type="number"
                 min={1}
                 value={d.copias}
+                aria-label={`Copias de ${nombre}`}
                 onChange={(e) =>
                   editar(d.id, {
                     copias: Math.max(1, Number(e.target.value) || 1),
@@ -942,156 +1356,319 @@ export default function CentroCopiadoSheet({
                 className={s.inputMini}
               />
             )}
-          </label>
-          {/* El tipo de papel + gramaje condicionan el tamaño → van primero. */}
-          <label className={s.ctrl}>
-            <span>Papel</span>
-            <SysSelect
-              value={d.papelMateriaPrimaId}
-              onChange={(v) => cambiarPapel(d.id, v, d.tamano)}
-              options={papelOptions}
-              ariaLabel="Papel"
-              triggerClassName="w-[190px]"
-            />
-          </label>
-          {gramajes.length > 1 && (
-            <label className={s.ctrl}>
-              <span>Gramaje</span>
+          </td>
+          {esCad ? (
+            <td colSpan={2}>
               <SysSelect
-                value={d.gramaje != null ? String(d.gramaje) : ""}
-                onChange={(v) =>
-                  cambiarGramaje(
+                value={d.cad?.perfilId ?? ""}
+                onChange={(id) =>
+                  editar(
                     d.id,
-                    d.papelMateriaPrimaId,
-                    Number(v),
-                    d.tamano,
+                    aplicarPerfilCad(
+                      d,
+                      perfilesCad.find((p) => p.perfilId === id),
+                    ),
                   )
                 }
-                options={gramajes.map((g) => ({
-                  value: String(g),
-                  label: `${g} g`,
-                }))}
-                ariaLabel="Gramaje"
-                triggerClassName="w-[92px]"
+                options={[
+                  {
+                    value: "",
+                    label: cargandoCad
+                      ? "Cargando perfiles…"
+                      : "Elegí perfil CAD",
+                  },
+                  ...perfilesCad
+                    .filter((p) => p.color === d.color)
+                    .map((p) => ({
+                      value: p.perfilId,
+                      label: `${p.nombre} · ${p.materialNombre} · ${p.impresoraNombre}`,
+                    })),
+                ]}
+                ariaLabel={`Perfil CAD de ${nombre}`}
               />
-            </label>
-          )}
-          <label className={s.ctrl}>
-            <span>Tamaño</span>
-            <SysSelect
-              value={d.tamano}
-              onChange={(v) => cambiarTamano(d.id, v, tamanos)}
-              options={tamanoOptions}
-              ariaLabel="Tamaño"
-              placeholder="—"
-              triggerClassName="w-[88px]"
-            />
-          </label>
-          <label className={s.ctrl}>
-            <span>Color</span>
-            <div className={s.seg}>
-              <button
-                type="button"
-                className={d.color === "BN" ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { color: "BN" })}
-              >
-                B/N
-              </button>
-              <button
-                type="button"
-                className={d.color === "COLOR" ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { color: "COLOR" })}
-              >
-                Color
-              </button>
-            </div>
-          </label>
-          <label className={s.ctrl}>
-            <span>Faz</span>
-            <div className={s.seg}>
-              <button
-                type="button"
-                className={d.faz === 1 ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { faz: 1 })}
-              >
-                Simple
-              </button>
-              <button
-                type="button"
-                className={d.faz === 2 ? s.segOn : s.segOff}
-                onClick={() => editar(d.id, { faz: 2 })}
-              >
-                Doble
-              </button>
-            </div>
-          </label>
-          {/* Cobertura de tóner del documento (default Alta). Modula el consumo
-              de tóner; el perfil de máquina lo resuelve el sistema. */}
-          <label className={s.ctrl}>
-            <span>Cobertura</span>
-            <SysSelect
-              value={d.cobertura}
-              onChange={(v) => editar(d.id, { cobertura: v })}
-              options={NIVELES_COBERTURA.map((nivel) => ({
-                value: nivel,
-                label: NIVEL_COBERTURA_LABELS[nivel],
-              }))}
-              ariaLabel="Cobertura de tóner"
-              triggerClassName="w-[120px]"
-            />
-          </label>
-          {/* Terminaciones (pasos opcionales) del suelto; en el tomo van una sola
-              vez en el header del grupo. Sólo aparece si hay alguna ofrecida. */}
-          {!enGrupo && terminacionesDisp.length > 0 && (
-            <label className={s.ctrl}>
-              <span>Terminaciones</span>
-              <SysMultiSelect
-                values={d.terminaciones}
-                onChange={(v) => editar(d.id, { terminaciones: v })}
-                options={terminacionesDisp.map((t) => ({ value: t, label: t }))}
-                ariaLabel="Terminaciones"
-                triggerClassName="w-[130px]"
-              />
-            </label>
-          )}
-          {/* Tipo de anillo: sólo si hay más de uno instalado y el doc anilla. */}
-          {!enGrupo &&
-            tiposAnilloDisp.length > 1 &&
-            d.terminaciones.includes("Anillado") && (
-              <label className={s.ctrl}>
-                <span>Tipo de anillo</span>
-                <SysSelect
-                  value={d.tipoAnillo || tiposAnilloDisp[0].value}
-                  onChange={(v) => editar(d.id, { tipoAnillo: v })}
-                  options={tiposAnilloDisp}
-                  ariaLabel="Tipo de anillo"
-                  triggerClassName="w-[150px]"
-                />
-              </label>
-            )}
-        </div>
-        {!enGrupo &&
-          previewDoc(d.id)?.anillado &&
-          (previewDoc(d.id)!.anillado!.error ? (
-            <div className={s.tomoAnilladoWarn}>
-              ⚠ {previewDoc(d.id)!.anillado!.error} No se puede agregar hasta
-              corregirlo.
-            </div>
+              <span className={s.cellHint}>
+                {perfilCad
+                  ? `Rollo ${numeroMedida(perfilCad.rollo.anchoRolloMm)} mm`
+                  : "Configuración → Impresoras → Planos CAD"}
+              </span>
+            </td>
           ) : (
-            <div className={s.tomoAnillado}>
-              <span className={s.tomoAnilladoLbl}>
-                Anillado ·{" "}
-                {labelTipoAnillo(previewDoc(d.id)!.anillado!.tipoAnillo)}
-                {previewDoc(d.id)!.anillado!.diametroMm
-                  ? ` Ø${previewDoc(d.id)!.anillado!.diametroMm} mm`
-                  : ""}
+            <>
+              <td>
+                <SysSelect
+                  value={d.papelMateriaPrimaId}
+                  onChange={(v) => cambiarPapel(d.id, v, d.tamano)}
+                  options={papelOptions}
+                  ariaLabel={`Papel de ${nombre}`}
+                />
+              </td>
+              <td>
+                {gramajes.length > 1 ? (
+                  <SysSelect
+                    value={d.gramaje != null ? String(d.gramaje) : ""}
+                    onChange={(v) =>
+                      cambiarGramaje(
+                        d.id,
+                        d.papelMateriaPrimaId,
+                        Number(v),
+                        d.tamano,
+                      )
+                    }
+                    options={gramajes.map((g) => ({
+                      value: String(g),
+                      label: `${g} g`,
+                    }))}
+                    ariaLabel={`Gramaje de ${nombre}`}
+                  />
+                ) : (
+                  <span className={s.valorCelda}>
+                    {d.gramaje != null ? `${d.gramaje} g` : "—"}
+                  </span>
+                )}
+              </td>
+            </>
+          )}
+          <td>
+            {esCad ? (
+              <span className={s.medidaOriginal}>
+                {resumenMedidas(medidas)}
+                <small>Original</small>
               </span>
-              <span className={s.tomoAnilladoPrecio}>
-                + {fmt(previewDoc(d.id)!.anillado!.subtotal)} sin IVA
-              </span>
-            </div>
-          ))}
-      </div>
+            ) : (
+              <SysSelect
+                value={d.tamano}
+                onChange={(v) =>
+                  cambiarTamano(
+                    d.id,
+                    v,
+                    tamanosDe(d.papelMateriaPrimaId, d.gramaje),
+                  )
+                }
+                options={tamanosDe(d.papelMateriaPrimaId, d.gramaje).map(
+                  (tm) => ({ value: tm.nombre, label: tm.nombre }),
+                )}
+                ariaLabel={`Tamaño de ${nombre}`}
+                placeholder="—"
+              />
+            )}
+          </td>
+          <td>
+            <SysSelect
+              value={d.color}
+              options={OPCIONES_COLOR}
+              onChange={(v) =>
+                esCad
+                  ? cambiarColorCad(d, v as ColorDoc)
+                  : editar(d.id, { color: v as ColorDoc })
+              }
+              ariaLabel={`Color de ${nombre}`}
+            />
+          </td>
+          <td>
+            {esCad ? (
+              <span className={s.cellHint}>Simple</span>
+            ) : (
+              <SysSelect
+                value={String(d.faz)}
+                options={OPCIONES_FAZ}
+                onChange={(v) => editar(d.id, { faz: Number(v) as FazDoc })}
+                ariaLabel={`Faz de ${nombre}`}
+              />
+            )}
+          </td>
+          <td className={s.importeCell}>
+            {error ? (
+              <span className={s.errChip}>Sin precio</span>
+            ) : subtotalImpresionDoc(d.id) != null ? (
+              <>
+                <strong>{fmt(subtotalImpresionDoc(d.id)!)}</strong>
+                <span className={s.cellHint}>
+                  {precioHojaDoc(d.id) != null
+                    ? `${fmtHoja(precioHojaDoc(d.id)!)}/${esCad ? "plano" : "hoja"}`
+                    : ""}
+                </span>
+              </>
+            ) : (
+              <span className={s.muted}>{cotizando ? "…" : "—"}</span>
+            )}
+          </td>
+          <td>
+            <ActionButton
+              variant="tertiary"
+              isIconOnly
+              className={s.rowButton}
+              aria-label={`Opciones de ${nombre}`}
+              aria-expanded={opciones}
+              aria-controls={`${d.id}-opciones`}
+              title={
+                esCad
+                  ? "Medidas y configuración CAD"
+                  : "Cobertura y terminaciones"
+              }
+              onPress={() =>
+                setOpcionesAbiertas((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(d.id)) next.delete(d.id);
+                  else next.add(d.id);
+                  return next;
+                })
+              }
+            >
+              <SlidersHorizontal aria-hidden="true" />
+            </ActionButton>
+          </td>
+          <td>
+            <ActionButton
+              variant="tertiary"
+              isIconOnly
+              className={s.rowButton}
+              onPress={() => eliminar(d.id)}
+              aria-label={`Quitar ${nombre}`}
+            >
+              <Trash2 aria-hidden="true" />
+            </ActionButton>
+          </td>
+        </tr>
+        {(opciones ||
+          error ||
+          anillado ||
+          perfilCadCambio ||
+          (esCad && !perfilCad)) && (
+          <tr className={s.detailRow}>
+            <td colSpan={12}>
+              {esCad && !perfilCad && (
+                <p className={s.rangoError}>
+                  {errorPerfilesCad ||
+                    (cargandoCad
+                      ? "Cargando perfiles CAD…"
+                      : "Elegí un perfil CAD del color seleccionado. Si no hay opciones, configurá uno en Impresoras.")}
+                </p>
+              )}
+              {perfilCadCambio && (
+                <div className={s.sugerenciaCad}>
+                  <span>
+                    La configuración del perfil cambió. Actualizala para volver
+                    a cotizar.
+                  </span>
+                  <ActionButton
+                    variant="tertiary"
+                    onPress={() => editar(d.id, aplicarPerfilCad(d, perfilCad))}
+                  >
+                    Actualizar perfil
+                  </ActionButton>
+                </div>
+              )}
+              {opciones && !enGrupo && !!d.medidasPaginas?.length && (
+                <div className={s.moverArchivo}>
+                  <ActionButton
+                    variant="tertiary"
+                    onPress={() => cambiarModo(d, esCad ? "HOJAS" : "CAD")}
+                    isDisabled={desglosado}
+                    title={
+                      desglosado
+                        ? "Unificá las copias antes de mover a Documentos."
+                        : undefined
+                    }
+                  >
+                    {esCad ? "Mover a Documentos" : "Mover a Planos CAD"}
+                  </ActionButton>
+                </div>
+              )}
+              {opciones && esCad && (
+                <DetallePaginasCad
+                  key={`${d.id}-${d.rangoPaginas}`}
+                  id={`${d.id}-opciones`}
+                  nombre={nombre}
+                  paginas={geometriaCad}
+                  perfil={perfilCad}
+                  copias={d.copias}
+                  copiasPorPagina={d.copiasPorPagina}
+                  onCopiasPagina={(pagina, copias) =>
+                    editar(d.id, {
+                      copiasPorPagina: [
+                        ...(d.copiasPorPagina ?? []).filter(
+                          (p) => p.pagina !== pagina,
+                        ),
+                        { pagina, copias },
+                      ],
+                    })
+                  }
+                  onUnificar={() =>
+                    editar(d.id, { copiasPorPagina: undefined })
+                  }
+                />
+              )}
+              {opciones && !esCad && (
+                <div className={s.rowOptions} id={`${d.id}-opciones`}>
+                  <span className={s.optionsTitle}>Opciones de {nombre}</span>
+                  <label className={s.campo}>
+                    <span>Cobertura</span>
+                    <SysSelect
+                      value={d.cobertura}
+                      onChange={(v) => editar(d.id, { cobertura: v })}
+                      options={NIVELES_COBERTURA.map((nivel) => ({
+                        value: nivel,
+                        label: NIVEL_COBERTURA_LABELS[nivel],
+                      }))}
+                      ariaLabel={`Cobertura de ${nombre}`}
+                      triggerClassName="w-[120px]"
+                    />
+                  </label>
+                  {!enGrupo && terminacionesDisp.length > 0 && (
+                    <label className={s.campo}>
+                      <span>Terminaciones</span>
+                      <SysMultiSelect
+                        values={d.terminaciones}
+                        onChange={(v) => editar(d.id, { terminaciones: v })}
+                        options={terminacionesDisp.map((t) => ({
+                          value: t,
+                          label: t,
+                        }))}
+                        ariaLabel={`Terminaciones de ${nombre}`}
+                        triggerClassName="w-[160px]"
+                      />
+                    </label>
+                  )}
+                  {!enGrupo &&
+                    tiposAnilloDisp.length > 1 &&
+                    d.terminaciones.includes("Anillado") && (
+                      <label className={s.campo}>
+                        <span>Tipo de anillo</span>
+                        <SysSelect
+                          value={d.tipoAnillo || tiposAnilloDisp[0].value}
+                          onChange={(v) => editar(d.id, { tipoAnillo: v })}
+                          options={tiposAnilloDisp}
+                          ariaLabel={`Tipo de anillo de ${nombre}`}
+                          triggerClassName="w-[150px]"
+                        />
+                      </label>
+                    )}
+                  {enGrupo && (
+                    <span className={s.cellHint}>
+                      Las terminaciones se definen en el tomo.
+                    </span>
+                  )}
+                </div>
+              )}
+              {error ? (
+                <p className={s.rowError} role="alert">
+                  {error}
+                </p>
+              ) : (
+                anillado && (
+                  <div className={s.tomoAnillado}>
+                    <span>
+                      Anillado · {labelTipoAnillo(anillado.tipoAnillo)}
+                      {anillado.diametroMm ? ` Ø${anillado.diametroMm} mm` : ""}
+                    </span>
+                    <strong>+ {fmt(anillado.subtotal)} sin IVA</strong>
+                  </div>
+                )
+              )}
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
     );
   };
 
@@ -1101,436 +1678,709 @@ export default function CentroCopiadoSheet({
   const defTamanos = tamanosDe(defaults.papelMateriaPrimaId, defaults.gramaje);
   const defGramajes = gramajesDe(defaults.papelMateriaPrimaId);
 
-  // Se portala a document.body: si el modal se renderiza dentro de un ancestro con
-  // `transform`/`filter`/`will-change`, el position:fixed + max-height dejan de
-  // medir contra el viewport (el sheet no se acota y el scroll interno no captura
-  // el wheel → scrollea la página de atrás). En el body no hay ese ancestro.
-  const contenido = (
+  return (
     <>
-      <div className={s.backdrop} onClick={intentarCerrar} />
-      <div
-        {...designScope}
-        className={`${designClass} ${s.sheet}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Centro de copiado"
+      <FormDialog
+        isOpen={open}
+        onOpenChange={(next) => {
+          if (!next) intentarCerrar();
+        }}
+        isDismissable={!guardando && !leyendo && !confirmarSalida}
+        title={
+          <span className={s.modalTitle}>
+            <Printer aria-hidden="true" />
+            Centro de copiado
+          </span>
+        }
+        description={
+          editItems?.length
+            ? "Editá los documentos, sus páginas y las opciones de impresión."
+            : "Cargá archivos, elegí las páginas y prepará tu trabajo de impresión."
+        }
+        className={s.sheet}
       >
-        <ProductoSheetHeaderConstelacion
-          eyebrow={editItems?.length ? "Editar carga" : "Carga rápida"}
-          name="Centro de copiado"
-          desc="Cargá varios documentos de una vez. Seleccioná dos o más y agrupalos para anillar juntos."
-          onClose={intentarCerrar}
-        />
-
         <div className={s.body}>
-          <section className={s.cargar}>
-            <div
-              className={`${s.drop} ${dragActive ? s.dropActive : ""}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => fileRef.current?.click()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  fileRef.current?.click();
+          <fieldset disabled={guardando || leyendo} className={s.bodyFields}>
+            <section className={s.cargar}>
+              <div
+                className={cn(s.drop, dragActive && s.dropActive)}
+                aria-label={
+                  tab === "CAD" ? "Agregar planos PDF" : "Agregar archivos"
                 }
-              }}
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragActive(false);
-                if (e.dataTransfer.files?.length)
-                  void onArchivos(e.dataTransfer.files);
-              }}
-            >
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx"
-                multiple
-                hidden
-                onChange={(e) => {
-                  if (e.target.files?.length) void onArchivos(e.target.files);
-                  e.target.value = "";
+                aria-busy={leyendo || cargandoHojas || cargandoCad}
+                aria-disabled={
+                  guardando || leyendo || cargandoHojas || cargandoCad
+                }
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (!guardando && !leyendo && !cargandoHojas && !cargandoCad)
+                    fileRef.current?.click();
                 }}
-              />
-              <div className={s.dropIcon}>⬦</div>
-              <div className={s.dropTitle}>
-                {dragActive
-                  ? "Soltá los archivos acá"
-                  : "Arrastrá o elegí archivos"}
-              </div>
-              <div className={s.dropHint}>
-                PDF, Word o Excel. Del PDF leemos las páginas; en el resto las
-                cargás a mano.
-              </div>
-            </div>
-
-            <div className={s.defaults}>
-              <div className={s.defaultsHead}>Valores por defecto</div>
-              <div className={s.defaultsGrid}>
-                {/* Papel + gramaje primero (condicionan el tamaño), después Tamaño. */}
-                <label className={s.campo}>
-                  <span>Papel</span>
-                  <SysSelect
-                    value={defaults.papelMateriaPrimaId}
-                    onChange={(v) => {
-                      const g = gramajesDe(v)[0] ?? null;
-                      const t = resolverTamano(v, g, defaults.tamano);
-                      setDefaults({
-                        ...defaults,
-                        papelMateriaPrimaId: v,
-                        gramaje: g,
-                        ...(t ?? {}),
-                      });
-                    }}
-                    options={papelOptions}
-                    ariaLabel="Papel por defecto"
-                    triggerClassName="w-[190px]"
-                  />
-                </label>
-                {defGramajes.length > 1 && (
-                  <label className={s.campo}>
-                    <span>Gramaje</span>
-                    <SysSelect
-                      value={
-                        defaults.gramaje != null ? String(defaults.gramaje) : ""
-                      }
-                      onChange={(v) => {
-                        const g = Number(v);
-                        const t = resolverTamano(
-                          defaults.papelMateriaPrimaId,
-                          g,
-                          defaults.tamano,
-                        );
-                        setDefaults({ ...defaults, gramaje: g, ...(t ?? {}) });
-                      }}
-                      options={defGramajes.map((g) => ({
-                        value: String(g),
-                        label: `${g} g`,
-                      }))}
-                      ariaLabel="Gramaje por defecto"
-                      triggerClassName="w-[92px]"
-                    />
-                  </label>
-                )}
-                <label className={s.campo}>
-                  <span>Tamaño</span>
-                  <SysSelect
-                    value={defaults.tamano}
-                    onChange={(v) => {
-                      const f = defTamanos.find((x) => x.nombre === v);
-                      if (f)
-                        setDefaults({
-                          ...defaults,
-                          tamano: f.nombre,
-                          tamanoAnchoMm: f.anchoMm,
-                          tamanoAltoMm: f.altoMm,
-                        });
-                    }}
-                    options={defTamanos.map((tm) => ({
-                      value: tm.nombre,
-                      label: tm.nombre,
-                    }))}
-                    ariaLabel="Tamaño por defecto"
-                    placeholder="—"
-                    triggerClassName="w-[88px]"
-                  />
-                </label>
-                <label className={s.campo}>
-                  <span>Color</span>
-                  <div className={s.seg}>
-                    <button
-                      type="button"
-                      className={defaults.color === "BN" ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, color: "BN" })}
-                    >
-                      B/N
-                    </button>
-                    <button
-                      type="button"
-                      className={
-                        defaults.color === "COLOR" ? s.segOn : s.segOff
-                      }
-                      onClick={() =>
-                        setDefaults({ ...defaults, color: "COLOR" })
-                      }
-                    >
-                      Color
-                    </button>
-                  </div>
-                </label>
-                <label className={s.campo}>
-                  <span>Faz</span>
-                  <div className={s.seg}>
-                    <button
-                      type="button"
-                      className={defaults.faz === 1 ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, faz: 1 })}
-                    >
-                      Simple
-                    </button>
-                    <button
-                      type="button"
-                      className={defaults.faz === 2 ? s.segOn : s.segOff}
-                      onClick={() => setDefaults({ ...defaults, faz: 2 })}
-                    >
-                      Doble
-                    </button>
-                  </div>
-                </label>
-                <label className={s.campo}>
-                  <span>Copias</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={defaults.copias}
-                    onChange={(e) =>
-                      setDefaults({
-                        ...defaults,
-                        copias: Math.max(1, Number(e.target.value) || 1),
-                      })
-                    }
-                    className={s.inputMini}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={aplicarATodos}
-                  disabled={docs.length === 0}
-                >
-                  Aplicar a todos
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className={s.tablaWrap}>
-            <div className={s.tablaHead}>
-              <span>Documentos del trabajo</span>
-              <div className={s.tablaHeadBtns}>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={agregarFilaManual}
-                >
-                  + Fila manual
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={anillarJuntos}
-                  disabled={
-                    sel.size < 2 || !terminacionesDisp.includes("Anillado")
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (
+                      !guardando &&
+                      !leyendo &&
+                      !cargandoHojas &&
+                      !cargandoCad
+                    )
+                      fileRef.current?.click();
                   }
-                  title={
-                    !terminacionesDisp.includes("Anillado")
-                      ? "Configurá una anilladora y anillos para crear tomos"
-                      : sel.size < 2
-                        ? "Seleccioná dos o más"
-                        : "Anillar juntos"
-                  }
-                >
-                  Anillar juntos ({sel.size})
-                </button>
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                  if (e.dataTransfer.files?.length)
+                    void onArchivos(e.dataTransfer.files);
+                }}
+              >
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={tab === "CAD" ? ".pdf" : ".pdf,.doc,.docx,.xls,.xlsx"}
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    if (e.target.files?.length) void onArchivos(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+                <span className={s.dropIcon}>
+                  <Upload aria-hidden="true" />
+                </span>
+                <div className={s.dropTitle}>
+                  {leyendo
+                    ? "Leyendo archivos…"
+                    : dragActive
+                      ? "Soltá los archivos acá"
+                      : cargandoHojas || cargandoCad
+                        ? "Cargando opciones…"
+                        : tab === "CAD"
+                          ? "Agregar planos PDF"
+                          : "Agregar archivos"}
+                </div>
+                <div className={s.dropHint}>
+                  {tab === "CAD"
+                    ? "Arrastrá planos PDF de cualquier tamaño."
+                    : "PDF, Word o Excel. Los PDF grandes pasan a CAD."}
+                </div>
               </div>
-            </div>
-            {docs.length === 0 ? (
-              <div className={s.vacio}>Todavía no cargaste documentos.</div>
-            ) : (
-              <div className={s.lista}>
-                {grupoIds.map((gid) => {
-                  const miembros = docs.filter((d) => d.grupoId === gid);
-                  const gprev = preview?.grupos.find((g) => g.id === gid);
-                  return (
-                    <div key={gid} className={s.tomo}>
-                      <div className={s.tomoHead}>
-                        <span className={s.tomoTitle}>Tomo anillado</span>
-                        <input
-                          type="text"
-                          value={grupos[gid]?.nombre ?? ""}
-                          onChange={(e) =>
-                            setGrupos((prev) => ({
-                              ...prev,
-                              [gid]: { ...prev[gid], nombre: e.target.value },
-                            }))
-                          }
-                          placeholder={`Nombre del tomo (${miembros.length} docs)`}
-                          className={s.tomoNombre}
-                          aria-label="Nombre del tomo"
-                        />
-                        <label className={s.tomoJuegos}>
-                          Juegos
-                          <input
-                            type="number"
-                            min={1}
-                            value={grupos[gid]?.juegos ?? 1}
-                            onChange={(e) =>
-                              setGrupos((prev) => ({
-                                ...prev,
-                                [gid]: {
-                                  ...prev[gid],
-                                  juegos: Math.max(
-                                    1,
-                                    Number(e.target.value) || 1,
-                                  ),
-                                },
-                              }))
-                            }
-                            className={s.inputMini}
-                          />
-                        </label>
-                        {/* Terminaciones del tomo entero (un solo selector). */}
-                        {terminacionesDisp.length > 0 && (
-                          <SysMultiSelect
-                            values={grupos[gid]?.terminaciones ?? []}
-                            onChange={(v) =>
-                              setGrupos((prev) => ({
-                                ...prev,
-                                [gid]: { ...prev[gid], terminaciones: v },
-                              }))
-                            }
-                            options={terminacionesDisp.map((t) => ({
-                              value: t,
-                              label: t,
-                            }))}
-                            ariaLabel="Terminaciones del tomo"
-                            triggerClassName="w-[160px]"
-                          />
-                        )}
-                        {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
-                        {tiposAnilloDisp.length > 1 &&
-                          (grupos[gid]?.terminaciones ?? []).includes(
-                            "Anillado",
-                          ) && (
-                            <SysSelect
-                              value={
-                                grupos[gid]?.tipoAnillo ||
-                                tiposAnilloDisp[0].value
-                              }
-                              onChange={(v) =>
-                                setGrupos((prev) => ({
-                                  ...prev,
-                                  [gid]: { ...prev[gid], tipoAnillo: v },
-                                }))
-                              }
-                              options={tiposAnilloDisp}
-                              ariaLabel="Tipo de anillo del tomo"
-                              triggerClassName="w-[150px]"
-                            />
-                          )}
-                        <span className={s.tomoMeta}>
-                          {gprev ? `${gprev.hojasPorLibro} hojas/juego` : ""}
-                        </span>
-                        <span className={s.tomoSub}>
-                          {gprev
-                            ? `Hojas ${fmt(
-                                Math.max(
-                                  0,
-                                  gprev.subtotal -
-                                    (gprev.anillado?.subtotal ?? 0),
-                                ),
-                              )}`
-                            : "—"}
-                        </span>
-                        <button
-                          type="button"
-                          className={s.del}
-                          onClick={() => desagrupar(gid)}
-                          aria-label="Desagrupar tomo"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      {gprev?.anillado &&
-                        (gprev.anillado.error ? (
-                          <div className={s.tomoAnilladoWarn}>
-                            ⚠ {gprev.anillado.error} No se puede agregar hasta
-                            corregirlo.
-                          </div>
-                        ) : (
-                          <div className={s.tomoAnillado}>
-                            <span className={s.tomoAnilladoLbl}>
-                              Anillado ·{" "}
-                              {labelTipoAnillo(gprev.anillado.tipoAnillo)}
-                              {gprev.anillado.diametroMm
-                                ? ` Ø${gprev.anillado.diametroMm} mm`
-                                : ""}
-                            </span>
-                            <span className={s.tomoAnilladoPrecio}>
-                              + {fmt(gprev.anillado.subtotal)} sin IVA
-                            </span>
-                          </div>
-                        ))}
-                      {miembros.map((d) => renderCard(d, idx++, true))}
+
+              {tab === "CAD" ? (
+                <div className={s.defaults}>
+                  <div className={s.defaultsHead}>
+                    <div>
+                      <strong>Configuración de planos</strong>
+                      <span>Tamaño original · 100% · Simple faz</span>
                     </div>
-                  );
-                })}
-                {sueltos.map((d) => renderCard(d, idx++, false))}
-              </div>
-            )}
-          </section>
+                  </div>
+                  <div className={s.defaultsGrid}>
+                    <label className={cn(s.campo, s.perfilDefault)}>
+                      <span>Perfil de impresión</span>
+                      <SysSelect
+                        value={perfilCadDefault?.perfilId ?? ""}
+                        onChange={(perfilId) =>
+                          setCadDefaults((d) => ({ ...d, perfilId }))
+                        }
+                        options={perfilesCad
+                          .filter((p) => p.color === cadDefaults.color)
+                          .map((p) => ({
+                            value: p.perfilId,
+                            label: `${p.nombre} · ${p.materialNombre} · ${p.impresoraNombre}`,
+                          }))}
+                        ariaLabel="Perfil CAD por defecto"
+                        placeholder={
+                          cargandoCad ? "Cargando…" : "Elegí un perfil CAD"
+                        }
+                      />
+                    </label>
+                    <label className={s.campo}>
+                      <span>Color</span>
+                      <SysSelect
+                        value={cadDefaults.color}
+                        options={OPCIONES_COLOR}
+                        ariaLabel="Color CAD por defecto"
+                        onChange={(color) =>
+                          setCadDefaults((d) => ({
+                            ...d,
+                            color: color as ColorDoc,
+                            perfilId: "",
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className={cn(s.campo, s.copiasDefault)}>
+                      <span>Copias</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className={s.inputMini}
+                        value={cadDefaults.copias}
+                        onChange={(e) =>
+                          setCadDefaults((d) => ({
+                            ...d,
+                            copias: Math.max(1, Number(e.target.value) || 1),
+                          }))
+                        }
+                      />
+                    </label>
+                    <ActionButton
+                      variant="outline"
+                      onPress={aplicarATodos}
+                      isDisabled={!docsVisibles.length || !perfilCadDefault}
+                      title="Aplica el perfil y las copias a todas las páginas de los planos."
+                    >
+                      Aplicar a los planos
+                    </ActionButton>
+                  </div>
+                  {!cargandoCad && !perfilCadDefault && (
+                    <p className={s.configAviso}>
+                      {errorPerfilesCad ||
+                        "Elegí un perfil CAD. Si no hay opciones, configurá uno en Impresoras."}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className={s.defaults}>
+                  <div className={s.defaultsHead}>
+                    <div>
+                      <strong>Configuración inicial</strong>
+                      <span>Para los nuevos archivos</span>
+                    </div>
+                  </div>
+                  <div className={s.defaultsGrid}>
+                    {/* Papel + gramaje primero (condicionan el tamaño), después Tamaño. */}
+                    <label className={s.campo}>
+                      <span>Papel</span>
+                      <SysSelect
+                        value={defaults.papelMateriaPrimaId}
+                        onChange={(v) => {
+                          const g = gramajesDe(v)[0] ?? null;
+                          const t = resolverTamano(v, g, defaults.tamano);
+                          setDefaults({
+                            ...defaults,
+                            papelMateriaPrimaId: v,
+                            gramaje: g,
+                            ...(t ?? {}),
+                          });
+                        }}
+                        options={papelOptions}
+                        ariaLabel="Papel por defecto"
+                      />
+                    </label>
+                    {defGramajes.length > 1 && (
+                      <label className={s.campo}>
+                        <span>Gramaje</span>
+                        <SysSelect
+                          value={
+                            defaults.gramaje != null
+                              ? String(defaults.gramaje)
+                              : ""
+                          }
+                          onChange={(v) => {
+                            const g = Number(v);
+                            const t = resolverTamano(
+                              defaults.papelMateriaPrimaId,
+                              g,
+                              defaults.tamano,
+                            );
+                            setDefaults({
+                              ...defaults,
+                              gramaje: g,
+                              ...(t ?? {}),
+                            });
+                          }}
+                          options={defGramajes.map((g) => ({
+                            value: String(g),
+                            label: `${g} g`,
+                          }))}
+                          ariaLabel="Gramaje por defecto"
+                        />
+                      </label>
+                    )}
+                    <label className={s.campo}>
+                      <span>Tamaño</span>
+                      <SysSelect
+                        value={defaults.tamano}
+                        onChange={(v) => {
+                          const f = defTamanos.find((x) => x.nombre === v);
+                          if (f)
+                            setDefaults({
+                              ...defaults,
+                              tamano: f.nombre,
+                              tamanoAnchoMm: f.anchoMm,
+                              tamanoAltoMm: f.altoMm,
+                            });
+                        }}
+                        options={defTamanos.map((tm) => ({
+                          value: tm.nombre,
+                          label: tm.nombre,
+                        }))}
+                        ariaLabel="Tamaño por defecto"
+                        placeholder="—"
+                      />
+                    </label>
+                    <div className={s.campo}>
+                      <span>Color</span>
+                      <SysSelect
+                        ariaLabel="Color por defecto"
+                        options={OPCIONES_COLOR}
+                        value={defaults.color}
+                        onChange={(v) =>
+                          setDefaults({ ...defaults, color: v as ColorDoc })
+                        }
+                      />
+                    </div>
+                    <div className={s.campo}>
+                      <span>Faz</span>
+                      <SysSelect
+                        ariaLabel="Faz por defecto"
+                        options={OPCIONES_FAZ}
+                        value={String(defaults.faz)}
+                        onChange={(v) =>
+                          setDefaults({
+                            ...defaults,
+                            faz: Number(v) as FazDoc,
+                          })
+                        }
+                      />
+                    </div>
+                    <label className={cn(s.campo, s.copiasDefault)}>
+                      <span>Copias</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={defaults.copias}
+                        onChange={(e) =>
+                          setDefaults({
+                            ...defaults,
+                            copias: Math.max(1, Number(e.target.value) || 1),
+                          })
+                        }
+                        className={s.inputMini}
+                      />
+                    </label>
+                    <ActionButton
+                      type="button"
+                      variant="outline"
+                      className={s.aplicarDefaults}
+                      onPress={aplicarATodos}
+                      isDisabled={docsVisibles.length === 0}
+                    >
+                      Aplicar a documentos
+                    </ActionButton>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <Tabs
+              selectedKey={tab}
+              onSelectionChange={(key) => setTab(key as DocRow["modo"])}
+              isDisabled={guardando || leyendo}
+              className={s.tabsRoot}
+            >
+              <section
+                className={s.tablaWrap}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes("Files"))
+                    e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files?.length)
+                    void onArchivos(e.dataTransfer.files);
+                }}
+              >
+                <div className={s.tablaHead}>
+                  <NavigationTabList
+                    label="Tipos de archivo"
+                    items={[
+                      {
+                        id: "HOJAS",
+                        label: "Documentos",
+                        count: docs.filter((d) => d.modo === "HOJAS").length,
+                        warning: avisoTab("HOJAS"),
+                      },
+                      {
+                        id: "CAD",
+                        label: "Planos CAD",
+                        count: docs.filter((d) => d.modo === "CAD").length,
+                        warning: avisoTab("CAD"),
+                      },
+                    ]}
+                  />
+                  {tab === "HOJAS" && (
+                    <div className={s.tablaHeadBtns}>
+                      <ActionButton
+                        type="button"
+                        variant="outline"
+                        onPress={agregarFilaManual}
+                      >
+                        <Plus data-icon="inline-start" /> Fila manual
+                      </ActionButton>
+                      <ActionButton
+                        type="button"
+                        variant="outline"
+                        onPress={anillarJuntos}
+                        isDisabled={
+                          sel.size < 2 ||
+                          !terminacionesDisp.includes("Anillado")
+                        }
+                        title={
+                          !terminacionesDisp.includes("Anillado")
+                            ? "Configurá una anilladora y anillos para crear tomos"
+                            : sel.size < 2
+                              ? "Seleccioná dos o más"
+                              : "Anillar juntos"
+                        }
+                      >
+                        <Layers data-icon="inline-start" />
+                        Anillar juntos ({sel.size})
+                      </ActionButton>
+                    </div>
+                  )}
+                </div>
+                <Tabs.Panel id={tab} key={tab} className={s.tabPanel}>
+                  {docsVisibles.length === 0 ? (
+                    <Empty className={s.vacio}>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <FileText />
+                        </EmptyMedia>
+                        <EmptyTitle>
+                          {tab === "CAD"
+                            ? "Cargá tus planos"
+                            : "Tu trabajo empieza con un documento"}
+                        </EmptyTitle>
+                        <EmptyDescription>
+                          {tab === "CAD"
+                            ? "Arrastrá un PDF acá. Conservamos el tamaño original de cada página."
+                            : "Arrastrá archivos acá o agregá una fila manual."}
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  ) : (
+                    <div
+                      className={s.tableScroll}
+                      role="region"
+                      aria-label="Documentos y opciones de impresión"
+                      tabIndex={0}
+                    >
+                      <table
+                        className={s.documentsTable}
+                        aria-label={
+                          tab === "CAD"
+                            ? "Planos CAD del trabajo"
+                            : "Documentos del trabajo"
+                        }
+                      >
+                        <colgroup>
+                          <col className={s.colCheck} />
+                          <col className={s.colDocument} />
+                          <col className={s.colPages} />
+                          <col className={s.colCopies} />
+                          <col className={s.colPaper} />
+                          <col className={s.colWeight} />
+                          <col className={s.colSize} />
+                          <col className={s.colColor} />
+                          <col className={s.colFaces} />
+                          <col className={s.colPrice} />
+                          <col className={s.colAction} />
+                          <col className={s.colAction} />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th scope="col">
+                              <span className="sr-only">Seleccionar</span>
+                            </th>
+                            <th scope="col">Documento</th>
+                            <th scope="col">Páginas / rango</th>
+                            <th scope="col">Copias</th>
+                            {tab === "CAD" ? (
+                              <th scope="col" colSpan={2}>
+                                Perfil / rollo
+                              </th>
+                            ) : (
+                              <>
+                                <th scope="col">Papel</th>
+                                <th scope="col">Gramaje</th>
+                              </>
+                            )}
+                            <th scope="col">Tamaño</th>
+                            <th scope="col">Color</th>
+                            <th scope="col">Faz</th>
+                            <th scope="col" className={s.importeCell}>
+                              Importe <small>sin IVA</small>
+                            </th>
+                            <th
+                              scope="colgroup"
+                              colSpan={2}
+                              className={s.actionsHead}
+                            >
+                              Acciones
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(tab === "HOJAS" ? grupoIds : []).map((gid) => {
+                            const miembros = docs.filter(
+                              (d) => d.grupoId === gid,
+                            );
+                            const gprev = preview?.grupos.find(
+                              (g) => g.id === gid,
+                            );
+                            return (
+                              <React.Fragment key={gid}>
+                                <tr className={s.tomoRow}>
+                                  <td colSpan={12}>
+                                    <div className={s.tomoHead}>
+                                      <span className={s.tomoTitle}>
+                                        Tomo anillado
+                                      </span>
+                                      <input
+                                        type="text"
+                                        value={grupos[gid]?.nombre ?? ""}
+                                        onChange={(e) =>
+                                          setGrupos((prev) => ({
+                                            ...prev,
+                                            [gid]: {
+                                              ...prev[gid],
+                                              nombre: e.target.value,
+                                            },
+                                          }))
+                                        }
+                                        placeholder={`Nombre del tomo (${miembros.length} docs)`}
+                                        className={s.tomoNombre}
+                                        aria-label="Nombre del tomo"
+                                      />
+                                      <label className={s.tomoJuegos}>
+                                        Juegos
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          value={grupos[gid]?.juegos ?? 1}
+                                          onChange={(e) =>
+                                            setGrupos((prev) => ({
+                                              ...prev,
+                                              [gid]: {
+                                                ...prev[gid],
+                                                juegos: Math.max(
+                                                  1,
+                                                  Number(e.target.value) || 1,
+                                                ),
+                                              },
+                                            }))
+                                          }
+                                          className={s.inputMini}
+                                        />
+                                      </label>
+                                      {/* Terminaciones del tomo entero (un solo selector). */}
+                                      {terminacionesDisp.length > 0 && (
+                                        <SysMultiSelect
+                                          values={
+                                            grupos[gid]?.terminaciones ?? []
+                                          }
+                                          onChange={(v) =>
+                                            setGrupos((prev) => ({
+                                              ...prev,
+                                              [gid]: {
+                                                ...prev[gid],
+                                                terminaciones: v,
+                                              },
+                                            }))
+                                          }
+                                          options={terminacionesDisp.map(
+                                            (t) => ({
+                                              value: t,
+                                              label: t,
+                                            }),
+                                          )}
+                                          ariaLabel="Terminaciones del tomo"
+                                          triggerClassName="w-[160px]"
+                                        />
+                                      )}
+                                      {/* Tipo de anillo del tomo: sólo si hay más de uno y anilla. */}
+                                      {tiposAnilloDisp.length > 1 &&
+                                        (
+                                          grupos[gid]?.terminaciones ?? []
+                                        ).includes("Anillado") && (
+                                          <SysSelect
+                                            value={
+                                              grupos[gid]?.tipoAnillo ||
+                                              tiposAnilloDisp[0].value
+                                            }
+                                            onChange={(v) =>
+                                              setGrupos((prev) => ({
+                                                ...prev,
+                                                [gid]: {
+                                                  ...prev[gid],
+                                                  tipoAnillo: v,
+                                                },
+                                              }))
+                                            }
+                                            options={tiposAnilloDisp}
+                                            ariaLabel="Tipo de anillo del tomo"
+                                            triggerClassName="w-[150px]"
+                                          />
+                                        )}
+                                      <span className={s.tomoMeta}>
+                                        {gprev
+                                          ? `${gprev.hojasPorLibro} hojas/juego`
+                                          : ""}
+                                      </span>
+                                      <span className={s.tomoSub}>
+                                        {gprev
+                                          ? `Hojas ${fmt(
+                                              Math.max(
+                                                0,
+                                                gprev.subtotal -
+                                                  (gprev.anillado?.subtotal ??
+                                                    0),
+                                              ),
+                                            )}`
+                                          : "—"}
+                                      </span>
+                                      <ActionButton
+                                        type="button"
+                                        variant="tertiary"
+                                        isIconOnly
+                                        onPress={() => desagrupar(gid)}
+                                        aria-label="Desagrupar tomo"
+                                      >
+                                        <Trash2 data-icon="inline-start" />
+                                      </ActionButton>
+                                    </div>
+                                    {gprev?.anillado &&
+                                      (gprev.anillado.error ? (
+                                        <div className={s.tomoAnilladoWarn}>
+                                          ⚠ {gprev.anillado.error} No se puede
+                                          agregar hasta corregirlo.
+                                        </div>
+                                      ) : (
+                                        <div className={s.tomoAnillado}>
+                                          <span className={s.tomoAnilladoLbl}>
+                                            Anillado ·{" "}
+                                            {labelTipoAnillo(
+                                              gprev.anillado.tipoAnillo,
+                                            )}
+                                            {gprev.anillado.diametroMm
+                                              ? ` Ø${gprev.anillado.diametroMm} mm`
+                                              : ""}
+                                          </span>
+                                          <span
+                                            className={s.tomoAnilladoPrecio}
+                                          >
+                                            + {fmt(gprev.anillado.subtotal)} sin
+                                            IVA
+                                          </span>
+                                        </div>
+                                      ))}
+                                  </td>
+                                </tr>
+                                {miembros.map((d) =>
+                                  renderFila(d, idx++, true),
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                          {sueltos.map((d) => renderFila(d, idx++, false))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Tabs.Panel>
+              </section>
+            </Tabs>
+          </fieldset>
         </div>
 
         {previewError && docs.length > 0 && (
-          <div className={s.errBanner}>
-            No se pudo calcular el precio: {previewError}
-          </div>
+          <Alert variant="destructive" className={s.errBanner}>
+            <AlertDescription>
+              No se pudo calcular el precio: {previewError}
+            </AlertDescription>
+          </Alert>
         )}
         <footer className={s.foot}>
           <div className={s.stats}>
             <div>
               <span className={s.statNum}>{t?.documentos ?? docs.length}</span>
-              <span className={s.statLbl}>Documentos</span>
+              <span className={s.statLbl}>Archivos</span>
             </div>
             <div>
               <span className={s.statNum}>{t?.tomos ?? grupoIds.length}</span>
               <span className={s.statLbl}>Tomos</span>
             </div>
             <div>
-              <span className={s.statNum}>{t?.carillas ?? 0}</span>
+              <span className={s.statNum}>{cantidades.carillas}</span>
               <span className={s.statLbl}>Carillas</span>
             </div>
             <div>
-              <span className={s.statNum}>{t?.hojasFisicas ?? 0}</span>
-              <span className={s.statLbl}>Hojas físicas</span>
+              <span className={s.statNum}>{cantidades.hojas}</span>
+              <span className={s.statLbl}>
+                {docs.some((d) => d.modo === "CAD")
+                  ? "Hojas / planos"
+                  : "Hojas físicas"}
+              </span>
             </div>
           </div>
           <div className={s.totalBox}>
             <div className={s.totalFinal}>
-              <span>Total c/IVA</span>
-              <strong>{fmt((t?.subtotal ?? 0) + (t?.iva ?? 0))}</strong>
+              <span>Total de la carga c/IVA</span>
+              <strong aria-live="polite">
+                {cotizando
+                  ? "…"
+                  : tieneErroresCotizacion
+                    ? "—"
+                    : t
+                      ? fmt(t.total)
+                      : docs.length
+                        ? "—"
+                        : fmt(0)}
+              </strong>
             </div>
             <div className={s.totalNetoSub}>
-              Hojas {fmt(impresionNeto)} · Anillado {fmt(anilladoNeto)} · IVA{" "}
-              {fmt(t?.iva ?? 0)}
+              {t && !tieneErroresCotizacion ? (
+                <>
+                  Impresión {fmt(impresionNeto)} · Anillado {fmt(anilladoNeto)}{" "}
+                  · IVA {fmt(t.iva)}
+                </>
+              ) : cotizando ? (
+                "Calculando precio…"
+              ) : (
+                ""
+              )}
             </div>
           </div>
-          <button
+          <ActionButton
             type="button"
-            className="btn btn-primary"
-            onClick={() => void agregar()}
-            disabled={
+            onPress={() => void agregar()}
+            isDisabled={
               docs.length === 0 ||
               incompletos > 0 ||
               tieneErroresCotizacion ||
-              guardando
+              guardando ||
+              leyendo ||
+              cotizando
             }
             title={
               incompletos > 0
-                ? `${incompletos} fila(s) sin páginas o sin papel`
+                ? `${incompletos} fila(s) con páginas, rangos o papel por completar`
                 : tieneErroresCotizacion
                   ? "Corregí los errores de cotización antes de agregar la carga"
                   : undefined
@@ -1538,35 +2388,66 @@ export default function CentroCopiadoSheet({
           >
             {guardando
               ? "Guardando…"
-              : incompletos > 0
-                ? `Completá ${incompletos} fila(s)`
-                : tieneErroresCotizacion
-                  ? "Corregí los errores"
-                  : editItems?.length
-                    ? "Guardar cambios"
-                    : "Agregar a la OT"}
-          </button>
+              : leyendo
+                ? "Leyendo archivos…"
+                : cotizando
+                  ? "Cotizando…"
+                  : incompletos > 0
+                    ? `Completá ${incompletos} fila(s)`
+                    : tieneErroresCotizacion
+                      ? "Corregí los errores"
+                      : editItems?.length
+                        ? "Guardar cambios"
+                        : "Agregar a la OT"}
+          </ActionButton>
         </footer>
-      </div>
-      <ConfirmacionSalida
-        open={confirmarSalida}
-        cambios={docs.length}
-        donde="el centro de copiado"
-        guardando={guardando}
-        onGuardarYSalir={async () => {
-          await agregar();
-          setConfirmarSalida(false);
-        }}
-        onDescartarYSalir={() => {
-          setConfirmarSalida(false);
-          onOpenChange(false);
-        }}
-        onSeguirEditando={() => setConfirmarSalida(false)}
-      />
+      </FormDialog>
+      <FormDialog
+        isOpen={confirmarSalida}
+        onOpenChange={setConfirmarSalida}
+        isDismissable={!guardando}
+        title="¿Cerrar Centro de copiado?"
+        description="Tenés documentos sin guardar en esta carga. Podés seguir editando, agregarlos a la orden o descartar los cambios."
+      >
+        <div className={s.confirmActions}>
+          <ActionButton
+            variant="tertiary"
+            isDisabled={guardando}
+            onPress={() => setConfirmarSalida(false)}
+          >
+            Seguir editando
+          </ActionButton>
+          <ActionButton
+            variant="outline"
+            isDisabled={guardando}
+            onPress={() => {
+              setConfirmarSalida(false);
+              onOpenChange(false);
+            }}
+          >
+            Descartar y salir
+          </ActionButton>
+          <ActionButton
+            isDisabled={
+              guardando ||
+              leyendo ||
+              cotizando ||
+              incompletos > 0 ||
+              tieneErroresCotizacion
+            }
+            onPress={async () => {
+              await agregar();
+              setConfirmarSalida(false);
+            }}
+          >
+            {guardando
+              ? "Guardando…"
+              : editItems?.length
+                ? "Guardar cambios"
+                : "Agregar a la OT"}
+          </ActionButton>
+        </div>
+      </FormDialog>
     </>
   );
-
-  return typeof document === "undefined"
-    ? null
-    : createPortal(contenido, document.body);
 }

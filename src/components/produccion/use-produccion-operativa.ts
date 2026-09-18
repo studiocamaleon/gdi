@@ -16,6 +16,7 @@ import {
   getTableroProduccion,
   mesaPasoProduccion,
   resolverGatePasoProduccion,
+  type AvisoFinalizacionOrden,
 } from "@/lib/ordenes-trabajo-api";
 import { crearSincronizadorTablero } from "@/lib/sincronizacion-tablero";
 import type { ItemView } from "@/lib/produccion-item-view";
@@ -26,6 +27,7 @@ type GateHandler = (
   estado: "CUMPLIDO" | "PENDIENTE",
 ) => Promise<void>;
 export type DatosProduccionOperativa = {
+  onOrdenFinalizada?: (aviso: AvisoFinalizacionOrden) => void;
   soloPendientes?: boolean;
   initialActualizadoEl?: string | null;
   initialItems: TableroItemData[];
@@ -39,6 +41,7 @@ export type DatosProduccionOperativa = {
 };
 /** Control único para Tablero y Estaciones: permisos, refresco vivo y mutaciones. */
 export function useProduccionOperativa({
+  onOrdenFinalizada,
   soloPendientes = false,
   initialActualizadoEl,
   initialItems,
@@ -174,7 +177,8 @@ export function useProduccionOperativa({
         sinTiempoConfirmado?: boolean;
       },
     ) => {
-      if (!canManage) return;
+      if (!canManage || mutacionesRef.current > 0) return;
+      let avisoFinalizacion: AvisoFinalizacionOrden | null = null;
       setBusy(true);
       setError(null);
       mutacionesRef.current += 1;
@@ -186,6 +190,7 @@ export function useProduccionOperativa({
           paso.id,
           { accion, ...opts },
         );
+        avisoFinalizacion = actualizado.avisoFinalizacion ?? null;
         setItems((current) =>
           current.map((entry) =>
             entry.id === actualizado.id ? actualizado : entry,
@@ -199,10 +204,13 @@ export function useProduccionOperativa({
       } finally {
         mutacionesRef.current -= 1;
         await refrescar();
-        if (montadoRef.current) setBusy(false);
+        if (montadoRef.current) {
+          setBusy(false);
+          if (avisoFinalizacion) onOrdenFinalizada?.(avisoFinalizacion);
+        }
       }
     },
-    [canManage, sincronizador, refrescar],
+    [canManage, sincronizador, refrescar, onOrdenFinalizada],
   );
 
   const handleGate = React.useCallback<GateHandler>(

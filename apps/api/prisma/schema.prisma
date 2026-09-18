@@ -855,6 +855,74 @@ model Tenant {
   centroCopiadoConfig                              CentroCopiadoConfig?
   centroCopiadoEventos                             CentroCopiadoEvento[]
   centroCopiadoOperaciones                         CentroCopiadoOperacion[]
+  destinosImpresion                                ImpresionDestino[]
+  bandejasImpresion                                ImpresionBandeja[]
+  perfilesImpresion                                ImpresionPerfil[]
+}
+
+/// Destinos compartidos por empresa. El transporte inicial es QZ en navegador.
+model ImpresionDestino {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  nombre String @db.VarChar(120)
+  host String @db.VarChar(253)
+  impresora String @db.VarChar(200)
+  maquinaId String @db.Uuid
+  activo Boolean @default(true)
+  /// Configuración del piloto CAD en rollo. Null: documentos en hojas.
+  cad Json?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bandejas ImpresionBandeja[]
+  @@unique([tenantId, host, impresora])
+  @@index([tenantId, maquinaId])
+}
+
+model ImpresionBandeja {
+  tenantId String @db.Uuid
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  id String @id @default(uuid()) @db.Uuid
+  destinoId String @db.Uuid
+  nombre String @db.VarChar(100)
+  codigo String @db.VarChar(100)
+  /// Declaración humana de carga habitual, no lectura de un sensor.
+  papelPreparadoId String? @db.Uuid
+  gramajePreparado Int?
+  preparadoPor String?
+  preparadoEl DateTime?
+  version Int @default(1)
+  destino ImpresionDestino @relation(fields: [destinoId], references: [id], onDelete: Cascade)
+  perfiles ImpresionPerfil[]
+  @@unique([destinoId, codigo])
+}
+
+model ImpresionPerfil {
+  tenantId String @db.Uuid
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId])
+  id String @id @default(uuid()) @db.Uuid
+  bandejaId String @db.Uuid
+  nombre String @db.VarChar(120)
+  papelMateriaPrimaId String @db.Uuid
+  gramaje Int
+  tamano String @default("A4") @db.VarChar(20)
+  /// Enlace CAD a la ruta de cotización y variante exacta de rollo. Null: hojas.
+  cad Json?
+  color String @default("BN") @db.VarChar(10)
+  faz Int
+  /// AUTOMATICO requiere además papel confirmado; PREPARACION nunca se libera solo.
+  modo String @default("PREPARACION") @db.VarChar(20)
+  probado Boolean @default(false)
+  activo Boolean @default(true)
+  prioridad Int @default(1)
+  version Int @default(1)
+  actualizadoPor String
+  updatedAt DateTime @updatedAt
+  bandeja ImpresionBandeja @relation(fields: [bandejaId], references: [id], onDelete: Cascade)
+  @@index([bandejaId, activo])
 }
 
 /// Configuración del módulo Centro de copiado por tenant. Es CURACIÓN OPCIONAL:

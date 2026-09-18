@@ -2399,6 +2399,7 @@ export interface CotizarResponse {
       } | null;
       tiempo?: {
         /** Incluye los minutos de `tiemposExtra` (la ETA los cuenta). */
+        maquinaId?: string | null;
         totalMin: number;
         setupMin?: number;
         procesamientoCorte?: import("./procesamiento-corte").ProcesamientoCorteCosteado;

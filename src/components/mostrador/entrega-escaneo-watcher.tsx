@@ -14,10 +14,7 @@
 import * as React from "react";
 
 import { useEscaneoCodigo } from "@/lib/use-escaneo-codigo";
-import {
-  parsearDniArgentino,
-  type DatosDocumento,
-} from "@/lib/dni-argentino";
+import { parsearDniArgentino, type DatosDocumento } from "@/lib/dni-argentino";
 import { EntregaModal } from "./entrega-modal";
 import { AltaDniModal } from "./alta-dni-modal";
 
@@ -68,12 +65,16 @@ export function EntregaEscaneoWatcher() {
       const numero = normalizarNumeroOrden(leido);
       if (NUMERO_ORDEN.test(numero)) {
         setCodigo(numero);
-        return;
+        return true;
       }
       // Sobre el texto CRUDO: la normalización de arriba se come los
       // separadores que este parser necesita.
       const dni = parsearDniArgentino(leido);
-      if (dni) setDocumento(dni);
+      if (dni) {
+        setDocumento(dni);
+        return true;
+      }
+      return false;
     },
   });
 

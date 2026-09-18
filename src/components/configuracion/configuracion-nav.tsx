@@ -43,6 +43,7 @@ const ICONOS: Record<string, IconCmp> = {
   "centro-copiado": PrinterIcon,
   almacenamiento: HardDriveIcon,
   integraciones: PlugIcon,
+  impresoras: PrinterIcon,
 };
 
 export function ConfiguracionNav() {
@@ -62,7 +63,7 @@ export function ConfiguracionNav() {
     },
     {
       label: "Operación",
-      keys: ["centro-copiado", "almacenamiento", "integraciones"],
+      keys: ["centro-copiado", "impresoras", "almacenamiento", "integraciones"],
     },
   ];
 

@@ -1,544 +1,564 @@
-/* z-index 50 = capa de overlays del sistema (Sheet, AlertDialog y el popup de
-   los Select del sistema viven todos en z-50). El modal debe quedar en esa capa
-   para que el popup de los Select —portalado al body después— se dibuje encima
-   por orden de DOM; con z mayor (60/61) el popup quedaba detrás. */
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(20, 20, 26, 0.42);
-  z-index: 50;
-  animation: fade 0.12s ease;
-}
-
 .sheet {
-  position: fixed;
-  z-index: 50;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(1320px, calc(100vw - 40px));
-  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--border);
-  border-radius: var(--r-4);
-  box-shadow: var(--shadow-pop);
-  overflow: hidden;
+  max-width: 1560px;
+  height: min(860px, calc(100dvh - 32px));
 }
-
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
+.sheet :global(.modal__header) {
+  padding: 12px 52px 8px 20px;
 }
-
-/* Header */
-.head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--hairline);
+.sheet :global(.modal__header) p {
+  font-size: 12px;
+  line-height: 16px;
 }
-.eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted-text-2);
-  font-family: var(--font-mono);
-}
-.titulo {
-  margin: 4px 0 6px;
-  font-size: 22px;
-  font-weight: 650;
+.modalTitle {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.badge {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--signal);
-  background: var(--signal-bg);
-  border: 1px solid var(--signal);
-  border-radius: 999px;
-  padding: 2px 9px;
-  font-weight: 600;
+.modalTitle svg {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-soft-foreground);
 }
-.sub {
-  margin: 0;
-  color: var(--muted-text);
-  font-size: 13px;
-  max-width: 640px;
-}
-.close {
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  border-radius: var(--r-2);
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
-  color: var(--muted-text);
-  flex: none;
-}
-.close:hover {
-  color: var(--ink);
-}
-
-/* Body scroll: en un flex-column con max-height, el hijo scrolleable necesita
-   flex:1 (flex-basis 0, NO auto: con basis auto el body toma el alto del
-   contenido y puede empujar al sheet en vez de encogerse) + min-height:0 — si no,
-   crece con el contenido y el overflow:hidden del sheet lo recorta sin scroll. */
-/* El body NO scrollea: reparte el alto entre la zona de carga (fija) y la tabla
-   (que se lleva el resto). El scroll vive sólo en la lista de documentos. */
 .body {
+  display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  padding: 14px 20px;
   overflow: hidden;
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
-
-/* Cargar: drop + defaults. Fija (no se encoge): sólo scrollea la lista de docs. */
+.bodyFields {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
 .cargar {
-  flex: none;
   display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 20px;
+  grid-template-columns: 154px minmax(0, 1fr);
+  gap: 12px;
+  flex: none;
 }
 .drop {
-  border: 1.5px dashed var(--border-strong);
-  border-radius: var(--r-3);
-  background: var(--surface-2);
-  padding: 22px 16px;
-  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--canvas-background);
   cursor: pointer;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
+  text-align: center;
 }
-.drop:hover {
-  border-color: var(--signal);
-}
+.drop:is(:hover, :focus-visible),
 .dropActive {
-  border-color: var(--signal);
-  background: var(--signal-bg);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
-.dropIcon {
-  font-size: 26px;
-  color: var(--muted-text-2);
+.drop:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.dropIcon svg {
+  width: 18px;
+  height: 18px;
 }
 .dropTitle {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 12px;
 }
 .dropHint {
-  font-size: 12px;
+  max-width: 130px;
+  font-size: 11px;
+  line-height: 1.3;
   color: var(--muted-text);
-  margin-bottom: 6px;
 }
-
 .defaults {
+  min-width: 0;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--r-3);
-  padding: 14px 16px;
-  background: var(--surface);
+  border-radius: var(--radius);
 }
 .defaultsHead {
+  margin-bottom: 8px;
+}
+.defaultsHead > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.defaultsHead strong {
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted-text-2);
-  margin-bottom: 12px;
+  font-weight: 600;
+}
+.defaultsHead span {
+  font-size: 11px;
+  color: var(--muted-text);
 }
 .defaultsGrid {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 14px;
+  gap: 8px;
+}
+.defaultsGrid > .campo {
+  flex: 1 1 76px;
+  min-width: 0;
+}
+.defaultsGrid > .campo:first-child {
+  flex: 2 1 180px;
+}
+.defaultsGrid > .copiasDefault {
+  flex: 0 0 64px;
+}
+.sheet .aplicarDefaults {
+  --action-height: 28px;
+  height: 28px;
+  min-height: 28px;
 }
 .campo {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--muted-text);
-}
-.campo > span {
-  font-weight: 500;
-}
-
-/* Controles */
-.select {
-  border: 1px solid var(--border);
-  border-radius: var(--r-1);
-  background: var(--surface);
-  color: var(--ink);
-  height: 32px;
-  padding: 0 6px;
-  font-size: 13px;
-  min-width: 92px;
-  max-width: 150px;
-}
-.inputMini {
-  border: 1px solid var(--border);
-  border-radius: var(--r-1);
-  background: var(--surface);
-  color: var(--ink);
-  height: 32px;
-  width: 62px;
-  padding: 0 8px;
-  font-size: 13px;
-  font-family: var(--font-mono);
-}
-/* Páginas leídas del PDF por el sistema. */
-.inputAuto {
-  border-color: var(--ok);
-  background: color-mix(in srgb, var(--ok) 12%, var(--surface));
-  color: var(--ok);
-  font-weight: 600;
-}
-/* Páginas sin cargar (manual / no-PDF): el usuario las tiene que indicar. */
-.inputFalta {
-  border-color: var(--signal);
-  background: color-mix(in srgb, var(--signal) 8%, var(--surface));
-}
-/* Nombre de documento editable (crece, se ve como texto hasta hover/foco). */
-.docNombreInput {
-  flex: 1;
-  min-width: 120px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink);
-  font-weight: 550;
-  font-size: 13.5px;
-  padding: 4px 6px;
-  border-radius: var(--r-1);
-}
-.docNombreInput:hover,
-.docNombreInput:focus {
-  border-color: var(--border);
-  background: var(--surface);
-  outline: none;
-}
-.docNombreInput::placeholder {
-  color: var(--muted-text-2);
-  font-weight: 400;
-}
-.tablaHeadBtns {
-  display: flex;
-  gap: 8px;
-}
-
-/* Segmented (B/N|Color, Simple|Doble) */
-.seg {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: var(--r-1);
-  overflow: hidden;
-  height: 32px;
-}
-.segOff,
-.segOn {
-  border: none;
-  background: var(--surface);
-  color: var(--muted-text);
-  font-size: 12px;
-  padding: 0 12px;
-  cursor: pointer;
-}
-.segOff + .segOff,
-.segOn + .segOff,
-.segOff + .segOn,
-.segOn + .segOn {
-  border-left: 1px solid var(--border);
-}
-.segOn {
-  background: var(--ink);
-  color: var(--surface);
-  font-weight: 600;
-}
-
-/* Tabla: se lleva el alto restante del body y es columna flex, así el header de
-   la tabla queda fijo y sólo la lista de documentos scrollea adentro. */
-.tablaWrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: var(--r-3);
-  overflow: hidden;
-}
-.tablaHead {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--hairline);
-  font-weight: 600;
-  font-size: 14px;
-}
-.vacio {
-  padding: 28px;
-  text-align: center;
-  color: var(--muted-text);
-  font-size: 13px;
-}
-.tablaScroll {
-  overflow-x: auto;
-}
-.errChip {
-  color: var(--signal);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.errBanner {
-  margin: -6px 24px 0;
-  padding: 8px 12px;
-  background: var(--signal-bg);
-  border: 1px solid var(--signal);
-  border-radius: var(--r-2);
-  color: var(--signal);
-  font-size: 12.5px;
-}
-/* Lista de documentos: ÚNICO contenedor scrolleable del modal. overscroll:contain
-   evita encadenar el wheel a la página al llegar al borde. */
-.lista {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-}
-.card {
-  /* No encoger: en la lista scrolleable (flex column) los hijos se comprimirían
-     para caber y, con overflow:hidden del tomo, recortarían documentos. */
-  flex: none;
-  border: 1px solid var(--border);
-  border-radius: var(--r-2);
-  background: var(--surface);
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cardTop {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.chk {
-  flex: none;
-}
-.docNum {
-  font-family: var(--font-mono);
-  color: var(--muted-text-2);
-  font-size: 12px;
-  flex: none;
-}
-.docNombre {
-  font-weight: 550;
-  font-size: 13.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cardPrecio {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  white-space: nowrap;
-}
-.cardUnit {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--muted-text-2);
-  font-variant-numeric: tabular-nums;
-}
-.cardSub {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.cardIva {
-  font-size: 10px;
-  color: var(--muted-text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-.cardCtrls {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: flex-end;
-  gap: 10px 11px;
-  padding-left: 26px;
-  overflow-x: auto;
-}
-.cardCtrls > .ctrl {
-  flex: none;
-}
-.ctrl {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 11px;
   color: var(--muted-text);
 }
-.ctrl > span {
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  font-size: 10px;
+.compactSelect {
+  height: auto;
 }
-.delTomo {
+.compactSelect :global(.select__trigger) {
+  height: 28px;
+  min-height: 28px;
+  gap: 4px;
+  padding: 0 7px;
   font-size: 12px;
-  color: var(--muted-text-2);
-  height: 32px;
+}
+.compactSelect :global(.select__value) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compactSelect :global(.select__indicator) {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+.inputMini,
+.rangoInput,
+.tomoNombre {
+  height: 28px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--field-radius);
+  padding: 0 7px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.inputMini {
+  width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+.paginasManual,
+.copiasDefault .inputMini {
+  width: 100%;
+}
+.inputFalta {
+  border-color: var(--warning);
+}
+.rangoInput[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.inputMini:focus-visible,
+.rangoInput:focus-visible,
+.tomoNombre:focus-visible,
+.docNombreInput:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 0;
+}
+.tablaWrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.tablaHead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.tablaHeadBtns {
+  display: flex;
+  gap: 6px;
+}
+.vacio {
+  flex: 1;
+  min-height: 130px;
+}
+.tableScroll {
+  container-type: inline-size;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.tableScroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.documentsTable {
+  width: 100%;
+  min-width: 1200px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+.documentsTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 34px;
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.documentsTable th small {
+  display: block;
+  font-size: 10px;
+  line-height: 10px;
+}
+.documentsTable :is(th, td) {
+  padding: 8px 6px;
+}
+.documentsTable td {
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.colCheck {
+  width: 32px;
+}
+/* El rango y el papel crecen con la tabla; el documento toma el espacio restante. */
+.colDocument {
+  width: auto;
+}
+.colPages {
+  width: max(170px, calc(20cqw - 70px));
+}
+.colCopies {
+  width: 64px;
+}
+.colPaper {
+  width: max(180px, calc(30cqw - 180px));
+}
+.colWeight {
+  width: 76px;
+}
+.colSize {
+  width: 72px;
+}
+.colColor {
+  width: 72px;
+}
+.colFaces {
+  width: 88px;
+}
+.colPrice {
+  width: 112px;
+}
+.colAction {
+  width: 42px;
+}
+.documentsTable .actionsHead {
+  text-align: center;
+}
+.documentsTable td:last-child {
+  padding-right: 12px;
+}
+.documentsTable td > .inputMini {
+  width: 100%;
+}
+.documentRow {
+  background: var(--surface);
+}
+.documentRow:hover {
+  background: var(--canvas-background);
+}
+.documentRow[data-selected] {
+  background: var(--accent-soft);
+}
+.rowGrupo td:first-child {
+  box-shadow: inset 3px 0 var(--border-strong);
+}
+.chk {
+  display: block;
+  width: 15px;
+  height: 15px;
+  margin: 7px auto 0;
+  accent-color: var(--accent);
+}
+.grupoIcon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  margin: 8px auto 0;
+  color: var(--muted-text);
+}
+.docNombreInput {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.docNombreInput:hover {
+  border-color: var(--border);
+}
+.docNombreInput::placeholder {
+  color: var(--muted-text);
+  font-weight: 400;
+}
+.docMeta {
   display: flex;
   align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  line-height: 14px;
+  padding-left: 4px;
+  font-size: 10px;
+  color: var(--muted-text);
 }
-
-.del {
-  border: none;
-  background: transparent;
-  color: var(--muted-text-2);
-  cursor: pointer;
-  font-size: 13px;
-  flex: none;
-}
-.del:hover {
-  color: var(--signal);
-}
-.muted {
-  color: var(--muted-text-2);
-}
-
-/* Tomo (grupo anillado): contenedor con sus documentos en orden */
-.tomo {
-  /* No encoger: si no, el contenedor del tomo se comprime en la lista y su
-     overflow:hidden recorta los documentos internos (queda con menos ítems). */
-  flex: none;
-  border: 1px solid var(--signal);
-  border-radius: var(--r-2);
+.docMeta > span:last-child {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.docNum {
+  flex: none;
+  font: 10px var(--brand-mono);
+}
+.orientacion {
+  flex: none;
+  color: var(--foreground);
+  border-right: 1px solid var(--border);
+  padding-right: 6px;
+}
+.rangoInput {
+  width: 100%;
+  font-family: var(--brand-mono);
+}
+.rangoInput::placeholder {
+  font: 11px var(--font-sans);
+  color: var(--muted-text);
+}
+.rangoAyuda {
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted-text);
+}
+.rangoError {
+  color: var(--danger);
+}
+.totalArchivo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.totalArchivo .inputMini {
+  width: 48px;
+  height: 24px;
+}
+.valorCelda,
+.importeCell > strong,
+.importeCell > .muted,
+.importeCell > .errChip {
+  display: block;
+  line-height: 28px;
+}
+.documentsTable .importeCell {
+  text-align: right;
+}
+.importeCell strong {
+  font-weight: 600;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.cellHint {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-text);
+  font-size: 10px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.delTomo {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  line-height: 28px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
-.cardGrupo {
-  border: none;
-  border-top: 1px solid var(--hairline);
-  border-radius: 0;
-  background: color-mix(in srgb, var(--signal-bg) 30%, var(--surface));
+.delTomo small {
+  font-size: 10px;
+  line-height: 14px;
+  margin-top: 4px;
+  color: var(--muted-text);
+}
+.sheet .rowButton {
+  --action-height: 28px;
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+.rowButton svg {
+  width: 14px;
+  height: 14px;
+}
+.rowButton[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.detailRow {
+  background: var(--canvas-background);
+}
+.documentsTable .detailRow > td {
+  padding: 0;
+}
+.rowOptions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px 10px 36px;
+}
+.optionsTitle {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+}
+.rowError {
+  margin: 0;
+  padding: 8px 14px 8px 36px;
+  font-size: 12px;
+  color: var(--danger);
+}
+.muted {
+  color: var(--muted-text);
+}
+.errChip {
+  font-size: 11px;
+  color: var(--danger);
+}
+.errBanner {
+  margin: 0 20px 12px;
+  width: auto;
+  flex-shrink: 0;
+}
+.tomoRow {
+  background: var(--surface-secondary);
+}
+.documentsTable .tomoRow td {
+  padding: 0;
 }
 .tomoHead {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
   padding: 8px 12px;
-  background: var(--signal-bg);
-  border-bottom: 1px solid var(--signal);
 }
 .tomoTitle {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--signal);
-  font-size: 13px;
-  white-space: nowrap;
 }
 .tomoNombre {
-  border: 1px solid var(--signal);
-  border-radius: var(--r-1);
-  background: var(--surface);
-  color: var(--ink);
-  height: 28px;
-  padding: 0 8px;
-  font-size: 13px;
-  min-width: 160px;
   flex: 1;
-  max-width: 280px;
-}
-.tomoNombre::placeholder {
-  color: var(--muted-text-2);
+  min-width: 150px;
+  max-width: 230px;
 }
 .tomoJuegos {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--ink);
+  font-size: 11px;
 }
 .tomoMeta {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted-text);
 }
 .tomoSub {
   margin-left: auto;
-  font-family: var(--font-mono);
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-
-/* Línea de anillado del tomo: bajo el head, antes de los documentos. */
 .tomoAnillado {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  font-size: 12px;
-  color: var(--ink);
-  background: color-mix(in srgb, var(--signal-bg) 40%, var(--surface));
-  border-bottom: 1px solid var(--hairline);
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 5px 12px 5px 36px;
+  font-size: 11px;
 }
 .tomoAnilladoLbl {
-  color: var(--signal);
-  font-weight: 600;
+  color: var(--muted-text);
 }
 .tomoAnilladoPrecio {
   margin-left: auto;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-family: var(--font-mono);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .tomoAnilladoWarn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
+  color: var(--danger);
   font-size: 12px;
-  color: var(--warning, #a16207);
-  background: color-mix(in srgb, var(--warning, #a16207) 8%, var(--surface));
-  border-bottom: 1px solid var(--hairline);
+  padding: 8px 12px;
 }
-
-/* Footer */
 .foot {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 14px 24px;
+  gap: 18px;
+  padding: 10px 20px;
   border-top: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--surface);
 }
 .stats {
   display: flex;
@@ -547,17 +567,16 @@
 .stats > div {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 .statNum {
-  font-size: 18px;
-  font-weight: 650;
-  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .statLbl {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted-text);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .totalBox {
   margin-left: auto;
@@ -568,38 +587,238 @@
   align-items: baseline;
   justify-content: flex-end;
   gap: 10px;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--muted-text);
 }
 .totalFinal strong {
-  font-size: 25px;
-  color: var(--ink);
-  font-family: var(--font-mono);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 .totalNetoSub {
-  font-size: 12px;
-  color: var(--muted-text-2);
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted-text);
   font-variant-numeric: tabular-nums;
 }
-
-@media (max-width: 860px) {
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 24px;
+}
+@media (max-width: 1100px) {
+  .cargar {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+  .defaultsHead span {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .sheet :global(.modal__header) {
+    padding: 12px 48px 10px 14px;
+  }
+  .body {
+    padding: 10px;
+  }
+  .bodyFields {
+    gap: 10px;
+  }
   .cargar {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .drop {
+    flex-direction: row;
+    padding: 6px 10px;
+  }
+  .dropHint {
+    max-width: none;
+  }
+  .defaults {
+    padding: 8px;
+  }
+  .defaultsHead {
+    margin-bottom: 6px;
+  }
+  .defaultsGrid {
+    gap: 6px;
+  }
+  .defaultsGrid > .campo:first-child {
+    flex-basis: 160px;
+  }
+  .campo {
+    gap: 2px;
+  }
+  .tablaHead {
+    padding: 6px 8px;
   }
   .foot {
     flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .stats {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .totalBox {
+    margin-left: 0;
+    text-align: left;
+    flex: 1;
+  }
+  .totalFinal {
+    justify-content: flex-start;
+  }
+  .totalNetoSub {
+    display: none;
+  }
+  .errBanner {
+    margin-inline: 10px;
   }
 }
 
-.sheet[data-appearance="light"] :global(.btn-primary) {
-  background: var(--action-primary-gradient);
-  color: var(--action-primary-foreground);
-  border-color: transparent;
-  border-radius: var(--action-radius);
+/* CAD comparte la tabla compacta, con la geometría en el detalle desplegable. */
+.medidaOriginal {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
 }
-.sheet[data-appearance="light"] .statNum,
-.sheet[data-appearance="light"] .totalFinal strong {
-  font-family: inherit;
-  font-weight: 500;
+.medidaOriginal small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.sugerenciaCad {
+  padding: 10px 14px 10px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.detalleCad {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 12px 36px;
+  font-size: 12px;
+}
+.detalleCad > p {
+  margin: 0;
+  color: var(--muted-text);
+}
+.medidasScroll {
+  overflow: auto;
+  max-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.medidasScroll table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+.medidasScroll th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  background: var(--surface-secondary);
+  font: 10px var(--brand-mono);
+  color: var(--muted-text);
+}
+.medidasScroll th,
+.medidasScroll td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabsRoot,
+.tabPanel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.tabsRoot {
+  gap: 14px;
+}
+.tabPanel {
+  padding: 0;
+}
+.defaultsGrid > .perfilDefault {
+  flex: 4 1 270px;
+}
+.configAviso {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--warning);
+}
+.moverArchivo {
+  padding: 6px 14px 0 36px;
+}
+.sheet .desglosar {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--accent-soft-foreground);
+}
+.sheet .copiasDesglosadas {
+  display: grid;
+  height: auto;
+  min-width: 0;
+  gap: 1px;
+  line-height: 14px;
+  width: 100%;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.copiasDesglosadas span {
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.copiasDesglosadas:focus-visible {
+  outline: 2px solid var(--accent-soft-foreground);
+  outline-offset: 2px;
+}
+.cabeceraDesglose,
+.paginacionCad {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cabeceraDesglose {
+  justify-content: space-between;
+}
+.cabeceraDesglose > div {
+  display: grid;
+  gap: 4px;
+}
+.cabeceraDesglose span,
+.paginacionCad > span {
+  color: var(--muted-text);
+}
+.paginacionCad > span {
+  margin-right: auto;
+}
+.medidasScroll td > .copiasPagina {
+  width: 76px;
+}
+.drop[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.65;
 }

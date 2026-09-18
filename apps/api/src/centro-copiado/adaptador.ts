@@ -1,23 +1,33 @@
+import type { MedidaPagina } from '../common/medidas-documento';
 /**
  * Adaptador del TPV Centro de copiado.
  * Traduce un DOCUMENTO (N páginas, tamaño, papel, color, faz) al `jobContext`
  * de un SEGMENTO de impresión que consume el motor (`impresion_por_hoja`).
  *
- * carillas = páginas × copias; hojas = faz doble ? ceil(carillas/2) : carillas.
+ * Cada copia empieza en un frente: hojas = ceil(páginas / faz) × copias.
  * Pasa `cantidad = hojas` + pieza ~tamaño-pliego ⇒ pliegos = hojas, clicks =
  * hojas × caras × factorA4(tamaño). El papel se cuenta por hoja (no por carilla).
  * El TAMAÑO viene con sus medidas reales (del catálogo de formatos del sistema).
  */
 import { PliegoDim, piezaDocumento, runtimePliegoImpresion } from './pliegos';
+import type { OrientacionPagina } from '../common/orientacion-pdf';
 
 export type ColorDocumento = 'BN' | 'COLOR';
 export type FazDocumento = 1 | 2;
 
 export interface DocumentoInput {
+  modo?: 'HOJAS' | 'CAD';
+  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
   id: string;
   nombre?: string;
+  archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   copias: number;
+  copiasPorPagina?: import('../common/copias-paginas-cad').CopiasPaginaCad[];
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;
   /** Medidas del pliego (del catálogo de formatos del sistema). */
@@ -78,7 +88,7 @@ export function calcularHojas(
   faz: FazDocumento,
 ): { carillas: number; hojas: number } {
   const carillas = paginas * copias;
-  const hojas = faz === 2 ? Math.ceil(carillas / 2) : carillas;
+  const hojas = Math.ceil(paginas / faz) * copias;
   return { carillas, hojas };
 }
 

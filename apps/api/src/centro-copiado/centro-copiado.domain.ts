@@ -1,4 +1,7 @@
+import type { MedidaPagina } from '../common/medidas-documento';
+import type { OrientacionPagina } from '../common/orientacion-pdf';
 import type { DocumentoInput } from './adaptador';
+import { metadataRangoPaginas } from '../common/rangos-paginas';
 
 export const CENTRO_COPIADO_TERMINACIONES_CATALOGO = [
   {
@@ -41,7 +44,12 @@ export type CentroCopiadoCobertura = (typeof CENTRO_COPIADO_COBERTURAS)[number];
 
 export interface CentroCopiadoSegmentoMeta {
   nombre: string | null;
+  archivoNombre?: string;
   paginas: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   tamano: string;
   tamanoAnchoMm: number;
   tamanoAltoMm: number;
@@ -63,7 +71,12 @@ export interface CentroCopiadoMeta {
   terminaciones: string[];
   tipoAnillo: string | null;
   nombre?: string | null;
+  archivoNombre?: string;
   paginas?: number;
+  paginasOriginales?: number;
+  rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   copias?: number;
   tamano?: string;
   tamanoAnchoMm?: number;
@@ -107,7 +120,13 @@ export function metaDocumentoCentroCopiado(args: {
     terminaciones: args.terminaciones,
     tipoAnillo: args.tipoAnillo,
     nombre: doc.nombre ?? null,
+    ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
     paginas: doc.paginas,
+    ...metadataRangoPaginas(doc),
+    ...(doc.medidasPaginas ? { medidasPaginas: doc.medidasPaginas } : {}),
+    ...(doc.orientacionesPaginas
+      ? { orientacionesPaginas: doc.orientacionesPaginas }
+      : {}),
     copias: args.copias,
     tamano: doc.tamano,
     tamanoAnchoMm: doc.tamanoAnchoMm,
@@ -150,7 +169,13 @@ export function metaTomoCentroCopiado(args: {
     documentos: args.docs.length,
     segmentos: args.docs.map((doc) => ({
       nombre: doc.nombre ?? null,
+      ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
       paginas: doc.paginas,
+      ...metadataRangoPaginas(doc),
+      ...(doc.medidasPaginas ? { medidasPaginas: doc.medidasPaginas } : {}),
+      ...(doc.orientacionesPaginas
+        ? { orientacionesPaginas: doc.orientacionesPaginas }
+        : {}),
       tamano: doc.tamano,
       tamanoAnchoMm: doc.tamanoAnchoMm,
       tamanoAltoMm: doc.tamanoAltoMm,

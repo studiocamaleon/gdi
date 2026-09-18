@@ -14,6 +14,9 @@ import { modoTableroGuardado, type ModoTablero } from "@/lib/tablero-modos";
 import { TableroMonitor } from "./tablero-monitor";
 import { useRelojProduccion } from "./use-reloj-produccion";
 import { useProduccionOperativa } from "./use-produccion-operativa";
+import { OrdenFinalizadaDialog } from "./orden-finalizada-dialog";
+import { usePuedeFn } from "@/components/navigation/permisos-provider";
+import type { AvisoFinalizacionOrden } from "@/lib/ordenes-trabajo-api";
 import { buildItemView, ESTADO_TRABAJO_LABELS, type ItemView, type StepView } from "@/lib/produccion-item-view";
 
 import { calcularProgreso } from "@/lib/progreso-produccion";
@@ -1064,8 +1067,12 @@ export function ItemDetailSheet({
 
         <div className="sheet-foot">
           <div className="sheet-foot-hint">
-            {item.finished
-              ? "Todos los pasos completados. La orden se finaliza desde Órdenes de trabajo."
+            {item.data.ordenEstado === "finalizada"
+              ? "OT finalizada. Lista para preparar la entrega."
+              : item.data.ordenEstado === "entregada"
+                ? "Orden entregada."
+                : item.finished
+                  ? "Trabajo terminado. La OT continúa con los trabajos restantes."
               : currentStep
                 ? `Paso actual: ${currentStep.paso.nombre}`
                 : item.statusLine}
@@ -1284,7 +1291,15 @@ export function TableroProduccion({
   const designTheme = useDesignTheme();
   const designScope = useDesignScope();
   const { zonaHoraria } = useConfigRegional();
-  const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, conexion, permisoSupervisar, canManage, refrescar, handleAccion, handleGate, handleMesa, handleAsignacionPersonal } = useProduccionOperativa({ initialActualizadoEl, initialItems, initialMeta, initialLoadError, soloPendientes: !modoPlanificacion });
+  const puede = usePuedeFn();
+  const puedeVerOrden = puede("produccion.ver") || puede("comercial.ver") || puede("administracion.ver") || puede("administracion.gestionar");
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [avisoFinalizacion, setAvisoFinalizacion] = React.useState<AvisoFinalizacionOrden | null>(null);
+  const avisarFinalizacion = React.useCallback((aviso: AvisoFinalizacionOrden) => {
+    setSelectedId(null);
+    setAvisoFinalizacion(aviso);
+  }, []);
+  const { items, meta, busy, error, loadError, syncError, refreshing, actualizadoEl, conexion, permisoSupervisar, canManage, refrescar, handleAccion, handleGate, handleMesa, handleAsignacionPersonal } = useProduccionOperativa({ initialActualizadoEl, initialItems, initialMeta, initialLoadError, soloPendientes: !modoPlanificacion, onOrdenFinalizada: avisarFinalizacion });
   const relojTabla = useRelojProduccion(60_000, initialActualizadoEl ? Date.parse(initialActualizadoEl) : null, !modoPlanificacion);
   const instanteVista = Math.max(actualizadoEl?.getTime() ?? 0, modoPlanificacion ? 0 : relojTabla ?? 0);
   const ahoraVista = React.useMemo(() => new Date(instanteVista), [instanteVista]);
@@ -1296,7 +1311,6 @@ export function TableroProduccion({
     x: number;
     y: number;
   } | null>(null);
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [historicos, setHistoricos] = React.useState<TableroItemData[]>([]);
   const [revisionHistorico, setRevisionHistorico] = React.useState(0);
   const [itemConsultado, setItemConsultado] = React.useState<TableroItemData | null>(null);
@@ -1671,6 +1685,7 @@ export function TableroProduccion({
         onGate={handleGate}
         onClose={() => setSelectedId(null)}
       />
+      {avisoFinalizacion && <OrdenFinalizadaDialog aviso={avisoFinalizacion} puedeVerOrden={puedeVerOrden} onClose={() => setAvisoFinalizacion(null)} />}
     </div>
   );
 }

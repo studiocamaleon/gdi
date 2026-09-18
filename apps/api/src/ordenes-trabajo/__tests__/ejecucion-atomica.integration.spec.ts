@@ -511,3 +511,153 @@ it('no ejecuta silenciosamente un trabajo que el operario no tiene asignado', as
   ).rejects.toThrow(/no está asignado/);
   await verificarSinCambios(trabajos);
 });
+
+it('el aviso se entrega sólo al completar la OT entera, con todos sus productos y sin costos', async () => {
+  const a = await crearTrabajo();
+  const b = await db.ordenTrabajoItem.create({
+    data: {
+      tenantId,
+      ordenId: a.ordenId,
+      ordenIndice: 1,
+      codigo: 'B',
+      nombre: 'Vinilo QA',
+      familia: 'impresion',
+      cantidad: 1.2,
+      cantidadUnidad: 'm²',
+      subtotal: 900,
+      impuestos: 189,
+      total: 1089,
+    },
+  });
+  const pasoB = await db.ordenTrabajoItemPaso.create({
+    data: {
+      tenantId,
+      ordenId: a.ordenId,
+      itemId: b.id,
+      indice: 0,
+      nombre: 'Terminación',
+      familiaCodigo: 'impresion_por_area',
+      categoriaFamilia: 'produccion_impresion',
+      maquinaId,
+      modoRegistro: 'solo_completar',
+      duracionEstimadaMin: 5,
+      mesaUsuarioId: actorId,
+    },
+  });
+  const parcial = await ordenes.accionPaso(
+    auth,
+    a.ordenId,
+    a.itemId,
+    a.pasoId,
+    { accion: 'completar' },
+  );
+  expect(parcial.avisoFinalizacion).toBeNull();
+  expect(parcial.ordenEstado).toBe('produccion');
+  const final = await ordenes.accionPaso(auth, a.ordenId, b.id, pasoB.id, {
+    accion: 'completar',
+  });
+  expect(final.ordenEstado).toBe('finalizada');
+  expect(final.avisoFinalizacion).toMatchObject({
+    ordenId: a.ordenId,
+    clienteNombre: 'Sin cliente',
+    fechaEntrega: '2026-09-25',
+    trabajos: [
+      { id: a.itemId, nombre: 'Trabajo QA', cantidad: 50, unidad: 'u' },
+      { id: b.id, nombre: 'Vinilo QA', cantidad: 1.2, unidad: 'm²' },
+    ],
+  });
+  expect(final.avisoFinalizacion!.finalizadaEl).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  expect(JSON.stringify(final.avisoFinalizacion)).not.toMatch(
+    /subtotal|impuestos|total|costo|precio/i,
+  );
+  await expect(
+    ordenes.accionPaso(auth, a.ordenId, b.id, pasoB.id, {
+      accion: 'completar',
+    }),
+  ).rejects.toThrow();
+  // Un GET/refresco no convierte el estado persistido en un nuevo aviso.
+  const tablero = await ordenes.tablero(auth);
+  expect(JSON.stringify(tablero)).not.toContain('avisoFinalizacion');
+});
+
+it('el resumen no duplica componentes fabricados ni inventa una fecha de entrega', async () => {
+  const t = await crearTrabajo();
+  await db.ordenTrabajo.update({
+    where: { id: t.ordenId },
+    data: { fechaEntrega: null },
+  });
+  await db.ordenTrabajoItem.create({
+    data: {
+      tenantId,
+      ordenId: t.ordenId,
+      parentItemId: t.itemId,
+      codigo: 'A.1',
+      nombre: 'Componente interno',
+      familia: 'impresion',
+      cantidad: 100,
+      cantidadUnidad: 'u',
+      subtotal: 0,
+      impuestos: 0,
+      total: 0,
+    },
+  });
+  const respuesta = await ordenes.accionPaso(
+    auth,
+    t.ordenId,
+    t.itemId,
+    t.pasoId,
+    { accion: 'completar' },
+  );
+  expect(respuesta.avisoFinalizacion!.fechaEntrega).toBeNull();
+  expect(respuesta.avisoFinalizacion!.trabajos).toHaveLength(1);
+  expect(respuesta.avisoFinalizacion!.trabajos[0].id).toBe(t.itemId);
+});
+
+it('reabrir no avisa; una nueva finalización sí corresponde a un nuevo cierre', async () => {
+  const t = await crearTrabajo();
+  const primera = await ordenes.accionPaso(
+    auth,
+    t.ordenId,
+    t.itemId,
+    t.pasoId,
+    { accion: 'completar' },
+  );
+  const reabierta = await ordenes.accionPaso(
+    auth,
+    t.ordenId,
+    t.itemId,
+    t.pasoId,
+    { accion: 'reabrir' },
+  );
+  expect(reabierta.avisoFinalizacion).toBeNull();
+  const segunda = await ordenes.accionPaso(
+    auth,
+    t.ordenId,
+    t.itemId,
+    t.pasoId,
+    { accion: 'completar' },
+  );
+  expect(segunda.avisoFinalizacion!.ordenId).toBe(t.ordenId);
+  expect(segunda.avisoFinalizacion!.finalizadaEl).not.toBe(
+    primera.avisoFinalizacion!.finalizadaEl,
+  );
+});
+
+it('dos completados simultáneos devuelven el aviso sólo a la acción que cerró la OT', async () => {
+  const t = await crearTrabajo();
+  const resultados = await Promise.allSettled(
+    [1, 2].map(() =>
+      ordenes.accionPaso(auth, t.ordenId, t.itemId, t.pasoId, {
+        accion: 'completar',
+      }),
+    ),
+  );
+  expect(
+    resultados.filter(
+      (r) =>
+        r.status === 'fulfilled' &&
+        r.value.avisoFinalizacion?.ordenId === t.ordenId,
+    ),
+  ).toHaveLength(1);
+  expect(resultados.filter((r) => r.status === 'rejected')).toHaveLength(1);
+});

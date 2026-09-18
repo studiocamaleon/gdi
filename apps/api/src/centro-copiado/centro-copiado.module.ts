@@ -1,3 +1,5 @@
+import { ImpresionModule } from '../impresion/impresion.module';
+import { CentroCopiadoCadService } from './centro-copiado-cad.service';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MotorUniversalModule } from '../motor-universal/motor.module';
@@ -14,9 +16,15 @@ import { CentroCopiadoIdempotenciaService } from './centro-copiado-idempotencia.
  * plantilla SYS-IMPRESION-DOC.
  */
 @Module({
-  imports: [PrismaModule, MotorUniversalModule, SuscripcionesModule],
+  imports: [
+    PrismaModule,
+    MotorUniversalModule,
+    SuscripcionesModule,
+    ImpresionModule,
+  ],
   controllers: [CentroCopiadoController],
   providers: [
+    CentroCopiadoCadService,
     CentroCopiadoService,
     CentroCopiadoSaludService,
     CentroCopiadoAuditoriaService,
