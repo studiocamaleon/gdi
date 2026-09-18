@@ -44,6 +44,7 @@ Equipo del piloto: Windows `192.168.88.164`, cola `Xprinter XP-410B`. Estos valo
 - API: tenant ajeno/inexistente, estados no imprimibles, límites de copias/página, paginación, integridad de raster TSPL, firma verificable y rechazo al alterar impresora.
 - Frontend: SDK QZ real con transporte simulado, coincidencia de hash/algoritmo/timestamp, persistencia por tenant, modal finalización.
 - QR decodificado desde el PNG final con OpenCV: coincide exactamente con el número OT.
-- La salida física de esta plantilla y la autorización recordada se completan en el puesto Windows después de instalar el certificado público. La prueba anterior de TSPL desde la demo ya había sido confirmada por el usuario.
+- Prueba física confirmada por el usuario el 17/09/2026: impresión desde Grafo en la Xprinter XP-410B, sin solicitudes de autorización en Windows después de instalar el certificado público; QR impreso reconocido por el lector y apertura de la entrega.
+- Regresión de foco: pruebas DOM con el botón real de la aplicación verifican que Enter/Tab del lector abren entrega aunque «Imprimir etiqueta» tenga el foco. Se consumen pulsación y suelta antes de que lleguen al botón; Enter manual y escritura en campos editables mantienen su comportamiento. La misma prueba reproduce el fallo con el detector anterior.
 
 Fuentes: [firma QZ](https://qz.io/docs/signing), [API QZ](https://qz.io/api/qz), [servidor de impresión QZ](https://qz.io/docs/print-server), [manual TSPL/TSPL2 de TSC](https://fs.tscprinters.com/system/files/31-0000001-00_tspl_tspl2_programming_3_0.pdf).

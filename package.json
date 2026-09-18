@@ -55,6 +55,7 @@
     "@types/three": "^0.149.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jsdom": "26.1.0",
     "postcss": "8.5.8",
     "tailwindcss": "^4",
     "typescript": "^5",

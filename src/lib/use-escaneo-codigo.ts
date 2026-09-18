@@ -43,19 +43,23 @@ export function useEscaneoCodigo({
   // caracteres en ráfaga de <50 ms cerrada con Enter no los tipea un humano.
   minLargo = 3,
 }: {
-  /** Con false no engancha nada (vista en lectura, modal abierto, etc.). */
+  /** Con false no detecta nuevos códigos (vista en lectura, modal abierto, etc.). */
   activo: boolean;
-  onCodigo: (codigo: string) => void;
+  /** false = este listener no reconoce el código; no consume el terminador. */
+  onCodigo: (codigo: string) => boolean | void;
   /** Máximo entre teclas para seguir considerándolo una ráfaga del lector. */
   maxGapMs?: number;
   /** Largo mínimo para tomarlo por código y no por pulsación suelta. */
   minLargo?: number;
 }) {
-  // El callback vive en un ref para que el efecto dependa sólo de `activo`:
-  // si dependiera de la función, cada render reengancharía el listener y
-  // perdería el buffer a mitad de un escaneo.
+  // Mantener los listeners estables evita perder el código a mitad de una
+  // ráfaga y permite consumir el keyup aunque el callback abra un modal.
   const onCodigoRef = React.useRef(onCodigo);
-  onCodigoRef.current = onCodigo;
+  const activoRef = React.useRef(activo);
+  React.useLayoutEffect(() => {
+    onCodigoRef.current = onCodigo;
+    activoRef.current = activo;
+  }, [onCodigo, activo]);
 
   React.useEffect(() => {
     // Diagnóstico: `localStorage.setItem("debug:escaneo", "1")` en la consola.
@@ -68,12 +72,25 @@ export function useEscaneoCodigo({
       window.localStorage.getItem("debug:escaneo") === "1";
     if (hayDebug()) {
       console.info(
-        `[escaneo] listener ${activo ? "ACTIVO" : "APAGADO"} (gap<=${maxGapMs}ms, largo>=${minLargo})`,
+        `[escaneo] listener ${activoRef.current ? "ACTIVO" : "APAGADO"} (gap<=${maxGapMs}ms, largo>=${minLargo})`,
       );
     }
-    if (!activo) return;
     let buffer = "";
     let ultimaTecla = 0;
+    let terminadorConsumido: string | null = null;
+
+    const consumir = (event: KeyboardEvent) => {
+      event.preventDefault();
+      // El Enter/Tab del lector no debe activar el botón que retuvo el foco
+      // (p. ej. Imprimir etiqueta). No usar stopImmediatePropagation: los otros
+      // lectores globales también deben poder reconocer su tipo de código.
+      event.stopPropagation();
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== terminadorConsumido) return;
+      terminadorConsumido = null;
+      consumir(event);
+    };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // Las modificadoras se ignoran SIN tocar el buffer: el lector escribe
@@ -82,6 +99,16 @@ export function useEscaneoCodigo({
       // letra. Tampoco mueven `ultimaTecla`: el gap se mide entre caracteres
       // reales, que es lo que distingue al lector de una persona.
       if (TECLAS_MODIFICADORAS.has(event.key)) return;
+      if (event.repeat && event.key === terminadorConsumido) {
+        consumir(event);
+        return;
+      }
+      terminadorConsumido = null;
+      if (!activoRef.current) {
+        buffer = "";
+        ultimaTecla = 0;
+        return;
+      }
       // Un atajo del usuario (Ctrl+C) no es un código. Shift NO cuenta acá:
       // es parte normal de escribir en mayúsculas.
       if (event.metaKey || event.ctrlKey || event.altKey) {
@@ -117,8 +144,10 @@ export function useEscaneoCodigo({
         // El terminador también tiene que llegar en ráfaga: si alguien deja
         // el foco quieto y aprieta Enter mucho después, no es un escaneo.
         if (codigo.length >= minLargo && gap <= maxGapMs) {
-          event.preventDefault();
-          onCodigoRef.current(codigo);
+          if (onCodigoRef.current(codigo) !== false) {
+            terminadorConsumido = event.key;
+            consumir(event);
+          }
         } else if (hayDebug()) {
           console.warn(
             `[escaneo] Enter DESCARTADO: código="${codigo}" (largo ${codigo.length}, mínimo ${minLargo}) gap=${Math.round(gap)}ms (máximo ${maxGapMs})`,
@@ -136,7 +165,15 @@ export function useEscaneoCodigo({
       buffer = gap > maxGapMs ? event.key : buffer + event.key;
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activo, maxGapMs, minLargo]);
+    // Captura antes de React/React Aria: sus botones pueden consumir Enter en
+    // el target sin que llegue a un listener global en fase de burbujeo.
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("keyup", handleKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("keyup", handleKeyUp, true);
+    };
+    // El cambio a inactivo al abrir la entrega no debe quitar el listener de
+    // keyup antes de que el lector suelte Enter (ni entregarlo al nuevo modal).
+  }, [maxGapMs, minLargo]);
 }

@@ -7091,8 +7091,9 @@ function PropuestaFichaContenido({
       // cupones. Sin este filtro, escanear un DNI o el QR de una orden acá
       // los mandaba a validar como cupón y devolvía "no existe" — mientras
       // el watcher global, en paralelo, hacía lo correcto.
-      if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return;
+      if (esNumeroOrden(codigo) || parsearDniArgentino(codigo)) return false;
       void aplicarCuponCodigo(codigo);
+      return true;
     },
   });
 
