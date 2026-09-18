@@ -1021,7 +1021,11 @@ function CentroCopiadoContenido({
                       paginasAuto: false,
                     })
                   }
-                  className={cn(s.inputMini, d.paginas < 1 && s.inputFalta)}
+                  className={cn(
+                    s.inputMini,
+                    s.paginasManual,
+                    d.paginas < 1 && s.inputFalta,
+                  )}
                 />
                 <span className={s.cellHint}>Carga manual</span>
               </>
@@ -1055,29 +1059,30 @@ function CentroCopiadoContenido({
               options={papelOptions}
               ariaLabel={`Papel de ${nombre}`}
             />
-            <div className={s.gramajeFila}>
-              {gramajes.length > 1 ? (
-                <SysSelect
-                  value={d.gramaje != null ? String(d.gramaje) : ""}
-                  onChange={(v) =>
-                    cambiarGramaje(
-                      d.id,
-                      d.papelMateriaPrimaId,
-                      Number(v),
-                      d.tamano,
-                    )
-                  }
-                  options={gramajes.map((g) => ({
-                    value: String(g),
-                    label: `${g} g`,
-                  }))}
-                  ariaLabel={`Gramaje de ${nombre}`}
-                  triggerClassName={s.gramajeSelect}
-                />
-              ) : (
-                <span>{d.gramaje != null ? `${d.gramaje} g` : "—"}</span>
-              )}
-            </div>
+          </td>
+          <td>
+            {gramajes.length > 1 ? (
+              <SysSelect
+                value={d.gramaje != null ? String(d.gramaje) : ""}
+                onChange={(v) =>
+                  cambiarGramaje(
+                    d.id,
+                    d.papelMateriaPrimaId,
+                    Number(v),
+                    d.tamano,
+                  )
+                }
+                options={gramajes.map((g) => ({
+                  value: String(g),
+                  label: `${g} g`,
+                }))}
+                ariaLabel={`Gramaje de ${nombre}`}
+              />
+            ) : (
+              <span className={s.valorCelda}>
+                {d.gramaje != null ? `${d.gramaje} g` : "—"}
+              </span>
+            )}
           </td>
           <td>
             <SysSelect
@@ -1163,7 +1168,7 @@ function CentroCopiadoContenido({
         </tr>
         {(opciones || error || anillado) && (
           <tr className={s.detailRow}>
-            <td colSpan={11}>
+            <td colSpan={12}>
               {opciones && (
                 <div className={s.rowOptions} id={`${d.id}-opciones`}>
                   <span className={s.optionsTitle}>Opciones de {nombre}</span>
@@ -1351,7 +1356,6 @@ function CentroCopiadoContenido({
                       }}
                       options={papelOptions}
                       ariaLabel="Papel por defecto"
-                      triggerClassName="w-[190px]"
                     />
                   </label>
                   {defGramajes.length > 1 && (
@@ -1381,7 +1385,6 @@ function CentroCopiadoContenido({
                           label: `${g} g`,
                         }))}
                         ariaLabel="Gramaje por defecto"
-                        triggerClassName="w-[92px]"
                       />
                     </label>
                   )}
@@ -1405,7 +1408,6 @@ function CentroCopiadoContenido({
                       }))}
                       ariaLabel="Tamaño por defecto"
                       placeholder="—"
-                      triggerClassName="w-[88px]"
                     />
                   </label>
                   <div className={s.campo}>
@@ -1417,7 +1419,6 @@ function CentroCopiadoContenido({
                       onChange={(v) =>
                         setDefaults({ ...defaults, color: v as ColorDoc })
                       }
-                      triggerClassName="w-[88px]"
                     />
                   </div>
                   <div className={s.campo}>
@@ -1429,10 +1430,9 @@ function CentroCopiadoContenido({
                       onChange={(v) =>
                         setDefaults({ ...defaults, faz: Number(v) as FazDoc })
                       }
-                      triggerClassName="w-[88px]"
                     />
                   </div>
-                  <label className={s.campo}>
+                  <label className={cn(s.campo, s.copiasDefault)}>
                     <span>Copias</span>
                     <input
                       type="number"
@@ -1450,6 +1450,7 @@ function CentroCopiadoContenido({
                   <ActionButton
                     type="button"
                     variant="outline"
+                    className={s.aplicarDefaults}
                     onPress={aplicarATodos}
                     isDisabled={docs.length === 0}
                   >
@@ -1518,10 +1519,11 @@ function CentroCopiadoContenido({
                   >
                     <colgroup>
                       <col className={s.colCheck} />
-                      <col />
+                      <col className={s.colDocument} />
                       <col className={s.colPages} />
                       <col className={s.colCopies} />
                       <col className={s.colPaper} />
+                      <col className={s.colWeight} />
                       <col className={s.colSize} />
                       <col className={s.colColor} />
                       <col className={s.colFaces} />
@@ -1537,18 +1539,20 @@ function CentroCopiadoContenido({
                         <th scope="col">Documento</th>
                         <th scope="col">Páginas / rango</th>
                         <th scope="col">Copias</th>
-                        <th scope="col">Papel / gramaje</th>
+                        <th scope="col">Papel</th>
+                        <th scope="col">Gramaje</th>
                         <th scope="col">Tamaño</th>
                         <th scope="col">Color</th>
                         <th scope="col">Faz</th>
                         <th scope="col" className={s.importeCell}>
                           Importe <small>sin IVA</small>
                         </th>
-                        <th scope="col">
-                          <span className="sr-only">Opciones</span>
-                        </th>
-                        <th scope="col">
-                          <span className="sr-only">Quitar</span>
+                        <th
+                          scope="colgroup"
+                          colSpan={2}
+                          className={s.actionsHead}
+                        >
+                          Acciones
                         </th>
                       </tr>
                     </thead>
@@ -1559,7 +1563,7 @@ function CentroCopiadoContenido({
                         return (
                           <React.Fragment key={gid}>
                             <tr className={s.tomoRow}>
-                              <td colSpan={11}>
+                              <td colSpan={12}>
                                 <div className={s.tomoHead}>
                                   <span className={s.tomoTitle}>
                                     Tomo anillado

@@ -110,6 +110,21 @@
   align-items: flex-end;
   gap: 8px;
 }
+.defaultsGrid > .campo {
+  flex: 1 1 76px;
+  min-width: 0;
+}
+.defaultsGrid > .campo:first-child {
+  flex: 2 1 180px;
+}
+.defaultsGrid > .copiasDefault {
+  flex: 0 0 64px;
+}
+.sheet .aplicarDefaults {
+  --action-height: 28px;
+  height: 28px;
+  min-height: 28px;
+}
 .campo {
   display: flex;
   flex-direction: column;
@@ -153,6 +168,10 @@
 .inputMini {
   width: 56px;
   font-variant-numeric: tabular-nums;
+}
+.paginasManual,
+.copiasDefault .inputMini {
+  width: 100%;
 }
 .inputFalta {
   border-color: var(--warning);
@@ -215,6 +234,7 @@
   min-height: 130px;
 }
 .tableScroll {
+  container-type: inline-size;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -226,7 +246,7 @@
 }
 .documentsTable {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1200px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -251,38 +271,54 @@
   line-height: 10px;
 }
 .documentsTable :is(th, td) {
-  padding: 6px;
+  padding: 8px 6px;
 }
 .documentsTable td {
   border-bottom: 1px solid var(--border);
-  vertical-align: middle;
+  vertical-align: top;
 }
 .colCheck {
-  width: 30px;
+  width: 32px;
+}
+/* El rango y el papel crecen con la tabla; el documento toma el espacio restante. */
+.colDocument {
+  width: auto;
 }
 .colPages {
-  width: 165px;
+  width: max(170px, calc(20cqw - 70px));
 }
 .colCopies {
   width: 64px;
 }
 .colPaper {
-  width: 170px;
+  width: max(180px, calc(30cqw - 180px));
+}
+.colWeight {
+  width: 76px;
 }
 .colSize {
-  width: 78px;
+  width: 72px;
 }
 .colColor {
-  width: 78px;
+  width: 72px;
 }
 .colFaces {
   width: 88px;
 }
 .colPrice {
-  width: 104px;
+  width: 112px;
 }
 .colAction {
-  width: 40px;
+  width: 42px;
+}
+.documentsTable .actionsHead {
+  text-align: center;
+}
+.documentsTable td:last-child {
+  padding-right: 12px;
+}
+.documentsTable td > .inputMini {
+  width: 100%;
 }
 .documentRow {
   background: var(--surface);
@@ -300,14 +336,14 @@
   display: block;
   width: 15px;
   height: 15px;
-  margin: auto;
+  margin: 7px auto 0;
   accent-color: var(--accent);
 }
 .grupoIcon {
   display: block;
   width: 13px;
   height: 13px;
-  margin: auto;
+  margin: 8px auto 0;
   color: var(--muted-text);
 }
 .docNombreInput {
@@ -334,7 +370,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 20px;
+  margin-top: 4px;
+  line-height: 14px;
   padding-left: 4px;
   font-size: 10px;
   color: var(--muted-text);
@@ -377,22 +414,12 @@
   width: 48px;
   height: 24px;
 }
-.gramajeFila {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 3px;
-  font-size: 11px;
-  color: var(--muted-text);
-}
-.gramajeSelect {
-  width: 80px;
-}
-.gramajeFila .compactSelect :global(.select__trigger) {
-  height: 24px;
-  min-height: 24px;
-  font-size: 11px;
-  background: transparent;
+.valorCelda,
+.importeCell > strong,
+.importeCell > .muted,
+.importeCell > .errChip {
+  display: block;
+  line-height: 28px;
 }
 .documentsTable .importeCell {
   text-align: right;
@@ -407,23 +434,27 @@
   margin-top: 4px;
   color: var(--muted-text);
   font-size: 10px;
+  line-height: 14px;
   font-variant-numeric: tabular-nums;
 }
 .delTomo {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  line-height: 28px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .delTomo small {
   font-size: 10px;
+  line-height: 14px;
+  margin-top: 4px;
   color: var(--muted-text);
 }
-.rowButton {
-  min-width: 26px;
-  width: 26px;
+.sheet .rowButton {
+  --action-height: 28px;
+  min-width: 28px;
+  width: 28px;
   height: 28px;
   padding: 0;
 }
@@ -631,11 +662,8 @@
   .defaultsGrid {
     gap: 6px;
   }
-  .defaultsGrid > label:first-child {
-    max-width: 170px;
-  }
-  .defaultsGrid > label:first-child > div {
-    max-width: 100%;
+  .defaultsGrid > .campo:first-child {
+    flex-basis: 160px;
   }
   .campo {
     gap: 2px;
