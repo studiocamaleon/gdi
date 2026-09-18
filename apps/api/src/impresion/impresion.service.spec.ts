@@ -5,7 +5,10 @@ import { execFileSync } from 'node:child_process';
 import { createHash, verify, X509Certificate } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { ImpresionService } from './impresion.service';
-import { PrepararEtiquetaDto } from './impresion.controller';
+import {
+  PrepararEtiquetaDto,
+  PruebaDocumentoDto,
+} from './impresion.controller';
 import { validate } from 'class-validator';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ArchivosService } from '../archivos/archivos.service';
@@ -229,6 +232,82 @@ describe('firma de mensajes canónicos QZ', () => {
         .toString(),
     ).toBe('\r\nPRINT 1,3\r\n');
   });
+  it('firma únicamente la escucha de una cola sin acceso a sus archivos', () => {
+    const timestamp = Date.now();
+    const r = servicio.escucharImpresora('Ricoh', timestamp);
+    expect(r.params).toEqual({ printerNames: ['Ricoh'] });
+    expect(r.timestamp).toBe(timestamp);
+    expect(r.hash).toBe(
+      createHash('sha256')
+        .update(
+          JSON.stringify({
+            call: 'printers.startListening',
+            params: r.params,
+            timestamp,
+          }),
+        )
+        .digest('hex'),
+    );
+    expect(
+      verify(
+        'RSA-SHA512',
+        Buffer.from(r.hash),
+        certificado.publicKey,
+        Buffer.from(r.firma, 'base64'),
+      ),
+    ).toBe(true);
+    expect(() =>
+      servicio.escucharImpresora('Ricoh', timestamp - 120000),
+    ).toThrow('venció');
+    expect(() =>
+      servicio.escucharImpresora('Ricoh', timestamp + 120000),
+    ).toThrow('venció');
+  });
+  it.each([true, false])(
+    'prepara un PDF fijo A4 con dos páginas, dos copias y doble faz %s',
+    (dobleFaz) => {
+      const r = servicio.prepararPruebaDocumento('Ricoh', 2, dobleFaz);
+      expect(r.params.options).toMatchObject({
+        copies: 2,
+        size: { width: 210, height: 297 },
+        colorType: 'grayscale',
+        duplex: dobleFaz ? 'long-edge' : 'one-sided',
+      });
+      expect(r.params.data[0]).toMatchObject({
+        type: 'pixel',
+        format: 'pdf',
+        flavor: 'base64',
+      });
+      const pdf = Buffer.from(r.params.data[0].data, 'base64').toString(
+        'latin1',
+      );
+      expect(pdf).toMatch(/^%PDF/);
+      expect(pdf.match(/\/Type \/Page\b/g)).toHaveLength(2);
+      expect(
+        verify(
+          'RSA-SHA512',
+          Buffer.from(r.hash),
+          certificado.publicKey,
+          Buffer.from(r.firma, 'base64'),
+        ),
+      ).toBe(true);
+      expect(findFirst).not.toHaveBeenCalled();
+    },
+  );
+  it.each([0, 4, 1.5])(
+    'limita la prueba a un máximo de tres copias: %s inválido',
+    async (copias) => {
+      expect(
+        await validate(
+          Object.assign(new PruebaDocumentoDto(), {
+            impresora: 'Ricoh',
+            copias,
+            dobleFaz: true,
+          }),
+        ),
+      ).not.toHaveLength(0);
+    },
+  );
   it('rechaza una página inexistente', async () => {
     await expect(
       servicio.preparar(auth, 'ot-a', 'Xprinter', 1, 1),

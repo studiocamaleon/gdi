@@ -127,3 +127,35 @@
     flex-basis: 100%;
   }
 }
+
+.testFields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(80px, 1fr);
+  gap: 16px;
+}
+.testActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.eventLog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  border-block: 1px solid var(--border);
+  padding-block: 12px;
+}
+.eventRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.eventRow[data-severity="ERROR"] strong,
+.eventRow[data-severity="FATAL"] strong {
+  color: var(--danger);
+}

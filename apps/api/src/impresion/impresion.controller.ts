@@ -8,6 +8,7 @@ import {
   Post,
 } from '@nestjs/common';
 import {
+  IsBoolean,
   IsInt,
   IsString,
   Matches,
@@ -21,7 +22,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 import { ImpresionService } from './impresion.service';
 
-export class PrepararEtiquetaDto {
+export class ImpresoraDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
@@ -29,6 +30,9 @@ export class PrepararEtiquetaDto {
   // eslint-disable-next-line no-control-regex
   @Matches(/^[^\x00-\x1f\x7f]+$/)
   impresora!: string;
+}
+
+export class PrepararEtiquetaDto extends ImpresoraDto {
   @IsInt()
   @Min(1)
   @Max(20)
@@ -37,6 +41,21 @@ export class PrepararEtiquetaDto {
   @Min(0)
   @Max(199)
   pagina!: number;
+}
+
+export class EscucharImpresoraDto extends ImpresoraDto {
+  @IsInt()
+  @Min(1)
+  timestamp!: number;
+}
+
+export class PruebaDocumentoDto extends ImpresoraDto {
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  copias!: number;
+  @IsBoolean()
+  dobleFaz!: boolean;
 }
 
 @Permiso('produccion.ver', 'produccion.ejecutar', 'configuracion.ver')
@@ -52,6 +71,22 @@ export class ImpresionController {
   @Header('Cache-Control', 'no-store')
   impresoras() {
     return this.service.buscarImpresoras();
+  }
+  @Post('escuchar')
+  @Permiso('configuracion.ver')
+  @Header('Cache-Control', 'no-store')
+  escuchar(@Body() body: EscucharImpresoraDto) {
+    return this.service.escucharImpresora(body.impresora, body.timestamp);
+  }
+  @Post('prueba-documento')
+  @Permiso('configuracion.ver')
+  @Header('Cache-Control', 'no-store')
+  pruebaDocumento(@Body() body: PruebaDocumentoDto) {
+    return this.service.prepararPruebaDocumento(
+      body.impresora,
+      body.copias,
+      body.dobleFaz,
+    );
   }
   @Get('ordenes/:id/etiqueta')
   @Permiso('produccion.ver', 'produccion.ejecutar')

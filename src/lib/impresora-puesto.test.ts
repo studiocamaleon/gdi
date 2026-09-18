@@ -26,6 +26,14 @@ describe("impresora por puesto y empresa", () => {
     });
     expect(leerImpresora("a").impresora).toBe("Xprinter XP-410B");
     expect(leerImpresora("b").impresora).toBe("");
+    guardarImpresora(
+      "a",
+      { host: "192.168.88.164", impresora: "Ricoh" },
+      "documentos",
+    );
+    expect(leerImpresora("a", "documentos").impresora).toBe("Ricoh");
+    expect(leerImpresora("a").impresora).toBe("Xprinter XP-410B");
+    expect(leerImpresora("b", "documentos").impresora).toBe("");
     datos.set("grafo:impresora-etiquetas:v1:a", "corrupto");
     expect(leerImpresora("a").host).toBe("localhost");
   });

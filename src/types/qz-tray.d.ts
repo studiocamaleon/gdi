@@ -7,11 +7,12 @@ declare module "qz-tray" {
   }>;
   type Config = {
     getPrinter(): { name: string };
-    getOptions(): { copies: number; jobName: string };
+    getOptions(): { copies: number; jobName: string; [key: string]: unknown };
   };
   const qz: {
     websocket: {
       isActive(): boolean;
+      setClosedCallbacks(callback: () => void): void;
       connect(options: {
         host: string;
         usingSecure: boolean;
@@ -42,8 +43,13 @@ declare module "qz-tray" {
     api: {
       getVersion(): Promise<string>;
       setWebSocketType(type: unknown): void;
+      setSha256Type(hasher: (message: string) => Promise<string>): void;
     };
     printers: {
+      startListening(printer: string): Promise<void>;
+      stopListening(): Promise<void>;
+      getStatus(): Promise<void>;
+      setPrinterCallbacks(callback: (event: unknown) => void): void;
       find(
         query?: string,
         signature?: string,

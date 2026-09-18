@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   createHash,
+  randomUUID,
   createPrivateKey,
   sign,
   X509Certificate,
@@ -16,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import type { CurrentAuth } from '../auth/auth.types';
+import { pdfPruebaA4 } from './prueba-documento';
 import { etiquetaTspl, renderizarEtiquetas } from './etiqueta-ot';
 
 @Injectable()
@@ -87,8 +89,7 @@ export class ImpresionService {
   }
 
   /** Se firman sólo mensajes construidos aquí; nunca un hash o comando del navegador. */
-  private firmar(call: string, params: object) {
-    const timestamp = Date.now();
+  private firmar(call: string, params: object, timestamp = Date.now()) {
     const hash = createHash('sha256')
       .update(JSON.stringify({ call, params, timestamp }))
       .digest('hex');
@@ -102,6 +103,54 @@ export class ImpresionService {
 
   buscarImpresoras() {
     return this.firmar('printers.find', {});
+  }
+
+  escucharImpresora(impresora: string, timestamp: number) {
+    // El SDK asigna su timestamp al iniciar la escucha. Reconstruimos únicamente
+    // este comando conocido; no se aceptan hashes, comandos ni jobData del cliente.
+    if (
+      !Number.isSafeInteger(timestamp) ||
+      Math.abs(Date.now() - timestamp) > 60000
+    )
+      throw new BadRequestException(
+        'La solicitud de escucha venció. Revisá la hora del equipo.',
+      );
+    return this.firmar(
+      'printers.startListening',
+      { printerNames: [impresora] },
+      timestamp,
+    );
+  }
+
+  prepararPruebaDocumento(
+    impresora: string,
+    copias: number,
+    dobleFaz: boolean,
+  ) {
+    const jobName = `Grafo prueba A4 ${randomUUID()}`;
+    const params = {
+      printer: { name: impresora },
+      options: {
+        copies: copias,
+        jobName,
+        units: 'mm',
+        size: { width: 210, height: 297 },
+        colorType: 'grayscale',
+        duplex: dobleFaz ? 'long-edge' : 'one-sided',
+        orientation: 'portrait',
+        scaleContent: true,
+        rasterize: false,
+      },
+      data: [
+        {
+          type: 'pixel',
+          format: 'pdf',
+          flavor: 'base64',
+          data: pdfPruebaA4().toString('base64'),
+        },
+      ],
+    };
+    return { ...this.firmar('print', params), params, totalPaginas: 2 };
   }
 
   private async paginas(auth: CurrentAuth, id: string, pagina?: number) {

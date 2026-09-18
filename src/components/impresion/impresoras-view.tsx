@@ -11,6 +11,7 @@ import {
 } from "@/lib/impresion-api";
 import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
 import { ImpresoraPuestoForm } from "./impresora-puesto-form";
+import { PruebaDocumentoPanel } from "./prueba-documento-panel";
 import s from "./impresion.module.css";
 
 export function ImpresorasView() {
@@ -18,6 +19,8 @@ export function ImpresorasView() {
     null,
   );
   const [config, setConfig] = useState<ImpresoraPuesto | null>(null);
+  const [documentos, setDocumentos] = useState<ImpresoraPuesto | null>(null);
+  const [probando, setProbando] = useState(false);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
@@ -26,7 +29,12 @@ export function ImpresorasView() {
       .then((dato) => {
         if (activo) {
           setIdentidad(dato);
-          setConfig(leerImpresora(dato.tenantId));
+          const etiquetas = leerImpresora(dato.tenantId);
+          const docs = leerImpresora(dato.tenantId, "documentos");
+          setConfig(etiquetas);
+          setDocumentos(
+            docs.impresora ? docs : { host: etiquetas.host, impresora: "" },
+          );
         }
       })
       .catch((e) => {
@@ -56,7 +64,7 @@ export function ImpresorasView() {
     <ConfiguracionPage>
       <ConfiguracionHeader
         titulo="Impresoras"
-        descripcion="Prepará este puesto para imprimir las etiquetas de tus órdenes."
+        descripcion="Configurá las impresoras de etiquetas y documentos de este puesto."
       />
       <div className={s.settings}>
         {error && (
@@ -79,9 +87,27 @@ export function ImpresorasView() {
           <ImpresoraPuestoForm
             tenantId={identidad.tenantId}
             inicial={config}
-            disabled={!identidad.firmaDisponible}
+            disabled={!identidad.firmaDisponible || probando}
             onGuardar={setConfig}
           />
+        )}
+        {identidad && documentos && (
+          <>
+            <ImpresoraPuestoForm
+              tenantId={identidad.tenantId}
+              inicial={documentos}
+              uso="documentos"
+              disabled={!identidad.firmaDisponible || probando}
+              onGuardar={setDocumentos}
+            />
+            <PruebaDocumentoPanel
+              key={`${identidad.tenantId}:${documentos.host}:${documentos.impresora}`}
+              tenantId={identidad.tenantId}
+              config={documentos}
+              disabled={!identidad.firmaDisponible}
+              onOcupado={setProbando}
+            />
+          </>
         )}
         {identidad?.firmaDisponible ? (
           <section className={s.setup}>

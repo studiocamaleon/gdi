@@ -48,3 +48,17 @@ Equipo del piloto: Windows `192.168.88.164`, cola `Xprinter XP-410B`. Estos valo
 - Regresión de foco: pruebas DOM con el botón real de la aplicación verifican que Enter/Tab del lector abren entrega aunque «Imprimir etiqueta» tenga el foco. Se consumen pulsación y suelta antes de que lleguen al botón; Enter manual y escritura en campos editables mantienen su comportamiento. La misma prueba reproduce el fallo con el detector anterior.
 
 Fuentes: [firma QZ](https://qz.io/docs/signing), [API QZ](https://qz.io/api/qz), [servidor de impresión QZ](https://qz.io/docs/print-server), [manual TSPL/TSPL2 de TSC](https://fs.tscprinters.com/system/files/31-0000001-00_tspl_tspl2_programming_3_0.pdf).
+
+## Piloto de documentos A4 y eventos de Windows
+
+En Configuración → Impresoras hay dos destinos independientes por tenant y navegador: **etiquetas** y **documentos**. El destino de documentos toma inicialmente el host de etiquetas, pero exige elegir y guardar su propia cola. Piloto configurado: `RICOH MP 9003 PCL 6` en `192.168.88.164`.
+
+- **Prueba de documentos A4** envía un PDF fijo de dos páginas numeradas, blanco y negro, 1–3 copias. Simple faz: dos hojas por copia; doble faz por borde largo: una hoja por copia, ambas caras derechas. No crea ni modifica una OT.
+- **Escuchar impresora** recibe avisos de Windows por QZ. Se muestran hasta 100 eventos en memoria y se pueden descargar como JSON. Se filtran los trabajos ajenos al piloto. No se solicitan archivos de la cola (`jobData`).
+- La escucha se detiene al salir de esta pantalla. Ante desconexión se informa que el último evento puede estar desactualizado. No hay servicio residente ni historial persistente en esta etapa.
+- `COMPLETE` se presenta como «Finalizado según la cola»; `DELETED` sólo como «Retirado de la cola». Ninguno confirma físicamente la salida ni finaliza producción. No hay reintentos automáticos de impresión.
+- `POST impresion/prueba-documento` construye y firma exclusivamente ese PDF fijo y sus opciones validadas. `POST impresion/escuchar` reconstruye exclusivamente `printers.startListening` para una cola, con timestamp del SDK dentro de 60 segundos del servidor. Ambos requieren configuración.ver.
+- QZ 2.2.6 no permite pasar timestamp a `startListening`. Usamos su API pública `setSha256Type` para conservar SHA256 y obtener la autorización de ese mensaje concreto. El backend no firma hashes/comandos libres. `getStatus` y `stopListening` no requieren firma según el SDK.
+- Validado con el equipo real: búsqueda de la Ricoh, configuración independiente y evento de impresora `OK` («Disponible»). Pendiente confirmar con el usuario las hojas impresas, copias, dúplex y avisos físicos.
+
+Secuencia de prueba: una copia simple faz (2 hojas), una copia doble faz (1 hoja) y dos copias doble faz (2 hojas). Con la escucha activa, pausar la cola de la Ricoh desde Windows y reanudarla para comprobar el aviso, cuidando no interrumpir trabajos ajenos. La integración con «Emitir OT» se hará después de validar el equipo.

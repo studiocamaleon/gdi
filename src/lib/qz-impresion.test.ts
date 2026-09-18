@@ -15,6 +15,7 @@ vi.mock("qz-tray", () => ({
   default: {
     websocket: {
       isActive: () => true,
+      setClosedCallbacks: vi.fn(),
       connect: mocks.connect,
       disconnect: mocks.disconnect,
     },
@@ -23,7 +24,8 @@ vi.mock("qz-tray", () => ({
       setSignatureAlgorithm: vi.fn(),
       setSignaturePromise: vi.fn(),
     },
-    api: { getVersion: async () => "2.2.6" },
+    api: { getVersion: async () => "2.2.6", setSha256Type: vi.fn() },
+    printers: { setPrinterCallbacks: vi.fn() },
     print: mocks.print,
   },
 }));

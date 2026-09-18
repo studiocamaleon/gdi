@@ -10,6 +10,7 @@ import {
   guardarImpresora,
   hostQzValido,
   type ImpresoraPuesto,
+  type UsoImpresora,
 } from "@/lib/impresora-puesto";
 import s from "./impresion.module.css";
 
@@ -18,11 +19,13 @@ export function ImpresoraPuestoForm({
   inicial,
   onGuardar,
   disabled = false,
+  uso = "etiquetas",
 }: {
   tenantId: string;
   inicial: ImpresoraPuesto;
   onGuardar: (config: ImpresoraPuesto) => void;
   disabled?: boolean;
+  uso?: UsoImpresora;
 }) {
   const id = useId();
   const [host, setHost] = useState(inicial.host);
@@ -67,7 +70,7 @@ export function ImpresoraPuestoForm({
     setError("");
     try {
       const config = { host: host.trim(), impresora };
-      guardarImpresora(tenantId, config);
+      guardarImpresora(tenantId, config, uso);
       onGuardar(config);
       setMensaje("Impresora guardada en este navegador.");
     } catch (e) {
@@ -79,8 +82,16 @@ export function ImpresoraPuestoForm({
       <div className={s.sectionTitle}>
         <Printer aria-hidden="true" />
         <div>
-          <strong>Impresora de este puesto</strong>
-          <p>Etiquetas de 100 × 150 mm · TSPL · 203 dpi</p>
+          <strong>
+            {uso === "etiquetas"
+              ? "Impresora de etiquetas"
+              : "Impresora de documentos"}
+          </strong>
+          <p>
+            {uso === "etiquetas"
+              ? "Etiquetas de 100 × 150 mm · TSPL · 203 dpi"
+              : "Documentos A4 · Blanco y negro"}
+          </p>
         </div>
       </div>
       <FieldGroup>

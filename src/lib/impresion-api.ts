@@ -10,7 +10,7 @@ export type FirmaQz = { timestamp: number; hash: string; firma: string };
 export type TrabajoQz = FirmaQz & {
   params: {
     printer: { name: string };
-    options: { copies: number; jobName: string };
+    options: { copies: number; jobName: string; [key: string]: unknown };
     data: Array<{ type: string; format: string; flavor: string; data: string }>;
   };
   totalPaginas: number;
@@ -39,3 +39,18 @@ export const prepararEtiqueta = (
     `/impresion/ordenes/${encodeURIComponent(id)}/etiqueta`,
     { method: "POST", body: JSON.stringify({ impresora, copias, pagina }) },
   );
+
+export const getFirmaEscucha = (impresora: string, timestamp: number) =>
+  apiRequest<FirmaQz>("/impresion/escuchar", {
+    method: "POST",
+    body: JSON.stringify({ impresora, timestamp }),
+  });
+export const prepararPruebaDocumento = (
+  impresora: string,
+  copias: number,
+  dobleFaz: boolean,
+) =>
+  apiRequest<TrabajoQz>("/impresion/prueba-documento", {
+    method: "POST",
+    body: JSON.stringify({ impresora, copias, dobleFaz }),
+  });
