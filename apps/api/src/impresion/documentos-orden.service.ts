@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PDFDocument } from 'pdf-lib';
+import { prepararPaginaCad } from './pdf-cad';
+import { esConfiguracionCad } from './cad.domain';
 import { resolverRangoPaginas } from '../common/rangos-paginas';
 import {
   orientacionPaginaPdf,
@@ -16,6 +18,13 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { ImpresionService } from './impresion.service';
+import { PerfilesImpresionService } from './perfiles-impresion.service';
+import { resolverPerfil, revisionPerfil } from './perfiles-impresion.domain';
+import {
+  disponibilidadCola,
+  pasoColaSelect,
+} from '../produccion/colas/colas.service';
+import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
 import {
   objeto,
   planDocumento,
@@ -24,6 +33,7 @@ import {
 } from './documentos-orden.domain';
 
 const TIPO = 'impresion_documento';
+const COLA = 'cola_impresion';
 const MAX_BYTES = 25 * 1024 * 1024;
 
 @Injectable()
@@ -32,7 +42,22 @@ export class DocumentosOrdenService {
     private readonly prisma: PrismaService,
     private readonly archivos: ArchivosService,
     private readonly impresion: ImpresionService,
+    private readonly perfiles: PerfilesImpresionService,
   ) {}
+
+  private esTrabajo(datos: unknown, itemId: string, pagina = 0) {
+    const d = objeto(datos);
+    return d.itemId === itemId && Number(d.pagina ?? 0) === pagina;
+  }
+  private filtroTrabajo(
+    itemId: string,
+    pagina = 0,
+  ): Prisma.OrdenTrabajoEventoWhereInput[] {
+    return [
+      { datosJson: { path: ['itemId'], equals: itemId } },
+      ...(pagina ? [{ datosJson: { path: ['pagina'], equals: pagina } }] : []),
+    ];
+  }
 
   private async orden(
     auth: CurrentAuth,
@@ -55,6 +80,7 @@ export class DocumentosOrdenService {
             contieneLotesEntrega: true,
             jobContextSnapshotJson: true,
             cotizacionItem: { select: { jobContextJson: true } },
+            pasos: { select: pasoColaSelect },
             archivos: {
               where: {
                 tenantId: auth.tenantId,
@@ -114,7 +140,128 @@ export class DocumentosOrdenService {
       if (!motivo && item.contieneLotesEntrega)
         motivo =
           'Este producto está distribuido en entregas; requiere impresión manual por lote.';
-      return [{ ...plan, itemId: item.id, motivo, archivos }];
+      const paginas = plan.paginasCad?.length ? plan.paginasCad : [null];
+      return paginas.map((paginaCad) => ({
+        ...plan,
+        paginaCad,
+        trabajoId: `${item.id}:${paginaCad?.pagina ?? 0}`,
+        ...(paginaCad
+          ? {
+              nombre: `${plan.nombre} · Pág. ${paginaCad.pagina}`,
+              copias: paginaCad.copias,
+              paginas: 1,
+              hojas: paginaCad.copias,
+            }
+          : {}),
+        itemId: item.id,
+        motivo,
+        archivos,
+        pasos: item.pasos.filter((p) =>
+          p.familiaCodigo?.startsWith('impresion_'),
+        ),
+      }));
+    });
+  }
+
+  private async rutear(
+    auth: CurrentAuth,
+    orden: Awaited<ReturnType<DocumentosOrdenService['orden']>>,
+    db: Prisma.TransactionClient = this.prisma,
+    reimpresiones: string[] = [],
+  ) {
+    const documentos = this.documentos(orden);
+    const [perfiles, maquinas, papeles, aprobaciones, liberaciones] =
+      await Promise.all([
+        this.perfiles.perfiles(auth.tenantId, db),
+        db.maquina.findMany({
+          where: { tenantId: auth.tenantId },
+          select: {
+            id: true,
+            activo: true,
+            estado: true,
+            estacion: { select: { activo: true } },
+          },
+        }),
+        db.materiaPrima.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            id: {
+              in: documentos
+                .map((d) => d.configuracion.papelMateriaPrimaId)
+                .filter(Boolean),
+            },
+          },
+          select: { id: true, nombre: true, activo: true },
+        }),
+        leerAprobacionesPendientes(
+          db,
+          auth.tenantId,
+          documentos.flatMap((d) => d.pasos),
+        ),
+        db.ordenTrabajoEvento.findMany({
+          where: { tenantId: auth.tenantId, ordenId: orden.id, tipo: COLA },
+          select: { datosJson: true },
+        }),
+      ]);
+    return documentos.map((doc) => {
+      const papel = papeles.find(
+        (p) => p.id === doc.configuracion.papelMateriaPrimaId,
+      );
+      const configuracion = {
+        ...doc.configuracion,
+        papelNombre: papel?.nombre ?? doc.configuracion.papelNombre,
+      };
+      const ruta = resolverPerfil(
+        configuracion,
+        perfiles,
+        doc.pasos.flatMap((p) => (p.maquinaId ? [p.maquinaId] : [])),
+      );
+      const liberacion = liberaciones.find(
+        (e) => objeto(e.datosJson).trabajoId === doc.trabajoId,
+      );
+      const autorizado = objeto(objeto(liberacion?.datosJson).preparacion);
+      if (
+        ruta.estado === 'PREPARACION' &&
+        ruta.perfil &&
+        autorizado.revision === revisionPerfil(ruta.perfil) &&
+        autorizado.perfilId === ruta.perfil.id
+      ) {
+        ruta.estado = 'LISTO';
+        ruta.motivo = null;
+      }
+      let motivo = doc.motivo;
+      if (!motivo && !papel?.activo)
+        motivo = 'El papel necesita revisión en el inventario.';
+      if (!motivo && doc.pasos.length !== 1)
+        motivo =
+          'No se pudo identificar un único paso de impresión para este documento.';
+      const paso = doc.pasos[0];
+      if (!motivo && paso) {
+        const maquina = maquinas.find((m) => m.id === paso.maquinaId);
+        const disponibilidad = disponibilidadCola(
+          paso,
+          aprobaciones.get(paso.id) ?? [],
+          !!maquina?.activo &&
+            maquina.estado === 'ACTIVA' &&
+            !!maquina.estacion?.activo,
+        );
+        if (paso.tipoEjecucion !== 'interno')
+          motivo = 'La impresión de este trabajo está tercerizada.';
+        else if (disponibilidad.motivos.length)
+          motivo = disponibilidad.motivos.join(' ');
+        else if (
+          !['listos', 'en_curso'].includes(disponibilidad.estadoCola) &&
+          !(reimpresiones.includes(doc.itemId) && paso.estado === 'hecho')
+        )
+          motivo =
+            'El paso de impresión todavía no está disponible para ejecutar.';
+      }
+      return {
+        ...doc,
+        configuracion,
+        ruta: motivo ? { ...ruta, estado: 'REVISAR' as const, motivo } : ruta,
+        motivo: motivo ?? ruta.motivo,
+      };
     });
   }
 
@@ -126,12 +273,14 @@ export class DocumentosOrdenService {
       take: 100,
       select: { id: true, fecha: true, usuarioNombre: true, datosJson: true },
     });
-    const documentos = this.documentos(orden);
     // Aunque el historial sea largo, ningún documento ya enviado debe aparecer
     // como nuevo por haber quedado fuera de la ventana de los últimos 100.
     if (historial.length === 100) {
-      const faltantes = documentos.filter(
-        (d) => !historial.some((e) => objeto(e.datosJson).itemId === d.itemId),
+      const faltantes = this.documentos(orden).filter(
+        (d) =>
+          !historial.some((e) =>
+            this.esTrabajo(e.datosJson, d.itemId, d.paginaCad?.pagina),
+          ),
       );
       const ultimos = await Promise.all(
         faltantes.map((d) =>
@@ -140,7 +289,7 @@ export class DocumentosOrdenService {
               tenantId: auth.tenantId,
               ordenId: id,
               tipo: TIPO,
-              datosJson: { path: ['itemId'], equals: d.itemId },
+              AND: this.filtroTrabajo(d.itemId, d.paginaCad?.pagina),
             },
             orderBy: { fecha: 'desc' },
             select: {
@@ -154,22 +303,35 @@ export class DocumentosOrdenService {
       );
       for (const ultimo of ultimos) if (ultimo) historial.push(ultimo);
     }
+    const documentos = await this.rutear(
+      auth,
+      orden,
+      this.prisma,
+      historial.map((e) => String(objeto(e.datosJson).itemId)),
+    );
     return {
       ordenId: id,
       numero: orden.numero,
       estado: orden.estado,
-      documentos: documentos.map(({ archivos, segmentos, ...doc }) => ({
-        ...doc,
-        archivos: archivos.filter((a) => a !== null).map((a) => a.id),
-        documentos: segmentos.length,
-        seleccionPaginas: segmentos
-          .filter((s) => s.rangoPaginas)
-          .map((s) => ({
-            nombre: s.nombre,
-            rango: s.rangoPaginas!,
-            paginasOriginales: s.paginasOriginales!,
-          })),
-      })),
+      documentos: documentos.map(
+        ({ archivos, segmentos, pasos, paginasCad: _paginasCad, ...doc }) => ({
+          ...doc,
+          pasoId: pasos[0]?.id ?? null,
+          fechaEntrega:
+            (
+              pasos[0]?.item.fechaEntrega ?? pasos[0]?.orden?.fechaEntrega
+            )?.toISOString() ?? null,
+          archivos: archivos.filter((a) => a !== null).map((a) => a.id),
+          documentos: segmentos.length,
+          seleccionPaginas: segmentos
+            .filter((s) => s.rangoPaginas)
+            .map((s) => ({
+              nombre: s.nombre,
+              rango: s.rangoPaginas!,
+              paginasOriginales: s.paginasOriginales!,
+            })),
+        }),
+      ),
       historial: historial.map((e) => ({
         ...objeto(e.datosJson),
         id: e.id,
@@ -187,14 +349,37 @@ export class DocumentosOrdenService {
     impresora: string,
     host: string,
     reimpresionDe?: string,
+    perfilId?: string,
+    perfilRevision?: string,
+    pagina = 0,
   ) {
     const orden = await this.orden(auth, ordenId);
     if (['borrador', 'cancelada'].includes(orden.estado))
       throw new BadRequestException('Primero emití la orden.');
-    const doc = this.documentos(orden).find((d) => d.itemId === itemId);
+    const doc = (
+      await this.rutear(auth, orden, this.prisma, reimpresionDe ? [itemId] : [])
+    ).find((d) => d.itemId === itemId && (d.paginaCad?.pagina ?? 0) === pagina);
     if (!doc || doc.motivo)
       throw new BadRequestException(doc?.motivo ?? 'Documento no imprimible.');
+    const perfil = doc.ruta.perfil;
+    if (
+      !perfil ||
+      doc.ruta.estado !== 'LISTO' ||
+      perfil.id !== perfilId ||
+      revisionPerfil(perfil) !== perfilRevision
+    )
+      throw new ConflictException(
+        'El perfil o la preparación cambió. Actualizá el resumen antes de imprimir.',
+      );
+    if (
+      perfil.bandeja.destino.host !== host ||
+      perfil.bandeja.destino.impresora !== impresora
+    )
+      throw new BadRequestException(
+        'El destino no coincide con el perfil de impresión.',
+      );
 
+    let salidaCad: Awaited<ReturnType<typeof prepararPaginaCad>> | null = null;
     const unido = await PDFDocument.create();
     const extraerPaginas =
       doc.archivos.length > 1 || doc.segmentos.some((s) => !!s.rangoPaginas);
@@ -221,6 +406,25 @@ export class DocumentosOrdenService {
         throw new BadRequestException(
           `Las páginas de ${archivo.nombreOriginal} no coinciden con las cotizadas. Volvé a cotizar el documento.`,
         );
+      if (doc.paginaCad) {
+        if (!esConfiguracionCad(perfil.bandeja.destino.cad))
+          throw new BadRequestException('Revisá la configuración CAD.');
+        try {
+          salidaCad = await prepararPaginaCad(
+            pdf,
+            doc.paginaCad.pagina,
+            doc.paginaCad,
+            perfil.bandeja.destino.cad,
+          );
+        } catch (error) {
+          throw new BadRequestException(
+            error instanceof Error
+              ? error.message
+              : 'No se pudo preparar el plano.',
+          );
+        }
+        continue;
+      }
       const seleccion = resolverRangoPaginas(
         segmento.rangoPaginas ?? '',
         pdf.getPageCount(),
@@ -249,9 +453,11 @@ export class DocumentosOrdenService {
           );
       }
     }
-    const contenido = extraerPaginas
-      ? Buffer.from(await unido.save())
-      : originalBytes;
+    const contenido = salidaCad
+      ? salidaCad.pdf
+      : extraerPaginas
+        ? Buffer.from(await unido.save())
+        : originalBytes;
     if (!contenido) throw new BadRequestException('El PDF no está disponible.');
     const jobName = `Grafo ${orden.numero} ${intentoId}`;
     const params = {
@@ -260,13 +466,25 @@ export class DocumentosOrdenService {
         copies: doc.copias,
         jobName,
         units: 'mm',
-        size: { width: 210, height: 297 },
-        colorType: 'grayscale',
+        size: salidaCad
+          ? {
+              width: salidaCad.plan.anchoSalidaMm,
+              height: salidaCad.plan.largoSalidaMm,
+              custom: true,
+            }
+          : { width: 210, height: 297 },
+        colorType: doc.configuracion.color === 'COLOR' ? 'color' : 'grayscale',
         duplex: doc.faz === 2 ? 'long-edge' : 'one-sided',
+        ...(salidaCad && esConfiguracionCad(perfil.bandeja.destino.cad)
+          ? perfil.bandeja.destino.cad.usarOrigenPredeterminado
+            ? {}
+            : { printerTray: perfil.bandeja.destino.cad.origenPapel }
+          : { printerTray: perfil.bandeja.codigo }),
         // QZ orienta cada página según su CropBox y /Rotate. Un único envío
         // conserva el orden y los frentes/dorsos incluso en archivos mixtos.
-        orientation: null,
-        scaleContent: true,
+        orientation: salidaCad ? 'portrait' : null,
+        scaleContent: !salidaCad,
+        ...(salidaCad ? { margins: 0, rotation: 0 } : {}),
         rasterize: false,
       },
       data: [
@@ -282,6 +500,9 @@ export class DocumentosOrdenService {
     const firma = this.impresion.firmarDocumento(params);
     const datos = {
       itemId,
+      trabajoId: doc.trabajoId,
+      pagina,
+      ...(salidaCad ? { planCad: salidaCad.plan } : {}),
       nombre: doc.nombre,
       copias: doc.copias,
       paginas: doc.paginas,
@@ -299,6 +520,11 @@ export class DocumentosOrdenService {
         })),
       host,
       impresora,
+      pasoId: doc.pasos[0].id,
+      perfilSnapshot: JSON.parse(
+        JSON.stringify(perfil),
+      ) as Prisma.InputJsonValue,
+      configuracion: doc.configuracion,
       jobName,
       estado: 'PREPARADO',
       actualizadoEl: new Date().toISOString(),
@@ -320,12 +546,40 @@ export class DocumentosOrdenService {
         throw new ConflictException(
           'La orden cambió mientras preparábamos el PDF. Actualizá el panel.',
         );
+      await tx.$queryRaw`SELECT id FROM "ImpresionDestino" WHERE id = ${perfil.bandeja.destino.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+      const documentoActual = (
+        await this.rutear(
+          auth,
+          await this.orden(auth, ordenId, tx),
+          tx,
+          reimpresionDe ? [itemId] : [],
+        )
+      ).find(
+        (d) => d.itemId === itemId && (d.paginaCad?.pagina ?? 0) === pagina,
+      );
+      const vigente = documentoActual?.ruta.perfil;
+      if (
+        !vigente ||
+        vigente.id !== perfil.id ||
+        revisionPerfil(vigente) !== perfilRevision ||
+        documentoActual?.ruta.estado !== 'LISTO'
+      )
+        throw new ConflictException(
+          'La configuración o la carga de papel cambió. Actualizá antes de enviar.',
+        );
+      await this.validarTurno(
+        auth,
+        tx,
+        doc.trabajoId,
+        perfil.bandeja.destino.maquinaId,
+        !!reimpresionDe,
+      );
       const previo = await tx.ordenTrabajoEvento.findFirst({
         where: {
           ordenId,
           tenantId: auth.tenantId,
           tipo: TIPO,
-          datosJson: { path: ['itemId'], equals: itemId },
+          AND: this.filtroTrabajo(itemId, pagina),
         },
         orderBy: { fecha: 'desc' },
         select: { id: true },
@@ -350,6 +604,10 @@ export class DocumentosOrdenService {
           datosJson: datos as Prisma.InputJsonValue,
         },
       });
+      await this.actualizarCola(auth, tx, ordenId, doc.trabajoId, {
+        estado: 'PREPARADO',
+        intentoId,
+      });
     });
     return {
       ...firma,
@@ -362,6 +620,302 @@ export class DocumentosOrdenService {
         usuario: auth.email,
       },
     };
+  }
+
+  /** Intenciones pequeñas y durables; los PDF permanecen en almacenamiento de archivos. */
+  async solicitar(auth: CurrentAuth, ordenId: string) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+      const orden = await this.orden(auth, ordenId, tx);
+      if (['borrador', 'cancelada'].includes(orden.estado))
+        throw new BadRequestException('Primero emití la orden.');
+      const docs = this.documentos(orden);
+      const actuales = await tx.ordenTrabajoEvento.findMany({
+        where: { tenantId: auth.tenantId, ordenId, tipo: COLA },
+        select: { datosJson: true },
+      });
+      const faltantes = docs.filter(
+        (d) =>
+          !actuales.some((e) => objeto(e.datosJson).trabajoId === d.trabajoId),
+      );
+      const envios = await tx.ordenTrabajoEvento.findMany({
+        where: { tenantId: auth.tenantId, ordenId, tipo: TIPO },
+        orderBy: { fecha: 'desc' },
+        select: { id: true, datosJson: true },
+      });
+      if (faltantes.length)
+        await tx.ordenTrabajoEvento.createMany({
+          data: faltantes.map((d) => {
+            const previo = envios.find((e) =>
+              this.esTrabajo(e.datosJson, d.itemId, d.paginaCad?.pagina),
+            );
+            const datos = objeto(previo?.datosJson);
+            return {
+              tenantId: auth.tenantId,
+              ordenId,
+              tipo: COLA,
+              descripcion: `En cola de impresión: ${d.nombre}`,
+              usuarioId: auth.userId,
+              usuarioNombre: auth.email,
+              datosJson: {
+                trabajoId: d.trabajoId,
+                itemId: d.itemId,
+                pagina: d.paginaCad?.pagina ?? 0,
+                maquinaId: d.pasos[0]?.maquinaId ?? null,
+                pasoId: d.pasos[0]?.id ?? d.itemId,
+                fechaEntrega:
+                  (
+                    d.pasos[0]?.item.fechaEntrega ??
+                    d.pasos[0]?.orden?.fechaEntrega
+                  )?.toISOString() ?? '9999',
+                numero: orden.numero,
+                estado: datos.confirmacion
+                  ? 'VERIFICADO'
+                  : String(datos.estado ?? 'PENDIENTE'),
+                intentoId: previo?.id ?? null,
+              },
+            };
+          }),
+        });
+    });
+    return this.vista(auth, ordenId);
+  }
+
+  async cola(auth: CurrentAuth, desde = 0) {
+    const where: Prisma.OrdenTrabajoEventoWhereInput = {
+      tenantId: auth.tenantId,
+      tipo: COLA,
+      NOT: { datosJson: { path: ['estado'], equals: 'VERIFICADO' } },
+      orden: { estado: { notIn: ['borrador', 'cancelada'] } },
+    };
+    const [eventos, total] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{ ordenId: string; datosJson: Prisma.JsonValue }>
+      >`
+        SELECT e."ordenId", e."datosJson" FROM "OrdenTrabajoEvento" e
+        JOIN "OrdenTrabajo" o ON o.id = e."ordenId" AND o."tenantId" = e."tenantId"
+        LEFT JOIN "OrdenTrabajoItem" i ON i.id::text = e."datosJson"->>'itemId' AND i."tenantId" = e."tenantId"
+        WHERE e."tenantId" = ${auth.tenantId}::uuid AND e.tipo = 'cola_impresion'
+          AND e."datosJson"->>'estado' <> 'VERIFICADO' AND o.estado NOT IN ('borrador', 'cancelada')
+        ORDER BY COALESCE(i."fechaEntrega", o."fechaEntrega") ASC NULLS LAST, o.numero,
+          e."datosJson"->>'pasoId', (e."datosJson"->>'pagina')::integer, e.id
+        LIMIT 100 OFFSET ${desde}`,
+
+      this.prisma.ordenTrabajoEvento.count({ where }),
+    ]);
+    const vistas = [] as Awaited<ReturnType<DocumentosOrdenService['vista']>>[];
+    // Carga secuencial acotada: no cientos de consultas/PDF en paralelo.
+    for (const id of [...new Set(eventos.map((e) => e.ordenId))]) {
+      const v = await this.vista(auth, id);
+      const claves = new Set(
+        eventos
+          .filter((e) => e.ordenId === id)
+          .map((e) => String(objeto(e.datosJson).trabajoId)),
+      );
+      vistas.push({
+        ...v,
+        documentos: v.documentos.filter((d) => claves.has(d.trabajoId)),
+      });
+    }
+    return {
+      vistas,
+      total,
+      siguiente: desde + eventos.length < total ? desde + eventos.length : null,
+    };
+  }
+
+  private async actualizarCola(
+    auth: CurrentAuth,
+    tx: Prisma.TransactionClient,
+    ordenId: string,
+    trabajoId: string,
+    cambio: Record<string, unknown>,
+    intentoId?: string,
+  ) {
+    const fila = await tx.ordenTrabajoEvento.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        ordenId,
+        tipo: COLA,
+        datosJson: { path: ['trabajoId'], equals: trabajoId },
+      },
+    });
+    if (!fila) return; // Compatibilidad con envíos anteriores a la cola persistente.
+    const datos = objeto(fila.datosJson);
+    if (datos.trabajoId !== trabajoId) return;
+    if (intentoId && datos.intentoId !== intentoId) return; // Evento tardío de una reimpresión anterior.
+    await tx.ordenTrabajoEvento.update({
+      where: { id: fila.id },
+      data: { datosJson: { ...datos, ...cambio } as Prisma.InputJsonValue },
+    });
+  }
+
+  private async validarTurno(
+    auth: CurrentAuth,
+    tx: Prisma.TransactionClient,
+    trabajoId: string,
+    maquinaId: string,
+    reimpresion: boolean,
+  ) {
+    const filas = await tx.ordenTrabajoEvento.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        tipo: COLA,
+        AND: [
+          { datosJson: { path: ['maquinaId'], equals: maquinaId } },
+          {
+            OR: [
+              'PENDIENTE',
+              'PREPARADO',
+              'SIN_CONFIRMAR',
+              'ERROR',
+              'PAUSED',
+              'ABORTED',
+              'CANCELED',
+              'DELETED',
+            ].map((estado) => ({
+              datosJson: { path: ['estado'], equals: estado },
+            })),
+          },
+        ],
+        orden: { estado: { notIn: ['borrador', 'cancelada'] } },
+      },
+      select: {
+        datosJson: true,
+        orden: {
+          select: {
+            fechaEntrega: true,
+            items: { select: { id: true, fechaEntrega: true } },
+          },
+        },
+      },
+    });
+    const pendientes = filas
+      .map((e) => {
+        const d = objeto(e.datosJson);
+        return {
+          ...d,
+          fechaEntrega:
+            (
+              e.orden.items.find((i) => i.id === d.itemId)?.fechaEntrega ??
+              e.orden.fechaEntrega
+            )?.toISOString() ?? '9999',
+        } as Record<string, unknown>;
+      })
+      .sort(
+        (a, b) =>
+          String(a.fechaEntrega).localeCompare(String(b.fechaEntrega)) ||
+          String(a.numero).localeCompare(String(b.numero)) ||
+          String(a.pasoId ?? a.itemId).localeCompare(
+            String(b.pasoId ?? b.itemId),
+          ) ||
+          Number(a.pagina) - Number(b.pagina),
+      );
+    const incierto = pendientes.find(
+      (d) => d.trabajoId !== trabajoId && d.estado !== 'PENDIENTE',
+    );
+    if (incierto)
+      throw new ConflictException(
+        'Esta máquina tiene un envío por revisar. Verificá su cola antes de continuar.',
+      );
+    if (!reimpresion && pendientes[0] && pendientes[0].trabajoId !== trabajoId)
+      throw new ConflictException(
+        'Hay un trabajo anterior en esta máquina. Preparalo o revisalo antes de continuar.',
+      );
+  }
+
+  async liberar(
+    auth: CurrentAuth,
+    ordenId: string,
+    trabajos: string[],
+    perfilId: string,
+    revision: string,
+  ) {
+    return this.liberarLote(auth, [{ ordenId, trabajos }], perfilId, revision);
+  }
+
+  async liberarLote(
+    auth: CurrentAuth,
+    grupos: { ordenId: string; trabajos: string[] }[],
+    perfilId: string,
+    revision: string,
+  ) {
+    const ids = [...new Set(grupos.map((g) => g.ordenId))].sort();
+    for (const id of ids) await this.solicitar(auth, id);
+    return this.prisma.$transaction(async (tx) => {
+      // Mismo orden de bloqueo que reserva/confirmación, también entre varias OT.
+      for (const id of ids)
+        await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+      const perfil = (await this.perfiles.perfiles(auth.tenantId, tx)).find(
+        (p) => p.id === perfilId,
+      );
+      if (!perfil || revisionPerfil(perfil) !== revision)
+        throw new ConflictException('El perfil cambió. Actualizá la cola.');
+      await tx.$queryRaw`SELECT id FROM "ImpresionDestino" WHERE id = ${perfil.bandeja.destino.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+      for (const grupo of grupos) {
+        const docs = await this.rutear(
+          auth,
+          await this.orden(auth, grupo.ordenId, tx),
+          tx,
+        );
+        const elegidos = docs.filter((d) =>
+          grupo.trabajos.includes(d.trabajoId),
+        );
+        if (
+          !elegidos.length ||
+          elegidos.length !== grupo.trabajos.length ||
+          elegidos.some(
+            (d) =>
+              d.ruta.perfil?.id !== perfilId ||
+              d.ruta.estado === 'REVISAR' ||
+              revisionPerfil(d.ruta.perfil) !== revision,
+          )
+        )
+          throw new ConflictException(
+            'Revisá los trabajos seleccionados y su disponibilidad.',
+          );
+        const filas = await tx.ordenTrabajoEvento.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            ordenId: grupo.ordenId,
+            tipo: COLA,
+          },
+          select: { datosJson: true },
+        });
+        if (
+          filas.some(
+            (e) =>
+              grupo.trabajos.includes(String(objeto(e.datosJson).trabajoId)) &&
+              objeto(e.datosJson).intentoId,
+          )
+        )
+          throw new ConflictException(
+            'Un trabajo seleccionado ya tiene un envío. Revisá su impresión.',
+          );
+      }
+      const bandeja = await tx.impresionBandeja.update({
+        where: { id: perfil.bandeja.id },
+        data: {
+          papelPreparadoId: perfil.papelMateriaPrimaId,
+          gramajePreparado: perfil.gramaje,
+          preparadoPor: auth.email,
+          preparadoEl: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      const preparacion = {
+        perfilId,
+        revision: `${perfil.version}:${bandeja.version}:${perfil.bandeja.destino.version}`,
+        usuarioId: auth.userId,
+        fecha: new Date().toISOString(),
+      };
+      for (const grupo of grupos)
+        for (const trabajoId of grupo.trabajos)
+          await this.actualizarCola(auth, tx, grupo.ordenId, trabajoId, {
+            preparacion,
+          });
+      return { ok: true };
+    });
   }
 
   async confirmar(auth: CurrentAuth, ordenId: string, envioIds: string[]) {
@@ -382,21 +936,19 @@ export class DocumentosOrdenService {
               tenantId: auth.tenantId,
               ordenId,
               tipo: TIPO,
-              datosJson: { path: ['itemId'], equals: doc.itemId },
+              AND: this.filtroTrabajo(doc.itemId, doc.paginaCad?.pagina),
             },
             orderBy: { fecha: 'desc' },
             select: { id: true },
           }),
         ),
       );
-      if (!ultimos.length || ultimos.some((e) => !e))
-        throw new ConflictException(
-          'Hay documentos sin enviar. Completá los envíos antes de confirmar todo.',
-        );
-      const ids = ultimos.map((e) => e!.id);
+      const vigentes = ultimos.filter((e) => e !== null).map((e) => e.id);
+      const ids = [...new Set(envioIds)];
       if (
+        !ids.length ||
         ids.length !== envioIds.length ||
-        ids.some((id) => !envioIds.includes(id))
+        ids.some((id) => !vigentes.includes(id))
       )
         throw new ConflictException(
           'Los envíos cambiaron. Actualizá el panel y revisá la impresión antes de confirmar.',
@@ -423,6 +975,13 @@ export class DocumentosOrdenService {
             datosJson: { ...datos, confirmacion } as Prisma.InputJsonValue,
           },
         });
+        await this.actualizarCola(
+          auth,
+          tx,
+          ordenId,
+          String(datos.trabajoId ?? `${datos.itemId}:0`),
+          { estado: 'VERIFICADO' },
+        );
         nuevos++;
       }
       if (nuevos)
@@ -449,6 +1008,7 @@ export class DocumentosOrdenService {
     detalle: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM "OrdenTrabajoEvento" WHERE id = ${intentoId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       const evento = await tx.ordenTrabajoEvento.findFirst({
         where: {
@@ -456,7 +1016,6 @@ export class DocumentosOrdenService {
           ordenId,
           tenantId: auth.tenantId,
           tipo: TIPO,
-          usuarioId: auth.userId,
         },
       });
       if (!evento)
@@ -473,6 +1032,14 @@ export class DocumentosOrdenService {
         where: { id: intentoId, tenantId: auth.tenantId },
         data: { datosJson: datos as Prisma.InputJsonValue },
       });
+      await this.actualizarCola(
+        auth,
+        tx,
+        ordenId,
+        String(datos.trabajoId ?? `${datos.itemId}:0`),
+        { estado: datos.confirmacion ? 'VERIFICADO' : datos.estado },
+        intentoId,
+      );
       return {
         ...datos,
         id: intentoId,

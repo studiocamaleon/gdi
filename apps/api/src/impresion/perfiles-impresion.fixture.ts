@@ -1,0 +1,32 @@
+import type { PerfilDisponible } from './perfiles-impresion.domain';
+export const perfilPrueba: PerfilDisponible = {
+  id: 'perfil',
+  nombre: 'Obra 75 doble',
+  papelMateriaPrimaId: 'papel',
+  gramaje: 75,
+  tamano: 'A4',
+  color: 'BN',
+  faz: 2,
+  modo: 'AUTOMATICO',
+  probado: true,
+  activo: true,
+  prioridad: 1,
+  version: 1,
+  bandeja: {
+    id: 'bandeja',
+    nombre: 'Bandeja 1',
+    codigo: 'Tray 1',
+    version: 1,
+    papelPreparadoId: 'papel',
+    gramajePreparado: 75,
+    destino: {
+      id: 'destino',
+      nombre: 'Ricoh',
+      host: 'localhost',
+      impresora: 'RICOH',
+      maquinaId: 'maquina',
+      activo: true,
+      version: 1,
+    },
+  },
+};

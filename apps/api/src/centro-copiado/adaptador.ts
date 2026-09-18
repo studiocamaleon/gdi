@@ -1,3 +1,4 @@
+import type { MedidaPagina } from '../common/medidas-documento';
 /**
  * Adaptador del TPV Centro de copiado.
  * Traduce un DOCUMENTO (N páginas, tamaño, papel, color, faz) al `jobContext`
@@ -15,6 +16,8 @@ export type ColorDocumento = 'BN' | 'COLOR';
 export type FazDocumento = 1 | 2;
 
 export interface DocumentoInput {
+  modo?: 'HOJAS' | 'CAD';
+  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
   id: string;
   nombre?: string;
   archivoNombre?: string;
@@ -22,7 +25,9 @@ export interface DocumentoInput {
   paginasOriginales?: number;
   rangoPaginas?: string;
   orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   copias: number;
+  copiasPorPagina?: import('../common/copias-paginas-cad').CopiasPaginaCad[];
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;
   /** Medidas del pliego (del catálogo de formatos del sistema). */

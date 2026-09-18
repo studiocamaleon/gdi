@@ -1,5 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { Cable, Download, ScanLine, ShieldCheck } from "lucide-react";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import p from "./perfiles-impresion.module.css";
 import {
   ConfiguracionHeader,
   ConfiguracionPage,
@@ -11,7 +16,7 @@ import {
 } from "@/lib/impresion-api";
 import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
 import { ImpresoraPuestoForm } from "./impresora-puesto-form";
-import { PruebaDocumentoPanel } from "./prueba-documento-panel";
+import { PerfilesImpresionPanel } from "./perfiles-impresion-panel";
 import s from "./impresion.module.css";
 
 export function ImpresorasView() {
@@ -19,9 +24,8 @@ export function ImpresorasView() {
     null,
   );
   const [config, setConfig] = useState<ImpresoraPuesto | null>(null);
-  const [documentos, setDocumentos] = useState<ImpresoraPuesto | null>(null);
-  const [probando, setProbando] = useState(false);
   const [error, setError] = useState("");
+  const [conexionAbierta, setConexionAbierta] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let activo = true;
@@ -30,11 +34,7 @@ export function ImpresorasView() {
         if (activo) {
           setIdentidad(dato);
           const etiquetas = leerImpresora(dato.tenantId);
-          const docs = leerImpresora(dato.tenantId, "documentos");
           setConfig(etiquetas);
-          setDocumentos(
-            docs.impresora ? docs : { host: etiquetas.host, impresora: "" },
-          );
         }
       })
       .catch((e) => {
@@ -64,9 +64,18 @@ export function ImpresorasView() {
     <ConfiguracionPage>
       <ConfiguracionHeader
         titulo="Impresoras"
-        descripcion="Configurá las impresoras de etiquetas y documentos de este puesto."
+        descripcion="Cada trabajo, en su equipo. Organizá impresoras, papeles y perfiles de impresión."
+        acciones={
+          <ActionButton
+            variant="outline"
+            onPress={() => setConexionAbierta(true)}
+          >
+            <Cable />
+            Conexión y autorización
+          </ActionButton>
+        }
       />
-      <div className={s.settings}>
+      <div className={p.contenido}>
         {error && (
           <>
             <p role="alert" className={s.error}>
@@ -82,60 +91,134 @@ export function ImpresorasView() {
             </ActionButton>
           </>
         )}
-        {!identidad && !error && <p role="status">Cargando configuración…</p>}
-        {identidad && config && (
-          <ImpresoraPuestoForm
+        {!identidad && !error && (
+          <Skeleton className="h-72" aria-label="Cargando configuración" />
+        )}
+        {identidad && !identidad.firmaDisponible && (
+          <Alert variant="destructive">
+            <AlertDescription>{identidad.mensaje}</AlertDescription>
+          </Alert>
+        )}
+        {identidad && (
+          <PerfilesImpresionPanel
             tenantId={identidad.tenantId}
-            inicial={config}
-            disabled={!identidad.firmaDisponible || probando}
-            onGuardar={setConfig}
+            disabled={!identidad.firmaDisponible}
+            etiquetaConfigurada={Boolean(config?.impresora)}
+            etiquetas={
+              <div className={p.etiquetas}>
+                <section className={p.termicaIntro}>
+                  <span className={p.eyebrow}>
+                    Identificación · Este puesto
+                  </span>
+                  <div className={p.termicaIcon}>
+                    <ScanLine aria-hidden="true" />
+                  </div>
+                  <h2>
+                    Una etiqueta.
+                    <br />
+                    Todo el trabajo.
+                  </h2>
+                  <p>
+                    Identificá los pedidos con su QR interno para abrir la
+                    entrega de la orden.
+                  </p>
+                  <dl className={p.termicaDatos}>
+                    <div>
+                      <dt>Formato</dt>
+                      <dd>100 × 150 mm</dd>
+                    </div>
+                    <div>
+                      <dt>Impresión</dt>
+                      <dd>Térmica · 203 dpi</dd>
+                    </div>
+                  </dl>
+                </section>
+                {config && (
+                  <ImpresoraPuestoForm
+                    tenantId={identidad.tenantId}
+                    inicial={config}
+                    disabled={!identidad.firmaDisponible}
+                    onGuardar={setConfig}
+                  />
+                )}
+              </div>
+            }
           />
         )}
-        {identidad && documentos && (
-          <>
-            <ImpresoraPuestoForm
-              tenantId={identidad.tenantId}
-              inicial={documentos}
-              uso="documentos"
-              disabled={!identidad.firmaDisponible || probando}
-              onGuardar={setDocumentos}
-            />
-            <PruebaDocumentoPanel
-              key={`${identidad.tenantId}:${documentos.host}:${documentos.impresora}`}
-              tenantId={identidad.tenantId}
-              config={documentos}
-              disabled={!identidad.firmaDisponible}
-              onOcupado={setProbando}
-            />
-          </>
-        )}
-        {identidad?.firmaDisponible ? (
-          <section className={s.setup}>
-            <strong>Autorización de Grafo</strong>
-            <p className={s.help}>
-              Para recordar la autorización, instalá este certificado público en
-              el equipo donde corre QZ Tray. En Windows, guardalo como
-              override.crt dentro de C:\Program Files\QZ Tray, reiniciá QZ y
-              autorizá Grafo con «Recordar esta decisión» en la primera
-              conexión.
-            </p>
-            <ActionButton variant="outline" onPress={descargarCertificado}>
-              Descargar certificado público
-            </ActionButton>
-            <p className={s.help}>
-              Si ese equipo ya tiene un override.crt para otra aplicación,
-              consultá al administrador antes de reemplazarlo. Este certificado
-              es distinto del que permite la conexión segura entre equipos.
-            </p>
-          </section>
-        ) : (
-          identidad && (
-            <p role="alert" className={s.error}>
-              {identidad.mensaje}
-            </p>
-          )
-        )}
       </div>
+      {conexionAbierta && (
+        <FormDialog
+          isOpen
+          onOpenChange={setConexionAbierta}
+          title={
+            <span className={p.modalTitulo}>
+              <ShieldCheck />
+              Conexión y autorización
+            </span>
+          }
+          description="QZ Tray conecta Grafo con las impresoras de tu taller."
+          className={p.dialog}
+        >
+          <div className={p.formulario}>
+            <div className={p.seccionTitulo}>
+              <span className={p.numero}>01</span>
+              <div>
+                <h3>Equipo de impresión</h3>
+                <p>
+                  Mantené QZ Tray abierto en la computadora donde están
+                  instaladas las impresoras. Cada equipo guarda su dirección en
+                  Ajustes.
+                </p>
+              </div>
+            </div>
+            <div className={p.seccionTitulo}>
+              <span className={p.numero}>02</span>
+              <div>
+                <h3>Autorizar a Grafo</h3>
+                <p>
+                  El certificado es compartido por las impresoras del mismo
+                  equipo.
+                </p>
+              </div>
+            </div>
+            {identidad?.firmaDisponible ? (
+              <section className={p.certificado}>
+                <strong>Autorización de Grafo</strong>
+                <p className={s.help}>
+                  Para recordar la autorización, instalá este certificado
+                  público en el equipo donde corre QZ Tray. En Windows, guardalo
+                  como override.crt dentro de C:\Program Files\QZ Tray, reiniciá
+                  QZ y autorizá Grafo con «Recordar esta decisión» en la primera
+                  conexión.
+                </p>
+                <ActionButton variant="outline" onPress={descargarCertificado}>
+                  <Download /> Descargar certificado público
+                </ActionButton>
+                <p className={s.help}>
+                  Si ese equipo ya tiene un override.crt para otra aplicación,
+                  consultá al administrador antes de reemplazarlo. Este
+                  certificado es distinto del que permite la conexión segura
+                  entre equipos.
+                </p>
+              </section>
+            ) : (
+              identidad && (
+                <p role="alert" className={s.error}>
+                  {identidad.mensaje}
+                </p>
+              )
+            )}
+          </div>
+          <footer className={p.footer}>
+            <ActionButton
+              variant="outline"
+              onPress={() => setConexionAbierta(false)}
+            >
+              Cerrar
+            </ActionButton>
+          </footer>
+        </FormDialog>
+      )}
     </ConfiguracionPage>
   );
 }

@@ -8,31 +8,25 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  Printer,
-  RefreshCw,
-  Settings2,
-  Minus,
-  FileText,
-  Check,
-  ArrowUpRight,
-} from "lucide-react";
+import { Minus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/design-system/action-button";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
+  claveDocumento,
+  getColaImpresion,
   getDocumentosOrden,
+  solicitarImpresionOrden,
+  liberarLoteImpresion,
   confirmarDocumentosImpresos,
   registrarEstadoDocumento,
   type EnvioDocumento,
   type EstadoDocumento,
   type VistaDocumentos,
 } from "@/lib/impresion-api";
-import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
 import {
   escucharImpresora,
   imprimirDocumentoOrden,
@@ -42,11 +36,19 @@ import { eventoImpresora } from "@/lib/qz-eventos";
 import {
   estadoDocumentoQz,
   estadoDocumentoSiguiente,
-  textoEstadoDocumento,
 } from "@/lib/impresion-documentos";
-import { ImpresoraPuestoForm } from "./impresora-puesto-form";
-import s from "./documentos-impresion.module.css";
-import { ORIENTACION_PDF_LABELS } from "@/lib/orientacion-pdf";
+import {
+  trabajosDeVistas,
+  maquinaTrabajo,
+  siguientesEnvios,
+  admiteVerificacionMultiple,
+  REVISAR_ENVIO,
+  type TrabajoCola,
+} from "@/lib/colas-impresion";
+import { revisionPerfil } from "@/lib/perfiles-impresion";
+import { ColasImpresionPanel } from "./colas-impresion-panel";
+import { AsistenteImpresionMinimizado } from "./asistente-impresion-minimizado";
+import s from "./colas-impresion.module.css";
 
 type Contexto = {
   tenantId: string;
@@ -54,9 +56,9 @@ type Contexto = {
 };
 const Contexto = createContext<Contexto>({ tenantId: "", abrir: () => {} });
 export const useImpresionDocumentos = () => useContext(Contexto);
-type Seguimiento = { ordenId: string; envio: EnvioDocumento };
 
-/** Vive en el dashboard: minimizar/cambiar de pantalla no interrumpe la cola. */
+/** Orquesta una conexión QZ. Los envíos se firman en serie; cada máquina imprime
+ * su cola mientras se despacha a las demás. Nunca se reintenta un envío incierto. */
 export function DocumentosImpresionProvider({
   tenantId,
   children,
@@ -64,352 +66,424 @@ export function DocumentosImpresionProvider({
   tenantId: string;
   children: ReactNode;
 }) {
-  const comercial = usePuede("comercial.gestionar");
-  const produccion = usePuede("produccion.ejecutar");
+  const comercial = usePuede("comercial.gestionar"),
+    produccion = usePuede("produccion.ejecutar");
+  const verProduccion = usePuede("produccion.ver"),
+    verComercial = usePuede("comercial.ver");
+  const puedeVer = verProduccion || verComercial;
   const puedeImprimir = comercial || produccion;
   const [abierto, setAbierto] = useState(false);
-  const [vista, setVista] = useState<VistaDocumentos | null>(null);
-  const vistaRef = useRef<VistaDocumentos | null>(null);
-  const [config, setConfig] = useState<ImpresoraPuesto | null>(null);
-  const [configurando, setConfigurando] = useState(false);
-  const [ocupado, setOcupado] = useState(false);
-  const [confirmando, setConfirmando] = useState(false);
-  const ocupadoRef = useRef(false);
-  const [cargando, setCargando] = useState(false);
+  const [vistas, setVistas] = useState<VistaDocumentos[]>([]);
+  const vistasRef = useRef<VistaDocumentos[]>([]);
+  const foco = useRef<string | null>(null);
+  const [ocupado, setOcupado] = useState(false),
+    ocupadoRef = useRef(false);
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
   const [guardadoError, setGuardadoError] = useState("");
-  const [avance, setAvance] = useState("");
-  const [conectado, setConectado] = useState(false);
-  const [avisoImpresora, setAvisoImpresora] = useState("");
-  const [reimprimir, setReimprimir] = useState<EnvioDocumento | null>(null);
-  const trabajos = useRef(new Map<string, Seguimiento>());
-  const escucha = useRef<{ destino: string; handle: EscuchaImpresora } | null>(
+  const [seleccionados, setSeleccionados] = useState<string[]>([]);
+  const [seleccionandoSalidas, setSeleccionandoSalidas] = useState(false);
+  // La selección refiere al intento visto, nunca a un posible reenvío posterior.
+  const [enviosSeleccionados, setEnviosSeleccionados] = useState<string[]>([]);
+  const [reimprimir, setReimprimir] = useState<TrabajoCola | null>(null);
+  const [conexiones, setConexiones] = useState<string[]>([]);
+  const [avisos, setAvisos] = useState<Record<string, string>>({});
+  const [siguiente, setSiguiente] = useState<number | null>(null);
+  const [total, setTotal] = useState(0);
+  const monitor = useRef<{ clave: string; handle: EscuchaImpresora } | null>(
     null,
   );
-  const vivos = useRef(true);
+  const seguimiento = useRef(
+    new Map<string, { ordenId: string; envio: EnvioDocumento }>(),
+  );
   const escrituras = useRef(Promise.resolve());
-  const carga = useRef(0);
-  const ordenesPendientes = useRef<string[]>([]);
+  const vivos = useRef(true);
+  const abrirPendiente = useRef<string[]>([]);
 
-  useEffect(() => {
-    vivos.current = true;
-    return () => {
-      vivos.current = false;
-      escucha.current?.handle.cerrar();
-    };
-  }, []);
-  function mostrar(v: VistaDocumentos) {
-    vistaRef.current = v;
-    setVista(v);
+  function mostrar(v: VistaDocumentos[]) {
+    vistasRef.current = v;
+    if (vivos.current) setVistas(v);
+  }
+  function incorporar(v: VistaDocumentos) {
+    mostrar([...vistasRef.current.filter((x) => x.ordenId !== v.ordenId), v]);
   }
   function actualizarEnvio(ordenId: string, envio: EnvioDocumento) {
-    const anterior = vistaRef.current;
-    if (anterior?.ordenId === ordenId)
-      mostrar({
-        ...anterior,
-        historial: [
-          envio,
-          ...anterior.historial.filter((e) => e.id !== envio.id),
-        ].sort((a, b) => b.fecha.localeCompare(a.fecha)),
-      });
+    mostrar(
+      vistasRef.current.map((v) =>
+        v.ordenId !== ordenId
+          ? v
+          : {
+              ...v,
+              historial: [
+                envio,
+                ...v.historial.filter((e) => e.id !== envio.id),
+              ].sort((a, b) => b.fecha.localeCompare(a.fecha)),
+            },
+      ),
+    );
+  }
+  async function cargar(desde = 0) {
+    await escrituras.current;
+    const cola = await getColaImpresion(desde);
+    if (!vivos.current) return;
+    let nuevas = desde ? [...vistasRef.current] : [];
+    for (const v of cola.vistas) {
+      const prev = nuevas.find((x) => x.ordenId === v.ordenId);
+      nuevas = [
+        ...nuevas.filter((x) => x.ordenId !== v.ordenId),
+        prev
+          ? {
+              ...v,
+              documentos: [
+                ...new Map(
+                  [...prev.documentos, ...v.documentos].map((d) => [
+                    claveDocumento(d),
+                    d,
+                  ]),
+                ).values(),
+              ],
+            }
+          : v,
+      ];
+    }
+    if (foco.current) {
+      const v = await getDocumentosOrden(foco.current);
+      nuevas = [...nuevas.filter((x) => x.ordenId !== v.ordenId), v];
+    }
+    if (!vivos.current) return;
+    mostrar(nuevas);
+    setTotal(cola.total);
+    setSiguiente(cola.siguiente);
+    for (const v of nuevas)
+      for (const e of v.historial)
+        if (!e.confirmacion)
+          seguimiento.current.set(e.jobName, { ordenId: v.ordenId, envio: e });
   }
   function registrar(
     jobName: string,
     estado: EstadoDocumento,
     detalle: string,
   ) {
-    const track = trabajos.current.get(jobName);
-    if (!track) return;
+    const t = seguimiento.current.get(jobName);
     if (
-      track.envio.eventos.at(-1)?.estado === estado &&
-      track.envio.eventos.at(-1)?.detalle === detalle
+      !t ||
+      (t.envio.eventos.at(-1)?.estado === estado &&
+        t.envio.eventos.at(-1)?.detalle === detalle)
     )
       return;
     const fecha = new Date().toISOString();
-    track.envio = {
-      ...track.envio,
-      estado: estadoDocumentoSiguiente(track.envio.estado, estado),
+    t.envio = {
+      ...t.envio,
+      estado: estadoDocumentoSiguiente(t.envio.estado, estado),
       actualizadoEl: fecha,
-      eventos: [...track.envio.eventos.slice(-39), { estado, detalle, fecha }],
+      eventos: [...t.envio.eventos.slice(-39), { estado, detalle, fecha }],
     };
-    actualizarEnvio(track.ordenId, track.envio);
-    // Ordena los mensajes del navegador: un ACK tardío no pisa PRINTING/COMPLETE.
+    actualizarEnvio(t.ordenId, t.envio);
+    const id = t.envio.id;
     escrituras.current = escrituras.current.then(async () => {
       try {
-        await registrarEstadoDocumento(
-          track.ordenId,
-          track.envio.id,
-          estado,
-          detalle,
-        );
+        await registrarEstadoDocumento(t.ordenId, id, estado, detalle);
       } catch {
         if (vivos.current)
           setGuardadoError(
-            "No se pudo guardar una actualización. El estado visible sigue en esta pestaña; revisá la cola antes de reimprimir.",
+            "No se pudo guardar una actualización. Revisá la cola antes de reenviar; el estado visible se conserva en esta pestaña.",
           );
       }
     });
   }
-  async function conectar(destino: ImpresoraPuesto) {
-    const clave = `${destino.host}:${destino.impresora}`;
-    if (escucha.current?.destino === clave) return;
-    escucha.current?.handle.cerrar();
-    escucha.current = null;
-    setConectado(false);
+  async function conectar(t: TrabajoCola) {
+    const destino = maquinaTrabajo(t);
+    if (!destino) throw new Error("Revisá el destino del trabajo.");
+    const destinos = [
+      ...new Map(
+        trabajosDeVistas(vistasRef.current)
+          .map(maquinaTrabajo)
+          .filter((d) => d?.host === destino.host)
+          .map((d) => [d!.impresora, d!]),
+      ).values(),
+    ];
+    const impresoras = destinos.map((d) => d.impresora).sort();
+    const clave = `${destino.host}:${impresoras.join("|")}`;
+    if (monitor.current?.clave === clave) return;
+    await monitor.current?.handle.cerrar();
+    monitor.current = null;
+    setConexiones([]);
     const handle = await escucharImpresora(
       tenantId,
       destino,
       (dato) => {
-        const evento = eventoImpresora(
-          dato,
-          destino.impresora,
-          new Set(trabajos.current.keys()),
-        );
-        if (!evento || !vivos.current) return;
-        if (evento.tipo === "PRINTER") {
-          setAvisoImpresora(evento.estado === "OK" ? "" : evento.detalle);
-        } else {
-          const estado = estadoDocumentoQz(evento.estado);
-          if (estado) registrar(evento.jobName, estado, evento.detalle);
+        for (const d of destinos) {
+          const ev = eventoImpresora(
+            dato,
+            d.impresora,
+            new Set(seguimiento.current.keys()),
+          );
+          if (!ev || !vivos.current) continue;
+          if (ev.tipo === "PRINTER")
+            setAvisos((a) => ({
+              ...a,
+              [d.maquinaId]: ev.estado === "OK" ? "" : ev.detalle,
+            }));
+          else {
+            const estado = estadoDocumentoQz(ev.estado);
+            if (estado) registrar(ev.jobName, estado, ev.detalle);
+          }
         }
       },
       () => {
-        escucha.current = null;
+        monitor.current = null;
         if (vivos.current) {
-          setConectado(false);
-          setAvisoImpresora(
-            "Se perdió la conexión. Windows puede seguir imprimiendo; los envíos no se repiten.",
+          setConexiones([]);
+          setMensaje(
+            "Seguimiento desconectado. Los envíos guardados no se repiten.",
           );
         }
       },
+      impresoras,
     );
     if (!vivos.current) {
-      handle.cerrar();
+      void handle.cerrar();
       return;
     }
-    escucha.current = { destino: clave, handle };
-    setConectado(true);
+    monitor.current = { clave, handle };
+    setConexiones(destinos.map((d) => `${d.host}:${d.impresora}`));
   }
-  async function enviar(
-    v: VistaDocumentos,
-    destino: ImpresoraPuesto,
-    ids: string[],
-    anterior?: EnvioDocumento,
-  ) {
-    if (ocupadoRef.current || !puedeImprimir || !ids.length) return;
+  async function enviarUno(t: TrabajoCola, anterior?: EnvioDocumento) {
+    const perfil = t.doc.ruta.perfil;
+    if (!perfil || t.doc.motivo || t.doc.ruta.estado !== "LISTO")
+      throw new Error(t.doc.motivo ?? "El trabajo requiere preparación.");
+    await conectar(t);
+    setEnviando(t.clave);
+    setMensaje(`Enviando a ${perfil.bandeja.destino.nombre}`);
+    let preparado: EnvioDocumento | undefined;
+    try {
+      const e = await imprimirDocumentoOrden(
+        tenantId,
+        {
+          ...perfil.bandeja.destino,
+          perfilId: perfil.id,
+          revisionPerfil: revisionPerfil(perfil),
+        },
+        t.ordenId,
+        t.doc.itemId,
+        crypto.randomUUID(),
+        anterior?.id,
+        (envio) => {
+          preparado = envio;
+          seguimiento.current.set(envio.jobName, { ordenId: t.ordenId, envio });
+          actualizarEnvio(t.ordenId, envio);
+        },
+        t.doc.paginaCad?.pagina,
+      );
+      registrar(e.jobName, "ENVIADO", "QZ confirmó el envío a Windows.");
+      await escrituras.current;
+    } catch (e) {
+      if (preparado)
+        registrar(
+          preparado.jobName,
+          "SIN_CONFIRMAR",
+          "No se pudo confirmar el envío. Revisar la cola antes de reimprimir.",
+        );
+      throw e;
+    } finally {
+      setEnviando(null);
+    }
+  }
+  async function despachar(claves?: Set<string>, reimpresion?: TrabajoCola) {
+    if (!puedeImprimir || ocupadoRef.current) return;
     ocupadoRef.current = true;
     setOcupado(true);
     setError("");
     setReimprimir(null);
+    const fallidas = new Set<string>();
+    const errores: string[] = [];
+    let enviados = 0;
     try {
-      setAvance("Conectando con el equipo de impresión…");
-      await conectar(destino);
-      for (const [indice, id] of ids.entries()) {
-        if (!vivos.current) break;
-        const doc = v.documentos.find((d) => d.itemId === id)!;
-        setAvance(`Enviando ${indice + 1} de ${ids.length} · ${doc.nombre}`);
-        let preparado: EnvioDocumento | null = null;
-        try {
-          const enviado = await imprimirDocumentoOrden(
-            tenantId,
-            destino,
-            v.ordenId,
-            id,
-            crypto.randomUUID(),
-            anterior?.id,
-            (envio) => {
-              preparado = envio;
-              trabajos.current.set(envio.jobName, {
-                ordenId: v.ordenId,
-                envio,
-              });
-              actualizarEnvio(v.ordenId, envio);
-            },
+      if (reimpresion) {
+        await enviarUno(reimpresion, reimpresion.envio);
+        enviados++;
+      } else {
+        while (vivos.current) {
+          const ronda = siguientesEnvios(
+            trabajosDeVistas(vistasRef.current),
+          ).filter(
+            (t) =>
+              (!claves || claves.has(t.clave)) &&
+              !fallidas.has(maquinaTrabajo(t)?.maquinaId ?? ""),
           );
-          registrar(
-            enviado.jobName,
-            "ENVIADO",
-            "QZ confirmó el envío a Windows.",
-          );
-        } catch (e) {
-          // Incluso una respuesta HTTP perdida puede haber reservado el intento.
-          const incierto = preparado as EnvioDocumento | null;
-          if (incierto)
-            registrar(
-              incierto.jobName,
-              "SIN_CONFIRMAR",
-              "No se pudo confirmar el envío. Revisar la cola antes de reimprimir.",
-            );
-          throw e;
+          if (!ronda.length) break;
+          for (const t of ronda) {
+            if (!vivos.current) break;
+            try {
+              await enviarUno(t);
+              enviados++;
+            } catch (e) {
+              fallidas.add(maquinaTrabajo(t)?.maquinaId ?? "");
+              errores.push(
+                `${maquinaTrabajo(t)?.nombre}: ${e instanceof Error ? e.message : "No se pudo enviar."}`,
+              );
+            }
+          }
         }
       }
-      setAvance(
-        "Envíos terminados. Esperando los estados de la cola de Windows.",
+      setMensaje(
+        enviados
+          ? `${enviados} envíos realizados. Podés seguir trabajando.`
+          : "Los pendientes esperan preparación o revisión.",
       );
+      if (errores.length) setError(errores.join(" "));
     } catch (e) {
-      setAvance("");
-      setError(
-        `${e instanceof Error ? e.message : "No se pudo enviar."} La OT está guardada. Revisá la cola antes de reintentar; los documentos restantes no se enviaron.`,
-      );
+      setError(e instanceof Error ? e.message : "No se pudo enviar.");
+    } finally {
       await escrituras.current;
       try {
-        mostrar(await getDocumentosOrden(v.ordenId));
+        await cargar();
       } catch {
-        /* conservar vista y error */
+        /* conservar estado visible y pendientes guardados */
       }
-    } finally {
       ocupadoRef.current = false;
       if (vivos.current) setOcupado(false);
-      const siguiente = ordenesPendientes.current.shift();
-      if (siguiente && vivos.current) void abrir(siguiente, true);
+      const proxima = abrirPendiente.current.shift();
+      if (proxima && vivos.current) void abrir(proxima, true);
     }
   }
   async function abrir(id: string, autoEnviar = false) {
     setAbierto(true);
-    if (ocupadoRef.current) {
-      if (autoEnviar && id !== vistaRef.current?.ordenId) {
-        if (!ordenesPendientes.current.includes(id))
-          ordenesPendientes.current.push(id);
-        toast.info(
-          "La OT está guardada. Sus documentos se enviarán cuando termine el envío actual.",
+    if (puedeImprimir) {
+      // La intención se persiste inmediatamente, incluso si otro envío está activo.
+      try {
+        await solicitarImpresionOrden(id);
+      } catch (e) {
+        setError(
+          `La OT está guardada, pero no pudimos agregarla a la cola: ${e instanceof Error ? e.message : "volvé a intentar desde la OT."}`,
         );
         return;
       }
-      toast.info("Esperá a que termine el envío actual para abrir otra orden.");
+    }
+    if (ocupadoRef.current) {
+      if (autoEnviar && !abrirPendiente.current.includes(id))
+        abrirPendiente.current.push(id);
       return;
     }
-    const revision = ++carga.current;
-    if (vistaRef.current?.ordenId !== id) {
-      vistaRef.current = null;
-      setVista(null);
-      setConfig(null);
-    }
-    setCargando(true);
+    foco.current = id;
     setError("");
-    setReimprimir(null);
-    setAvance("");
+    setSeleccionados([]);
+    setSeleccionandoSalidas(false);
+    setEnviosSeleccionados([]);
+    setMensaje("");
     try {
-      const v = await getDocumentosOrden(id);
-      if (revision !== carga.current || !vivos.current) return;
-      const destino = leerImpresora(tenantId, "documentos");
-      mostrar(v);
-      setConfig(destino);
-      setConfigurando(!destino.impresora);
-      if (autoEnviar && destino.impresora)
-        await enviar(
-          v,
-          destino,
-          v.documentos
-            .filter(
-              (d) =>
-                !d.motivo && !v.historial.some((e) => e.itemId === d.itemId),
-            )
-            .map((d) => d.itemId),
+      await cargar();
+      if (autoEnviar)
+        await despachar(
+          new Set(
+            trabajosDeVistas(vistasRef.current)
+              .filter((t) => t.ordenId === id)
+              .map((t) => t.clave),
+          ),
         );
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "No se pudo cargar la impresión.",
-      );
-    } finally {
-      if (revision === carga.current) setCargando(false);
+      setError(e instanceof Error ? e.message : "No se pudo cargar la cola.");
     }
   }
-  async function actualizar() {
-    const v = vistaRef.current;
-    if (!v || ocupadoRef.current) return;
-    setError("");
-    setCargando(true);
-    const revision = ++carga.current;
-    try {
-      await escrituras.current;
-      const actual = await getDocumentosOrden(v.ordenId);
-      if (revision === carga.current && vivos.current) mostrar(actual);
-    } catch (e) {
-      if (revision === carga.current)
-        setError(e instanceof Error ? e.message : "No se pudo actualizar.");
-    } finally {
-      if (revision === carga.current) setCargando(false);
-    }
-  }
-  async function reconectar() {
-    if (!config || !vista || ocupadoRef.current) return;
-    setError("");
-    setCargando(true);
-    for (const envio of vista.historial)
-      if (envio.host === config.host && envio.impresora === config.impresora)
-        trabajos.current.set(envio.jobName, { ordenId: vista.ordenId, envio });
-    try {
-      await conectar(config);
-      await escucha.current?.handle.consultar();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo conectar.");
-    } finally {
-      setCargando(false);
-    }
-  }
-  async function confirmarImpresion() {
-    const v = vistaRef.current;
-    if (!v || ocupadoRef.current || cargando || !puedeImprimir) return;
-    const ultimos = v.documentos.map((d) =>
-      v.historial.find((e) => e.itemId === d.itemId),
-    );
-    if (!ultimos.length || ultimos.some((e) => !e)) return;
+  async function accion(fn: () => Promise<void>) {
+    if (ocupadoRef.current) return;
     ocupadoRef.current = true;
-    setConfirmando(true);
+    setOcupado(true);
     setError("");
     try {
-      await escrituras.current;
-      await confirmarDocumentosImpresos(
-        v.ordenId,
-        ultimos.map((e) => e!.id),
-      );
-      // Finaliza sólo el seguimiento de esta OT; otras órdenes conservan su cola.
-      for (const [jobName, track] of trabajos.current)
-        if (track.ordenId === v.ordenId) trabajos.current.delete(jobName);
-      if (!trabajos.current.size) {
-        escucha.current?.handle.cerrar();
-        escucha.current = null;
-        setConectado(false);
-      }
-      ++carga.current;
-      vistaRef.current = null;
-      setVista(null);
-      setAbierto(false);
-      setReimprimir(null);
-      setAvance("");
-      setAvisoImpresora("");
-      setGuardadoError("");
-      toast.success(`Impresión confirmada · ${v.numero}`);
+      await fn();
     } catch (e) {
       setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudo guardar la confirmación. Volvé a intentarlo.",
+        e instanceof Error ? e.message : "No se pudo completar la acción.",
       );
     } finally {
       ocupadoRef.current = false;
-      if (vivos.current) setConfirmando(false);
-      const siguiente = ordenesPendientes.current.shift();
-      if (siguiente && vivos.current) void abrir(siguiente, true);
+      if (vivos.current) setOcupado(false);
     }
   }
-  const pendientes =
-    vista?.documentos.filter(
-      (d) => !d.motivo && !vista.historial.some((e) => e.itemId === d.itemId),
-    ) ?? [];
-  const ultimos =
-    vista?.documentos.map((d) =>
-      vista.historial.find((e) => e.itemId === d.itemId),
-    ) ?? [];
-  const todosEnviados = ultimos.length > 0 && ultimos.every(Boolean);
-  const todosConfirmados =
-    todosEnviados && ultimos.every((e) => e?.confirmacion);
-  const bloqueado = ocupado || confirmando;
-  // Los eventos de la cola no deben volver a renderizar toda la ficha comercial.
-  const abrirRef = useRef(abrir);
+  async function verificar(trabajos: TrabajoCola[]) {
+    if (!puedeImprimir) return;
+    const elegidos = trabajos.filter((t) => t.envio && !t.envio.confirmacion);
+    if (!elegidos.length) return;
+    await accion(async () => {
+      await escrituras.current;
+      const fallos: string[] = [];
+      let confirmados = 0;
+      for (const ordenId of new Set(elegidos.map((t) => t.ordenId))) {
+        const grupo = elegidos.filter((t) => t.ordenId === ordenId);
+        let guardados = false;
+        // La API valida el último intento y guarda cada lote de la OT atómicamente.
+        for (let inicio = 0; inicio < grupo.length; inicio += 500) {
+          const lote = grupo.slice(inicio, inicio + 500);
+          const ids = lote.map((t) => t.envio!.id);
+          try {
+            await confirmarDocumentosImpresos(ordenId, ids);
+            guardados = true;
+            confirmados += lote.length;
+            for (const t of lote) seguimiento.current.delete(t.envio!.jobName);
+            setEnviosSeleccionados((actuales) =>
+              actuales.filter((id) => !ids.includes(id)),
+            );
+          } catch (e) {
+            fallos.push(
+              `${grupo[0].numero}: ${e instanceof Error ? e.message : "No se pudo guardar la verificación."}`,
+            );
+          }
+        }
+        if (guardados) {
+          try {
+            incorporar(await getDocumentosOrden(ordenId));
+          } catch {
+            fallos.push(
+              `${grupo[0].numero}: la verificación se guardó. Actualizá para ver el resultado.`,
+            );
+          }
+        }
+      }
+      if (confirmados) {
+        setTotal((actual) => Math.max(0, actual - confirmados));
+        toast.success(
+          `${confirmados} ${confirmados === 1 ? "salida verificada" : "salidas verificadas"}`,
+        );
+      }
+      if (confirmados === elegidos.length) setSeleccionandoSalidas(false);
+      if (fallos.length) setError(fallos.join(" "));
+    });
+  }
+  async function preparar() {
+    const ts = trabajosDeVistas(vistasRef.current).filter((t) =>
+      seleccionados.includes(t.clave),
+    );
+    const p = ts[0]?.doc.ruta.perfil;
+    if (!p || !puedeImprimir) return;
+    let liberado = false;
+    await accion(async () => {
+      const grupos = [...new Set(ts.map((t) => t.ordenId))].map((ordenId) => ({
+        ordenId,
+        trabajos: ts.filter((t) => t.ordenId === ordenId).map((t) => t.clave),
+      }));
+      await liberarLoteImpresion(grupos, p.id, revisionPerfil(p));
+      await cargar();
+      setSeleccionados([]);
+      liberado = true;
+    });
+    if (liberado) await despachar(new Set(ts.map((t) => t.clave)));
+  }
+  // El proveedor permanece montado al navegar. Recargar recupera pendientes,
+  // pero no dispara automáticamente envíos ni reconexiones a equipos remotos.
+  const cargarRef = useRef(cargar);
+  cargarRef.current = cargar;
   useEffect(() => {
-    abrirRef.current = abrir;
-  });
+    vivos.current = true;
+    if (puedeVer || puedeImprimir) void cargarRef.current().catch(() => {});
+    return () => {
+      vivos.current = false;
+      void monitor.current?.handle.cerrar();
+    };
+  }, [tenantId, puedeVer, puedeImprimir]);
+  const abrirRef = useRef(abrir);
+  abrirRef.current = abrir;
   const contexto = useMemo(
     () => ({
       tenantId,
@@ -418,82 +492,40 @@ export function DocumentosImpresionProvider({
     }),
     [tenantId],
   );
+  const trabajos = trabajosDeVistas(vistas);
   return (
     <Contexto.Provider value={contexto}>
       {children}
       <DesignSystemProvider theme="brand" appearance="light">
-        {vista && !abierto && (
-          <div className={s.widget} data-ui="heroui" data-appearance="light">
-            <ActionButton
-              size="md"
-              tone="neutral"
-              className={s.widgetButton}
-              onPress={() => setAbierto(true)}
-            >
-              <Printer data-icon="inline-start" />
-              {ocupado
-                ? "Enviando documentos…"
-                : error || avisoImpresora || guardadoError
-                  ? `Revisar impresión · ${vista.numero}`
-                  : `Impresión · ${vista.numero}`}
-              <ArrowUpRight data-icon="inline-end" />
-            </ActionButton>
-          </div>
+        {(puedeVer || puedeImprimir) && !abierto && (
+          <AsistenteImpresionMinimizado
+            total={total}
+            ocupado={!!enviando}
+            requiereAtencion={
+              !!error ||
+              !!guardadoError ||
+              trabajos.some(
+                (t) =>
+                  (!t.envio && t.doc.ruta.estado !== "LISTO") ||
+                  (t.envio &&
+                    !t.envio.confirmacion &&
+                    REVISAR_ENVIO.has(t.envio.estado)),
+              )
+            }
+            onAbrir={() => {
+              setAbierto(true);
+              if (!ocupadoRef.current) void accion(() => cargar());
+            }}
+          />
         )}
         <FormDialog
           isOpen={abierto}
           onOpenChange={setAbierto}
-          isDismissable={!confirmando}
-          title="Impresión de documentos"
-          description={
-            vista
-              ? `${vista.numero} · A4 · Blanco y negro`
-              : "Cargando los documentos de la orden…"
-          }
+          title="Asistente de impresión"
+          description="Grafo organiza los archivos y acompaña cada envío."
           className={s.dialog}
         >
           <div className={s.body}>
-            {cargando && !vista && <p role="status">Cargando documentos…</p>}
-            {config && configurando && (
-              <ImpresoraPuestoForm
-                uso="documentos"
-                tenantId={tenantId}
-                inicial={config}
-                disabled={bloqueado || !puedeImprimir}
-                onGuardar={(c) => {
-                  setConfig(c);
-                  setConfigurando(false);
-                }}
-              />
-            )}
-            {config?.impresora && !configurando && (
-              <div className={s.destino}>
-                <div>
-                  <strong>{config.impresora}</strong>
-                  <p>
-                    {config.host} ·{" "}
-                    {conectado &&
-                    escucha.current?.destino ===
-                      `${config.host}:${config.impresora}`
-                      ? "Seguimiento conectado"
-                      : "Último estado registrado"}
-                  </p>
-                </div>
-                <ActionButton
-                  variant="tertiary"
-                  isDisabled={bloqueado}
-                  onPress={() => setConfigurando(true)}
-                >
-                  <Settings2 data-icon="inline-start" />
-                  Cambiar
-                </ActionButton>
-              </div>
-            )}
-            {avisoImpresora && (
-              <Alert>
-                <AlertDescription>{avisoImpresora}</AlertDescription>
-              </Alert>
-            )}
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -504,151 +536,58 @@ export function DocumentosImpresionProvider({
                 <AlertDescription>{guardadoError}</AlertDescription>
               </Alert>
             )}
-            {avance && (
-              <p role="status" className={s.avance}>
-                {avance}
-              </p>
-            )}
-            {vista && !vista.documentos.length && (
-              <p>No hay documentos de centro de copiado en esta orden.</p>
-            )}
-            <div className={s.lista}>
-              {vista?.documentos.map((doc) => {
-                const envios = vista.historial.filter(
-                  (e) => e.itemId === doc.itemId,
-                );
-                const ultimo = envios[0];
-                const orientacion = ultimo?.orientacion ?? doc.orientacion;
-                return (
-                  <article className={s.documento} key={doc.itemId}>
-                    <div className={s.titulo}>
-                      <FileText aria-hidden="true" />
-                      <strong>{doc.nombre}</strong>
-                    </div>
-                    <p>
-                      {doc.paginas} páginas · {doc.copias}{" "}
-                      {doc.documentos > 1
-                        ? doc.copias === 1
-                          ? "juego"
-                          : "juegos"
-                        : doc.copias === 1
-                          ? "copia"
-                          : "copias"}{" "}
-                      ·{" "}
-                      {doc.faz === 2 ? "Doble faz · borde largo" : "Simple faz"}{" "}
-                      · {doc.hojas} hojas ·{" "}
-                      {orientacion
-                        ? ORIENTACION_PDF_LABELS[orientacion]
-                        : "Orientación automática"}
-                    </p>
-                    {doc.seleccionPaginas?.map((seleccion, i) => (
-                      <p key={i}>
-                        {doc.documentos > 1 ? `${seleccion.nombre} · ` : ""}
-                        Páginas {seleccion.rango} de{" "}
-                        {seleccion.paginasOriginales}
-                      </p>
-                    ))}
-                    <div className={s.acciones}>
-                      <Badge
-                        variant={
-                          !ultimo?.confirmacion &&
-                          (doc.motivo ||
-                            (ultimo &&
-                              ["ERROR", "SIN_CONFIRMAR", "PREPARADO"].includes(
-                                ultimo.estado,
-                              )))
-                            ? "outline"
-                            : "secondary"
-                        }
-                      >
-                        {ultimo?.confirmacion
-                          ? "Impresión verificada"
-                          : ultimo
-                            ? textoEstadoDocumento[ultimo.estado]
-                            : doc.motivo
-                              ? "Impresión pendiente"
-                              : "Listo para enviar"}
-                      </Badge>
-                      {ultimo && !doc.motivo && puedeImprimir && (
-                        <ActionButton
-                          variant="tertiary"
-                          isDisabled={
-                            bloqueado ||
-                            cargando ||
-                            !config?.impresora ||
-                            configurando
-                          }
-                          onPress={() => setReimprimir(ultimo)}
-                        >
-                          Reimprimir
-                        </ActionButton>
-                      )}
-                    </div>
-                    {doc.motivo && <p className={s.motivo}>{doc.motivo}</p>}
-                    {envios.length > 0 && (
-                      <details className={s.historial}>
-                        <summary>
-                          {envios.length} envío{envios.length > 1 ? "s" : ""} ·
-                          Ver historial
-                        </summary>
-                        {envios.map((e) => (
-                          <section key={e.id}>
-                            <strong>{textoEstadoDocumento[e.estado]}</strong>
-                            <p>
-                              {new Date(e.fecha).toLocaleString()} · {e.usuario}
-                              <br />
-                              {e.impresora} · {e.copias} copias
-                            </p>
-                            {e.eventos.map((ev, i) => (
-                              <p key={i}>
-                                {new Date(ev.fecha).toLocaleTimeString()} ·{" "}
-                                {ev.detalle}
-                              </p>
-                            ))}
-                            {e.confirmacion && (
-                              <p>
-                                Impresión verificada por{" "}
-                                {e.confirmacion.usuario} ·{" "}
-                                {new Date(
-                                  e.confirmacion.fecha,
-                                ).toLocaleString()}
-                              </p>
-                            )}
-                          </section>
-                        ))}
-                      </details>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
+            <ColasImpresionPanel
+              trabajos={trabajos}
+              enviando={enviando}
+              mensaje={mensaje}
+              bloqueado={ocupado}
+              puedeImprimir={puedeImprimir}
+              seleccionados={seleccionados}
+              setSeleccionados={setSeleccionados}
+              onVerificar={(t) => void verificar([t])}
+              seleccionandoSalidas={seleccionandoSalidas}
+              setSeleccionandoSalidas={setSeleccionandoSalidas}
+              enviosSeleccionados={enviosSeleccionados}
+              setEnviosSeleccionados={setEnviosSeleccionados}
+              onVerificarSeleccion={() =>
+                void verificar(
+                  trabajos.filter(
+                    (t) =>
+                      admiteVerificacionMultiple(t) &&
+                      enviosSeleccionados.includes(t.envio!.id),
+                  ),
+                )
+              }
+              onReimprimir={setReimprimir}
+              onPreparar={() => void preparar()}
+              onEnviar={() => void despachar()}
+              onSeguir={(t) =>
+                void accion(async () => {
+                  await conectar(t);
+                  await monitor.current?.handle.consultar();
+                })
+              }
+              conexiones={conexiones}
+              avisos={avisos}
+            />
             {reimprimir && (
               <Alert>
                 <AlertDescription>
                   <p>
-                    Se enviarán nuevamente las {reimprimir.copias} copias de{" "}
-                    <strong>{reimprimir.nombre}</strong>. Revisá la salida y la
-                    cola para evitar duplicados.
+                    Se volverán a enviar {reimprimir.doc.copias} copias de{" "}
+                    <strong>{reimprimir.doc.nombre}</strong>. Revisá la salida y
+                    la cola de la impresora antes de confirmar.
                   </p>
                   <div className={s.acciones}>
                     <ActionButton
                       variant="outline"
-                      isDisabled={bloqueado}
                       onPress={() => setReimprimir(null)}
                     >
                       Volver
                     </ActionButton>
                     <ActionButton
-                      isDisabled={bloqueado || !config}
-                      onPress={() => {
-                        if (vista && config)
-                          void enviar(
-                            vista,
-                            config,
-                            [reimprimir.itemId],
-                            reimprimir,
-                          );
-                      }}
+                      isDisabled={ocupado}
+                      onPress={() => void despachar(undefined, reimprimir)}
                     >
                       Confirmar reimpresión
                     </ActionButton>
@@ -656,113 +595,34 @@ export function DocumentosImpresionProvider({
                 </AlertDescription>
               </Alert>
             )}
-            <p className={s.nota}>
-              La cola informa lo que reporta Windows. La salida física depende
-              de la impresora. Podés minimizar y seguir trabajando; si cerrás o
-              recargás esta pestaña se interrumpe el seguimiento, pero se
-              conserva el historial. La producción se completa desde el tablero.
-            </p>
+            {siguiente !== null && (
+              <ActionButton
+                variant="tertiary"
+                isDisabled={ocupado}
+                onPress={() => void accion(() => cargar(siguiente))}
+              >
+                Cargar más pendientes ({total})
+              </ActionButton>
+            )}
           </div>
-          <div className={s.herramientas}>
+          <footer className={s.footer}>
+            <span className={s.nota}>
+              La cola informa lo que reporta Windows. “Verifiqué la salida”
+              registra tu revisión; la producción se completa desde el tablero.
+            </span>
             <ActionButton
               variant="tertiary"
-              isDisabled={bloqueado || cargando}
-              onPress={() => void actualizar()}
+              isDisabled={ocupado}
+              onPress={() => void accion(() => cargar())}
             >
               <RefreshCw data-icon="inline-start" />
               Actualizar
             </ActionButton>
-            {!conectado && config?.impresora && puedeImprimir && (
-              <ActionButton
-                variant="outline"
-                isDisabled={bloqueado || cargando}
-                onPress={() => void reconectar()}
-              >
-                Conectar seguimiento
-              </ActionButton>
-            )}
-            {conectado && (
-              <ActionButton
-                variant="tertiary"
-                isDisabled={bloqueado}
-                onPress={() => {
-                  escucha.current?.handle.cerrar();
-                  escucha.current = null;
-                  setConectado(false);
-                  setAvisoImpresora(
-                    "Seguimiento detenido. Los trabajos enviados siguen en Windows.",
-                  );
-                }}
-              >
-                Desconectar seguimiento
-              </ActionButton>
-            )}
-          </div>
-          <div className={s.footer}>
-            {vista && ultimos.length > 0 && (
-              <p className={s.confirmacionNota}>
-                {todosConfirmados
-                  ? "La impresión ya fue verificada. Podés cerrar este panel."
-                  : todosEnviados
-                    ? "Cuando revises todas las copias, confirmá la impresión para guardar el registro y cerrar."
-                    : "Completá los documentos sin enviar antes de confirmar toda la impresión."}
-              </p>
-            )}
-            <ActionButton
-              variant="outline"
-              isDisabled={confirmando}
-              onPress={() => setAbierto(false)}
-            >
+            <ActionButton variant="outline" onPress={() => setAbierto(false)}>
               <Minus data-icon="inline-start" />
               Minimizar
             </ActionButton>
-            {puedeImprimir && (pendientes.length > 0 || ocupado) && (
-              <ActionButton
-                isDisabled={
-                  !pendientes.length ||
-                  bloqueado ||
-                  cargando ||
-                  !config?.impresora ||
-                  configurando ||
-                  !vista ||
-                  ["borrador", "cancelada"].includes(vista.estado)
-                }
-                onPress={() => {
-                  if (vista && config)
-                    void enviar(
-                      vista,
-                      config,
-                      pendientes.map((d) => d.itemId),
-                    );
-                }}
-              >
-                <Printer data-icon="inline-start" />
-                {ocupado
-                  ? "Enviando…"
-                  : `Enviar pendientes${pendientes.length ? ` (${pendientes.length})` : ""}`}
-              </ActionButton>
-            )}
-            {puedeImprimir && (
-              <ActionButton
-                isDisabled={
-                  !todosEnviados ||
-                  bloqueado ||
-                  cargando ||
-                  !!reimprimir ||
-                  !vista ||
-                  ["borrador", "cancelada"].includes(vista.estado)
-                }
-                onPress={() => void confirmarImpresion()}
-              >
-                <Check data-icon="inline-start" />
-                {confirmando
-                  ? "Guardando confirmación…"
-                  : todosConfirmados
-                    ? "Cerrar impresión"
-                    : "Todo impreso correctamente"}
-              </ActionButton>
-            )}
-          </div>
+          </footer>
         </FormDialog>
       </DesignSystemProvider>
     </Contexto.Provider>

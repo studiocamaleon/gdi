@@ -24,6 +24,22 @@ import {
   CENTRO_COPIADO_TIPOS_ANILLO,
 } from '../centro-copiado.domain';
 
+export class MedidaPaginaDto {
+  @IsNumber() @Min(0.01) @Max(100000) anchoMm!: number;
+  @IsNumber() @Min(0.01) @Max(100000) altoMm!: number;
+}
+
+export class SeleccionCadDto {
+  @IsUUID() perfilId!: string;
+  @IsInt() @Min(1) versionPerfil!: number;
+  @IsInt() @Min(1) versionDestino!: number;
+}
+
+export class CopiasPaginaCadDto {
+  @IsInt() @Min(1) @Max(100000) pagina!: number;
+  @IsInt() @Min(1) @Max(10000) copias!: number;
+}
+
 /**
  * Request del preview del TPV Centro de copiado (POST /centro-copiado/cotizar).
  * Cada documento llega ya resuelto (los "valores por defecto / aplicar a todos"
@@ -31,6 +47,24 @@ import {
  * tomo; los `grupos` traen los `juegos` del tomo.
  */
 export class DocumentoCentroCopiadoDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100000)
+  @ValidateNested({ each: true })
+  @Type(() => CopiasPaginaCadDto)
+  copiasPorPagina?: CopiasPaginaCadDto[];
+  @IsOptional() @IsIn(['HOJAS', 'CAD']) modo?: 'HOJAS' | 'CAD';
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SeleccionCadDto)
+  cad?: SeleccionCadDto;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100000)
+  @ValidateNested({ each: true })
+  @Type(() => MedidaPaginaDto)
+  medidasPaginas?: MedidaPaginaDto[];
+
   @IsString()
   @MaxLength(100)
   id!: string;

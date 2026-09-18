@@ -4992,10 +4992,7 @@ function PropuestaFichaContenido({
   const [items, setItems] = React.useState<PropuestaItem[]>(() =>
     orden ? orden.productos.map(rehidratarOrdenItem) : [],
   );
-  const documentosA4Bn = items.filter(item => {
-    const meta = metaCentroCopiado(item.jobContext);
-    return meta && (meta.esTomo ? meta.segmentos?.some(s => s.tamano === "A4" && s.color === "BN") : meta.tamano === "A4" && meta.color === "BN");
-  }).length;
+  const documentosCentroCopiado = items.filter(item => metaCentroCopiado(item.jobContext)).length;
 
   const [cargosOrden, setCargosOrden] = React.useState<PropuestaCargoDirecto[]>(
     () =>
@@ -7488,7 +7485,7 @@ function PropuestaFichaContenido({
                       tipo={ordenTipo}
                       clienteSeleccionado={Boolean(clienteId)}
                       empty={items.length === 0}
-                      onEmitir={() => documentosA4Bn ? setConfirmarEmisionDocumentos("nueva") : void emitirOrden()}
+                      onEmitir={() => documentosCentroCopiado ? setConfirmarEmisionDocumentos("nueva") : void emitirOrden()}
                       onEmitirPresupuesto={emitirPresupuestoCb}
                       emitiendo={emitiendo || emitiendoPresupuesto}
                       guardandoBorrador={guardandoBorrador}
@@ -7562,7 +7559,7 @@ function PropuestaFichaContenido({
                           type="button"
                           variant="primary"
                           size="sm"
-                          onPress={() => documentosA4Bn ? setConfirmarEmisionDocumentos("borrador") : void emitirBorrador()}
+                          onPress={() => documentosCentroCopiado ? setConfirmarEmisionDocumentos("borrador") : void emitirBorrador()}
                           isDisabled={
                             emitiendoBorrador ||
                             cambiosSinGuardar > 0 ||
@@ -8477,7 +8474,7 @@ function PropuestaFichaContenido({
 
         {confirmarEmisionDocumentos && (
           <EmisionDocumentosDialog
-            cantidad={documentosA4Bn}
+            items={items}
             onClose={() => setConfirmarEmisionDocumentos(null)}
             onEmitir={(imprimir) => {
               const modo = confirmarEmisionDocumentos;

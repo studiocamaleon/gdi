@@ -1,0 +1,10 @@
+ALTER TABLE "ImpresionBandeja" ADD COLUMN "tenantId" UUID;
+UPDATE "ImpresionBandeja" b SET "tenantId" = d."tenantId" FROM "ImpresionDestino" d WHERE b."destinoId" = d.id;
+ALTER TABLE "ImpresionBandeja" ALTER COLUMN "tenantId" SET NOT NULL;
+ALTER TABLE "ImpresionBandeja" ADD CONSTRAINT "ImpresionBandeja_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX "ImpresionBandeja_tenantId_idx" ON "ImpresionBandeja"("tenantId");
+ALTER TABLE "ImpresionPerfil" ADD COLUMN "tenantId" UUID;
+UPDATE "ImpresionPerfil" p SET "tenantId" = b."tenantId" FROM "ImpresionBandeja" b WHERE p."bandejaId" = b.id;
+ALTER TABLE "ImpresionPerfil" ALTER COLUMN "tenantId" SET NOT NULL;
+ALTER TABLE "ImpresionPerfil" ADD CONSTRAINT "ImpresionPerfil_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX "ImpresionPerfil_tenantId_idx" ON "ImpresionPerfil"("tenantId");

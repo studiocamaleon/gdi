@@ -1,5 +1,10 @@
 /** Contrato de impresión derivado exclusivamente del snapshot cotizado. */
+import {
+  planDocumentoCad,
+  type PaginaCadImprimible,
+} from './documento-cad.domain';
 import { errorPaginasDocumento } from '../common/rangos-paginas';
+import type { ConfiguracionDocumento } from './perfiles-impresion.domain';
 import {
   errorOrientacionesDocumento,
   orientacionesSeleccionadas,
@@ -17,6 +22,8 @@ export type SegmentoImprimible = {
   faz: 1 | 2;
 };
 export type PlanDocumento = {
+  paginasCad?: PaginaCadImprimible[];
+  configuracion: ConfiguracionDocumento;
   nombre: string;
   copias: number;
   paginas: number;
@@ -37,6 +44,7 @@ function texto(valor: unknown, fallback: string): string {
 export function planDocumento(job: unknown): PlanDocumento | null {
   const meta = objeto(objeto(job)._centroCopiado);
   if (!Object.keys(meta).length) return null;
+  if (meta.modo === 'CAD') return planDocumentoCad(meta);
   const segmentos = meta.esTomo
     ? Array.isArray(meta.segmentos)
       ? meta.segmentos.map(objeto)
@@ -47,19 +55,23 @@ export function planDocumento(job: unknown): PlanDocumento | null {
   let motivo: string | null = null;
   if (
     !segmentos.length ||
-    segmentos.some((s) => s.tamano !== 'A4' || s.color !== 'BN')
+    segmentos.some(
+      (s) => s.tamano !== 'A4' || !['BN', 'COLOR'].includes(String(s.color)),
+    )
   )
-    motivo = 'La impresión directa admite documentos en A4 blanco y negro.';
+    motivo =
+      'La impresión directa admite documentos en A4, en blanco y negro o color.';
   else if (
     segmentos.some(
       (s) =>
         s.faz !== faz ||
+        s.color !== segmentos[0].color ||
         s.papelMateriaPrimaId !== segmentos[0].papelMateriaPrimaId ||
         s.gramaje !== segmentos[0].gramaje,
     )
   )
     motivo =
-      'El tomo combina papeles o caras diferentes; requiere impresión manual.';
+      'El tomo combina papeles, color o caras diferentes; requiere impresión manual.';
   else if (
     !Number.isSafeInteger(copias) ||
     copias < 1 ||
@@ -107,6 +119,15 @@ export function planDocumento(job: unknown): PlanDocumento | null {
     motivo =
       'Las hojas guardadas no coinciden con copias completas. Volvé a cotizar este documento.';
   return {
+    configuracion: {
+      papelMateriaPrimaId: texto(segmentos[0]?.papelMateriaPrimaId, ''),
+      papelNombre: texto(meta.papelLabel, ''),
+      gramaje:
+        segmentos[0]?.gramaje == null ? null : Number(segmentos[0].gramaje),
+      tamano: texto(segmentos[0]?.tamano, ''),
+      color: texto(segmentos[0]?.color, ''),
+      faz,
+    },
     nombre: meta.esTomo
       ? texto(meta.tomoNombre, 'Tomo')
       : texto(meta.nombre, 'Documento'),

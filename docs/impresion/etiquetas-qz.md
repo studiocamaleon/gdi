@@ -1,5 +1,7 @@
 # Etiquetas de órdenes con QZ Tray
 
+Evolución propuesta para documentos, perfiles de impresora, preparación de papel y onboarding: [Plan de impresión operativa](plan-impresion-operativa.md). Es un documento de planificación; el comportamiento disponible se describe a continuación.
+
 ## Uso
 
 - Configuración → Impresoras: equipo con QZ, buscar cola y guardar. La selección se guarda **por tenant en ese navegador**, sin cambiar otros puestos.
@@ -77,7 +79,7 @@ Secuencia de prueba: una copia simple faz (2 hojas), una copia doble faz (1 hoja
 
 ### Alcance
 
-PDF A4 B/N, simple o doble faz por borde largo, hasta 25 MB de originales por ítem, 2.000 páginas seleccionadas por documento y 999 copias. Se validan páginas reales contra el snapshot. Los tomos con mismo papel/gramaje/faz se unen en orden, insertando un dorso vacío después de segmentos con una cantidad impar de páginas seleccionadas. Un tomo mixto o producto distribuido en entregas requiere impresión manual. El papel se prepara en la Ricoh; esta versión no selecciona bandejas por gramaje ni ejecuta terminaciones.
+El piloto original era PDF A4 B/N. El flujo vigente admite **A4 B/N y Color** mediante perfiles compartidos por empresa, con destino, bandeja, material, gramaje, color y faz probados. Admite simple o doble faz por borde largo, hasta 25 MB de originales por ítem, 2.000 páginas seleccionadas por documento y 999 copias. Se validan páginas reales contra el snapshot. Los tomos con mismo papel/gramaje/color/faz se unen en orden, insertando un dorso vacío después de segmentos con una cantidad impar de páginas seleccionadas. Un tomo mixto o producto distribuido en entregas requiere impresión manual. Cada impresora se vincula a su máquina y cada perfil automático exige papel confirmado; las terminaciones no se ejecutan desde QZ. Ver [plan vigente](plan-impresion-operativa.md).
 
 ### Rangos de páginas del Centro de copiado
 

@@ -105,7 +105,7 @@
   font-size: 12px;
 }
 .settings {
-  max-width: 700px;
+  max-width: 1200px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -158,4 +158,8 @@
 .eventRow[data-severity="ERROR"] strong,
 .eventRow[data-severity="FATAL"] strong {
   color: var(--danger);
+}
+
+.settings > .setup {
+  max-width: 700px;
 }

@@ -1,3 +1,6 @@
+import { CentroCopiadoCadService } from './centro-copiado-cad.service';
+import { errorMedidasDocumento } from '../common/medidas-documento';
+import { errorCopiasPorPagina } from '../common/copias-paginas-cad';
 import { errorOrientacionesDocumento } from '../common/orientacion-pdf';
 import { monedaCotizacionContext } from '../cotizaciones/material-moneda-context';
 import {
@@ -320,7 +323,12 @@ export class CentroCopiadoService {
     private readonly motor: MotorUniversalService,
     private readonly auditoria?: CentroCopiadoAuditoriaService,
     private readonly idempotencia?: CentroCopiadoIdempotenciaService,
+    private readonly cad?: CentroCopiadoCadService,
   ) {}
+
+  opcionesCad(tenantId: string) {
+    return this.cad!.opciones(tenantId);
+  }
 
   /**
    * Opciones para el modal: TIPOS de papel + gramajes + las variantes (formato y
@@ -1338,9 +1346,18 @@ export class CentroCopiadoService {
 
     for (const doc of dto.documentos) {
       const errorPaginas =
-        errorPaginasDocumento(doc) || errorOrientacionesDocumento(doc);
+        errorPaginasDocumento(doc) ||
+        errorOrientacionesDocumento(doc) ||
+        errorMedidasDocumento(doc) ||
+        errorCopiasPorPagina(doc);
       if (errorPaginas) {
-        throw new BadRequestException(`${doc.nombre ?? doc.id}: ${errorPaginas}`);
+        throw new BadRequestException(
+          `${doc.nombre ?? doc.id}: ${errorPaginas}`,
+        );
+      }
+      if (doc.modo === 'CAD') {
+        this.cad!.validar(doc);
+        continue;
       }
       const formato = CENTRO_COPIADO_FORMATOS.find(
         (candidato) => candidato.nombre === doc.tamano,
@@ -1907,6 +1924,8 @@ export class CentroCopiadoService {
       dto.documentos.map((doc) => {
         const grupo = doc.grupoId ? gruposById.get(doc.grupoId) : undefined;
         const copias = grupo ? grupo.juegos : doc.copias;
+        if (doc.modo === 'CAD')
+          return this.cad!.cotizar(tenantId, doc, periodo, dto.clienteId);
         return this.cotizarDocumento(
           tenantId,
           doc as DocumentoInput,
@@ -2312,6 +2331,41 @@ export class CentroCopiadoService {
     periodo: string | null,
     clienteId?: string,
   ): Promise<ItemAgregado> {
+    if (doc.modo === 'CAD') {
+      const item = await this.cad!.construir(
+        tenantId,
+        doc,
+        grupoCargaId,
+        periodo,
+        clienteId,
+      );
+      if (item.error) throw new BadRequestException(item.error);
+      const { result, cotizacionItemId } = await this.motor.cotizarYGuardar({
+        tenantId,
+        productoId: item.productoId,
+        rutaAlternativaId: item.cotizacion?.rutaAlternativaId,
+        clienteId,
+        cotizacionId,
+        periodo,
+        jobContext: item.jobContext as never,
+      });
+      const montos = result.cotizacion
+        ? this.extraerMontos(result.cotizacion)
+        : { subtotal: 0, iva: 0, total: 0 };
+      return {
+        documentoId: doc.id,
+        grupoTomoId: null,
+        nombre: item.nombre,
+        carillas: item.cantidad,
+        hojas: item.cantidad,
+        cotizacionItemId: cotizacionItemId ?? null,
+        ...montos,
+        error:
+          result.exitoso && cotizacionItemId
+            ? null
+            : (result.errores?.[0]?.mensaje ?? 'No se pudo guardar el plano.'),
+      };
+    }
     const p = this.prepararDoc(doc, ctx, grupo, grupoCargaId);
     const base = {
       documentoId: doc.id,
@@ -2388,6 +2442,18 @@ export class CentroCopiadoService {
     const emitidos = new Set<string>();
     const items: ItemConstruido[] = [];
     for (const doc of dto.documentos) {
+      if (doc.modo === 'CAD') {
+        items.push(
+          await this.cad!.construir(
+            tenantId,
+            doc,
+            grupoCargaId,
+            periodo,
+            dto.clienteId,
+          ),
+        );
+        continue;
+      }
       if (doc.grupoId) {
         if (emitidos.has(doc.grupoId)) continue;
         emitidos.add(doc.grupoId);

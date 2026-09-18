@@ -263,6 +263,25 @@ describe('firma de mensajes canónicos QZ', () => {
       servicio.escucharImpresora('Ricoh', timestamp + 120000),
     ).toThrow('venció');
   });
+  it('firma sólo printers.detail sin params, igual al SDK, y rechaza timestamps vencidos', () => {
+    const timestamp = Date.now();
+    const r = servicio.detallesImpresoras(timestamp);
+    const hash = createHash('sha256')
+      .update(JSON.stringify({ call: 'printers.detail', timestamp }))
+      .digest('hex');
+    expect(r.hash).toBe(hash);
+    expect(r.params).toBeUndefined();
+    expect(
+      verify(
+        'RSA-SHA512',
+        Buffer.from(hash),
+        certificado.publicKey,
+        Buffer.from(r.firma, 'base64'),
+      ),
+    ).toBe(true);
+    for (const invalido of [timestamp - 120000, timestamp + 120000, NaN, 1.5])
+      expect(() => servicio.detallesImpresoras(invalido)).toThrow('venció');
+  });
   it.each([true, false])(
     'prepara un PDF fijo A4 con dos páginas, dos copias y doble faz %s',
     (dobleFaz) => {

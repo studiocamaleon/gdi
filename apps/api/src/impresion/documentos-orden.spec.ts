@@ -1,3 +1,5 @@
+import { perfilPrueba } from './perfiles-impresion.fixture';
+import type { PerfilesImpresionService } from './perfiles-impresion.service';
 import { PDFDocument, degrees } from 'pdf-lib';
 import { orientacionPaginaPdf } from '../common/orientacion-pdf';
 import { DocumentosOrdenService } from './documentos-orden.service';
@@ -27,6 +29,11 @@ const meta = {
 const job = (value: object = meta) => ({ _centroCopiado: value });
 
 describe('plan de impresión cotizado', () => {
+  it('no convierte un CAD incompleto en un envío A4', () => {
+    expect(planDocumento(job({ ...meta, modo: 'CAD' }))?.motivo).toBe(
+      'Faltan las medidas o el perfil CAD cotizado. Volvé a cotizar el plano.',
+    );
+  });
   it('resume las páginas seleccionadas y conserva la orientación de cada original', () => {
     const orientacionesPaginas = ['vertical', 'horizontal', 'horizontal'];
     expect(planDocumento(job())?.orientacion).toBeNull();
@@ -70,7 +77,7 @@ describe('plan de impresión cotizado', () => {
     );
   });
   it.each([
-    { color: 'COLOR' },
+    { color: 'DESCONOCIDO' },
     { tamano: 'A3' },
     { copias: 0 },
     { paginas: 0 },
@@ -78,6 +85,49 @@ describe('plan de impresión cotizado', () => {
   ])('excluye documentos incompatibles: %o', (cambios) => {
     expect(planDocumento(job({ ...meta, ...cambios }))?.motivo).toBeTruthy();
   });
+  it.each(['BN', 'COLOR'])(
+    'admite documentos y tomos uniformes en %s',
+    (color) => {
+      expect(planDocumento(job({ ...meta, color }))).toMatchObject({
+        motivo: null,
+        configuracion: { color },
+      });
+      expect(
+        planDocumento(
+          job({
+            esTomo: true,
+            juegos: 2,
+            hojas: 8,
+            segmentos: [
+              { ...meta, color },
+              { ...meta, color },
+            ],
+          }),
+        ),
+      ).toMatchObject({ motivo: null, configuracion: { color } });
+    },
+  );
+  it.each([
+    ['BN', 'COLOR'],
+    ['COLOR', 'BN'],
+  ])(
+    'no envía un tomo con segmentos %s y %s bajo un solo modo',
+    (primero, segundo) => {
+      expect(
+        planDocumento(
+          job({
+            esTomo: true,
+            juegos: 2,
+            hojas: 8,
+            segmentos: [
+              { ...meta, color: primero },
+              { ...meta, color: segundo },
+            ],
+          }),
+        )?.motivo,
+      ).toContain('color');
+    },
+  );
   it('no degrada finales con ACK ni DELETED tardíos', () => {
     expect(siguienteEstado('COMPLETE', 'DELETED')).toBe('COMPLETE');
     expect(siguienteEstado('PRINTING', 'ENVIADO')).toBe('PRINTING');
@@ -99,6 +149,33 @@ describe('envíos de documentos de una OT', () => {
       items: [
         {
           id: 'item',
+          pasos: [
+            {
+              id: 'paso',
+              itemId: 'item',
+              ordenId: 'orden',
+              familiaCodigo: 'impresion_digital',
+              maquinaId: 'maquina',
+              tipoEjecucion: 'interno',
+              estado: 'pendiente',
+              indice: 1,
+              nodoClave: null,
+              motivoBloqueo: null,
+              gatesOperativos: [],
+              dependenciasEntrantes: [],
+              item: {
+                parentItemId: null,
+                pasos: [
+                  {
+                    id: 'paso',
+                    indice: 1,
+                    estado: 'pendiente',
+                    nodoClave: null,
+                  },
+                ],
+              },
+            },
+          ],
           contieneLotesEntrega: false,
           jobContextSnapshotJson: job(),
           cotizacionItem: null,
@@ -118,10 +195,30 @@ describe('envíos de documentos de una OT', () => {
     const buscarEvento = jest.fn().mockResolvedValue(null);
     const actualizarEvento = jest.fn().mockResolvedValue({});
     const buscarOrden = jest.fn().mockResolvedValue(orden);
+    const perfiles = {
+      perfiles: jest.fn().mockResolvedValue([structuredClone(perfilPrueba)]),
+    };
     const tx = {
+      maquina: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'maquina',
+            activo: true,
+            estado: 'ACTIVA',
+            estacion: { activo: true },
+          },
+        ]),
+      },
+      materiaPrima: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'papel', nombre: 'Obra', activo: true }]),
+      },
+      gateProduccionDocumento: { findMany: jest.fn().mockResolvedValue([]) },
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'orden' }]),
       ordenTrabajo: { findFirst: buscarOrden },
       ordenTrabajoEvento: {
+        findMany: jest.fn().mockResolvedValue([]),
         findFirst: buscarEvento,
         create: crear,
         update: actualizarEvento,
@@ -143,6 +240,7 @@ describe('envíos de documentos de una OT', () => {
       prisma as unknown as PrismaService,
       { leerContenido: leer } as unknown as ArchivosService,
       { firmarDocumento: firmar } as unknown as ImpresionService,
+      perfiles as unknown as PerfilesImpresionService,
     );
     const preparar = (anterior?: string) =>
       servicio.preparar(
@@ -153,9 +251,12 @@ describe('envíos de documentos de una OT', () => {
         'RICOH',
         'localhost',
         anterior,
+        'perfil',
+        '1:1:1',
       );
     return {
       servicio,
+      perfiles,
       preparar,
       orden,
       crear,
@@ -168,6 +269,33 @@ describe('envíos de documentos de una OT', () => {
       bytes,
     };
   }
+  it('bloquea perfiles obsoletos y documentos cuyo paso está bloqueado', async () => {
+    const f = await fixture();
+    f.perfiles.perfiles.mockResolvedValue([{ ...perfilPrueba, version: 2 }]);
+    await expect(f.preparar()).rejects.toThrow();
+    expect(f.leer).not.toHaveBeenCalled();
+    f.perfiles.perfiles.mockResolvedValue([perfilPrueba]);
+    f.orden.items[0].pasos[0].estado = 'bloqueado';
+    await expect(f.preparar()).rejects.toThrow('bloqueado');
+    expect(f.crear).not.toHaveBeenCalled();
+  });
+  it('revalida la preparación bajo bloqueo antes de reservar el envío', async () => {
+    const f = await fixture();
+    f.perfiles.perfiles
+      .mockResolvedValueOnce([perfilPrueba])
+      .mockResolvedValue([
+        {
+          ...perfilPrueba,
+          bandeja: {
+            ...perfilPrueba.bandeja,
+            version: 2,
+            papelPreparadoId: null,
+          },
+        },
+      ]);
+    await expect(f.preparar()).rejects.toThrow();
+    expect(f.crear).not.toHaveBeenCalled();
+  });
   it('deriva el PDF, copias y faz del snapshot, con reserva auditable antes de responder', async () => {
     const f = await fixture();
     const r = await f.preparar();
@@ -191,6 +319,47 @@ describe('envíos de documentos de una OT', () => {
     };
     expect(consulta.where).toEqual({ id: 'orden', tenantId: auth.tenantId });
     expect(f.leer).toHaveBeenCalledTimes(1);
+  });
+  it.each([1, 2])(
+    'envía color cotizado en faz %s, conserva el PDF y registra el modo firmado',
+    async (faz) => {
+      const f = await fixture();
+      f.orden.items[0].jobContextSnapshotJson = job({
+        ...meta,
+        color: 'COLOR',
+        faz,
+        hojas: faz === 2 ? 4 : 6,
+      });
+      f.perfiles.perfiles.mockResolvedValue([
+        { ...perfilPrueba, color: 'COLOR', faz },
+      ]);
+      const r = await f.preparar();
+      expect(r.params.options).toMatchObject({
+        colorType: 'color',
+        copies: 2,
+        printerTray: perfilPrueba.bandeja.codigo,
+        duplex: faz === 2 ? 'long-edge' : 'one-sided',
+      });
+      expect(r.params.data[0].data).toBe(f.bytes.toString('base64'));
+      expect(f.firmar).toHaveBeenCalledWith(r.params);
+      const creacion = (f.crear.mock.calls as unknown[][])[0][0] as {
+        data: Record<string, unknown>;
+      };
+      expect(creacion.data).toMatchObject({
+        datosJson: {
+          configuracion: { color: 'COLOR' },
+          perfilSnapshot: { color: 'COLOR' },
+        },
+      });
+    },
+  );
+  it('rechaza color sin perfil compatible antes de leer archivos o reservar un envío', async () => {
+    const f = await fixture();
+    f.orden.items[0].jobContextSnapshotJson = job({ ...meta, color: 'COLOR' });
+    await expect(f.preparar()).rejects.toThrow('perfil compatible');
+    expect(f.leer).not.toHaveBeenCalled();
+    expect(f.firmar).not.toHaveBeenCalled();
+    expect(f.crear).not.toHaveBeenCalled();
   });
   it.each(['vertical', 'horizontal', 'mixto', 'rotado'])(
     'imprime un PDF %s con orientación automática y audita la lectura real, también en OT históricas',
@@ -464,7 +633,7 @@ describe('envíos de documentos de una OT', () => {
       ['tenant-a/segundo.pdf'],
     ]);
   });
-  it('los estados pertenecen al usuario y tenant del envío, sin modificar producción', async () => {
+  it('permite seguimiento compartido dentro del tenant sin modificar producción', async () => {
     const f = await fixture();
     f.buscarEvento.mockResolvedValue({
       id: 'intento',
@@ -483,8 +652,8 @@ describe('envíos de documentos de una OT', () => {
       'DELETED',
       'Retirado',
     );
-    expect(r.estado).toBe('COMPLETE');
-    expect(r.confirmacion).toEqual({
+    expect((r as Record<string, unknown>).estado).toBe('COMPLETE');
+    expect((r as Record<string, unknown>).confirmacion).toEqual({
       usuario: 'Comercial',
       fecha: '2026-09-18',
     });
@@ -493,7 +662,6 @@ describe('envíos de documentos de una OT', () => {
     };
     expect(consulta.where).toMatchObject({
       tenantId: auth.tenantId,
-      usuarioId: auth.userId,
       ordenId: 'orden',
     });
   });
@@ -554,17 +722,17 @@ describe('envíos de documentos de una OT', () => {
     expect(f.crear).not.toHaveBeenCalled();
   });
 
-  it('rechaza confirmar todo si hay un documento sin enviar', async () => {
+  it('permite verificar sólo lo enviado y conservar documentos pendientes', async () => {
     const f = await fixture();
     f.orden.items.push({ ...f.orden.items[0], id: 'otro-item' });
     f.buscarEvento
       .mockResolvedValueOnce({ id: 'envio' })
-      .mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({ id: 'envio', datosJson: { estado: 'COMPLETE' } });
     await expect(
       f.servicio.confirmar(auth, 'orden', ['envio']),
-    ).rejects.toThrow('sin enviar');
-    expect(f.actualizarEvento).not.toHaveBeenCalled();
-    expect(f.crear).not.toHaveBeenCalled();
+    ).resolves.toEqual({ ok: true });
+    expect(f.actualizarEvento).toHaveBeenCalledTimes(1);
   });
 
   it.each([['envio-anterior'], ['envio', 'extra'], []])(

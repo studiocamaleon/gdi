@@ -89,7 +89,11 @@ export class ImpresionService {
   }
 
   /** Se firman sólo mensajes construidos aquí; nunca un hash o comando del navegador. */
-  private firmar(call: string, params: object, timestamp = Date.now()) {
+  private firmar<T extends object | undefined>(
+    call: string,
+    params: T,
+    timestamp = Date.now(),
+  ) {
     const hash = createHash('sha256')
       .update(JSON.stringify({ call, params, timestamp }))
       .digest('hex');
@@ -105,12 +109,25 @@ export class ImpresionService {
     return this.firmar('printers.find', {});
   }
 
+  detallesImpresoras(timestamp: number) {
+    if (
+      !Number.isSafeInteger(timestamp) ||
+      Math.abs(Date.now() - timestamp) > 60000
+    )
+      throw new BadRequestException(
+        'La consulta de bandejas venció. Revisá la hora del equipo.',
+      );
+    // details() del SDK omite params y asigna su propio timestamp. Se firma
+    // exclusivamente esta consulta de lectura, sin aceptar comandos del cliente.
+    return this.firmar('printers.detail', undefined, timestamp);
+  }
+
   /** El único caller es el servicio de documentos, luego de validar la OT. */
   firmarDocumento(params: object) {
     return this.firmar('print', params);
   }
 
-  escucharImpresora(impresora: string, timestamp: number) {
+  escucharImpresora(impresora: string | string[], timestamp: number) {
     // El SDK asigna su timestamp al iniciar la escucha. Reconstruimos únicamente
     // este comando conocido; no se aceptan hashes, comandos ni jobData del cliente.
     if (
@@ -120,11 +137,10 @@ export class ImpresionService {
       throw new BadRequestException(
         'La solicitud de escucha venció. Revisá la hora del equipo.',
       );
-    return this.firmar(
-      'printers.startListening',
-      { printerNames: [impresora] },
-      timestamp,
-    );
+    const printerNames = Array.isArray(impresora) ? impresora : [impresora];
+    if (!printerNames.length)
+      throw new BadRequestException('Elegí las impresoras a seguir.');
+    return this.firmar('printers.startListening', { printerNames }, timestamp);
   }
 
   prepararPruebaDocumento(

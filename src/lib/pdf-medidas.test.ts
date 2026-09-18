@@ -1,4 +1,4 @@
-import { PDFDocument, degrees } from "pdf-lib";
+import { PDFDocument, PDFName, PDFNumber, degrees } from "pdf-lib";
 import { expect, it } from "vitest";
 import { leerMedidasPdf } from "./pdf-medidas";
 import {
@@ -42,4 +42,30 @@ it("lee la orientación visible de cada página, incluyendo rotaciones y recorte
   expect(
     resumirOrientaciones(orientacionesSeleccionadas(orientaciones, "7")),
   ).toBeNull();
+});
+
+it("mide el área visible con UserUnit, origen desplazado y rotación sin redondear", async () => {
+  const pdf = await PDFDocument.create();
+  const pagina = pdf.addPage([600, 900]);
+  pagina.setMediaBox(10, 20, 600, 900);
+  pagina.setCropBox(30, 40, 500, 800);
+  pagina.setRotation(degrees(90));
+  pagina.node.set(PDFName.of("UserUnit"), PDFNumber.of(2));
+  const bytes = await pdf.save();
+  const [r] = await leerMedidasPdf([
+    {
+      name: "medidas.pdf",
+      type: "application/pdf",
+      arrayBuffer: async () => bytes.buffer,
+    } as File,
+  ]);
+  if (!r.ok) throw new Error(r.error);
+  expect(r.paginas[0].medidaVisible.anchoMm).toBeCloseTo(
+    (800 * 2 * 25.4) / 72,
+    8,
+  );
+  expect(r.paginas[0].medidaVisible.altoMm).toBeCloseTo(
+    (500 * 2 * 25.4) / 72,
+    8,
+  );
 });

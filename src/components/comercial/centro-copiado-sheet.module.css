@@ -206,25 +206,6 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
-.seccionTitulo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.contador {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 20px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font: 11px var(--brand-mono);
-  background: var(--canvas-background);
-  color: var(--muted-text);
-}
 .tablaHeadBtns {
   display: flex;
   gap: 6px;
@@ -475,7 +456,7 @@
 .detailRow {
   background: var(--canvas-background);
 }
-.documentsTable .detailRow td {
+.documentsTable .detailRow > td {
   padding: 0;
 }
 .rowOptions {
@@ -677,9 +658,6 @@
   .tablaHead {
     padding: 6px 8px;
   }
-  .seccionTitulo {
-    font-size: 12px;
-  }
   .foot {
     flex-wrap: wrap;
     gap: 8px;
@@ -704,4 +682,143 @@
   .errBanner {
     margin-inline: 10px;
   }
+}
+
+/* CAD comparte la tabla compacta, con la geometría en el detalle desplegable. */
+.medidaOriginal {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.medidaOriginal small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-text);
+}
+.sugerenciaCad {
+  padding: 10px 14px 10px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.detalleCad {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px 12px 36px;
+  font-size: 12px;
+}
+.detalleCad > p {
+  margin: 0;
+  color: var(--muted-text);
+}
+.medidasScroll {
+  overflow: auto;
+  max-height: 240px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.medidasScroll table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+.medidasScroll th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  background: var(--surface-secondary);
+  font: 10px var(--brand-mono);
+  color: var(--muted-text);
+}
+.medidasScroll th,
+.medidasScroll td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabsRoot,
+.tabPanel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.tabsRoot {
+  gap: 14px;
+}
+.tabPanel {
+  padding: 0;
+}
+.defaultsGrid > .perfilDefault {
+  flex: 4 1 270px;
+}
+.configAviso {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--warning);
+}
+.moverArchivo {
+  padding: 6px 14px 0 36px;
+}
+.sheet .desglosar {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--accent-soft-foreground);
+}
+.sheet .copiasDesglosadas {
+  display: grid;
+  height: auto;
+  min-width: 0;
+  gap: 1px;
+  line-height: 14px;
+  width: 100%;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.copiasDesglosadas span {
+  font-size: 9px;
+  color: var(--muted-text);
+}
+.copiasDesglosadas:focus-visible {
+  outline: 2px solid var(--accent-soft-foreground);
+  outline-offset: 2px;
+}
+.cabeceraDesglose,
+.paginacionCad {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cabeceraDesglose {
+  justify-content: space-between;
+}
+.cabeceraDesglose > div {
+  display: grid;
+  gap: 4px;
+}
+.cabeceraDesglose span,
+.paginacionCad > span {
+  color: var(--muted-text);
+}
+.paginacionCad > span {
+  margin-right: auto;
+}
+.medidasScroll td > .copiasPagina {
+  width: 76px;
+}
+.drop[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.65;
 }

@@ -1,3 +1,4 @@
+import type { MedidaPagina } from '../common/medidas-documento';
 import type { OrientacionPagina } from '../common/orientacion-pdf';
 import type { DocumentoInput } from './adaptador';
 import { metadataRangoPaginas } from '../common/rangos-paginas';
@@ -48,6 +49,7 @@ export interface CentroCopiadoSegmentoMeta {
   paginasOriginales?: number;
   rangoPaginas?: string;
   orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   tamano: string;
   tamanoAnchoMm: number;
   tamanoAltoMm: number;
@@ -74,6 +76,7 @@ export interface CentroCopiadoMeta {
   paginasOriginales?: number;
   rangoPaginas?: string;
   orientacionesPaginas?: OrientacionPagina[];
+  medidasPaginas?: MedidaPagina[];
   copias?: number;
   tamano?: string;
   tamanoAnchoMm?: number;
@@ -120,6 +123,7 @@ export function metaDocumentoCentroCopiado(args: {
     ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
     paginas: doc.paginas,
     ...metadataRangoPaginas(doc),
+    ...(doc.medidasPaginas ? { medidasPaginas: doc.medidasPaginas } : {}),
     ...(doc.orientacionesPaginas
       ? { orientacionesPaginas: doc.orientacionesPaginas }
       : {}),
@@ -168,6 +172,7 @@ export function metaTomoCentroCopiado(args: {
       ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
       paginas: doc.paginas,
       ...metadataRangoPaginas(doc),
+      ...(doc.medidasPaginas ? { medidasPaginas: doc.medidasPaginas } : {}),
       ...(doc.orientacionesPaginas
         ? { orientacionesPaginas: doc.orientacionesPaginas }
         : {}),

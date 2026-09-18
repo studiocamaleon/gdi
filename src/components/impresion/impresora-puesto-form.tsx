@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 import { Printer, Search } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { SelectField } from "@/components/design-system/select-field";
-import { Input } from "@/components/ui/input";
+import { Input } from "@heroui/react";
 import { Field, FieldLabel, FieldGroup } from "@/components/ui/field";
 import { buscarImpresoras } from "@/lib/qz-impresion";
 import {

@@ -46,7 +46,8 @@ declare module "qz-tray" {
       setSha256Type(hasher: (message: string) => Promise<string>): void;
     };
     printers: {
-      startListening(printer: string): Promise<void>;
+      details(): Promise<unknown>;
+      startListening(printer: string | string[]): Promise<void>;
       stopListening(): Promise<void>;
       getStatus(): Promise<void>;
       setPrinterCallbacks(callback: (event: unknown) => void): void;
