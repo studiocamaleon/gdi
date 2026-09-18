@@ -385,6 +385,12 @@
   flex: none;
   font: 10px var(--brand-mono);
 }
+.orientacion {
+  flex: none;
+  color: var(--foreground);
+  border-right: 1px solid var(--border);
+  padding-right: 6px;
+}
 .rangoInput {
   width: 100%;
   font-family: var(--brand-mono);

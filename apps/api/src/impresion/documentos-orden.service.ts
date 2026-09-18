@@ -7,6 +7,11 @@ import {
 import { Prisma } from '@prisma/client';
 import { PDFDocument } from 'pdf-lib';
 import { resolverRangoPaginas } from '../common/rangos-paginas';
+import {
+  orientacionPaginaPdf,
+  resumirOrientaciones,
+  type OrientacionPagina,
+} from '../common/orientacion-pdf';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
@@ -194,6 +199,7 @@ export class DocumentosOrdenService {
     const extraerPaginas =
       doc.archivos.length > 1 || doc.segmentos.some((s) => !!s.rangoPaginas);
     let originalBytes: Buffer | null = null;
+    const orientacionesPaginas: OrientacionPagina[] = [];
     for (const [i, archivo] of doc.archivos.entries()) {
       if (!archivo) throw new BadRequestException('Falta el archivo original.');
       const bytes = await this.archivos.leerContenido(archivo.key);
@@ -215,23 +221,32 @@ export class DocumentosOrdenService {
         throw new BadRequestException(
           `Las páginas de ${archivo.nombreOriginal} no coinciden con las cotizadas. Volvé a cotizar el documento.`,
         );
+      const seleccion = resolverRangoPaginas(
+        segmento.rangoPaginas ?? '',
+        pdf.getPageCount(),
+      );
+      if (seleccion.error || seleccion.paginas !== segmento.paginas)
+        throw new BadRequestException(
+          'El rango no coincide con las páginas cotizadas. Volvé a cotizar el documento.',
+        );
+      const indices = seleccion.intervalos.flatMap(([desde, hasta]) =>
+        Array.from({ length: hasta - desde + 1 }, (_, n) => desde - 1 + n),
+      );
+      // Se verifica el PDF real incluso en órdenes históricas sin orientación.
+      const orientaciones = indices.map((indice) =>
+        orientacionPaginaPdf(pdf.getPage(indice)),
+      );
+      orientacionesPaginas.push(...orientaciones);
       if (extraerPaginas) {
-        const seleccion = resolverRangoPaginas(
-          segmento.rangoPaginas ?? '',
-          pdf.getPageCount(),
-        );
-        if (seleccion.error || seleccion.paginas !== segmento.paginas)
-          throw new BadRequestException(
-            'El rango no coincide con las páginas cotizadas. Volvé a cotizar el documento.',
-          );
-        const indices = seleccion.intervalos.flatMap(([desde, hasta]) =>
-          Array.from({ length: hasta - desde + 1 }, (_, n) => desde - 1 + n),
-        );
         const paginas = await unido.copyPages(pdf, indices);
         paginas.forEach((p) => unido.addPage(p));
         // Cada original empieza en un frente y cada juego mantiene su orden.
         if (doc.archivos.length > 1 && doc.faz === 2 && seleccion.paginas % 2)
-          unido.addPage([595.276, 841.89]);
+          unido.addPage(
+            orientaciones.at(-1) === 'horizontal'
+              ? [841.89, 595.276]
+              : [595.276, 841.89],
+          );
       }
     }
     const contenido = extraerPaginas
@@ -248,7 +263,9 @@ export class DocumentosOrdenService {
         size: { width: 210, height: 297 },
         colorType: 'grayscale',
         duplex: doc.faz === 2 ? 'long-edge' : 'one-sided',
-        orientation: 'portrait',
+        // QZ orienta cada página según su CropBox y /Rotate. Un único envío
+        // conserva el orden y los frentes/dorsos incluso en archivos mixtos.
+        orientation: null,
         scaleContent: true,
         rasterize: false,
       },
@@ -270,6 +287,8 @@ export class DocumentosOrdenService {
       paginas: doc.paginas,
       hojas: doc.hojas,
       faz: doc.faz,
+      orientacion: resumirOrientaciones(orientacionesPaginas),
+      orientacionesPaginas,
       archivos: doc.archivos.map((a) => a!.id),
       seleccionPaginas: doc.segmentos
         .filter((s) => s.rangoPaginas)

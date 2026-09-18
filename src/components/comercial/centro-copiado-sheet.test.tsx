@@ -227,3 +227,27 @@ it("rehidrata rangos de un tomo y permite volver a seleccionar todas las página
   expect(dto.documentos[0].rangoPaginas).toBeUndefined();
   expect(dto.grupos[0].juegos).toBe(3);
 });
+
+it("conserva la orientación de cada página al editar y muestra la del rango seleccionado", async () => {
+  const orientacionesPaginas = Array.from({ length: 20 }, (_, i) =>
+    i < 10 ? ("vertical" as const) : ("horizontal" as const),
+  );
+  await montar({ ...doc, orientacionesPaginas });
+  expect(el.querySelector('[aria-label="Orientación: Mixto"]')).not.toBeNull();
+  await rango("1-3");
+  expect(
+    el.querySelector('[aria-label="Orientación: Vertical"]'),
+  ).not.toBeNull();
+  await rango("11-20");
+  expect(
+    el.querySelector('[aria-label="Orientación: Horizontal"]'),
+  ).not.toBeNull();
+  await avanzar();
+  await act(async () => guardar()!.click());
+  expect(mocks.construir.mock.calls[0][0].documentos[0]).toMatchObject({
+    paginas: 10,
+    paginasOriginales: 20,
+    rangoPaginas: "11-20",
+    orientacionesPaginas,
+  });
+});

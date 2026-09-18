@@ -20,10 +20,14 @@ const doc = {
 };
 
 it('genera metadata versionada y canónica para documento y tomo', () => {
+  const orientacionesPaginas = Array.from({ length: 20 }, (_, i) =>
+    i % 2 ? ('horizontal' as const) : ('vertical' as const),
+  );
   const documento = metaDocumentoCentroCopiado({
     doc: {
       ...doc,
       paginasOriginales: 20,
+      orientacionesPaginas,
       rangoPaginas: '16,1-7,9,12-15',
       archivoNombre: 'Contrato.pdf',
       paginas: 13,
@@ -43,6 +47,7 @@ it('genera metadata versionada y canónica para documento y tomo', () => {
       {
         ...doc,
         paginasOriginales: 20,
+        orientacionesPaginas,
         rangoPaginas: '16,1-7,9,12-15',
         archivoNombre: 'Contrato.pdf',
         paginas: 13,
@@ -65,6 +70,7 @@ it('genera metadata versionada y canónica para documento y tomo', () => {
     paginas: 13,
     paginasOriginales: 20,
     rangoPaginas: '1-7,9,12-16',
+    orientacionesPaginas,
     archivoNombre: 'Contrato.pdf',
   });
   expect(tomo).toMatchObject({
@@ -78,6 +84,7 @@ it('genera metadata versionada y canónica para documento y tomo', () => {
     paginas: 13,
     paginasOriginales: 20,
     rangoPaginas: '1-7,9,12-16',
+    orientacionesPaginas,
     archivoNombre: 'Contrato.pdf',
   });
 });

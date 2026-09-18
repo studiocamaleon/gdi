@@ -46,6 +46,7 @@ import {
 } from "@/lib/impresion-documentos";
 import { ImpresoraPuestoForm } from "./impresora-puesto-form";
 import s from "./documentos-impresion.module.css";
+import { ORIENTACION_PDF_LABELS } from "@/lib/orientacion-pdf";
 
 type Contexto = {
   tenantId: string;
@@ -517,6 +518,7 @@ export function DocumentosImpresionProvider({
                   (e) => e.itemId === doc.itemId,
                 );
                 const ultimo = envios[0];
+                const orientacion = ultimo?.orientacion ?? doc.orientacion;
                 return (
                   <article className={s.documento} key={doc.itemId}>
                     <div className={s.titulo}>
@@ -534,7 +536,10 @@ export function DocumentosImpresionProvider({
                           : "copias"}{" "}
                       ·{" "}
                       {doc.faz === 2 ? "Doble faz · borde largo" : "Simple faz"}{" "}
-                      · {doc.hojas} hojas
+                      · {doc.hojas} hojas ·{" "}
+                      {orientacion
+                        ? ORIENTACION_PDF_LABELS[orientacion]
+                        : "Orientación automática"}
                     </p>
                     {doc.seleccionPaginas?.map((seleccion, i) => (
                       <p key={i}>

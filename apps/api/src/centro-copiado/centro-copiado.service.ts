@@ -1,3 +1,4 @@
+import { errorOrientacionesDocumento } from '../common/orientacion-pdf';
 import { monedaCotizacionContext } from '../cotizaciones/material-moneda-context';
 import {
   errorPaginasDocumento,
@@ -1336,7 +1337,8 @@ export class CentroCopiadoService {
     if (errorEstructura) throw new BadRequestException(errorEstructura);
 
     for (const doc of dto.documentos) {
-      const errorPaginas = errorPaginasDocumento(doc);
+      const errorPaginas =
+        errorPaginasDocumento(doc) || errorOrientacionesDocumento(doc);
       if (errorPaginas) {
         throw new BadRequestException(`${doc.nombre ?? doc.id}: ${errorPaginas}`);
       }

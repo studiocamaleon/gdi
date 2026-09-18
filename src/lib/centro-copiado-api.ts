@@ -1,3 +1,4 @@
+import type { OrientacionPagina } from "./orientacion-pdf";
 /**
  * Cliente del TPV Centro de copiado.
  * Backend: apps/api/src/centro-copiado/ (controller + service).
@@ -20,6 +21,7 @@ export interface CentroCopiadoSegmentoMeta {
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
   tamano: string;
   tamanoAnchoMm?: number;
   tamanoAltoMm?: number;
@@ -46,6 +48,7 @@ export interface CentroCopiadoMeta {
   paginas?: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
   copias?: number;
   tamano?: string;
   tamanoAnchoMm?: number;
@@ -102,6 +105,7 @@ export interface DocumentoCentroCopiado {
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
   copias: number;
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;

@@ -1,5 +1,9 @@
 import { Type } from 'class-transformer';
 import {
+  ORIENTACIONES_PAGINA,
+  type OrientacionPagina,
+} from '../../common/orientacion-pdf';
+import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
@@ -55,6 +59,12 @@ export class DocumentoCentroCopiadoDto {
   @IsString()
   @MaxLength(2000)
   rangoPaginas?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100000)
+  @IsIn(ORIENTACIONES_PAGINA, { each: true })
+  orientacionesPaginas?: OrientacionPagina[];
 
   @IsInt()
   @Min(1)

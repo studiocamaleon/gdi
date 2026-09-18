@@ -137,6 +137,7 @@ describe("documentos y escucha con SDK QZ real", () => {
       options: {
         copies: 7,
         duplex: "one-sided",
+        orientation: null,
         jobName: "Grafo OT-1 intento-1",
       },
       data: [{ type: "pixel", format: "pdf", flavor: "base64", data: "cGRm" }],

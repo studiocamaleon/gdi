@@ -1,4 +1,5 @@
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, degrees } from 'pdf-lib';
+import { orientacionPaginaPdf } from '../common/orientacion-pdf';
 import { DocumentosOrdenService } from './documentos-orden.service';
 import { planDocumento, siguienteEstado } from './documentos-orden.domain';
 import { calcularHojas } from '../centro-copiado/adaptador';
@@ -26,6 +27,34 @@ const meta = {
 const job = (value: object = meta) => ({ _centroCopiado: value });
 
 describe('plan de impresión cotizado', () => {
+  it('resume las páginas seleccionadas y conserva la orientación de cada original', () => {
+    const orientacionesPaginas = ['vertical', 'horizontal', 'horizontal'];
+    expect(planDocumento(job())?.orientacion).toBeNull();
+    expect(
+      planDocumento(job({ ...meta, orientacionesPaginas }))?.orientacion,
+    ).toBe('mixto');
+    expect(
+      planDocumento(
+        job({
+          ...meta,
+          orientacionesPaginas,
+          paginas: 1,
+          paginasOriginales: 3,
+          rangoPaginas: '2',
+          archivoNombre: 'original.pdf',
+          hojas: 2,
+        }),
+      ),
+    ).toMatchObject({
+      orientacion: 'horizontal',
+      motivo: null,
+      segmentos: [{ orientacionesPaginas }],
+    });
+    expect(
+      planDocumento(job({ ...meta, orientacionesPaginas: ['vertical'] }))
+        ?.motivo,
+    ).toContain('orientación');
+  });
   it('cada copia impar comienza en un frente, tanto al cotizar como al imprimir', () => {
     expect(calcularHojas(3, 2, 2)).toEqual({ carillas: 6, hojas: 4 });
     expect(calcularHojas(3, 3, 2)).toEqual({ carillas: 9, hojas: 6 });
@@ -162,6 +191,113 @@ describe('envíos de documentos de una OT', () => {
     };
     expect(consulta.where).toEqual({ id: 'orden', tenantId: auth.tenantId });
     expect(f.leer).toHaveBeenCalledTimes(1);
+  });
+  it.each(['vertical', 'horizontal', 'mixto', 'rotado'])(
+    'imprime un PDF %s con orientación automática y audita la lectura real, también en OT históricas',
+    async (tipo) => {
+      const f = await fixture();
+      const pdf = await PDFDocument.create();
+      for (let i = 0; i < 3; i++) {
+        const horizontal =
+          tipo === 'horizontal' || (tipo === 'mixto' && i === 1);
+        const pagina = pdf.addPage(horizontal ? [842, 595] : [595, 842]);
+        if (tipo === 'rotado') pagina.setRotation(degrees(90));
+      }
+      const bytes = Buffer.from(await pdf.save());
+      f.leer.mockResolvedValue(bytes);
+      f.orden.items[0].archivos[0].bytes = BigInt(bytes.length);
+      const r = await f.preparar();
+      expect(r.params.options).toMatchObject({
+        orientation: null,
+        copies: 2,
+        duplex: 'long-edge',
+      });
+      expect(r.params.data[0].data).toBe(bytes.toString('base64'));
+      expect(r.intento.orientacion).toBe(
+        tipo === 'rotado' ? 'horizontal' : tipo,
+      );
+      expect(r.intento.orientacionesPaginas).toEqual(
+        pdf.getPages().map(orientacionPaginaPdf),
+      );
+    },
+  );
+  it('conserva /Rotate y toma la orientación del rango enviado, sin usar a ciegas la metadata', async () => {
+    const f = await fixture();
+    const pdf = await PDFDocument.create();
+    pdf.addPage([595, 842]);
+    pdf.addPage([842, 595]);
+    pdf.addPage([595, 842]).setRotation(degrees(270));
+    const bytes = Buffer.from(await pdf.save());
+    f.leer.mockResolvedValue(bytes);
+    f.orden.items[0].archivos[0].bytes = BigInt(bytes.length);
+    f.orden.items[0].jobContextSnapshotJson = job({
+      ...meta,
+      paginas: 2,
+      paginasOriginales: 3,
+      rangoPaginas: '2-3',
+      archivoNombre: 'original.pdf',
+      hojas: 2,
+      orientacionesPaginas: ['vertical', 'vertical', 'vertical'],
+    });
+    const r = await f.preparar();
+    const enviado = await PDFDocument.load(
+      Buffer.from(r.params.data[0].data, 'base64'),
+    );
+    expect(enviado.getPageCount()).toBe(2);
+    expect(enviado.getPage(1).getRotation().angle).toBe(270);
+    expect(enviado.getPages().map(orientacionPaginaPdf)).toEqual([
+      'horizontal',
+      'horizontal',
+    ]);
+    expect(r.intento.orientacion).toBe('horizontal');
+    expect(r.params.options.orientation).toBeNull();
+  });
+  it('mantiene el orden, las copias y el dorso en blanco de un tomo con originales de distinta orientación', async () => {
+    const f = await fixture();
+    const horizontal = await PDFDocument.create();
+    for (let i = 0; i < 3; i++) horizontal.addPage([842, 595]);
+    const bytes = Buffer.from(await horizontal.save());
+    const item = f.orden.items[0];
+    item.archivos.push({
+      ...item.archivos[0],
+      id: 'archivo-2',
+      nombreOriginal: 'segundo.pdf',
+      key: 'tenant-a/segundo.pdf',
+    });
+    item.archivos[0].bytes = BigInt(bytes.length);
+    f.leer.mockResolvedValueOnce(bytes).mockResolvedValueOnce(f.bytes);
+    item.jobContextSnapshotJson = job({
+      esTomo: true,
+      tomoNombre: 'Tomo mixto',
+      juegos: 2,
+      hojas: 8,
+      segmentos: [
+        { ...meta, archivoNombre: 'original.pdf' },
+        { ...meta, archivoNombre: 'segundo.pdf' },
+      ],
+    });
+    const r = await f.preparar();
+    const enviado = await PDFDocument.load(
+      Buffer.from(r.params.data[0].data, 'base64'),
+    );
+    expect(enviado.getPages().map(orientacionPaginaPdf)).toEqual([
+      'horizontal',
+      'horizontal',
+      'horizontal',
+      'horizontal',
+      'vertical',
+      'vertical',
+      'vertical',
+      'vertical',
+    ]);
+    expect(r.params.options).toMatchObject({
+      orientation: null,
+      copies: 2,
+      duplex: 'long-edge',
+    });
+    expect(r.intento.orientacion).toBe('mixto');
+    expect(r.intento.orientacionesPaginas).toHaveLength(6);
+    expect(r.intento.hojas).toBe(8);
   });
   it.each(['borrador', 'cancelada'])(
     'rechaza una OT %s sin leer sus archivos',

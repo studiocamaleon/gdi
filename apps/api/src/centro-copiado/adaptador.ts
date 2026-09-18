@@ -9,6 +9,7 @@
  * El TAMAÑO viene con sus medidas reales (del catálogo de formatos del sistema).
  */
 import { PliegoDim, piezaDocumento, runtimePliegoImpresion } from './pliegos';
+import type { OrientacionPagina } from '../common/orientacion-pdf';
 
 export type ColorDocumento = 'BN' | 'COLOR';
 export type FazDocumento = 1 | 2;
@@ -20,6 +21,7 @@ export interface DocumentoInput {
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
   copias: number;
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */
   tamano: string;

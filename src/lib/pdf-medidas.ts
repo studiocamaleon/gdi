@@ -2,6 +2,11 @@
 // desde CAD ("Plot to PDF") a escala 1:1 tiene el MediaBox = tamaño real de la
 // hoja, así que leerlo nos da la medida del plano sin backend.
 
+import {
+  orientacionPaginaPdf,
+  type OrientacionPagina,
+} from "./orientacion-pdf";
+
 const PT_TO_MM = 25.4 / 72;
 
 export type MedidaArchivoPagina = {
@@ -10,6 +15,7 @@ export type MedidaArchivoPagina = {
   totalPaginas: number;
   anchoMm: number;
   altoMm: number;
+  orientacion: OrientacionPagina;
 };
 
 export type LecturaArchivoResultado =
@@ -61,6 +67,7 @@ async function leerUnArchivo(file: File): Promise<LecturaArchivoResultado> {
         archivoNombre: file.name,
         pagina: index + 1,
         totalPaginas: total,
+        orientacion: orientacionPaginaPdf(page),
         anchoMm: Math.round(anchoPt * PT_TO_MM * 10) / 10,
         altoMm: Math.round(altoPt * PT_TO_MM * 10) / 10,
       };

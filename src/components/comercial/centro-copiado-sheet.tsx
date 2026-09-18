@@ -33,6 +33,12 @@ import * as React from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { leerMedidasPdf } from "@/lib/pdf-medidas";
+import {
+  ORIENTACION_PDF_LABELS,
+  orientacionesSeleccionadas,
+  resumirOrientaciones,
+  type OrientacionPagina,
+} from "@/lib/orientacion-pdf";
 import type { PropuestaItem } from "@/lib/propuestas";
 import {
   opcionesCentroCopiado,
@@ -66,6 +72,7 @@ type DocRow = TamanoFila & {
   archivoNombre?: string;
   paginas: number;
   rangoPaginas: string;
+  orientacionesPaginas?: OrientacionPagina[];
   /** true = las páginas las leyó el sistema del PDF y no son editables. */
   paginasAuto: boolean;
   papelMateriaPrimaId: string;
@@ -122,6 +129,9 @@ const paginasParaCotizar = (doc: DocRow) => ({
   paginas: seleccionDe(doc).paginas,
   ...(doc.file || doc.archivoNombre ? { paginasOriginales: doc.paginas } : {}),
   ...(doc.rangoPaginas.trim() ? { rangoPaginas: seleccionDe(doc).rango } : {}),
+  ...(doc.orientacionesPaginas
+    ? { orientacionesPaginas: doc.orientacionesPaginas }
+    : {}),
 });
 const OPCIONES_COLOR = [
   { value: "BN", label: "B/N", icon: null },
@@ -423,6 +433,7 @@ function CentroCopiadoContenido({
             archivoNombre: seg.archivoNombre,
             paginas: Number(seg.paginasOriginales ?? seg.paginas) || 1,
             rangoPaginas: seg.rangoPaginas ?? "",
+            orientacionesPaginas: seg.orientacionesPaginas,
             paginasAuto: (seg.archivoNombre ?? seg.nombre ?? "")
               .toLowerCase()
               .endsWith(".pdf"),
@@ -452,6 +463,7 @@ function CentroCopiadoContenido({
           archivoNombre: meta.archivoNombre,
           paginas: Number(meta.paginasOriginales ?? meta.paginas) || 1,
           rangoPaginas: meta.rangoPaginas ?? "",
+          orientacionesPaginas: meta.orientacionesPaginas,
           paginasAuto: (meta.archivoNombre ?? meta.nombre ?? "")
             .toLowerCase()
             .endsWith(".pdf"),
@@ -557,6 +569,7 @@ function CentroCopiadoContenido({
         nombre: string;
         paginas: number;
         paginasAuto: boolean;
+        orientacionesPaginas?: OrientacionPagina[];
         file?: File | null;
       }[],
     ) => {
@@ -568,6 +581,7 @@ function CentroCopiadoContenido({
           paginas: n.paginas,
           rangoPaginas: "",
           paginasAuto: n.paginasAuto,
+          orientacionesPaginas: n.orientacionesPaginas,
           tamano: defaults.tamano,
           tamanoAnchoMm: defaults.tamanoAnchoMm,
           tamanoAltoMm: defaults.tamanoAltoMm,
@@ -603,6 +617,7 @@ function CentroCopiadoContenido({
                 nombre: l.archivoNombre,
                 paginas: l.paginas[0]?.totalPaginas ?? 1,
                 paginasAuto: true,
+                orientacionesPaginas: l.paginas.map((p) => p.orientacion),
                 file: lista[i] ?? null,
               }
             : {
@@ -906,6 +921,9 @@ function CentroCopiadoContenido({
 
   const renderFila = (d: DocRow, index: number, enGrupo: boolean) => {
     const seleccion = seleccionDe(d);
+    const orientacion = resumirOrientaciones(
+      orientacionesSeleccionadas(d.orientacionesPaginas, d.rangoPaginas),
+    );
     const tieneArchivo = !!(d.file || d.archivoNombre);
     const gramajes = gramajesDe(d.papelMateriaPrimaId);
     const opciones = opcionesAbiertas.has(d.id);
@@ -946,6 +964,15 @@ function CentroCopiadoContenido({
               <span className={s.docNum}>
                 {String(index + 1).padStart(2, "0")}
               </span>
+              {orientacion && (
+                <span
+                  className={s.orientacion}
+                  title="Orientación de las páginas seleccionadas"
+                  aria-label={`Orientación: ${ORIENTACION_PDF_LABELS[orientacion]}`}
+                >
+                  {ORIENTACION_PDF_LABELS[orientacion]}
+                </span>
+              )}
               <span>
                 Cobertura{" "}
                 {NIVEL_COBERTURA_LABELS[

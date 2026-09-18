@@ -1,11 +1,19 @@
 /** Contrato de impresión derivado exclusivamente del snapshot cotizado. */
 import { errorPaginasDocumento } from '../common/rangos-paginas';
+import {
+  errorOrientacionesDocumento,
+  orientacionesSeleccionadas,
+  resumirOrientaciones,
+  type OrientacionPagina,
+  type OrientacionDocumento,
+} from '../common/orientacion-pdf';
 
 export type SegmentoImprimible = {
   nombre: string;
   paginas: number;
   paginasOriginales?: number;
   rangoPaginas?: string;
+  orientacionesPaginas?: OrientacionPagina[];
   faz: 1 | 2;
 };
 export type PlanDocumento = {
@@ -15,6 +23,7 @@ export type PlanDocumento = {
   hojas: number;
   faz: 1 | 2;
   segmentos: SegmentoImprimible[];
+  orientacion: OrientacionDocumento | null;
   motivo: string | null;
 };
 export function objeto(valor: unknown): Record<string, unknown> {
@@ -72,7 +81,7 @@ export function planDocumento(job: unknown): PlanDocumento | null {
         'El rango de páginas guardado es inválido. Volvé a cotizar el documento.';
       break;
     }
-    motivo = errorPaginasDocumento({
+    const paginas = {
       paginas: Number(s.paginas),
       paginasOriginales:
         s.paginasOriginales == null ? undefined : Number(s.paginasOriginales),
@@ -80,7 +89,13 @@ export function planDocumento(job: unknown): PlanDocumento | null {
         typeof s.rangoPaginas === 'string' ? s.rangoPaginas : undefined,
       archivoNombre:
         typeof s.archivoNombre === 'string' ? s.archivoNombre : undefined,
-    });
+    };
+    motivo =
+      errorPaginasDocumento(paginas) ||
+      errorOrientacionesDocumento({
+        ...paginas,
+        orientacionesPaginas: s.orientacionesPaginas,
+      });
   }
   const paginas = segmentos.reduce((n, s) => n + Number(s.paginas || 0), 0);
   const hojas =
@@ -100,6 +115,17 @@ export function planDocumento(job: unknown): PlanDocumento | null {
     hojas,
     faz,
     motivo,
+    orientacion:
+      !motivo && segmentos.every((s) => Array.isArray(s.orientacionesPaginas))
+        ? resumirOrientaciones(
+            segmentos.flatMap((s) =>
+              orientacionesSeleccionadas(
+                s.orientacionesPaginas as OrientacionPagina[],
+                typeof s.rangoPaginas === 'string' ? s.rangoPaginas : '',
+              ),
+            ),
+          )
+        : null,
     segmentos: segmentos.map((s) => ({
       nombre: texto(s.archivoNombre, texto(s.nombre, '')),
       paginas: Number(s.paginas),
@@ -110,6 +136,11 @@ export function planDocumento(job: unknown): PlanDocumento | null {
         ? { rangoPaginas: s.rangoPaginas }
         : {}),
       faz,
+      ...(Array.isArray(s.orientacionesPaginas)
+        ? {
+            orientacionesPaginas: s.orientacionesPaginas as OrientacionPagina[],
+          }
+        : {}),
     })),
   };
 }

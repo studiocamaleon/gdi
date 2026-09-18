@@ -1,4 +1,8 @@
 import { apiRequest } from "./api";
+import type {
+  OrientacionDocumento,
+  OrientacionPagina,
+} from "./orientacion-pdf";
 export type ConfiguracionImpresion = {
   tenantId: string;
   certificado: string | null;
@@ -78,6 +82,8 @@ export type EnvioDocumento = {
   paginas: number;
   hojas: number;
   faz: 1 | 2;
+  orientacion?: OrientacionDocumento | null;
+  orientacionesPaginas?: OrientacionPagina[];
   host: string;
   impresora: string;
   jobName: string;
@@ -95,6 +101,7 @@ export type DocumentoOrden = {
   paginas: number;
   hojas: number;
   faz: 1 | 2;
+  orientacion?: OrientacionDocumento | null;
   motivo: string | null;
   archivos: string[];
   documentos: number;
