@@ -8,7 +8,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Printer, RefreshCw, Settings2, Minus, FileText } from "lucide-react";
+import {
+  Printer,
+  RefreshCw,
+  Settings2,
+  Minus,
+  FileText,
+  Check,
+  ArrowUpRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/design-system/action-button";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
@@ -18,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   getDocumentosOrden,
+  confirmarDocumentosImpresos,
   registrarEstadoDocumento,
   type EnvioDocumento,
   type EstadoDocumento,
@@ -63,6 +72,7 @@ export function DocumentosImpresionProvider({
   const [config, setConfig] = useState<ImpresoraPuesto | null>(null);
   const [configurando, setConfigurando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const ocupadoRef = useRef(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
@@ -307,16 +317,23 @@ export function DocumentosImpresionProvider({
     const v = vistaRef.current;
     if (!v || ocupadoRef.current) return;
     setError("");
+    setCargando(true);
+    const revision = ++carga.current;
     try {
       await escrituras.current;
-      mostrar(await getDocumentosOrden(v.ordenId));
+      const actual = await getDocumentosOrden(v.ordenId);
+      if (revision === carga.current && vivos.current) mostrar(actual);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo actualizar.");
+      if (revision === carga.current)
+        setError(e instanceof Error ? e.message : "No se pudo actualizar.");
+    } finally {
+      if (revision === carga.current) setCargando(false);
     }
   }
   async function reconectar() {
     if (!config || !vista || ocupadoRef.current) return;
     setError("");
+    setCargando(true);
     for (const envio of vista.historial)
       if (envio.host === config.host && envio.impresora === config.impresora)
         trabajos.current.set(envio.jobName, { ordenId: vista.ordenId, envio });
@@ -325,12 +342,68 @@ export function DocumentosImpresionProvider({
       await escucha.current?.handle.consultar();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo conectar.");
+    } finally {
+      setCargando(false);
+    }
+  }
+  async function confirmarImpresion() {
+    const v = vistaRef.current;
+    if (!v || ocupadoRef.current || cargando || !puedeImprimir) return;
+    const ultimos = v.documentos.map((d) =>
+      v.historial.find((e) => e.itemId === d.itemId),
+    );
+    if (!ultimos.length || ultimos.some((e) => !e)) return;
+    ocupadoRef.current = true;
+    setConfirmando(true);
+    setError("");
+    try {
+      await escrituras.current;
+      await confirmarDocumentosImpresos(
+        v.ordenId,
+        ultimos.map((e) => e!.id),
+      );
+      // Finaliza sólo el seguimiento de esta OT; otras órdenes conservan su cola.
+      for (const [jobName, track] of trabajos.current)
+        if (track.ordenId === v.ordenId) trabajos.current.delete(jobName);
+      if (!trabajos.current.size) {
+        escucha.current?.handle.cerrar();
+        escucha.current = null;
+        setConectado(false);
+      }
+      ++carga.current;
+      vistaRef.current = null;
+      setVista(null);
+      setAbierto(false);
+      setReimprimir(null);
+      setAvance("");
+      setAvisoImpresora("");
+      setGuardadoError("");
+      toast.success(`Impresión confirmada · ${v.numero}`);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "No se pudo guardar la confirmación. Volvé a intentarlo.",
+      );
+    } finally {
+      ocupadoRef.current = false;
+      if (vivos.current) setConfirmando(false);
+      const siguiente = ordenesPendientes.current.shift();
+      if (siguiente && vivos.current) void abrir(siguiente, true);
     }
   }
   const pendientes =
     vista?.documentos.filter(
       (d) => !d.motivo && !vista.historial.some((e) => e.itemId === d.itemId),
     ) ?? [];
+  const ultimos =
+    vista?.documentos.map((d) =>
+      vista.historial.find((e) => e.itemId === d.itemId),
+    ) ?? [];
+  const todosEnviados = ultimos.length > 0 && ultimos.every(Boolean);
+  const todosConfirmados =
+    todosEnviados && ultimos.every((e) => e?.confirmacion);
+  const bloqueado = ocupado || confirmando;
   // Los eventos de la cola no deben volver a renderizar toda la ficha comercial.
   const abrirRef = useRef(abrir);
   useEffect(() => {
@@ -349,20 +422,27 @@ export function DocumentosImpresionProvider({
       {children}
       <DesignSystemProvider theme="brand" appearance="light">
         {vista && !abierto && (
-          <div className={s.widget}>
-            <ActionButton onPress={() => setAbierto(true)}>
+          <div className={s.widget} data-ui="heroui" data-appearance="light">
+            <ActionButton
+              size="md"
+              tone="neutral"
+              className={s.widgetButton}
+              onPress={() => setAbierto(true)}
+            >
               <Printer data-icon="inline-start" />
               {ocupado
                 ? "Enviando documentos…"
                 : error || avisoImpresora || guardadoError
                   ? `Revisar impresión · ${vista.numero}`
                   : `Impresión · ${vista.numero}`}
+              <ArrowUpRight data-icon="inline-end" />
             </ActionButton>
           </div>
         )}
         <FormDialog
           isOpen={abierto}
           onOpenChange={setAbierto}
+          isDismissable={!confirmando}
           title="Impresión de documentos"
           description={
             vista
@@ -378,7 +458,7 @@ export function DocumentosImpresionProvider({
                 uso="documentos"
                 tenantId={tenantId}
                 inicial={config}
-                disabled={ocupado || !puedeImprimir}
+                disabled={bloqueado || !puedeImprimir}
                 onGuardar={(c) => {
                   setConfig(c);
                   setConfigurando(false);
@@ -400,7 +480,7 @@ export function DocumentosImpresionProvider({
                 </div>
                 <ActionButton
                   variant="tertiary"
-                  isDisabled={ocupado}
+                  isDisabled={bloqueado}
                   onPress={() => setConfigurando(true)}
                 >
                   <Settings2 data-icon="inline-start" />
@@ -459,26 +539,29 @@ export function DocumentosImpresionProvider({
                     <div className={s.acciones}>
                       <Badge
                         variant={
-                          doc.motivo ||
-                          (ultimo &&
-                            ["ERROR", "SIN_CONFIRMAR", "PREPARADO"].includes(
-                              ultimo.estado,
-                            ))
+                          !ultimo?.confirmacion &&
+                          (doc.motivo ||
+                            (ultimo &&
+                              ["ERROR", "SIN_CONFIRMAR", "PREPARADO"].includes(
+                                ultimo.estado,
+                              )))
                             ? "outline"
                             : "secondary"
                         }
                       >
-                        {ultimo
-                          ? textoEstadoDocumento[ultimo.estado]
-                          : doc.motivo
-                            ? "Impresión pendiente"
-                            : "Listo para enviar"}
+                        {ultimo?.confirmacion
+                          ? "Impresión verificada"
+                          : ultimo
+                            ? textoEstadoDocumento[ultimo.estado]
+                            : doc.motivo
+                              ? "Impresión pendiente"
+                              : "Listo para enviar"}
                       </Badge>
                       {ultimo && !doc.motivo && puedeImprimir && (
                         <ActionButton
                           variant="tertiary"
                           isDisabled={
-                            ocupado ||
+                            bloqueado ||
                             cargando ||
                             !config?.impresora ||
                             configurando
@@ -510,6 +593,15 @@ export function DocumentosImpresionProvider({
                                 {ev.detalle}
                               </p>
                             ))}
+                            {e.confirmacion && (
+                              <p>
+                                Impresión verificada por{" "}
+                                {e.confirmacion.usuario} ·{" "}
+                                {new Date(
+                                  e.confirmacion.fecha,
+                                ).toLocaleString()}
+                              </p>
+                            )}
                           </section>
                         ))}
                       </details>
@@ -529,12 +621,13 @@ export function DocumentosImpresionProvider({
                   <div className={s.acciones}>
                     <ActionButton
                       variant="outline"
+                      isDisabled={bloqueado}
                       onPress={() => setReimprimir(null)}
                     >
                       Volver
                     </ActionButton>
                     <ActionButton
-                      isDisabled={ocupado || !config}
+                      isDisabled={bloqueado || !config}
                       onPress={() => {
                         if (vista && config)
                           void enviar(
@@ -558,10 +651,10 @@ export function DocumentosImpresionProvider({
               conserva el historial. La producción se completa desde el tablero.
             </p>
           </div>
-          <div className={s.footer}>
+          <div className={s.herramientas}>
             <ActionButton
               variant="tertiary"
-              isDisabled={ocupado || cargando}
+              isDisabled={bloqueado || cargando}
               onPress={() => void actualizar()}
             >
               <RefreshCw data-icon="inline-start" />
@@ -570,7 +663,7 @@ export function DocumentosImpresionProvider({
             {!conectado && config?.impresora && puedeImprimir && (
               <ActionButton
                 variant="outline"
-                isDisabled={ocupado || cargando}
+                isDisabled={bloqueado || cargando}
                 onPress={() => void reconectar()}
               >
                 Conectar seguimiento
@@ -579,7 +672,7 @@ export function DocumentosImpresionProvider({
             {conectado && (
               <ActionButton
                 variant="tertiary"
-                isDisabled={ocupado}
+                isDisabled={bloqueado}
                 onPress={() => {
                   escucha.current?.handle.cerrar();
                   escucha.current = null;
@@ -592,15 +685,30 @@ export function DocumentosImpresionProvider({
                 Desconectar seguimiento
               </ActionButton>
             )}
-            <ActionButton variant="outline" onPress={() => setAbierto(false)}>
+          </div>
+          <div className={s.footer}>
+            {vista && ultimos.length > 0 && (
+              <p className={s.confirmacionNota}>
+                {todosConfirmados
+                  ? "La impresión ya fue verificada. Podés cerrar este panel."
+                  : todosEnviados
+                    ? "Cuando revises todas las copias, confirmá la impresión para guardar el registro y cerrar."
+                    : "Completá los documentos sin enviar antes de confirmar toda la impresión."}
+              </p>
+            )}
+            <ActionButton
+              variant="outline"
+              isDisabled={confirmando}
+              onPress={() => setAbierto(false)}
+            >
               <Minus data-icon="inline-start" />
               Minimizar
             </ActionButton>
-            {puedeImprimir && (
+            {puedeImprimir && (pendientes.length > 0 || ocupado) && (
               <ActionButton
                 isDisabled={
                   !pendientes.length ||
-                  ocupado ||
+                  bloqueado ||
                   cargando ||
                   !config?.impresora ||
                   configurando ||
@@ -620,6 +728,26 @@ export function DocumentosImpresionProvider({
                 {ocupado
                   ? "Enviando…"
                   : `Enviar pendientes${pendientes.length ? ` (${pendientes.length})` : ""}`}
+              </ActionButton>
+            )}
+            {puedeImprimir && (
+              <ActionButton
+                isDisabled={
+                  !todosEnviados ||
+                  bloqueado ||
+                  cargando ||
+                  !!reimprimir ||
+                  !vista ||
+                  ["borrador", "cancelada"].includes(vista.estado)
+                }
+                onPress={() => void confirmarImpresion()}
+              >
+                <Check data-icon="inline-start" />
+                {confirmando
+                  ? "Guardando confirmación…"
+                  : todosConfirmados
+                    ? "Cerrar impresión"
+                    : "Todo impreso correctamente"}
               </ActionButton>
             )}
           </div>

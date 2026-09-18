@@ -8,6 +8,10 @@ import {
   Post,
 } from '@nestjs/common';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsInt,
   IsIn,
@@ -68,6 +72,15 @@ export class EstadoDocumentoDto {
   @IsString()
   @MaxLength(500)
   detalle!: string;
+}
+
+export class ConfirmarDocumentosDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  envioIds!: string[];
 }
 
 export class EscucharImpresoraDto extends ImpresoraDto {
@@ -168,6 +181,16 @@ export class ImpresionController {
       body.estado,
       body.detalle,
     );
+  }
+  @Post('ordenes/:id/confirmacion-documentos')
+  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Header('Cache-Control', 'no-store')
+  confirmarDocumentos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ConfirmarDocumentosDto,
+  ) {
+    return this.documentos.confirmar(auth, id, body.envioIds);
   }
   @Get('ordenes/:id/etiqueta')
   @Permiso('produccion.ver', 'produccion.ejecutar')

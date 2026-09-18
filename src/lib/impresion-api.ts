@@ -85,6 +85,7 @@ export type EnvioDocumento = {
   fecha: string;
   actualizadoEl: string;
   usuario: string;
+  confirmacion?: { fecha: string; usuario: string; usuarioId: string };
   eventos: Array<{ estado: EstadoDocumento; fecha: string; detalle: string }>;
 };
 export type DocumentoOrden = {
@@ -107,6 +108,14 @@ export type VistaDocumentos = {
 };
 export const getDocumentosOrden = (id: string) =>
   apiRequest<VistaDocumentos>(`/impresion/ordenes/${id}/documentos`);
+export const confirmarDocumentosImpresos = (
+  ordenId: string,
+  envioIds: string[],
+) =>
+  apiRequest<{ ok: boolean }>(
+    `/impresion/ordenes/${ordenId}/confirmacion-documentos`,
+    { method: "POST", body: JSON.stringify({ envioIds }) },
+  );
 export const prepararDocumentoOrden = (
   ordenId: string,
   itemId: string,

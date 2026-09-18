@@ -28,8 +28,12 @@ export class DocumentosOrdenService {
     private readonly impresion: ImpresionService,
   ) {}
 
-  private async orden(auth: CurrentAuth, id: string) {
-    const orden = await this.prisma.ordenTrabajo.findFirst({
+  private async orden(
+    auth: CurrentAuth,
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    const orden = await db.ordenTrabajo.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: {
         id: true,
@@ -309,6 +313,83 @@ export class DocumentosOrdenService {
         usuario: auth.email,
       },
     };
+  }
+
+  async confirmar(auth: CurrentAuth, ordenId: string, envioIds: string[]) {
+    return this.prisma.$transaction(async (tx) => {
+      // Comparte el bloqueo con preparar: no confirma una versión anterior si
+      // otra pestaña acaba de reimprimir o de modificar los documentos de la OT.
+      await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+      const orden = await this.orden(auth, ordenId, tx);
+      if (['borrador', 'cancelada'].includes(orden.estado))
+        throw new ConflictException(
+          'La orden no está disponible para confirmar.',
+        );
+      const documentos = this.documentos(orden);
+      const ultimos = await Promise.all(
+        documentos.map((doc) =>
+          tx.ordenTrabajoEvento.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              ordenId,
+              tipo: TIPO,
+              datosJson: { path: ['itemId'], equals: doc.itemId },
+            },
+            orderBy: { fecha: 'desc' },
+            select: { id: true },
+          }),
+        ),
+      );
+      if (!ultimos.length || ultimos.some((e) => !e))
+        throw new ConflictException(
+          'Hay documentos sin enviar. Completá los envíos antes de confirmar todo.',
+        );
+      const ids = ultimos.map((e) => e!.id);
+      if (
+        ids.length !== envioIds.length ||
+        ids.some((id) => !envioIds.includes(id))
+      )
+        throw new ConflictException(
+          'Los envíos cambiaron. Actualizá el panel y revisá la impresión antes de confirmar.',
+        );
+      const confirmacion = {
+        fecha: new Date().toISOString(),
+        usuario: auth.impersonacion?.actorNombre ?? auth.email,
+        usuarioId: auth.userId,
+      };
+      let nuevos = 0;
+      for (const id of ids.sort()) {
+        // Los eventos de Windows usan el mismo bloqueo: conservamos su estado
+        // y guardamos la verificación humana por separado, sin perder mensajes.
+        await tx.$queryRaw`SELECT id FROM "OrdenTrabajoEvento" WHERE id = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
+        const envio = await tx.ordenTrabajoEvento.findFirst({
+          where: { id, ordenId, tenantId: auth.tenantId, tipo: TIPO },
+        });
+        if (!envio) throw new NotFoundException('Envío no encontrado.');
+        const datos = objeto(envio.datosJson);
+        if (datos.confirmacion) continue;
+        await tx.ordenTrabajoEvento.update({
+          where: { id, tenantId: auth.tenantId },
+          data: {
+            datosJson: { ...datos, confirmacion } as Prisma.InputJsonValue,
+          },
+        });
+        nuevos++;
+      }
+      if (nuevos)
+        await tx.ordenTrabajoEvento.create({
+          data: {
+            tenantId: auth.tenantId,
+            ordenId,
+            tipo: 'impresion_confirmada',
+            descripcion: `Impresión de documentos verificada: ${ids.length} documento(s) impresos correctamente.`,
+            usuarioId: auth.userId,
+            usuarioNombre: confirmacion.usuario,
+            datosJson: { envioIds: ids, ...confirmacion },
+          },
+        });
+      return { ok: true };
+    });
   }
 
   async estado(

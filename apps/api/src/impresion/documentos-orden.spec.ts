@@ -247,7 +247,11 @@ describe('envíos de documentos de una OT', () => {
     const f = await fixture();
     f.buscarEvento.mockResolvedValue({
       id: 'intento',
-      datosJson: { estado: 'COMPLETE', eventos: [] },
+      datosJson: {
+        estado: 'COMPLETE',
+        eventos: [],
+        confirmacion: { usuario: 'Comercial', fecha: '2026-09-18' },
+      },
       fecha: new Date(),
       usuarioNombre: 'Operario',
     });
@@ -259,6 +263,10 @@ describe('envíos de documentos de una OT', () => {
       'Retirado',
     );
     expect(r.estado).toBe('COMPLETE');
+    expect(r.confirmacion).toEqual({
+      usuario: 'Comercial',
+      fecha: '2026-09-18',
+    });
     const consulta = (f.buscarEvento.mock.calls as unknown[][])[0][0] as {
       where: Record<string, unknown>;
     };
@@ -267,5 +275,105 @@ describe('envíos de documentos de una OT', () => {
       usuarioId: auth.userId,
       ordenId: 'orden',
     });
+  });
+
+  it('registra la verificación humana sin alterar el estado de Windows ni producción', async () => {
+    const f = await fixture();
+    f.buscarEvento.mockResolvedValue({
+      id: 'envio',
+      datosJson: { itemId: 'item', estado: 'SIN_CONFIRMAR', eventos: [] },
+    });
+    await f.servicio.confirmar(auth, 'orden', ['envio']);
+    const actualizacion = (f.actualizarEvento.mock.calls as unknown[][])[0][0];
+    expect(actualizacion).toMatchObject({
+      where: { id: 'envio', tenantId: auth.tenantId },
+      data: {
+        datosJson: {
+          estado: 'SIN_CONFIRMAR',
+          confirmacion: {
+            usuarioId: auth.userId,
+            usuario: auth.email,
+          },
+        },
+      },
+    });
+    const creacion = (f.crear.mock.calls as unknown[][])[0][0];
+    expect(creacion).toMatchObject({
+      data: {
+        tipo: 'impresion_confirmada',
+        tenantId: auth.tenantId,
+        ordenId: 'orden',
+        usuarioId: auth.userId,
+        datosJson: { envioIds: ['envio'] },
+      },
+    });
+    const consulta = (f.buscarEvento.mock.calls as unknown[][])[0][0];
+    expect(consulta).toMatchObject({
+      where: {
+        tenantId: auth.tenantId,
+        ordenId: 'orden',
+        tipo: 'impresion_documento',
+      },
+    });
+    expect(f.firmar).not.toHaveBeenCalled();
+  });
+
+  it('no duplica el registro si se repite una confirmación ya guardada', async () => {
+    const f = await fixture();
+    f.buscarEvento.mockResolvedValue({
+      id: 'envio',
+      datosJson: {
+        confirmacion: { usuarioId: 'otro-operario', fecha: '2026-09-18' },
+      },
+    });
+    await expect(
+      f.servicio.confirmar(auth, 'orden', ['envio']),
+    ).resolves.toEqual({ ok: true });
+    expect(f.actualizarEvento).not.toHaveBeenCalled();
+    expect(f.crear).not.toHaveBeenCalled();
+  });
+
+  it('rechaza confirmar todo si hay un documento sin enviar', async () => {
+    const f = await fixture();
+    f.orden.items.push({ ...f.orden.items[0], id: 'otro-item' });
+    f.buscarEvento
+      .mockResolvedValueOnce({ id: 'envio' })
+      .mockResolvedValueOnce(null);
+    await expect(
+      f.servicio.confirmar(auth, 'orden', ['envio']),
+    ).rejects.toThrow('sin enviar');
+    expect(f.actualizarEvento).not.toHaveBeenCalled();
+    expect(f.crear).not.toHaveBeenCalled();
+  });
+
+  it.each([['envio-anterior'], ['envio', 'extra'], []])(
+    'rechaza una vista de envíos obsoleta: %j',
+    async (...ids: string[]) => {
+      const f = await fixture();
+      f.buscarEvento.mockResolvedValue({ id: 'envio' });
+      await expect(f.servicio.confirmar(auth, 'orden', ids)).rejects.toThrow(
+        'envíos cambiaron',
+      );
+      expect(f.actualizarEvento).not.toHaveBeenCalled();
+    },
+  );
+
+  it('no confirma órdenes de otra empresa ni órdenes canceladas', async () => {
+    const f = await fixture();
+    f.buscarOrden.mockResolvedValueOnce(null);
+    await expect(
+      f.servicio.confirmar(auth, 'orden', ['envio']),
+    ).rejects.toThrow('no encontrada');
+    f.orden.estado = 'cancelada';
+    await expect(
+      f.servicio.confirmar(auth, 'orden', ['envio']),
+    ).rejects.toThrow('no está disponible');
+    expect(f.buscarOrden).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'orden', tenantId: auth.tenantId },
+      }),
+    );
+    expect(f.actualizarEvento).not.toHaveBeenCalled();
+    expect(f.crear).not.toHaveBeenCalled();
   });
 });

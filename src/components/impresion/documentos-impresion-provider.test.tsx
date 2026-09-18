@@ -14,10 +14,12 @@ const mocks = vi.hoisted(() => ({
   imprimir: vi.fn(),
   escuchar: vi.fn(),
   cerrar: vi.fn(),
+  confirmar: vi.fn(),
 }));
 vi.mock("@/lib/impresion-api", () => ({
   getDocumentosOrden: mocks.vista,
   registrarEstadoDocumento: mocks.estado,
+  confirmarDocumentosImpresos: mocks.confirmar,
 }));
 vi.mock("@/lib/qz-impresion", () => ({
   imprimirDocumentoOrden: mocks.imprimir,
@@ -66,7 +68,12 @@ vi.mock("@/components/design-system/action-button", () => ({
 vi.mock("./impresora-puesto-form", () => ({ ImpresoraPuestoForm: () => null }));
 function Abrir() {
   const impresion = useImpresionDocumentos();
-  return <button onClick={() => impresion.abrir("ot", true)}>Emitida</button>;
+  return (
+    <>
+      <button onClick={() => impresion.abrir("ot", true)}>Emitida</button>
+      <button onClick={() => impresion.abrir("otra-ot", true)}>Otra OT</button>
+    </>
+  );
 }
 let root: Root;
 let el: HTMLDivElement;
@@ -115,6 +122,7 @@ beforeEach(() => {
   };
   mocks.vista.mockImplementation(async () => structuredClone(vista));
   mocks.estado.mockResolvedValue(base);
+  mocks.confirmar.mockResolvedValue({ ok: true });
   mocks.escuchar.mockResolvedValue({
     cerrar: mocks.cerrar,
     consultar: vi.fn(),
@@ -204,4 +212,105 @@ it("se detiene si un envío falla; conserva el historial y la OT", async () => {
   expect(el.textContent).toContain("La OT está guardada");
   expect(el.textContent).toContain("Envío sin confirmar");
   expect(el.textContent).toContain("Enviar pendientes (1)");
+  await click("Todo impreso correctamente");
+  expect(mocks.confirmar).not.toHaveBeenCalled();
+});
+
+it("espera el guardado y luego cierra el modal y su indicador sin reenviar", async () => {
+  let guardar!: (value: { ok: boolean }) => void;
+  mocks.confirmar.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        guardar = resolve;
+      }),
+  );
+  await montar();
+  await click("Emitida");
+  await click("Todo impreso correctamente");
+  expect(mocks.confirmar).toHaveBeenCalledWith("ot", ["envio"]);
+  expect(el.textContent).toContain("Guardando confirmación…");
+  expect(mocks.cerrar).not.toHaveBeenCalled();
+  await click("Guardando confirmación…");
+  expect(mocks.confirmar).toHaveBeenCalledTimes(1);
+  await act(async () => guardar({ ok: true }));
+  expect(el.textContent).not.toContain("Impresión de documentos");
+  expect(el.textContent).not.toContain("Impresión · OT-1");
+  expect(mocks.cerrar).toHaveBeenCalledTimes(1);
+  const llamadas = mocks.estado.mock.calls.length;
+  await act(async () =>
+    mocks.escuchar.mock.calls[0][2]({
+      printerName: "RICOH",
+      eventType: "JOB",
+      jobName: base.jobName,
+      statusText: "DELETED",
+    }),
+  );
+  expect(mocks.estado).toHaveBeenCalledTimes(llamadas);
+  expect(mocks.imprimir).toHaveBeenCalledTimes(1);
+});
+
+it("conserva el panel y la escucha si falla la confirmación", async () => {
+  mocks.confirmar.mockRejectedValueOnce(new Error("No se pudo guardar"));
+  await montar();
+  await click("Emitida");
+  await click("Todo impreso correctamente");
+  expect(el.textContent).toContain("No se pudo guardar");
+  expect(el.textContent).toContain("Impresión de documentos");
+  expect(mocks.cerrar).not.toHaveBeenCalled();
+  await click("Todo impreso correctamente");
+  expect(el.textContent).not.toContain("Impresión de documentos");
+  expect(mocks.imprimir).toHaveBeenCalledTimes(1);
+});
+
+it("recupera una verificación humana aunque Windows no confirmó la salida", async () => {
+  vista.historial = [
+    {
+      ...base,
+      estado: "SIN_CONFIRMAR",
+      confirmacion: {
+        usuario: "Operario",
+        usuarioId: "user",
+        fecha: base.fecha,
+      },
+    },
+  ];
+  await montar();
+  await click("Emitida");
+  expect(el.textContent).toContain("Impresión verificada");
+  expect(el.textContent).toContain("Impresión verificada por Operario");
+  expect(mocks.imprimir).not.toHaveBeenCalled();
+  await click("Cerrar impresión");
+  expect(el.textContent).not.toContain("Impresión de documentos");
+});
+
+it("confirmar una orden mantiene el seguimiento de otra orden pendiente", async () => {
+  await montar();
+  await click("Emitida");
+  const otra = { ...vista, ordenId: "otra-ot", numero: "OT-2" };
+  const envioOtra = { ...base, id: "otro-envio", jobName: "Grafo OT-2 envio" };
+  mocks.vista.mockResolvedValue(otra);
+  mocks.imprimir.mockImplementation(
+    async (_t, _c, _o, _i, _id, _r, preparado) => {
+      preparado(envioOtra);
+      return envioOtra;
+    },
+  );
+  await click("Otra OT");
+  await click("Todo impreso correctamente");
+  expect(mocks.confirmar).toHaveBeenCalledWith("otra-ot", ["otro-envio"]);
+  expect(mocks.cerrar).not.toHaveBeenCalled();
+  await act(async () =>
+    mocks.escuchar.mock.calls[0][2]({
+      printerName: "RICOH",
+      eventType: "JOB",
+      jobName: base.jobName,
+      statusText: "COMPLETE",
+    }),
+  );
+  expect(mocks.estado).toHaveBeenLastCalledWith(
+    "ot",
+    "envio",
+    "COMPLETE",
+    "Finalizado según la cola",
+  );
 });

@@ -72,6 +72,8 @@ Secuencia de prueba: una copia simple faz (2 hojas), una copia doble faz (1 hoja
 - Reservar un intento bloquea la fila OT dentro de una transacción. Dos pestañas no pueden autorizar el mismo primer envío. Reimprimir exige el ID del último intento y confirmación explícita; repetir un request no devuelve otra autorización. Ante error/timeout se detiene el lote. Nunca se reenvía al recargar/reconectar.
 - Cerrar/recargar la pestaña interrumpe el seguimiento. Los trabajos enviados siguen en Windows y el historial permanece. **Conectar seguimiento** consulta estados presentes, sin reconstruir eventos que Windows descartó. **Desconectar seguimiento** libera la escucha para las pruebas de configuración.
 - `COMPLETE`/`PRINTED` indican finalización según cola; `DELETED` sólo indica retirada. ACK/borrados tardíos no degradan una finalización. Los avisos PRINTER describen la cola completa, sin atribuirlos a un documento.
+- **Todo impreso correctamente** registra una verificación humana con usuario y fecha en los últimos envíos y en el historial de la OT (`impresion_confirmada`). Cierra el panel y retira su indicador flotante; conserva el seguimiento de otras órdenes. Requiere que todos los documentos tengan un intento y que termine el envío actual. Si falla el guardado, el panel permanece abierto. No cambia el estado de producción ni sustituye los eventos de Windows. Una reimpresión necesita una nueva verificación.
+- `POST impresion/ordenes/:id/confirmacion-documentos` recibe los IDs de los últimos envíos. Valida tenant, permisos y que no haya nuevos intentos desde otra pestaña; repetir la confirmación no duplica el registro. El indicador minimizado usa el contenedor de estilos de Grafo, igual que el modal.
 
 ### Alcance
 
