@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import qz from "qz-tray";
-const mocks = vi.hoisted(() => ({ escuchar: vi.fn(), preparar: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  escuchar: vi.fn(),
+  preparar: vi.fn(),
+  documento: vi.fn(),
+}));
 vi.mock("./impresion-api", () => ({
   getConfiguracionImpresion: async () => ({
     tenantId: "tenant",
@@ -9,6 +13,7 @@ vi.mock("./impresion-api", () => ({
   }),
   getFirmaEscucha: mocks.escuchar,
   prepararPruebaDocumento: mocks.preparar,
+  prepararDocumentoOrden: mocks.documento,
 }));
 const hash = (call: string, params: object, timestamp: number) =>
   createHash("sha256")
@@ -123,6 +128,62 @@ describe("documentos y escucha con SDK QZ real", () => {
     await qz.websocket.disconnect();
     expect(desconectado).toHaveBeenCalledOnce();
     await expect(escucha.consultar()).rejects.toThrow("desconectada");
+  });
+  it("envía un intento de OT con sus parámetros firmados y no lo repite ante rechazo", async () => {
+    qz.api.setWebSocketType(Socket);
+    const timestamp = Date.now();
+    const params = {
+      printer: { name: "RICOH" },
+      options: {
+        copies: 7,
+        duplex: "one-sided",
+        jobName: "Grafo OT-1 intento-1",
+      },
+      data: [{ type: "pixel", format: "pdf", flavor: "base64", data: "cGRm" }],
+    };
+    const intento = { id: "intento-1", jobName: params.options.jobName };
+    mocks.documento.mockResolvedValue({
+      params,
+      intento,
+      timestamp,
+      hash: hash("print", params, timestamp),
+      firma: "firma-ot",
+      totalPaginas: 3,
+    });
+    const { imprimirDocumentoOrden } = await import("./qz-impresion");
+    const preparado = vi.fn();
+    await imprimirDocumentoOrden(
+      "tenant",
+      { host: "localhost", impresora: "RICOH" },
+      "ot-1",
+      "item-1",
+      "intento-1",
+      undefined,
+      preparado,
+    );
+    expect(preparado).toHaveBeenCalledExactlyOnceWith(intento);
+    expect(mensajes.filter((m) => m.call === "print")).toEqual([
+      expect.objectContaining({ params, signature: "firma-ot" }),
+    ]);
+    expect(mocks.documento).toHaveBeenCalledExactlyOnceWith("ot-1", "item-1", {
+      host: "localhost",
+      impresora: "RICOH",
+      intentoId: "intento-1",
+      reimpresionDe: undefined,
+    });
+    mocks.documento.mockRejectedValue(new Error("Ya enviado"));
+    await expect(
+      imprimirDocumentoOrden(
+        "tenant",
+        { host: "localhost", impresora: "RICOH" },
+        "ot-1",
+        "item-1",
+        "intento-1",
+        undefined,
+        preparado,
+      ),
+    ).rejects.toThrow("Ya enviado");
+    expect(mensajes.filter((m) => m.call === "print")).toHaveLength(1);
   });
   it("rechaza una firma de escucha alterada sin enviar startListening a QZ", async () => {
     mocks.escuchar.mockResolvedValue({

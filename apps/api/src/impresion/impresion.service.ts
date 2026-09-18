@@ -105,6 +105,11 @@ export class ImpresionService {
     return this.firmar('printers.find', {});
   }
 
+  /** El único caller es el servicio de documentos, luego de validar la OT. */
+  firmarDocumento(params: object) {
+    return this.firmar('print', params);
+  }
+
   escucharImpresora(impresora: string, timestamp: number) {
     // El SDK asigna su timestamp al iniciar la escucha. Reconstruimos únicamente
     // este comando conocido; no se aceptan hashes, comandos ni jobData del cliente.

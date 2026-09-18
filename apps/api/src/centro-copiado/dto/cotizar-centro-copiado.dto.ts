@@ -35,6 +35,11 @@ export class DocumentoCentroCopiadoDto {
   @MaxLength(200)
   nombre?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  archivoNombre?: string;
+
   @IsInt()
   @Min(1)
   paginas!: number;

@@ -65,6 +65,7 @@
     "maxrects-packer": "^2.7.3",
     "nestjs-pino": "^4.6.1",
     "otpauth": "^9.5.2",
+    "pdf-lib": "^1.17.1",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "polygon-clipping": "^0.15.7",

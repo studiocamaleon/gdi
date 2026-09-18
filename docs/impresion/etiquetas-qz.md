@@ -57,12 +57,32 @@ En Configuración → Impresoras hay dos destinos independientes por tenant y na
 - **Escuchar impresora** recibe avisos de Windows por QZ. Se muestran hasta 100 eventos en memoria y se pueden descargar como JSON. Se filtran los trabajos ajenos al piloto. No se solicitan archivos de la cola (`jobData`).
 - La escucha se detiene al salir de esta pantalla. Ante desconexión se informa que el último evento puede estar desactualizado. No hay servicio residente ni historial persistente en esta etapa.
 - `COMPLETE` se presenta como «Finalizado según la cola»; `DELETED` sólo como «Retirado de la cola». Ninguno confirma físicamente la salida ni finaliza producción. No hay reintentos automáticos de impresión.
-- `POST impresion/prueba-documento` construye y firma exclusivamente ese PDF fijo y sus opciones validadas. `POST impresion/escuchar` reconstruye exclusivamente `printers.startListening` para una cola, con timestamp del SDK dentro de 60 segundos del servidor. Ambos requieren configuración.ver.
+- `POST impresion/prueba-documento` construye y firma exclusivamente ese PDF fijo y sus opciones validadas. `POST impresion/escuchar` reconstruye exclusivamente `printers.startListening` para una cola, con timestamp del SDK dentro de 60 segundos del servidor. La prueba requiere configuración.ver; la escucha admite además comercial.gestionar/produccion.ejecutar.
 - QZ 2.2.6 no permite pasar timestamp a `startListening`. Usamos su API pública `setSha256Type` para conservar SHA256 y obtener la autorización de ese mensaje concreto. El backend no firma hashes/comandos libres. `getStatus` y `stopListening` no requieren firma según el SDK.
 - Validado con el equipo real: búsqueda de la Ricoh, configuración independiente y evento de impresora `OK` («Disponible»). El usuario confirmó las tres pruebas físicas: simple faz con una copia (2 hojas), doble faz con una copia (1 hoja) y doble faz con dos copias (2 hojas). Los avisos de falta de papel, atasco y la correspondencia entre fin de cola y salida física aún no se verificaron específicamente.
 
-Secuencia de prueba: una copia simple faz (2 hojas), una copia doble faz (1 hoja) y dos copias doble faz (2 hojas). Con la escucha activa, pausar la cola de la Ricoh desde Windows y reanudarla para comprobar el aviso, cuidando no interrumpir trabajos ajenos. La integración con «Emitir OT» se hará después de validar el equipo.
+Secuencia de prueba: una copia simple faz (2 hojas), una copia doble faz (1 hoja) y dos copias doble faz (2 hojas). Con la escucha activa, pausar la cola de la Ricoh desde Windows y reanudarla para comprobar el aviso, cuidando no interrumpir trabajos ajenos. Las tres variantes físicas quedaron validadas; el flujo integrado se describe abajo.
 
-### Punto de integración con la emisión
+## Documentos al emitir OT (18/09/2026)
 
-La emisión de una nueva OT en `PropuestaFicha` ya espera las tareas de adjuntos con `Promise.allSettled`. `subirArchivosCentroCopiado` informa las fallas con un aviso y no las propaga; para imprimir deberá devolver el resultado por archivo y habilitar sólo los PDF confirmados. La emisión de un borrador tiene otro recorrido (`emitirBorrador`) que también deberá ofrecer la impresión. El envío tomará copias y faz del snapshot guardado; una falla de impresión no deberá convertir una emisión exitosa en una acción reintentable que duplique la OT.
+- Emitir OT detecta A4 B/N de centro de copiado y ofrece **Emitir sin imprimir** / **Emitir e imprimir**, en órdenes nuevas y borradores. La impresora se configura por tenant y navegador, separada de etiquetas.
+- Primero se emite la OT y terminan los intentos de subida. El servidor consulta los archivos `LISTO` del ítem y tenant: prepara sólo originales confirmados. Los archivos ausentes quedan pendientes con un motivo visible; no se deshace la emisión.
+- El panel global se puede minimizar y permanece al navegar dentro del dashboard. Muestra páginas, copias/juegos, faz, hojas, avisos e historial por documento. También se abre desde **Impresión de documentos** en la OT. Cambiar de empresa desmonta la escucha.
+- Los mensajes JOB se vinculan mediante un `jobName` único a OT + intento. Se persisten en `OrdenTrabajoEvento`, tipo `impresion_documento`, con actor, originales, destino, cantidades, estado y hasta 40 actualizaciones por intento. El panel recupera los 100 envíos más recientes y el último intento de cada documento. Esta telemetría no es prueba de salida física ni una transición de producción.
+- Reservar un intento bloquea la fila OT dentro de una transacción. Dos pestañas no pueden autorizar el mismo primer envío. Reimprimir exige el ID del último intento y confirmación explícita; repetir un request no devuelve otra autorización. Ante error/timeout se detiene el lote. Nunca se reenvía al recargar/reconectar.
+- Cerrar/recargar la pestaña interrumpe el seguimiento. Los trabajos enviados siguen en Windows y el historial permanece. **Conectar seguimiento** consulta estados presentes, sin reconstruir eventos que Windows descartó. **Desconectar seguimiento** libera la escucha para las pruebas de configuración.
+- `COMPLETE`/`PRINTED` indican finalización según cola; `DELETED` sólo indica retirada. ACK/borrados tardíos no degradan una finalización. Los avisos PRINTER describen la cola completa, sin atribuirlos a un documento.
+
+### Alcance
+
+PDF A4 B/N, simple o doble faz por borde largo, hasta 25 MB de originales por ítem, 2.000 páginas por original y 999 copias. Se validan páginas reales contra el snapshot. Los tomos con mismo papel/gramaje/faz se unen en orden, insertando un dorso vacío después de originales impares. Un tomo mixto o producto distribuido en entregas requiere impresión manual. El papel se prepara en la Ricoh; esta versión no selecciona bandejas por gramaje ni ejecuta terminaciones.
+
+Se corrigió el cómputo de doble faz impar: `ceil(páginas / faz) × copias`. Por ejemplo, 3 páginas × 2 copias a doble faz = 4 hojas. Las cotizaciones históricas que guardaron 3 hojas deben recotizarse antes de usar impresión directa.
+
+Endpoints: `GET impresion/ordenes/:id/documentos`, `POST impresion/ordenes/:id/documentos/:itemId`, `POST impresion/ordenes/:id/envios/:intentoId`. Escritura: comercial.gestionar o produccion.ejecutar. Lectura: comercial.ver o produccion.ver/ejecutar. Escuchar QZ ahora también admite comercial.gestionar/produccion.ejecutar. El servidor reconstruye y firma el PDF y opciones; no acepta comandos libres ni cantidades arbitrarias.
+
+### Verificación
+
+Pruebas automáticas: aislamiento tenant/actor, reserva y reimpresión, páginas reales, tomos impares, eventos tardíos, seguimiento al minimizar y detención ante error parcial. Contrato probado contra SDK QZ 2.2.6 real con transporte simulado. Cotización verificada con pruebas de dominio e integración.
+
+En navegador: OT-2026-0058 con original ausente correctamente bloqueado, Ricoh reconocida y escucha real conectada al minimizar/navegar. No se emitió una OT ni se envió un PDF real durante esa revisión; queda probar físicamente **Emitir e imprimir**. Las tres variantes físicas del panel de configuración ya fueron confirmadas por el usuario.

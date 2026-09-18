@@ -5,6 +5,8 @@ import {
   getFirmaEscucha,
   prepararPruebaDocumento,
   prepararEtiqueta,
+  prepararDocumentoOrden,
+  type EnvioDocumento,
   type FirmaQz,
 } from "./impresion-api";
 import { hostQzValido, type ImpresoraPuesto } from "./impresora-puesto";
@@ -314,5 +316,39 @@ export function imprimirPruebaDocumento(
       );
     }
     return options.jobName;
+  });
+}
+
+/** Un intento por documento. Si QZ no responde, nunca reenviar automáticamente. */
+export function imprimirDocumentoOrden(
+  tenantId: string,
+  config: ImpresoraPuesto,
+  ordenId: string,
+  itemId: string,
+  intentoId: string,
+  reimpresionDe: string | undefined,
+  preparado: (envio: EnvioDocumento) => void,
+) {
+  return exclusivo(async () => {
+    const qz = await conectar(config.host, tenantId);
+    const trabajo = await prepararDocumentoOrden(ordenId, itemId, {
+      intentoId,
+      impresora: config.impresora,
+      host: config.host,
+      reimpresionDe,
+    });
+    preparado(trabajo.intento);
+    firmaActual = trabajo;
+    const { printer, options, data } = trabajo.params;
+    await conLimite(
+      qz,
+      qz.print(
+        { getPrinter: () => printer, getOptions: () => options },
+        data,
+        [],
+        trabajo.timestamp,
+      ),
+    );
+    return trabajo.intento;
   });
 }

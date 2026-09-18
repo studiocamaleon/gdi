@@ -10,6 +10,9 @@ import {
 import {
   IsBoolean,
   IsInt,
+  IsIn,
+  IsOptional,
+  IsUUID,
   IsString,
   Matches,
   Max,
@@ -21,6 +24,11 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 import { ImpresionService } from './impresion.service';
+import { DocumentosOrdenService } from './documentos-orden.service';
+import {
+  ESTADOS_IMPRESION,
+  type EstadoImpresion,
+} from './documentos-orden.domain';
 
 export class ImpresoraDto {
   @IsString()
@@ -43,6 +51,25 @@ export class PrepararEtiquetaDto extends ImpresoraDto {
   pagina!: number;
 }
 
+export class PrepararDocumentoDto extends ImpresoraDto {
+  @IsUUID()
+  intentoId!: string;
+  @IsString()
+  @MaxLength(253)
+  @Matches(/^[a-zA-Z0-9.-]+$/)
+  host!: string;
+  @IsOptional()
+  @IsUUID()
+  reimpresionDe?: string;
+}
+export class EstadoDocumentoDto {
+  @IsIn(ESTADOS_IMPRESION)
+  estado!: EstadoImpresion;
+  @IsString()
+  @MaxLength(500)
+  detalle!: string;
+}
+
 export class EscucharImpresoraDto extends ImpresoraDto {
   @IsInt()
   @Min(1)
@@ -58,10 +85,18 @@ export class PruebaDocumentoDto extends ImpresoraDto {
   dobleFaz!: boolean;
 }
 
-@Permiso('produccion.ver', 'produccion.ejecutar', 'configuracion.ver')
+@Permiso(
+  'produccion.ver',
+  'produccion.ejecutar',
+  'configuracion.ver',
+  'comercial.gestionar',
+)
 @Controller('impresion')
 export class ImpresionController {
-  constructor(private readonly service: ImpresionService) {}
+  constructor(
+    private readonly service: ImpresionService,
+    private readonly documentos: DocumentosOrdenService,
+  ) {}
   @Get('configuracion')
   @Header('Cache-Control', 'no-store')
   configuracion(@CurrentSession() auth: CurrentAuth) {
@@ -73,7 +108,7 @@ export class ImpresionController {
     return this.service.buscarImpresoras();
   }
   @Post('escuchar')
-  @Permiso('configuracion.ver')
+  @Permiso('configuracion.ver', 'comercial.gestionar', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')
   escuchar(@Body() body: EscucharImpresoraDto) {
     return this.service.escucharImpresora(body.impresora, body.timestamp);
@@ -86,6 +121,52 @@ export class ImpresionController {
       body.impresora,
       body.copias,
       body.dobleFaz,
+    );
+  }
+
+  @Get('ordenes/:id/documentos')
+  @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
+  @Header('Cache-Control', 'no-store')
+  vistaDocumentos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.documentos.vista(auth, id);
+  }
+  @Post('ordenes/:id/documentos/:itemId')
+  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Header('Cache-Control', 'no-store')
+  prepararDocumento(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() body: PrepararDocumentoDto,
+  ) {
+    return this.documentos.preparar(
+      auth,
+      id,
+      itemId,
+      body.intentoId,
+      body.impresora,
+      body.host,
+      body.reimpresionDe,
+    );
+  }
+  @Post('ordenes/:id/envios/:intentoId')
+  @Permiso('comercial.gestionar', 'produccion.ejecutar')
+  @Header('Cache-Control', 'no-store')
+  estadoDocumento(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('intentoId', ParseUUIDPipe) intentoId: string,
+    @Body() body: EstadoDocumentoDto,
+  ) {
+    return this.documentos.estado(
+      auth,
+      id,
+      intentoId,
+      body.estado,
+      body.detalle,
     );
   }
   @Get('ordenes/:id/etiqueta')

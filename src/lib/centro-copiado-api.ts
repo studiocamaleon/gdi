@@ -16,6 +16,7 @@ export type FazDoc = 1 | 2;
 
 export interface CentroCopiadoSegmentoMeta {
   nombre?: string | null;
+  archivoNombre?: string;
   paginas: number;
   tamano: string;
   tamanoAnchoMm?: number;
@@ -39,6 +40,7 @@ export interface CentroCopiadoMeta {
   terminaciones?: string[];
   tipoAnillo?: string | null;
   nombre?: string | null;
+  archivoNombre?: string;
   paginas?: number;
   copias?: number;
   tamano?: string;
@@ -90,6 +92,7 @@ export function cantidadLibrosCentroCopiado(
 export interface DocumentoCentroCopiado {
   id: string;
   nombre?: string;
+  archivoNombre?: string;
   paginas: number;
   copias: number;
   /** Nombre del formato (etiqueta), ej. "A4", "SRA3". */

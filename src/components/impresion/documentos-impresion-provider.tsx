@@ -1,0 +1,630 @@
+"use client";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Printer, RefreshCw, Settings2, Minus, FileText } from "lucide-react";
+import { toast } from "sonner";
+import { ActionButton } from "@/components/design-system/action-button";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import {
+  getDocumentosOrden,
+  registrarEstadoDocumento,
+  type EnvioDocumento,
+  type EstadoDocumento,
+  type VistaDocumentos,
+} from "@/lib/impresion-api";
+import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
+import {
+  escucharImpresora,
+  imprimirDocumentoOrden,
+  type EscuchaImpresora,
+} from "@/lib/qz-impresion";
+import { eventoImpresora } from "@/lib/qz-eventos";
+import {
+  estadoDocumentoQz,
+  estadoDocumentoSiguiente,
+  textoEstadoDocumento,
+} from "@/lib/impresion-documentos";
+import { ImpresoraPuestoForm } from "./impresora-puesto-form";
+import s from "./documentos-impresion.module.css";
+
+type Contexto = {
+  tenantId: string;
+  abrir: (id: string, enviar?: boolean) => void;
+};
+const Contexto = createContext<Contexto>({ tenantId: "", abrir: () => {} });
+export const useImpresionDocumentos = () => useContext(Contexto);
+type Seguimiento = { ordenId: string; envio: EnvioDocumento };
+
+/** Vive en el dashboard: minimizar/cambiar de pantalla no interrumpe la cola. */
+export function DocumentosImpresionProvider({
+  tenantId,
+  children,
+}: {
+  tenantId: string;
+  children: ReactNode;
+}) {
+  const comercial = usePuede("comercial.gestionar");
+  const produccion = usePuede("produccion.ejecutar");
+  const puedeImprimir = comercial || produccion;
+  const [abierto, setAbierto] = useState(false);
+  const [vista, setVista] = useState<VistaDocumentos | null>(null);
+  const vistaRef = useRef<VistaDocumentos | null>(null);
+  const [config, setConfig] = useState<ImpresoraPuesto | null>(null);
+  const [configurando, setConfigurando] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const ocupadoRef = useRef(false);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState("");
+  const [guardadoError, setGuardadoError] = useState("");
+  const [avance, setAvance] = useState("");
+  const [conectado, setConectado] = useState(false);
+  const [avisoImpresora, setAvisoImpresora] = useState("");
+  const [reimprimir, setReimprimir] = useState<EnvioDocumento | null>(null);
+  const trabajos = useRef(new Map<string, Seguimiento>());
+  const escucha = useRef<{ destino: string; handle: EscuchaImpresora } | null>(
+    null,
+  );
+  const vivos = useRef(true);
+  const escrituras = useRef(Promise.resolve());
+  const carga = useRef(0);
+  const ordenesPendientes = useRef<string[]>([]);
+
+  useEffect(() => {
+    vivos.current = true;
+    return () => {
+      vivos.current = false;
+      escucha.current?.handle.cerrar();
+    };
+  }, []);
+  function mostrar(v: VistaDocumentos) {
+    vistaRef.current = v;
+    setVista(v);
+  }
+  function actualizarEnvio(ordenId: string, envio: EnvioDocumento) {
+    const anterior = vistaRef.current;
+    if (anterior?.ordenId === ordenId)
+      mostrar({
+        ...anterior,
+        historial: [
+          envio,
+          ...anterior.historial.filter((e) => e.id !== envio.id),
+        ].sort((a, b) => b.fecha.localeCompare(a.fecha)),
+      });
+  }
+  function registrar(
+    jobName: string,
+    estado: EstadoDocumento,
+    detalle: string,
+  ) {
+    const track = trabajos.current.get(jobName);
+    if (!track) return;
+    if (
+      track.envio.eventos.at(-1)?.estado === estado &&
+      track.envio.eventos.at(-1)?.detalle === detalle
+    )
+      return;
+    const fecha = new Date().toISOString();
+    track.envio = {
+      ...track.envio,
+      estado: estadoDocumentoSiguiente(track.envio.estado, estado),
+      actualizadoEl: fecha,
+      eventos: [...track.envio.eventos.slice(-39), { estado, detalle, fecha }],
+    };
+    actualizarEnvio(track.ordenId, track.envio);
+    // Ordena los mensajes del navegador: un ACK tardío no pisa PRINTING/COMPLETE.
+    escrituras.current = escrituras.current.then(async () => {
+      try {
+        await registrarEstadoDocumento(
+          track.ordenId,
+          track.envio.id,
+          estado,
+          detalle,
+        );
+      } catch {
+        if (vivos.current)
+          setGuardadoError(
+            "No se pudo guardar una actualización. El estado visible sigue en esta pestaña; revisá la cola antes de reimprimir.",
+          );
+      }
+    });
+  }
+  async function conectar(destino: ImpresoraPuesto) {
+    const clave = `${destino.host}:${destino.impresora}`;
+    if (escucha.current?.destino === clave) return;
+    escucha.current?.handle.cerrar();
+    escucha.current = null;
+    setConectado(false);
+    const handle = await escucharImpresora(
+      tenantId,
+      destino,
+      (dato) => {
+        const evento = eventoImpresora(
+          dato,
+          destino.impresora,
+          new Set(trabajos.current.keys()),
+        );
+        if (!evento || !vivos.current) return;
+        if (evento.tipo === "PRINTER") {
+          setAvisoImpresora(evento.estado === "OK" ? "" : evento.detalle);
+        } else {
+          const estado = estadoDocumentoQz(evento.estado);
+          if (estado) registrar(evento.jobName, estado, evento.detalle);
+        }
+      },
+      () => {
+        escucha.current = null;
+        if (vivos.current) {
+          setConectado(false);
+          setAvisoImpresora(
+            "Se perdió la conexión. Windows puede seguir imprimiendo; los envíos no se repiten.",
+          );
+        }
+      },
+    );
+    if (!vivos.current) {
+      handle.cerrar();
+      return;
+    }
+    escucha.current = { destino: clave, handle };
+    setConectado(true);
+  }
+  async function enviar(
+    v: VistaDocumentos,
+    destino: ImpresoraPuesto,
+    ids: string[],
+    anterior?: EnvioDocumento,
+  ) {
+    if (ocupadoRef.current || !puedeImprimir || !ids.length) return;
+    ocupadoRef.current = true;
+    setOcupado(true);
+    setError("");
+    setReimprimir(null);
+    try {
+      setAvance("Conectando con el equipo de impresión…");
+      await conectar(destino);
+      for (const [indice, id] of ids.entries()) {
+        if (!vivos.current) break;
+        const doc = v.documentos.find((d) => d.itemId === id)!;
+        setAvance(`Enviando ${indice + 1} de ${ids.length} · ${doc.nombre}`);
+        let preparado: EnvioDocumento | null = null;
+        try {
+          const enviado = await imprimirDocumentoOrden(
+            tenantId,
+            destino,
+            v.ordenId,
+            id,
+            crypto.randomUUID(),
+            anterior?.id,
+            (envio) => {
+              preparado = envio;
+              trabajos.current.set(envio.jobName, {
+                ordenId: v.ordenId,
+                envio,
+              });
+              actualizarEnvio(v.ordenId, envio);
+            },
+          );
+          registrar(
+            enviado.jobName,
+            "ENVIADO",
+            "QZ confirmó el envío a Windows.",
+          );
+        } catch (e) {
+          // Incluso una respuesta HTTP perdida puede haber reservado el intento.
+          const incierto = preparado as EnvioDocumento | null;
+          if (incierto)
+            registrar(
+              incierto.jobName,
+              "SIN_CONFIRMAR",
+              "No se pudo confirmar el envío. Revisar la cola antes de reimprimir.",
+            );
+          throw e;
+        }
+      }
+      setAvance(
+        "Envíos terminados. Esperando los estados de la cola de Windows.",
+      );
+    } catch (e) {
+      setAvance("");
+      setError(
+        `${e instanceof Error ? e.message : "No se pudo enviar."} La OT está guardada. Revisá la cola antes de reintentar; los documentos restantes no se enviaron.`,
+      );
+      await escrituras.current;
+      try {
+        mostrar(await getDocumentosOrden(v.ordenId));
+      } catch {
+        /* conservar vista y error */
+      }
+    } finally {
+      ocupadoRef.current = false;
+      if (vivos.current) setOcupado(false);
+      const siguiente = ordenesPendientes.current.shift();
+      if (siguiente && vivos.current) void abrir(siguiente, true);
+    }
+  }
+  async function abrir(id: string, autoEnviar = false) {
+    setAbierto(true);
+    if (ocupadoRef.current) {
+      if (autoEnviar && id !== vistaRef.current?.ordenId) {
+        if (!ordenesPendientes.current.includes(id))
+          ordenesPendientes.current.push(id);
+        toast.info(
+          "La OT está guardada. Sus documentos se enviarán cuando termine el envío actual.",
+        );
+        return;
+      }
+      toast.info("Esperá a que termine el envío actual para abrir otra orden.");
+      return;
+    }
+    const revision = ++carga.current;
+    if (vistaRef.current?.ordenId !== id) {
+      vistaRef.current = null;
+      setVista(null);
+      setConfig(null);
+    }
+    setCargando(true);
+    setError("");
+    setReimprimir(null);
+    setAvance("");
+    try {
+      const v = await getDocumentosOrden(id);
+      if (revision !== carga.current || !vivos.current) return;
+      const destino = leerImpresora(tenantId, "documentos");
+      mostrar(v);
+      setConfig(destino);
+      setConfigurando(!destino.impresora);
+      if (autoEnviar && destino.impresora)
+        await enviar(
+          v,
+          destino,
+          v.documentos
+            .filter(
+              (d) =>
+                !d.motivo && !v.historial.some((e) => e.itemId === d.itemId),
+            )
+            .map((d) => d.itemId),
+        );
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudo cargar la impresión.",
+      );
+    } finally {
+      if (revision === carga.current) setCargando(false);
+    }
+  }
+  async function actualizar() {
+    const v = vistaRef.current;
+    if (!v || ocupadoRef.current) return;
+    setError("");
+    try {
+      await escrituras.current;
+      mostrar(await getDocumentosOrden(v.ordenId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo actualizar.");
+    }
+  }
+  async function reconectar() {
+    if (!config || !vista || ocupadoRef.current) return;
+    setError("");
+    for (const envio of vista.historial)
+      if (envio.host === config.host && envio.impresora === config.impresora)
+        trabajos.current.set(envio.jobName, { ordenId: vista.ordenId, envio });
+    try {
+      await conectar(config);
+      await escucha.current?.handle.consultar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo conectar.");
+    }
+  }
+  const pendientes =
+    vista?.documentos.filter(
+      (d) => !d.motivo && !vista.historial.some((e) => e.itemId === d.itemId),
+    ) ?? [];
+  // Los eventos de la cola no deben volver a renderizar toda la ficha comercial.
+  const abrirRef = useRef(abrir);
+  useEffect(() => {
+    abrirRef.current = abrir;
+  });
+  const contexto = useMemo(
+    () => ({
+      tenantId,
+      abrir: (id: string, enviar?: boolean) =>
+        void abrirRef.current(id, enviar),
+    }),
+    [tenantId],
+  );
+  return (
+    <Contexto.Provider value={contexto}>
+      {children}
+      <DesignSystemProvider theme="brand" appearance="light">
+        {vista && !abierto && (
+          <div className={s.widget}>
+            <ActionButton onPress={() => setAbierto(true)}>
+              <Printer data-icon="inline-start" />
+              {ocupado
+                ? "Enviando documentos…"
+                : error || avisoImpresora || guardadoError
+                  ? `Revisar impresión · ${vista.numero}`
+                  : `Impresión · ${vista.numero}`}
+            </ActionButton>
+          </div>
+        )}
+        <FormDialog
+          isOpen={abierto}
+          onOpenChange={setAbierto}
+          title="Impresión de documentos"
+          description={
+            vista
+              ? `${vista.numero} · A4 · Blanco y negro`
+              : "Cargando los documentos de la orden…"
+          }
+          className={s.dialog}
+        >
+          <div className={s.body}>
+            {cargando && !vista && <p role="status">Cargando documentos…</p>}
+            {config && configurando && (
+              <ImpresoraPuestoForm
+                uso="documentos"
+                tenantId={tenantId}
+                inicial={config}
+                disabled={ocupado || !puedeImprimir}
+                onGuardar={(c) => {
+                  setConfig(c);
+                  setConfigurando(false);
+                }}
+              />
+            )}
+            {config?.impresora && !configurando && (
+              <div className={s.destino}>
+                <div>
+                  <strong>{config.impresora}</strong>
+                  <p>
+                    {config.host} ·{" "}
+                    {conectado &&
+                    escucha.current?.destino ===
+                      `${config.host}:${config.impresora}`
+                      ? "Seguimiento conectado"
+                      : "Último estado registrado"}
+                  </p>
+                </div>
+                <ActionButton
+                  variant="tertiary"
+                  isDisabled={ocupado}
+                  onPress={() => setConfigurando(true)}
+                >
+                  <Settings2 data-icon="inline-start" />
+                  Cambiar
+                </ActionButton>
+              </div>
+            )}
+            {avisoImpresora && (
+              <Alert>
+                <AlertDescription>{avisoImpresora}</AlertDescription>
+              </Alert>
+            )}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {guardadoError && (
+              <Alert variant="destructive">
+                <AlertDescription>{guardadoError}</AlertDescription>
+              </Alert>
+            )}
+            {avance && (
+              <p role="status" className={s.avance}>
+                {avance}
+              </p>
+            )}
+            {vista && !vista.documentos.length && (
+              <p>No hay documentos de centro de copiado en esta orden.</p>
+            )}
+            <div className={s.lista}>
+              {vista?.documentos.map((doc) => {
+                const envios = vista.historial.filter(
+                  (e) => e.itemId === doc.itemId,
+                );
+                const ultimo = envios[0];
+                return (
+                  <article className={s.documento} key={doc.itemId}>
+                    <div className={s.titulo}>
+                      <FileText aria-hidden="true" />
+                      <strong>{doc.nombre}</strong>
+                    </div>
+                    <p>
+                      {doc.paginas} páginas · {doc.copias}{" "}
+                      {doc.documentos > 1
+                        ? doc.copias === 1
+                          ? "juego"
+                          : "juegos"
+                        : doc.copias === 1
+                          ? "copia"
+                          : "copias"}{" "}
+                      ·{" "}
+                      {doc.faz === 2 ? "Doble faz · borde largo" : "Simple faz"}{" "}
+                      · {doc.hojas} hojas
+                    </p>
+                    <div className={s.acciones}>
+                      <Badge
+                        variant={
+                          doc.motivo ||
+                          (ultimo &&
+                            ["ERROR", "SIN_CONFIRMAR", "PREPARADO"].includes(
+                              ultimo.estado,
+                            ))
+                            ? "outline"
+                            : "secondary"
+                        }
+                      >
+                        {ultimo
+                          ? textoEstadoDocumento[ultimo.estado]
+                          : doc.motivo
+                            ? "Impresión pendiente"
+                            : "Listo para enviar"}
+                      </Badge>
+                      {ultimo && !doc.motivo && puedeImprimir && (
+                        <ActionButton
+                          variant="tertiary"
+                          isDisabled={
+                            ocupado ||
+                            cargando ||
+                            !config?.impresora ||
+                            configurando
+                          }
+                          onPress={() => setReimprimir(ultimo)}
+                        >
+                          Reimprimir
+                        </ActionButton>
+                      )}
+                    </div>
+                    {doc.motivo && <p className={s.motivo}>{doc.motivo}</p>}
+                    {envios.length > 0 && (
+                      <details className={s.historial}>
+                        <summary>
+                          {envios.length} envío{envios.length > 1 ? "s" : ""} ·
+                          Ver historial
+                        </summary>
+                        {envios.map((e) => (
+                          <section key={e.id}>
+                            <strong>{textoEstadoDocumento[e.estado]}</strong>
+                            <p>
+                              {new Date(e.fecha).toLocaleString()} · {e.usuario}
+                              <br />
+                              {e.impresora} · {e.copias} copias
+                            </p>
+                            {e.eventos.map((ev, i) => (
+                              <p key={i}>
+                                {new Date(ev.fecha).toLocaleTimeString()} ·{" "}
+                                {ev.detalle}
+                              </p>
+                            ))}
+                          </section>
+                        ))}
+                      </details>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+            {reimprimir && (
+              <Alert>
+                <AlertDescription>
+                  <p>
+                    Se enviarán nuevamente las {reimprimir.copias} copias de{" "}
+                    <strong>{reimprimir.nombre}</strong>. Revisá la salida y la
+                    cola para evitar duplicados.
+                  </p>
+                  <div className={s.acciones}>
+                    <ActionButton
+                      variant="outline"
+                      onPress={() => setReimprimir(null)}
+                    >
+                      Volver
+                    </ActionButton>
+                    <ActionButton
+                      isDisabled={ocupado || !config}
+                      onPress={() => {
+                        if (vista && config)
+                          void enviar(
+                            vista,
+                            config,
+                            [reimprimir.itemId],
+                            reimprimir,
+                          );
+                      }}
+                    >
+                      Confirmar reimpresión
+                    </ActionButton>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            <p className={s.nota}>
+              La cola informa lo que reporta Windows. La salida física depende
+              de la impresora. Podés minimizar y seguir trabajando; si cerrás o
+              recargás esta pestaña se interrumpe el seguimiento, pero se
+              conserva el historial. La producción se completa desde el tablero.
+            </p>
+          </div>
+          <div className={s.footer}>
+            <ActionButton
+              variant="tertiary"
+              isDisabled={ocupado || cargando}
+              onPress={() => void actualizar()}
+            >
+              <RefreshCw data-icon="inline-start" />
+              Actualizar
+            </ActionButton>
+            {!conectado && config?.impresora && puedeImprimir && (
+              <ActionButton
+                variant="outline"
+                isDisabled={ocupado || cargando}
+                onPress={() => void reconectar()}
+              >
+                Conectar seguimiento
+              </ActionButton>
+            )}
+            {conectado && (
+              <ActionButton
+                variant="tertiary"
+                isDisabled={ocupado}
+                onPress={() => {
+                  escucha.current?.handle.cerrar();
+                  escucha.current = null;
+                  setConectado(false);
+                  setAvisoImpresora(
+                    "Seguimiento detenido. Los trabajos enviados siguen en Windows.",
+                  );
+                }}
+              >
+                Desconectar seguimiento
+              </ActionButton>
+            )}
+            <ActionButton variant="outline" onPress={() => setAbierto(false)}>
+              <Minus data-icon="inline-start" />
+              Minimizar
+            </ActionButton>
+            {puedeImprimir && (
+              <ActionButton
+                isDisabled={
+                  !pendientes.length ||
+                  ocupado ||
+                  cargando ||
+                  !config?.impresora ||
+                  configurando ||
+                  !vista ||
+                  ["borrador", "cancelada"].includes(vista.estado)
+                }
+                onPress={() => {
+                  if (vista && config)
+                    void enviar(
+                      vista,
+                      config,
+                      pendientes.map((d) => d.itemId),
+                    );
+                }}
+              >
+                <Printer data-icon="inline-start" />
+                {ocupado
+                  ? "Enviando…"
+                  : `Enviar pendientes${pendientes.length ? ` (${pendientes.length})` : ""}`}
+              </ActionButton>
+            )}
+          </div>
+        </FormDialog>
+      </DesignSystemProvider>
+    </Contexto.Provider>
+  );
+}

@@ -41,6 +41,7 @@ export type CentroCopiadoCobertura = (typeof CENTRO_COPIADO_COBERTURAS)[number];
 
 export interface CentroCopiadoSegmentoMeta {
   nombre: string | null;
+  archivoNombre?: string;
   paginas: number;
   tamano: string;
   tamanoAnchoMm: number;
@@ -63,6 +64,7 @@ export interface CentroCopiadoMeta {
   terminaciones: string[];
   tipoAnillo: string | null;
   nombre?: string | null;
+  archivoNombre?: string;
   paginas?: number;
   copias?: number;
   tamano?: string;
@@ -107,6 +109,7 @@ export function metaDocumentoCentroCopiado(args: {
     terminaciones: args.terminaciones,
     tipoAnillo: args.tipoAnillo,
     nombre: doc.nombre ?? null,
+    ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
     paginas: doc.paginas,
     copias: args.copias,
     tamano: doc.tamano,
@@ -150,6 +153,7 @@ export function metaTomoCentroCopiado(args: {
     documentos: args.docs.length,
     segmentos: args.docs.map((doc) => ({
       nombre: doc.nombre ?? null,
+      ...(doc.archivoNombre ? { archivoNombre: doc.archivoNombre } : {}),
       paginas: doc.paginas,
       tamano: doc.tamano,
       tamanoAnchoMm: doc.tamanoAnchoMm,

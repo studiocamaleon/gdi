@@ -44,6 +44,7 @@ type TamanoFila = {
 type DocRow = TamanoFila & {
   id: string;
   nombre: string;
+  archivoNombre?: string;
   paginas: number;
   /** true = las páginas las leyó el sistema del PDF (se marcan en verde). */
   paginasAuto: boolean;
@@ -394,6 +395,7 @@ export default function CentroCopiadoSheet({
           nuevosDocs.push({
             id: nextId(),
             nombre: seg.nombre ?? "Documento",
+            archivoNombre: seg.archivoNombre,
             paginas: Number(seg.paginas) || 1,
             paginasAuto: true,
             tamano: tn,
@@ -419,6 +421,7 @@ export default function CentroCopiadoSheet({
         nuevosDocs.push({
           id: nextId(),
           nombre: meta.nombre ?? it.varianteNombre ?? "Documento",
+          archivoNombre: meta.archivoNombre,
           paginas: Number(meta.paginas) || 1,
           paginasAuto: true,
           tamano: tn,
@@ -482,6 +485,7 @@ export default function CentroCopiadoSheet({
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
+          archivoNombre: d.file?.name ?? d.archivoNombre,
           paginas: d.paginas,
           copias: d.copias,
           tamano: d.tamano,
@@ -744,6 +748,7 @@ export default function CentroCopiadoSheet({
         documentos: docs.map((d) => ({
           id: d.id,
           nombre: d.nombre.trim() || undefined,
+          archivoNombre: d.file?.name ?? d.archivoNombre,
           paginas: d.paginas,
           copias: d.copias,
           tamano: d.tamano,

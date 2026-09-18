@@ -54,3 +54,83 @@ export const prepararPruebaDocumento = (
     method: "POST",
     body: JSON.stringify({ impresora, copias, dobleFaz }),
   });
+
+export type EstadoDocumento =
+  | "PREPARADO"
+  | "ENVIADO"
+  | "SPOOLING"
+  | "SCHEDULED"
+  | "PRINTING"
+  | "SENT"
+  | "COMPLETE"
+  | "PRINTED"
+  | "DELETED"
+  | "CANCELED"
+  | "ABORTED"
+  | "ERROR"
+  | "PAUSED"
+  | "SIN_CONFIRMAR";
+export type EnvioDocumento = {
+  id: string;
+  itemId: string;
+  nombre: string;
+  copias: number;
+  paginas: number;
+  hojas: number;
+  faz: 1 | 2;
+  host: string;
+  impresora: string;
+  jobName: string;
+  estado: EstadoDocumento;
+  fecha: string;
+  actualizadoEl: string;
+  usuario: string;
+  eventos: Array<{ estado: EstadoDocumento; fecha: string; detalle: string }>;
+};
+export type DocumentoOrden = {
+  itemId: string;
+  nombre: string;
+  copias: number;
+  paginas: number;
+  hojas: number;
+  faz: 1 | 2;
+  motivo: string | null;
+  archivos: string[];
+  documentos: number;
+};
+export type VistaDocumentos = {
+  ordenId: string;
+  numero: string;
+  estado: string;
+  documentos: DocumentoOrden[];
+  historial: EnvioDocumento[];
+};
+export const getDocumentosOrden = (id: string) =>
+  apiRequest<VistaDocumentos>(`/impresion/ordenes/${id}/documentos`);
+export const prepararDocumentoOrden = (
+  ordenId: string,
+  itemId: string,
+  datos: {
+    intentoId: string;
+    impresora: string;
+    host: string;
+    reimpresionDe?: string;
+  },
+) =>
+  apiRequest<TrabajoQz & { intento: EnvioDocumento }>(
+    `/impresion/ordenes/${ordenId}/documentos/${itemId}`,
+    { method: "POST", body: JSON.stringify(datos) },
+  );
+export const registrarEstadoDocumento = (
+  ordenId: string,
+  intentoId: string,
+  estado: EstadoDocumento,
+  detalle: string,
+) =>
+  apiRequest<EnvioDocumento>(
+    `/impresion/ordenes/${ordenId}/envios/${intentoId}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ estado, detalle: detalle.slice(0, 500) }),
+    },
+  );
