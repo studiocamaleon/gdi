@@ -150,6 +150,7 @@ import {
   CuponAvisoModal,
   type AvisoCupon,
 } from "@/components/comercial/cupon-aviso";
+import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
@@ -4963,6 +4964,8 @@ function PropuestaFichaContenido({
     ordenProp ? "productos" : "datos",
   );
   // QR que el cliente presenta en el mostrador para retirar.
+  const [etiquetaOpen, setEtiquetaOpen] = React.useState(false);
+  const puedeImprimirEtiqueta = usePuede("produccion.ver");
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
   // Acceso manual al mismo circuito de mostrador cuando no se usa el QR.
   const [entregaManualOpen, setEntregaManualOpen] = React.useState(false);
@@ -7591,6 +7594,12 @@ function PropuestaFichaContenido({
                           Entregar
                         </Button>
                       ) : null}
+                      {puedeImprimirEtiqueta && orden && !["borrador", "cancelada"].includes(orden.estado) && (
+                        <HeroButton variant="tertiary" onPress={() => setEtiquetaOpen(true)}>
+                          <PrinterIcon />
+                          Imprimir etiqueta
+                        </HeroButton>
+                      )}
                       {publicToken ? (
                         <HeroButton
                           type="button"
@@ -8466,6 +8475,9 @@ function PropuestaFichaContenido({
           onCerrar={() => setAvisoCupon(null)}
         />
 
+        {etiquetaOpen && orden && (
+          <EtiquetaOrdenDialog ordenId={orden.id} onClose={() => setEtiquetaOpen(false)} />
+        )}
         {qrRetiroOpen && orden ? (
           <QrRetiroModal
             numero={orden.numero}

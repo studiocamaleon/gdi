@@ -36,6 +36,7 @@
     "opentype.js": "^2.0.0",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
+    "qz-tray": "2.2.6",
     "react": "19.2.3",
     "react-aria-components": "1.21.1",
     "react-dom": "19.2.3",

@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowUpRight, CalendarDays, CircleCheck } from "lucide-react";
+import { useState } from "react";
+import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
+import { ArrowUpRight, CalendarDays, CircleCheck, Printer } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
@@ -20,6 +22,14 @@ export function OrdenFinalizadaDialog({
   puedeVerOrden: boolean;
   onClose: () => void;
 }) {
+  const [imprimir, setImprimir] = useState(false);
+  if (imprimir)
+    return (
+      <EtiquetaOrdenDialog
+        ordenId={aviso.ordenId}
+        onClose={() => setImprimir(false)}
+      />
+    );
   return (
     <DesignSystemProvider theme="brand" appearance="light">
       <FormDialog
@@ -77,6 +87,10 @@ export function OrdenFinalizadaDialog({
           )}
         </div>
         <div className={s.footer}>
+          <ActionButton variant="outline" onPress={() => setImprimir(true)}>
+            <Printer aria-hidden="true" />
+            Imprimir etiqueta
+          </ActionButton>
           {puedeVerOrden && (
             <ActionLink
               variant="outline"

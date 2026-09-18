@@ -49,6 +49,7 @@ describe("aviso de finalización de una OT", () => {
       "Tarjetas",
       "500",
       "Entendido",
+      "Imprimir etiqueta",
     ])
       expect(html).toContain(texto);
     expect(html).toContain('href="/produccion/ordenes/ot-1"');

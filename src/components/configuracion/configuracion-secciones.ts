@@ -95,6 +95,13 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
     permiso: "configuracion.ver",
   },
   {
+    key: "impresoras",
+    href: "/configuracion/impresoras",
+    label: "Impresoras",
+    detalle: "Etiquetas y conexión de este puesto",
+    permiso: "configuracion.ver",
+  },
+  {
     key: "integraciones",
     href: "/configuracion/integraciones",
     label: "Integraciones",

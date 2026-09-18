@@ -1,3 +1,4 @@
+import { ImpresionModule } from './impresion/impresion.module';
 import { PlanificacionEntregasModule } from './planificacion-entregas/planificacion.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
@@ -97,6 +98,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
       },
     ]),
     PrismaModule,
+    ImpresionModule,
     EventosSistemaModule,
     AuthModule,
     TenantsModule,
