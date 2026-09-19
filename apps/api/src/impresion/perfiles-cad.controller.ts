@@ -1,3 +1,5 @@
+import { UseGuards } from '@nestjs/common';
+import { ImpresionDirectaGuard } from './impresion-directa.guard';
 import {
   Body,
   Controller,
@@ -14,6 +16,7 @@ import { Permiso } from '../auth/permiso.decorator';
 import { PerfilesCadService } from './perfiles-cad.service';
 import { PerfilCadDto, SimularPerfilCadDto } from './perfiles-cad.dto';
 
+@UseGuards(ImpresionDirectaGuard)
 @Controller('impresion/cad')
 @Permiso('configuracion.gestionar')
 export class PerfilesCadController {

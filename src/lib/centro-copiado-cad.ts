@@ -5,7 +5,7 @@ export {
   mapaCopiasCad,
   type CopiasPaginaCad,
 } from "../../apps/api/src/common/copias-paginas-cad";
-import { planPaginaCad } from "../../apps/api/src/impresion/cad.domain";
+import { planPaginaCad } from "../../apps/api/src/common/cad-geometria";
 import {
   medidasSeleccionadas,
   type MedidaPagina,
@@ -20,12 +20,10 @@ export {
 export type { MedidaPagina } from "../../apps/api/src/common/medidas-documento";
 
 export type PerfilCadCopiado = {
-  perfilId: string;
+  id: string;
+  revision: string;
   nombre: string;
-  versionPerfil: number;
-  versionDestino: number;
-  destinoId: string;
-  impresoraNombre: string;
+  maquinaNombre: string;
   maquinaId: string;
   productoNombre: string;
   materialNombre: string;
@@ -33,11 +31,9 @@ export type PerfilCadCopiado = {
   productoId: string;
   rutaAlternativaId: string;
   materialVarianteId: string;
-  gramaje: number;
+  gramaje: number | null;
   color: "BN" | "COLOR";
   prioridad: number;
-  probado: boolean;
-  modo: string;
   rollo: { anchoRolloMm: number; margenMm: number };
 };
 export const opcionesCadCopiado = () =>

@@ -16,7 +16,6 @@ import {
 } from "@/components/navigation/nav-items";
 import { permisosDe, puede } from "@/lib/permisos";
 import {
-  PALABRAS_CONFIG,
   seccionesConfigVisibles,
 } from "@/components/configuracion/configuracion-secciones";
 import { Sidebar, useSidebar } from "@/components/ui/sidebar";
@@ -367,6 +366,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
       seccionesConfigVisibles(
         (p) => permisos === null || permisos.has(p),
         currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
+        currentUser.tenantActual?.suscripcion?.capacidades?.impresionDirecta === true,
       ).length > 0
     );
   }, [currentUser]);
@@ -398,7 +398,7 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
     filtering &&
     ("configuración".includes(q) ||
       "configuracion".includes(q) ||
-      PALABRAS_CONFIG.some((p) => p.toLowerCase().includes(q)));
+      seccionesConfigVisibles((p) => puede(currentUser, p), currentUser.tenantActual?.regional?.paisCodigo ?? "AR", currentUser.tenantActual?.suscripcion?.capacidades?.impresionDirecta === true).some((s) => s.label.toLowerCase().includes(q)));
 
   // Navegación filtrada en vivo por el buscador del sidebar. Al filtrar, los
   // grupos con hijos que matchean se muestran expandidos.

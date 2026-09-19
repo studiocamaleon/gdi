@@ -1,3 +1,8 @@
+import { UseGuards } from '@nestjs/common';
+import {
+  ImpresionDirectaGuard,
+  ImpresionManual,
+} from './impresion-directa.guard';
 import {
   Body,
   Controller,
@@ -145,6 +150,7 @@ export class EscucharImpresoraDto {
   @IsString()
   @MinLength(1)
   @MaxLength(200)
+  // eslint-disable-next-line no-control-regex -- Excluye controles del nombre de cola.
   @Matches(/^[^\x00-\x1f\x7f]+$/)
   impresora?: string;
   @IsOptional()
@@ -155,6 +161,7 @@ export class EscucharImpresoraDto {
   @IsString({ each: true })
   @MinLength(1, { each: true })
   @MaxLength(200, { each: true })
+  // eslint-disable-next-line no-control-regex -- Excluye controles de cada nombre de cola.
   @Matches(/^[^\x00-\x1f\x7f]+$/, { each: true })
   impresoras?: string[];
   @IsInt()
@@ -183,6 +190,7 @@ export class PruebaDocumentoDto extends ImpresoraDto {
   'configuracion.ver',
   'comercial.gestionar',
 )
+@UseGuards(ImpresionDirectaGuard)
 @Controller('impresion')
 export class ImpresionController {
   constructor(
@@ -419,6 +427,7 @@ export class ImpresionController {
   ) {
     return this.documentos.confirmar(auth, id, body.envioIds);
   }
+  @ImpresionManual()
   @Get('ordenes/:id/etiqueta')
   @Permiso('produccion.ver', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')

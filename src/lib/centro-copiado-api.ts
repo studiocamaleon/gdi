@@ -1,3 +1,4 @@
+import type { SeleccionCad } from "../../apps/api/src/common/seleccion-cad";
 import type { MedidaPagina } from "../../apps/api/src/common/medidas-documento";
 import type { CopiasPaginaCad } from "../../apps/api/src/common/copias-paginas-cad";
 import type { OrientacionPagina } from "./orientacion-pdf";
@@ -39,7 +40,7 @@ export interface CentroCopiadoSegmentoMeta {
 export interface CentroCopiadoMeta {
   copiasPorPagina?: CopiasPaginaCad[];
   modo?: "HOJAS" | "CAD";
-  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
+  cad?: SeleccionCad;
   version?: 1;
   productoNombre?: string;
   productoCodigo?: string;
@@ -111,7 +112,7 @@ export function cantidadLibrosCentroCopiado(
 export interface DocumentoCentroCopiado {
   copiasPorPagina?: CopiasPaginaCad[];
   modo?: "HOJAS" | "CAD";
-  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
+  cad?: SeleccionCad;
   id: string;
   nombre?: string;
   archivoNombre?: string;

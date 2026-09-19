@@ -13,6 +13,70 @@ const doc: ConfiguracionDocumento = {
   faz: 2,
 };
 describe('selección de perfiles de impresión', () => {
+  it('resuelve un plano cotizado sin QZ contra un destino actual y exige coincidencia completa', () => {
+    const cad = { rutaAlternativaId: 'ruta', materialVarianteId: 'rollo' };
+    const configuracion: ConfiguracionDocumento = {
+      ...doc,
+      tamano: 'CAD',
+      faz: 1,
+      cad: {
+        ...cad,
+        origen: 'COTIZACION',
+        maquinaId: 'maquina',
+        anchoRolloMm: 914,
+      },
+    };
+    const perfil = {
+      ...perfilPrueba,
+      tamano: 'CAD',
+      faz: 1,
+      cad,
+      bandeja: {
+        ...perfilPrueba.bandeja,
+        destino: {
+          ...perfilPrueba.bandeja.destino,
+          cad: {
+            anchoRolloMm: 914,
+            margenMm: 5,
+            origenPapel: '',
+            usarOrigenPredeterminado: true,
+          },
+        },
+      },
+    };
+    expect(resolverPerfil(configuracion, []).perfil).toBeNull();
+    expect(resolverPerfil(configuracion, [perfil], ['maquina']).estado).toBe(
+      'LISTO',
+    );
+    expect(
+      resolverPerfil(configuracion, [{ ...perfil, version: 99 }]).estado,
+    ).toBe('LISTO');
+    expect(
+      resolverPerfil({ ...configuracion, gramaje: null }, [perfil]).estado,
+    ).toBe('LISTO');
+    expect(
+      resolverPerfil({ ...configuracion, gramaje: 150 }, [perfil]).perfil,
+    ).toBeNull();
+    expect(resolverPerfil(configuracion, [perfil], ['otra']).perfil).toBeNull();
+    for (const cambio of [
+      { materialVarianteId: 'otro' },
+      { rutaAlternativaId: 'otra' },
+      { maquinaId: 'otra' },
+      { anchoRolloMm: 610 },
+    ])
+      expect(
+        resolverPerfil(
+          { ...configuracion, cad: { ...configuracion.cad!, ...cambio } },
+          [perfil],
+        ).perfil,
+      ).toBeNull();
+    expect(
+      resolverPerfil(configuracion, [{ ...perfil, probado: false }]).estado,
+    ).toBe('REVISAR');
+    expect(
+      resolverPerfil(configuracion, [perfil, { ...perfil, id: 'otro' }]).perfil,
+    ).toBeNull();
+  });
   it('separa B/N de Color aun con mayor prioridad y permite ambos perfiles en una impresora color', () => {
     const color = {
       ...perfilPrueba,

@@ -1,4 +1,4 @@
-import { ImpresionModule } from '../impresion/impresion.module';
+import { CatalogoCadModule } from './catalogo-cad.module';
 import { CentroCopiadoCadService } from './centro-copiado-cad.service';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -20,7 +20,7 @@ import { CentroCopiadoIdempotenciaService } from './centro-copiado-idempotencia.
     PrismaModule,
     MotorUniversalModule,
     SuscripcionesModule,
-    ImpresionModule,
+    CatalogoCadModule,
   ],
   controllers: [CentroCopiadoController],
   providers: [

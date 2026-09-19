@@ -1,4 +1,6 @@
 "use client";
+import type { SeleccionCad } from "../../../apps/api/src/common/seleccion-cad";
+
 import { useMotorConTipoCambio } from "./tipo-cambio-documento";
 
 import {
@@ -84,7 +86,7 @@ type TamanoFila = {
 type DocRow = TamanoFila & {
   modo: "HOJAS" | "CAD";
   medidasPaginas?: MedidaPagina[];
-  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
+  cad?: SeleccionCad;
   id: string;
   nombre: string;
   archivoNombre?: string;
@@ -159,7 +161,9 @@ const paginasParaCotizar = (doc: DocRow) => ({
 });
 const faltaConfiguracion = (d: DocRow) =>
   d.modo === "CAD"
-    ? !d.cad || !d.medidasPaginas?.length
+    ? !d.cad ||
+      (d.cad.cotizacion !== undefined && !d.cad.cotizacion.revision) ||
+      !d.medidasPaginas?.length
     : !d.papelMateriaPrimaId;
 
 const OPCIONES_COLOR = [
@@ -229,9 +233,7 @@ const aplicarPerfilCad = (
   tamano: "CAD",
   cad: perfil
     ? {
-        perfilId: perfil.perfilId,
-        versionPerfil: perfil.versionPerfil,
-        versionDestino: perfil.versionDestino,
+        cotizacion: { id: perfil.id, revision: perfil.revision },
       }
     : undefined,
   ...(perfil
@@ -384,8 +386,7 @@ function CentroCopiadoContenido({
   const [cargandoHojas, setCargandoHojas] = React.useState(true);
   const perfilCadDefault =
     perfilesCad.find(
-      (p) =>
-        p.perfilId === cadDefaults.perfilId && p.color === cadDefaults.color,
+      (p) => p.id === cadDefaults.perfilId && p.color === cadDefaults.color,
     ) ?? perfilCadPreferido(perfilesCad, cadDefaults.color);
   const [docs, setDocs] = React.useState<DocRow[]>([]);
   const [grupos, setGrupos] = React.useState<Record<string, GrupoState>>({});
@@ -587,7 +588,29 @@ function CentroCopiadoContenido({
           orientacionesPaginas: meta.orientacionesPaginas,
           medidasPaginas: meta.medidasPaginas,
           modo: meta.modo ?? "HOJAS",
-          cad: meta.cad,
+          cad: meta.cad?.cotizacion
+            ? meta.cad
+            : (() => {
+                const contexto = it.jobContext as
+                  | Record<string, unknown>
+                  | undefined;
+                const maquinaId = Object.entries(contexto ?? {}).find(([k]) =>
+                  k.startsWith("maquinaSeleccionada_"),
+                )?.[1];
+                const ruta = (meta as unknown as Record<string, unknown>)
+                  .rutaAlternativaId;
+                const material = (meta as unknown as Record<string, unknown>)
+                  .materialVarianteId;
+                return maquinaId && ruta && material
+                  ? {
+                      ...meta.cad,
+                      cotizacion: {
+                        id: `${maquinaId}:${ruta}:${material}:${meta.color}`,
+                        revision: "",
+                      },
+                    }
+                  : meta.cad;
+              })(),
           paginasAuto: (meta.archivoNombre ?? meta.nombre ?? "")
             .toLowerCase()
             .endsWith(".pdf"),
@@ -869,11 +892,11 @@ function CentroCopiadoContenido({
       });
   };
   const cambiarColorCad = (d: DocRow, color: ColorDoc) => {
-    const actual = perfilesCad.find((p) => p.perfilId === d.cad?.perfilId);
+    const actual = perfilesCad.find((p) => p.id === d.cad?.cotizacion?.id);
     const mismaReceta = actual
       ? perfilesCad.filter(
           (p) =>
-            p.destinoId === actual.destinoId &&
+            p.maquinaId === actual.maquinaId &&
             p.rutaAlternativaId === actual.rutaAlternativaId &&
             p.materialVarianteId === actual.materialVarianteId,
         )
@@ -1158,12 +1181,9 @@ function CentroCopiadoContenido({
     const abrirPaginas = () =>
       setOpcionesAbiertas((prev) => new Set(prev).add(d.id));
     const medidas = medidasSeleccionadas(d.medidasPaginas, d.rangoPaginas);
-    const perfilCad = perfilesCad.find((p) => p.perfilId === d.cad?.perfilId);
+    const perfilCad = perfilesCad.find((p) => p.id === d.cad?.cotizacion?.id);
     const perfilCadCambio =
-      esCad &&
-      perfilCad &&
-      (perfilCad.versionPerfil !== d.cad?.versionPerfil ||
-        perfilCad.versionDestino !== d.cad?.versionDestino);
+      esCad && perfilCad && perfilCad.revision !== d.cad?.cotizacion?.revision;
     const geometriaCad = esCad
       ? paginasCad(d.medidasPaginas, d.rangoPaginas, perfilCad)
       : [];
@@ -1360,13 +1380,13 @@ function CentroCopiadoContenido({
           {esCad ? (
             <td colSpan={2}>
               <SysSelect
-                value={d.cad?.perfilId ?? ""}
+                value={d.cad?.cotizacion?.id ?? ""}
                 onChange={(id) =>
                   editar(
                     d.id,
                     aplicarPerfilCad(
                       d,
-                      perfilesCad.find((p) => p.perfilId === id),
+                      perfilesCad.find((p) => p.id === id),
                     ),
                   )
                 }
@@ -1374,22 +1394,22 @@ function CentroCopiadoContenido({
                   {
                     value: "",
                     label: cargandoCad
-                      ? "Cargando perfiles…"
-                      : "Elegí perfil CAD",
+                      ? "Cargando configuraciones…"
+                      : "Elegí configuración CAD",
                   },
                   ...perfilesCad
                     .filter((p) => p.color === d.color)
                     .map((p) => ({
-                      value: p.perfilId,
-                      label: `${p.nombre} · ${p.materialNombre} · ${p.impresoraNombre}`,
+                      value: p.id,
+                      label: `${p.nombre} · ${p.materialNombre} · ${p.maquinaNombre}`,
                     })),
                 ]}
-                ariaLabel={`Perfil CAD de ${nombre}`}
+                ariaLabel={`Configuración CAD de ${nombre}`}
               />
               <span className={s.cellHint}>
                 {perfilCad
                   ? `Rollo ${numeroMedida(perfilCad.rollo.anchoRolloMm)} mm`
-                  : "Configuración → Impresoras → Planos CAD"}
+                  : "Revisá las recetas y materiales de tus plotters CAD"}
               </span>
             </td>
           ) : (
@@ -1540,21 +1560,21 @@ function CentroCopiadoContenido({
                 <p className={s.rangoError}>
                   {errorPerfilesCad ||
                     (cargandoCad
-                      ? "Cargando perfiles CAD…"
-                      : "Elegí un perfil CAD del color seleccionado. Si no hay opciones, configurá uno en Impresoras.")}
+                      ? "Cargando configuraciones CAD…"
+                      : "Elegí una configuración CAD del color seleccionado. Si no hay opciones, revisá las recetas y materiales de tus plotters CAD.")}
                 </p>
               )}
               {perfilCadCambio && (
                 <div className={s.sugerenciaCad}>
                   <span>
-                    La configuración del perfil cambió. Actualizala para volver
-                    a cotizar.
+                    La receta o el material cambió. Actualizala para volver a
+                    cotizar.
                   </span>
                   <ActionButton
                     variant="tertiary"
                     onPress={() => editar(d.id, aplicarPerfilCad(d, perfilCad))}
                   >
-                    Actualizar perfil
+                    Actualizar configuración
                   </ActionButton>
                 </div>
               )}
@@ -1790,21 +1810,23 @@ function CentroCopiadoContenido({
                   </div>
                   <div className={s.defaultsGrid}>
                     <label className={cn(s.campo, s.perfilDefault)}>
-                      <span>Perfil de impresión</span>
+                      <span>Producto, papel y máquina</span>
                       <SysSelect
-                        value={perfilCadDefault?.perfilId ?? ""}
+                        value={perfilCadDefault?.id ?? ""}
                         onChange={(perfilId) =>
                           setCadDefaults((d) => ({ ...d, perfilId }))
                         }
                         options={perfilesCad
                           .filter((p) => p.color === cadDefaults.color)
                           .map((p) => ({
-                            value: p.perfilId,
-                            label: `${p.nombre} · ${p.materialNombre} · ${p.impresoraNombre}`,
+                            value: p.id,
+                            label: `${p.nombre} · ${p.materialNombre} · ${p.maquinaNombre}`,
                           }))}
-                        ariaLabel="Perfil CAD por defecto"
+                        ariaLabel="Configuración CAD por defecto"
                         placeholder={
-                          cargandoCad ? "Cargando…" : "Elegí un perfil CAD"
+                          cargandoCad
+                            ? "Cargando…"
+                            : "Elegí una configuración CAD"
                         }
                       />
                     </label>
@@ -1842,7 +1864,7 @@ function CentroCopiadoContenido({
                       variant="outline"
                       onPress={aplicarATodos}
                       isDisabled={!docsVisibles.length || !perfilCadDefault}
-                      title="Aplica el perfil y las copias a todas las páginas de los planos."
+                      title="Aplica la configuración y las copias a todas las páginas de los planos."
                     >
                       Aplicar a los planos
                     </ActionButton>
@@ -1850,7 +1872,7 @@ function CentroCopiadoContenido({
                   {!cargandoCad && !perfilCadDefault && (
                     <p className={s.configAviso}>
                       {errorPerfilesCad ||
-                        "Elegí un perfil CAD. Si no hay opciones, configurá uno en Impresoras."}
+                        "Elegí una configuración CAD. Si no hay opciones, revisá las recetas y materiales de tus plotters CAD."}
                     </p>
                   )}
                 </div>

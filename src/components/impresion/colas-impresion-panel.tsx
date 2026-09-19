@@ -347,8 +347,10 @@ export function ColasImpresionPanel({
                       </p>
                       {!verificado && (
                         <p className={s.papel}>
-                          {doc.configuracion.papelNombre} ·{" "}
-                          {doc.configuracion.gramaje} g
+                          {doc.configuracion.papelNombre}
+                          {doc.configuracion.gramaje
+                            ? ` · ${doc.configuracion.gramaje} g`
+                            : ""}
                           {doc.ruta.perfil
                             ? ` · ${doc.ruta.perfil.bandeja.nombre}`
                             : ""}

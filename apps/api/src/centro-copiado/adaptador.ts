@@ -1,3 +1,4 @@
+import type { SeleccionCad } from '../common/seleccion-cad';
 import type { MedidaPagina } from '../common/medidas-documento';
 /**
  * Adaptador del TPV Centro de copiado.
@@ -17,7 +18,7 @@ export type FazDocumento = 1 | 2;
 
 export interface DocumentoInput {
   modo?: 'HOJAS' | 'CAD';
-  cad?: { perfilId: string; versionPerfil: number; versionDestino: number };
+  cad?: SeleccionCad;
   id: string;
   nombre?: string;
   archivoNombre?: string;

@@ -1,3 +1,4 @@
+import { incluyeImpresionDirecta } from './capacidades-plan';
 import {
   BadRequestException,
   Injectable,
@@ -18,7 +19,7 @@ const DIA_MS = 86_400_000;
  * plan (docs/control-plane-diseno.md).
  *
  * Sin suscripción = tenant LEGACY (anterior a los planes): se lo trata como
- * ilimitado a propósito — grandfathered. Los gates recién muerden cuando el
+ * ilimitado a propósito — grandfathered (excepto pilotos opt-in). Los gates recién muerden cuando el
  * control plane le asigna un plan; así la llegada de los planes no apaga
  * nada que hoy funciona.
  *
@@ -26,7 +27,11 @@ const DIA_MS = 86_400_000;
  * control plane, auditado en PlataformaEvento (plataforma.service).
  */
 
-export type FeaturePlan = 'afip' | 'whatsapp' | 'centroCopiado';
+export type FeaturePlan =
+  | 'afip'
+  | 'whatsapp'
+  | 'centroCopiado'
+  | 'impresionDirecta';
 
 export type LimitesPlan = {
   /** Nombre del plan que fija estos topes. `null` = sin suscripción (legacy). */
@@ -37,13 +42,14 @@ export type LimitesPlan = {
 };
 
 type Features = {
-  /** Acceso irrestricto a las capacidades actuales y futuras del sistema. */
+  /** Acceso general. Los pilotos con habilitación explícita quedan excluidos. */
   todo?: boolean;
   afip?: boolean;
   whatsapp?: boolean;
   /** Módulo Centro de copiado (TPV de impresión por hoja). Actualmente
    * incluido en Diamante; tenants legacy sin suscripción conservan acceso. */
   centroCopiado?: boolean;
+  impresionDirecta?: boolean;
   usuariosMax?: number;
   ordenesMesMax?: number;
   storageGb?: number;
@@ -181,6 +187,8 @@ export class SuscripcionesService {
       where: { tenantId },
       include: { plan: { select: { featuresJson: true } } },
     });
+    if (clave === 'impresionDirecta')
+      return incluyeImpresionDirecta(s?.estado, s?.plan.featuresJson);
     if (!s) return true;
     if (s.estado !== 'activa') return false;
     const features = (s.plan.featuresJson ?? {}) as Features;

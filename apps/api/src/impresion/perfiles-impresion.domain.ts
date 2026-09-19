@@ -2,9 +2,12 @@ import { esConfiguracionCad } from './cad.domain';
 import { enlacePerfilCad } from './perfiles-cad.domain';
 export type ConfiguracionDocumento = {
   cad?: {
-    perfilId: string;
-    versionPerfil: number;
-    versionDestino: number;
+    origen?: 'COTIZACION';
+    maquinaId?: string;
+    anchoRolloMm?: number;
+    perfilId?: string;
+    versionPerfil?: number;
+    versionDestino?: number;
     materialVarianteId: string;
     rutaAlternativaId: string;
   };
@@ -59,6 +62,58 @@ export function resolverPerfil(
   perfiles: PerfilDisponible[],
   maquinas?: string[],
 ): RutaImpresion {
+  if (doc.cad?.origen === 'COTIZACION') {
+    const cad = doc.cad;
+    const compatibles = perfiles
+      .filter((p) => {
+        const d = p.bandeja.destino;
+        const enlace = enlacePerfilCad(p.cad);
+        return (
+          p.activo &&
+          d.activo &&
+          esConfiguracionCad(d.cad) &&
+          d.maquinaId === cad.maquinaId &&
+          (maquinas === undefined || maquinas.includes(d.maquinaId)) &&
+          Math.abs(d.cad.anchoRolloMm - (cad.anchoRolloMm ?? 0)) <= 0.5 &&
+          p.tamano === 'CAD' &&
+          p.color === doc.color &&
+          p.faz === 1 &&
+          p.papelMateriaPrimaId === doc.papelMateriaPrimaId &&
+          (doc.gramaje === null || p.gramaje === doc.gramaje) &&
+          enlace?.rutaAlternativaId === cad.rutaAlternativaId &&
+          enlace?.materialVarianteId === cad.materialVarianteId
+        );
+      })
+      .sort((a, b) => b.prioridad - a.prioridad);
+    const p = compatibles[0];
+    if (!p)
+      return {
+        estado: 'REVISAR',
+        motivo:
+          'No hay un destino de impresión configurado para este plano. La cotización sigue siendo válida.',
+        perfil: null,
+      };
+    if (compatibles[1]?.prioridad === p.prioridad)
+      return {
+        estado: 'REVISAR',
+        motivo:
+          'Hay varios destinos CAD con la misma prioridad. Definí uno preferido en Impresoras.',
+        perfil: null,
+      };
+    if (!p.probado)
+      return {
+        estado: 'REVISAR',
+        motivo: 'Falta verificar la prueba física de este perfil CAD.',
+        perfil: p,
+      };
+    return p.modo === 'AUTOMATICO'
+      ? { estado: 'LISTO', motivo: null, perfil: p }
+      : {
+          estado: 'PREPARACION',
+          motivo: 'Confirmá el rollo cargado antes de enviar.',
+          perfil: p,
+        };
+  }
   if (doc.cad) {
     const p = perfiles.find((p) => p.id === doc.cad!.perfilId);
     const enlace = enlacePerfilCad(p?.cad);

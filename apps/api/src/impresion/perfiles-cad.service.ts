@@ -1,3 +1,4 @@
+import { CatalogoCadService } from '../centro-copiado/catalogo-cad.service';
 import {
   BadRequestException,
   ConflictException,
@@ -12,10 +13,6 @@ import { PerfilesImpresionService } from './perfiles-impresion.service';
 import { esConfiguracionCad, planPruebaCad } from './cad.domain';
 import { PerfilCadDto, SimularPerfilCadDto } from './perfiles-cad.dto';
 import { enlacePerfilCad } from './perfiles-cad.domain';
-const obj = (v: unknown): Record<string, unknown> =>
-  v && typeof v === 'object' && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : {};
 
 @Injectable()
 export class PerfilesCadService {
@@ -23,6 +20,7 @@ export class PerfilesCadService {
     private readonly prisma: PrismaService,
     private readonly perfiles: PerfilesImpresionService,
     private readonly motor: MotorUniversalService,
+    private readonly catalogo: CatalogoCadService,
   ) {}
 
   private async destino(
@@ -57,114 +55,18 @@ export class PerfilesCadService {
     db: Prisma.TransactionClient = this.prisma,
   ) {
     const d = await this.destino(tenantId, destinoId, db);
-    const rutas = await db.productoRutaAlternativa.findMany({
-      where: {
-        tenantId,
-        activo: true,
-        producto: { tenantId, activo: true, estructuraProducto: 'SIMPLE' },
-        ruta: { tenantId, activo: true },
-        configPasos: {
-          some: {
-            activo: true,
-            maquinasCandidatas: {
-              some: { activo: true, maquinaId: d.maquinaId },
-            },
-          },
-        },
-      },
-      include: {
-        producto: { select: { id: true, nombre: true, codigo: true } },
-        configPasos: {
-          where: { activo: true, rutaPaso: { activo: true } },
-          include: {
-            rutaPaso: true,
-            maquinasCandidatas: { where: { activo: true } },
-            slotsMateriales: { where: { activo: true } },
-          },
-        },
-      },
-      orderBy: { nombre: 'asc' },
-    });
-    const ids = rutas.flatMap((r) =>
-      r.configPasos.flatMap((p) =>
-        p.slotsMateriales.flatMap((s) =>
-          s.materialVarianteId ? [s.materialVarianteId] : [],
-        ),
-      ),
+    const resultado = await this.catalogo.opcionesMaquina(
+      tenantId,
+      d.maquinaId,
+      d.cad.anchoRolloMm,
+      db,
     );
-    const materiales = await db.materiaPrimaVariante.findMany({
-      where: {
-        id: { in: ids },
-        tenantId,
-        activo: true,
-        materiaPrima: {
-          tenantId,
-          activo: true,
-          subfamilia: 'SUSTRATO_ROLLO_FLEXIBLE',
-        },
-      },
-      include: { materiaPrima: true },
-    });
-    const opciones = rutas.flatMap((r) => {
-      // El piloto conecta rutas con un único paso de impresión y material fijo.
-      // No elegir materiales por nombre ni ignorar restricciones de la receta.
-      const impresiones = r.configPasos.filter((p) =>
-        p.rutaPaso.familiaCodigo.startsWith('impresion_'),
-      );
-      const paso = impresiones[0];
-      if (
-        impresiones.length !== 1 ||
-        paso.rutaPaso.familiaCodigo !== 'impresion_por_area' ||
-        paso.tercerizado
-      )
-        return [];
-      const candidata = paso.maquinasCandidatas.find(
-        (c) => c.maquinaId === d.maquinaId,
-      );
-      const slot = paso.slotsMateriales.find(
-        (s) =>
-          s.slotCodigo === 'sustrato_principal' &&
-          s.modoSeleccion === 'HARDCODED',
-      );
-      const material = materiales.find(
-        (m) => m.id === slot?.materialVarianteId,
-      );
-      if (!candidata || !material) return [];
-      const attrs = {
-        ...obj(material.materiaPrima.atributosTecnicosJson),
-        ...obj(material.atributosVarianteJson),
-      };
-      const anchoMm = Number(attrs.anchoMm ?? Number(attrs.ancho) * 1000);
-      if (
-        !Number.isFinite(anchoMm) ||
-        Math.abs(anchoMm - d.cad.anchoRolloMm) > 0.5
-      )
-        return [];
-      const gramaje = Number(attrs.gramajeGr ?? attrs.gramaje);
-      const colores = (['BN', 'COLOR'] as const).filter((c) =>
-        candidata.modoColorAllowedModes.includes(c === 'BN' ? 'BN' : 'CMYK'),
-      );
-      if (!colores.length) return [];
-      return [
-        {
-          rutaAlternativaId: r.id,
-          productoId: r.producto.id,
-          productoNombre: r.producto.nombre,
-          productoCodigo: r.producto.codigo,
-          rutaNombre: r.nombre,
-          configPasoId: paso.id,
-          materialVarianteId: material.id,
-          papelMateriaPrimaId: material.materiaPrimaId,
-          materialNombre:
-            material.nombreVariante || material.materiaPrima.nombre,
-          papelNombre: material.materiaPrima.nombre,
-          anchoMm,
-          gramaje: Number.isFinite(gramaje) && gramaje > 0 ? gramaje : null,
-          colores,
-        },
-      ];
-    });
-    return { opciones };
+    return {
+      opciones: resultado.opciones.map(({ revisionBase, ...opcion }) => {
+        void revisionBase;
+        return opcion;
+      }),
+    };
   }
 
   async guardar(auth: CurrentAuth, dto: PerfilCadDto, id?: string) {

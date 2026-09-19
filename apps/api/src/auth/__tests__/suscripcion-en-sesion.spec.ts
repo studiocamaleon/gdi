@@ -138,11 +138,36 @@ describe('Suscripción en el contexto de sesión', () => {
       .tenantActual.suscripcion;
     expect(susc).toMatchObject({
       planNombre: 'Estudio',
+      capacidades: { impresionDirecta: false },
       estado: 'activa',
       diasRestantes: 10,
       diasTotales: 30,
       enPrueba: false,
     });
+  });
+
+  it('lleva la impresión habilitada explícitamente y la retira al suspender el plan', async () => {
+    const { tenantId, contexto } = await crearTenantConUsuario();
+    const planId = await crearPlan('Piloto');
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { featuresJson: { impresionDirecta: true } },
+    });
+    await prisma.suscripcion.create({
+      data: { tenantId, planId, estado: 'activa' },
+    });
+    expect(
+      (await auth.getCurrentContext(contexto)).currentUser.tenantActual
+        .suscripcion?.capacidades.impresionDirecta,
+    ).toBe(true);
+    await prisma.suscripcion.update({
+      where: { tenantId },
+      data: { estado: 'suspendida' },
+    });
+    expect(
+      (await auth.getCurrentContext(contexto)).currentUser.tenantActual
+        .suscripcion?.capacidades.impresionDirecta,
+    ).toBe(false);
   });
 
   it('en prueba informa la prueba, no el cobro', async () => {

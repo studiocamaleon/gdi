@@ -22,6 +22,7 @@ export type TenantSummary = {
   /** Null cuando el tenant no tiene plan asignado (legacy): la card no
    *  inventa un plan ni un contador, muestra su texto neutro. */
   suscripcion?: {
+    capacidades?: { impresionDirecta?: boolean };
     planNombre?: string | null;
     estado?: string | null;
     estadoProveedor?: string | null;

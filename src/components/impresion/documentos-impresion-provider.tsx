@@ -1,13 +1,5 @@
 "use client";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Minus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ActionButton } from "@/components/design-system/action-button";
@@ -27,11 +19,7 @@ import {
   type EstadoDocumento,
   type VistaDocumentos,
 } from "@/lib/impresion-api";
-import {
-  escucharImpresora,
-  imprimirDocumentoOrden,
-  type EscuchaImpresora,
-} from "@/lib/qz-impresion";
+import type { EscuchaImpresora } from "@/lib/qz-impresion";
 import { eventoImpresora } from "@/lib/qz-eventos";
 import {
   estadoDocumentoQz,
@@ -50,12 +38,8 @@ import { ColasImpresionPanel } from "./colas-impresion-panel";
 import { AsistenteImpresionMinimizado } from "./asistente-impresion-minimizado";
 import s from "./colas-impresion.module.css";
 
-type Contexto = {
-  tenantId: string;
-  abrir: (id: string, enviar?: boolean) => void;
-};
-const Contexto = createContext<Contexto>({ tenantId: "", abrir: () => {} });
-export const useImpresionDocumentos = () => useContext(Contexto);
+import { ContextoImpresion as Contexto } from "./documentos-impresion-contexto";
+export { useImpresionDocumentos } from "./documentos-impresion-contexto";
 
 /** Orquesta una conexión QZ. Los envíos se firman en serie; cada máquina imprime
  * su cola mientras se despacha a las demás. Nunca se reintenta un envío incierto. */
@@ -209,6 +193,7 @@ export function DocumentosImpresionProvider({
     await monitor.current?.handle.cerrar();
     monitor.current = null;
     setConexiones([]);
+    const { escucharImpresora } = await import("@/lib/qz-impresion");
     const handle = await escucharImpresora(
       tenantId,
       destino,
@@ -258,6 +243,7 @@ export function DocumentosImpresionProvider({
     setMensaje(`Enviando a ${perfil.bandeja.destino.nombre}`);
     let preparado: EnvioDocumento | undefined;
     try {
+      const { imprimirDocumentoOrden } = await import("@/lib/qz-impresion");
       const e = await imprimirDocumentoOrden(
         tenantId,
         {

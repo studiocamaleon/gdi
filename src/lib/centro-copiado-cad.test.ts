@@ -10,7 +10,7 @@ import {
   type PerfilCadCopiado,
 } from "./centro-copiado-cad";
 const perfil = {
-  perfilId: "bn",
+  id: "bn",
   color: "BN",
   prioridad: 1,
   rollo: { anchoRolloMm: 914, margenMm: 5 },
@@ -91,13 +91,13 @@ describe("planos del Centro de copiado", () => {
   it("no elige silenciosamente entre perfiles empatados y respeta B/N o Color", () => {
     expect(perfilCadPreferido([perfil], "COLOR")).toBeUndefined();
     expect(
-      perfilCadPreferido([perfil, { ...perfil, perfilId: "otro" }], "BN"),
+      perfilCadPreferido([perfil, { ...perfil, id: "otro" }], "BN"),
     ).toBeUndefined();
     expect(
       perfilCadPreferido(
-        [perfil, { ...perfil, perfilId: "prioritario", prioridad: 2 }],
+        [perfil, { ...perfil, id: "prioritario", prioridad: 2 }],
         "BN",
-      )?.perfilId,
+      )?.id,
     ).toBe("prioritario");
   });
 });

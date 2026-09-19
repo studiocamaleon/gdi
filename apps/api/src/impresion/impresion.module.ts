@@ -1,3 +1,6 @@
+import { CatalogoCadModule } from '../centro-copiado/catalogo-cad.module';
+import { SuscripcionesModule } from '../suscripciones/suscripciones.module';
+import { ImpresionDirectaGuard } from './impresion-directa.guard';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ArchivosModule } from '../archivos/archivos.module';
@@ -10,10 +13,17 @@ import { PerfilesCadService } from './perfiles-cad.service';
 import { PerfilesCadController } from './perfiles-cad.controller';
 
 @Module({
-  imports: [ConfigModule, ArchivosModule, MotorUniversalModule],
+  imports: [
+    CatalogoCadModule,
+    SuscripcionesModule,
+    ConfigModule,
+    ArchivosModule,
+    MotorUniversalModule,
+  ],
   controllers: [ImpresionController, PerfilesCadController],
   exports: [PerfilesCadService],
   providers: [
+    ImpresionDirectaGuard,
     ImpresionService,
     PerfilesImpresionService,
     PerfilesCadService,

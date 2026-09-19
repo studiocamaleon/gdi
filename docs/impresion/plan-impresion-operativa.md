@@ -1,10 +1,24 @@
 # Impresión operativa: configuración, envío y preparación
 
-**Documento vivo · 18/09/2026 · v0.15**
+**Documento vivo · 18/09/2026 · v0.16**
 
 **Estado:** etapas 1 y 2 implementadas en `codex/mejoras-lista-produccion`, junto con el envío CAD desde OT y el asistente visual aprobado. Hay perfiles compartidos, preparación por selección, cola persistida, reserva contra envíos duplicados, columnas por máquina y seguimiento simultáneo de impresoras del mismo puesto QZ. Centro de copiado conserva rangos, medidas y cantidades por página CAD; el servidor prepara los originales al 100%.
 
 El usuario ya confirmó pruebas físicas de B/N, Color, bandeja y lámina fija del HP T950 con rollo de 914 mm. **La nueva integración OT → cola → planos reales necesita la prueba física de aceptación** indicada más abajo. El conector residente sigue planificado: el navegador ejecuta los envíos y recibe eventos; cerrar la pestaña conserva los pendientes, pero interrumpe su ejecución y seguimiento.
+
+## Disponibilidad por plan y cotización independiente (v0.16)
+
+- `impresionDirecta` es una capacidad explícita del plan. La migración la habilita sólo en Founder. `todo: true`, el plan Trial y las cuentas legacy no la heredan. Se puede habilitar en otro plan más adelante sin cambiar el circuito comercial.
+- `centroCopiado` conserva sus reglas actuales. Cotizar, cargar archivos/rangos/copias, emitir OT y descargar originales no requieren QZ. La descarga manual de etiquetas conserva el QR de entrega y el tamaño de 100 × 150 mm.
+- El catálogo CAD comercial se obtiene de las recetas activas, las máquinas PLOTTER_CAD y los materiales de rollo compatibles. El selector muestra producto, papel y máquina. No consulta conexiones, bandejas ni pruebas físicas. Mantiene las restricciones actuales del piloto (receta simple con material fijo, rollos hasta 914,4 mm y 5 mm de margen).
+- Las nuevas cotizaciones guardan una selección comercial y su revisión. Al enviar, se busca un perfil de impresión compatible con máquina, receta, variante, color, gramaje y ancho. Cambiar QZ no invalida una cotización; una modificación comercial requiere recalcular.
+- La migración traslada al material el gramaje guardado sólo en perfiles CAD cuando todos coinciden y el material no tiene uno definido. Si un rollo no declara gramaje, puede cotizarse por su variante exacta sin inferir el valor de su nombre.
+- Las OT anteriores conservan sus datos e historial. Un adaptador permite recotizar las selecciones históricas; al editar una carga antigua la UI puede pedir actualizar la configuración comercial. La verificación de versiones de los envíos históricos sigue vigente.
+- Sin la capacidad, la emisión ofrece sólo Emitir OT, no se monta el asistente ni se consulta su cola y no se ofrece Configuración → Impresoras. El SDK QZ se importa al usar una acción de conexión/impresión. Los endpoints de impresión directa y configuración validan el plan en cada solicitud; la vista manual de etiquetas permanece disponible con sus permisos habituales.
+- Desactivar la capacidad conserva configuraciones y eventos, impide preparar nuevos envíos y no cancela trabajos ya aceptados por Windows. Los permisos del usuario y la suscripción activa siguen siendo requisitos adicionales.
+
+**Validación del desacople:** TypeScript y lint de los archivos modificados; pruebas de sesión, autorización HTTP por plan, catálogo y cotización CAD sin acceso a tablas de impresión, compatibilidad de destinos, navegación, cola y etiquetas manuales. Migraciones aplicadas en desarrollo y en la base aislada de pruebas. Cotización visual del PDF CAD de Grafo con tamaños mixtos, sin emitir una OT ni imprimir durante esta validación.
+
 ## 1. Objetivo y recorrido
 
 Que el comercial emita una OT y envíe los documentos que pueden imprimirse con la configuración disponible. Los que requieren cargar papel quedan identificados para el operario, conservando parámetros, archivos y trazabilidad.
@@ -78,7 +92,7 @@ Son ejemplos de configuración, no capacidades certificadas de la Ricoh. Las com
 
 ### CAD real desde la OT
 
-1. Se resuelve el perfil CAD cotizado y se revalidan versión, máquina, color, variante de rollo y preparación. El resumen previo muestra el plotter y el motivo si requiere preparación.
+1. Se resuelve un destino compatible con la configuración CAD cotizada y se revalidan máquina, color, variante de rollo y preparación. Las OT históricas conservan además la comprobación de versión del perfil original. El resumen previo muestra el plotter y el motivo si requiere preparación.
 2. Al enviar, se lee el PDF persistido y se contrastan cantidad de páginas y medidas visibles con el snapshot. Se aplica CropBox ∩ MediaBox, UserUnit y Rotate; sólo giro/traslación a escala 100%. La salida usa ancho de rollo, largo calculado y márgenes de 5 mm. Un PDF cifrado o con anotaciones que no se pueden preservar queda bloqueado con una explicación; las anotaciones deben integrarse al exportar el original.
 3. Cada página seleccionada es un trabajo con sus copias efectivas. El orden es por número de página original: primero todas las copias de una página, luego la siguiente; no se crean juegos intercalados entre páginas. Un fallo parcial permite reimprimir explícitamente sólo la página afectada.
 4. QZ recibe PDF vectorial, tamaño personalizado, orientación preparada, sin ajuste ni rasterización, simple faz y color cotizado. La calidad Fast sigue configurada en Windows.
