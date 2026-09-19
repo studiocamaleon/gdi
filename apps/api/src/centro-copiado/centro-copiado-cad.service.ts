@@ -3,12 +3,16 @@ import {
   mapaCopiasCad,
   errorCopiasPorPagina,
 } from '../common/copias-paginas-cad';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MotorUniversalService } from '../motor-universal/motor.service';
-import { PerfilesCadService } from '../impresion/perfiles-cad.service';
-import { esConfiguracionCad, planPaginaCad } from '../impresion/cad.domain';
-import { enlacePerfilCad } from '../impresion/perfiles-cad.domain';
+import { CatalogoCadService } from './catalogo-cad.service';
+import type { SeleccionCad } from '../common/seleccion-cad';
+import { planPaginaCad } from '../common/cad-geometria';
 import {
   errorMedidasDocumento,
   medidasSeleccionadas,
@@ -30,79 +34,54 @@ const redondear = (n: number) => Math.round(n * 100) / 100;
 export class CentroCopiadoCadService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly perfiles: PerfilesCadService,
+    private readonly catalogo: CatalogoCadService,
     private readonly motor: MotorUniversalService,
   ) {}
 
-  /** Datos comerciales: no expone hosts, colas Windows ni permisos de ajustes. */
   async opciones(tenantId: string) {
-    const perfiles = await this.prisma.impresionPerfil.findMany({
-      where: {
-        tenantId,
-        activo: true,
-        tamano: 'CAD',
-        bandeja: { tenantId, destino: { tenantId, activo: true } },
-      },
-      include: { bandeja: { include: { destino: true } } },
-      orderBy: [{ prioridad: 'desc' }, { nombre: 'asc' }],
-    });
-    const destinos = new Map<
-      string,
-      Awaited<ReturnType<PerfilesCadService['opciones']>>['opciones']
-    >();
-    const opciones = [];
-    for (const p of perfiles) {
-      const d = p.bandeja.destino;
-      if (!esConfiguracionCad(d.cad)) continue;
-      if (!destinos.has(d.id)) {
-        try {
-          destinos.set(
-            d.id,
-            (await this.perfiles.opciones(tenantId, d.id)).opciones,
-          );
-        } catch (e) {
-          if (e instanceof BadRequestException) {
-            destinos.set(d.id, []);
-            continue;
-          }
-          throw e;
-        }
-      }
-      const enlace = enlacePerfilCad(p.cad);
-      const o = destinos
-        .get(d.id)
-        ?.find(
-          (o) =>
-            o.rutaAlternativaId === enlace?.rutaAlternativaId &&
-            o.materialVarianteId === enlace?.materialVarianteId &&
-            o.colores.includes(p.color as 'BN' | 'COLOR') &&
-            o.papelMateriaPrimaId === p.papelMateriaPrimaId &&
-            (o.gramaje == null || o.gramaje === p.gramaje),
+    return { perfiles: await this.catalogo.configuraciones(tenantId) };
+  }
+
+  private async resolver(tenantId: string, cad: SeleccionCad, color: string) {
+    const opciones = await this.catalogo.configuraciones(tenantId);
+    if (cad.cotizacion) {
+      const opcion = opciones.find(
+        (o) => o.id === cad.cotizacion!.id && o.color === color,
+      );
+      if (!opcion)
+        throw new BadRequestException(
+          'La configuración CAD ya no está disponible. Revisá la receta, el material y la máquina.',
         );
-      if (!o) continue;
-      opciones.push({
-        perfilId: p.id,
-        nombre: p.nombre,
-        versionPerfil: p.version,
-        versionDestino: d.version,
-        destinoId: d.id,
-        impresoraNombre: d.nombre,
-        maquinaId: d.maquinaId,
-        productoNombre: o.productoNombre,
-        materialNombre: o.materialNombre,
-        productoId: o.productoId,
-        rutaAlternativaId: o.rutaAlternativaId,
-        materialVarianteId: o.materialVarianteId,
-        papelMateriaPrimaId: o.papelMateriaPrimaId,
-        gramaje: p.gramaje,
-        color: p.color as 'BN' | 'COLOR',
-        prioridad: p.prioridad,
-        probado: p.probado,
-        modo: p.modo,
-        rollo: { anchoRolloMm: d.cad.anchoRolloMm, margenMm: d.cad.margenMm },
-      });
+      if (opcion.revision !== cad.cotizacion.revision)
+        throw new ConflictException(
+          'La configuración CAD cambió. Actualizala antes de cotizar.',
+        );
+      return opcion;
     }
-    return { perfiles: opciones };
+    // Adaptador de lectura para borradores históricos. Nuevas cotizaciones sólo
+    // guardan la selección comercial y no dependen de un destino de impresión.
+    const previo = cad.perfilId
+      ? await this.prisma.impresionPerfil.findFirst({
+          where: { id: cad.perfilId, tenantId, tamano: 'CAD' },
+          include: { bandeja: { include: { destino: true } } },
+        })
+      : null;
+    const enlace = previo?.cad as {
+      rutaAlternativaId?: string;
+      materialVarianteId?: string;
+    } | null;
+    const opcion = opciones.find(
+      (o) =>
+        o.maquinaId === previo?.bandeja.destino.maquinaId &&
+        o.rutaAlternativaId === enlace?.rutaAlternativaId &&
+        o.materialVarianteId === enlace?.materialVarianteId &&
+        o.color === color,
+    );
+    if (!opcion)
+      throw new BadRequestException(
+        'Elegí una configuración CAD para volver a cotizar este plano.',
+      );
+    return opcion;
   }
 
   validar(doc: DocumentoInput) {
@@ -119,8 +98,7 @@ export class CentroCopiadoCadService {
       throw new BadRequestException(
         'Para Planos CAD, adjuntá un PDF con sus medidas por página.',
       );
-    if (!doc.cad)
-      throw new BadRequestException('Elegí un perfil CAD configurado.');
+    if (!doc.cad) throw new BadRequestException('Elegí una configuración CAD.');
     if (doc.faz !== 1 || doc.grupoId || doc.terminaciones?.length)
       throw new BadRequestException(
         'Los planos CAD se cotizan en simple faz, sin anillado ni tomos.',
@@ -165,21 +143,21 @@ export class CentroCopiadoCadService {
       const cantidad = cantidadImpresionesCad(doc);
       base.cantidad = cantidad;
       const copiasPorPagina = mapaCopiasCad(doc);
-      const { p, d, opcion } = await this.perfiles.resolverPerfil(
-        tenantId,
-        doc.cad!.perfilId,
-        {
-          version: doc.cad!.versionPerfil,
-          versionDestino: doc.cad!.versionDestino,
-        },
-      );
+      const opcion = await this.resolver(tenantId, doc.cad!, doc.color);
+      const p = opcion;
+      const cad = { cotizacion: { id: opcion.id, revision: opcion.revision } };
+      const rollo = {
+        ...opcion.rollo,
+        origenPapel: '',
+        usarOrigenPredeterminado: true,
+      };
       if (
         doc.color !== p.color ||
         doc.papelMateriaPrimaId !== p.papelMateriaPrimaId ||
-        doc.gramaje !== p.gramaje
+        (doc.gramaje ?? null) !== p.gramaje
       )
         throw new BadRequestException(
-          'El color y el papel deben coincidir con el perfil CAD elegido.',
+          'El color y el papel deben coincidir con la configuración CAD elegida.',
         );
       const seleccionadas = medidasSeleccionadas(
         doc.medidasPaginas,
@@ -190,7 +168,7 @@ export class CentroCopiadoCadService {
           return {
             pagina: pagina.pagina,
             copias: copiasPorPagina.get(pagina.pagina) ?? doc.copias,
-            ...planPaginaCad(d.cad, pagina),
+            ...planPaginaCad(rollo, pagina),
           };
         } catch (e) {
           throw new BadRequestException(
@@ -208,7 +186,7 @@ export class CentroCopiadoCadService {
           anchoMm: pagina.anchoMm,
           altoMm: pagina.altoMm,
         })),
-        [`maquinaSeleccionada_${opcion.configPasoId}`]: d.maquinaId,
+        [`maquinaSeleccionada_${opcion.configPasoId}`]: opcion.maquinaId,
         slotMateriales: {
           [`${opcion.configPasoId}_sustrato_principal`]:
             opcion.materialVarianteId,
@@ -216,7 +194,7 @@ export class CentroCopiadoCadService {
         _centroCopiado: {
           version: 1,
           modo: 'CAD',
-          cad: doc.cad,
+          cad,
           grupoCargaId,
           grupoTomoId: null,
           esTomo: false,
@@ -243,14 +221,14 @@ export class CentroCopiadoCadService {
           carillas: cantidad,
           hojas: cantidad,
           terminaciones: [],
-          destinoId: d.id,
-          impresoraNombre: d.nombre,
+          maquinaId: opcion.maquinaId,
+          impresoraNombre: opcion.maquinaNombre,
           productoNombre: opcion.productoNombre,
           productoCodigo: opcion.productoCodigo,
           materialVarianteId: opcion.materialVarianteId,
           rutaAlternativaId: opcion.rutaAlternativaId,
           escala: 100,
-          anchoRolloMm: d.cad.anchoRolloMm,
+          anchoRolloMm: opcion.rollo.anchoRolloMm,
           planes,
         },
       };
@@ -303,7 +281,7 @@ export class CentroCopiadoCadService {
               }
             : {}),
           Papel: opcion.materialNombre,
-          Impresora: d.nombre,
+          Máquina: opcion.maquinaNombre,
         },
         subtotal,
         total,

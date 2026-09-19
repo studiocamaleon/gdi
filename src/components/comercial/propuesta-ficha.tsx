@@ -1,4 +1,5 @@
 "use client";
+import { useImpresionDirecta } from "@/components/navigation/capacidades-provider";
 
 import { TipoCambioPanel } from "./tipo-cambio-panel";
 import type { TipoCambioSnapshot } from "@/lib/tipo-cambio-api";
@@ -150,7 +151,7 @@ import {
   CuponAvisoModal,
   type AvisoCupon,
 } from "@/components/comercial/cupon-aviso";
-import { useImpresionDocumentos } from "@/components/impresion/documentos-impresion-provider";
+import { useImpresionDocumentos } from "@/components/impresion/documentos-impresion-contexto";
 import { EmisionDocumentosDialog } from "@/components/impresion/emision-documentos-dialog";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
@@ -4967,6 +4968,7 @@ function PropuestaFichaContenido({
   );
   // QR que el cliente presenta en el mostrador para retirar.
   const [etiquetaOpen, setEtiquetaOpen] = React.useState(false);
+  const impresionDirecta = useImpresionDirecta();
   const impresionDocumentos = useImpresionDocumentos();
   const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
   const imprimirAlEmitirRef = React.useRef(false);
@@ -7485,7 +7487,7 @@ function PropuestaFichaContenido({
                       tipo={ordenTipo}
                       clienteSeleccionado={Boolean(clienteId)}
                       empty={items.length === 0}
-                      onEmitir={() => documentosCentroCopiado ? setConfirmarEmisionDocumentos("nueva") : void emitirOrden()}
+                      onEmitir={() => impresionDirecta && documentosCentroCopiado ? setConfirmarEmisionDocumentos("nueva") : void emitirOrden()}
                       onEmitirPresupuesto={emitirPresupuestoCb}
                       emitiendo={emitiendo || emitiendoPresupuesto}
                       guardandoBorrador={guardandoBorrador}
@@ -7559,7 +7561,7 @@ function PropuestaFichaContenido({
                           type="button"
                           variant="primary"
                           size="sm"
-                          onPress={() => documentosCentroCopiado ? setConfirmarEmisionDocumentos("borrador") : void emitirBorrador()}
+                          onPress={() => impresionDirecta && documentosCentroCopiado ? setConfirmarEmisionDocumentos("borrador") : void emitirBorrador()}
                           isDisabled={
                             emitiendoBorrador ||
                             cambiosSinGuardar > 0 ||
@@ -7585,7 +7587,7 @@ function PropuestaFichaContenido({
                           Entregar
                         </Button>
                       ) : null}
-                      {orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado) && (
+                      {impresionDirecta && orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado) && (
                         <HeroButton variant="tertiary" onPress={() => impresionDocumentos.abrir(orden.id)}>
                           <PrinterIcon />
                           Impresión de documentos
@@ -7594,7 +7596,7 @@ function PropuestaFichaContenido({
                       {puedeImprimirEtiqueta && orden && !["borrador", "cancelada"].includes(orden.estado) && (
                         <HeroButton variant="tertiary" onPress={() => setEtiquetaOpen(true)}>
                           <PrinterIcon />
-                          Imprimir etiqueta
+                          {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}
                         </HeroButton>
                       )}
                       {publicToken ? (
@@ -8472,7 +8474,7 @@ function PropuestaFichaContenido({
           onCerrar={() => setAvisoCupon(null)}
         />
 
-        {confirmarEmisionDocumentos && (
+        {impresionDirecta && confirmarEmisionDocumentos && (
           <EmisionDocumentosDialog
             items={items}
             onClose={() => setConfirmarEmisionDocumentos(null)}

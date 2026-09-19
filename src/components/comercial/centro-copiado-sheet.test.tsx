@@ -291,7 +291,7 @@ it("conserva el modo CAD, perfil, medidas originales y copias al editar rangos y
         color: "BN",
         gramaje: 80,
         papelMateriaPrimaId: "rollo",
-        impresoraNombre: "HP",
+        maquinaNombre: "HP",
         materialNombre: "Obra",
         rollo: { anchoRolloMm: 914, margenMm: 5 },
       },
@@ -331,15 +331,14 @@ it("conserva el modo CAD, perfil, medidas originales y copias al editar rangos y
 });
 
 const perfilCarga = {
-  perfilId: "perfil-cad",
+  id: "perfil-cad",
+  revision: "a".repeat(64),
   nombre: "Planos B/N",
   color: "BN",
   prioridad: 1,
-  versionPerfil: 1,
-  versionDestino: 1,
   gramaje: 80,
   papelMateriaPrimaId: "rollo",
-  impresoraNombre: "HP",
+  maquinaNombre: "HP",
   materialNombre: "Obra",
   rollo: { anchoRolloMm: 914, margenMm: 5 },
 };
@@ -434,7 +433,7 @@ it("clasifica una carga mixta por el máximo disponible, conserva originales y c
   expect(docs[1]).toMatchObject({
     modo: "CAD",
     faz: 1,
-    cad: { perfilId: "perfil-cad" },
+    cad: { cotizacion: { id: "perfil-cad" } },
   });
   expect(docs[2]).toMatchObject({
     modo: "CAD",
@@ -565,9 +564,7 @@ it("rehidrata copias por página, edita páginas posteriores a la 100 y conserva
     copias: 1,
     medidasPaginas: Array.from({ length: 101 }, () => a1),
     cad: {
-      perfilId: perfilCarga.perfilId,
-      versionPerfil: 1,
-      versionDestino: 1,
+      cotizacion: { id: perfilCarga.id, revision: perfilCarga.revision },
     },
     faz: 1,
     papelMateriaPrimaId: "rollo",

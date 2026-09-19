@@ -19,6 +19,8 @@ export default async function Page() {
   const visibles = seccionesConfigVisibles(
     (p) => permisos === null || permisos.has(p),
     currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
+    currentUser.tenantActual?.suscripcion?.capacidades?.impresionDirecta ===
+      true,
   );
   // El layout ya frenó a quien no tiene ninguna de las dos llaves; esto cubre
   // el caso raro de un rol con la llave del módulo y ninguna sección.

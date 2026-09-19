@@ -1,3 +1,4 @@
+import { incluyeImpresionDirecta } from '../suscripciones/capacidades-plan';
 import {
   BadRequestException,
   Injectable,
@@ -1011,13 +1012,19 @@ export class AuthService {
         trialHasta: true,
         periodoDesde: true,
         proximoCobro: true,
-        plan: { select: { nombre: true, trialDias: true } },
+        plan: { select: { nombre: true, trialDias: true, featuresJson: true } },
       },
     });
     if (!suscripcion) return null;
 
     return {
       planNombre: suscripcion.plan.nombre,
+      capacidades: {
+        impresionDirecta: incluyeImpresionDirecta(
+          suscripcion.estado,
+          suscripcion.plan.featuresJson,
+        ),
+      },
       estado: suscripcion.estado,
       estadoProveedor: suscripcion.estadoProveedor,
       moraDesde: suscripcion.moraDesde?.toISOString() ?? null,

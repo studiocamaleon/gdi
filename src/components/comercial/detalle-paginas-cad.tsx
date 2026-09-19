@@ -49,7 +49,7 @@ export function DetallePaginasCad({
         </div>
       )}
       <p>
-        <strong>{perfil?.impresoraNombre ?? "Planos CAD"}</strong> · Tamaño real
+        <strong>{perfil?.maquinaNombre ?? "Planos CAD"}</strong> · Tamaño real
         100% · Simple faz. Calidad según preferencias de Windows.
       </p>
       <div className={s.medidasScroll}>

@@ -12,7 +12,8 @@ import { EntregaEscaneoWatcher } from "@/components/mostrador/entrega-escaneo-wa
 import { ImpersonacionBanner } from "@/components/plataforma/impersonacion-banner";
 import { SuscripcionGlobalBanner } from "@/components/suscripcion/suscripcion-global-banner";
 import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
-import { DocumentosImpresionProvider } from "@/components/impresion/documentos-impresion-provider";
+import { ImpresionDisponibleProvider } from "@/components/impresion/impresion-disponible-provider";
+import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import { SidebarInset } from "@/components/ui/sidebar";
 import {
   DashboardFrame,
@@ -59,31 +60,35 @@ export default async function DashboardLayout({
       <ConfigRegionalProvider regional={currentUser.tenantActual?.regional}>
         <NavigationFeedbackProvider>
           <NotificacionesProvider>
-            <DocumentosImpresionProvider
-              key={currentUser.tenantActual?.id}
-              tenantId={currentUser.tenantActual?.id ?? ""}
+            <CapacidadesProvider
+              capacidades={currentUser.tenantActual?.suscripcion?.capacidades}
             >
-              <ImpersonacionBanner currentUser={currentUser} />
-              <DashboardFrame>
-                <AppSidebar currentUser={currentUser} />
-                <SidebarInset className="main" style={{ minHeight: 0 }}>
-                  <DashboardTopbar />
+              <ImpresionDisponibleProvider
+                key={currentUser.tenantActual?.id}
+                tenantId={currentUser.tenantActual?.id ?? ""}
+              >
+                <ImpersonacionBanner currentUser={currentUser} />
+                <DashboardFrame>
+                  <AppSidebar currentUser={currentUser} />
+                  <SidebarInset className="main" style={{ minHeight: 0 }}>
+                    <DashboardTopbar />
 
-                  <SuscripcionGlobalBanner currentUser={currentUser} />
+                    <SuscripcionGlobalBanner currentUser={currentUser} />
 
-                  <main
-                    className="gp-main flex flex-1"
-                    style={{ minHeight: 0, overflowY: "auto" }}
-                  >
-                    {children}
-                  </main>
-                </SidebarInset>
-                <PasosEnCursoWidget />
-                {/* Escanear el QR del cliente abre la entrega desde cualquier
+                    <main
+                      className="gp-main flex flex-1"
+                      style={{ minHeight: 0, overflowY: "auto" }}
+                    >
+                      {children}
+                    </main>
+                  </SidebarInset>
+                  <PasosEnCursoWidget />
+                  {/* Escanear el QR del cliente abre la entrega desde cualquier
               pantalla. */}
-                <EntregaEscaneoWatcher />
-              </DashboardFrame>
-            </DocumentosImpresionProvider>
+                  <EntregaEscaneoWatcher />
+                </DashboardFrame>
+              </ImpresionDisponibleProvider>
+            </CapacidadesProvider>
           </NotificacionesProvider>
         </NavigationFeedbackProvider>
       </ConfigRegionalProvider>

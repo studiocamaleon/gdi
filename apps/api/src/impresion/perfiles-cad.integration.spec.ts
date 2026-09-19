@@ -1,3 +1,4 @@
+import { CatalogoCadService } from '../centro-copiado/catalogo-cad.service';
 import { CentroCopiadoCadService } from '../centro-copiado/centro-copiado-cad.service';
 import type { DocumentoInput } from '../centro-copiado/adaptador';
 import { randomUUID } from 'node:crypto';
@@ -19,12 +20,14 @@ const auth = {
   email: 'cad@test.local',
 } as CurrentAuth;
 const motor = {
-  cotizar: jest.fn().mockResolvedValue({
-    exitoso: true,
-    cotizacion: {
-      desglosePrecio: { precioNetoTotal: 100, precioBrutoTotal: 121 },
-    },
-  }),
+  cotizar: jest
+    .fn<Promise<unknown>, Parameters<MotorUniversalService['cotizar']>>()
+    .mockResolvedValue({
+      exitoso: true,
+      cotizacion: {
+        desglosePrecio: { precioNetoTotal: 100, precioBrutoTotal: 121 },
+      },
+    }),
 };
 const impresion = {
   firmarDocumento: jest
@@ -35,10 +38,12 @@ const generales = new PerfilesImpresionService(
   db,
   impresion as unknown as ImpresionService,
 );
+const catalogo = new CatalogoCadService(db);
 const service = new PerfilesCadService(
   db,
   generales,
   motor as unknown as MotorUniversalService,
+  catalogo,
 );
 let datos: PerfilCadDto;
 let categoriaId: string;
@@ -184,8 +189,8 @@ beforeAll(async () => {
       gramaje: 80,
       color: 'BN',
       modo: 'PREPARACION',
-      activo: true,
       probado: false,
+      activo: true,
       prioridad: 1,
     };
   });
@@ -229,7 +234,7 @@ it('vincula la receta y el rollo, cotiza con máquina/color correctos y firma s�
         piezas: [{ cantidad: 1, anchoMm: 594, altoMm: 841 }],
       },
     });
-    expect(Object.values(input.jobContext.slotMateriales)).toEqual([
+    expect(Object.values(input.jobContext.slotMateriales ?? {})).toEqual([
       datos.materialVarianteId,
     ]);
     expect(
@@ -287,14 +292,13 @@ it('cotiza rangos CAD mixtos, conserva receta/cantidad y rechaza rollos incompat
   runWithTenant(tenantId, async () => {
     const cad = new CentroCopiadoCadService(
       db,
-      service,
+      catalogo,
       motor as unknown as MotorUniversalService,
     );
     const p = await service.guardar(auth, datos);
     const opciones = await cad.opciones(tenantId);
-    expect(opciones.perfiles.find((o) => o.perfilId === p.id)).toMatchObject({
+    expect(opciones.perfiles.find((o) => o.color === 'BN')).toMatchObject({
       color: 'BN',
-      probado: false,
     });
     expect(opciones.perfiles[0]).not.toHaveProperty('host');
     const doc: DocumentoInput = {
@@ -312,9 +316,10 @@ it('cotiza rangos CAD mixtos, conserva receta/cantidad y rechaza rollos incompat
         { anchoMm: 910, altoMm: 1200 },
       ],
       cad: {
-        perfilId: p.id,
-        versionPerfil: p.version,
-        versionDestino: datos.versionDestino,
+        cotizacion: {
+          id: opciones.perfiles.find((o) => o.color === 'BN')!.id,
+          revision: opciones.perfiles.find((o) => o.color === 'BN')!.revision,
+        },
       },
       papelMateriaPrimaId: p.papelMateriaPrimaId,
       gramaje: p.gramaje,
@@ -324,6 +329,37 @@ it('cotiza rangos CAD mixtos, conserva receta/cantidad y rechaza rollos incompat
       tamanoAnchoMm: 594,
       tamanoAltoMm: 841,
     };
+    // Cotiza aunque todas las conexiones estén desactivadas. El catálogo no
+    // debe consultar las tablas de impresión ni necesitar claves/certificados.
+    await db.impresionDestino.update({
+      where: { id: datos.destinoId },
+      data: { activo: false },
+    });
+    const sinImpresion = new Proxy(db, {
+      get(target, prop) {
+        if (String(prop).startsWith('impresion'))
+          throw new Error('Dependencia de impresión en la cotización');
+        return Reflect.get(target, prop) as unknown;
+      },
+    });
+    const independiente = new CentroCopiadoCadService(
+      sinImpresion,
+      new CatalogoCadService(sinImpresion),
+      motor as unknown as MotorUniversalService,
+    );
+    try {
+      expect((await independiente.opciones(tenantId)).perfiles).toEqual(
+        opciones.perfiles,
+      );
+      expect(
+        (await independiente.construir(tenantId, doc, 'sin-qz', null)).error,
+      ).toBeNull();
+    } finally {
+      await db.impresionDestino.update({
+        where: { id: datos.destinoId },
+        data: { activo: true },
+      });
+    }
     const r = await cad.construir(tenantId, doc, 'carga-cad', null);
     expect(r.error).toBeNull();
     expect(r).toMatchObject({
@@ -433,17 +469,22 @@ it('cotiza rangos CAD mixtos, conserva receta/cantidad y rechaza rollos incompat
     expect(
       (await cad.construir(tenantId, { ...doc, color: 'COLOR' }, '', null))
         .error,
-    ).toContain('coincidir');
+    ).toContain('disponible');
     expect(
       (
         await cad.construir(
           tenantId,
-          { ...doc, cad: { ...doc.cad!, versionPerfil: 99 } },
+          {
+            ...doc,
+            cad: {
+              cotizacion: { ...doc.cad!.cotizacion!, revision: 'cambio' },
+            },
+          },
           '',
           null,
         )
       ).error,
-    ).toContain('cambiaron');
+    ).toContain('cambió');
     expect(() => cad.validar({ ...doc, faz: 2 })).toThrow('simple faz');
     expect(() =>
       cad.validar({ ...doc, medidasPaginas: [{ anchoMm: 1, altoMm: 1 }] }),
@@ -451,10 +492,60 @@ it('cotiza rangos CAD mixtos, conserva receta/cantidad y rechaza rollos incompat
     await runWithTenant(otro, async () => {
       expect((await cad.opciones(otro)).perfiles).toEqual([]);
       expect((await cad.construir(otro, doc, '', null)).error).toContain(
-        'no encontrado',
+        'no está disponible',
       );
     });
     expect(motor.cotizar.mock.calls).toHaveLength(previo);
+  }));
+
+it('cotiza por variante exacta aunque el material no declare gramaje y no lo infiere del nombre', async () =>
+  runWithTenant(tenantId, async () => {
+    await db.materiaPrimaVariante.update({
+      where: { id: datos.materialVarianteId },
+      data: { atributosVarianteJson: { anchoMm: 914 } },
+    });
+    try {
+      const cad = new CentroCopiadoCadService(
+        db,
+        catalogo,
+        motor as unknown as MotorUniversalService,
+      );
+      const opciones = await cad.opciones(tenantId);
+      const opcion = opciones.perfiles.find((o) => o.color === 'BN')!;
+      expect(opcion.gramaje).toBeNull();
+      const doc: DocumentoInput = {
+        id: 'sin-gramaje',
+        nombre: 'Plano',
+        archivoNombre: 'plano.pdf',
+        modo: 'CAD',
+        paginasOriginales: 1,
+        paginas: 1,
+        copias: 1,
+        medidasPaginas: [{ anchoMm: 594, altoMm: 841 }],
+        cad: { cotizacion: { id: opcion.id, revision: opcion.revision } },
+        papelMateriaPrimaId: opcion.papelMateriaPrimaId,
+        color: 'BN',
+        faz: 1,
+        tamano: 'CAD',
+        tamanoAnchoMm: 594,
+        tamanoAltoMm: 841,
+      };
+      const resultado = await cad.construir(tenantId, doc, '', null);
+      expect(resultado.error).toBeNull();
+      expect(resultado.jobContext._centroCopiado).toMatchObject({
+        gramaje: null,
+        materialVarianteId: datos.materialVarianteId,
+      });
+      expect(
+        (await cad.construir(tenantId, { ...doc, gramaje: 80 }, '', null))
+          .error,
+      ).toContain('coincidir');
+    } finally {
+      await db.materiaPrimaVariante.update({
+        where: { id: datos.materialVarianteId },
+        data: { atributosVarianteJson: { anchoMm: 914, gramajeGr: 80 } },
+      });
+    }
   }));
 
 it('rechaza receta ajena, gramaje falso, rollo cambiado y color no permitido', async () =>

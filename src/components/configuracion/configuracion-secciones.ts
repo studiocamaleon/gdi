@@ -24,6 +24,7 @@ export type SeccionConfig = {
   detalle: string;
   /** Sin él, la sección no se ofrece. */
   permiso: PermisoClave;
+  requiereImpresionDirecta?: boolean;
   /** Sólo para el país del tenant (el circuito fiscal ARCA es argentino). */
   soloPais?: string;
 };
@@ -96,6 +97,7 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
   },
   {
     key: "impresoras",
+    requiereImpresionDirecta: true,
     href: "/configuracion/impresoras",
     label: "Impresoras",
     detalle: "Etiquetas y conexión de este puesto",
@@ -117,9 +119,13 @@ export const SECCIONES_CONFIG: SeccionConfig[] = [
 export function seccionesConfigVisibles(
   puede: (permiso: PermisoClave) => boolean,
   pais: string,
+  impresionDirecta = false,
 ): SeccionConfig[] {
   return SECCIONES_CONFIG.filter(
-    (s) => puede(s.permiso) && (!s.soloPais || s.soloPais === pais),
+    (s) =>
+      puede(s.permiso) &&
+      (!s.soloPais || s.soloPais === pais) &&
+      (!s.requiereImpresionDirecta || impresionDirecta),
   );
 }
 

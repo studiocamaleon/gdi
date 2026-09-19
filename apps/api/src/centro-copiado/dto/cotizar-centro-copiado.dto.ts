@@ -10,6 +10,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  Matches,
   IsOptional,
   IsString,
   IsUUID,
@@ -29,10 +30,18 @@ export class MedidaPaginaDto {
   @IsNumber() @Min(0.01) @Max(100000) altoMm!: number;
 }
 
+export class SeleccionCotizacionCadDto {
+  @IsString() @MaxLength(160) id!: string;
+  @IsString() @Matches(/^[a-f0-9]{64}$/) revision!: string;
+}
 export class SeleccionCadDto {
-  @IsUUID() perfilId!: string;
-  @IsInt() @Min(1) versionPerfil!: number;
-  @IsInt() @Min(1) versionDestino!: number;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SeleccionCotizacionCadDto)
+  cotizacion?: SeleccionCotizacionCadDto;
+  @IsOptional() @IsUUID() perfilId?: string;
+  @IsOptional() @IsInt() @Min(1) versionPerfil?: number;
+  @IsOptional() @IsInt() @Min(1) versionDestino?: number;
 }
 
 export class CopiasPaginaCadDto {

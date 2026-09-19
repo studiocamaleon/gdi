@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Printer, Settings2 } from "lucide-react";
+import { Printer, Settings2, Download } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { FormDialog } from "@/components/design-system/form-dialog";
@@ -13,8 +13,12 @@ import {
   type VistaEtiqueta,
 } from "@/lib/impresion-api";
 import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
-import { imprimirOrden } from "@/lib/qz-impresion";
-import { ImpresoraPuestoForm } from "./impresora-puesto-form";
+import dynamic from "next/dynamic";
+import { useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import { descargarEtiquetaPdf } from "@/lib/etiqueta-pdf";
+const ImpresoraPuestoForm = dynamic(() =>
+  import("./impresora-puesto-form").then((m) => m.ImpresoraPuestoForm),
+);
 import s from "./impresion.module.css";
 
 export function EtiquetaOrdenDialog({
@@ -24,6 +28,7 @@ export function EtiquetaOrdenDialog({
   ordenId: string;
   onClose: () => void;
 }) {
+  const impresionDirecta = useImpresionDirecta();
   const [vista, setVista] = useState<VistaEtiqueta | null>(null);
   const [identidad, setIdentidad] = useState<ConfiguracionImpresion | null>(
     null,
@@ -39,13 +44,21 @@ export function EtiquetaOrdenDialog({
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let cancelado = false;
-    Promise.all([getVistaEtiqueta(ordenId), getConfiguracionImpresion()])
+    Promise.all([
+      getVistaEtiqueta(ordenId),
+      impresionDirecta ? getConfiguracionImpresion() : Promise.resolve(null),
+    ])
       .then(([v, i]) => {
         if (cancelado) return;
         setError("");
         setPagina(0);
         setVista(v);
         setIdentidad(i);
+        if (!i) {
+          setConfig(null);
+          setConfigurando(false);
+          return;
+        }
         const guardada = leerImpresora(i.tenantId);
         setConfig(guardada);
         setConfigurando(!guardada.impresora);
@@ -59,17 +72,25 @@ export function EtiquetaOrdenDialog({
     return () => {
       cancelado = true;
     };
-  }, [ordenId, revision]);
+  }, [ordenId, revision, impresionDirecta]);
   const cantidad = Number(copias);
   const cantidadValida =
     Number.isInteger(cantidad) && cantidad >= 1 && cantidad <= 20;
   async function imprimir() {
-    if (!config || !identidad || !cantidadValida || enviando.current) return;
+    if (
+      !impresionDirecta ||
+      !config ||
+      !identidad ||
+      !cantidadValida ||
+      enviando.current
+    )
+      return;
     enviando.current = true;
     setImprimiendo(true);
     setError("");
     setMensaje("Conectando con la impresora…");
     try {
+      const { imprimirOrden } = await import("@/lib/qz-impresion");
       await imprimirOrden(
         ordenId,
         identidad.tenantId,
@@ -99,7 +120,7 @@ export function EtiquetaOrdenDialog({
           if (!open && !enviando.current) onClose();
         }}
         isDismissable={!imprimiendo}
-        title="Imprimir etiqueta"
+        title={impresionDirecta ? "Imprimir etiqueta" : "Etiqueta de la orden"}
         description={
           vista
             ? `${vista.numero} · 100 × 150 mm · QR de entrega`
@@ -142,12 +163,12 @@ export function EtiquetaOrdenDialog({
             </div>
           )}
           {!vista && !error && <p role="status">Preparando vista previa…</p>}
-          {identidad && !identidad.firmaDisponible && (
+          {impresionDirecta && identidad && !identidad.firmaDisponible && (
             <p role="alert" className={s.error}>
               {identidad.mensaje}
             </p>
           )}
-          {identidad && config && configurando && (
+          {impresionDirecta && identidad && config && configurando && (
             <ImpresoraPuestoForm
               tenantId={identidad.tenantId}
               inicial={config}
@@ -158,7 +179,7 @@ export function EtiquetaOrdenDialog({
               }}
             />
           )}
-          {config?.impresora && !configurando && (
+          {impresionDirecta && config?.impresora && !configurando && (
             <div className={s.selected}>
               <div>
                 <strong>{config.impresora}</strong>
@@ -174,7 +195,7 @@ export function EtiquetaOrdenDialog({
               </ActionButton>
             </div>
           )}
-          {vista && (
+          {impresionDirecta && vista && (
             <Field className={s.copies}>
               <FieldLabel htmlFor="etiqueta-copias">
                 Copias de cada etiqueta
@@ -229,20 +250,40 @@ export function EtiquetaOrdenDialog({
               Reintentar carga
             </ActionButton>
           )}
-          <ActionButton
-            onPress={imprimir}
-            isDisabled={
-              !vista ||
-              !identidad?.firmaDisponible ||
-              !config?.impresora ||
-              configurando ||
-              !cantidadValida ||
-              imprimiendo
-            }
-          >
-            <Printer aria-hidden="true" />
-            {imprimiendo ? "Enviando…" : "Imprimir etiqueta"}
-          </ActionButton>
+          {vista && (
+            <ActionButton
+              variant="outline"
+              isDisabled={imprimiendo}
+              onPress={async () => {
+                try {
+                  await descargarEtiquetaPdf(vista);
+                } catch {
+                  setError(
+                    "No se pudo descargar la etiqueta. Intentá nuevamente.",
+                  );
+                }
+              }}
+            >
+              <Download aria-hidden="true" />
+              Descargar PDF
+            </ActionButton>
+          )}
+          {impresionDirecta && (
+            <ActionButton
+              onPress={imprimir}
+              isDisabled={
+                !vista ||
+                !identidad?.firmaDisponible ||
+                !config?.impresora ||
+                configurando ||
+                !cantidadValida ||
+                imprimiendo
+              }
+            >
+              <Printer aria-hidden="true" />
+              {imprimiendo ? "Enviando…" : "Imprimir etiqueta"}
+            </ActionButton>
+          )}
         </div>
       </FormDialog>
     </DesignSystemProvider>
