@@ -758,6 +758,14 @@ model Tenant {
   materiaPrimaVariantes                            MateriaPrimaVariante[]
   almacenesMateriaPrima                            AlmacenMateriaPrima[]
   almacenesMateriaPrimaUbicaciones                 AlmacenMateriaPrimaUbicacion[]
+  ofertasCompra OfertaCompra[]
+  ordenesCompra OrdenCompra[]
+  operacionesCompra OperacionCompra[]
+  politicaReservasMaterial                        PoliticaReservasMaterial?
+  necesidadesMaterialOt                           NecesidadMaterialOt[]
+  reservasMaterialOt                              ReservaMaterialOt[]
+  consumosMaterialOt                              ConsumoMaterialOt[]
+  operacionesReservasMaterial                     OperacionReservasMaterial[]
   stockMateriaPrimaVariantes                       StockMateriaPrimaVariante[]
   movimientoStockMateriaPrima                      MovimientoStockMateriaPrima[]
   clienteContactos                                 ClienteContacto[]
@@ -1393,6 +1401,10 @@ model Cliente {
 }
 
 model Proveedor {
+  reposicionDias Int?
+  reposicionTipo String @default("CORRIDOS") @db.VarChar(16)
+  ofertasCompra OfertaCompra[]
+  ordenesCompra OrdenCompra[]
   gastosFijosEstructura           GastoFijoEstructura[]
   id                              String                 @id @default(uuid()) @db.Uuid
   tenantId                        String                 @db.Uuid
@@ -1433,6 +1445,7 @@ model Proveedor {
   familiaPasoDefaults FamiliaPasoDefaults[]
   pasosTenant         PasoTenant[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, nombre])
   @@unique([tenantId, cuit])
   @@index([tenantId, nombre])
@@ -2429,6 +2442,8 @@ model MateriaPrima {
 }
 
 model MateriaPrimaVariante {
+  ofertasCompra OfertaCompra[]
+  lineasCompra LineaOrdenCompra[]
   id                             String                                            @id @default(uuid()) @db.Uuid
   tenantId                       String                                            @db.Uuid
   materiaPrimaId                 String                                            @db.Uuid
@@ -2452,6 +2467,7 @@ model MateriaPrimaVariante {
   materiaPrima                   MateriaPrima                                      @relation(fields: [materiaPrimaId], references: [id], onDelete: Cascade)
   materialPresetVariante         MaterialPresetVariante?                           @relation(fields: [materialPresetVarianteId], references: [id], onDelete: SetNull)
   proveedorReferencia            Proveedor?                                        @relation("MateriaPrimaVarianteProveedorReferencia", fields: [proveedorReferenciaId], references: [id], onDelete: Restrict)
+  necesidadesMaterialOt          NecesidadMaterialOt[]
   stocks                         StockMateriaPrimaVariante[]
   movimientosStock               MovimientoStockMateriaPrima[]
   maquinaConsumibles             MaquinaConsumible[]                               @relation("MaquinaConsumibleMateriaPrimaVariante")
@@ -2461,6 +2477,7 @@ model MateriaPrimaVariante {
   slotMaterialCandidatoDefaults  ProductoConfigPasoSlotMaterialCandidato[]         @relation("ProductoConfigPasoSlotMaterialCandidatoDefaultVariante")
   slotMaterialCandidatoVariantes ProductoConfigPasoSlotMaterialCandidatoVariante[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, sku])
   @@index([materialPresetVarianteId])
   @@index([tenantId, materiaPrimaId, activo])
@@ -2534,6 +2551,8 @@ model AlmacenMateriaPrima {
 }
 
 model AlmacenMateriaPrimaUbicacion {
+  ordenesCompra OrdenCompra[]
+  recepcionesCompra RecepcionCompra[]
   id          String                        @id @default(uuid()) @db.Uuid
   tenantId    String                        @db.Uuid
   almacenId   String                        @db.Uuid
@@ -2545,9 +2564,11 @@ model AlmacenMateriaPrimaUbicacion {
   updatedAt   DateTime                      @updatedAt
   tenant      Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   almacen     AlmacenMateriaPrima           @relation(fields: [almacenId], references: [id], onDelete: Cascade)
+  reservasMaterialOt ReservaMaterialOt[]
   stocks      StockMateriaPrimaVariante[]
   movimientos MovimientoStockMateriaPrima[]
 
+  @@unique([tenantId, id])
   @@unique([tenantId, almacenId, codigo])
   @@index([tenantId, almacenId, activo])
 }
@@ -2571,6 +2592,7 @@ model StockMateriaPrimaVariante {
 }
 
 model MovimientoStockMateriaPrima {
+  recepcionCompra DetalleRecepcionCompra?
   id                String                            @id @default(uuid()) @db.Uuid
   tenantId          String                            @db.Uuid
   varianteId        String                            @db.Uuid
@@ -2591,6 +2613,9 @@ model MovimientoStockMateriaPrima {
   variante          MateriaPrimaVariante              @relation(fields: [varianteId], references: [id], onDelete: Cascade)
   ubicacion         AlmacenMateriaPrimaUbicacion      @relation(fields: [ubicacionId], references: [id], onDelete: Cascade)
 
+  consumoMaterialOt ConsumoMaterialOt?
+
+  @@unique([tenantId, id])
   @@index([tenantId, varianteId, createdAt])
   @@index([tenantId, ubicacionId, createdAt])
   @@index([tenantId, tipo, createdAt])
@@ -3789,6 +3814,10 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
+  materialesControlados Boolean @default(false)
+  materialesRevision String? @db.VarChar(64)
+  necesidadesMaterialOt NecesidadMaterialOt[]
+  operacionesReservasMaterial OperacionReservasMaterial[]
   id                          String                        @id @default(uuid()) @db.Uuid
   tenantId                    String                        @db.Uuid
   /// UUID estable del comando de creación. Permite devolver la misma OT ante
@@ -3922,6 +3951,8 @@ model OrdenTrabajo {
   @@index([tenantId, proyectoCampanaId])
   @@index([tenantId, estado, fechaEmision])
   @@index([tenantId, estado, fechaFinalizada])
+  @@unique([tenantId, id])
+
 }
 
 model OrdenTrabajoItem {
@@ -6246,4 +6277,234 @@ model TipoCambioCotizacion {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   cotizaciones Cotizacion[]
   @@index([tenantId, createdAt])
+}
+
+
+/// Optativo: activar no incorpora retroactivamente órdenes ni compromete stock.
+model PoliticaReservasMaterial {
+  tenantId String @id @db.Uuid
+  modo String @default("AL_EMITIR") @db.VarChar(16)
+  habilitada Boolean @default(false)
+  incluirConsumibles Boolean @default(false)
+  version Int @default(1)
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model NecesidadMaterialOt {
+  coberturasCompra CoberturaCompra[]
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  ordenId String @db.Uuid
+  varianteId String @db.Uuid
+  nombre String
+  unidad String @db.VarChar(32)
+  revision String @db.VarChar(64)
+  fuente String @default("SNAPSHOT") @db.VarChar(16)
+  estado String @default("ACTIVA") @db.VarChar(16)
+  cantidad Decimal @db.Decimal(20, 8)
+  consumida Decimal @default(0) @db.Decimal(20, 8)
+  motivoRevision String?
+  origenesJson Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden OrdenTrabajo @relation(fields: [tenantId, ordenId], references: [tenantId, id], onDelete: Restrict)
+  variante MateriaPrimaVariante @relation(fields: [tenantId, varianteId], references: [tenantId, id], onDelete: Restrict)
+  reservas ReservaMaterialOt[]
+  consumos ConsumoMaterialOt[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, ordenId, varianteId])
+  @@index([tenantId, varianteId, estado])
+}
+
+/// cantidad es el remanente comprometido, nunca una segunda existencia física.
+model ReservaMaterialOt {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  necesidadId String @db.Uuid
+  ubicacionId String @db.Uuid
+  cantidad Decimal @db.Decimal(20, 8)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  necesidad NecesidadMaterialOt @relation(fields: [tenantId, necesidadId], references: [tenantId, id], onDelete: Restrict)
+  ubicacion AlmacenMateriaPrimaUbicacion @relation(fields: [tenantId, ubicacionId], references: [tenantId, id], onDelete: Restrict)
+  consumos ConsumoMaterialOt[]
+  @@unique([tenantId, id])
+  @@unique([tenantId, necesidadId, ubicacionId])
+  @@index([tenantId, ubicacionId])
+}
+
+model ConsumoMaterialOt {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  necesidadId String @db.Uuid
+  reservaId String @db.Uuid
+  movimientoId String @db.Uuid
+  cantidad Decimal @db.Decimal(20, 8)
+  costoUnitario Decimal @db.Decimal(14, 6)
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  necesidad NecesidadMaterialOt @relation(fields: [tenantId, necesidadId], references: [tenantId, id], onDelete: Restrict)
+  reserva ReservaMaterialOt @relation(fields: [tenantId, reservaId], references: [tenantId, id], onDelete: Restrict)
+  movimiento MovimientoStockMateriaPrima @relation(fields: [tenantId, movimientoId], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, movimientoId])
+  @@index([tenantId, necesidadId])
+}
+
+/// Comando idempotente y registro auditable de sus cambios, dentro de la misma transacción.
+model OperacionReservasMaterial {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  ordenId String @db.Uuid
+  clave String @db.Uuid
+  accion String @db.VarChar(32)
+  huella String @db.VarChar(64)
+  actorUsuarioId String? @db.Uuid
+  actorNombre String
+  detalleJson Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orden OrdenTrabajo @relation(fields: [tenantId, ordenId], references: [tenantId, id], onDelete: Restrict)
+  @@unique([tenantId, clave])
+  @@index([tenantId, ordenId, createdAt])
+}
+
+/// Catálogo comercial, independiente del precio usado para cotizar.
+model OfertaCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  proveedorId String @db.Uuid
+  varianteId String @db.Uuid
+  codigoProveedor String? @db.VarChar(120)
+  unidadCompra UnidadMateriaPrima
+  unidadStock UnidadMateriaPrima
+  factorStock Decimal @db.Decimal(20,8)
+  precio Decimal? @db.Decimal(14,6)
+  moneda String @db.VarChar(3)
+  minimo Decimal @default(0) @db.Decimal(20,8)
+  multiplo Decimal? @db.Decimal(20,8)
+  reposicionDias Int?
+  reposicionTipo String? @db.VarChar(16)
+  vigenteHasta DateTime? @db.Date
+  activo Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Cascade)
+  proveedor Proveedor @relation(fields:[tenantId,proveedorId],references:[tenantId,id],onDelete:Restrict)
+  variante MateriaPrimaVariante @relation(fields:[tenantId,varianteId],references:[tenantId,id],onDelete:Restrict)
+  @@unique([tenantId,proveedorId,varianteId])
+  @@index([tenantId,varianteId,activo])
+}
+model OrdenCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  numero Int
+  proveedorId String @db.Uuid
+  proveedorNombre String
+  ubicacionId String @db.Uuid
+  estado String @default("BORRADOR") @db.VarChar(24)
+  version Int @default(1)
+  fechaPedido DateTime @db.Date
+  moneda String @db.VarChar(3)
+  monedaStock String @db.VarChar(3)
+  tipoCambio Decimal @db.Decimal(20,8)
+  notas String? @db.VarChar(1000)
+  motivoCierre String? @db.VarChar(500)
+  creadoPor String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Cascade)
+  proveedor Proveedor @relation(fields:[tenantId,proveedorId],references:[tenantId,id],onDelete:Restrict)
+  ubicacion AlmacenMateriaPrimaUbicacion @relation(fields:[tenantId,ubicacionId],references:[tenantId,id],onDelete:Restrict)
+  lineas LineaOrdenCompra[]
+  recepciones RecepcionCompra[]
+  @@unique([tenantId,id])
+  @@unique([tenantId,numero])
+  @@index([tenantId,estado,createdAt])
+}
+model LineaOrdenCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  ordenId String @db.Uuid
+  varianteId String @db.Uuid
+  posicion Int
+  nombre String
+  unidadCompra UnidadMateriaPrima
+  unidadStock UnidadMateriaPrima
+  factorStock Decimal @db.Decimal(20,8)
+  cantidad Decimal @db.Decimal(20,8)
+  recibida Decimal @default(0) @db.Decimal(20,8)
+  precio Decimal @db.Decimal(14,6)
+  fechaEstimada DateTime? @db.Date
+  fechaConfirmada DateTime? @db.Date
+  plazoDias Int?
+  plazoTipo String? @db.VarChar(16)
+  ofertaSnapshot Json
+  orden OrdenCompra @relation(fields:[tenantId,ordenId],references:[tenantId,id],onDelete:Restrict)
+  variante MateriaPrimaVariante @relation(fields:[tenantId,varianteId],references:[tenantId,id],onDelete:Restrict)
+  coberturas CoberturaCompra[]
+  recepciones DetalleRecepcionCompra[]
+  @@unique([tenantId,id])
+  @@index([tenantId,varianteId])
+}
+/// Cobertura FUTURA en unidad de stock. Sólo la recepción la convierte en reserva física.
+model CoberturaCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  lineaId String @db.Uuid
+  necesidadId String @db.Uuid
+  revision String @db.VarChar(64)
+  cantidad Decimal @db.Decimal(20,8)
+  recibida Decimal @default(0) @db.Decimal(20,8)
+  linea LineaOrdenCompra @relation(fields:[tenantId,lineaId],references:[tenantId,id],onDelete:Restrict)
+  necesidad NecesidadMaterialOt @relation(fields:[tenantId,necesidadId],references:[tenantId,id],onDelete:Restrict)
+  @@unique([tenantId,lineaId,necesidadId])
+  @@index([tenantId,necesidadId])
+}
+model RecepcionCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  ordenId String @db.Uuid
+  ubicacionId String @db.Uuid
+  referencia String? @db.VarChar(160)
+  notas String? @db.VarChar(500)
+  actor String
+  createdAt DateTime @default(now())
+  orden OrdenCompra @relation(fields:[tenantId,ordenId],references:[tenantId,id],onDelete:Restrict)
+  ubicacion AlmacenMateriaPrimaUbicacion @relation(fields:[tenantId,ubicacionId],references:[tenantId,id],onDelete:Restrict)
+  detalles DetalleRecepcionCompra[]
+  @@unique([tenantId,id])
+  @@index([tenantId,createdAt])
+}
+model DetalleRecepcionCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  recepcionId String @db.Uuid
+  lineaId String @db.Uuid
+  movimientoId String @db.Uuid
+  cantidadCompra Decimal @db.Decimal(20,8)
+  cantidadStock Decimal @db.Decimal(20,8)
+  costoStock Decimal @db.Decimal(14,6)
+  reservasJson Json
+  recepcion RecepcionCompra @relation(fields:[tenantId,recepcionId],references:[tenantId,id],onDelete:Restrict)
+  linea LineaOrdenCompra @relation(fields:[tenantId,lineaId],references:[tenantId,id],onDelete:Restrict)
+  movimiento MovimientoStockMateriaPrima @relation(fields:[tenantId,movimientoId],references:[tenantId,id],onDelete:Restrict)
+  @@unique([tenantId,movimientoId])
+}
+model OperacionCompra {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  clave String @db.Uuid
+  huella String @db.VarChar(64)
+  ordenId String? @db.Uuid
+  accion String @db.VarChar(32)
+  actor String
+  resultado Json
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields:[tenantId],references:[id],onDelete:Cascade)
+  @@unique([tenantId,clave])
+  @@index([tenantId,ordenId,createdAt])
 }

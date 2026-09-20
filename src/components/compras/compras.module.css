@@ -1,0 +1,177 @@
+.pageBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.table {
+  min-width: 940px;
+}
+.table th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-text);
+  background: var(--surface-secondary);
+  padding: 12px;
+}
+.table td {
+  padding: 12px;
+  vertical-align: middle;
+}
+.table input {
+  max-width: 160px;
+}
+.material {
+  min-width: 220px;
+  max-width: 360px;
+}
+.material strong {
+  display: block;
+  font-weight: 550;
+}
+.secondary {
+  display: block;
+  font-size: 12px;
+  color: var(--muted-text);
+  line-height: 1.55;
+}
+.amount {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.warning {
+  color: var(--danger);
+  font-size: 13px;
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 24px;
+  overflow: auto;
+  min-height: 0;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}
+.dialog {
+  width: min(1120px, calc(100vw - 32px));
+  max-width: none;
+}
+.dialogWide {
+  width: min(1320px, calc(100vw - 32px));
+  max-width: none;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.offerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.lineTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lineFields {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.addRow > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  border-radius: 8px;
+}
+.summary p {
+  margin: 0;
+  font-size: 13px;
+}
+.summary strong {
+  display: block;
+  margin-top: 3px;
+}
+.link {
+  color: var(--accent-soft-foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--muted-text);
+}
+.history {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .grid,
+  .offerGrid,
+  .lineFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .body {
+    padding: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .grid,
+  .offerGrid,
+  .lineFields {
+    grid-template-columns: 1fr;
+  }
+}

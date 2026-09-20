@@ -345,11 +345,17 @@
   width: 100%;
   height: auto;
   min-height: 64px;
-  padding: 10px 14px 10px 10px;
+  padding: 10px 50px 10px 10px;
   border: 1px solid var(--brand-graphite-line);
   border-radius: 12px;
   box-shadow: var(--overlay-shadow);
   white-space: normal;
+}
+.widgetCerrar.widgetCerrar {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 .widgetBot.widgetBot {
   width: 38px;

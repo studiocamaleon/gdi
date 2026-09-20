@@ -1,0 +1,248 @@
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 8px);
+  background: var(--surface);
+  overflow: hidden;
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px;
+}
+.header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+.header h2 svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+.header p,
+.footer {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.header p {
+  margin: 7px 0 0;
+}
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 12px 22px;
+  background: var(--surface-secondary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.summary > span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.summary svg {
+  width: 14px;
+  height: 14px;
+}
+.warning {
+  color: var(--accent-soft-foreground);
+}
+.pending {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.pending h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.pending ul,
+.details ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pending li,
+.details li {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.pending li span,
+.details li > span {
+  color: var(--muted-text);
+}
+.table {
+  min-width: 680px;
+}
+.table td {
+  vertical-align: top;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
+}
+.material {
+  display: grid;
+  gap: 4px;
+  max-width: 320px;
+  white-space: normal;
+}
+.material > span,
+.quantity small {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.quantity {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.quantity small {
+  display: block;
+  margin-top: 4px;
+}
+.details {
+  max-width: 430px;
+  white-space: normal;
+}
+.details summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.details ul {
+  margin-top: 14px;
+}
+.details p {
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  background: var(--surface-secondary);
+  white-space: nowrap;
+}
+.badge[data-review="true"] {
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+}
+.message {
+  padding: 24px;
+  font-size: 13px;
+  color: var(--muted-text);
+}
+.footer {
+  margin: 0;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+}
+.control {
+  padding: 20px 22px;
+  border-top: 1px solid var(--border);
+}
+.controlHeading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.controlHeading h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.controlHeading p,
+.secondary {
+  font-size: 12px;
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+.stockTableWrap {
+  overflow-x: auto;
+  margin: 16px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.stockTable {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+.stockTable th {
+  text-align: left;
+  background: var(--surface-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+.stockTable td {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stockTable td:first-child {
+  white-space: normal;
+  min-width: 180px;
+}
+.stockTable small {
+  display: block;
+  color: var(--muted-text);
+  margin-top: 4px;
+}
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dialogBody {
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+  font-size: 13px;
+}
+.dialogBody label {
+  display: grid;
+  gap: 7px;
+}
+.dialogBody p {
+  margin: 0;
+  color: var(--muted-text);
+  line-height: 1.6;
+}
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+}
+.calculation > summary {
+  padding: 14px 22px;
+  cursor: pointer;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-text);
+}
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

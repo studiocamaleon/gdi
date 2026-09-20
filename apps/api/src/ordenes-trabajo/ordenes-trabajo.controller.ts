@@ -32,6 +32,7 @@ import {
   RevertirEntregaDto,
 } from './dto/entrega.dto';
 import { EntregaService } from './entrega.service';
+import { MaterialesOrdenService } from './materiales-orden.service';
 import { MesaPasoDto } from './dto/mesa-paso.dto';
 import { AvanzarCompraDto } from './dto/avanzar-compra.dto';
 import { ResolverGatePasoDto } from './dto/resolver-gate-paso.dto';
@@ -57,6 +58,7 @@ export class OrdenesTrabajoController {
   constructor(
     private readonly ordenesTrabajoService: OrdenesTrabajoService,
     private readonly entrega: EntregaService,
+    private readonly materiales: MaterialesOrdenService,
   ) {}
 
   /**
@@ -228,6 +230,15 @@ export class OrdenesTrabajoController {
   )
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.ordenesTrabajoService.findOne(auth, id);
+  }
+
+  @Get(':id/materiales')
+  @Permiso('produccion.ver', 'comercial.ver')
+  materialesOrden(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.materiales.consultar(auth.tenantId, id);
   }
 
   /** Pasos materializados de la orden (tab Producción del detalle). */

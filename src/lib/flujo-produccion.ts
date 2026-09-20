@@ -1154,6 +1154,8 @@ function ocupar(est: EstacionSim, fin: Date) {
 // ── Fase 3: demora sugerida para trabajo NUEVO (cotizador) ───────────────
 
 export type PasoHipotetico = {
+  /** Piso de inicio de una simulación comercial; no persiste una reserva. */
+  planificadoDesde?: string | null;
   requiereMaquina?: boolean;
   demandaHumana?: unknown;
   clave?: string;
@@ -1242,6 +1244,7 @@ export function estimarDemoraNuevos({
         centroCostoId: paso.centroCostoId,
         centroCostoNombre: null,
         duracionEstimadaMin: paso.duracionMin,
+        planificadoDesde: paso.planificadoDesde,
         demandaHumana: paso.demandaHumana,
         estado: "pendiente",
         motivoBloqueo: null,

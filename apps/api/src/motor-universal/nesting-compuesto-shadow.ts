@@ -500,6 +500,7 @@ function candidatoDesdePaso(args: {
 
     const opcionFija: OpcionRollo = {
       materialVarianteId: material.materialVarianteId,
+      contextoUnidadesSnapshot: material.contextoUnidadesSnapshot,
       materialSku: material.materialSku,
       materialDisplayName: material.materialDisplayName,
       materiaPrimaId: material.materiaPrimaId ?? null,
@@ -1316,6 +1317,7 @@ function aplicarGrupoConsolidado(args: {
       material.materiaPrimaTemplateId = opcion.materiaPrimaTemplateId;
       material.materiaPrimaTipoTecnico = opcion.materiaPrimaTipoTecnico;
       material.atributosVarianteJson = opcion.atributosVarianteJson;
+      material.contextoUnidadesSnapshot = opcion.contextoUnidadesSnapshot;
       material.unidad = opcion.unidad;
       material.precioUnitario = opcion.precioUnitario;
       material.estrategiaCosto = 'consumed-length';

@@ -922,6 +922,10 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
         {
           materialVarianteId: 'rollo-800',
           materialSku: 'VINILO-800',
+          contextoUnidadesSnapshot: {
+            unidadStock: 'M2',
+            unidadCompra: 'ROLLO',
+          },
           materialDisplayName: 'Vinilo 80 cm',
           materiaPrimaId: 'vinilo-base',
           materiaPrimaNombre: 'Vinilo',
@@ -935,6 +939,10 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
         {
           materialVarianteId: 'rollo-1000',
           materialSku: 'VINILO-1000',
+          contextoUnidadesSnapshot: {
+            unidadStock: 'METRO_LINEAL',
+            unidadCompra: 'ROLLO',
+          },
           materialDisplayName: 'Vinilo 100 cm',
           materiaPrimaId: 'vinilo-base',
           materiaPrimaNombre: 'Vinilo',
@@ -985,6 +993,12 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
         (item) => item.pasos?.[0].materiales?.[0].materialVarianteId,
       ),
     ).toEqual(['rollo-1000', 'rollo-1000']);
+    expect(
+      componentes.map(
+        (item) =>
+          item.pasos?.[0].materiales?.[0].contextoUnidadesSnapshot?.unidadStock,
+      ),
+    ).toEqual(['METRO_LINEAL', 'METRO_LINEAL']);
   });
 
   it('no consolida automáticamente un panelizado manual', async () => {

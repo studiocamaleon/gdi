@@ -1157,6 +1157,8 @@ export interface NestingCostingPreview {
 }
 
 export interface MaterialEjecutado {
+  /** Unidades y conversiones vigentes al cotizar; abastecimiento no relee el catálogo. */
+  contextoUnidadesSnapshot?: MaterialUnitContext;
   slotCodigo: string;
   slotNombre?: string | null;
   slotRol?: string | null;
@@ -1177,6 +1179,7 @@ export interface MaterialEjecutado {
    * demanda consolidada, en lugar de heredar el ganador de cada componente.
    */
   opcionesNestingRollo?: Array<{
+    contextoUnidadesSnapshot?: MaterialUnitContext;
     materialVarianteId: string;
     materialSku: string;
     materialDisplayName: string;

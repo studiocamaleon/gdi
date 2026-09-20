@@ -285,6 +285,8 @@ export const NAV: NavItem[] = [
         label: "Materiales",
         href: "/inventario/materias-primas",
       },
+      { key: "stock", label: "Stock", href: "/inventario/centro-stock" },
+      { key: "compras", label: "Compras y abastecimiento", href: "/inventario/compras" },
       { key: "movimientos", label: "Movimientos", href: "/inventario/movimientos" },
     ],
   },

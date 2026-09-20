@@ -23,6 +23,16 @@ import { ProveedorContactoDto } from './contacto.dto';
 import { ProveedorDireccionDto } from './direccion.dto';
 
 export class UpsertProveedorDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(3650)
+  reposicionDias?: number | null;
+
+  @ValidateIf((_, value) => value !== undefined)
+  @IsIn(['CORRIDOS', 'HABILES'])
+  reposicionTipo?: 'CORRIDOS' | 'HABILES';
+
   @IsString()
   @MinLength(1)
   @MaxLength(160)

@@ -107,6 +107,8 @@ export class ProveedoresService {
         cuit: true,
         condicionIva: true,
         condicionPagoDias: true,
+        reposicionDias: true,
+        reposicionTipo: true,
         cbuAlias: true,
       },
       orderBy: { nombre: 'asc' },
@@ -186,6 +188,8 @@ export class ProveedoresService {
         cuit: normalized.cuit,
         condicionIva: normalized.condicionIva,
         condicionPagoDias: normalized.condicionPagoDias,
+        reposicionDias: normalized.reposicionDias,
+        reposicionTipo: normalized.reposicionTipo,
         cbuAlias: normalized.cbuAlias,
         contactos: {
           create: normalized.contactos.map((contacto) => ({
@@ -242,6 +246,8 @@ export class ProveedoresService {
             cuit: normalized.cuit,
             condicionIva: normalized.condicionIva,
             condicionPagoDias: normalized.condicionPagoDias,
+            reposicionDias: normalized.reposicionDias,
+            reposicionTipo: normalized.reposicionTipo,
             cbuAlias: normalized.cbuAlias,
           },
         });
@@ -600,6 +606,8 @@ export class ProveedoresService {
       cuit: proveedor.cuit ?? '',
       condicionIva: proveedor.condicionIva ?? '',
       condicionPagoDias: proveedor.condicionPagoDias,
+      reposicionDias: proveedor.reposicionDias,
+      reposicionTipo: proveedor.reposicionTipo,
       cbuAlias: proveedor.cbuAlias ?? '',
       activo: proveedor.activo,
       updatedAt: proveedor.updatedAt.toISOString(),

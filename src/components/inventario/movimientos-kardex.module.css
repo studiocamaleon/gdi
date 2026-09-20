@@ -140,3 +140,19 @@
   .empty { padding: 36px 20px; min-height: 360px; }
   .empty [data-slot="empty-title"] h3 { font-size: 22px; }
 }
+
+.warehouseFilter {
+  flex: 0 1 220px;
+  min-width: 160px;
+}
+.context {
+  padding: 10px 16px;
+  color: var(--muted-text);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.location {
+  display: block;
+  color: var(--muted-text);
+  font-size: 11px;
+}

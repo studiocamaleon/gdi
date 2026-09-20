@@ -6890,6 +6890,7 @@ export class MotorUniversalService {
         slotRol: slot.slotRol ?? null,
         materialVarianteId: materialResuelto.id,
         materialNombre: materialResuelto.sku,
+        contextoUnidadesSnapshot: materialResuelto.contextoUnidades,
         materialSku: materialResuelto.sku,
         materialDisplayName: this.getMaterialDisplayName(materialResuelto),
         materiaPrimaNombre: materialResuelto.materiaPrimaNombre ?? null,
@@ -7740,6 +7741,7 @@ export class MotorUniversalService {
       ejecutados.push({
         slotCodigo: `consumible_maquina:${channel}`,
         materialVarianteId: consumible.materialVariante.id,
+        contextoUnidadesSnapshot: consumible.materialVariante.contextoUnidades,
         materialNombre: consumible.materialVariante.sku,
         materialSku: consumible.materialVariante.sku,
         materialDisplayName: this.getConsumibleMaterialDisplayName(
@@ -7829,6 +7831,7 @@ export class MotorUniversalService {
           ejecutados.push({
             slotCodigo: 'consumible_maquina:master',
             materialVarianteId: master.materialVariante.id,
+            contextoUnidadesSnapshot: master.materialVariante.contextoUnidades,
             materialNombre: master.materialVariante.sku,
             materialSku: master.materialVariante.sku,
             materialDisplayName:
@@ -8342,6 +8345,7 @@ export class MotorUniversalService {
           {
             materialVarianteId: variante.id,
             materialSku: variante.sku,
+            contextoUnidadesSnapshot: variante.contextoUnidades,
             materialDisplayName: this.getMaterialDisplayName(variante),
             materiaPrimaId: variante.materiaPrimaId ?? null,
             materiaPrimaNombre: variante.materiaPrimaNombre ?? null,

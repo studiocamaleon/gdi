@@ -1189,6 +1189,10 @@ Vender y producir un total consolidado con distribución por talle, color u otro
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fases 3 y 6.
 
+**Priorización e investigación, 19/09/2026:** el usuario prioriza F9/F10 sobre la preparación comercial. Se documentó el [diseño de compras y abastecimiento para múltiples tamaños de empresa](compras-abastecimiento-investigacion-y-plan-2026-09-19.md), con demanda física, reservas, políticas por tenant/material y entregas C0–C5. Es una propuesta de implementación; no declara F9 implementada ni modifica saldos existentes.
+
+**Punto de partida, revisión de inventario 19/09:** el mismo plan incorpora una entrega base acotada para recuperar el Centro de stock existente, actualizar el tab Inventario de la ficha y contextualizar Movimientos. Corregir agregaciones de unidades, conteo de depósitos, selección de ubicaciones y carga de datos antes de agregar reservas; conservar saldos, conversiones e historial. No crear un segundo inventario.
+
 ### Objetivo de negocio
 
 Distinguir stock físico, reservado, disponible, en producción, consumido, scrap, recuperado y en compra.
@@ -1227,6 +1231,8 @@ Distinguir stock físico, reservado, disponible, en producción, consumido, scra
 
 **Estado inicial:** PENDIENTE  
 **Dependencias:** Fase 9; reutiliza tercerización existente.
+
+**Investigación, 19/09/2026:** el [plan de compras y abastecimiento](compras-abastecimiento-investigacion-y-plan-2026-09-19.md) concreta compras rápidas y controladas sobre el mismo modelo, OC consolidadas, recepciones parciales y vínculo con Egreso/Pago. Mantiene las dependencias de cantidades productivas para tercerización y los criterios de salida de esta fase. Implementación pendiente.
 
 ### Objetivo de negocio
 
@@ -1807,3 +1813,13 @@ No se integrará a `main` únicamente porque todas las ramas estén mergeadas. S
 10. aprobación explícita para fusionar a `main`.
 
 Hasta entonces, `visual-ilusion/analisis` es la línea integradora y recuperable del programa.
+
+- 2026-09-19: inventario C1 incorpora reservas explícitas por OT y consumo vinculado, activación optativa por empresa, disponibilidad/faltantes y protección concurrente de salidas. Ver §11.3 del [plan de abastecimiento](compras-abastecimiento-investigacion-y-plan-2026-09-19.md). Compras y fechas de reposición continúan en C2.
+
+- 2026-09-19: primer circuito C2 de abastecimiento: proveedores alternativos por variante, plazos heredados/específicos, compras consolidadas o para stock, pedidos y recepción parcial aceptada con reserva al origen. Ver §11.4 del [plan de abastecimiento](compras-abastecimiento-investigacion-y-plan-2026-09-19.md). Aprobaciones, devoluciones, PDF de compra y estimación de entrega de OT siguen pendientes; no declara F10 completa.
+
+- 2026-09-19: reservas automáticas al emitir e incorporación automática de necesidades para Compras, conservando modo manual configurable y control desactivable. Emisión directa/borrador y edición reconciliadas transaccionalmente. Ver §11.5 del [plan de abastecimiento](compras-abastecimiento-investigacion-y-plan-2026-09-19.md).
+
+### Ajuste del circuito comercial de materiales · 19/09/2026
+
+Disponibilidad de materiales y previsión de reposición visibles al cotizar/editar borrador, antes de emitir. La entrega sugerida incorpora espera de abastecimiento y calendario/carga productiva; sin plazo conocido queda por confirmar. Consulta sin escrituras ni reservas, con demanda conjunta y cobertura futura libre. OT emitida: textos de abastecimiento y acción de reserva sólo si corresponde. Alcance, límites (fechas manuales y distribuciones por revisar) y validación en §11.6 de `compras-abastecimiento-investigacion-y-plan-2026-09-19.md`.

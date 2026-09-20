@@ -14,6 +14,7 @@ import {
   FolderIcon,
   CircleDollarSignIcon,
   HistoryIcon,
+  BoxesIcon,
 } from "lucide-react";
 import { OrdenCampoLabel } from "./orden-workspace";
 
@@ -21,6 +22,7 @@ export type OrdenTab =
   | "datos"
   | "productos"
   | "produccion"
+  | "materiales"
   | "pagos"
   | "comprobantes"
   | "archivos"
@@ -65,6 +67,7 @@ export function OrdenTabs({
   comprobantesCount,
   archivosCount,
   archivosPendientesCount = 0,
+  mostrarMateriales = false,
 }: {
   count: number;
   clientePendiente: boolean;
@@ -76,6 +79,7 @@ export function OrdenTabs({
   /** null hasta que el tab de Archivos se abre y los cuenta. */
   archivosCount?: number | null;
   archivosPendientesCount?: number;
+  mostrarMateriales?: boolean;
 }) {
   const tabs: Array<{
     key: OrdenTab;
@@ -86,6 +90,15 @@ export function OrdenTabs({
     { key: "datos", label: "Datos", icon: <ContactRoundIcon /> },
     { key: "productos", label: "Productos", count, icon: <PackageIcon /> },
     { key: "produccion", label: "Producción", icon: <FactoryIcon /> },
+    ...(mostrarMateriales
+      ? [
+          {
+            key: "materiales" as const,
+            label: "Materiales",
+            icon: <BoxesIcon />,
+          },
+        ]
+      : []),
     { key: "pagos", label: "Pagos", icon: <CreditCardIcon /> },
     ...(comprobantesCount !== undefined
       ? [
@@ -147,6 +160,7 @@ export function OrdenTabs({
           datos: "Cliente y entrega",
           productos: "Ítems y cantidades",
           produccion: "Rutas y procesos",
+          materiales: "Necesidades del trabajo",
           pagos: "Cobros y facturación",
           archivos: "Adjuntos y versiones",
           costos: "Resumen y margen",

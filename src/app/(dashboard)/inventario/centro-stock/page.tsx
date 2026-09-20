@@ -1,34 +1,33 @@
 import { Suspense } from "react";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 import { CentroStockPanel } from "@/components/inventario/centro-stock-panel";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
-import { getAlmacenes, getStockActual } from "@/lib/inventario-stock-api";
+import { getAlmacenes } from "@/lib/inventario-stock-api";
 import { getMateriasPrimas } from "@/lib/materias-primas-api";
 
 export const dynamic = "force-dynamic";
 
 export default function CentroStockPage() {
   return (
-    <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
-      <CentroStockPageContent />
-    </Suspense>
+    <DesignSystemProvider theme="brand" appearance="light">
+      <Suspense fallback={<ModulePageSkeleton variant="workspace" />}>
+        <CentroStockPageContent />
+      </Suspense>
+    </DesignSystemProvider>
   );
 }
 
 async function CentroStockPageContent() {
-  const [almacenes, stock, materiasPrimas] = await Promise.all([
+  const [almacenes, materiasPrimas] = await Promise.all([
     getAlmacenes(),
-    getStockActual(),
     getMateriasPrimas(),
   ]);
 
   return (
-    <section className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-      <CentroStockPanel
-        initialAlmacenes={almacenes}
-        initialStock={stock}
-        materiasPrimas={materiasPrimas}
-      />
-    </section>
+    <CentroStockPanel
+      initialAlmacenes={almacenes}
+      materiasPrimas={materiasPrimas}
+    />
   );
 }
