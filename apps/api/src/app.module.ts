@@ -1,3 +1,4 @@
+import { ComprasModule } from './compras/compras.module';
 import { ImpresionModule } from './impresion/impresion.module';
 import { PlanificacionEntregasModule } from './planificacion-entregas/planificacion.module';
 import { Module } from '@nestjs/common';
@@ -115,6 +116,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
     GastosFijosModule,
     MaquinariaModule,
     InventarioModule,
+    ComprasModule,
     ProduccionModule,
     ProductosServiciosModule,
     MotorUniversalModule,

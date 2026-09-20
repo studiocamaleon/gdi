@@ -13,7 +13,15 @@ import * as React from "react";
 import { formatearMoneda } from "@/lib/moneda";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { useRouter } from "next/navigation";
-import { ArrowDownIcon, ArrowUpIcon, BoxIcon, CirclePlusIcon } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowLeftRight,
+  BoxIcon,
+  CirclePlusIcon,
+  History,
+  RefreshCw,
+  Warehouse,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -32,17 +40,49 @@ import {
   getMateriaPrimaVarianteLabel,
   getVarianteDisplayName,
 } from "@/lib/materias-primas-variantes-display";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card, Chip, Input, Spinner } from "@heroui/react";
+import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { FormSheet } from "@/components/design-system/form-sheet";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { SelectField } from "@/components/design-system/select-field";
+import {
+  useDesignScope,
+  useDesignTheme,
+} from "@/components/design-system/appearance";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import {
+  inventoryHref,
+  notifyInventoryChanged,
+} from "@/lib/inventario-navigation";
+import { useInventoryQuery } from "./use-inventory-query";
+import { useStockPage } from "./use-stock-page";
+import { InventoryVariantPicker } from "./inventory-variant-picker";
+import {
+  ConfiguracionReservas,
+  ReservasDeSaldo,
+} from "./reservas-stock-controls";
+import layout from "@/components/design-system/list-page.module.css";
+import materialStyles from "./materiales.module.css";
+import styles from "./centro-stock.module.css";
 
 type CentroStockPanelProps = {
   initialAlmacenes: AlmacenMateriaPrima[];
-  initialStock: StockMateriaPrimaItem[];
   materiasPrimas: MateriaPrima[];
 };
 
@@ -64,7 +104,13 @@ const number2Formatter = new Intl.NumberFormat("es-AR", {
 
 function getDefaultUbicacionId(almacen: AlmacenMateriaPrima | undefined) {
   if (!almacen) return "";
-  return almacen.ubicaciones.find((item) => item.activo)?.id ?? almacen.ubicaciones[0]?.id ?? "";
+  return (
+    almacen.ubicaciones.find(
+      (item) => item.activo && item.codigo === "PRINCIPAL",
+    )?.id ??
+    almacen.ubicaciones.find((item) => item.activo)?.id ??
+    ""
+  );
 }
 
 function generateAutoAlmacenCodigo() {
@@ -74,11 +120,47 @@ function generateAutoAlmacenCodigo() {
 
 export function CentroStockPanel({
   initialAlmacenes,
-  initialStock,
   materiasPrimas,
 }: CentroStockPanelProps) {
   const { moneda } = useConfigRegional();
   const router = useRouter();
+  const scope = useDesignScope();
+  const theme = useDesignTheme();
+  const canManage = usePuede("inventario.gestionar");
+  const query = useInventoryQuery();
+  const { result, loading, error, refresh } = useStockPage({
+    materiaPrimaId: query.materiaPrimaId,
+    varianteId: query.varianteId,
+    almacenId: query.almacenId,
+    ubicacionId: query.ubicacionId,
+    search: query.search,
+    soloConStock: query.soloConStock,
+    page: query.page,
+    pageSize: 50,
+  });
+  const [depositsOpen, setDepositsOpen] = React.useState(false);
+  const [destinoUbicacionId, setDestinoUbicacionId] = React.useState("");
+  const [ingresoInicialUbicacionId, setIngresoInicialUbicacionId] =
+    React.useState("");
+  const activeWarehouses = initialAlmacenes.filter((item) => item.activo);
+  const activeLocations = activeWarehouses.flatMap((almacen) =>
+    almacen.ubicaciones
+      .filter((item) => item.activo)
+      .map((item) => ({
+        ...item,
+        almacenId: almacen.id,
+        label: `${almacen.nombre} · ${item.nombre}`,
+      })),
+  );
+  const pages = Math.max(1, Math.ceil((result?.total ?? 0) / 50));
+  React.useEffect(() => {
+    if (!loading && !error && result && query.page > pages)
+      query.update({ page: String(pages) }, false);
+  }, [loading, error, result, query, pages]);
+  const afterMutation = () => {
+    notifyInventoryChanged();
+    router.refresh();
+  };
 
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -88,8 +170,8 @@ export function CentroStockPanel({
   const [movOpen, setMovOpen] = React.useState(false);
   const [trxOpen, setTrxOpen] = React.useState(false);
   const [ingresoInicialOpen, setIngresoInicialOpen] = React.useState(false);
-  const [rowSelected, setRowSelected] = React.useState<StockMateriaPrimaItem | null>(null);
-  const [movimientoModo, setMovimientoModo] = React.useState<"libre" | "ingreso">("libre");
+  const [rowSelected, setRowSelected] =
+    React.useState<StockMateriaPrimaItem | null>(null);
 
   const [tipo, setTipo] = React.useState<
     "ingreso" | "egreso" | "ajuste_entrada" | "ajuste_salida"
@@ -104,18 +186,16 @@ export function CentroStockPanel({
   const [costoUnitario, setCostoUnitario] = React.useState("");
   const [referenciaId, setReferenciaId] = React.useState("");
 
-  const [destinoAlmacenId, setDestinoAlmacenId] = React.useState("");
   const [cantidadTransfer, setCantidadTransfer] = React.useState("1");
-  const [ingresoInicialAlmacenId, setIngresoInicialAlmacenId] = React.useState("");
-  const [ingresoInicialVarianteId, setIngresoInicialVarianteId] = React.useState("");
-  const [ingresoInicialVarianteQuery, setIngresoInicialVarianteQuery] = React.useState("");
-  const [ingresoInicialVarianteOpen, setIngresoInicialVarianteOpen] = React.useState(false);
+  const [ingresoInicialAlmacenId, setIngresoInicialAlmacenId] =
+    React.useState("");
+  const [ingresoInicialVarianteId, setIngresoInicialVarianteId] =
+    React.useState("");
   const [ingresoInicialOrigen, setIngresoInicialOrigen] =
     React.useState<OrigenMovimientoStockMateriaPrima>("compra");
   const [ingresoInicialCantidad, setIngresoInicialCantidad] = React.useState("1");
   const [ingresoInicialCostoUnitario, setIngresoInicialCostoUnitario] = React.useState("");
   const [ingresoInicialReferenciaId, setIngresoInicialReferenciaId] = React.useState("");
-  const ingresoInicialVarianteRef = React.useRef<HTMLDivElement | null>(null);
   const [confirmPrecioOpen, setConfirmPrecioOpen] = React.useState(false);
   const [confirmPrecioData, setConfirmPrecioData] = React.useState<{
     etiqueta: string;
@@ -139,56 +219,6 @@ export function CentroStockPanel({
       )
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [materiasPrimas]);
-
-  const variantesIngresoInicialFiltradas = React.useMemo(() => {
-    const needle = ingresoInicialVarianteQuery.trim().toLowerCase();
-    if (!needle) return variantesIngresoInicial;
-    return variantesIngresoInicial.filter(
-      (item) => item.label.toLowerCase().includes(needle) || item.searchText.includes(needle),
-    );
-  }, [ingresoInicialVarianteQuery, variantesIngresoInicial]);
-
-  React.useEffect(() => {
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (ingresoInicialVarianteRef.current && !ingresoInicialVarianteRef.current.contains(target)) {
-        setIngresoInicialVarianteOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, []);
-
-  const stockPorAlmacen = React.useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        almacenId: string;
-        almacenNombre: string;
-        items: number;
-        cantidadTotal: number;
-        valorTotal: number;
-      }
-    >();
-
-    for (const item of initialStock) {
-      const entry =
-        map.get(item.almacenId) ?? {
-          almacenId: item.almacenId,
-          almacenNombre: item.almacenNombre,
-          items: 0,
-          cantidadTotal: 0,
-          valorTotal: 0,
-        };
-      entry.items += 1;
-      entry.cantidadTotal += item.cantidadDisponible;
-      entry.valorTotal += item.valorStock;
-      map.set(item.almacenId, entry);
-    }
-
-    return Array.from(map.values()).sort((a, b) => a.almacenNombre.localeCompare(b.almacenNombre));
-  }, [initialStock]);
 
   const varianteMetaById = React.useMemo(() => {
     const map = new Map<
@@ -343,6 +373,7 @@ export function CentroStockPanel({
   }, []);
 
   const handleCreateAlmacen = async () => {
+    if (!canManage || isSaving) return;
     if (!almacenNombre.trim()) {
       toast.error("Completa el nombre del almacén.");
       return;
@@ -361,7 +392,7 @@ export function CentroStockPanel({
       setAlmacenNombre("");
       setAlmacenDescripcion("");
       setIsCreateOpen(false);
-      router.refresh();
+      afterMutation();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo crear el almacén.");
     } finally {
@@ -371,7 +402,6 @@ export function CentroStockPanel({
 
   const openMovimiento = (row: StockMateriaPrimaItem) => {
     setRowSelected(row);
-    setMovimientoModo("libre");
     setTipo("ingreso");
     setOrigen("compra");
     setUnidadMovimiento(
@@ -386,14 +416,15 @@ export function CentroStockPanel({
 
   const openTransferencia = (row: StockMateriaPrimaItem) => {
     setRowSelected(row);
-    const nextDestino = initialAlmacenes.find((item) => item.id !== row.almacenId)?.id ?? "";
-    setDestinoAlmacenId(nextDestino);
+    setDestinoUbicacionId(
+      activeLocations.find((item) => item.id !== row.ubicacionId)?.id ?? "",
+    );
     setCantidadTransfer("1");
     setTrxOpen(true);
   };
 
   const openIngresoInicial = () => {
-    if (initialAlmacenes.length === 0) {
+    if (activeWarehouses.length === 0) {
       toast.error("Primero crea un almacén.");
       return;
     }
@@ -405,10 +436,24 @@ export function CentroStockPanel({
 
     setUnidadIngreso("");
     setCantidadRealIngreso("");
-    setIngresoInicialAlmacenId(initialAlmacenes[0]?.id ?? "");
-    setIngresoInicialVarianteId("");
-    setIngresoInicialVarianteQuery("");
-    setIngresoInicialVarianteOpen(false);
+    const warehouse =
+      activeWarehouses.find((item) => item.id === query.almacenId) ??
+      activeWarehouses[0];
+    setIngresoInicialAlmacenId(warehouse?.id ?? "");
+    setIngresoInicialUbicacionId(
+      warehouse?.ubicaciones.find(
+        (item) => item.activo && item.id === query.ubicacionId,
+      )?.id ?? getDefaultUbicacionId(warehouse),
+    );
+    const variantId = variantesIngresoInicial.some(
+      (item) => item.varianteId === query.varianteId,
+    )
+      ? query.varianteId!
+      : "";
+    setIngresoInicialVarianteId(variantId);
+    setUnidadIngreso(
+      varianteMetaById.get(variantId)?.unidades.unidadCompra ?? "",
+    );
     setIngresoInicialOrigen("compra");
     setIngresoInicialCantidad("1");
     setIngresoInicialCostoUnitario("");
@@ -417,11 +462,13 @@ export function CentroStockPanel({
   };
 
   const handleRegistrarMovimiento = async () => {
+    if (!canManage || isSaving) return;
     if (!rowSelected) return;
-    const almacen = initialAlmacenes.find((item) => item.id === rowSelected.almacenId);
-    const ubicacionId = getDefaultUbicacionId(almacen);
+    const ubicacionId = rowSelected.ubicacionId;
     if (!ubicacionId) {
-      toast.error("El almacén no tiene ubicación interna principal.");
+      toast.error(
+        "No se pudo identificar la ubicación del saldo seleccionado.",
+      );
       return;
     }
 
@@ -485,7 +532,7 @@ export function CentroStockPanel({
       }
       toast.success("Movimiento registrado.");
       setMovOpen(false);
-      router.refresh();
+      afterMutation();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo registrar movimiento.");
     } finally {
@@ -494,8 +541,9 @@ export function CentroStockPanel({
   };
 
   const handleRegistrarTransferencia = async () => {
-    if (!rowSelected || !destinoAlmacenId) {
-      toast.error("Selecciona un almacén destino.");
+    if (!canManage || isSaving) return;
+    if (!rowSelected || !destinoUbicacionId) {
+      toast.error("Seleccioná una ubicación de destino.");
       return;
     }
 
@@ -505,13 +553,15 @@ export function CentroStockPanel({
       return;
     }
 
-    const almacenOrigen = initialAlmacenes.find((item) => item.id === rowSelected.almacenId);
-    const almacenDestino = initialAlmacenes.find((item) => item.id === destinoAlmacenId);
-    const ubicacionOrigenId = getDefaultUbicacionId(almacenOrigen);
-    const ubicacionDestinoId = getDefaultUbicacionId(almacenDestino);
+    const ubicacionOrigenId = rowSelected.ubicacionId;
+    const ubicacionDestinoId = activeLocations.find(
+      (item) => item.id === destinoUbicacionId && item.id !== ubicacionOrigenId,
+    )?.id;
 
     if (!ubicacionOrigenId || !ubicacionDestinoId) {
-      toast.error("No se pudo resolver ubicación principal de origen o destino.");
+      toast.error(
+        "Seleccioná una ubicación de destino activa y diferente del origen.",
+      );
       return;
     }
 
@@ -526,7 +576,7 @@ export function CentroStockPanel({
       });
       toast.success("Transferencia registrada.");
       setTrxOpen(false);
-      router.refresh();
+      afterMutation();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo transferir.");
     } finally {
@@ -535,15 +585,20 @@ export function CentroStockPanel({
   };
 
   const handleRegistrarIngresoInicial = async () => {
+    if (!canManage || isSaving) return;
     if (!ingresoInicialAlmacenId || !ingresoInicialVarianteId) {
       toast.error("Selecciona almacén y materia prima.");
       return;
     }
 
     const almacen = initialAlmacenes.find((item) => item.id === ingresoInicialAlmacenId);
-    const ubicacionId = getDefaultUbicacionId(almacen);
+    const ubicacionId = almacen?.activo
+      ? almacen.ubicaciones.find(
+          (item) => item.id === ingresoInicialUbicacionId && item.activo,
+        )?.id
+      : undefined;
     if (!ubicacionId) {
-      toast.error("El almacén no tiene ubicación interna principal.");
+      toast.error("Seleccioná una ubicación activa para ingresar el stock.");
       return;
     }
 
@@ -597,7 +652,7 @@ export function CentroStockPanel({
         await maybeActualizarPrecioReferencia(ingresoInicialVarianteId, cost);
       toast.success("Ingreso registrado.");
       setIngresoInicialOpen(false);
-      router.refresh();
+      afterMutation();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo registrar ingreso.");
     } finally {
@@ -605,229 +660,482 @@ export function CentroStockPanel({
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <div>
-            <CardTitle>Centro de stock</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Gestión simple por almacén para operación PyME. La estructura interna se administra automáticamente.
-            </p>
-          </div>
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <CirclePlusIcon className="size-4" />
-            Nuevo almacén
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Almacén</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Items con stock</TableHead>
-                <TableHead className="text-right">Cantidad total</TableHead>
-                <TableHead className="text-right">Valor stock</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initialAlmacenes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
-                    Aún no hay almacenes creados.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                initialAlmacenes.map((almacen) => {
-                  const resumen = stockPorAlmacen.find((item) => item.almacenId === almacen.id);
-                  return (
-                    <TableRow key={almacen.id}>
-                      <TableCell>{almacen.nombre}</TableCell>
-                      <TableCell>
-                        <Badge variant={almacen.activo ? "default" : "outline"}>
-                          {almacen.activo ? "Activo" : "Inactivo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">{resumen?.items ?? 0}</TableCell>
-                      <TableCell className="text-right">
-                        {number2Formatter.format(resumen?.cantidadTotal ?? 0)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatearMoneda(resumen?.valorTotal ?? 0, moneda, { decimales: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+  const variantOptions = materiasPrimas
+    .filter(
+      (material) =>
+        !query.materiaPrimaId || material.id === query.materiaPrimaId,
+    )
+    .flatMap((material) =>
+      material.variantes.map((variant) => ({
+        id: variant.id,
+        label: getMateriaPrimaVarianteLabel(material, variant, {
+          maxDimensiones: 5,
+        }),
+      })),
+    );
+  const context = {
+    materiaPrimaId: query.materiaPrimaId,
+    varianteId: query.varianteId,
+    almacenId: query.almacenId,
+    ubicacionId: query.ubicacionId,
+  };
+  const materialContext = materiasPrimas.find(
+    (material) => material.id === query.materiaPrimaId,
+  );
+  const closeActions = (
+    close: () => void,
+    save: () => Promise<void>,
+    label: string,
+  ) => (
+    <>
+      <ActionButton variant="outline" onPress={close} isDisabled={isSaving}>
+        Cancelar
+      </ActionButton>
+      <ActionButton onPress={save} isPending={isSaving} isDisabled={isSaving}>
+        {isSaving ? "Guardando…" : label}
+      </ActionButton>
+    </>
+  );
+  const rowDescription = rowSelected
+    ? `${varianteMetaById.get(rowSelected.varianteId)?.materiaPrimaNombre ?? rowSelected.materiaPrimaNombre} · ${varianteMetaById.get(rowSelected.varianteId)?.varianteNombre ?? ""} · ${rowSelected.almacenNombre} / ${rowSelected.ubicacionNombre}`
+    : "";
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Detalle de stock actual</CardTitle>
-          <Button onClick={openIngresoInicial}>
-            <BoxIcon className="size-4" />
-            Ingresar stock
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Almacén</TableHead>
-                <TableHead>Materia prima</TableHead>
-                <TableHead>Variante</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead className="text-right">Cantidad</TableHead>
-                <TableHead className="text-right">Costo promedio</TableHead>
-                <TableHead className="text-right">Valor stock</TableHead>
-                <TableHead className="w-[220px] text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initialStock.length === 0 ? (
+  return (
+    <section
+      {...scope}
+      data-visual="brand"
+      className={`${theme} ${layout.page} ${materialStyles.page}`}
+    >
+      <header className={layout.header}>
+        <div>
+          <p className={materialStyles.eyebrow}>Inventario · Existencias</p>
+          <h1>
+            Stock<span className={materialStyles.titleDot}>.</span>
+          </h1>
+          <p className={layout.subtitle}>
+            Materiales por depósito y ubicación. Ingresos, ajustes y
+            transferencias.
+          </p>
+        </div>
+        <div className={styles.headerActions}>
+          {canManage && <ConfiguracionReservas />}
+          <ActionButton variant="outline" onPress={() => setDepositsOpen(true)}>
+            <Warehouse data-icon="inline-start" />
+            Depósitos
+          </ActionButton>
+          <ActionLink
+            variant="outline"
+            href={inventoryHref("movimientos", context)}
+          >
+            <History data-icon="inline-start" />
+            Movimientos
+          </ActionLink>
+          {canManage && (
+            <ActionButton onPress={openIngresoInicial}>
+              <CirclePlusIcon data-icon="inline-start" />
+              Ingresar stock
+            </ActionButton>
+          )}
+        </div>
+      </header>
+      <Card className={`${layout.results} ${styles.results}`}>
+        {(query.materiaPrimaId || query.ubicacionId) && (
+          <div className={styles.context}>
+            <span>
+              {materialContext
+                ? `Material: ${materialContext.nombre}`
+                : query.materiaPrimaId
+                  ? "Material seleccionado"
+                  : ""}
+              {query.ubicacionId ? " · Ubicación seleccionada" : ""}
+            </span>
+            <ActionButton
+              variant="ghost"
+              onPress={() =>
+                query.update({
+                  materiaPrimaId: undefined,
+                  varianteId: undefined,
+                  ubicacionId: undefined,
+                })
+              }
+            >
+              Ver todos los materiales
+            </ActionButton>
+          </div>
+        )}
+        <div className={styles.toolbar}>
+          <div className={styles.filter}>
+            <span>Material / variante</span>
+            <InventoryVariantPicker
+              label="Filtrar stock por variante"
+              value={query.varianteId ?? "__all__"}
+              options={[
+                { id: "__all__", label: "Todas las variantes" },
+                ...variantOptions,
+              ]}
+              onChange={(value) =>
+                query.update({
+                  varianteId: value === "__all__" ? undefined : value,
+                })
+              }
+            />
+          </div>
+          <div className={styles.filter}>
+            <span>Depósito</span>
+            <SelectField
+              aria-label="Filtrar stock por depósito"
+              value={query.almacenId ?? ""}
+              options={[
+                { value: "", label: "Todos los depósitos" },
+                ...initialAlmacenes.map((item) => ({
+                  value: item.id,
+                  label: `${item.nombre}${item.activo ? "" : " · Inactivo"}`,
+                })),
+              ]}
+              onChange={(value) =>
+                query.update({ almacenId: value, ubicacionId: undefined })
+              }
+            />
+          </div>
+          <div className={styles.filter}>
+            <span>Existencias</span>
+            <SelectField
+              aria-label="Filtrar por existencia"
+              value={query.soloConStock ? "con" : "todos"}
+              options={[
+                { value: "todos", label: "Todos los saldos" },
+                { value: "con", label: "Sólo con stock" },
+              ]}
+              onChange={(value) =>
+                query.update({
+                  soloConStock: value === "con" ? "true" : undefined,
+                })
+              }
+            />
+          </div>
+          <ActionButton
+            variant="outline"
+            onPress={refresh}
+            isDisabled={loading}
+            aria-label="Actualizar stock"
+          >
+            <RefreshCw data-icon="inline-start" />
+            Actualizar
+          </ActionButton>
+        </div>
+        <div aria-busy={loading}>
+          {loading ? (
+            <div className={layout.empty} role="status">
+              <Spinner size="sm" />
+              Consultando existencias…
+            </div>
+          ) : error ? (
+            <Empty className={layout.empty}>
+              <EmptyHeader>
+                <EmptyTitle>No pudimos consultar el stock</EmptyTitle>
+                <EmptyDescription>{error}</EmptyDescription>
+              </EmptyHeader>
+              <ActionButton variant="outline" onPress={refresh}>
+                Reintentar
+              </ActionButton>
+            </Empty>
+          ) : !result?.items.length ? (
+            <Empty className={layout.empty}>
+              <EmptyHeader>
+                <BoxIcon aria-hidden />
+                <EmptyTitle>Sin saldos para esta selección</EmptyTitle>
+                <EmptyDescription>
+                  No hay saldos que coincidan con estos filtros.
+                  {canManage &&
+                    " Podés registrar existencias desde «Ingresar stock»."}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <Table
+              className={`${materialStyles.table} ${styles.table}`}
+              aria-label="Existencias por ubicación"
+            >
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground">
-                    <span>Sin stock cargado todavía. Registra un ingreso para iniciar historial.</span>
-                  </TableCell>
+                  <TableHead>Material / variante</TableHead>
+                  <TableHead>Depósito / ubicación</TableHead>
+                  <TableHead className="text-right">
+                    Existencia física
+                  </TableHead>
+                  <TableHead className="text-right">Reservado</TableHead>
+                  <TableHead className="text-right">Libre</TableHead>
+                  <TableHead className="text-right">Costo promedio</TableHead>
+                  <TableHead className="text-right">Valor stock</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ) : (
-                initialStock.map((row) => (
+              </TableHeader>
+              <TableBody>
+                {result.items.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell>{row.almacenNombre}</TableCell>
-                    <TableCell>{row.materiaPrimaNombre}</TableCell>
                     <TableCell>
-                      {varianteMetaById.get(row.varianteId)?.varianteNombre ?? row.varianteSku}
+                      <div className={styles.material}>
+                        <Link
+                          href={`/inventario/materias-primas/${row.materiaPrimaId}`}
+                        >
+                          {row.materiaPrimaNombre}
+                        </Link>
+                        <span className={styles.secondary}>
+                          {varianteMetaById.get(row.varianteId)
+                            ?.varianteNombre ?? "Variante"}
+                        </span>
+                      </div>
                     </TableCell>
-                    <TableCell>{row.varianteSku}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell>
+                      {row.almacenNombre}
+                      <span className={styles.secondary}>
+                        {row.ubicacionNombre}
+                      </span>
+                    </TableCell>
+                    <TableCell className={styles.number}>
                       {quantityFormatter.format(row.cantidadDisponible)}{" "}
-                      {stockUnitLabel(
-                        row.unidadStock ??
-                          varianteMetaById.get(row.varianteId)?.unidades
-                            .unidadStock ??
-                          "",
-                      )}
+                      {stockUnitLabel(row.unidadStock ?? "")}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {number2Formatter.format(row.costoPromedio)}
+                    <TableCell className={styles.number}>
+                      <ReservasDeSaldo
+                        varianteId={row.varianteId}
+                        ubicacionId={row.ubicacionId}
+                        cantidad={row.cantidadReservada ?? 0}
+                        unidad={row.unidadStock ?? ""}
+                      />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className={styles.number}>
+                      {quantityFormatter.format(
+                        row.cantidadLibre ?? row.cantidadDisponible,
+                      )}{" "}
+                      {stockUnitLabel(row.unidadStock ?? "")}
+                    </TableCell>
+                    <TableCell className={styles.number}>
+                      {formatearMoneda(row.costoPromedio, moneda, {
+                        decimales: 6,
+                      })}
+                      <span className={styles.secondary}>
+                        por{" "}
+                        {stockUnitLabel(row.unidadStock ?? "").toLowerCase()}
+                      </span>
+                    </TableCell>
+                    <TableCell className={styles.number}>
                       {formatearMoneda(row.valorStock, moneda, {
                         decimales: 2,
                       })}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openMovimiento(row)}>
-                          Movimiento
-                        </Button>
-                        {initialAlmacenes.length > 1 ? (
-                          <Button variant="outline" size="sm" onClick={() => openTransferencia(row)}>
-                            Transferir
-                          </Button>
-                        ) : null}
+                      <div className={styles.rowActions}>
+                        {canManage && (
+                          <>
+                            <ActionButton
+                              variant="outline"
+                              onPress={() => openMovimiento(row)}
+                            >
+                              Movimiento
+                            </ActionButton>
+                            <ActionButton
+                              variant="outline"
+                              onPress={() => openTransferencia(row)}
+                              isDisabled={
+                                (row.cantidadLibre ?? row.cantidadDisponible) <=
+                                  0 ||
+                                !activeLocations.some(
+                                  (item) => item.id !== row.ubicacionId,
+                                )
+                              }
+                              title="Transferir desde esta ubicación"
+                              aria-label="Transferir desde esta ubicación"
+                              isIconOnly
+                            >
+                              <ArrowLeftRight />
+                            </ActionButton>
+                          </>
+                        )}
+                        <ActionLink
+                          variant="outline"
+                          href={inventoryHref("movimientos", {
+                            materiaPrimaId: row.materiaPrimaId,
+                            varianteId: row.varianteId,
+                            almacenId: row.almacenId,
+                            ubicacionId: row.ubicacionId,
+                          })}
+                          aria-label="Ver movimientos de esta ubicación"
+                        >
+                          <History data-icon="inline-start" />
+                        </ActionLink>
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+        {!error && result && !loading && (
+          <div className={layout.pager}>
+            <span>
+              {result.total}{" "}
+              {result.total === 1
+                ? "saldo por ubicación"
+                : "saldos por ubicación"}{" "}
+              · Página {result.page} de {pages}
+            </span>
+            <div className={styles.actions}>
+              <ActionButton
+                variant="outline"
+                isDisabled={query.page <= 1}
+                onPress={() =>
+                  query.update({ page: String(query.page - 1) }, false)
+                }
+              >
+                Anterior
+              </ActionButton>
+              <ActionButton
+                variant="outline"
+                isDisabled={query.page >= pages}
+                onPress={() =>
+                  query.update({ page: String(query.page + 1) }, false)
+                }
+              >
+                Siguiente
+              </ActionButton>
+            </div>
+          </div>
+        )}
       </Card>
 
-      <Sheet open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <SheetContent className="w-full sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>Nuevo almacén</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-            <p className="text-sm text-muted-foreground">
-              El código se genera automáticamente al crear el almacén.
-            </p>
-            <Field>
-              <FieldLabel>Nombre</FieldLabel>
-              <Input value={almacenNombre} onChange={(e) => setAlmacenNombre(e.target.value)} />
-            </Field>
-            <Field>
-              <FieldLabel>Descripción</FieldLabel>
-              <Input value={almacenDescripcion} onChange={(e) => setAlmacenDescripcion(e.target.value)} />
-            </Field>
+      {depositsOpen && (
+        <FormSheet
+          title="Depósitos"
+          description="Lugares donde guardás tus materiales."
+          onClose={() => setDepositsOpen(false)}
+          footer={
+            canManage ? (
+              <ActionButton
+                onPress={() => {
+                  setDepositsOpen(false);
+                  setIsCreateOpen(true);
+                }}
+              >
+                <CirclePlusIcon data-icon="inline-start" />
+                Nuevo depósito
+              </ActionButton>
+            ) : undefined
+          }
+        >
+          <div className={styles.deposits}>
+            {initialAlmacenes.length ? (
+              initialAlmacenes.map((item) => (
+                <div key={item.id} className={styles.deposit}>
+                  <div>
+                    <strong>{item.nombre}</strong>
+                    <span className={styles.secondary}>
+                      {item.ubicaciones
+                        .filter((location) => location.activo)
+                        .map((location) => location.nombre)
+                        .join(" · ") || "Sin ubicaciones activas"}
+                    </span>
+                  </div>
+                  <Chip size="sm" variant="soft">
+                    {item.activo ? "Activo" : "Inactivo"}
+                  </Chip>
+                </div>
+              ))
+            ) : (
+              <p>Todavía no hay depósitos.</p>
+            )}
           </div>
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleCreateAlmacen} disabled={isSaving}>
-              {isSaving ? "Guardando..." : "Crear almacén"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={movOpen} onOpenChange={setMovOpen}>
-        <SheetContent className="w-full sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>
-              {movimientoModo === "ingreso" ? "Ingresar stock" : "Registrar movimiento"}
-            </SheetTitle>
-          </SheetHeader>
-          {rowSelected ? (
-            <div className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-              <p className="text-sm text-muted-foreground">
-                {rowSelected.materiaPrimaNombre} · {rowSelected.varianteSku} · {rowSelected.almacenNombre}
-              </p>
-              {movimientoModo === "libre" ? (
-                <Field>
-                  <FieldLabel>Tipo</FieldLabel>
-                  <select
-                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-                    value={tipo}
-                    onChange={(e) =>
-                      setTipo(
-                        e.target.value as
-                          | "ingreso"
-                          | "egreso"
-                          | "ajuste_entrada"
-                          | "ajuste_salida",
-                      )
-                    }
-                  >
-                    <option value="ingreso">Ingreso</option>
-                    <option value="egreso">Egreso</option>
-                    <option value="ajuste_entrada">Ajuste entrada</option>
-                    <option value="ajuste_salida">Ajuste salida</option>
-                  </select>
-                </Field>
-              ) : null}
-              <Field>
-                <FieldLabel>Origen</FieldLabel>
-                <select
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-                  value={origen}
-                  onChange={(e) => setOrigen(e.target.value as OrigenMovimientoStockMateriaPrima)}
-                >
-                  {ORIGEN_ITEMS.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field>
-                <FieldLabel>Cantidad</FieldLabel>
-                <Input
-                  value={cantidad}
-                  onChange={(e) => setCantidad(e.target.value)}
-                  type="number"
-                  min="0"
-                  step="any"
-                />
-              </Field>
+        </FormSheet>
+      )}
+      {canManage && isCreateOpen && (
+        <FormSheet
+          title="Nuevo depósito"
+          description="Se crea con una ubicación principal lista para usar."
+          onClose={() => setIsCreateOpen(false)}
+          busy={isSaving}
+          footer={closeActions(
+            () => setIsCreateOpen(false),
+            handleCreateAlmacen,
+            "Crear depósito",
+          )}
+        >
+          <FieldGroup className={styles.form}>
+            <Field>
+              <FieldLabel htmlFor="stock-deposito-nombre">Nombre</FieldLabel>
+              <Input
+                id="stock-deposito-nombre"
+                value={almacenNombre}
+                onChange={(event) => setAlmacenNombre(event.target.value)}
+                autoFocus
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="stock-deposito-descripcion">
+                Descripción · opcional
+              </FieldLabel>
+              <Input
+                id="stock-deposito-descripcion"
+                value={almacenDescripcion}
+                onChange={(event) => setAlmacenDescripcion(event.target.value)}
+              />
+            </Field>
+          </FieldGroup>
+        </FormSheet>
+      )}
+      {canManage && movOpen && rowSelected && (
+        <FormSheet
+          title="Registrar movimiento"
+          description={rowDescription}
+          onClose={() => setMovOpen(false)}
+          busy={isSaving}
+          footer={closeActions(
+            () => setMovOpen(false),
+            handleRegistrarMovimiento,
+            "Registrar movimiento",
+          )}
+        >
+          <FieldGroup className={`${styles.form} ${styles.formGrid}`}>
+            <Field>
+              <FieldLabel>Tipo</FieldLabel>
+              <SelectField
+                aria-label="Tipo de movimiento"
+                value={tipo}
+                options={[
+                  { value: "ingreso", label: "Ingreso" },
+                  { value: "egreso", label: "Egreso" },
+                  { value: "ajuste_entrada", label: "Ajuste de entrada" },
+                  { value: "ajuste_salida", label: "Ajuste de salida" },
+                ]}
+                onChange={(value) => {
+                  setTipo(value as typeof tipo);
+                  setCantidadRealStock("");
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Origen</FieldLabel>
+              <SelectField
+                aria-label="Origen del movimiento"
+                value={origen}
+                options={ORIGEN_ITEMS}
+                onChange={(value) =>
+                  setOrigen(value as OrigenMovimientoStockMateriaPrima)
+                }
+              />
+            </Field>
+            <Field className={styles.full}>
+              <FieldLabel htmlFor="stock-mov-cantidad">Cantidad</FieldLabel>
+              <Input
+                id="stock-mov-cantidad"
+                type="number"
+                min="0.00000001"
+                step="any"
+                value={cantidad}
+                onChange={(event) => setCantidad(event.target.value)}
+              />
+            </Field>
+            <div className={styles.full}>
               <StockConversionFields
                 context={unidadesMovimiento}
                 unidad={unidadMovimiento}
@@ -837,310 +1145,257 @@ export function CentroStockPanel({
                 onCantidadStock={setCantidadRealStock}
                 ingreso={["ingreso", "ajuste_entrada"].includes(tipo)}
               />
-              <Field>
-                <FieldLabel>
-                  Costo por{" "}
-                  {stockUnitLabel(
-                    unidadMovimiento ||
-                      unidadesMovimiento?.unidadStock ||
-                      "unidad",
-                  )}{" "}
-                  en {moneda.codigo} (opcional)
-                </FieldLabel>
-                <Input
-                  value={costoUnitario}
-                  onChange={(e) => setCostoUnitario(e.target.value)}
-                  type="number"
-                  min="0"
-                  step="any"
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Referencia (opcional)</FieldLabel>
-                <Input value={referenciaId} onChange={(e) => setReferenciaId(e.target.value)} />
-              </Field>
             </div>
-          ) : null}
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setMovOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleRegistrarMovimiento} disabled={isSaving}>
-              {isSaving ? "Guardando..." : movimientoModo === "ingreso" ? "Ingresar stock" : "Registrar"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={trxOpen} onOpenChange={setTrxOpen}>
-        <SheetContent className="w-full sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>Transferir stock</SheetTitle>
-          </SheetHeader>
-          {rowSelected ? (
-            <div className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
-              <p className="text-sm text-muted-foreground">
-                {rowSelected.materiaPrimaNombre} · {rowSelected.varianteSku}
-              </p>
-              <Field>
-                <FieldLabel>Origen</FieldLabel>
-                <Input value={rowSelected.almacenNombre} readOnly />
-              </Field>
-              <Field>
-                <FieldLabel>Destino</FieldLabel>
-                <select
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-                  value={destinoAlmacenId}
-                  onChange={(e) => setDestinoAlmacenId(e.target.value)}
-                >
-                  <option value="">Seleccionar</option>
-                  {initialAlmacenes
-                    .filter((item) => item.id !== rowSelected.almacenId)
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.nombre}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-              <Field>
-                <FieldLabel>Cantidad</FieldLabel>
-                <Input
-                  aria-label="Cantidad a transferir en unidad de stock"
-                  value={cantidadTransfer}
-                  onChange={(e) => setCantidadTransfer(e.target.value)}
-                  type="number"
-                  min="0"
-                  step="any"
-                />
-              </Field>
-            </div>
-          ) : null}
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setTrxOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleRegistrarTransferencia} disabled={isSaving}>
-              {isSaving ? "Guardando..." : "Transferir"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet open={ingresoInicialOpen} onOpenChange={setIngresoInicialOpen}>
-        <SheetContent className="w-full sm:max-w-3xl">
-          <SheetHeader>
-            <SheetTitle>Ingresar stock</SheetTitle>
-          </SheetHeader>
-          <div className="space-y-4 px-4 pb-4 md:px-6 md:pb-6">
+            <Field className={styles.full}>
+              <FieldLabel htmlFor="stock-mov-costo">
+                Costo por{" "}
+                {stockUnitLabel(
+                  unidadMovimiento ||
+                    unidadesMovimiento?.unidadStock ||
+                    "unidad",
+                ).toLowerCase()}{" "}
+                en {moneda.codigo} · opcional
+              </FieldLabel>
+              <Input
+                id="stock-mov-costo"
+                type="number"
+                min="0"
+                step="any"
+                value={costoUnitario}
+                onChange={(event) => setCostoUnitario(event.target.value)}
+              />
+            </Field>
+            <Field className={styles.full}>
+              <FieldLabel htmlFor="stock-mov-referencia">
+                Referencia · opcional
+              </FieldLabel>
+              <Input
+                id="stock-mov-referencia"
+                value={referenciaId}
+                onChange={(event) => setReferenciaId(event.target.value)}
+              />
+            </Field>
+          </FieldGroup>
+        </FormSheet>
+      )}
+      {canManage && trxOpen && rowSelected && (
+        <FormSheet
+          title="Transferir stock"
+          description={rowDescription}
+          onClose={() => setTrxOpen(false)}
+          busy={isSaving}
+          footer={closeActions(
+            () => setTrxOpen(false),
+            handleRegistrarTransferencia,
+            "Transferir",
+          )}
+        >
+          <FieldGroup className={styles.form}>
             <Field>
-              <FieldLabel>Almacén</FieldLabel>
-              <select
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
-                value={ingresoInicialAlmacenId}
-                onChange={(e) => setIngresoInicialAlmacenId(e.target.value)}
-              >
-                <option value="">Seleccionar</option>
-                {initialAlmacenes.map((almacen) => (
-                  <option key={almacen.id} value={almacen.id}>
-                    {almacen.nombre}
-                  </option>
-                ))}
-              </select>
+              <FieldLabel>Destino</FieldLabel>
+              <SelectField
+                aria-label="Ubicación de destino"
+                value={destinoUbicacionId}
+                options={activeLocations
+                  .filter((item) => item.id !== rowSelected.ubicacionId)
+                  .map((item) => ({ value: item.id, label: item.label }))}
+                onChange={setDestinoUbicacionId}
+              />
             </Field>
             <Field>
-              <FieldLabel>Materia prima / Variante</FieldLabel>
-              <div ref={ingresoInicialVarianteRef} className="relative">
-                <Input
-                  value={ingresoInicialVarianteQuery}
-                  onFocus={() => setIngresoInicialVarianteOpen(true)}
-                  onChange={(e) => {
-                    setIngresoInicialVarianteQuery(e.target.value);
-                    setIngresoInicialVarianteId("");
-                    setIngresoInicialVarianteOpen(true);
-                  }}
-                  placeholder="Buscar materia prima o variante..."
-                />
-                {ingresoInicialVarianteOpen ? (
-                  <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-background p-1 shadow-md">
-                    {variantesIngresoInicialFiltradas.length === 0 ? (
-                      <p className="px-2 py-1 text-sm text-muted-foreground">Sin resultados</p>
-                    ) : (
-                      variantesIngresoInicialFiltradas.map((item) => (
-                        <button
-                          key={item.varianteId}
-                          type="button"
-                          className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                          onClick={() => {
-                            setIngresoInicialVarianteId(item.varianteId);
-                            setUnidadIngreso(
-                              varianteMetaById.get(item.varianteId)?.unidades
-                                .unidadCompra ?? "",
-                            );
-                            setCantidadRealIngreso("");
-                            setIngresoInicialVarianteQuery(item.label);
-                            setIngresoInicialVarianteOpen(false);
-                          }}
-                        >
-                          {item.label}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                ) : null}
-              </div>
+              <FieldLabel htmlFor="stock-transferencia-cantidad">
+                Cantidad en{" "}
+                {stockUnitLabel(rowSelected.unidadStock ?? "").toLowerCase()}
+              </FieldLabel>
+              <Input
+                id="stock-transferencia-cantidad"
+                type="number"
+                min="0.00000001"
+                max={rowSelected.cantidadDisponible}
+                step="any"
+                value={cantidadTransfer}
+                onChange={(event) => setCantidadTransfer(event.target.value)}
+              />
+            </Field>
+            <p>
+              Existencia en origen:{" "}
+              {quantityFormatter.format(rowSelected.cantidadDisponible)}{" "}
+              {stockUnitLabel(rowSelected.unidadStock ?? "").toLowerCase()}.
+            </p>
+          </FieldGroup>
+        </FormSheet>
+      )}
+      {canManage && ingresoInicialOpen && (
+        <FormSheet
+          title="Ingresar stock"
+          description="Registrá la cantidad recibida y dónde se guarda."
+          onClose={() => setIngresoInicialOpen(false)}
+          busy={isSaving}
+          footer={closeActions(
+            () => setIngresoInicialOpen(false),
+            handleRegistrarIngresoInicial,
+            "Ingresar stock",
+          )}
+        >
+          <FieldGroup className={`${styles.form} ${styles.formGrid}`}>
+            <Field>
+              <FieldLabel>Depósito</FieldLabel>
+              <SelectField
+                aria-label="Depósito del ingreso"
+                value={ingresoInicialAlmacenId}
+                options={activeWarehouses.map((item) => ({
+                  value: item.id,
+                  label: item.nombre,
+                }))}
+                onChange={(value) => {
+                  setIngresoInicialAlmacenId(value);
+                  setIngresoInicialUbicacionId(
+                    getDefaultUbicacionId(
+                      activeWarehouses.find((item) => item.id === value),
+                    ),
+                  );
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Ubicación</FieldLabel>
+              <SelectField
+                aria-label="Ubicación del ingreso"
+                value={ingresoInicialUbicacionId}
+                options={activeLocations
+                  .filter((item) => item.almacenId === ingresoInicialAlmacenId)
+                  .map((item) => ({ value: item.id, label: item.nombre }))}
+                onChange={setIngresoInicialUbicacionId}
+              />
+            </Field>
+            <Field className={styles.full}>
+              <FieldLabel>Material / variante</FieldLabel>
+              <InventoryVariantPicker
+                label="Material del ingreso"
+                value={ingresoInicialVarianteId}
+                options={variantesIngresoInicial.map((item) => ({
+                  id: item.varianteId,
+                  label: item.label,
+                }))}
+                onChange={(value) => {
+                  setIngresoInicialVarianteId(value);
+                  setUnidadIngreso(
+                    varianteMetaById.get(value)?.unidades.unidadCompra ?? "",
+                  );
+                  setCantidadRealIngreso("");
+                }}
+              />
             </Field>
             <Field>
               <FieldLabel>Origen</FieldLabel>
-              <select
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+              <SelectField
+                aria-label="Origen del ingreso"
                 value={ingresoInicialOrigen}
-                onChange={(e) => setIngresoInicialOrigen(e.target.value as OrigenMovimientoStockMateriaPrima)}
-              >
-                {ORIGEN_ITEMS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field>
-              <FieldLabel>Cantidad</FieldLabel>
-              <Input
-                value={ingresoInicialCantidad}
-                onChange={(e) => setIngresoInicialCantidad(e.target.value)}
-                type="number"
-                min="0"
-                step="any"
+                options={ORIGEN_ITEMS}
+                onChange={(value) =>
+                  setIngresoInicialOrigen(
+                    value as OrigenMovimientoStockMateriaPrima,
+                  )
+                }
               />
             </Field>
-            <StockConversionFields
-              context={unidadesIngreso}
-              unidad={unidadIngreso || unidadesIngreso?.unidadCompra || ""}
-              onUnidad={setUnidadIngreso}
-              cantidad={ingresoInicialCantidad}
-              cantidadStock={cantidadRealIngreso}
-              onCantidadStock={setCantidadRealIngreso}
-              ingreso
-            />
             <Field>
-              <FieldLabel>
+              <FieldLabel htmlFor="stock-ingreso-cantidad">Cantidad</FieldLabel>
+              <Input
+                id="stock-ingreso-cantidad"
+                type="number"
+                min="0.00000001"
+                step="any"
+                value={ingresoInicialCantidad}
+                onChange={(event) =>
+                  setIngresoInicialCantidad(event.target.value)
+                }
+              />
+            </Field>
+            <div className={styles.full}>
+              <StockConversionFields
+                context={unidadesIngreso}
+                unidad={unidadIngreso || unidadesIngreso?.unidadCompra || ""}
+                onUnidad={setUnidadIngreso}
+                cantidad={ingresoInicialCantidad}
+                cantidadStock={cantidadRealIngreso}
+                onCantidadStock={setCantidadRealIngreso}
+                ingreso
+              />
+            </div>
+            <Field className={styles.full}>
+              <FieldLabel htmlFor="stock-ingreso-costo">
                 Costo por{" "}
                 {stockUnitLabel(
                   unidadIngreso || unidadesIngreso?.unidadCompra || "unidad",
-                )}{" "}
-                en {moneda.codigo} (opcional)
+                ).toLowerCase()}{" "}
+                en {moneda.codigo} · opcional
               </FieldLabel>
               <Input
-                value={ingresoInicialCostoUnitario}
-                onChange={(e) => setIngresoInicialCostoUnitario(e.target.value)}
+                id="stock-ingreso-costo"
                 type="number"
                 min="0"
                 step="any"
+                value={ingresoInicialCostoUnitario}
+                onChange={(event) =>
+                  setIngresoInicialCostoUnitario(event.target.value)
+                }
               />
             </Field>
-            <Field>
-              <FieldLabel>Referencia (opcional)</FieldLabel>
+            <Field className={styles.full}>
+              <FieldLabel htmlFor="stock-ingreso-referencia">
+                Referencia · opcional
+              </FieldLabel>
               <Input
+                id="stock-ingreso-referencia"
                 value={ingresoInicialReferenciaId}
-                onChange={(e) => setIngresoInicialReferenciaId(e.target.value)}
+                onChange={(event) =>
+                  setIngresoInicialReferenciaId(event.target.value)
+                }
               />
             </Field>
-          </div>
-          <SheetFooter>
-            <Button variant="outline" onClick={() => setIngresoInicialOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleRegistrarIngresoInicial} disabled={isSaving}>
-              {isSaving ? "Guardando..." : "Ingresar stock"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      <Sheet
-        open={confirmPrecioOpen}
+          </FieldGroup>
+        </FormSheet>
+      )}
+      <FormDialog
+        isOpen={confirmPrecioOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            resolveConfirmPrecio(false);
-          } else {
-            setConfirmPrecioOpen(true);
-          }
+          if (!open) resolveConfirmPrecio(false);
         }}
+        title="Actualizar precio de referencia"
+        description="El ingreso ya se registró. Podés usar este costo para próximas cotizaciones."
       >
-        <SheetContent
-          side="right"
-          className="!inset-auto !left-1/2 !top-1/2 !right-auto !h-auto !w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg border sm:!max-w-2xl"
-        >
-          <SheetHeader>
-            <SheetTitle>Actualizar precio referencia</SheetTitle>
-          </SheetHeader>
-          {confirmPrecioData ? (
-            <div className="space-y-3 px-4 pb-4 md:px-6 md:pb-6">
-              {(() => {
-                const delta =
-                  typeof confirmPrecioData.precioReferencia === "number"
-                    ? confirmPrecioData.costoUnitario - confirmPrecioData.precioReferencia
-                    : null;
-                const variacionPct =
-                  typeof confirmPrecioData.precioReferencia === "number" &&
-                  Number.isFinite(confirmPrecioData.precioReferencia) &&
-                  confirmPrecioData.precioReferencia > 0
-                    ? (Math.abs(
-                        confirmPrecioData.costoUnitario - confirmPrecioData.precioReferencia,
-                      ) /
-                        confirmPrecioData.precioReferencia) *
-                      100
-                    : null;
-
-                return (
-                  <>
-              <p className="text-sm text-muted-foreground">
-                Se registró el ingreso de stock y detectamos una variación de costo para:
-              </p>
-              <p className="text-sm font-medium">{confirmPrecioData.etiqueta}</p>
-              <div className="rounded-md border p-3 text-sm">
-                <p>
-                  <span className="text-muted-foreground">Precio referencia actual:</span>{" "}
-                  {confirmPrecioData.precioReferencia !== null
-                    ? `${number2Formatter.format(confirmPrecioData.precioReferencia)} ${confirmPrecioData.moneda}`
-                    : "No definido"}
-                </p>
-                <p>
-                  <span className="text-muted-foreground">Costo ingresado:</span>{" "}
-                  {number2Formatter.format(confirmPrecioData.costoUnitario)} {confirmPrecioData.moneda}
-                </p>
-                {typeof variacionPct === "number" && Number.isFinite(variacionPct) ? (
-                  <p>
-                    <span className="text-muted-foreground">Variación:</span>{" "}
-                    <span className="inline-flex items-center gap-1">
-                      {typeof delta === "number" && delta > 0 ? (
-                        <ArrowUpIcon className="size-4 text-red-600" />
-                      ) : null}
-                      {typeof delta === "number" && delta < 0 ? (
-                        <ArrowDownIcon className="size-4 text-emerald-600" />
-                      ) : null}
-                      {number2Formatter.format(variacionPct)}%
-                    </span>
-                  </p>
-                ) : null}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                ¿Quieres actualizar el precio referencia de la variante con el costo ingresado?
-              </p>
-                  </>
-                );
-              })()}
-            </div>
-          ) : null}
-          <SheetFooter>
-            <Button variant="outline" onClick={() => resolveConfirmPrecio(false)}>
-              No actualizar
-            </Button>
-            <Button onClick={() => resolveConfirmPrecio(true)}>Actualizar precio</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-    </div>
+        {confirmPrecioData && (
+          <div className={styles.dialogBody}>
+            <strong>{confirmPrecioData.etiqueta}</strong>
+            <p>
+              Referencia actual:{" "}
+              {confirmPrecioData.precioReferencia === null
+                ? "Sin definir"
+                : number2Formatter.format(
+                    confirmPrecioData.precioReferencia,
+                  )}{" "}
+              {confirmPrecioData.moneda}
+            </p>
+            <p>
+              Costo ingresado:{" "}
+              {number2Formatter.format(confirmPrecioData.costoUnitario)}{" "}
+              {confirmPrecioData.moneda}
+            </p>
+          </div>
+        )}
+        <div className={styles.dialogFooter}>
+          <ActionButton
+            variant="outline"
+            onPress={() => resolveConfirmPrecio(false)}
+          >
+            Conservar referencia
+          </ActionButton>
+          <ActionButton onPress={() => resolveConfirmPrecio(true)}>
+            Actualizar precio
+          </ActionButton>
+        </div>
+      </FormDialog>
+    </section>
   );
 }

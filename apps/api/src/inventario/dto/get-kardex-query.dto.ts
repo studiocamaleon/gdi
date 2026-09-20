@@ -11,6 +11,14 @@ import {
 export class GetKardexQueryDto {
   @IsOptional()
   @IsUUID()
+  materiaPrimaId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  almacenId?: string;
+
+  @IsOptional()
+  @IsUUID()
   varianteId?: string;
 
   @IsOptional()

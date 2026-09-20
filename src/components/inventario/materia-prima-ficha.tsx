@@ -4,7 +4,6 @@ import type { MaterialEquivalence } from "@/lib/material-units";
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowLeftIcon,
   LayersIcon,
@@ -20,11 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { updateMateriaPrima } from "@/lib/materias-primas-api";
-import { getKardex, getStockActual } from "@/lib/inventario-stock-api";
-import type {
-  MovimientoStockMateriaPrima,
-  StockMateriaPrimaItem,
-} from "@/lib/inventario-stock";
+import { MaterialInventarioPanel } from "./material-inventario-panel";
 import {
   familiaMateriaPrimaItems,
   unidadMateriaPrimaItems,
@@ -35,7 +30,6 @@ import {
   type UnidadMateriaPrima,
 } from "@/lib/materias-primas";
 import type { MaquinaResumen } from "@/lib/maquinaria";
-import { getMateriaPrimaVarianteLabel } from "@/lib/materias-primas-variantes-display";
 import {
   SUSTRATO_HOJA_FORMATOS_PRESET,
   getMateriaPrimaTemplateAvailability,
@@ -58,7 +52,6 @@ import { ActionButton } from "@/components/design-system/action-button";
 import { Badge } from "@/components/ui/badge";
 import { NavigationTabList } from "@/components/design-system/navigation-tab-list";
 import { SelectField } from "@/components/design-system/select-field";
-import { ListMetric } from "@/components/design-system/list-metric";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { MaterialMultiSelect } from "./material-multi-select";
@@ -72,18 +65,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatearMoneda, numeroMoneda, type Moneda } from "@/lib/moneda";
+import { numeroMoneda, type Moneda } from "@/lib/moneda";
 import { monedaDe } from "@/lib/monedas";
 import { MoneyInput } from "@/components/ui/money-input";
-import {
-  useConfigRegional,
-  useFecha,
-} from "@/components/navigation/config-regional-provider";
-
-const number2Formatter = new Intl.NumberFormat("es-AR", {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 8,
-});
+import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 
 const subfamiliaMateriaPrimaItems: Array<{
   value: SubfamiliaMateriaPrima;
@@ -143,17 +128,6 @@ const subfamiliaMateriaPrimaItems: Array<{
   { value: "almohadilla_tinta", label: "Almohadillas y tintas" },
 ];
 
-function getLabel<T extends string>(
-  items: Array<{ value: T; label: string }>,
-  value: T | null | undefined,
-  fallback = "Sin definir",
-) {
-  if (!value) {
-    return fallback;
-  }
-  return items.find((item) => item.value === value)?.label ?? fallback;
-}
-
 function resolveVarianteUnits(
   variante: LocalVariante,
   fallbackStock: UnidadMateriaPrima,
@@ -212,16 +186,6 @@ type MateriaPrimaFichaProps = {
   materiaPrima: MateriaPrima;
   proveedores: ProveedorOpcion[];
   maquinas: MaquinaResumen[];
-};
-
-type InventarioVarianteResumen = {
-  varianteId: string;
-  varianteLabel: string;
-  stockTotal: number;
-  costoPromedio: number;
-  valorStock: number;
-  almacenesConStock: number;
-  ultimoMovimiento: MovimientoStockMateriaPrima | null;
 };
 
 /**
@@ -701,25 +665,6 @@ const COMPONENTES_UNIDAD_IMAGEN_LASER = new Set<string>([
   "drum_cleaning_blade",
 ]);
 
-function getMovimientoTipoLabel(tipo: string) {
-  switch (tipo) {
-    case "ingreso":
-      return "Ingreso";
-    case "egreso":
-      return "Egreso";
-    case "ajuste_entrada":
-      return "Ajuste +";
-    case "ajuste_salida":
-      return "Ajuste -";
-    case "transferencia_entrada":
-      return "Transferencia +";
-    case "transferencia_salida":
-      return "Transferencia -";
-    default:
-      return tipo;
-  }
-}
-
 export function MateriaPrimaFicha({
   materiaPrima,
   proveedores,
@@ -728,10 +673,6 @@ export function MateriaPrimaFicha({
   const { moneda } = useConfigRegional();
   const themeClass = useDesignTheme();
   const scope = useDesignScope();
-  const { fechaNumerica, hora } = useFecha();
-  const formatFechaCorta = (value: string) =>
-    `${fechaNumerica(value)} ${hora(value)}`;
-  const router = useRouter();
   const [form, setForm] = React.useState<FormState>(() =>
     mapMateriaPrimaToForm(materiaPrima, moneda),
   );
@@ -739,11 +680,8 @@ export function MateriaPrimaFicha({
     createFormSnapshot(mapMateriaPrimaToForm(materiaPrima, moneda)),
   );
   const [activeTab, setActiveTab] = React.useState("datos-base");
+  const [savedMaterial, setSavedMaterial] = React.useState(materiaPrima);
   const [isSaving, setIsSaving] = React.useState(false);
-  const [inventarioResumen, setInventarioResumen] = React.useState<
-    InventarioVarianteResumen[]
-  >([]);
-  const [inventarioLoading, setInventarioLoading] = React.useState(false);
   const [customFormatoModeByVariante, setCustomFormatoModeByVariante] =
     React.useState<Record<string, boolean>>({});
 
@@ -845,92 +783,6 @@ export function MateriaPrimaFicha({
     templateAvailability.lockEsRepuesto,
     templateAvailability.lockEsProductoBase,
   ]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const loadInventario = async () => {
-      setInventarioLoading(true);
-      try {
-        const stockRows = await getStockActual({
-          materiaPrimaId: materiaPrima.id,
-        });
-        const byVariante = new Map<string, StockMateriaPrimaItem[]>();
-
-        for (const row of stockRows) {
-          const current = byVariante.get(row.varianteId) ?? [];
-          current.push(row);
-          byVariante.set(row.varianteId, current);
-        }
-
-        const ultimoMovimientoByVariante = new Map<
-          string,
-          MovimientoStockMateriaPrima | null
-        >();
-        await Promise.all(
-          materiaPrima.variantes.map(async (variante) => {
-            try {
-              const result = await getKardex({
-                varianteId: variante.id,
-                page: 1,
-                pageSize: 1,
-              });
-              ultimoMovimientoByVariante.set(
-                variante.id,
-                result.items[0] ?? null,
-              );
-            } catch {
-              ultimoMovimientoByVariante.set(variante.id, null);
-            }
-          }),
-        );
-
-        const rows: InventarioVarianteResumen[] = materiaPrima.variantes.map(
-          (variante) => {
-            const stockItems = byVariante.get(variante.id) ?? [];
-            const stockTotal = stockItems.reduce(
-              (acc, item) => acc + item.cantidadDisponible,
-              0,
-            );
-            const valorStock = stockItems.reduce(
-              (acc, item) => acc + item.valorStock,
-              0,
-            );
-            const costoPromedio = stockTotal > 0 ? valorStock / stockTotal : 0;
-
-            return {
-              varianteId: variante.id,
-              varianteLabel: getMateriaPrimaVarianteLabel(
-                materiaPrima,
-                variante,
-                { maxDimensiones: 5 },
-              ),
-              stockTotal,
-              costoPromedio,
-              valorStock,
-              almacenesConStock: stockItems.length,
-              ultimoMovimiento:
-                ultimoMovimientoByVariante.get(variante.id) ?? null,
-            };
-          },
-        );
-
-        if (!cancelled) {
-          setInventarioResumen(rows);
-        }
-      } finally {
-        if (!cancelled) {
-          setInventarioLoading(false);
-        }
-      }
-    };
-
-    void loadInventario();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [materiaPrima]);
 
   const setVariante = (id: string, patch: Partial<LocalVariante>) => {
     setForm((prev) => ({
@@ -1140,6 +992,7 @@ export function MateriaPrimaFicha({
       const updated = await updateMateriaPrima(materiaPrima.id, payload);
       const updatedForm = mapMateriaPrimaToForm(updated, moneda);
       setForm(updatedForm);
+      setSavedMaterial(updated);
       setSavedSnapshot(createFormSnapshot(updatedForm));
       toast.success("Ficha de materia prima actualizada.");
     } catch (error) {
@@ -2064,132 +1917,9 @@ export function MateriaPrimaFicha({
         </Tabs.Panel>
 
         <Tabs.Panel id="inventario" className={styles.tabPanel}>
-          <div className="flex flex-col gap-4">
-            <div className={styles.stockMetrics}>
-              <ListMetric
-                label="Stock total"
-                value={number2Formatter.format(
-                  inventarioResumen.reduce(
-                    (acc, item) => acc + item.stockTotal,
-                    0,
-                  ),
-                )}
-                hint="Existencias de todas las variantes"
-                icon={PackageIcon}
-              />
-              <ListMetric
-                label="Valor stock"
-                value={formatearMoneda(
-                  inventarioResumen.reduce(
-                    (acc, item) => acc + item.valorStock,
-                    0,
-                  ),
-                  moneda,
-                  { decimales: 2 },
-                )}
-                hint="Valor del inventario actual"
-                icon={DollarSignIcon}
-              />
-              <ListMetric
-                label="Variantes con stock"
-                value={
-                  inventarioResumen.filter((item) => item.stockTotal > 0).length
-                }
-                hint="Variantes con existencias disponibles"
-                icon={LayersIcon}
-              />
-            </div>
-
-            <div className={styles.tableFrame}>
-              <Table className={styles.table}>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Variante</TableHead>
-                    <TableHead className="text-right">Stock total</TableHead>
-                    <TableHead className="text-right">Costo promedio</TableHead>
-                    <TableHead className="text-right">Valor stock</TableHead>
-                    <TableHead className="text-right">Almacenes</TableHead>
-                    <TableHead>Último movimiento</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inventarioLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-muted-foreground">
-                        Cargando inventario...
-                      </TableCell>
-                    </TableRow>
-                  ) : inventarioResumen.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-muted-foreground">
-                        Esta materia prima no tiene variantes definidas para
-                        inventario.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    inventarioResumen.map((item) => (
-                      <TableRow key={item.varianteId}>
-                        <TableCell>{item.varianteLabel}</TableCell>
-                        <TableCell className="text-right">
-                          {number2Formatter.format(item.stockTotal)}{" "}
-                          {getLabel(
-                            unidadMateriaPrimaItems,
-                            form.variantes.find((v) => v.id === item.varianteId)
-                              ?.unidadStock ?? form.unidadStock,
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatearMoneda(item.costoPromedio, moneda, {
-                            decimales: 2,
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatearMoneda(item.valorStock, moneda, {
-                            decimales: 2,
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.almacenesConStock}
-                        </TableCell>
-                        <TableCell>
-                          {item.ultimoMovimiento
-                            ? `${getMovimientoTipoLabel(item.ultimoMovimiento.tipo)} · ${formatFechaCorta(
-                                item.ultimoMovimiento.createdAt,
-                              )}`
-                            : "Sin movimientos"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-2">
-                            <ActionButton
-                              variant="outline"
-                              size="sm"
-                              onPress={() =>
-                                router.push("/inventario/centro-stock")
-                              }
-                            >
-                              <PackageIcon className="size-4" />
-                              Centro stock
-                            </ActionButton>
-                            <ActionButton
-                              variant="outline"
-                              size="sm"
-                              onPress={() =>
-                                router.push("/inventario/movimientos")
-                              }
-                            >
-                              <HistoryIcon className="size-4" />
-                              Historial
-                            </ActionButton>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+          {activeTab === "inventario" && (
+            <MaterialInventarioPanel material={savedMaterial} />
+          )}
         </Tabs.Panel>
 
         <Tabs.Panel id="historial" className={styles.tabPanel}>

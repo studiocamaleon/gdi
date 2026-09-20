@@ -1,0 +1,172 @@
+.results {
+  overflow: hidden;
+}
+.headerActions,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 170px;
+  min-width: 0;
+}
+.filter:first-child {
+  flex-basis: 270px;
+}
+.filter > span {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.filter [data-slot="autocomplete-value"] {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 18px;
+}
+.table {
+  min-width: 1050px;
+}
+.material {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 360px;
+}
+.material a {
+  color: var(--foreground);
+  font-weight: 550;
+  text-decoration: none;
+}
+.material a:hover {
+  text-decoration: underline;
+}
+.secondary {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.number {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-text);
+  font-size: 12px;
+}
+.form {
+  gap: 18px;
+}
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.formGrid > * {
+  min-width: 0;
+}
+.full {
+  grid-column: 1 / -1;
+}
+.form p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted-text);
+}
+.form input {
+  width: 100%;
+  min-width: 0;
+}
+.dialogBody {
+  padding: 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dialogFooter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding: 16px 24px;
+}
+.deposits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.deposit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.deposit:first-child {
+  padding-top: 0;
+}
+.deposit:last-child {
+  border: 0;
+}
+.deposit strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 550;
+}
+.conversion {
+  padding: 12px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+@container list-page (max-width: 650px) {
+  .toolbar {
+    padding: 12px;
+  }
+  .filter {
+    flex-basis: 100%;
+  }
+  .rowActions {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 550px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  .dialogBody,
+  .dialogFooter {
+    padding: 16px;
+  }
+}

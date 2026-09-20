@@ -1,3 +1,4 @@
+import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
   cambioDelSnapshot,
   validarMonedaDocumento,
@@ -738,6 +739,7 @@ export class OrdenesTrabajoService {
     private readonly fidelizacion: FidelizacionService,
     private readonly desarrolloDocumental: DesarrolloDocumentalService,
     @Optional() private readonly eventosSistema?: EventosSistemaService,
+    @Optional() private readonly reservasMaterial?: ReservasMaterialService,
   ) {}
 
   /** Adopción transaccional compartida por la creación y la edición del plan. */
@@ -780,6 +782,7 @@ export class OrdenesTrabajoService {
           actorNombre: 'Planificación de entregas',
         });
     }
+    await this.reservasMaterial?.sincronizarOrdenTx(tx, tenantId, raiz.ordenId);
   }
 
   async prepararRecorridosDeItems(
@@ -1886,6 +1889,14 @@ export class OrdenesTrabajoService {
           orden.id,
           vinculosEntrega,
         );
+        if (emitida) {
+          await this.reservasMaterial?.sincronizarOrdenTx(
+            tx,
+            auth.tenantId,
+            orden.id,
+            { alEmitir: true, auth },
+          );
+        }
         return orden;
       });
     } catch (error) {
@@ -2950,6 +2961,11 @@ export class OrdenesTrabajoService {
         total,
       },
     });
+    await this.reservasMaterial?.sincronizarOrdenTx(
+      tx,
+      actual.tenantId,
+      ordenId,
+    );
   }
 
   private itemAutorizado(
@@ -3937,6 +3953,14 @@ export class OrdenesTrabajoService {
           );
         }
       }
+      if (desde === 'borrador') {
+        await this.reservasMaterial?.sincronizarOrdenTx(
+          tx,
+          auth.tenantId,
+          orden.id,
+          { alEmitir: true, auth },
+        );
+      }
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -4094,6 +4118,13 @@ export class OrdenesTrabajoService {
           'La orden cambió mientras la estabas cancelando. Recargala antes de volver a intentar.',
         );
       }
+
+      await this.reservasMaterial?.cancelarOrdenTx(
+        tx,
+        auth.tenantId,
+        orden.id,
+        auth,
+      );
 
       // 1. Los cronómetros que quedaron corriendo. Si no se cierran acá nadie
       //    los cierra: la orden sale del tablero y el barrido de fin de jornada

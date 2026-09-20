@@ -249,6 +249,30 @@ it("minimizar mantiene todos los eventos y un ACK o DELETED no borra COMPLETE", 
   expect(mocks.imprimir).toHaveBeenCalledTimes(1);
 });
 
+it("cerrar el asistente oculta el widget, conserva el seguimiento y permite reabrirlo desde la OT", async () => {
+  await montar();
+  await click("Emitida");
+  await click("Minimizar");
+  await click("Cerrar asistente de impresión");
+  expect(el.textContent).not.toContain("Asistente Grafo");
+  expect(el.textContent).not.toContain("Asistente de impresión");
+  expect(mocks.cerrar).not.toHaveBeenCalled();
+
+  const recibir = mocks.escuchar.mock.calls[0][2];
+  await act(async () => recibir({
+    printerName: "RICOH",
+    eventType: "JOB",
+    jobName: vista.historial[0].jobName,
+    statusText: "COMPLETE",
+  }));
+  expect(el.textContent).not.toContain("Asistente Grafo");
+  await click("Emitida");
+  expect(el.textContent).toContain("Finalizado según la cola");
+  expect(mocks.imprimir).toHaveBeenCalledTimes(1);
+  await click("Minimizar");
+  expect(el.querySelector('[aria-label="Cerrar asistente de impresión"]')).not.toBeNull();
+});
+
 it("verifica varios juntos, permite seleccionar por impresora y excluye pendientes e inciertos", async () => {
   const color = structuredClone(perfilPrueba);
   color.bandeja.destino = {

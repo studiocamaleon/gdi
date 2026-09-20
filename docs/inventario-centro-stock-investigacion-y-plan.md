@@ -3,6 +3,10 @@
 
 Fecha: 2026-03-12
 
+> **Antecedente histórico. Actualización 19/09/2026:** el diagnóstico de implementación de este documento corresponde a marzo. El sistema ya dispone de almacenes, ubicaciones, saldos, movimientos, transferencias y valorización. El [plan vigente de compras y abastecimiento](compras-abastecimiento-investigacion-y-plan-2026-09-19.md) incluye la revisión del Centro de stock y de la ficha del material, su reutilización y las extensiones pendientes. No usar la sección 3 de este documento como inventario actual de funcionalidades.
+
+> **Entrega Base implementada (19/09/2026):** Stock vuelve al sidebar, se renuevan sus formularios y se corrigen resumen de la ficha, unidades, filtros y ubicaciones de origen/destino. Pruebas y límites en la [sección 11 del plan vigente](compras-abastecimiento-investigacion-y-plan-2026-09-19.md#estado-de-la-entrega-base--19092026). Las reservas por OT y compras siguen pendientes.
+
 ## 1) Objetivo
 
 Definir un camino realista para implementar inventario en nuestro ERP, con foco en:

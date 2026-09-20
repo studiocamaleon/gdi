@@ -104,6 +104,10 @@ export type MovimientoStockMateriaPrima = {
   varianteId: string;
   varianteSku?: string;
   materiaPrimaNombre?: string;
+  materiaPrimaId?: string;
+  unidadStock?: string;
+  almacenId?: string;
+  almacenNombre?: string;
   ubicacionId: string;
   ubicacionNombre?: string;
   tipo: TipoMovimientoStockMateriaPrima;
@@ -120,6 +124,9 @@ export type MovimientoStockMateriaPrima = {
 };
 
 export type StockMateriaPrimaItem = {
+  cantidadFisica?: number;
+  cantidadReservada?: number;
+  cantidadLibre?: number;
   id: string;
   varianteId: string;
   varianteSku: string;
@@ -142,4 +149,23 @@ export type KardexResponse = {
   total: number;
   page: number;
   pageSize: number;
+};
+
+export type StockPageResponse = {
+  items: StockMateriaPrimaItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type MaterialStockResumen = {
+  varianteId: string;
+  unidadStock: string;
+  stockTotal: number;
+  cantidadReservada: number;
+  cantidadLibre: number;
+  costoPromedio: number;
+  valorStock: number;
+  almacenesConStock: number;
+  ultimoMovimiento: MovimientoStockMateriaPrima | null;
 };

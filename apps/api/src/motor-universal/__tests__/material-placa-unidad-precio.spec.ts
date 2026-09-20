@@ -11,6 +11,7 @@ import type {
   PasoCargado,
 } from '../tipos';
 import type { CostingStrategyKind } from '../../productos-servicios/nesting/costing';
+import { calcularMaterialesOrden } from '../../ordenes-trabajo/materiales-orden';
 
 type MotorMateriales = {
   calcularMateriales: (
@@ -115,6 +116,46 @@ async function cotizarMaterial(
 }
 
 describe('Precio de placas y unidad de la línea de material', () => {
+  it('guarda la unidad real de stock y demanda la placa completa sin modificar el precio parcial', async () => {
+    const contextoUnidades: MaterialUnitContext = {
+      unidadCompra: 'kg',
+      unidadStock: 'placa',
+      unidadUso: 'kg',
+      unidadPrecio: 'kg',
+      equivalencias: [{ origen: 'placa', destino: 'kg', factor: 2.5 }],
+    };
+    const { material, nesting } = await cotizarMaterial('plate-segments', {
+      unidadStock: 'KG',
+      precioReferencia: 4,
+      contextoUnidades,
+    });
+    expect(material.contextoUnidadesSnapshot).toEqual(contextoUnidades);
+    expect(material.costoTotal).toBe(3);
+    const result = calcularMaterialesOrden('orden', [
+      {
+        id: 'item',
+        nombre: 'Cartel',
+        parentItemId: null,
+        contieneLotesEntrega: false,
+        cotizacionItem: null,
+        pasos: [],
+        trazabilidadSnapshotJson: {
+          pasos: [
+            {
+              rutaPasoId: 'ruta',
+              materiales: [material],
+              nestingResult: nesting,
+            },
+          ],
+        },
+      },
+    ]);
+    expect(result.necesidades[0]).toMatchObject({
+      cantidad: 1,
+      unidad: 'placa',
+      estado: 'calculada',
+    });
+  });
   it.each(['simple', 'plate-segments', 'consumed-length', 'm2-exact'] as const)(
     '%s conserva el costo y muestra placa cuando se elige esa unidad',
     async (strategy) => {

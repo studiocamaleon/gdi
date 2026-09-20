@@ -85,6 +85,8 @@ type DatosGeneralesState = {
   condicionIva: string;
   /** Texto y no número: el input vacío tiene que poder quedar vacío. */
   condicionPagoDias: string;
+  reposicionDias: string;
+  reposicionTipo: "HABILES" | "CORRIDOS";
   cbuAlias: string;
 };
 
@@ -152,6 +154,8 @@ function buildPayload(
   direcciones: ProveedorDireccion[]
 ): ProveedorPayload {
   return {
+    reposicionDias: datosGenerales.reposicionDias.trim() === "" ? null : Number(datosGenerales.reposicionDias),
+    reposicionTipo: datosGenerales.reposicionTipo,
     nombre: datosGenerales.nombre.trim(),
     razonSocial: datosGenerales.razonSocial.trim() || undefined,
     cuit: datosGenerales.cuit.replace(/\D/g, "") || undefined,
@@ -292,6 +296,8 @@ export function ProveedorFicha({ proveedor, mode }: ProveedorFichaProps) {
   const [version, setVersion] = React.useState(proveedor.updatedAt);
   const [datosGenerales, setDatosGenerales] =
     React.useState<DatosGeneralesState>({
+      reposicionDias: proveedor.reposicionDias == null ? "" : String(proveedor.reposicionDias),
+      reposicionTipo: proveedor.reposicionTipo ?? "CORRIDOS",
       nombre: proveedor.nombre,
       razonSocial: proveedor.razonSocial,
       telefonoCodigo: proveedor.telefonoCodigo,
@@ -789,6 +795,21 @@ export function ProveedorFicha({ proveedor, mode }: ProveedorFichaProps) {
                             }
                             placeholder="mi.alias.banco"
                           />
+                        </Field>
+                      </FieldGroup>
+                    </section>
+                    <section>
+                      <h3 className={styles.groupHeading}>Reposición de materiales</h3>
+                      <FieldGroup className={styles.formGrid}>
+                        <Field>
+                          <FieldLabel htmlFor="reposicion-dias">Plazo habitual de entrega</FieldLabel>
+                          <Input className={focus.singleBorder} id="reposicion-dias" type="number" min={0} max={3650} step={1} value={datosGenerales.reposicionDias} disabled={readOnly} onChange={event=>setDatosGenerales(current=>({...current,reposicionDias:event.target.value}))} placeholder="Sin confirmar" />
+                          <FieldDescription>Desde el pedido hasta la llegada. Vacío = desconocido; 0 = en el día. Cada material puede tener otro plazo.</FieldDescription>
+                        </Field>
+                        <Field>
+                          <FieldLabel>Cómputo del plazo</FieldLabel>
+                          <SelectField aria-label="Cómputo del plazo de reposición" value={datosGenerales.reposicionTipo} options={[{value:"CORRIDOS",label:"Días corridos"},{value:"HABILES",label:"Lunes a viernes"}]} disabled={readOnly} onChange={value=>setDatosGenerales(current=>({...current,reposicionTipo:value as "HABILES" | "CORRIDOS"}))} />
+                          <FieldDescription>Lunes a viernes no descuenta feriados. La fecha confirmada de una compra tiene prioridad.</FieldDescription>
                         </Field>
                       </FieldGroup>
                     </section>

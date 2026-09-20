@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Bot } from "lucide-react";
+import { ArrowUpRight, Bot, X } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
   useDesignScope,
@@ -15,11 +15,13 @@ export function AsistenteImpresionMinimizado({
   ocupado,
   requiereAtencion,
   onAbrir,
+  onCerrar,
 }: {
   total: number;
   ocupado: boolean;
   requiereAtencion: boolean;
   onAbrir: () => void;
+  onCerrar: () => void;
 }) {
   const scope = useDesignScope();
   const theme = useDesignTheme();
@@ -49,6 +51,16 @@ export function AsistenteImpresionMinimizado({
         </span>
         {total > 0 && <span className={s.widgetCantidad}>{total}</span>}
         <ArrowUpRight aria-hidden="true" className={s.widgetAbrir} />
+      </ActionButton>
+      <ActionButton
+        tone="neutral"
+        isIconOnly
+        className={s.widgetCerrar}
+        aria-label="Cerrar asistente de impresión"
+        title="Ocultar asistente. Las impresiones continúan en segundo plano."
+        onPress={onCerrar}
+      >
+        <X aria-hidden="true" />
       </ActionButton>
     </div>
   );

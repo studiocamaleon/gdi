@@ -15,6 +15,9 @@ import {
   fechaFinalItems,
 } from "@/lib/planificacion-entregas";
 
+import { usePrevisionMateriales } from "@/hooks/use-prevision-materiales";
+import { condicionarPorMateriales } from "@/lib/prevision-materiales";
+import { PrevisionMaterialesPanel } from "./prevision-materiales-panel";
 import { getContextoPrevision } from "@/lib/eta-api";
 import { itemHipoteticoDesdeCotizacion } from "@/lib/eta-cotizacion";
 import { describirEta, fechaRecomendadaEta } from "@/lib/eta-fechas";
@@ -169,6 +172,7 @@ import {
 } from "@/lib/archivos-api";
 import type { BriefDisenoArchivoPendiente } from "@/lib/brief-diseno";
 import { ProduccionOrdenTab } from "@/components/comercial/produccion-orden-tab";
+import { MaterialesOrdenTab } from "@/components/comercial/materiales-orden-tab";
 import { BastidorVisor } from "@/components/carteleria/bastidor-visor";
 import { StepperOt } from "@/components/comercial/stepper-ot";
 import {
@@ -4476,7 +4480,7 @@ function itemToOrdenItemPayload(
   const descuento = item.cotizacion.desglosePrecio?.descuento;
   return {
     cotizacionItemId,
-    fechaEntrega: item.fechaEntrega,
+    fechaEntrega: item.fechaEntrega || undefined,
     ...(planEntrega ? { planEntrega } : {}),
     descuentoTipo: item.descuentoInput?.tipo ?? null,
     descuentoValor: item.descuentoInput?.valor ?? null,
@@ -4973,6 +4977,9 @@ function PropuestaFichaContenido({
   const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
   const imprimirAlEmitirRef = React.useRef(false);
   const puedeImprimirEtiqueta = usePuede("produccion.ver");
+  const puedeVerMaterialesComercial = usePuede("comercial.ver");
+  const puedeVerMateriales =
+    puedeImprimirEtiqueta || puedeVerMaterialesComercial;
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
   // Acceso manual al mismo circuito de mostrador cuando no se usa el QR.
   const [entregaManualOpen, setEntregaManualOpen] = React.useState(false);
@@ -5214,6 +5221,7 @@ function PropuestaFichaContenido({
   // Sólo en creación/borrador: una orden emitida ya está EN las colas del
   // tablero — volver a simularla la contaría dos veces (D10 del doc).
   const conDemoraSistema = !orden || orden.estado === "borrador";
+  const previsionMateriales = usePrevisionMateriales(items, conDemoraSistema);
   const [colasTaller, setColasTaller] = React.useState<Awaited<
     ReturnType<typeof getContextoPrevision>
   > | null>(null);
@@ -5246,10 +5254,20 @@ function PropuestaFichaContenido({
   const demoraPorItem = React.useMemo(() => {
     if (!conDemoraSistema || !colasTaller || items.length === 0) return null;
     const nuevos = items.map((item) =>
-      itemHipoteticoDesdeCotizacion(item.id, item.cotizacion),
+      condicionarPorMateriales(
+        itemHipoteticoDesdeCotizacion(item.id, item.cotizacion),
+        previsionMateriales.data,
+        previsionMateriales.error,
+      ),
     );
     return estimarDemoraNuevos({ nuevos, ...colasTaller });
-  }, [conDemoraSistema, colasTaller, items]);
+  }, [
+    conDemoraSistema,
+    colasTaller,
+    items,
+    previsionMateriales.data,
+    previsionMateriales.error,
+  ]);
 
   /** ETA de la ORDEN completa = el item que termina último. */
   const demoraOrden = React.useMemo<SimulacionItem | null>(() => {
@@ -5258,14 +5276,17 @@ function PropuestaFichaContenido({
     let sinEstimar = false;
     let parcial = false;
     let asumeDesbloqueo = false;
+    const motivos = new Set<string>();
     for (const eta of demoraPorItem.values()) {
       if (eta.sinEstimar || eta.finEstimado === null) sinEstimar = true;
       else if (fin === null || eta.finEstimado > fin) fin = eta.finEstimado;
       parcial ||= eta.parcial;
       asumeDesbloqueo ||= eta.asumeDesbloqueo;
+      if (eta.motivoSinEstimar) motivos.add(eta.motivoSinEstimar);
     }
     return {
       finEstimado: sinEstimar ? null : fin,
+      motivoSinEstimar: [...motivos].join(" ") || undefined,
       sinEstimar,
       parcial,
       asumeDesbloqueo,
@@ -5296,9 +5317,10 @@ function PropuestaFichaContenido({
           noLaborables,
           zona: colasTaller?.zona ?? zonaHoraria,
         });
-        if (!fecha || item.fechaEntrega === fecha) return item;
+        // No conservar una sugerencia anterior si el abastecimiento dejó de ser estimable.
+        if (item.fechaEntrega === (fecha ?? "")) return item;
         cambio = true;
-        return { ...item, fechaEntrega: fecha };
+        return { ...item, fechaEntrega: fecha ?? "" };
       });
       return cambio ? next : current;
     });
@@ -5313,15 +5335,18 @@ function PropuestaFichaContenido({
   // La fecha de la OT sigue a la ETA de la orden completa (el item que termina
   // último) hasta que el usuario la fija a mano.
   React.useEffect(() => {
-    if (otFechaTocadaRef.current) return;
+    if (!conDemoraSistema || otFechaTocadaRef.current) return;
     const fecha = fechaRecomendadaEta(demoraOrden, {
       margenDias: margenEtaDias,
       noLaborables: colasTaller?.noLaborables,
       zona: colasTaller?.zona ?? zonaHoraria,
     });
-    if (fecha) setFechaEstimada((prev) => (prev === fecha ? prev : fecha));
+    if (items.length > 0)
+      setFechaEstimada((prev) => (prev === (fecha ?? "") ? prev : fecha ?? ""));
   }, [
     demoraOrden,
+    conDemoraSistema,
+    items.length,
     margenEtaDias,
     colasTaller?.noLaborables,
     colasTaller?.zona,
@@ -6312,7 +6337,7 @@ function PropuestaFichaContenido({
         proyectoCampanaId: proyectoCampanaId || undefined,
         fidelizacionCanjePuntos,
         canalVenta,
-        fechaEntrega: fechaEntregaOrden(),
+        fechaEntrega: fechaEntregaOrden() || undefined,
         cargos: cargosOrden.map(cargoToOrdenInput),
         items: itemsConSnapshot.map(({ item, cotizacionItemId, planEntrega }) =>
           itemToOrdenItemPayload(item, cotizacionItemId, planEntrega),
@@ -6367,6 +6392,10 @@ function PropuestaFichaContenido({
       return;
     }
     const fechaEntrega = fechaEntregaOrden();
+    if (!fechaEntrega) {
+      toast.error("La entrega está por confirmar. Podés guardar un borrador o fijar la fecha del producto antes de emitir.");
+      return;
+    }
     if (fechaEntrega < offsetDate(0, zonaHoraria)) {
       toast.error(
         "La fecha de entrega no puede ser anterior a hoy. Revisá la fecha estimada.",
@@ -7328,6 +7357,7 @@ function PropuestaFichaContenido({
                 count={items.length}
                 historialCount={orden ? orden.eventosTotal : undefined}
                 comprobantesCount={orden ? 0 : undefined}
+                mostrarMateriales={Boolean(orden) && puedeVerMateriales}
                 archivosCount={archivosCount}
                 archivosPendientesCount={
                   initialDocumentos?.gates.filter((gate) => !gate.cumplido).length
@@ -7939,6 +7969,17 @@ function PropuestaFichaContenido({
               </>
             }
           >
+            {conDemoraSistema && items.length > 0 && (
+              <PrevisionMaterialesPanel
+                data={previsionMateriales.data}
+                error={previsionMateriales.error}
+                loading={previsionMateriales.loading}
+                onRefresh={previsionMateriales.actualizar}
+                entregasDistribuidas={items.some(
+                  (item) => !!entregasPrevias.fechaPara(item) || !!fechaFinalDistribucion(item.distribucionEntregas),
+                )}
+              />
+            )}
             {orden && <OrdenSectionHeading section={tab} />}
             {tab === "productos" ? (
               <OrdenProductosTable
@@ -8089,6 +8130,9 @@ function PropuestaFichaContenido({
                   description="Una vez confirmada la OT vas a poder ver pasos, maquinas asignadas y tiempos estimados aca."
                 />
               )
+            ) : null}
+            {tab === "materiales" && orden && puedeVerMateriales ? (
+              <MaterialesOrdenTab ordenId={orden.id} versionOrden={orden} />
             ) : null}
             {tab === "pagos" ? (
               orden ? (

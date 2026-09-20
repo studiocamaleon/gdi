@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -12,6 +13,7 @@ import type { CurrentAuth } from '../auth/auth.types';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { GetKardexQueryDto } from './dto/get-kardex-query.dto';
 import { GetStockQueryDto } from './dto/get-stock-query.dto';
+import { GetStockPageQueryDto } from './dto/get-stock-page-query.dto';
 import { RegistrarMovimientoStockDto } from './dto/registrar-movimiento-stock.dto';
 import { RegistrarTransferenciaStockDto } from './dto/registrar-transferencia-stock.dto';
 import { UpsertAlmacenDto } from './dto/upsert-almacen.dto';
@@ -115,6 +117,22 @@ export class InventarioStockController {
     @Query() query: GetStockQueryDto,
   ) {
     return this.inventarioService.getStockActual(auth, query);
+  }
+
+  @Get('stock/pagina')
+  getStockPage(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: GetStockPageQueryDto,
+  ) {
+    return this.inventarioService.getStockPage(auth, query);
+  }
+
+  @Get('stock/resumen-material/:id')
+  getResumenMaterial(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.inventarioService.getResumenStockMaterial(auth, id);
   }
 
   @Get('kardex')

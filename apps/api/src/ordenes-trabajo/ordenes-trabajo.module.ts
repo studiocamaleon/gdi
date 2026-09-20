@@ -1,5 +1,6 @@
 import { AsignacionPersonalController } from './asignacion-personal.controller';
 import { AsignacionPersonalService } from './asignacion-personal.service';
+import { ReservasMaterialModule } from '../inventario/reservas-material.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { AdministracionModule } from '../administracion/administracion.module';
@@ -10,11 +11,13 @@ import { OrdenesTrabajoController } from './ordenes-trabajo.controller';
 import { AccionesColaController } from './acciones-cola.controller';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { EntregaService } from './entrega.service';
+import { MaterialesOrdenService } from './materiales-orden.service';
 import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorridos-vectoriales.module';
 import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-documental.module';
 
 @Module({
   imports: [
+    ReservasMaterialModule,
     // "Acreditar y cancelar" en un paso necesita emitir la NC. Dependencia de
     // ida: Administración no importa este módulo.
     AdministracionModule,
@@ -26,7 +29,12 @@ import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-
     DesarrolloDocumentalModule,
   ],
   controllers: [AsignacionPersonalController, OrdenesTrabajoController, AccionesColaController],
-  providers: [OrdenesTrabajoService, EntregaService, AsignacionPersonalService],
+  providers: [
+    OrdenesTrabajoService,
+    EntregaService,
+    AsignacionPersonalService,
+    MaterialesOrdenService,
+  ],
   // Presupuestos convierte en OT reusando el create canónico.
   exports: [OrdenesTrabajoService],
 })

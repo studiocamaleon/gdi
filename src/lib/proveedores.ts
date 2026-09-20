@@ -46,6 +46,8 @@ export type ProveedorDetalle = {
   condicionIva: string;
   /** Días de plazo. Precarga el vencimiento al cargar su factura; null = no sabemos. */
   condicionPagoDias: number | null;
+  reposicionDias?: number | null;
+  reposicionTipo?: "HABILES" | "CORRIDOS";
   cbuAlias: string;
   activo: boolean;
   updatedAt: string;
@@ -66,6 +68,8 @@ export type ProveedorOpcion = {
   cuit: string | null;
   condicionIva: string | null;
   condicionPagoDias: number | null;
+  reposicionDias?: number | null;
+  reposicionTipo?: "HABILES" | "CORRIDOS";
   cbuAlias: string | null;
 };
 
@@ -79,6 +83,8 @@ export type ProveedorPayload = {
   cuit?: string;
   condicionIva?: string;
   condicionPagoDias?: number;
+  reposicionDias?: number | null;
+  reposicionTipo?: "HABILES" | "CORRIDOS";
   cbuAlias?: string;
   contactos: Array<{
     id?: string;
