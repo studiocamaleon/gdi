@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
@@ -12,7 +13,7 @@ import { PresupuestoPilotoService } from './pdf-piloto/presupuesto-piloto.servic
 import { DocumentosPdfModule } from '../documentos-pdf/documentos-pdf.module';
 
 @Module({
-  imports: [
+  imports: [CapacidadesEmpresaModule,
     DocumentosPdfModule,
     OrdenesTrabajoModule,
     ArchivosModule,

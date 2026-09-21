@@ -4,7 +4,12 @@ import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
-import { UnauthorizedException, type ExecutionContext } from '@nestjs/common';
+import {
+  ForbiddenException,
+  UnauthorizedException,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { ENROLAMIENTO_PLATAFORMA } from '../enrolamiento-plataforma';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from '../auth.service';
 import { AuthGuard } from '../auth.guard';
@@ -28,10 +33,14 @@ const jwt = new JwtService({ secret: process.env.JWT_SECRET });
 function contexto(
   request: Record<string, unknown>,
   sinTenant: boolean,
+  enrolamiento = false,
 ): ExecutionContext {
   return {
     switchToHttp: () => ({ getRequest: () => request }),
-    getHandler: () => ({ __sinTenant: sinTenant }),
+    getHandler: () => ({
+      __sinTenant: sinTenant,
+      __enrolamiento: enrolamiento,
+    }),
     getClass: () => ({}),
   } as unknown as ExecutionContext;
 }
@@ -51,8 +60,13 @@ describe('Login de backoffice (sesión de plataforma)', () => {
   const reflector = {
     getAllAndOverride: (
       key: string,
-      targets: Array<{ __sinTenant?: boolean }>,
-    ) => (key === SIN_TENANT_KEY ? Boolean(targets[0]?.__sinTenant) : false),
+      targets: Array<{ __sinTenant?: boolean; __enrolamiento?: boolean }>,
+    ) =>
+      key === ENROLAMIENTO_PLATAFORMA
+        ? Boolean(targets[0]?.__enrolamiento)
+        : key === SIN_TENANT_KEY
+          ? Boolean(targets[0]?.__sinTenant)
+          : false,
   } as unknown as Reflector;
   const guard = new AuthGuard(
     reflector,
@@ -104,15 +118,19 @@ describe('Login de backoffice (sesión de plataforma)', () => {
     ).rejects.toThrow(/invalid/i);
   });
 
-  it('la sesión de plataforma sirve en rutas @SinTenant', async () => {
+  it('sin MFA la sesión sólo sirve para enrolarse o salir, no para operar el control plane', async () => {
     const email = await crearUsuario('ADMIN');
     const { accessToken } = await auth.loginPlataforma({ email, password });
     const req: { headers: Record<string, string>; auth?: CurrentAuth } = {
       headers: { authorization: `Bearer ${accessToken}` },
     };
-    await guard.canActivate(contexto(req, true));
+    await expect(guard.canActivate(contexto(req, true))).rejects.toThrow(
+      ForbiddenException,
+    );
+    await guard.canActivate(contexto(req, true, true));
     expect(req.auth?.esPlataforma).toBe(true);
     expect(req.auth?.tenantId).toBe('');
+    expect(req.auth?.plataformaMfaPendiente).toBe(true);
   });
 
   it('la sesión de plataforma NO sirve en una ruta de tenant', async () => {

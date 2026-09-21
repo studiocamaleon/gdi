@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { nombreMaterialCompra } from './nombre-material-compra';
 import { leerMaterialesOrden } from '../ordenes-trabajo/materiales-orden.consulta';
 import {
@@ -72,6 +73,8 @@ export class ComprasService {
     private readonly prisma: PrismaService,
     private readonly inventario: InventarioService,
     private readonly reservas: ReservasMaterialService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
   private precios(auth: CurrentAuth) {
     if (
@@ -261,6 +264,7 @@ export class ComprasService {
     };
   }
   async guardarOferta(auth: CurrentAuth, data: OfertaCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'proveedores');
     this.precios(auth);
     return this.prisma.$transaction(async (tx) => {
       const tenantId = auth.tenantId;
@@ -456,6 +460,7 @@ export class ComprasService {
     });
   }
   async crear(auth: CurrentAuth, data: CrearCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
     return this.operacion(auth, data.clave, 'crear', data, async (tx) => {
       const tenantId = auth.tenantId;
       const proveedor = await tx.proveedor.findFirst({
@@ -670,6 +675,7 @@ export class ComprasService {
     });
   }
   async actuar(auth: CurrentAuth, id: string, data: AccionCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
     return this.operacion(
       auth,
       data.clave,
@@ -814,6 +820,8 @@ export class ComprasService {
     );
   }
   async recibir(auth: CurrentAuth, id: string, data: RecibirCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
+    await this.capacidades.exigir(auth.tenantId, 'recepciones');
     return this.operacion(
       auth,
       data.clave,

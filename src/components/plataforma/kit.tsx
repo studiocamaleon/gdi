@@ -6,10 +6,9 @@ import { fechaCorta as fechaCortaAR } from "@/lib/fecha";
 import type { TenantConsola } from "@/lib/plataforma-api";
 
 /**
- * Kit de la consola del control plane, portado de "Grafo Control Plane"
- * (claude.ai/design, backoffice/bo-kit.jsx): íconos, formateadores y piezas
- * chicas. Clases con prefijo cpl- (hoja global) — el diseño original usa
- * .kpi/.panel/.tbl y acá serían colisiones seguras.
+ * Íconos, formateadores y piezas compartidas de Plataforma.
+ * Las clases cpl- están acotadas por el tema de plataforma.module.css,
+ * también dentro de los portales de diálogos y fichas.
  */
 
 type IconProps = React.SVGProps<SVGSVGElement>;
@@ -126,10 +125,11 @@ export function mk(n: number): string {
 }
 
 export const PLAN_COLORS: Record<string, string> = {
-  trial: "#63636d",
-  taller: "#37d39b",
-  estudio: "#5aa2f5",
-  diamante: "#8b7cff",
+  trial: "#646668",
+  taller: "#387764",
+  estudio: "#356f89",
+  diamante: "#ac4020",
+  founder: "#936014",
 };
 
 export function PlanBadge({
@@ -139,10 +139,9 @@ export function PlanBadge({
   codigo: string;
   nombre: string;
 }) {
-  const c = PLAN_COLORS[codigo] ?? "#63636d";
   return (
-    <span className="cpl-plan" style={{ color: c, background: c + "1f" }}>
-      <span className="g" style={{ background: c }} />
+    <span className="cpl-plan" data-plan={codigo}>
+      <span className="g" aria-hidden />
       {nombre}
     </span>
   );
@@ -193,16 +192,16 @@ export function riesgoDe(t: TenantConsola): string | null {
 // ── piezas chicas ──────────────────────────────────────────────────────
 
 export const PALETA = [
-  "#8b7cff",
-  "#5aa2f5",
-  "#37d39b",
-  "#f5b544",
-  "#e07a5f",
-  "#b07cff",
-  "#4db6ac",
-  "#7986cb",
-  "#ff8a65",
-  "#9ccc65",
+  "#ac4020",
+  "#356f89",
+  "#387764",
+  "#936014",
+  "#915c47",
+  "#6c617c",
+  "#447977",
+  "#596b83",
+  "#9f5338",
+  "#677d45",
 ];
 
 /** Color determinístico por slug: no lo guardamos, no hace falta. */
@@ -231,8 +230,9 @@ export function TLogo({
   return (
     <span
       className="cpl-tlogo"
+      data-empresa={slug}
+      aria-hidden
       style={{
-        background: colorDe(slug),
         width: size,
         height: size,
         fontSize: size * 0.37,
@@ -300,7 +300,10 @@ export function Kpi({
   return (
     <div className="cpl-kpi">
       <div className="kl">{label}</div>
-      <div className="kv cpl-mono" style={alerta ? { color: "var(--warn)" } : undefined}>
+      <div
+        className="kv cpl-mono"
+        style={alerta ? { color: "var(--warn)" } : undefined}
+      >
         {value}
         {unit ? <span className="u">{unit}</span> : null}
       </div>
@@ -431,83 +434,95 @@ export function AreaChart({
   const mx = Math.max(...todos, 1) * 1.08;
   const yAt = (v: number) => padT + ih - (v / mx) * ih;
   return (
-    <svg
-      className="cpl-chart"
-      viewBox={`0 0 ${w} ${height}`}
-      preserveAspectRatio="none"
-      style={{ height }}
-    >
-      {[0.25, 0.5, 0.75, 1].map((g) => (
-        <line
-          key={g}
-          x1={padL}
-          x2={w - padR}
-          y1={padT + ih * g}
-          y2={padT + ih * g}
-          stroke="var(--hair)"
-          strokeWidth="1"
-        />
-      ))}
-      {series.map((s, si) => {
-        const pts = data.map(
-          (d, i) => [xAt(i), yAt(Number(d[s.key]))] as const,
-        );
-        const line = pts
-          .map(
-            (p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1),
-          )
-          .join(" ");
-        return (
-          <g key={s.key}>
-            {si === 0 ? (
-              <>
-                <defs>
-                  <linearGradient id={uid + si} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor={s.color} stopOpacity=".2" />
-                    <stop offset="1" stopColor={s.color} stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d={`${line} L ${xAt(n - 1)} ${padT + ih} L ${xAt(0)} ${padT + ih} Z`}
-                  fill={`url(#${uid + si})`}
-                />
-              </>
-            ) : null}
-            <path
-              d={line}
-              fill="none"
-              stroke={s.color}
-              strokeWidth="2.4"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            {pts.map((p, i) => (
-              <circle
-                key={i}
-                cx={p[0]}
-                cy={p[1]}
-                r="2.4"
-                fill="var(--bg)"
+    <div className="cpl-chart-frame" style={{ height }}>
+      <svg
+        className="cpl-chart"
+        viewBox={`0 0 ${w} ${height}`}
+        preserveAspectRatio="none"
+        style={{ height }}
+      >
+        {[0.25, 0.5, 0.75, 1].map((g) => (
+          <line
+            key={g}
+            x1={padL}
+            x2={w - padR}
+            y1={padT + ih * g}
+            y2={padT + ih * g}
+            stroke="var(--hair)"
+            strokeWidth="1"
+          />
+        ))}
+        {series.map((s, si) => {
+          const pts = data.map(
+            (d, i) => [xAt(i), yAt(Number(d[s.key]))] as const,
+          );
+          const line = pts
+            .map(
+              (p, i) =>
+                (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1),
+            )
+            .join(" ");
+          return (
+            <g key={s.key}>
+              {si === 0 ? (
+                <>
+                  <defs>
+                    <linearGradient id={uid + si} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor={s.color} stopOpacity=".2" />
+                      <stop offset="1" stopColor={s.color} stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={`${line} L ${xAt(n - 1)} ${padT + ih} L ${xAt(0)} ${padT + ih} Z`}
+                    fill={`url(#${uid + si})`}
+                  />
+                </>
+              ) : null}
+              <path
+                d={line}
+                fill="none"
                 stroke={s.color}
-                strokeWidth="1.8"
+                strokeWidth="2.4"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
               />
-            ))}
-          </g>
-        );
-      })}
-      {data.map((d, i) => (
-        <text
-          key={i}
-          x={xAt(i)}
-          y={height - 6}
-          textAnchor="middle"
-          className="cpl-chart-x"
-        >
-          {String(d.x)}
-        </text>
-      ))}
-    </svg>
+              {pts.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p[0]}
+                  cy={p[1]}
+                  r="2.4"
+                  fill="var(--bg)"
+                  stroke={s.color}
+                  strokeWidth="1.8"
+                />
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="cpl-chart-labels">
+        {data.map((d, i) => (
+          <span
+            key={i}
+            className="cpl-chart-label"
+            style={{
+              left: `${(xAt(i) / w) * 100}%`,
+              bottom: 0,
+              transform:
+                i === 0
+                  ? "none"
+                  : i === n - 1
+                    ? "translateX(-100%)"
+                    : "translateX(-50%)",
+            }}
+          >
+            {String(d.x)}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -530,59 +545,62 @@ export function Bars({
   const slot = (w - padX * 2) / n;
   const bw = Math.min(26, slot * 0.4);
   return (
-    <svg
-      className="cpl-chart"
-      viewBox={`0 0 ${w} ${height}`}
-      preserveAspectRatio="none"
-      style={{ height }}
-    >
-      {[0, 0.5, 1].map((g) => (
-        <line
-          key={g}
-          x1={padX}
-          x2={w - padX}
-          y1={padT + ih * g}
-          y2={padT + ih * g}
-          stroke="var(--hair)"
-          strokeWidth="1"
-        />
-      ))}
-      {data.map((d, i) => {
-        const cx = padX + slot * i + slot / 2;
-        const hv = (d.v / mx) * ih;
-        return (
-          <g key={i}>
-            <rect
-              x={cx - bw / 2}
-              y={padT + ih - hv}
-              width={bw}
-              height={hv}
-              rx="2.5"
-              fill={color}
-            />
-            {d.v > 0 ? (
-              <text
-                x={cx}
-                y={padT + ih - hv - 5}
-                textAnchor="middle"
-                className="cpl-chart-x"
-                style={{ fill: "var(--muted)" }}
-              >
-                {d.v}
-              </text>
-            ) : null}
-            <text
-              x={cx}
-              y={height - 6}
-              textAnchor="middle"
-              className="cpl-chart-x"
-            >
-              {d.x}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="cpl-chart-frame" style={{ height }}>
+      <svg
+        className="cpl-chart"
+        viewBox={`0 0 ${w} ${height}`}
+        preserveAspectRatio="none"
+        style={{ height }}
+      >
+        {[0, 0.5, 1].map((g) => (
+          <line
+            key={g}
+            x1={padX}
+            x2={w - padX}
+            y1={padT + ih * g}
+            y2={padT + ih * g}
+            stroke="var(--hair)"
+            strokeWidth="1"
+          />
+        ))}
+        {data.map((d, i) => {
+          const cx = padX + slot * i + slot / 2;
+          const hv = (d.v / mx) * ih;
+          return (
+            <g key={i}>
+              <rect
+                x={cx - bw / 2}
+                y={padT + ih - hv}
+                width={bw}
+                height={hv}
+                rx="2.5"
+                fill={color}
+              />
+            </g>
+          );
+        })}
+      </svg>
+      <div className="cpl-chart-labels">
+        {data.map((d, i) => {
+          const left = `${((padX + slot * i + slot / 2) / w) * 100}%`;
+          return (
+            <React.Fragment key={i}>
+              {d.v > 0 && (
+                <span
+                  className="cpl-chart-label"
+                  style={{ left, bottom: padB + (d.v / mx) * ih + 2 }}
+                >
+                  {fmtN(d.v)}
+                </span>
+              )}
+              <span className="cpl-chart-label" style={{ left, bottom: 0 }}>
+                {d.x}
+              </span>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -668,44 +686,51 @@ export function Donut({
         </g>
       </svg>
       {hideLegend ? null : (
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}>
-        {segs.map((s, i) => (
-          <div
-            key={i}
-            style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12 }}
-          >
-            <i
+        <div
+          style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9 }}
+        >
+          {segs.map((s, i) => (
+            <div
+              key={i}
               style={{
-                width: 9,
-                height: 9,
-                borderRadius: 3,
-                background: s.color,
-                flex: "none",
-              }}
-            />
-            <span style={{ color: "var(--ink-2)" }}>{s.label}</span>
-            <span
-              style={{
-                marginLeft: "auto",
-                fontFamily: "var(--font-mono)",
-                color: "var(--muted)",
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                fontSize: 12,
               }}
             >
-              {s.value}
-            </span>
-            <span
-              style={{
-                fontFamily: "var(--font-mono)",
-                color: "var(--muted-2)",
-                width: 34,
-                textAlign: "right",
-              }}
-            >
-              {Math.round((s.value / total) * 100)}%
-            </span>
-          </div>
-        ))}
-      </div>
+              <i
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 3,
+                  background: s.color,
+                  flex: "none",
+                }}
+              />
+              <span style={{ color: "var(--ink-2)" }}>{s.label}</span>
+              <span
+                style={{
+                  marginLeft: "auto",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--muted-text)",
+                }}
+              >
+                {s.value}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--muted-2)",
+                  width: 34,
+                  textAlign: "right",
+                }}
+              >
+                {Math.round((s.value / total) * 100)}%
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

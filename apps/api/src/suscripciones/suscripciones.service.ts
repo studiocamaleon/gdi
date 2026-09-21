@@ -1,4 +1,9 @@
-import { incluyeImpresionDirecta } from './capacidades-plan';
+import { limiteUsuarios } from './cupos-usuarios';
+import {
+  funcionIncluidaEnPlan,
+  type ClaveFuncionPlan,
+} from './capacidades-plan';
+import { resolverAccesoEmpresa } from './acceso-empresa';
 import {
   BadRequestException,
   Injectable,
@@ -14,7 +19,7 @@ const DIA_MS = 86_400_000;
 
 /**
  * Lecturas de la suscripción de un tenant — el ÚNICO lugar que interpreta
- * `Plan.featuresJson`. Los services de negocio preguntan `feature(tenantId,
+ * capacidades del plan. Los services de negocio preguntan `feature(tenantId,
  * 'afip')` y nunca leen el JSON directo: un solo lugar decide qué incluye un
  * plan (docs/control-plane-diseno.md).
  *
@@ -23,15 +28,11 @@ const DIA_MS = 86_400_000;
  * control plane le asigna un plan; así la llegada de los planes no apaga
  * nada que hoy funciona.
  *
- * Las escrituras NO viven acá: cambiar el plan de un tenant es un acto del
- * control plane, auditado en PlataformaEvento (plataforma.service).
+ * La autogestión comercial usa Paddle. Plataforma sólo asigna localmente los
+ * contratos manuales. Ambos conservan el bloqueo administrativo independiente.
  */
 
-export type FeaturePlan =
-  | 'afip'
-  | 'whatsapp'
-  | 'centroCopiado'
-  | 'impresionDirecta';
+export type FeaturePlan = ClaveFuncionPlan;
 
 export type LimitesPlan = {
   /** Nombre del plan que fija estos topes. `null` = sin suscripción (legacy). */
@@ -179,20 +180,33 @@ export class SuscripcionesService {
 
   /**
    * ¿El plan del tenant incluye este feature? Sin suscripción → true
-   * (grandfathered); con suscripción suspendida → false (no se paga, no hay
-   * feature); con plan → lo que diga el plan.
+   * (grandfathered, excepto pilotos); acceso restringido → false;
+   * con plan → el catálogo compartido de capacidades.
    */
   async feature(tenantId: string, clave: FeaturePlan): Promise<boolean> {
-    const s = await this.prisma.suscripcion.findFirst({
-      where: { tenantId },
-      include: { plan: { select: { featuresJson: true } } },
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        activo: true,
+        suscripcion: {
+          select: {
+            estado: true,
+            proveedor: true,
+            estadoProveedor: true,
+            trialHasta: true,
+            graciaHasta: true,
+            plan: { select: { featuresJson: true } },
+          },
+        },
+      },
     });
-    if (clave === 'impresionDirecta')
-      return incluyeImpresionDirecta(s?.estado, s?.plan.featuresJson);
-    if (!s) return true;
-    if (s.estado !== 'activa') return false;
-    const features = (s.plan.featuresJson ?? {}) as Features;
-    return features.todo === true || features[clave] === true;
+    if (
+      !tenant ||
+      resolverAccesoEmpresa(tenant.activo, tenant.suscripcion).modo !==
+        'operativo'
+    )
+      return false;
+    return funcionIncluidaEnPlan(clave, tenant.suscripcion?.plan ?? null);
   }
 
   /** Los topes del plan, o todos null (legacy / sin límite). */
@@ -205,7 +219,7 @@ export class SuscripcionesService {
     const sinLimites = f.todo === true;
     return {
       planNombre: s?.plan.nombre ?? null,
-      usuariosMax: sinLimites ? null : (f.usuariosMax ?? null),
+      usuariosMax: limiteUsuarios(s?.plan ?? null, s?.usuariosAdicionales ?? 0).limite,
       ordenesMesMax: sinLimites ? null : (f.ordenesMesMax ?? null),
       storageGb: sinLimites ? null : (f.storageGb ?? null),
     };
@@ -280,7 +294,8 @@ export class SuscripcionesService {
                   ),
                 )
               : null,
-            soloLectura: suscripcion.estado !== 'activa',
+            soloLectura:
+              resolverAccesoEmpresa(true, suscripcion).modo !== 'operativo',
             ultimaSyncProveedorEl:
               suscripcion.ultimaSyncProveedorEl?.toISOString() ?? null,
           }

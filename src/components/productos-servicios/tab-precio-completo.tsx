@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useProductoVisual } from "./producto-ui";
 
 /**
@@ -666,7 +667,14 @@ function SeccionComisiones({
 // SECCIÓN 4 — Precios especiales por cliente
 // ════════════════════════════════════════════════════════════════════════
 
-export function PreciosEspecialesClientesCard({
+export function PreciosEspecialesClientesCard(
+  props: React.ComponentProps<typeof PreciosEspecialesClientesContenido>,
+) {
+  const incluida = useCapacidad("precios_especiales");
+  return incluida ? <PreciosEspecialesClientesContenido {...props} /> : null;
+}
+
+function PreciosEspecialesClientesContenido({
   productoId,
   step = "04",
   unidadComercial,

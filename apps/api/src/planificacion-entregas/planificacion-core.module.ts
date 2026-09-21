@@ -1,10 +1,11 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EtaCalculoModule } from '../eta/eta-calculo.module';
 import { PlanificacionEntregasService } from './planificacion.service';
 
 @Module({
-  imports: [PrismaModule, EtaCalculoModule],
+  imports: [CapacidadesEmpresaModule,PrismaModule, EtaCalculoModule],
   providers: [PlanificacionEntregasService],
   exports: [PlanificacionEntregasService],
 })

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { cambioDelSnapshot } from '../cotizaciones/validar-moneda-documento';
 import {
   BadRequestException,
@@ -112,6 +113,8 @@ export class PresupuestosService {
     private readonly cupones: CuponesService,
     private readonly fidelizacion: FidelizacionService,
     private readonly documentos: DocumentosPdfService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /**
@@ -184,6 +187,7 @@ export class PresupuestosService {
       );
     }
     if (dto.proyectoCampanaId) {
+      await this.capacidades.exigir(auth.tenantId, 'proyectos');
       const campana = await this.prisma.proyectoCampana.findFirst({
         where: {
           id: dto.proyectoCampanaId,

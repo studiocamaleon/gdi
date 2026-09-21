@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { ImpuestosCatalogoController } from './catalogos/impuestos-catalogo.controller';
@@ -26,7 +27,7 @@ import { AplicarPrecioService } from './aplicar-precio.service';
  * cuando exista) lo inyecte y lo use al crear `CotizacionItem`.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [CapacidadesEmpresaModule, PrismaModule],
   controllers: [
     ImpuestosCatalogoController,
     ComisionesCatalogoController,

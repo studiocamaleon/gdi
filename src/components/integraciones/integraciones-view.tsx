@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import {
   ConfiguracionPage,
   ConfiguracionHeader,
@@ -231,6 +232,7 @@ export function IntegracionesView({
    */
   mcp?: { inicial: CredencialMcp[]; mcpUrl: string };
 }) {
+  const conWati = useCapacidad("whatsapp_automatico");
   const [datos, setDatos] = React.useState(inicial);
   const [abierta, setAbierta] = React.useState<ProveedorIntegracion | null>(
     null,
@@ -291,7 +293,7 @@ export function IntegracionesView({
     );
   }
 
-  if (abierta === "WATI") {
+  if (abierta === "WATI" && conWati) {
     return (
       <WatiDetalle
         integracion={
@@ -320,10 +322,11 @@ export function IntegracionesView({
     );
   }
 
-  const conectadas = CATALOGO.filter(
+  const catalogo = CATALOGO.filter((c) => c.proveedor !== "WATI" || conWati);
+  const conectadas = catalogo.filter(
     (c) => estadoDe(c.proveedor) === "CONECTADA",
   );
-  const resto = CATALOGO.filter((c) => estadoDe(c.proveedor) !== "CONECTADA");
+  const resto = catalogo.filter((c) => estadoDe(c.proveedor) !== "CONECTADA");
 
   return (
     <ConfiguracionPage>

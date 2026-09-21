@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -22,7 +23,11 @@ import {
  */
 @Injectable()
 export class PreciosEspecialesClientesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
+  ) {}
 
   async listarPorProducto(tenantId: string, productoId: string) {
     await this.assertProductoExiste(tenantId, productoId);
@@ -40,6 +45,7 @@ export class PreciosEspecialesClientesService {
     productoId: string,
     dto: CrearPrecioEspecialClienteDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'precios_especiales');
     await this.assertProductoExiste(tenantId, productoId);
     await this.assertClienteExiste(tenantId, dto.clienteId);
 
@@ -74,6 +80,7 @@ export class PreciosEspecialesClientesService {
     id: string,
     dto: ActualizarPrecioEspecialClienteDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'precios_especiales');
     const existente =
       await this.prisma.productoPrecioEspecialClienteV2.findFirst({
         where: { id, tenantId },
@@ -96,6 +103,7 @@ export class PreciosEspecialesClientesService {
   }
 
   async eliminar(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'precios_especiales');
     const existente =
       await this.prisma.productoPrecioEspecialClienteV2.findFirst({
         where: { id, tenantId },
@@ -112,6 +120,7 @@ export class PreciosEspecialesClientesService {
    * Usado por `aplicar-precio.service` cuando se cotiza con cliente.
    */
   async buscarActivo(tenantId: string, productoId: string, clienteId: string) {
+    if (!(await this.capacidades.incluida(tenantId, 'precios_especiales'))) return null;
     return this.prisma.productoPrecioEspecialClienteV2.findFirst({
       where: { tenantId, productoId, clienteId, activo: true },
     });

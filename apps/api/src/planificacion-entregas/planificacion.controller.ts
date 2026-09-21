@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -21,6 +22,7 @@ import {
 
 @Permiso('comercial.ver', 'produccion.ver')
 @OcultaMargenes()
+@RequiereCapacidad('planificacion_avanzada')
 @Controller('ordenes-trabajo/items/:itemId/planificacion-entregas')
 export class PlanificacionEntregasController {
   constructor(private readonly planes: PlanificacionEntregasService) {}

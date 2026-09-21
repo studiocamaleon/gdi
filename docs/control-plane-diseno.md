@@ -1,5 +1,7 @@
 # Control plane — el plano de la Plataforma
 
+> **Documento histórico.** Describe el diseño inicial; varias capacidades mencionadas como pendientes ya existen. Para la evolución actual, consultar [Backoffice profesional: investigación, auditoría y plan — 20/09/2026](backoffice-profesional-investigacion-y-plan-2026-09-20.md), basado en el código vigente y en la integración actual con Paddle.
+
 Grafo hoy tiene un solo plano: el de tenant. Todo usuario —incluida
 Corporearte, que es de Grupo Idea— opera *dentro* de una empresa, con roles de
 empresa (`RolSistema` en `Membership`) y el `tenant-guard` aislando sus datos.

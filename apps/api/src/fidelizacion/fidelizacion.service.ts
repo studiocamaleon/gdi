@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -49,7 +50,11 @@ export function calcularPuntosFidelizacion(args: {
 
 @Injectable()
 export class FidelizacionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
+  ) {}
 
   async configuracion(tenantId: string) {
     const config = await this.prisma.configuracionFidelizacion.findUnique({
@@ -71,6 +76,7 @@ export class FidelizacionService {
     auth: CurrentAuth,
     dto: ActualizarFidelizacionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'fidelizacion');
     const actual = await this.prisma.configuracionFidelizacion.findUnique({
       where: { tenantId: auth.tenantId },
     });
@@ -140,6 +146,7 @@ export class FidelizacionService {
   }
 
   async ajustar(auth: CurrentAuth, clienteId: string, dto: AjustarPuntosDto) {
+    await this.capacidades.exigir(auth.tenantId, 'fidelizacion');
     return this.prisma.$transaction(async (tx) => {
       const cuenta = await this.bloquearCuenta(tx, auth.tenantId, clienteId);
       const delta = dto.tipo === 'CREDITO' ? dto.puntos : -dto.puntos;
@@ -186,6 +193,20 @@ export class FidelizacionService {
     canjePuntos = 0,
     puntosReservadosAplicables = 0,
   ) {
+    if (!(await this.capacidades.incluida(tenantId, 'fidelizacion'))) {
+      if (canjePuntos > 0) await this.capacidades.exigir(tenantId, 'fidelizacion');
+      return {
+        acumulacionActiva: false,
+        saldoDisponible: 0,
+        saldoDisponibleMonto: 0,
+        puntosEstimados: 0,
+        puntosEstimadosMonto: 0,
+        maximoCanjeable: 0,
+        canjePuntos: 0,
+        canjeMonto: 0,
+        snapshot: { porcentajeMargen: 0, montoBase: 0, puntosBase: 1 },
+      };
+    }
     const config = await this.configTx(this.prisma, tenantId);
     const cuenta = clienteId
       ? await this.prisma.fidelizacionCuenta.findUnique({
@@ -368,6 +389,7 @@ export class FidelizacionService {
     },
   ) {
     if (args.puntos <= 0) return null;
+    await this.capacidades.exigir(args.tenantId, 'fidelizacion', tx);
     const cuenta = await this.bloquearCuenta(tx, args.tenantId, args.clienteId);
     if (cuenta.saldoPuntos - cuenta.reservadosPuntos < args.puntos)
       throw new ConflictException(
@@ -420,6 +442,7 @@ export class FidelizacionService {
     ordenId: string,
     reservaId: string,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'fidelizacion', tx);
     const reserva = await tx.fidelizacionReserva.findFirst({
       where: { id: reservaId, tenantId: auth.tenantId, estado: 'RESERVADA' },
     });
@@ -469,6 +492,16 @@ export class FidelizacionService {
     tenantId: string,
     ordenId: string,
   ) {
+    const incluida = await this.capacidades.incluida(tenantId, 'fidelizacion', tx);
+    // Sin programa, sólo reconciliar si existe una ganancia anterior que pueda
+    // necesitar reversión. Cobrar y entregar no crean cuentas ni movimientos.
+    if (
+      !incluida &&
+      !(await tx.fidelizacionMovimiento.findFirst({
+        where: { tenantId, ordenId, tipo: 'GANANCIA' },
+        select: { id: true },
+      }))
+    ) return;
     const orden = await tx.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId },
       select: {
@@ -501,7 +534,7 @@ export class FidelizacionService {
       include: { reversiones: true },
       orderBy: { createdAt: 'desc' },
     });
-    if (elegible && (!ganancia || ganancia.reversiones.length > 0)) {
+    if (incluida && elegible && (!ganancia || ganancia.reversiones.length > 0)) {
       const cuenta = await this.bloquearCuenta(tx, tenantId, orden.clienteId);
       const config = await this.configTx(tx, tenantId);
       const puntos = orden.fidelizacionPuntosEstimados!;

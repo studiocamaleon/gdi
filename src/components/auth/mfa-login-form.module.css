@@ -25,12 +25,22 @@
   cursor: default;
 }
 .backoffice {
-  --reg-paper: #131318;
-  --reg-surface: #0d0d11;
-  --reg-ink: #f4f3f0;
-  --reg-muted: #a9a9b2;
-  --reg-line: #30303b;
-  --reg-orange: #ff7546;
-  --reg-orange-ink: #ff9876;
-  --reg-error: #ac352d;
+  --reg-paper: var(--canvas-background);
+  --reg-surface: var(--surface);
+  --reg-ink: var(--foreground);
+  --reg-muted: var(--muted-text);
+  --reg-line: var(--border);
+  --reg-orange: var(--accent);
+  --reg-orange-ink: var(--accent-soft-foreground);
+  --reg-error: var(--danger);
+}
+
+.recordar {
+  display: grid;
+  gap: 8px;
+}
+.recordar p {
+  color: var(--reg-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }

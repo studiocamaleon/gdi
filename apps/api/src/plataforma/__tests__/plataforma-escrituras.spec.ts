@@ -168,7 +168,7 @@ describe('Control plane — escrituras y feature gates', () => {
     }
   });
 
-  it('suspender corta el tenant Y su suscripción; reactivar restituye', async () => {
+  it('bloquear corta el acceso sin modificar la suscripción; levantar restituye', async () => {
     await plataforma.suspenderTenant(staffId, tenantId, 'prueba de suspensión');
 
     const t = await prisma.tenant.findUnique({
@@ -176,7 +176,7 @@ describe('Control plane — escrituras y feature gates', () => {
       select: { activo: true },
     });
     expect(t?.activo).toBe(false);
-    // Suscripción suspendida = sin features, aunque el plan los tenga.
+    // El bloqueo corta los features sin alterar el contrato de suscripción.
     await expect(suscripciones.feature(tenantId, 'whatsapp')).resolves.toBe(
       false,
     );

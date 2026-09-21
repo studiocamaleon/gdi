@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -19,6 +20,7 @@ import {
 
 @Permiso('comercial.gestionar')
 @OcultaMargenes()
+@RequiereCapacidad('planificacion_avanzada')
 @Controller('cotizaciones/items/:itemId/planificacion-entregas')
 export class PlanificacionCotizacionController {
   constructor(private readonly planes: PlanificacionEntregasService) {}

@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -28,6 +29,7 @@ import {
 
 @OcultaMargenes()
 @Permiso('comercial.ver')
+@RequiereCapacidad('proyectos')
 @Controller('campanas')
 export class CampanasController {
   constructor(private readonly service: CampanasService) {}

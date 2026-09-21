@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { ResumenEjecutivo } from "@/components/panel/resumen-ejecutivo";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { getPanelResumen } from "@/lib/panel-api";
@@ -19,6 +21,7 @@ export default async function Page({
 }: {
   searchParams: Promise<ParametrosPeriodo>;
 }) {
+  if (!(await tieneCapacidad("reportes_resumen"))) return <FuncionNoIncluida />;
   if (!(await tienePermiso("reportes.ver_resumen"))) {
     return <SinPermiso modulo="el Resumen ejecutivo" />;
   }

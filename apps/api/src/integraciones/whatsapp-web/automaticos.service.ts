@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   ConflictException,
   ForbiddenException,
@@ -18,7 +19,11 @@ import type {
 
 @Injectable()
 export class AutomaticosWebService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
+  ) {}
   private validarTenant(tenantId: string, dto: DispositivoWebDto) {
     if (tenantId !== dto.tenantId)
       throw new ForbiddenException(
@@ -54,6 +59,9 @@ export class AutomaticosWebService {
     };
   }
   async configurar(tenantId: string, dto: ConfigurarWebDto) {
+    if (dto.modo === 'WATI')
+      await this.capacidades.exigir(tenantId, 'whatsapp_automatico');
+    await this.capacidades.exigir(tenantId, 'whatsapp_web');
     this.validarTenant(tenantId, dto);
     await this.prisma.$transaction(async (tx) => {
       // Bloquea la misma fila que iniciar(): una pausa no puede adelantarse
@@ -101,6 +109,7 @@ export class AutomaticosWebService {
     return c;
   }
   async prueba(tenantId: string, dto: DispositivoWebDto) {
+    await this.capacidades.exigir(tenantId, 'whatsapp_web');
     if (!(await this.configActiva(tenantId, dto)))
       throw new ConflictException(
         'Activá los avisos en este equipo antes de probar.',
@@ -122,6 +131,8 @@ export class AutomaticosWebService {
   }
 
   async reservar(tenantId: string, dto: DispositivoWebDto) {
+    if (!(await this.capacidades.puedeOperar(tenantId, 'whatsapp_web')))
+      return { trabajo: null };
     const config = await this.configActiva(tenantId, dto);
     if (!config) return { trabajo: null };
     const ahora = new Date();
@@ -193,6 +204,7 @@ export class AutomaticosWebService {
     return { trabajo: null };
   }
   async iniciar(tenantId: string, id: string, dto: ReservaWebDto) {
+    await this.capacidades.exigir(tenantId, 'whatsapp_web');
     this.validarTenant(tenantId, dto);
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "ConfiguracionNotificaciones" WHERE "tenantId" = ${tenantId}::uuid FOR UPDATE`;

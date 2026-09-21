@@ -1,4 +1,8 @@
 import {
+  bloquearCupoUsuarios,
+  exigirCupoUsuario,
+} from '../suscripciones/cupos-usuarios';
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -248,6 +252,8 @@ export class RegistroService {
       emailEmpresa: registro.email,
       iniciaTrial: true,
     });
+    await bloquearCupoUsuarios(tx, provisionado.tenantId);
+    await exigirCupoUsuario(tx, provisionado.tenantId, { email: registro.email });
     const membership = await tx.membership.create({
       data: {
         userId: user.id,

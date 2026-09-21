@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { useSearchParams } from "next/navigation";
 import {
@@ -34,6 +35,7 @@ const porcentaje = (valor: number | null | undefined) =>
 export function ResumenEjecutivo({ d }: { d: ResumenData }) {
   const { moneda } = useConfigRegional();
   const puede = usePuedeFn();
+  const conFinanzas = useCapacidad("reportes_finanzas");
   const search = useSearchParams();
   const custom = leerRangoPersonalizado(
     search.get("desde") ?? undefined,
@@ -301,7 +303,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
               }
             />
           )}
-          {puede("finanzas.ver_margenes") ? (
+          {conFinanzas && puede("finanzas.ver_margenes") ? (
             <div className={styles.cardAction}>
               <ActionLink variant="outline" href={href("/reportes/finanzas")}>
                 Analizar finanzas <ArrowUpRightIcon data-icon="inline-end" />

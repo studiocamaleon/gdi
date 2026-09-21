@@ -19,6 +19,8 @@ import { CurrentSession } from './current-auth.decorator';
 import type { CurrentAuth } from './auth.types';
 import { PerfilService } from './perfil.service';
 import { MfaService } from './mfa.service';
+import { PermitirEnrolamientoPlataforma } from './enrolamiento-plataforma';
+import { ConfirmarRecuperacionDto } from './dto/perfil.dto';
 import {
   ClavePerfilDto,
   ConfirmarMfaDto,
@@ -61,12 +63,20 @@ export class PerfilController {
   }
 
   @Get('mfa')
+  @PermitirEnrolamientoPlataforma()
   @Header('Cache-Control', 'no-store')
   estado(@CurrentSession() auth: CurrentAuth) {
     return this.mfa.estado(auth);
   }
 
+  @Delete('mfa/dispositivos')
+  @Header('Cache-Control', 'no-store')
+  olvidarDispositivos(@CurrentSession() auth: CurrentAuth) {
+    return this.mfa.olvidarDispositivos(auth);
+  }
+
   @Post('mfa/iniciar')
+  @PermitirEnrolamientoPlataforma()
   @Header('Cache-Control', 'no-store')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   iniciar(@CurrentSession() auth: CurrentAuth, @Body() dto: ClavePerfilDto) {
@@ -74,6 +84,7 @@ export class PerfilController {
   }
 
   @Post('mfa/confirmar')
+  @PermitirEnrolamientoPlataforma()
   @Header('Cache-Control', 'no-store')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   confirmar(@CurrentSession() auth: CurrentAuth, @Body() dto: ConfirmarMfaDto) {
@@ -81,6 +92,7 @@ export class PerfilController {
   }
 
   @Delete('mfa/pendiente')
+  @PermitirEnrolamientoPlataforma()
   cancelar(@CurrentSession() auth: CurrentAuth) {
     return this.mfa.cancelar(auth);
   }
@@ -93,9 +105,28 @@ export class PerfilController {
   }
 
   @Post('mfa/recuperacion')
+  @PermitirEnrolamientoPlataforma()
   @Header('Cache-Control', 'no-store')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
   recuperar(@CurrentSession() auth: CurrentAuth, @Body() dto: GestionMfaDto) {
     return this.mfa.gestionar(auth, dto.password, dto.codigo, 'regenerar');
+  }
+
+  @Post('mfa/recuperacion/confirmar')
+  @PermitirEnrolamientoPlataforma()
+  @Header('Cache-Control', 'no-store')
+  confirmarRecuperacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Body() dto: ConfirmarRecuperacionDto,
+  ) {
+    return this.mfa.confirmarRecuperacion(auth, dto.version);
+  }
+
+  @Post('mfa/reemplazar')
+  @PermitirEnrolamientoPlataforma()
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  reemplazar(@CurrentSession() auth: CurrentAuth, @Body() dto: GestionMfaDto) {
+    return this.mfa.reemplazar(auth, dto.password, dto.codigo);
   }
 }

@@ -414,6 +414,7 @@ enum ArchivoEstado {
   PENDIENTE
   LISTO
   ELIMINADO
+  PURGANDO
 }
 
 enum PropositoArchivoMaestro {
@@ -700,6 +701,10 @@ model Tenant {
   nombre                                           String
   slug                                             String                                            @unique
   activo                                           Boolean                                           @default(true)
+  /// Bloqueo administrativo de acceso, independiente del estado de cobro.
+  /// Null en bloqueos anteriores: su motivo histórico no se infiere.
+  bloqueoAccesoMotivo                               String?
+  bloqueoAccesoEl                                   DateTime?
   /// De dónde nació la empresa: 'plataforma' (alta asistida) o
   /// 'registro_publico'. Sirve para medir adquisición sin inferirla de otras
   /// tablas y para que el onboarding sólo aparezca a quien corresponde.
@@ -1027,6 +1032,8 @@ model User {
   fotoPerfilVersion        String?                               @db.Uuid
   mfa                      UserMfa?
   mfaChallenges            MfaChallenge[]
+  mfaDispositivos          MfaDispositivo[]
+  invitacionesPlataforma   InvitacionPlataforma[] @relation("InvitadorPlataforma")
   activo                   Boolean                               @default(true)
   /// Rol en el control plane. Null = usuario común (la enorme mayoría).
   /// Se otorga por script/consola y todo cambio queda en PlataformaEvento.
@@ -1036,6 +1043,7 @@ model User {
   memberships              Membership[]
   authSessions             AuthSession[]
   plataformaEventos        PlataformaEvento[]                    @relation("EventosDeStaff")
+  sincronizacionesPaddle   SincronizacionPaddle[]
   invitations              Invitation[]
   empleados                Empleado[]
   ordenTrabajoEventos      OrdenTrabajoEvento[]
@@ -1062,6 +1070,8 @@ model UserMfa {
   userId           String   @id @db.Uuid
   secret           Json?
   activatedAt      DateTime?
+  recuperacionConfirmadaEl DateTime?
+  recoveryPendingSessionId String? @db.Uuid
   pendingSecret    Json?
   pendingId        String?  @db.Uuid
   pendingSessionId String?  @db.Uuid
@@ -1074,12 +1084,33 @@ model UserMfa {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/// Credencial de navegador para recordar el segundo factor; no sustituye la contraseña.
+model MfaDispositivo {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  alcance String
+  passwordStamp String
+  mfaVersion Int
+  verificadoEl DateTime @default(now())
+  venceEl DateTime
+  ultimoUsoEl DateTime @default(now())
+  revocadoEl DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sesiones AuthSession[]
+
+  @@index([userId, venceEl])
+  @@index([venceEl])
+}
+
 /// Primer factor verificado; no autoriza llamadas al API ni crea una sesión.
 model MfaChallenge {
   tokenHash      String   @id
   userId         String   @db.Uuid
   destination    String
   membershipId   String?  @db.Uuid
+  invitacionPlataformaId String? @db.Uuid
+  invitacionPlataforma InvitacionPlataforma? @relation(fields: [invitacionPlataformaId], references: [id], onDelete: Cascade)
   passwordStamp  String
   mfaVersion     Int
   expiresAt      DateTime
@@ -1250,6 +1281,9 @@ model AuthSession {
   impersonacionId     String?              @unique @db.Uuid
   expiresAt           DateTime
   revokedAt           DateTime?
+  mfaVerificadoEl     DateTime?
+  mfaDispositivoId    String? @db.Uuid
+  mfaDispositivo      MfaDispositivo? @relation(fields: [mfaDispositivoId], references: [id], onDelete: SetNull)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1259,6 +1293,25 @@ model AuthSession {
 
   @@index([userId])
   @@index([currentTenantId])
+}
+
+/// Invitaciones del equipo del SaaS, independientes de las membresías de empresas.
+model InvitacionPlataforma {
+  id String @id @default(uuid()) @db.Uuid
+  email String
+  rol RolPlataforma
+  tokenHash String @unique
+  invitadorId String @db.Uuid
+  invitador User @relation("InvitadorPlataforma", fields: [invitadorId], references: [id], onDelete: Restrict)
+  creadaEl DateTime @default(now())
+  venceEl DateTime
+  revocadaEl DateTime?
+  aceptadaEl DateTime?
+  aceptadaPorId String? @db.Uuid
+  desafios MfaChallenge[]
+
+  @@index([email, creadaEl])
+  @@index([invitadorId])
 }
 
 model Invitation {
@@ -5396,6 +5449,9 @@ model Archivo {
   /// MIME verificado contra el objeto real en el confirmar, no el declarado.
   mimeType          String
   bytes             BigInt        @default(0)
+  /// Espacio comprometido mientras se sube, antes de confirmar el tamaño real.
+  bytesReservados   BigInt        @default(0)
+  reservaHasta      DateTime?
   /// sha256 en hex del contenido, si el cliente lo aportó. Dedupe futuro.
   hash              String?
   /// Subida en partes en curso. Se guarda para poder abortarla desde el
@@ -5450,6 +5506,7 @@ model Archivo {
   revisionDocumental   ArchivoRevision?                      @relation("ArchivoDeRevision")
   evidenciasAprobacion DecisionAprobacionDocumentoRegistro[] @relation("EvidenciaDecisionAprobacion")
 
+  @@index([tenantId, estado, reservaHasta])
   @@index([tenantId, scope, estado])
   @@index([tenantId, scope, generado])
   @@index([tenantId, ordenItemId])
@@ -5931,9 +5988,21 @@ model PlataformaEvento {
   @@index([tenantAfectadoId])
 }
 
-/// Catálogo de planes del SaaS. Nivel plataforma (sin tenantId), como
-/// MaterialPreset: los mismos planes para todos los tenants.
-/// Ver docs/control-plane-diseno.md
+/// Propuesta comercial editable de Plataforma, separada de los contratos vigentes.
+/// Ver docs/planes-editor-borradores-2026-09-20.md
+model PlanBorrador {
+  id              String   @id @default(uuid()) @db.Uuid
+  codigo          String   @unique
+  orden           Int
+  revision        Int      @default(1)
+  catalogoVersion Int      @default(1)
+  contenido       Json
+  creadoEl        DateTime @default(now())
+  actualizadoEl   DateTime @default(now()) @updatedAt
+}
+
+/// Catálogo vigente de planes del SaaS, compartido y sin tenantId.
+/// Los borradores comerciales no alteran estas suscripciones.
 model Plan {
   id                 String             @id @default(uuid()) @db.Uuid
   /// "trial" | "taller" | "estudio" | "diamante" | "founder" — estable.
@@ -6044,6 +6113,9 @@ model Suscripcion {
   id                      String    @id @default(uuid()) @db.Uuid
   tenantId                String    @unique @db.Uuid
   planId                  String    @db.Uuid
+  /// Plazas extra acordadas para esta empresa. No cambia el plan compartido
+  /// ni genera cargos; su cobro automático requiere integración comercial.
+  usuariosAdicionales     Int       @default(0)
   /// 'activa' | 'suspendida' | 'baja' — estado NORMALIZADO nuestro, el que
   /// mira el gate por plan. No es el de Paddle: ver estadoProveedor.
   estado                  String    @default("activa")
@@ -6072,6 +6144,8 @@ model Suscripcion {
   /// occurred_at del último webhook aplicado. Evita que un evento demorado
   /// pise un estado más nuevo.
   ultimoEventoProveedorEl DateTime?
+  /// updated_at del estado remoto aplicado, para ordenar API y webhooks.
+  actualizadoProveedorEl  DateTime?
   /// Próximo cobro informado por el proveedor (para la vista del tenant).
   proximoCobro            DateTime?
   /// Inicio del período de facturación en curso (current_billing_period de
@@ -6150,6 +6224,9 @@ model EventoCobro {
   eventoId    String    @unique
   /// p. ej. 'subscription.updated', 'transaction.completed'
   tipo        String
+  referenciaSuscripcion String?
+  /// aplicado | ignorado | sin_aplicar | fallido. Null en registros históricos.
+  resultado   String?
   payloadJson Json
   /// Null mientras no se procesó; con fecha una vez aplicado.
   procesadoEl DateTime?
@@ -6162,6 +6239,28 @@ model EventoCobro {
 
   @@index([proveedor, tipo])
   @@index([recibidoEl])
+  @@index([referenciaSuscripcion, recibidoEl])
+}
+
+/// Consultas solicitadas por staff. Se conserva el resultado incluso si el
+/// navegador se cierra o pierde la respuesta. No contiene payloads de Paddle.
+model SincronizacionPaddle {
+  id              String    @id @db.Uuid
+  tenantId        String    @db.Uuid
+  suscripcionId   String    @db.Uuid
+  referencia      String
+  staffUserId     String    @db.Uuid
+  motivo          String
+  estado          String    @default("en_curso")
+  detalle         String?
+  antesJson       Json?
+  despuesJson     Json?
+  creadaEl        DateTime  @default(now())
+  finalizadaEl    DateTime?
+  staff           User      @relation(fields: [staffUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, creadaEl])
+  @@index([estado, creadaEl])
 }
 
 /// Una entrada de staff a un tenant (etapa C). Nivel plataforma: junta al

@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -23,6 +24,7 @@ import {
 } from './dto/cupones.dto';
 
 @Permiso('crm.ver')
+@RequiereCapacidad('cupones')
 @Controller('cupones')
 export class CuponesController {
   constructor(private readonly service: CuponesService) {}

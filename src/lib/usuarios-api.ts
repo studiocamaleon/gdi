@@ -24,7 +24,20 @@ export type UsuarioDelTenant = {
   esYo: boolean;
 };
 
+export type CupoUsuarios = {
+  incluidos: number | null;
+  adicionales: number;
+  limite: number | null;
+  activos: number;
+  invitacionesPendientes: number;
+  ocupados: number;
+  disponibles: number | null;
+  excedidos: number;
+};
+
 export type ListadoUsuarios = {
+  cupo?: CupoUsuarios;
+  invitaciones?: Array<{ id: string; email: string; venceEl: string }>;
   usuarios: UsuarioDelTenant[];
   /** Tope del plan. Null = sin límite (tenant legacy o plan ilimitado). */
   limite: number | null;
@@ -54,6 +67,10 @@ export type CatalogoPermisos = {
 
 export async function getUsuarios(): Promise<ListadoUsuarios> {
   return apiRequest("/usuarios", { cache: "no-store" });
+}
+
+export async function cancelarInvitacionUsuario(id: string): Promise<{ ok: true }> {
+  return apiRequest(`/usuarios/invitaciones/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function getRoles(): Promise<RolDelTenant[]> {

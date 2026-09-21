@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -117,6 +118,8 @@ export class EgresosService {
     private readonly empresa: DatosEmpresaService,
     private readonly archivos: ArchivosService,
     private readonly ordenPagoPdf: OrdenPagoPdfService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /** "Grafica Corporearte" → "GC". El fallback del logo, igual que el recibo. */
@@ -555,6 +558,7 @@ export class EgresosService {
    * o sea algo que nadie va a cobrar nunca y que ensucia el saldo para siempre.
    */
   async crear(auth: CurrentAuth, dto: CrearEgresoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     if (dto.centroCostoId) {
       const centro = await this.prisma.centroCosto.findFirst({
         where: { id: dto.centroCostoId, tenantId: auth.tenantId, activo: true },
@@ -846,6 +850,7 @@ export class EgresosService {
    * negativo sin nada que lo explique.
    */
   async editar(auth: CurrentAuth, id: string, dto: EditarEgresoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const egreso = await this.prisma.egreso.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: { id: true, estado: true, pagadoTotal: true },
@@ -931,6 +936,7 @@ export class EgresosService {
    * egreso dejaría un movimiento de fondos sin nada que lo explique.
    */
   async anular(auth: CurrentAuth, id: string, dto: AnularDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const egreso = await this.prisma.egreso.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: { id: true, estado: true, pagadoTotal: true },
@@ -958,6 +964,9 @@ export class EgresosService {
   // ── Pagos ──────────────────────────────────────────────────────────────
 
   async registrarPago(auth: CurrentAuth, dto: RegistrarPagoDto) {
+    if (dto.cheque || dto.valorId)
+      await this.capacidades.exigir(auth.tenantId, 'valores');
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     if (dto.imputaciones.length === 0) {
       throw new BadRequestException('Indicá qué egresos estás pagando.');
     }
@@ -1070,6 +1079,7 @@ export class EgresosService {
     // valor va a cartera y recién impacta la cuenta cuando se debita. Es el
     // mismo criterio que usa Cobros con los cheques de terceros.
     const esCheque = metodo.tipo === 'cheque_echeq';
+    if (esCheque) await this.capacidades.exigir(auth.tenantId, 'valores', tx);
     if (esCheque && !dto.cheque && !dto.valorId) {
       throw new BadRequestException(
         'Pagando con cheque hay que emitir uno propio o endosar uno de la cartera.',
@@ -1443,6 +1453,7 @@ export class EgresosService {
    * historial — se intentó y falló, y eso es información.
    */
   async anularPago(auth: CurrentAuth, id: string, dto: AnularDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       const pago = await tx.pago.findFirst({
@@ -1746,6 +1757,8 @@ export class EgresosService {
 
   /** Confirma que el banco debitó un cheque propio y recién entonces mueve fondos. */
   async debitarValor(auth: CurrentAuth, id: string, dto: DebitarValorDto) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     if (dto.idempotencyKey) {
       const existente = await this.prisma.movimientoFondos.findUnique({
         where: {
@@ -1842,6 +1855,8 @@ export class EgresosService {
     id: string,
     dto: RechazarValorPropioDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
       const valor = await tx.valor.findFirst({

@@ -18,7 +18,7 @@ describe('impresión directa habilitada explícitamente por plan', () => {
   let suscripcion: null | { estado: string; plan: { featuresJson: object } } =
     null;
   const prisma = {
-    suscripcion: { findFirst: jest.fn(() => Promise.resolve(suscripcion)) },
+    tenant: { findUnique: jest.fn(() => Promise.resolve({ activo: true, suscripcion })) },
   };
   const suscripciones = new SuscripcionesService(
     prisma as unknown as PrismaService,
@@ -103,5 +103,11 @@ describe('impresión directa habilitada explícitamente por plan', () => {
     await request(app.getHttpServer() as Server)
       .get('/impresion/configuracion')
       .expect(403);
+  });
+
+  it('el bloqueo administrativo prevalece sobre la habilitación del plan', async () => {
+    suscripcion = { estado: 'activa', plan: { featuresJson: { impresionDirecta: true } } };
+    prisma.tenant.findUnique.mockResolvedValueOnce({ activo: false, suscripcion });
+    await request(app.getHttpServer() as Server).get('/impresion/configuracion').expect(403);
   });
 });

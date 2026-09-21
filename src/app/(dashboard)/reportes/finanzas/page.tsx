@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { ReporteFinanzas } from "@/components/panel/reporte-finanzas";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { getPanelFinanzas } from "@/lib/panel-api";
@@ -19,6 +21,8 @@ export default async function Page({
 }: {
   searchParams: Promise<ParametrosPeriodo>;
 }) {
+  if (!(await tieneCapacidad("reportes_finanzas")))
+    return <FuncionNoIncluida />;
   if (!(await tienePermiso("finanzas.ver_margenes"))) {
     return <SinPermiso modulo="Finanzas" />;
   }

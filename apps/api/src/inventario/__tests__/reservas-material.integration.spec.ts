@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { InventarioService } from '../inventario.service';
@@ -8,7 +9,11 @@ import type { ComandoReservasDto } from '../dto/comando-reservas.dto';
 describe('Reservas OT: saldos, concurrencia y ciclo de vida (DB de test)', () => {
   const prisma = new PrismaClient();
   const inventario = new InventarioService(prisma as never);
-  const service = new ReservasMaterialService(prisma as never, inventario);
+  const service = new ReservasMaterialService(
+    prisma as never,
+    inventario,
+    new CapacidadesEmpresaService(prisma as never),
+  );
   let tenantId: string,
     varianteId: string,
     ubicacionId: string,

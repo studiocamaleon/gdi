@@ -112,6 +112,9 @@ beforeEach(async () => {
   };
 });
 afterAll(async () => {
+  await prisma.plataformaEvento.deleteMany({
+    where: { staffUserId: { in: usuarios } },
+  });
   await prisma.user.deleteMany({ where: { id: { in: usuarios } } });
   await prisma.tenant.deleteMany({ where: { id: { in: tenants } } });
   await prisma.$disconnect();
@@ -121,6 +124,90 @@ afterAll(async () => {
 });
 
 describe('MFA de identidad: activación, login y recuperación', () => {
+  it('reemplaza un autenticador perdido usando recuperación sin desactivar MFA durante el proceso', async () => {
+    const anterior = await activar();
+    const config = await prisma.userMfa.findUniqueOrThrow({
+      where: { userId: usuario.id },
+    });
+    await expect(
+      mfa.reemplazar(sesion, 'incorrecta', anterior.codigosRecuperacion[0]),
+    ).rejects.toThrow('contraseña');
+    const nueva = await mfa.reemplazar(
+      sesion,
+      password,
+      anterior.codigosRecuperacion[0],
+    );
+    const pendiente = await prisma.userMfa.findUniqueOrThrow({
+      where: { userId: usuario.id },
+    });
+    expect(pendiente.secret).toEqual(config.secret);
+    expect(pendiente.activatedAt).toEqual(config.activatedAt);
+    const codigos = await mfa.confirmar(
+      sesion,
+      nueva.setupId,
+      token(nueva.secret),
+    );
+    await mfa.confirmarRecuperacion(sesion, codigos.versionRecuperacion);
+    await mfa.confirmarRecuperacion(sesion, codigos.versionRecuperacion);
+    const eventos = await prisma.plataformaEvento.findMany({
+      where: { staffUserId: usuario.id },
+    });
+    expect(
+      eventos.filter((e) => e.tipo === 'mfa_recuperacion_confirmada'),
+    ).toHaveLength(1);
+    expect(eventos.some((e) => e.tipo === 'mfa_reemplazada')).toBe(true);
+    const challenge = await desafio(true);
+    await expect(
+      auth.verificarMfa({
+        challengeToken: challenge.challengeToken,
+        codigo: anterior.codigosRecuperacion[1],
+      }),
+    ).rejects.toThrow('Código');
+    const entrada = await auth.verificarMfa({
+      challengeToken: challenge.challengeToken,
+      codigo: codigos.codigosRecuperacion[0],
+    });
+    expect(entrada.accessToken).toBeTruthy();
+  });
+
+  it('cancelar un reemplazo borra sólo la configuración pendiente y conserva el autenticador anterior', async () => {
+    const anterior = await activar();
+    const nueva = await mfa.reemplazar(
+      sesion,
+      password,
+      anterior.codigosRecuperacion[0],
+    );
+    await mfa.cancelar(sesion);
+    await expect(
+      mfa.confirmar(sesion, nueva.setupId, token(nueva.secret)),
+    ).rejects.toThrow('venció');
+    expect((await mfa.estado(sesion)).activo).toBe(true);
+    const challenge = await desafio(true);
+    expect(
+      (
+        await auth.verificarMfa({
+          challengeToken: challenge.challengeToken,
+          codigo: anterior.codigosRecuperacion[1],
+        })
+      ).accessToken,
+    ).toBeTruthy();
+  });
+  it('audita cambios MFA del equipo sin guardar secretos ni códigos recuperables', async () => {
+    const { alta, codigosRecuperacion } = await activar();
+    await mfa.gestionar(sesion, password, codigosRecuperacion[0], 'regenerar');
+    const eventos = await prisma.plataformaEvento.findMany({
+      where: { staffUserId: usuario.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(eventos.map((e) => e.tipo)).toEqual([
+      'mfa_activada',
+      'mfa_codigos_renovados',
+    ]);
+    expect(JSON.stringify(eventos)).not.toContain(alta.secret);
+    for (const codigo of codigosRecuperacion)
+      expect(JSON.stringify(eventos)).not.toContain(codigo);
+    expect(eventos.every((e) => e.datosJson === null)).toBe(true);
+  });
   it('requiere contraseña; el alta pendiente no activa MFA ni bloquea el login normal', async () => {
     await expect(mfa.iniciar(sesion, 'incorrecta')).rejects.toThrow(
       /contraseña/,
@@ -335,6 +422,10 @@ describe('MFA de identidad: activación, login y recuperación', () => {
   });
 
   it('renovar códigos invalida los anteriores; desactivar exige contraseña y un factor vigente', async () => {
+    await prisma.user.update({
+      where: { id: usuario.id },
+      data: { rolPlataforma: null },
+    });
     const { codigosRecuperacion } = await activar();
     await expect(
       mfa.gestionar(sesion, 'incorrecta', codigosRecuperacion[0], 'desactivar'),
@@ -485,6 +576,266 @@ describe('Perfil personal', () => {
         ForbiddenException,
       );
       await expect(mfa.estado(contexto)).rejects.toThrow(ForbiddenException);
+      await expect(mfa.olvidarDispositivos(contexto)).rejects.toThrow(
+        ForbiddenException,
+      );
     }
+  });
+});
+
+describe('MFA recordada por navegador durante 30 días', () => {
+  async function recordar(plataforma = false) {
+    const alta = await activar();
+    const config = await prisma.userMfa.findUniqueOrThrow({
+      where: { userId: usuario.id },
+    });
+    await mfa.confirmarRecuperacion(sesion, config.version);
+    const reto = await desafio(plataforma);
+    const respuesta = await auth.verificarMfa({
+      challengeToken: reto.challengeToken,
+      codigo: alta.codigosRecuperacion[0],
+      recordarDispositivo: true,
+    });
+    const dispositivo = respuesta.dispositivoRecordado!;
+    expect(dispositivo).toBeDefined();
+    return { ...alta, dispositivo, respuesta };
+  }
+  it('recuerda sólo después de validar MFA y almacena una huella, no el secreto', async () => {
+    const { dispositivo } = await recordar();
+    const guardado = await prisma.mfaDispositivo.findFirstOrThrow({
+      where: { userId: usuario.id },
+    });
+    expect(guardado.tokenHash).not.toBe(dispositivo.token);
+    expect(guardado.tokenHash).toBe(
+      createHash('sha256').update(dispositivo.token).digest('hex'),
+    );
+    expect(
+      guardado.venceEl.getTime() - guardado.verificadoEl.getTime(),
+    ).toBeGreaterThan(29.99 * 86400000);
+    expect(
+      guardado.venceEl.getTime() - guardado.verificadoEl.getTime(),
+    ).toBeLessThan(30.01 * 86400000);
+  });
+  it('un dispositivo válido evita el código pero sigue exigiendo la contraseña', async () => {
+    const { dispositivo } = await recordar();
+    await expect(
+      auth.login(
+        { email: usuario.email, password: 'incorrecta' },
+        '',
+        dispositivo.token,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const login = await auth.login(
+      { email: usuario.email, password },
+      '',
+      dispositivo.token,
+    );
+    expect(login).toHaveProperty('sessionId');
+    expect(login).not.toHaveProperty('requiereMfa');
+    const nueva = await prisma.authSession.findUniqueOrThrow({
+      where: { id: 'sessionId' in login ? login.sessionId : '' },
+    });
+    expect(nueva.mfaDispositivoId).not.toBeNull();
+    expect(nueva.mfaVerificadoEl).not.toBeNull();
+  });
+  it('sin cookie o con una alterada exige MFA y no renueva el vencimiento al usarla', async () => {
+    const { dispositivo } = await recordar();
+    const antes = await prisma.mfaDispositivo.findFirstOrThrow({
+      where: { userId: usuario.id },
+    });
+    expect(await auth.login({ email: usuario.email, password })).toHaveProperty(
+      'requiereMfa',
+      true,
+    );
+    expect(
+      await auth.login({ email: usuario.email, password }, '', '0'.repeat(64)),
+    ).toHaveProperty('requiereMfa', true);
+    await auth.login({ email: usuario.email, password }, '', dispositivo.token);
+    expect(
+      (
+        await prisma.mfaDispositivo.findUniqueOrThrow({
+          where: { id: antes.id },
+        })
+      ).venceEl,
+    ).toEqual(antes.venceEl);
+  });
+  it('al vencer los 30 días vuelve a solicitar el código', async () => {
+    const { dispositivo } = await recordar();
+    await prisma.mfaDispositivo.updateMany({
+      where: { userId: usuario.id },
+      data: { venceEl: new Date(0) },
+    });
+    expect(
+      await auth.login(
+        { email: usuario.email, password },
+        '',
+        dispositivo.token,
+      ),
+    ).toHaveProperty('requiereMfa', true);
+  });
+  it('recordar Empresa no habilita Plataforma', async () => {
+    const { dispositivo } = await recordar();
+    expect(
+      await auth.loginPlataforma(
+        { email: usuario.email, password },
+        dispositivo.token,
+      ),
+    ).toHaveProperty('requiereMfa', true);
+  });
+  it('el recuerdo de Plataforma conserva su comprobación de rol y segundo factor', async () => {
+    const { dispositivo } = await recordar(true);
+    const login = await auth.loginPlataforma(
+      { email: usuario.email, password },
+      dispositivo.token,
+    );
+    expect(login).toHaveProperty('staff');
+    expect(
+      await auth.login(
+        { email: usuario.email, password },
+        '',
+        dispositivo.token,
+      ),
+    ).toHaveProperty('requiereMfa', true);
+    await prisma.user.update({
+      where: { id: usuario.id },
+      data: { rolPlataforma: null },
+    });
+    await expect(
+      auth.loginPlataforma(
+        { email: usuario.email, password },
+        dispositivo.token,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+  it('un recuerdo de otra identidad no sirve aunque compartan contraseña y versión de MFA', async () => {
+    const { dispositivo } = await recordar();
+    const otro = await prisma.user.create({
+      data: {
+        email: `otra-identidad-${randomUUID()}@test.local`,
+        passwordHash: usuario.passwordHash,
+      },
+    });
+    usuarios.push(otro.id);
+    await prisma.membership.create({
+      data: {
+        tenantId: sesion.tenantId,
+        userId: otro.id,
+        rol: 'ADMINISTRADOR',
+      },
+    });
+    const config = await prisma.userMfa.findUniqueOrThrow({
+      where: { userId: usuario.id },
+    });
+    await prisma.userMfa.create({
+      data: {
+        userId: otro.id,
+        activatedAt: config.activatedAt,
+        version: config.version,
+        secret: config.secret!,
+      },
+    });
+    expect(
+      await auth.login({ email: otro.email, password }, '', dispositivo.token),
+    ).toHaveProperty('requiereMfa', true);
+  });
+  it('no evita la restricción de red de la empresa', async () => {
+    const { dispositivo } = await recordar();
+    await prisma.membership.update({
+      where: { id: sesion.membershipId },
+      data: { ipsPermitidas: ['192.168.1.0/24'] },
+    });
+    await expect(
+      auth.login(
+        { email: usuario.email, password },
+        '10.0.0.1',
+        dispositivo.token,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+  it('cambiar la contraseña invalida los dispositivos anteriores', async () => {
+    const { dispositivo } = await recordar();
+    await auth.cambiarPassword(sesion, {
+      actual: password,
+      nueva: 'Otra-clave-segura-1234',
+    });
+    expect(
+      await auth.login(
+        { email: usuario.email, password: 'Otra-clave-segura-1234' },
+        '',
+        dispositivo.token,
+      ),
+    ).toHaveProperty('requiereMfa', true);
+    expect((await mfa.estado(sesion)).dispositivosRecordados).toBe(0);
+  });
+  it('renovar los códigos de recuperación invalida todos los recuerdos', async () => {
+    const { dispositivo, codigosRecuperacion } = await recordar();
+    await mfa.gestionar(sesion, password, codigosRecuperacion[1], 'regenerar');
+    expect(
+      await auth.login(
+        { email: usuario.email, password },
+        '',
+        dispositivo.token,
+      ),
+    ).toHaveProperty('requiereMfa', true);
+  });
+  it('olvidarlos revoca los recuerdos y las sesiones que ingresaron gracias a ellos', async () => {
+    const { dispositivo } = await recordar();
+    const login = await auth.login(
+      { email: usuario.email, password },
+      '',
+      dispositivo.token,
+    );
+    if (!('sessionId' in login)) throw new Error('Falta sesión');
+    const resultado = await mfa.olvidarDispositivos({
+      ...sesion,
+      sessionId: login.sessionId,
+    });
+    expect(resultado.requiereLogin).toBe(true);
+    expect(
+      (
+        await prisma.authSession.findUniqueOrThrow({
+          where: { id: login.sessionId },
+        })
+      ).revokedAt,
+    ).not.toBeNull();
+    expect(
+      await auth.login(
+        { email: usuario.email, password },
+        '',
+        dispositivo.token,
+      ),
+    ).toHaveProperty('requiereMfa', true);
+  });
+  it('un código inválido no crea un dispositivo ni una sesión', async () => {
+    await activar();
+    const reto = await desafio();
+    const antes = await prisma.authSession.count({
+      where: { userId: usuario.id },
+    });
+    await expect(
+      auth.verificarMfa({
+        challengeToken: reto.challengeToken,
+        codigo: 'CODIGO-INVALIDO',
+        recordarDispositivo: true,
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(
+      await prisma.mfaDispositivo.count({ where: { userId: usuario.id } }),
+    ).toBe(0);
+    expect(
+      await prisma.authSession.count({ where: { userId: usuario.id } }),
+    ).toBe(antes);
+  });
+  it('no crea recuerdos si no se eligió la opción', async () => {
+    const { codigosRecuperacion } = await activar();
+    const reto = await desafio();
+    const respuesta = await auth.verificarMfa({
+      challengeToken: reto.challengeToken,
+      codigo: codigosRecuperacion[0],
+    });
+    expect(respuesta.dispositivoRecordado).toBeUndefined();
+    expect(
+      await prisma.mfaDispositivo.count({ where: { userId: usuario.id } }),
+    ).toBe(0);
   });
 });

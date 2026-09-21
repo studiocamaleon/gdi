@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -37,7 +38,11 @@ type ItemCotizadoConCupon = {
 
 @Injectable()
 export class CuponesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
+  ) {}
 
   async listar(auth: CurrentAuth, filtros: ListarCuponesDto) {
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
@@ -105,6 +110,7 @@ export class CuponesService {
   }
 
   async crear(auth: CurrentAuth, dto: CrearCuponDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cupones');
     const codigo = normalizarCodigoCupon(dto.codigo);
     this.validarReglas(
       dto.tipo,
@@ -157,6 +163,7 @@ export class CuponesService {
   }
 
   async actualizar(auth: CurrentAuth, id: string, dto: ActualizarCuponDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cupones');
     const existente = await this.exigir(auth, id);
     const tipo = dto.tipo ?? existente.tipo;
     const valor = dto.valor ?? Number(existente.valor);
@@ -247,6 +254,7 @@ export class CuponesService {
   }
 
   async validar(auth: CurrentAuth, dto: ValidarCuponDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cupones');
     const [cupon, regional] = await Promise.all([
       this.prisma.cupon.findUnique({
         where: {
@@ -304,6 +312,7 @@ export class CuponesService {
       ),
     );
     if (ids.length === 0) return;
+    await this.capacidades.exigir(auth.tenantId, 'cupones', tx);
     const [cupones, referencias, regional, actor] = await Promise.all([
       tx.cupon.findMany({
         where: { tenantId: auth.tenantId, id: { in: ids } },

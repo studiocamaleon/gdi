@@ -565,3 +565,12 @@ Un tercero, no de código: Turbopack sirvió el `globals.css` viejo después de
 una edición in-place (el bloque agregado al final sí estaba, la regla insertada
 en el medio no). Ya está documentado en la memoria del proyecto; conviene
 verificar la regla en el bundle antes de dar por buena una diferencia visual.
+
+
+## Actualización de cupos — 21/09/2026
+
+La comprobación previa sin reserva queda reemplazada por una reserva transaccional por empresa. `Archivo.bytesReservados` y `reservaHasta` describen las cargas en curso; `Tenant.bytesArchivos` sigue contando sólo `LISTO`. Confirmar revalida los bytes reales, la cuota vigente y el estado bajo el lock de empresa. PDF generados, papelera y reconciliación participan del mismo control.
+
+`POST /archivos/:id/cancelar-subida` libera sólo reservas incompletas; nunca borra un archivo confirmado. `PURGANDO` bloquea restauraciones/confirmaciones durante la limpieza. Las claves canceladas se conservan 24 horas para limpiar transferencias tardías y un fallo de storage conserva el rastro para el siguiente barrido.
+
+Reglas, compatibilidad y pruebas: [Cupo de almacenamiento](planes-evaluador-desacople-2026-09-21.md#cupo-de-almacenamiento--21092026).

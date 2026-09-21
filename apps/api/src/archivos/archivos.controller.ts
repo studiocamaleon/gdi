@@ -92,6 +92,15 @@ export class ArchivosController {
     return this.service.confirmar(auth, id, dto);
   }
 
+  @Post(':id/cancelar-subida')
+  async cancelarSubida(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.service.cancelarSubida(auth, id);
+    return { ok: true };
+  }
+
   /**
    * Descarga. Responde 302 a una URL firmada de 60 s: la banda va del storage
    * al navegador sin pasar por el API.

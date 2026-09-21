@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   Optional,
   Logger,
@@ -79,6 +80,8 @@ export class PlanificacionEntregasService {
     private readonly db: PrismaService,
     private readonly eta: EtaService,
     @Optional() private readonly ordenes?: OrdenesTrabajoService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(db),
   ) {}
 
   private async origen(
@@ -310,6 +313,7 @@ export class PlanificacionEntregasService {
     dto: SolicitarPlanEntregaDto,
     borrador = false,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada');
     const origen = await this.origen(auth.tenantId, itemId, borrador);
     const claves = new Set<string>();
     let anterior = '';
@@ -659,6 +663,7 @@ export class PlanificacionEntregasService {
       throw new ForbiddenException(
         'Necesitás permiso de supervisión de producción.',
       );
+    await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada');
     const origen = await this.origen(auth.tenantId, itemId, borrador);
     const revision = await this.db.planEntregaRevision.findFirst({
       where: {
@@ -797,6 +802,7 @@ export class PlanificacionEntregasService {
     dto: ElegirPlanEntregaDto,
     borrador = false,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada');
     const origen = await this.origen(auth.tenantId, itemId, borrador);
     const plan = await this.db.planEntregaItem.findFirst({
       where: {
@@ -1037,6 +1043,7 @@ export class PlanificacionEntregasService {
     ) => Promise<CotizarOutput>,
     signal?: AbortSignal,
   ) {
+    await this.capacidades.exigir(tenantId, 'planificacion_avanzada');
     const revision = await this.db.planEntregaRevision.findFirst({
       where: { id: revisionId, tenantId },
       include: { plan: true },

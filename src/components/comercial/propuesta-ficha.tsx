@@ -1,5 +1,5 @@
 "use client";
-import { useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import { useImpresionDirecta, useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { TipoCambioPanel } from "./tipo-cambio-panel";
 import type { TipoCambioSnapshot } from "@/lib/tipo-cambio-api";
@@ -3868,6 +3868,8 @@ export function OrdenProductoDetalle({
   /** Orden sin comprobante fiscal: la fila oculta Imp. y muestra Total neto. */
   sinComprobante?: boolean;
 }) {
+  const conPlanificacion = useCapacidad("planificacion_avanzada");
+  const conEta = useCapacidad("eta_capacidad");
   const { className: legacyTheme, ...legacyScope } = useLegacyDesignScope();
   const { zonaHoraria } = useConfigRegional();
   const [innerTab, setInnerTab] = React.useState<InnerTab>("specs");
@@ -4117,6 +4119,7 @@ export function OrdenProductoDetalle({
                       )}
                     </div>
                     {(() => {
+                      if (!conEta) return null;
                       const eta = describirEta(
                         etaSistema,
                         item.fechaEntrega ?? fechaEstimada,
@@ -4163,8 +4166,7 @@ export function OrdenProductoDetalle({
                     })()}
                   </>
                 ) : null}
-                {planificarEntregas ||
-                entregasPrevias ||
+                {(conPlanificacion && (planificarEntregas || entregasPrevias)) ||
                 item.distribucionEntregas ? (
                   <PlanificacionEntregas
                     itemId={item.id}
@@ -4172,7 +4174,7 @@ export function OrdenProductoDetalle({
                     cantidad={item.cantidad}
                     previa={entregasPrevias}
                     distribucion={item.distribucionEntregas}
-                    editable={!!planificarEntregas || !!entregasPrevias}
+                    editable={conPlanificacion && (!!planificarEntregas || !!entregasPrevias)}
                     onGuardada={onDistribucionGuardada}
                   />
                 ) : null}
@@ -4973,6 +4975,11 @@ function PropuestaFichaContenido({
   // QR que el cliente presenta en el mostrador para retirar.
   const [etiquetaOpen, setEtiquetaOpen] = React.useState(false);
   const impresionDirecta = useImpresionDirecta();
+  const conFidelizacion = useCapacidad("fidelizacion");
+  const conCupones = useCapacidad("cupones");
+  const conProyectos = useCapacidad("proyectos");
+  const conEta = useCapacidad("eta_capacidad");
+  const conPrevision = useCapacidad("prevision_materiales");
   const impresionDocumentos = useImpresionDocumentos();
   const [confirmarEmisionDocumentos, setConfirmarEmisionDocumentos] = React.useState<"nueva" | "borrador" | null>(null);
   const imprimirAlEmitirRef = React.useRef(false);
@@ -5106,6 +5113,7 @@ function PropuestaFichaContenido({
   >([]);
   React.useEffect(() => {
     let vigente = true;
+    if (!conProyectos) return;
     if (!clienteId) {
       setCampanasCliente([]);
       setProyectoCampanaId("");
@@ -5125,7 +5133,7 @@ function PropuestaFichaContenido({
     return () => {
       vigente = false;
     };
-  }, [clienteId]);
+  }, [clienteId, conProyectos]);
   // Clientes dados de alta escaneando el DNI durante ESTA sesión: no vienen
   // en `initialClientes` (se cargó en el server) y sin esto el combobox no
   // tendría cómo mostrar al recién creado.
@@ -5220,8 +5228,10 @@ function PropuestaFichaContenido({
   // ── Demora estimada por el sistema (fase 3, simulación de flujo) ──────
   // Sólo en creación/borrador: una orden emitida ya está EN las colas del
   // tablero — volver a simularla la contaría dos veces (D10 del doc).
-  const conDemoraSistema = !orden || orden.estado === "borrador";
-  const previsionMateriales = usePrevisionMateriales(items, conDemoraSistema);
+  const cotizando = !orden || orden.estado === "borrador";
+  const conDemoraSistema = cotizando && conEta;
+  const conPrevisionMateriales = cotizando && conPrevision;
+  const previsionMateriales = usePrevisionMateriales(items, conPrevisionMateriales);
   const [colasTaller, setColasTaller] = React.useState<Awaited<
     ReturnType<typeof getContextoPrevision>
   > | null>(null);
@@ -7032,6 +7042,7 @@ function PropuestaFichaContenido({
   const aplicarCuponCodigo = React.useCallback(
     async (codigo: string): Promise<boolean> => {
       if (
+        !conCupones ||
         cuponEnCurso.current ||
         descuentoAplicando ||
         modoOrden ||
@@ -7083,6 +7094,7 @@ function PropuestaFichaContenido({
     },
     [
       aplicarCupon,
+      conCupones,
       descuentoAplicando,
       modoOrden,
       emitiendo,
@@ -7098,6 +7110,7 @@ function PropuestaFichaContenido({
   // conviene explicarlo con un aviso, no quedarse mudo.
   useEscaneoCodigo({
     activo:
+      conCupones &&
       !modoOrden &&
       descuentoTarget == null &&
       !cuponAbierto &&
@@ -7410,7 +7423,7 @@ function PropuestaFichaContenido({
                           setDescuentoTarget({ scope: "orden", itemId: null })
                   }
                   onCuponOrden={
-                    modoOrden
+                    modoOrden || !conCupones
                       ? undefined
                       : () => setCuponAbierto((value) => !value)
                   }
@@ -7422,7 +7435,7 @@ function PropuestaFichaContenido({
                   }
                   togglingFiscal={togglingFiscal}
                 />
-                {cuponAbierto && !modoOrden && (
+                {conCupones && cuponAbierto && !modoOrden && (
                   <OrdenCuponField
                     id="orden-cupon"
                     isDisabled={
@@ -7758,7 +7771,7 @@ function PropuestaFichaContenido({
                       )}
                     </FieldCard>
                   }
-                  campana={
+                  campana={conProyectos ? (
                     <FieldCard
                       label="Campaña"
                       icon={<FolderIcon />}
@@ -7814,7 +7827,7 @@ function PropuestaFichaContenido({
                         </Tooltip>
                       )}
                     </FieldCard>
-                  }
+                  ) : undefined}
                   canalVenta={
                     campoEditable("canalVenta") ? (
                       <CanalVentaSelector
@@ -7870,6 +7883,7 @@ function PropuestaFichaContenido({
                         )}
                       </FieldCard>
                       {(() => {
+                        if (!conEta) return null;
                         const porProducto = items.some((i) =>
                           !orden
                             ? !!entregasPrevias.fechaPara(i)
@@ -7969,7 +7983,7 @@ function PropuestaFichaContenido({
               </>
             }
           >
-            {conDemoraSistema && items.length > 0 && (
+            {conPrevisionMateriales && items.length > 0 && (
               <PrevisionMaterialesPanel
                 data={previsionMateriales.data}
                 error={previsionMateriales.error}
@@ -8258,7 +8272,7 @@ function PropuestaFichaContenido({
                     </div>
                   </div>
                 ) : null}
-                {!modoOrden ? (
+                {!modoOrden && conFidelizacion ? (
                   <FidelizacionCotizador
                     clienteId={clienteId}
                     margen={costosFidelizacion.margenMonto}

@@ -8,6 +8,7 @@ import { Reflector } from '@nestjs/core';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { PERMITIR_SUSCRIPCION_INACTIVA_KEY } from './permitir-suscripcion-inactiva.decorator';
+import { resolverAccesoEmpresa } from './acceso-empresa';
 
 /**
  * Una suscripción suspendida conserva lectura y exportación, pero no puede
@@ -38,15 +39,21 @@ export class SuscripcionAccesoGuard implements CanActivate {
 
     const suscripcion = await this.prisma.suscripcion.findFirst({
       where: { tenantId: request.auth.tenantId },
-      select: { estado: true },
+      select: {
+        estado: true,
+        proveedor: true,
+        estadoProveedor: true,
+        trialHasta: true,
+        graciaHasta: true,
+      },
     });
     // Los tenants legacy sin suscripción conservan su acceso actual.
-    if (!suscripcion || suscripcion.estado === 'activa') return true;
+    const acceso = resolverAccesoEmpresa(true, suscripcion);
+    if (acceso.modo === 'operativo') return true;
 
     throw new HttpException(
       {
-        message:
-          'La cuenta está en modo solo lectura. Actualizá el pago desde Plan y facturación para volver a operar.',
+        message: `${acceso.descripcion} Revisá Plan y facturación para volver a operar.`,
         code: 'SUSCRIPCION_SOLO_LECTURA',
       },
       402,

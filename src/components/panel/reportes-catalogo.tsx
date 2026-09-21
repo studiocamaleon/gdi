@@ -1,4 +1,5 @@
 "use client";
+import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
 
 import Link from "next/link";
 import {
@@ -28,7 +29,8 @@ const DESCRIPCIONES: Record<ReporteCategoria, string> = {
 
 export function ReportesCatalogo() {
   const puede = usePuedeFn();
-  const visibles = reportesVisibles(puede);
+  const funciones = useFuncionesPlan();
+  const visibles = reportesVisibles(puede, funciones);
 
   return (
     <div className={styles.catalogo}>

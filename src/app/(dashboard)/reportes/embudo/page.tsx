@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { ReporteEmbudo } from "@/components/panel/reporte-embudo";
 import { getPanelEmbudo } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
@@ -11,6 +13,7 @@ export default async function Page({
 }: {
   searchParams: Promise<ParametrosPeriodo>;
 }) {
+  if (!(await tieneCapacidad("reportes_resumen"))) return <FuncionNoIncluida />;
   const parametros = await searchParams;
   const d = await getPanelEmbudo(
     rangoDeParametros(parametros, await zonaHorariaDelTenant()),

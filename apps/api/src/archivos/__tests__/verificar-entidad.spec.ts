@@ -4,7 +4,6 @@ import { ArchivoScope } from '@prisma/client';
 import { ArchivosService } from '../archivos.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { StorageDriver } from '../storage/storage.driver';
-import type { SuscripcionesService } from '../../suscripciones/suscripciones.service';
 
 /**
  * A qué entidad se puede adjuntar un archivo.
@@ -50,7 +49,6 @@ function armar(encontrado: boolean) {
   const service = new ArchivosService(
     prisma,
     {} as unknown as StorageDriver,
-    {} as unknown as SuscripcionesService,
     {} as never,
   );
   // `verificarEntidad` es privado a propósito: es una comprobación interna del
@@ -78,7 +76,9 @@ describe('a qué entidad se adjunta', () => {
   /** El que faltaba, escrito aparte para que se lea el caso. */
   it('EGRESO encuentra su egreso (el bug que motivó esto)', async () => {
     const { verificar, buscados } = armar(true);
-    await expect(verificar(ArchivoScope.EGRESO, 'egr1')).resolves.toBeUndefined();
+    await expect(
+      verificar(ArchivoScope.EGRESO, 'egr1'),
+    ).resolves.toBeUndefined();
     expect(buscados).toEqual(['egreso']);
   });
 

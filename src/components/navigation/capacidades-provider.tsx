@@ -1,6 +1,10 @@
 "use client";
 import { createContext, useContext, type ReactNode } from "react";
-export type Capacidades = { impresionDirecta?: boolean };
+import { funcionesCompatibles, type ClaveCapacidad } from "@/lib/capacidades";
+export type Capacidades = {
+  impresionDirecta?: boolean;
+  funciones?: Record<string, boolean>;
+};
 const Contexto = createContext<Capacidades>({});
 export function CapacidadesProvider({
   capacidades,
@@ -15,4 +19,10 @@ export function CapacidadesProvider({
 }
 export function useImpresionDirecta() {
   return useContext(Contexto).impresionDirecta === true;
+}
+export function useFuncionesPlan() {
+  return useContext(Contexto).funciones ?? funcionesCompatibles;
+}
+export function useCapacidad(clave: ClaveCapacidad) {
+  return useFuncionesPlan()[clave] === true;
 }

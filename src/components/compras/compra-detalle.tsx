@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useEffect, useRef, useState } from "react";
 import { Chip, Input, TextArea } from "@heroui/react";
 import Link from "next/link";
@@ -50,6 +51,7 @@ export function CompraDetalle({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const conRecepciones = useCapacidad("recepciones");
   const [compra, setCompra] = useState<Compra | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -514,11 +516,12 @@ export function CompraDetalle({
                       Registrar pedido
                     </ActionButton>
                   )}
-                  {["EMITIDA", "PARCIAL"].includes(compra.estado) && (
-                    <ActionButton onPress={abrirRecepcion}>
-                      Recibir materiales
-                    </ActionButton>
-                  )}
+                  {conRecepciones &&
+                    ["EMITIDA", "PARCIAL"].includes(compra.estado) && (
+                      <ActionButton onPress={abrirRecepcion}>
+                        Recibir materiales
+                      </ActionButton>
+                    )}
                   {["BORRADOR", "EMITIDA"].includes(compra.estado) && (
                     <ActionButton
                       variant="outline"

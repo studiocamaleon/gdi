@@ -1,6 +1,12 @@
 import { cookies } from "next/headers";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
+import {
+  MFA_COOKIES,
+  MFA_HEADERS,
+  MFA_RECORDADO_HEADER,
+  MFA_DISPOSITIVO_MAX_AGE,
+} from "../../../../../apps/api/src/auth/mfa-dispositivo-cookie";
 
 const DEFAULT_API_URL = "http://localhost:3001/api";
 
@@ -44,6 +50,17 @@ async function handler(
     headers.set("authorization", `Bearer ${token}`);
   }
 
+  const ruta = path.join("/");
+  if (
+    ["auth/login", "auth/login-plataforma", "auth/mfa/verificar"].includes(ruta)
+  ) {
+    for (const alcance of ["tenant", "plataforma"] as const) {
+      const dispositivo = cookieStore.get(MFA_COOKIES[alcance])?.value;
+      if (dispositivo && /^[a-f0-9]{64}$/.test(dispositivo))
+        headers.set(MFA_HEADERS[alcance], dispositivo);
+    }
+  }
+
   const method = request.method;
   const hasBody = method !== "GET" && method !== "HEAD";
 
@@ -67,6 +84,39 @@ async function handler(
       JSON.stringify({ message: "No se pudo conectar con el API." }),
       { status: 503, headers: { "content-type": "application/json" } },
     );
+  }
+
+  if (response.ok && ruta === "auth/mfa/verificar") {
+    const raw = response.headers.get(MFA_RECORDADO_HEADER);
+    if (raw) {
+      let recordado: { token?: unknown; alcance?: unknown } | null = null;
+      try {
+        recordado = JSON.parse(raw);
+      } catch {
+        // La sesión puede continuar, pero un encabezado inválido nunca crea confianza.
+      }
+      if (
+        recordado &&
+        typeof recordado.token === "string" &&
+        /^[a-f0-9]{64}$/.test(recordado.token) &&
+        (recordado.alcance === "tenant" || recordado.alcance === "plataforma")
+      ) {
+        cookieStore.set(MFA_COOKIES[recordado.alcance], recordado.token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "strict",
+          path: "/",
+          maxAge: MFA_DISPOSITIVO_MAX_AGE,
+        });
+      }
+    }
+  }
+  if (
+    response.ok &&
+    method === "DELETE" &&
+    ruta === "auth/perfil/mfa/dispositivos"
+  ) {
+    for (const nombre of Object.values(MFA_COOKIES)) cookieStore.delete(nombre);
   }
 
   const responseHeaders = new Headers();

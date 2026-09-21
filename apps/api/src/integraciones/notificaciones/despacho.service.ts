@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -50,6 +51,8 @@ export class DespachoService {
     private readonly prisma: PrismaService,
     private readonly integraciones: IntegracionesService,
     private readonly wati: WatiClient,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /**
@@ -98,6 +101,11 @@ export class DespachoService {
       where: { id },
     });
     if (!n) return { estado: 'nada' };
+    if (!(await this.capacidades.puedeOperar(n.tenantId, 'whatsapp_automatico'))) {
+      // Conservar el aviso pendiente y su trazabilidad, sin enviarlo ni consumir intentos.
+      await this.liberar(id);
+      return { estado: 'pendiente', motivo: 'Los avisos automáticos no están disponibles en el plan.' };
+    }
 
     // Mismo criterio que al encolar: sin fila, apagado.
     const config = await this.prisma.configuracionNotificaciones.findFirst();

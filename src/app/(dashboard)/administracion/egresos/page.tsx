@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { EgresosView } from "@/components/administracion/egresos-view";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 import {
@@ -22,7 +24,9 @@ export default async function EgresosPage({
 }: {
   searchParams: Promise<{ accion?: string }>;
 }) {
+  if (!(await tieneCapacidad("cuentas_pagar"))) return <FuncionNoIncluida />;
   const params = await searchParams;
+  const conGastosFijos = await tieneCapacidad("gastos_fijos");
   // Todo en paralelo y tolerante: una lista vacía muestra el estado vacío, que
   // es mejor que una pantalla de error por un catálogo sin cargar.
   const [
@@ -33,16 +37,15 @@ export default async function EgresosPage({
     metodosPago,
     cuentas,
     gastosFijos,
-  ] =
-    await Promise.all([
-      getEgresos({}).then((r) => r.egresos),
-      getResumenEgresos(),
-      getCategoriasEgreso(),
-      getProveedores(),
-      getMetodosPago(),
-      getCuentasFondos(),
-      getGastosFijos(),
-    ]);
+  ] = await Promise.all([
+    getEgresos({}).then((r) => r.egresos),
+    getResumenEgresos(),
+    getCategoriasEgreso(),
+    getProveedores(),
+    getMetodosPago(),
+    getCuentasFondos(),
+    conGastosFijos ? getGastosFijos() : Promise.resolve([]),
+  ]);
 
   return (
     <EgresosView

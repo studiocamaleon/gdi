@@ -1,3 +1,5 @@
+import { getCurrentTenantId } from '../common/tenant-context';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   EstadoIntegracion,
@@ -73,6 +75,8 @@ export class IntegracionesService {
     private readonly secretos: SecretosService,
     private readonly wati: WatiClient,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /** ¿Se pueden guardar credenciales en este entorno? */
@@ -425,6 +429,10 @@ export class IntegracionesService {
     motivo?: string;
     parametros?: Record<string, string>;
   }> {
+    await this.capacidades.exigir(
+      getCurrentTenantId() ?? '',
+      'whatsapp_automatico',
+    );
     const cred = await this.credencialesWati();
     if (!cred) throw new NotFoundException('Wati no está conectada.');
 
@@ -480,6 +488,12 @@ export class IntegracionesService {
    * acá hacia un controller.
    */
   async credencialesWati(): Promise<CredencialesWati | null> {
+    if (
+      !(await this.capacidades.puedeOperar(
+        getCurrentTenantId() ?? '',
+        'whatsapp_automatico',
+      ))
+    ) return null;
     const fila = await this.prisma.integracionTenant.findFirst({
       where: {
         proveedor: ProveedorIntegracion.WATI,

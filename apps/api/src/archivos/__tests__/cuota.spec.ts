@@ -3,7 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { ArchivosService } from '../archivos.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { StorageDriver } from '../storage/storage.driver';
-import type { SuscripcionesService } from '../../suscripciones/suscripciones.service';
+import { exigirEspacio } from '../cupo-almacenamiento';
 
 /**
  * De dónde sale el tope de espacio.
@@ -39,6 +39,15 @@ function armar({
         cuotaBytesArchivos: ajusteBytes === null ? null : BigInt(ajusteBytes),
       }),
     },
+    suscripcion: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue(
+          planNombre
+            ? { plan: { nombre: planNombre, featuresJson: { storageGb } } }
+            : null,
+        ),
+    },
     archivo: {
       groupBy: jest.fn().mockResolvedValue([]),
       aggregate: jest
@@ -47,28 +56,13 @@ function armar({
     },
   } as unknown as PrismaService;
 
-  const suscripciones = {
-    limites: jest.fn().mockResolvedValue({
-      planNombre,
-      usuariosMax: null,
-      ordenesMesMax: null,
-      storageGb,
-    }),
-  } as unknown as SuscripcionesService;
+  (prisma as unknown as { $transaction: unknown }).$transaction = (
+    cb: (db: unknown) => unknown,
+  ) => cb(prisma);
 
-  const service = new ArchivosService(
-    prisma,
-    {} as StorageDriver,
-    suscripciones,
-    {} as never,
-  );
-  // `verificarCuota` es privado: es un guard interno, no una operación pública.
+  const service = new ArchivosService(prisma, {} as StorageDriver, {} as never);
   const verificar = (bytes: number) =>
-    (
-      service as unknown as {
-        verificarCuota(tenantId: string, bytes: number): Promise<void>;
-      }
-    ).verificarCuota('t1', bytes);
+    exigirEspacio(prisma as never, 't1', BigInt(bytes));
 
   return { service, verificar };
 }
@@ -121,7 +115,9 @@ describe('cuota de almacenamiento', () => {
     it('rechaza la subida que se pasa del plan', async () => {
       const { verificar } = armar({ storageGb: 5, usadoBytes: 4 * GB });
 
-      await expect(verificar(2 * GB)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(verificar(2 * GB)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
       // El texto tiene que ofrecer la salida correcta: acá frena el plan.
       await expect(verificar(2 * GB)).rejects.toThrow(/plan con más espacio/);
     });

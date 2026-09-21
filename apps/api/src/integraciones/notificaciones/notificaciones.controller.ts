@@ -1,3 +1,4 @@
+import { RequiereAlgunaCapacidad } from '../../suscripciones/capacidad.guard';
 import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 
@@ -16,6 +17,7 @@ import { Permiso } from '../../auth/permiso.decorator';
  * desde el número oficial de la empresa.
  */
 @Permiso('configuracion.ver')
+@RequiereAlgunaCapacidad('whatsapp_automatico', 'whatsapp_web')
 @Controller('integraciones/notificaciones')
 export class NotificacionesController {
   constructor(private readonly service: NotificacionesService) {}

@@ -161,6 +161,7 @@ const ordenes = new OrdenesTrabajoService(
   db,
   {
     capturarEmision: jest.fn().mockResolvedValue(undefined),
+    sincronizarAsignaciones: jest.fn().mockResolvedValue(undefined),
     contextoSimulacion: async () => taller,
   } as never,
   {} as never,

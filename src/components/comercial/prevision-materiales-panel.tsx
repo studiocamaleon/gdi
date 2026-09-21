@@ -22,6 +22,7 @@ export function PrevisionMaterialesPanel({
   onRefresh: () => void;
   entregasDistribuidas?: boolean;
 }) {
+  if (data?.estado === "no_incluido" && !error) return null;
   const titulo = loading
     ? "Consultando materiales…"
     : error

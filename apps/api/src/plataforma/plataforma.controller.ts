@@ -15,10 +15,16 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsInt,
+  Min,
+  Max,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
+import { EmpresasPlataformaService } from './empresas.service';
+import { PermitirEnrolamientoPlataforma } from '../auth/enrolamiento-plataforma';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { SinTenant } from '../common/sin-tenant.decorator';
@@ -31,6 +37,39 @@ import { PlataformaService } from './plataforma.service';
 export class CambiarPlanDto {
   @IsUUID()
   planId: string;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MinLength(3)
+  @MaxLength(300)
+  motivo: string;
+}
+
+export class PaginaPlataformaDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  pagina = 1;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limite = 25;
+}
+
+export class EmpresasConsultaDto extends PaginaPlataformaDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @IsOptional()
+  @IsIn(['habilitado', 'bloqueado'])
+  acceso?: 'habilitado' | 'bloqueado';
 }
 
 export class DescribirPlanDto {
@@ -65,6 +104,9 @@ export class VincularPaddleDto {
 }
 
 export class SuspenderTenantDto {
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @MinLength(3)
   @MaxLength(300)
@@ -116,7 +158,47 @@ export class PlataformaController {
     private readonly service: PlataformaService,
     private readonly impersonacion: ImpersonacionService,
     private readonly negocio: NegocioService,
+    private readonly empresas: EmpresasPlataformaService,
   ) {}
+
+  @Get('contexto')
+  @PermitirEnrolamientoPlataforma()
+  async contexto(@CurrentSession() auth: CurrentAuth) {
+    return {
+      ...(await this.empresas.contexto(
+        auth.userId,
+        auth.esPlataforma === true,
+      )),
+      requiereSeguridad:
+        !auth.esPlataforma || auth.plataformaMfaPendiente !== false,
+    };
+  }
+
+  @Get('empresas')
+  listarEmpresas(@Query() consulta: EmpresasConsultaDto) {
+    return this.empresas.listar(consulta);
+  }
+
+  @Get('empresas/:id')
+  detalleEmpresa(@Param('id', ParseUUIDPipe) id: string) {
+    return this.empresas.detalle(id);
+  }
+
+  @Get('empresas/:id/historial')
+  historialEmpresa(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() consulta: PaginaPlataformaDto,
+  ) {
+    return this.empresas.historial(id, consulta.pagina, consulta.limite);
+  }
+
+  @Get('empresas/:id/usuarios')
+  usuariosEmpresa(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() consulta: PaginaPlataformaDto,
+  ) {
+    return this.empresas.usuarios(id, consulta.pagina, consulta.limite);
+  }
 
   /** La consola completa: resumen + tenants + auditoría + quién mira. */
   @Get('consola')
@@ -200,8 +282,8 @@ export class PlataformaController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CambiarPlanDto,
   ) {
-    await this.service.cambiarPlan(auth.userId, id, dto.planId);
-    return this.service.consola(auth.userId);
+    await this.service.cambiarPlan(auth.userId, id, dto.planId, dto.motivo);
+    return this.empresas.detalle(id);
   }
 
   @Post('tenants/:id/suspender')
@@ -212,7 +294,7 @@ export class PlataformaController {
     @Body() dto: SuspenderTenantDto,
   ) {
     await this.service.suspenderTenant(auth.userId, id, dto.motivo);
-    return this.service.consola(auth.userId);
+    return this.empresas.detalle(id);
   }
 
   @Post('tenants/:id/reactivar')
@@ -220,9 +302,10 @@ export class PlataformaController {
   async reactivar(
     @CurrentSession() auth: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SuspenderTenantDto,
   ) {
-    await this.service.reactivarTenant(auth.userId, id);
-    return this.service.consola(auth.userId);
+    await this.service.reactivarTenant(auth.userId, id, dto.motivo);
+    return this.empresas.detalle(id);
   }
 
   /** Alta de tenant + invitación del primer admin. Devuelve el link. */

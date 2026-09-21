@@ -22,6 +22,8 @@ import type { PrismaService } from '../../prisma/prisma.service';
 function contextoCon(request: Record<string, unknown>): ExecutionContext {
   return {
     switchToHttp: () => ({ getRequest: () => request }),
+    getHandler: () => () => {},
+    getClass: () => class {},
   } as unknown as ExecutionContext;
 }
 
@@ -34,9 +36,23 @@ function guardCon(
   return new PlataformaGuard(prisma);
 }
 
-const AUTH = { userId: 'u1' };
+const AUTH = {
+  userId: 'u1',
+  esPlataforma: true,
+  plataformaMfaPendiente: false,
+};
 
 describe('PlataformaGuard', () => {
+  it.each([
+    { impersonacion: { actorUserId: 'u1' } },
+    { mcp: { credencialId: 'credencial' } },
+  ])('rechaza sesiones delegadas: %o', async (delegada) => {
+    await expect(
+      guardCon({ activo: true, rolPlataforma: 'ADMIN' }).canActivate(
+        contextoCon({ auth: { ...AUTH, ...delegada } }),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
   it('sin auth en el request rebota (el AuthGuard global tendría que haber corrido)', async () => {
     await expect(guardCon(null).canActivate(contextoCon({}))).rejects.toThrow(
       UnauthorizedException,

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -121,6 +122,8 @@ export class DesarrolloDocumentalService {
     private readonly enlaces: EnlacesPublicosService,
     private readonly archivos: ArchivosService,
     @Optional() private readonly eventosSistema?: EventosSistemaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /**
@@ -138,6 +141,7 @@ export class DesarrolloDocumentalService {
       actorNombre: string;
     },
   ) {
+    if (!(await this.capacidades.incluida(args.tenantId, 'aprobacion_arte', tx))) return;
     const orden = await tx.ordenTrabajo.findFirst({
       where: {
         id: args.ordenId,

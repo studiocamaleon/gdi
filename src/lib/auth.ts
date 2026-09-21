@@ -167,12 +167,20 @@ export async function acceptInvitation(token: string, password?: string) {
   );
 }
 
-export function verificarMfa(challengeToken: string, codigo: string) {
+export function verificarMfa(
+  challengeToken: string,
+  codigo: string,
+  recordarDispositivo = false,
+) {
   return apiRequest<AuthResponse | PlatformAuthResponse>(
     "/auth/mfa/verificar",
     {
       method: "POST",
-      body: JSON.stringify({ challengeToken, codigo }),
+      body: JSON.stringify({
+        challengeToken,
+        codigo,
+        ...(recordarDispositivo ? { recordarDispositivo } : {}),
+      }),
     },
     { auth: false },
   );

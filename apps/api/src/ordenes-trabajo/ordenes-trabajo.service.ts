@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
   cambioDelSnapshot,
@@ -740,6 +741,8 @@ export class OrdenesTrabajoService {
     private readonly desarrolloDocumental: DesarrolloDocumentalService,
     @Optional() private readonly eventosSistema?: EventosSistemaService,
     @Optional() private readonly reservasMaterial?: ReservasMaterialService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /** Adopción transaccional compartida por la creación y la edición del plan. */
@@ -749,6 +752,8 @@ export class OrdenesTrabajoService {
     itemId: string,
     retirar = false,
   ) {
+    if (!retirar)
+      await this.capacidades.exigir(tenantId, 'planificacion_avanzada', tx);
     if (!retirar)
       await validarReprogramacionAlEmitir(tx, this.eta, tenantId, itemId);
     const trabajos = await materializarLotesEntrega(
@@ -789,6 +794,7 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     itemIds: string[],
   ): Promise<void> {
+    if (!(await this.capacidades.incluida(auth.tenantId, 'recorridos_fabricacion'))) return;
     const pendientes = [...itemIds];
     const visitados = new Set<string>();
     for (let indice = 0; indice < pendientes.length; indice++) {
@@ -1368,6 +1374,7 @@ export class OrdenesTrabajoService {
     const proyectoCampanaId =
       payload.proyectoCampanaId ?? cotizacion?.proyectoCampanaId ?? null;
     if (proyectoCampanaId) {
+      await this.capacidades.exigir(auth.tenantId, 'proyectos');
       if (!payload.clienteId) {
         throw new BadRequestException(
           'Para asignar una campaña, la orden debe tener cliente.',
@@ -1601,6 +1608,8 @@ export class OrdenesTrabajoService {
     const tokenSeguimiento = emitida ? generarTokenPublico() : null;
 
     const tienePlanEntrega = items.some((i) => i.planEntrega);
+    if (tienePlanEntrega)
+      await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada');
     let creada: { id: string };
     try {
       creada = await this.prisma.$transaction(async (tx) => {
@@ -3045,6 +3054,7 @@ export class OrdenesTrabajoService {
       ),
     );
     if (idsCupon.length === 0) return items;
+    await this.capacidades.exigir(auth.tenantId, 'cupones', db);
 
     const [cupones, referencias, regional] = await Promise.all([
       db.cupon.findMany({
@@ -4436,6 +4446,7 @@ export class OrdenesTrabajoService {
       );
     }
     if (montos.size === 0) return;
+    await this.capacidades.exigir(auth.tenantId, 'cupones', tx);
 
     // Bloquea las reglas antes de revalidarlas dentro de ESTA transacción:
     // ningún supervisor puede cambiar alcance/valor/vigencia entre validar y

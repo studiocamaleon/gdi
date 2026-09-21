@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -38,6 +39,8 @@ export class TesoreriaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cobros: CobrosService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /** Cuentas y posición, sin sumar monedas incompatibles. */
@@ -370,6 +373,7 @@ export class TesoreriaService {
   }
 
   async transferir(auth: CurrentAuth, payload: TransferenciaDto) {
+    await this.capacidades.exigir(auth.tenantId, 'tesoreria');
     if (payload.desdeCuentaId === payload.haciaCuentaId) {
       throw new BadRequestException('Elegí dos cuentas distintas.');
     }
@@ -477,6 +481,7 @@ export class TesoreriaService {
   }
 
   async arqueo(auth: CurrentAuth, cuentaId: string, payload: ArqueoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'tesoreria');
     if (payload.idempotencyKey) {
       const existente = await this.prisma.movimientoFondos.findUnique({
         where: {
@@ -520,6 +525,7 @@ export class TesoreriaService {
   }
 
   async ajustar(auth: CurrentAuth, cuentaId: string, payload: AjusteFondosDto) {
+    await this.capacidades.exigir(auth.tenantId, 'tesoreria');
     if (payload.idempotencyKey) {
       const existente = await this.prisma.movimientoFondos.findUnique({
         where: {
@@ -578,6 +584,7 @@ export class TesoreriaService {
     movimientoId: string,
     payload: ConciliarMovimientoDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'tesoreria');
     const actor = await resolverActorFondos(this.prisma, auth);
     const movimiento = await this.prisma.movimientoFondos.findFirst({
       where: { id: movimientoId, cuentaId, tenantId: auth.tenantId },
@@ -671,6 +678,7 @@ export class TesoreriaService {
     valorId: string,
     payload: DepositarValorDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
     const actor = await resolverActorFondos(this.prisma, auth);
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
@@ -753,6 +761,7 @@ export class TesoreriaService {
     valorId: string,
     payload: AcreditarValorDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
     if (payload.idempotencyKey) {
       const existente = await this.prisma.movimientoFondos.findUnique({
         where: {
@@ -853,6 +862,7 @@ export class TesoreriaService {
     valorId: string,
     payload: RevertirOperacionValorDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
     const actor = await resolverActorFondos(this.prisma, auth);
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
@@ -915,6 +925,7 @@ export class TesoreriaService {
     valorId: string,
     payload: RevertirOperacionValorDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
     if (payload.idempotencyKey) {
       const existente = await this.prisma.movimientoFondos.findUnique({
         where: {
@@ -1013,6 +1024,7 @@ export class TesoreriaService {
     valorId: string,
     payload: RechazarValorDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'valores');
     const actor = await resolverActorFondos(this.prisma, auth);
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {

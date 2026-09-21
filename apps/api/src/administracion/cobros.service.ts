@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -43,6 +44,8 @@ export class CobrosService {
     private readonly recibos: RecibosService,
     private readonly avisos: NotificacionesCobrosService,
     private readonly fidelizacion: FidelizacionService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /** Cálculo canónico de las tres cifras. */
@@ -191,6 +194,7 @@ export class CobrosService {
     }
 
     const esCheque = metodo.tipo === 'cheque_echeq';
+    if (esCheque) await this.capacidades.exigir(auth.tenantId, 'valores');
     if (!esCheque && !payload.cuentaDestinoId) {
       throw new BadRequestException(
         'Elegí una cuenta destino para registrar el cobro.',

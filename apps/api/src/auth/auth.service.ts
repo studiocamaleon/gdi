@@ -1,3 +1,7 @@
+import {
+  bloquearCupoUsuarios,
+  exigirCupoUsuario,
+} from '../suscripciones/cupos-usuarios';
 import { incluyeImpresionDirecta } from '../suscripciones/capacidades-plan';
 import {
   BadRequestException,
@@ -27,7 +31,14 @@ import { ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 import { bloquearIdentidad, MfaService } from './mfa.service';
+import type { AlcanceMfa } from './mfa-dispositivo-cookie';
 import { VerificarMfaDto } from './dto/perfil.dto';
+import {
+  aceptarRolInvitado,
+  hashInvitacionEquipo,
+  invitacionEquipoValida,
+} from './invitacion-plataforma';
+import { AceptarInvitacionPlataformaDto } from './dto/invitacion-plataforma.dto';
 
 // Hash dummy para igualar el tiempo de respuesta del login cuando el usuario
 // no existe (evita enumeración de usuarios por timing). Se calcula una vez.
@@ -53,7 +64,7 @@ export class AuthService {
 
   private readonly logger = new Logger(AuthService.name);
 
-  async login(payload: LoginDto, ip = '') {
+  async login(payload: LoginDto, ip = '', dispositivoToken?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: payload.email.trim().toLowerCase() },
       include: {
@@ -125,6 +136,40 @@ export class AuthService {
       });
       if (!vigente.activo || vigente.passwordHash !== user.passwordHash)
         throw new UnauthorizedException('Volvé a iniciar sesión.');
+      const dispositivo = dispositivoToken
+        ? await this.mfa.dispositivoValido(
+            tx,
+            user.id,
+            vigente.passwordHash,
+            'tenant',
+            dispositivoToken,
+          )
+        : null;
+      if (dispositivo) {
+        const actual = await tx.membership.findFirst({
+          where: {
+            id: membership.id,
+            userId: user.id,
+            activa: true,
+            tenant: { activo: true },
+          },
+          include: { tenant: true },
+        });
+        if (!actual || !ipPermitida(ip, actual.ipsPermitidas))
+          throw new UnauthorizedException(
+            'No podés ingresar a esta empresa desde la red actual.',
+          );
+        return this.createSessionResponse(
+          user.id,
+          user.email,
+          actual,
+          tx,
+          vigente.nombreCompleto,
+          vigente.rolPlataforma,
+          dispositivo.verificadoEl,
+          dispositivo.id,
+        );
+      }
       const challenge = await this.mfa.desafiar(
         tx,
         user.id,
@@ -192,7 +237,7 @@ export class AuthService {
    * de Grupo Idea puede entrar por acá para operar la plataforma y por el login
    * normal para operar su imprenta. Ver docs/control-plane-diseno.md
    */
-  async loginPlataforma(payload: LoginDto) {
+  async loginPlataforma(payload: LoginDto, dispositivoToken?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: payload.email.trim().toLowerCase() },
       select: {
@@ -231,6 +276,22 @@ export class AuthService {
         vigente.passwordHash !== user.passwordHash
       )
         throw new UnauthorizedException('Volvé a iniciar sesión.');
+      const dispositivo = dispositivoToken
+        ? await this.mfa.dispositivoValido(
+            tx,
+            user.id,
+            vigente.passwordHash,
+            'plataforma',
+            dispositivoToken,
+          )
+        : null;
+      if (dispositivo)
+        return this.createPlatformSession(
+          vigente,
+          tx,
+          dispositivo.verificadoEl,
+          dispositivo.id,
+        );
       const challenge = await this.mfa.desafiar(
         tx,
         user.id,
@@ -245,6 +306,8 @@ export class AuthService {
   private async createPlatformSession(
     user: Pick<User, 'id' | 'email' | 'nombreCompleto' | 'rolPlataforma'>,
     db: Prisma.TransactionClient,
+    mfaVerificada: boolean | Date = false,
+    dispositivoId?: string,
   ) {
     const session = await db.authSession.create({
       data: {
@@ -252,6 +315,13 @@ export class AuthService {
         currentTenantId: null,
         currentMembershipId: null,
         expiresAt: vencimientoInicial(),
+        mfaVerificadoEl:
+          mfaVerificada instanceof Date
+            ? mfaVerificada
+            : mfaVerificada
+              ? new Date()
+              : null,
+        mfaDispositivoId: dispositivoId,
       },
     });
     const accessToken = await this.issueToken({
@@ -275,42 +345,157 @@ export class AuthService {
     };
   }
 
-  async verificarMfa(payload: VerificarMfaDto, ip = '') {
-    return this.mfa.verificarDesafio<
-      | Awaited<ReturnType<AuthService['createSessionResponse']>>
-      | Awaited<ReturnType<AuthService['createPlatformSession']>>
-    >(payload.challengeToken, payload.codigo, async (challenge, tx) => {
-      const user = await tx.user.findUniqueOrThrow({
-        where: { id: challenge.userId },
-      });
-      if (challenge.destination === 'plataforma') {
-        if (!user.rolPlataforma)
-          throw new UnauthorizedException(
-            'Esta cuenta ya no tiene acceso al equipo de Grafo.',
+  async verificarMfa(
+    payload: VerificarMfaDto,
+    ip = '',
+    dispositivos: Partial<Record<AlcanceMfa, string>> = {},
+  ) {
+    return this.mfa.verificarDesafio(
+      payload.challengeToken,
+      payload.codigo,
+      async (challenge, tx) => {
+        const completar = async () => {
+          const user = await tx.user.findUniqueOrThrow({
+            where: { id: challenge.userId },
+          });
+          if (challenge.destination === 'invitacion_plataforma') {
+            if (!challenge.invitacionPlataformaId)
+              throw new UnauthorizedException(
+                'La invitación no está disponible.',
+              );
+            const invitacion = await invitacionEquipoValida(tx, {
+              id: challenge.invitacionPlataformaId,
+            });
+            const staff = await aceptarRolInvitado(tx, invitacion, user.id);
+            return this.createPlatformSession(staff, tx, true);
+          }
+          if (challenge.destination === 'plataforma') {
+            if (!user.rolPlataforma)
+              throw new UnauthorizedException(
+                'Esta cuenta ya no tiene acceso al equipo de Grafo.',
+              );
+            return this.createPlatformSession(user, tx, true);
+          }
+          const membership = await tx.membership.findFirst({
+            where: {
+              id: challenge.membershipId ?? '',
+              userId: user.id,
+              activa: true,
+              tenant: { activo: true },
+            },
+            include: { tenant: true },
+          });
+          if (!membership || !ipPermitida(ip, membership.ipsPermitidas))
+            throw new UnauthorizedException(
+              'No podés ingresar a esta empresa desde la red actual.',
+            );
+          return this.createSessionResponse(
+            user.id,
+            user.email,
+            membership,
+            tx,
+            user.nombreCompleto,
+            user.rolPlataforma,
+            new Date(),
           );
-        return this.createPlatformSession(user, tx);
-      }
-      const membership = await tx.membership.findFirst({
-        where: {
-          id: challenge.membershipId ?? '',
-          userId: user.id,
-          activa: true,
-          tenant: { activo: true },
-        },
-        include: { tenant: true },
-      });
-      if (!membership || !ipPermitida(ip, membership.ipsPermitidas))
-        throw new UnauthorizedException(
-          'No podés ingresar a esta empresa desde la red actual.',
-        );
-      return this.createSessionResponse(
-        user.id,
-        user.email,
-        membership,
-        tx,
-        user.nombreCompleto,
-        user.rolPlataforma,
+        };
+        const respuesta = await completar();
+        const alcance =
+          challenge.destination === 'tenant' ? 'tenant' : 'plataforma';
+        const dispositivoRecordado = payload.recordarDispositivo
+          ? await this.mfa.recordar(tx, challenge, dispositivos[alcance])
+          : undefined;
+        return { ...respuesta, dispositivoRecordado };
+      },
+    );
+  }
+
+  async consultarInvitacionPlataforma(token: string) {
+    const invitacion = await invitacionEquipoValida(this.prisma, {
+      tokenHash: hashInvitacionEquipo(token),
+    });
+    const user = await this.prisma.user.findUnique({
+      where: { email: invitacion.email },
+      select: { passwordHash: true },
+    });
+    return {
+      email: invitacion.email,
+      rol: invitacion.rol,
+      venceEl: invitacion.venceEl.toISOString(),
+      requiereCrearClave: !user?.passwordHash,
+    };
+  }
+
+  async aceptarInvitacionPlataforma(dto: AceptarInvitacionPlataformaDto) {
+    const tokenHash = hashInvitacionEquipo(dto.token);
+    const invitacion = await invitacionEquipoValida(this.prisma, { tokenHash });
+    const previo = await this.prisma.user.findUnique({
+      where: { email: invitacion.email },
+    });
+    if (previo && !previo.activo)
+      throw new UnauthorizedException(
+        'Esta cuenta está desactivada. Contactá al equipo de Grafo.',
       );
+    if (
+      previo?.passwordHash &&
+      !(await bcrypt.compare(dto.password, previo.passwordHash))
+    )
+      throw new UnauthorizedException('La contraseña actual no es correcta.');
+    if (
+      !previo?.passwordHash &&
+      (dto.password.length < 12 || !dto.nombre?.trim())
+    )
+      throw new BadRequestException(
+        'Ingresá tu nombre y una contraseña de al menos 12 caracteres.',
+      );
+    if (!previo?.passwordHash && Buffer.byteLength(dto.password, 'utf8') > 72)
+      throw new BadRequestException(
+        'La contraseña nueva es demasiado larga. Probá una más corta de al menos 12 caracteres.',
+      );
+    const passwordHash =
+      previo?.passwordHash ?? (await bcrypt.hash(dto.password, 12));
+    return this.prisma.$transaction(async (tx) => {
+      const actual = await invitacionEquipoValida(tx, { tokenHash });
+      let user: User;
+      if (previo) {
+        await bloquearIdentidad(tx, previo.id);
+        user = await tx.user.findUniqueOrThrow({ where: { id: previo.id } });
+        if (!user.activo || user.passwordHash !== previo.passwordHash)
+          throw new UnauthorizedException(
+            'La cuenta cambió. Volvé a iniciar la aceptación.',
+          );
+        if (!user.passwordHash)
+          user = await tx.user.update({
+            where: { id: user.id },
+            data: {
+              passwordHash,
+              nombreCompleto: user.nombreCompleto || dto.nombre?.trim(),
+            },
+          });
+      } else {
+        user = await tx.user.create({
+          data: {
+            email: actual.email,
+            nombreCompleto: dto.nombre!.trim(),
+            passwordHash,
+          },
+        });
+      }
+      if (user.rolPlataforma)
+        throw new BadRequestException(
+          'Esta cuenta ya pertenece al equipo de Grafo. Ingresá desde el backoffice.',
+        );
+      const challenge = await this.mfa.desafiar(
+        tx,
+        user.id,
+        user.passwordHash,
+        'invitacion_plataforma',
+        undefined,
+        actual.id,
+      );
+      if (challenge) return challenge;
+      const staff = await aceptarRolInvitado(tx, actual, user.id);
+      return this.createPlatformSession(staff, tx);
     });
   }
 
@@ -392,6 +577,7 @@ export class AuthService {
         currentMembershipId: null,
         impersonacionId: params.sesionImpersonacionId,
         expiresAt: params.expiraEl,
+        mfaVerificadoEl: new Date(),
       },
     });
     return this.issueToken({
@@ -467,6 +653,11 @@ export class AuthService {
     const normalizedEmail = invitation.email.trim().toLowerCase();
 
     return this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, invitation.tenantId);
+      await exigirCupoUsuario(tx, invitation.tenantId, {
+        email: normalizedEmail,
+        userId: invitation.userId,
+      });
       // Consumo atómico de la invitación (single-use). Si otra request en
       // paralelo ya la aceptó, este updateMany afecta 0 filas y abortamos,
       // evitando crear membership/sesión duplicadas por doble submit o replay.
@@ -527,12 +718,14 @@ export class AuthService {
         },
         update: {
           rol: invitation.rol,
+          ...(invitation.rolId ? { rolId: invitation.rolId } : {}),
           activa: true,
         },
         create: {
           userId: user.id,
           tenantId: invitation.tenantId,
           rol: invitation.rol,
+          rolId: invitation.rolId,
           activa: true,
         },
         include: {
@@ -787,6 +980,7 @@ export class AuthService {
     const expiresAt = vencimientoInicial();
 
     const invitation = await this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
       const user =
         existingUser ??
         (await tx.user.create({
@@ -795,25 +989,6 @@ export class AuthService {
             activo: true,
           },
         }));
-
-      await tx.membership.upsert({
-        where: {
-          userId_tenantId: {
-            userId: user.id,
-            tenantId: auth.tenantId,
-          },
-        },
-        update: {
-          rol,
-          activa: true,
-        },
-        create: {
-          userId: user.id,
-          tenantId: auth.tenantId,
-          rol,
-          activa: true,
-        },
-      });
 
       await tx.empleado.update({
         where: { id: empleadoId },
@@ -834,6 +1009,10 @@ export class AuthService {
         },
       });
 
+      await exigirCupoUsuario(tx, auth.tenantId, {
+        email: normalizedEmail,
+        userId: user.id,
+      });
       return tx.invitation.create({
         data: {
           tenantId: auth.tenantId,
@@ -897,6 +1076,7 @@ export class AuthService {
     empleadoId: string,
     userId: string,
   ) {
+    await bloquearCupoUsuarios(tx, tenantId);
     await tx.membership.updateMany({
       where: { userId, tenantId },
       data: { activa: false },
@@ -941,10 +1121,14 @@ export class AuthService {
     db: PrismaService | Prisma.TransactionClient = this.prisma,
     nombreCompleto: string | null = null,
     rolPlataforma: RolPlataforma | null = null,
+    mfaVerificadoEl?: Date,
+    mfaDispositivoId?: string,
   ) {
     const session = await db.authSession.create({
       data: {
         userId,
+        mfaVerificadoEl,
+        mfaDispositivoId,
         currentTenantId: membership.tenantId,
         currentMembershipId: membership.id,
         expiresAt: vencimientoInicial(),

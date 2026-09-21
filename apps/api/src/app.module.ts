@@ -80,6 +80,9 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
         redact: [
           'req.headers.authorization',
           'req.headers.cookie',
+          'req.headers["x-grafo-mfa-empresa"]',
+          'req.headers["x-grafo-mfa-plataforma"]',
+          'res.headers["x-grafo-mfa-recordado"]',
           'res.headers["set-cookie"]',
         ],
         genReqId: (req, res) => {

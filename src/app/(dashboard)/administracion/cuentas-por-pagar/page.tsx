@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { EgresosView } from "@/components/administracion/egresos-view";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 import {
@@ -25,6 +27,7 @@ export default async function CuentasPorPagarPage({
 }: {
   searchParams: Promise<{ endosarValorId?: string }>;
 }) {
+  if (!(await tieneCapacidad("cuentas_pagar"))) return <FuncionNoIncluida />;
   const { endosarValorId } = await searchParams;
   const [egresos, resumen, categorias, proveedores, metodosPago, cuentas] =
     await Promise.all([

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { EstadoIntegracion, ProveedorIntegracion } from '@prisma/client';
@@ -36,6 +37,8 @@ export class WatiScheduler {
   constructor(
     private readonly integraciones: IntegracionesService,
     private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   @Cron('*/15 * * * *', { name: 'wati-plantillas' })
@@ -80,6 +83,7 @@ export class WatiScheduler {
   }
 
   private async sincronizarTenant(tenantId: string): Promise<void> {
+    if (!(await this.capacidades.puedeOperar(tenantId, 'whatsapp_automatico'))) return;
     await runWithTenant(tenantId, async () => {
       let estado: Awaited<ReturnType<IntegracionesService['plantillasWati']>>;
       try {

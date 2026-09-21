@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 /**
  * Egresos y Cuentas por pagar.
@@ -462,7 +463,15 @@ export function EgresosView({
   const brand = modo === "cuentas-por-pagar";
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const tabsVisibles = TABS_POR_MODO[modo];
+  const conValores = useCapacidad("valores");
+  const metodosDisponibles = metodosPago.filter(
+    (m) => conValores || m.tipo !== "cheque_echeq",
+  );
+  const conRecurrentes = useCapacidad("gastos_recurrentes");
+  const conAnalisis = useCapacidad("reportes_finanzas");
+  const tabsVisibles = TABS_POR_MODO[modo].filter(
+    (t) => (t !== "recurrentes" || conRecurrentes) && (t !== "analisis" || conAnalisis),
+  );
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
   // API es el que manda, esto sólo evita ofrecer botones que van a dar 403.
   const puedeGestionar = usePuede("administracion.gestionar");
@@ -540,7 +549,7 @@ export function EgresosView({
       getReporteEgresos()
         .then(setReporte)
         .catch(() => setReporte(null));
-      getPresupuestadoVsReal()
+      if (conRecurrentes) getPresupuestadoVsReal()
         .then(setPresu)
         .catch(() => setPresu(null));
       return;
@@ -856,7 +865,7 @@ export function EgresosView({
             modo={modo}
             categorias={categorias}
             proveedores={proveedores}
-            metodosPago={metodosPago}
+            metodosPago={metodosDisponibles}
             cuentas={cuentas}
             hoy={hoy}
             onCerrar={() => setAltaAbierta(false)}
@@ -880,10 +889,10 @@ export function EgresosView({
         {pagoAbierto ? (
           <RegistrarPago
             egresos={seleccionados}
-            metodosPago={metodosPago}
+            metodosPago={metodosDisponibles}
             cuentas={cuentas}
             hoy={hoy}
-            valorInicialId={valorEndosoInicialId}
+            valorInicialId={conValores ? valorEndosoInicialId : undefined}
             onCerrar={() => setPagoAbierto(false)}
             onListo={() => {
               setPagoAbierto(false);

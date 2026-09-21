@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -71,6 +72,7 @@ export class DesarrolloDocumentalController {
     return this.service.estadoOrden(auth, ordenId);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('maestros')
   crearMaestro(
@@ -80,6 +82,7 @@ export class DesarrolloDocumentalController {
     return this.service.crearMaestro(auth, dto);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('maestros/:maestroId/revisiones')
   crearRevision(
@@ -90,6 +93,7 @@ export class DesarrolloDocumentalController {
     return this.service.crearRevision(auth, maestroId, dto);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('revisiones/:revisionId/solicitudes')
   solicitar(
@@ -100,6 +104,7 @@ export class DesarrolloDocumentalController {
     return this.service.solicitar(auth, revisionId, dto);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('solicitudes/:solicitudId/link')
   emitirLink(
@@ -110,6 +115,7 @@ export class DesarrolloDocumentalController {
     return this.service.emitirLink(auth, solicitudId, dto);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Delete('solicitudes/:solicitudId/link')
   revocarLink(
@@ -119,6 +125,7 @@ export class DesarrolloDocumentalController {
     return this.service.revocarLink(auth, solicitudId);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('solicitudes/:solicitudId/decision')
   decidir(
@@ -129,6 +136,7 @@ export class DesarrolloDocumentalController {
     return this.service.decidir(auth, solicitudId, dto);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('revisiones/:revisionId/liberar')
   liberar(
@@ -138,6 +146,7 @@ export class DesarrolloDocumentalController {
     return this.service.liberar(auth, revisionId);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('gates')
   crearGate(
@@ -147,6 +156,7 @@ export class DesarrolloDocumentalController {
     return this.service.crearGate(auth, dto);
   }
 
+  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Delete('gates/:gateId')
   eliminarGate(

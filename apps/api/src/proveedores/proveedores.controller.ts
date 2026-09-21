@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -27,6 +28,7 @@ import { Permiso } from '../auth/permiso.decorator';
 export class ProveedoresController {
   constructor(private readonly proveedoresService: ProveedoresService) {}
 
+  @RequiereCapacidad('proveedores')
   @Get()
   findAll(
     @CurrentSession() auth: CurrentAuth,
@@ -40,12 +42,14 @@ export class ProveedoresController {
     return this.proveedoresService.opciones(auth);
   }
 
+  @RequiereCapacidad('proveedores')
   @Get(':id')
   findOne(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
     return this.proveedoresService.findOne(auth, id);
   }
 
   @Permiso('registros.gestionar')
+  @RequiereCapacidad('proveedores')
   @Post()
   create(
     @CurrentSession() auth: CurrentAuth,
@@ -55,6 +59,7 @@ export class ProveedoresController {
   }
 
   @Permiso('registros.gestionar')
+  @RequiereCapacidad('proveedores')
   @Post('importar')
   importar(
     @CurrentSession() auth: CurrentAuth,
@@ -64,6 +69,7 @@ export class ProveedoresController {
   }
 
   @Permiso('registros.gestionar')
+  @RequiereCapacidad('proveedores')
   @Put(':id')
   update(
     @CurrentSession() auth: CurrentAuth,
@@ -74,6 +80,7 @@ export class ProveedoresController {
   }
 
   @Permiso('registros.gestionar')
+  @RequiereCapacidad('proveedores')
   @Patch(':id/estado')
   estado(
     @CurrentSession() auth: CurrentAuth,
@@ -84,6 +91,7 @@ export class ProveedoresController {
   }
 
   @Permiso('registros.gestionar')
+  @RequiereCapacidad('proveedores')
   @Delete(':id')
   @HttpCode(204)
   async remove(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {

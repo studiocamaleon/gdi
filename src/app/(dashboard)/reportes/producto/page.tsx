@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { ReporteProducto } from "@/components/panel/reporte-producto";
 import { getPanelProducto } from "@/lib/panel-api";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
@@ -17,6 +19,8 @@ export default async function Page({
 }: {
   searchParams: Promise<ParametrosPeriodo>;
 }) {
+  if (!(await tieneCapacidad("reportes_comerciales")))
+    return <FuncionNoIncluida />;
   const parametros = await searchParams;
   const rango = rangoDeParametros(parametros, await zonaHorariaDelTenant());
   const d = await getPanelProducto(rango);

@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import { Body, Controller, Get, Put, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -55,6 +56,7 @@ export class ReportesController {
    */
   @Permiso('reportes.ver_resumen')
   @OcultaMargenes(false)
+  @RequiereCapacidad('reportes_resumen')
   @Get('resumen')
   async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -100,6 +102,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_resumen')
   @Get('comercial')
   async comercial(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -115,6 +118,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_resumen')
   @Get('embudo')
   async embudo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -140,6 +144,7 @@ export class ReportesController {
    * URL propia, el gate tiene que estar acá.
    */
   @Permiso('finanzas.ver_margenes')
+  @RequiereCapacidad('reportes_finanzas')
   @Get('finanzas')
   async finanzas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -170,6 +175,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_produccion')
   @Get('produccion')
   async produccion(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -182,6 +188,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_produccion')
   @Get('alertas')
   async alertasActivas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -192,6 +199,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_comerciales')
   @Get('producto')
   async producto(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -205,6 +213,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_comerciales')
   @Get('producto/mix-categoria')
   async mixCategoria(@CurrentSession() auth: CurrentAuth, @Query() query: MixCategoriaDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -215,6 +224,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_comerciales')
   @Get('clientes')
   async clientes(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -229,6 +239,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_produccion')
   @Get('equipo')
   async equipo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -247,6 +258,7 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_produccion')
   @Get('salud-eta')
   async saludEta(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
     const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
@@ -265,11 +277,13 @@ export class ReportesController {
     };
   }
 
+  @RequiereCapacidad('reportes_produccion')
   @Get('umbrales')
   getUmbrales(@CurrentSession() auth: CurrentAuth) {
     return this.alertas.getUmbrales(auth.tenantId);
   }
 
+  @RequiereCapacidad('reportes_produccion')
   @Put('umbrales')
   @Permiso('reportes.ver_resumen')
   actualizarUmbrales(

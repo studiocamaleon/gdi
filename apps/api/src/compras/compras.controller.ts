@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -21,6 +22,7 @@ import {
   OfertaCompraDto,
   RecibirCompraDto,
 } from './dto/compras.dto';
+@RequiereCapacidad('compras')
 @Controller('compras')
 @Permiso('inventario.ver')
 export class ComprasController {
@@ -83,6 +85,7 @@ export class ComprasController {
   ) {
     return this.service.actuar(a, id, d);
   }
+  @RequiereCapacidad('recepciones')
   @Post(':id/recepciones') @Permiso('inventario.gestionar') recibir(
     @CurrentSession() a: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,

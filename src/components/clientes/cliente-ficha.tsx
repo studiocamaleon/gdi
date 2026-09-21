@@ -1,5 +1,6 @@
 "use client";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -296,6 +297,7 @@ function createEmptyDireccion(countryCode: string): ClienteDireccion {
 }
 
 export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
+  const conFidelizacion = useCapacidad("fidelizacion");
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const puedeAjustarPuntos = usePuede("crm.configurar_fidelizacion");
@@ -758,12 +760,12 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 description: "Datos y contactos",
                 icon: <UserRoundIcon />,
               },
-              {
+              ...(conFidelizacion ? [{
                 id: "fidelizacion",
                 label: "Fidelización",
                 description: "Puntos y movimientos",
                 icon: <StarIcon />,
-              },
+              }] : []),
               {
                 id: "historial",
                 label: "Historial",
@@ -1684,7 +1686,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
           </fieldset>
         </Tabs.Panel>
 
-        {mode !== "create" ? (
+        {mode !== "create" && conFidelizacion ? (
           <Tabs.Panel id="fidelizacion" className={styles.tabPanel}>
             <ClienteFidelizacionCard
               clienteId={cliente.id}

@@ -113,7 +113,11 @@ export class R2Driver implements StorageDriver {
 
   async iniciarMultipart(
     key: string,
-    opciones: { contentType: string; bytes: number },
+    opciones: {
+      contentType: string;
+      bytes: number;
+      alCrear?: (uploadId: string) => Promise<void>;
+    },
   ): Promise<MultipartIniciado> {
     const { UploadId: uploadId } = await this.cliente.send(
       new CreateMultipartUploadCommand({
@@ -128,24 +132,38 @@ export class R2Driver implements StorageDriver {
       );
     }
 
-    const tamanioParte = calcularTamanioParte(opciones.bytes);
-    const cantidad = Math.max(1, Math.ceil(opciones.bytes / tamanioParte));
-    const partes = await Promise.all(
-      Array.from({ length: cantidad }, (_, i) => i + 1).map(async (numero) => ({
-        numero,
-        url: await getSignedUrl(
-          this.cliente,
-          new UploadPartCommand({
-            Bucket: this.bucket,
-            Key: key,
-            UploadId: uploadId,
-            PartNumber: numero,
+    try {
+      await opciones.alCrear?.(uploadId);
+      const tamanioParte = calcularTamanioParte(opciones.bytes);
+      const cantidad = Math.max(1, Math.ceil(opciones.bytes / tamanioParte));
+      const partes = await Promise.all(
+        Array.from({ length: cantidad }, (_, i) => i + 1).map(
+          async (numero) => ({
+            numero,
+            url: await getSignedUrl(
+              this.cliente,
+              new UploadPartCommand({
+                Bucket: this.bucket,
+                Key: key,
+                UploadId: uploadId,
+                PartNumber: numero,
+              }),
+              { expiresIn: SUBIDA_SEGUNDOS },
+            ),
           }),
-          { expiresIn: SUBIDA_SEGUNDOS },
         ),
-      })),
-    );
-    return { uploadId, partes, tamanioParte };
+      );
+      return { uploadId, partes, tamanioParte };
+    } catch (error) {
+      // Si falla una firma, ninguna URL llegó al cliente. Abortamos el upload
+      // creado antes de devolver el error; la fila reservada la libera el service.
+      await this.abortarMultipart(key, uploadId).catch((aborto: unknown) => {
+        this.logger.warn(
+          `No se pudo abortar el multipart ${uploadId}: ${String(aborto)}`,
+        );
+      });
+      throw error;
+    }
   }
 
   async completarMultipart(

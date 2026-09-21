@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { Input } from "@heroui/react";
@@ -25,7 +26,8 @@ export function MaterialesOrdenControl({
   onChanged: () => void;
 }) {
   const canManage = usePuede("inventario.gestionar");
-  const canBuy = usePuede("finanzas.ver_margenes") && canManage;
+  const conCompras = useCapacidad("compras");
+  const canBuy = usePuede("finanzas.ver_margenes") && canManage && conCompras;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dialog, setDialog] = useState<{

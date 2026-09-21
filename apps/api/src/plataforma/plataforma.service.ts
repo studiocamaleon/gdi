@@ -1,4 +1,10 @@
 import {
+  bloquearCupoUsuarios,
+  exigirCupoUsuario,
+  limiteUsuarios,
+  resumenCupoUsuarios,
+} from '../suscripciones/cupos-usuarios';
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -10,9 +16,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PaddleService } from '../cobro/paddle.service';
 import { finDePrueba } from '../suscripciones/trial';
 import { TenantProvisioningService } from '../provisionamiento/tenant-provisioning.service';
+import { SessionCacheService } from '../auth/session-cache.service';
 
 /**
- * Lecturas del control plane: la consola de la Plataforma (etapa A).
+ * Consultas y acciones administrativas del control plane.
  *
  * Todo acá corre SIN contexto de tenant — el controller lleva @SinTenant() —
  * y por eso el tenant-guard no filtra: los groupBy por tenantId ven todos los
@@ -20,8 +27,7 @@ import { TenantProvisioningService } from '../provisionamiento/tenant-provisioni
  * que usan los crons.
  *
  * Dos reglas de este módulo:
- *  - SÓLO lectura (la etapa A no escribe nada; las escrituras llegan en B con
- *    su auditoría en PlataformaEvento).
+ *  - Las escrituras administrativas se auditan en la misma transacción.
  *  - No se reusan services de negocio: llamados sin contexto leerían todos
  *    los tenants sin que se note. Las queries de acá son propias y explícitas.
  *
@@ -134,7 +140,7 @@ export type ConsolaPlataforma = {
     ots30d: number;
     storageBytes: number;
     sinActividad14d: number;
-    /** Σ precio de las suscripciones ACTIVAS. Real desde la etapa B1. */
+    /** Estimación por catálogo; no equivale al MRR comercial contratado. */
     mrr: number;
     /** Tenants sin plan asignado (legacy): la consola los muestra aparte. */
     sinPlan: number;
@@ -158,6 +164,7 @@ export class PlataformaService {
     private readonly prisma: PrismaService,
     private readonly paddle: PaddleService,
     private readonly provisionamiento: TenantProvisioningService,
+    private readonly sessionCache?: SessionCacheService,
   ) {}
 
   async consola(
@@ -199,6 +206,7 @@ export class PlataformaService {
           suscripcion: {
             select: {
               estado: true,
+              usuariosAdicionales: true,
               plan: {
                 select: {
                   codigo: true,
@@ -321,7 +329,7 @@ export class PlataformaService {
                 nombre: t.suscripcion.plan.nombre,
                 precioMensual: Number(t.suscripcion.plan.precioMensual),
                 estado: t.suscripcion.estado,
-                usuariosMax: f.usuariosMax ?? null,
+                usuariosMax: limiteUsuarios(t.suscripcion.plan, t.suscripcion.usuariosAdicionales).limite,
                 ordenesMesMax: f.ordenesMesMax ?? null,
                 storageGb: f.storageGb ?? null,
               };
@@ -570,110 +578,153 @@ export class PlataformaService {
     return this.planes();
   }
 
-  /** Asigna (o cambia) el plan del tenant. Upsert: una suscripción por tenant. */
-  async cambiarPlan(staffUserId: string, tenantId: string, planId: string) {
-    const [tenant, plan] = await Promise.all([
-      this.prisma.tenant.findUnique({
+  /** Asignación administrativa sólo para contratos manuales. Nunca modifica
+   * el estado de cobro ni renueva una prueba al cambiar de plan. */
+  async cambiarPlan(
+    staffUserId: string,
+    tenantId: string,
+    planId: string,
+    motivo = 'Asignación administrativa de plan',
+  ) {
+    const razon = this.motivoAccion(motivo);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId}::uuid FOR UPDATE`;
+      const tenant = await tx.tenant.findUnique({
         where: { id: tenantId },
-        select: {
-          id: true,
-          nombre: true,
-          suscripcion: { select: { plan: { select: { nombre: true } } } },
-        },
-      }),
-      this.prisma.plan.findUnique({ where: { id: planId } }),
-    ]);
-    if (!tenant) throw new NotFoundException('El tenant no existe.');
-    if (!plan || !plan.activo) {
-      throw new BadRequestException('El plan no existe o no está activo.');
-    }
-
-    // Si el plan otorga prueba, se le pone fecha de fin al asignarlo. Sólo al
-    // dar de ALTA la suscripción: cambiarle el plan a alguien que ya está
-    // adentro no le regala una prueba nueva.
-    const trialHasta = finDePrueba(plan.trialDias);
-
-    await this.prisma.$transaction([
-      this.prisma.suscripcion.upsert({
-        where: { tenantId },
-        create: { tenantId, planId, estado: 'activa', trialHasta },
-        update: { planId, estado: 'activa', hasta: null },
-      }),
-      this.prisma.plataformaEvento.create({
+        include: { suscripcion: { include: { plan: true } } },
+      });
+      if (!tenant) throw new NotFoundException('La empresa no existe.');
+      const anterior = tenant.suscripcion;
+      if (
+        anterior &&
+        (anterior.proveedor !== 'manual' || anterior.referenciaExterna)
+      ) {
+        throw new ConflictException(
+          'Esta suscripción está vinculada a un proveedor. El cambio comercial debe realizarse desde Plan y facturación; no se puede reemplazar por una asignación local.',
+        );
+      }
+      const plan = await tx.plan.findUnique({ where: { id: planId } });
+      if (!plan?.activo)
+        throw new BadRequestException('El plan no existe o no está activo.');
+      if (anterior?.planId === planId) return;
+      const cupo = await resumenCupoUsuarios(tx, tenantId);
+      const limite = limiteUsuarios(plan, anterior?.usuariosAdicionales ?? 0).limite;
+      if (limite !== null && cupo.ocupados > limite)
+        throw new ConflictException(`Hay ${cupo.ocupados} lugares ocupados y el plan de destino admite ${limite}. Ajustá los accesos o los adicionales antes de cambiar de plan.`);
+      if (anterior) {
+        // Una vinculación concurrente de Paddle impide que pisemos el contrato.
+        const cambio = await tx.suscripcion.updateMany({
+          where: {
+            id: anterior.id,
+            proveedor: 'manual',
+            referenciaExterna: null,
+          },
+          data: { planId },
+        });
+        if (cambio.count !== 1)
+          throw new ConflictException(
+            'La suscripción cambió. Actualizá la ficha antes de continuar.',
+          );
+      } else {
+        await tx.suscripcion.create({
+          data: {
+            tenantId,
+            planId,
+            estado: 'activa',
+            trialHasta: finDePrueba(plan.trialDias),
+          },
+        });
+      }
+      await tx.plataformaEvento.create({
         data: {
           staffUserId,
           tipo: 'plan_cambiado',
           tenantAfectadoId: tenantId,
-          descripcion: `Plan de ${tenant.nombre}: ${tenant.suscripcion?.plan.nombre ?? 'sin plan'} → ${plan.nombre}.`,
-          datosJson: { planId, planCodigo: plan.codigo },
+          descripcion: `Plan manual de ${tenant.nombre}: ${anterior?.plan.nombre ?? 'sin plan'} → ${plan.nombre}. ${razon}`,
+          datosJson: {
+            motivo: razon,
+            anterior: anterior?.planId ?? null,
+            nuevo: planId,
+            estadoConservado: anterior?.estado ?? 'activa',
+            resultado: 'completada',
+          },
         },
-      }),
-    ]);
+      });
+    });
   }
 
-  /**
-   * Suspende el tenant: el auth guard valida `tenant.activo` en cada request,
-   * así que el corte es inmediato (módulo el cache de sesión de 30 s). No
-   * borra nada; reactivar lo deja como estaba.
-   */
+  private motivoAccion(motivo: string) {
+    const razon = motivo.trim();
+    if (razon.length < 3 || razon.length > 300)
+      throw new BadRequestException(
+        'Indicá un motivo de entre 3 y 300 caracteres.',
+      );
+    return razon;
+  }
+
   async suspenderTenant(staffUserId: string, tenantId: string, motivo: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, nombre: true, activo: true },
-    });
-    if (!tenant) throw new NotFoundException('El tenant no existe.');
-    if (!tenant.activo) {
-      throw new BadRequestException('El tenant ya está suspendido.');
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.tenant.update({
-        where: { id: tenantId },
-        data: { activo: false },
-      }),
-      this.prisma.suscripcion.updateMany({
-        where: { tenantId },
-        data: { estado: 'suspendida' },
-      }),
-      this.prisma.plataformaEvento.create({
-        data: {
-          staffUserId,
-          tipo: 'tenant_suspendido',
-          tenantAfectadoId: tenantId,
-          descripcion: `Suspendió ${tenant.nombre}: ${motivo}`,
-        },
-      }),
-    ]);
+    return this.cambiarAcceso(staffUserId, tenantId, false, motivo);
   }
 
-  async reactivarTenant(staffUserId: string, tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, nombre: true, activo: true },
-    });
-    if (!tenant) throw new NotFoundException('El tenant no existe.');
-    if (tenant.activo) {
-      throw new BadRequestException('El tenant ya está activo.');
-    }
+  async reactivarTenant(
+    staffUserId: string,
+    tenantId: string,
+    motivo = 'Levantamiento del bloqueo administrativo',
+  ) {
+    return this.cambiarAcceso(staffUserId, tenantId, true, motivo);
+  }
 
-    await this.prisma.$transaction([
-      this.prisma.tenant.update({
+  private async cambiarAcceso(
+    staffUserId: string,
+    tenantId: string,
+    activo: boolean,
+    motivo: string,
+  ) {
+    const razon = this.motivoAccion(motivo);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId}::uuid FOR UPDATE`;
+      const tenant = await tx.tenant.findUnique({
         where: { id: tenantId },
-        data: { activo: true },
-      }),
-      this.prisma.suscripcion.updateMany({
-        where: { tenantId },
-        data: { estado: 'activa' },
-      }),
-      this.prisma.plataformaEvento.create({
+        select: {
+          nombre: true,
+          activo: true,
+          bloqueoAccesoMotivo: true,
+          suscripcion: { select: { estado: true, proveedor: true } },
+        },
+      });
+      if (!tenant) throw new NotFoundException('La empresa no existe.');
+      if (tenant.activo === activo)
+        throw new ConflictException(
+          'El acceso ya cambió. Actualizá la ficha antes de continuar.',
+        );
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data: {
+          activo,
+          bloqueoAccesoMotivo: activo ? null : razon,
+          bloqueoAccesoEl: activo ? null : new Date(),
+        },
+      });
+      await tx.plataformaEvento.create({
         data: {
           staffUserId,
-          tipo: 'tenant_reactivado',
+          tipo: activo ? 'tenant_reactivado' : 'tenant_suspendido',
           tenantAfectadoId: tenantId,
-          descripcion: `Reactivó ${tenant.nombre}.`,
+          descripcion: `${activo ? 'Levantó el bloqueo de' : 'Bloqueó el acceso a'} ${tenant.nombre}: ${razon}.`,
+          datosJson: {
+            motivo: razon,
+            anterior: {
+              activo: tenant.activo,
+              motivo: tenant.bloqueoAccesoMotivo,
+            },
+            nuevo: { activo },
+            suscripcion: tenant.suscripcion,
+            resultado: 'completada',
+          },
         },
-      }),
-    ]);
+      });
+    });
+    this.sessionCache?.invalidarTenant(tenantId);
   }
 
   /**
@@ -720,6 +771,8 @@ export class PlataformaService {
         id: provisionado.tenantId,
         nombre: provisionado.tenantNombre,
       };
+      await bloquearCupoUsuarios(tx, creado.id);
+      await exigirCupoUsuario(tx, creado.id, { email: email });
       await tx.invitation.create({
         data: {
           tenantId: creado.id,

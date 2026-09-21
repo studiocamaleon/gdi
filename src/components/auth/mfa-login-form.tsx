@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { ShieldCheck, ArrowRight } from "lucide-react";
 import { verificarMfa, type MfaChallenge } from "@/lib/auth";
 import shared from "@/components/registro/registro-premium.module.css";
@@ -19,6 +21,7 @@ export function MfaLoginForm({
   onBack: () => void;
 }) {
   const [codigo, setCodigo] = useState("");
+  const [recordarDispositivo, setRecordarDispositivo] = useState(false);
   const [recuperacion, setRecuperacion] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +40,7 @@ export function MfaLoginForm({
           const respuesta = await verificarMfa(
             challenge.challengeToken,
             codigo.trim(),
+            recordarDispositivo,
           );
           if (!respuesta.accessToken)
             throw new Error("No se pudo iniciar la sesión.");
@@ -82,6 +86,24 @@ export function MfaLoginForm({
           aria-invalid={!!error}
           aria-describedby={error ? "mfa-login-error" : undefined}
         />
+      </div>
+      <div className={m.recordar}>
+        <Field orientation="horizontal">
+          <Checkbox
+            id="mfa-recordar"
+            checked={recordarDispositivo}
+            onCheckedChange={setRecordarDispositivo}
+            disabled={busy}
+            aria-describedby="mfa-recordar-ayuda"
+          />
+          <FieldLabel htmlFor="mfa-recordar">
+            Recordar este dispositivo durante 30 días
+          </FieldLabel>
+        </Field>
+        <p id="mfa-recordar-ayuda">
+          Usalo sólo en un dispositivo personal. Te seguiremos pidiendo la
+          contraseña.
+        </p>
       </div>
       {error && (
         <p className={s.error} id="mfa-login-error" role="alert">

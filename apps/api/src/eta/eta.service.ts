@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { sincronizarAsignaciones } from './asignacion-automatica';
 import { personalFijoDelPaso } from '../produccion/asignacion-personal';
 import { recuperarDemandasHistoricas } from './demanda-historica';
@@ -53,9 +54,12 @@ export class EtaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly produccion: ProduccionService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   async sincronizarAsignaciones(tenantId: string) {
+    if (!(await this.capacidades.incluida(tenantId, 'asignacion_automatica'))) return;
     return sincronizarAsignaciones(this.prisma, tenantId, db => this.contextoSimulacion(tenantId, db, false));
   }
 
@@ -75,6 +79,7 @@ export class EtaService {
   /** Contexto compartido por ETA y F6. Recupera metadatos históricos de
    * atención ausentes; no reserva capacidad ni modifica fechas o tiempos. */
   async contextoSimulacion(tenantId: string, db: Prisma.TransactionClient = this.prisma, recuperarHistoricos = true) {
+    await this.capacidades.exigirIncluida(tenantId, 'eta_capacidad', db);
     const [items, estaciones, duraciones, dias, config, regional] =
       await Promise.all([
         this.assembleItems(tenantId, db, recuperarHistoricos),
@@ -269,6 +274,7 @@ export class EtaService {
    * fallo del motor deja una fila con `sinEstimar` para no perder cobertura.
    */
   async capturarEmision(auth: CurrentAuth, ordenId: string): Promise<void> {
+    if (!(await this.capacidades.incluida(auth.tenantId, 'eta_capacidad'))) return;
     const items = await this.prisma.ordenTrabajoItem.findMany({
       where: { tenantId: auth.tenantId, ordenId },
       select: { id: true, fechaEntrega: true, orden: { select: { fechaEntrega: true } } },
@@ -310,6 +316,7 @@ export class EtaService {
    * Idempotente: sólo toca promesas con `finReal` nulo y recomputa el ciclo.
    */
   async capturarCierre(tenantId: string, ordenId: string): Promise<void> {
+    if (!(await this.capacidades.incluida(tenantId, 'eta_capacidad'))) return;
     const items = await this.prisma.ordenTrabajoItem.findMany({
       where: { tenantId, ordenId },
       select: {
@@ -400,6 +407,7 @@ export class EtaService {
    * día pisa, no duplica.
    */
   async snapshotDiario(tenantId: string, ahora = new Date()): Promise<void> {
+    if (!(await this.capacidades.incluida(tenantId, 'eta_capacidad'))) return;
     const [{ porItem, traza }, estaciones, dias, entregas, regional] =
       await Promise.all([
         this.correr(tenantId),

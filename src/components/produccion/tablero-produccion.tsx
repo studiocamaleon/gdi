@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { asignacionPermiteEjecutar } from "@/lib/acciones-produccion";
 import { filtrarTrabajos, metricasTrabajos, opcionesEstacionesTablero, type FiltrosTrabajo } from "@/lib/tablero-lista";
 import { modoTableroEnUrl, urlTableroEstacion } from "@/lib/tablero-navegacion";
@@ -1399,9 +1400,10 @@ export function TableroProduccion({
     [diasNoLaborables],
   );
 
+  const conEta = useCapacidad("eta_capacidad");
   /** Simulación de flujo (fase 2b): ETA por item + llegadas por estación. */
   const sim = React.useMemo<ResultadoSimulacion>(
-    () =>
+    () => conEta ?
       simularFlujo({
         items,
         estaciones,
@@ -1410,8 +1412,9 @@ export function TableroProduccion({
         tiempoEntrePasosMin,
         zona: zonaHoraria,
         ahora: ahoraVista,
-      }),
+      }) : { porItem: new Map(), llegadasPorEstacion: new Map(), traza: [] },
     [
+      conEta,
       items,
       estaciones,
       medianas,
@@ -1659,7 +1662,7 @@ export function TableroProduccion({
               <TableroFiltros filters={filters} setFilters={setFilters} onEstacionChange={cambiarEstacion} counts={counts} total={views.length}
                 estaciones={estacionesFiltro} empleados={empleados} puedeFiltrarPersonal={puedeFiltrarPersonal} />
               {mode === "items"
-                ? <TableroLista items={filtered} trabajosContexto={views} estaciones={estaciones} sim={sim} zona={zonaHoraria} onOpen={setSelectedId} seccionInicial={seccionInicial} contextoFiltros={JSON.stringify(filters)} asignacionManual={{ puedeReasignar: permisoSupervisar, onConfirmar: handleAsignacionPersonal, canManage, estacionIdsEjecutables: meta.estacionIdsEjecutables, busy, onMesa: handleMesa }} />
+                ? <TableroLista items={filtered} trabajosContexto={views} estaciones={estaciones} sim={sim} zona={zonaHoraria} onOpen={setSelectedId} seccionInicial={seccionInicial} contextoFiltros={JSON.stringify(filters)} asignacionManual={{ puedeReasignar: permisoSupervisar && conEta, onConfirmar: handleAsignacionPersonal, canManage, estacionIdsEjecutables: meta.estacionIdsEjecutables, busy, onMesa: handleMesa }} />
                 : <KanbanView items={filtered} onOpen={setSelectedId} />}
 
             </>

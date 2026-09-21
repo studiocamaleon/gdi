@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -29,6 +30,7 @@ const DIA_MS = 86_400_000;
 export type SuscripcionExterna = {
   /** subscription_id en la pasarela. */
   referencia: string;
+  actualizadoEl?: Date | null;
   estadoProveedor: string;
   clienteExterno: string | null;
   proximoCobro: Date | null;
@@ -62,6 +64,8 @@ export type OpcionesSync = {
   /** La reconciliación registra cuándo obtuvo una respuesta autoritativa. */
   origen?: 'webhook' | 'reconciliacion' | 'accion';
   ahora?: Date;
+  consultadaDesde?: Date;
+  suscripcionEsperada?: { id: string; tenantId: string; referencia: string };
 };
 
 @Injectable()
@@ -103,7 +107,9 @@ export class SuscripcionSyncService {
       .filter((id): id is string => id !== null);
 
     const custom = campo('customData', 'custom_data') as
-      Record<string, unknown> | null | undefined;
+      | Record<string, unknown>
+      | null
+      | undefined;
     const tenantIdCrudo = custom?.tenantId ?? custom?.tenant_id;
     const tenantId =
       typeof tenantIdCrudo === 'string' && tenantIdCrudo ? tenantIdCrudo : null;
@@ -113,14 +119,18 @@ export class SuscripcionSyncService {
       proximo && !Number.isNaN(Date.parse(proximo)) ? new Date(proximo) : null;
 
     const periodo = campo('currentBillingPeriod', 'current_billing_period') as
-      Record<string, unknown> | null | undefined;
+      | Record<string, unknown>
+      | null
+      | undefined;
     const inicio =
       periodo && typeof (periodo.startsAt ?? periodo.starts_at) === 'string'
         ? String(periodo.startsAt ?? periodo.starts_at)
         : null;
 
     const programado = campo('scheduledChange', 'scheduled_change') as
-      Record<string, unknown> | null | undefined;
+      | Record<string, unknown>
+      | null
+      | undefined;
     const accion =
       programado && typeof programado.action === 'string'
         ? programado.action
@@ -133,6 +143,10 @@ export class SuscripcionSyncService {
 
     return {
       referencia,
+      actualizadoEl: (() => {
+        const v = texto('updatedAt', 'updated_at');
+        return v && !Number.isNaN(Date.parse(v)) ? new Date(v) : null;
+      })(),
       estadoProveedor,
       clienteExterno: texto('customerId', 'customer_id'),
       proximoCobro,
@@ -161,6 +175,18 @@ export class SuscripcionSyncService {
     externa: SuscripcionExterna,
     opciones: OpcionesSync = {},
   ): Promise<ResultadoSync> {
+    return this.prisma.$transaction((tx) =>
+      this.aplicarEnTransaccion(tx, externa, opciones),
+    );
+  }
+
+  /** Estado y auditoría del solicitante pueden confirmarse en la misma transacción. */
+  async aplicarEnTransaccion(
+    tx: Prisma.TransactionClient,
+    externa: SuscripcionExterna,
+    opciones: OpcionesSync = {},
+  ): Promise<ResultadoSync> {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`paddle:${externa.referencia}`}, 0))::text`;
     const estadoBase = ESTADO[externa.estadoProveedor];
     if (!estadoBase) {
       return {
@@ -169,7 +195,7 @@ export class SuscripcionSyncService {
       };
     }
 
-    const existente = await this.prisma.suscripcion.findFirst({
+    let existente = await tx.suscripcion.findFirst({
       where: { referenciaExterna: externa.referencia },
       select: {
         id: true,
@@ -177,21 +203,9 @@ export class SuscripcionSyncService {
         moraDesde: true,
         graciaHasta: true,
         ultimoEventoProveedorEl: true,
+        actualizadoProveedorEl: true,
       },
     });
-
-    // Paddle no garantiza orden de entrega. Un evento viejo se audita, pero no
-    // puede regresar una suscripción que ya fue activada por uno más nuevo.
-    if (
-      opciones.ocurridoEl &&
-      existente?.ultimoEventoProveedorEl &&
-      opciones.ocurridoEl < existente.ultimoEventoProveedorEl
-    ) {
-      return {
-        aplicado: false,
-        motivo: `Evento anterior al último aplicado (${existente.ultimoEventoProveedorEl.toISOString()}).`,
-      };
-    }
 
     const tenantId = existente?.tenantId ?? externa.tenantId;
     if (!tenantId) {
@@ -202,14 +216,60 @@ export class SuscripcionSyncService {
       };
     }
 
-    const suscripcionDelTenant = await this.prisma.suscripcion.findFirst({
+    // Serializa también altas de dos referencias distintas para una empresa.
+    await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId}::uuid FOR UPDATE`;
+    existente = await tx.suscripcion.findFirst({
+      where: { referenciaExterna: externa.referencia },
+      select: {
+        id: true,
+        tenantId: true,
+        moraDesde: true,
+        graciaHasta: true,
+        ultimoEventoProveedorEl: true,
+        actualizadoProveedorEl: true,
+      },
+    });
+    const versionRemota = externa.actualizadoEl ?? opciones.ocurridoEl;
+    const versionLocal = existente?.actualizadoProveedorEl;
+    if (
+      (versionRemota && versionLocal && versionRemota < versionLocal) ||
+      (opciones.ocurridoEl &&
+        existente?.ultimoEventoProveedorEl &&
+        opciones.ocurridoEl < existente.ultimoEventoProveedorEl) ||
+      (!versionRemota &&
+        opciones.consultadaDesde &&
+        existente?.ultimoEventoProveedorEl &&
+        existente.ultimoEventoProveedorEl > opciones.consultadaDesde)
+    )
+      return {
+        aplicado: false,
+        motivo:
+          'El estado recibido es anterior al último aplicado. Se conserva el estado más reciente.',
+      };
+
+    const suscripcionDelTenant = await tx.suscripcion.findFirst({
       where: { tenantId },
       select: {
         id: true,
         referenciaExterna: true,
         estado: true,
+        proveedor: true,
       },
     });
+
+    if (
+      opciones.suscripcionEsperada &&
+      (suscripcionDelTenant?.id !== opciones.suscripcionEsperada.id ||
+        tenantId !== opciones.suscripcionEsperada.tenantId ||
+        suscripcionDelTenant.referenciaExterna !==
+          opciones.suscripcionEsperada.referencia ||
+        suscripcionDelTenant.proveedor !== 'paddle')
+    )
+      return {
+        aplicado: false,
+        motivo:
+          'El vínculo cambió durante la consulta; se conserva la suscripción actual.',
+      };
 
     // Un doble click, un reintento mientras Paddle terminaba el alta o un
     // webhook demorado no pueden reemplazar silenciosamente una suscripción
@@ -230,7 +290,7 @@ export class SuscripcionSyncService {
     // El plan sale del price_id: si el tenant hizo un upgrade en Paddle, el
     // cambio de plan se refleja solo, sin que nadie lo toque a mano acá.
     const plan = externa.precios.length
-      ? await this.prisma.plan.findFirst({
+      ? await tx.plan.findFirst({
           where: {
             OR: [
               { paddlePriceId: { in: externa.precios } },
@@ -283,6 +343,7 @@ export class SuscripcionSyncService {
       ...(opciones.origen !== 'webhook'
         ? { ultimaSyncProveedorEl: ahora }
         : {}),
+      ...(versionRemota ? { actualizadoProveedorEl: versionRemota } : {}),
       ...(opciones.ocurridoEl
         ? { ultimoEventoProveedorEl: opciones.ocurridoEl }
         : {}),
@@ -293,7 +354,7 @@ export class SuscripcionSyncService {
     const suscripcion = suscripcionDelTenant;
 
     if (suscripcion) {
-      await this.prisma.suscripcion.update({
+      await tx.suscripcion.update({
         where: { id: suscripcion.id },
         data: datos,
       });
@@ -307,7 +368,7 @@ export class SuscripcionSyncService {
           motivo: `Alta sin plan: ningún Plan tiene paddlePriceId en [${externa.precios.join(', ')}].`,
         };
       }
-      await this.prisma.suscripcion.create({
+      await tx.suscripcion.create({
         data: { tenantId, planId: plan.id, ...datos },
       });
     }

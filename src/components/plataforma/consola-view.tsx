@@ -1,12 +1,30 @@
 "use client";
 
+import fieldFocus from "@/components/design-system/field-focus.module.css";
+
+import { Input, TextArea as Textarea } from "@heroui/react";
+
+import { ActionButton } from "@/components/design-system/action-button";
+
 import * as React from "react";
 
 import { fechaHora } from "@/lib/fecha";
 import Link from "next/link";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { EmpresasView } from "./empresas-view";
+import { EquipoView } from "./equipo-view";
+import { SuscripcionesView } from "./suscripciones-view";
+import { PlanesView, type SalidaPlanes } from "./planes-view";
+import { ConfirmacionSalida } from "@/components/ui/confirmacion-salida";
 import { toast } from "sonner";
+import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
+import { FormDialog } from "@/components/design-system/form-dialog";
+import { SelectField } from "@/components/design-system/select-field";
+import styles from "./plataforma.module.css";
+import brandTheme from "@/components/design-system/brand-workspace-theme.module.css";
+const platformTheme = `${brandTheme.theme} ${styles.theme}`;
 
 import { logout } from "@/lib/auth";
 import { clearSessionToken, setSessionToken } from "@/lib/session";
@@ -21,16 +39,12 @@ import {
   PALETA,
   Panel,
   PLAN_COLORS,
-  PlanBadge,
   TLogo,
-  fechaCorta,
   fmtBytes,
   fmtN,
-  haceCuanto,
   riesgoDe,
 } from "@/components/plataforma/kit";
 import {
-  cambiarPlanTenant,
   cerrarImpersonacion,
   crearTenantPlataforma,
   getNegocioPlataforma,
@@ -39,20 +53,19 @@ import {
   vincularPlanPaddle,
   getSesionesImpersonacion,
   iniciarImpersonacion,
-  reactivarTenant,
-  suspenderTenant,
   type ConsolaPlataforma,
   type NegocioPlataforma,
   type PeriodoNegocio,
   type PlanCatalogo,
   type SesionImpersonacion,
+  type StaffPlataforma,
   type TenantConsola,
+  getConsolaPlataforma,
 } from "@/lib/plataforma-api";
 
 /**
- * La consola del control plane, con el shell de "Grafo Control Plane"
- * (claude.ai/design): rail oscuro. Regla de esta vista: cada número que
- * muestra es VERDAD — nada de datos inventados.
+ * La consola del equipo comparte la identidad visual de Grafo y presenta las
+ * mediciones disponibles con su alcance. Empresas carga sus datos por separado.
  *
  * La sección "Facturación" (billing de suscripciones desde el tenant
  * plataforma) se retiró: con Paddle como Merchant of Record el comprobante al
@@ -66,7 +79,9 @@ type Vista =
   | "negocio"
   | "tenants"
   | "planes"
-  | "impersonacion";
+  | "impersonacion"
+  | "equipo"
+  | "suscripciones";
 
 const NAV: Array<{
   grupo: string;
@@ -77,43 +92,97 @@ const NAV: Array<{
     items: [
       { k: "observabilidad", label: "Observabilidad", ic: "gauge" },
       { k: "negocio", label: "Negocio", ic: "chart" },
-      { k: "tenants", label: "Tenants", ic: "building" },
+      { k: "tenants", label: "Empresas", ic: "building" },
+      { k: "suscripciones", label: "Suscripciones", ic: "card" },
       { k: "planes", label: "Planes", ic: "check" },
     ],
   },
   {
     grupo: "Operaciones",
-    items: [{ k: "impersonacion", label: "Impersonación", ic: "mask" }],
+    items: [
+      { k: "impersonacion", label: "Impersonación", ic: "mask" },
+      { k: "equipo", label: "Equipo y acceso", ic: "users" },
+    ],
   },
 ];
 
 const TITULOS: Record<Vista, { crumb: string; title: string }> = {
+  suscripciones: { crumb: "Plataforma", title: "Suscripciones y cobros" },
+  equipo: { crumb: "Operaciones", title: "Equipo y acceso" },
   observabilidad: { crumb: "Plataforma", title: "Observabilidad" },
   negocio: { crumb: "Plataforma", title: "Negocio del ecosistema" },
-  tenants: { crumb: "Plataforma", title: "Tenants" },
-  planes: { crumb: "Plataforma", title: "Planes y precios" },
+  tenants: { crumb: "Plataforma", title: "Empresas" },
+  planes: { crumb: "Plataforma", title: "Planes y funciones" },
   impersonacion: { crumb: "Operaciones", title: "Impersonación y auditoría" },
+};
+const DESCRIPCIONES: Record<Vista, string> = {
+  suscripciones:
+    "Estado comercial, acceso y diagnóstico de la sincronización con Paddle.",
+  equipo: "Personas, permisos y protección del backoffice de Grafo.",
+  observabilidad:
+    "Salud de la plataforma, actividad y señales que necesitan atención.",
+  negocio: "Cómo crece y trabaja el ecosistema de gráficas.",
+  tenants: "Empresas, suscripciones y uso de la plataforma.",
+  planes: "Capacidades, límites y precios de cada plan.",
+  impersonacion: "Accesos de soporte y registro de las acciones del equipo.",
 };
 
 export function ConsolaPlataformaView({
-  datos: datosIniciales,
+  staff,
   ambiente,
 }: {
-  datos: ConsolaPlataforma;
+  staff: StaffPlataforma;
   ambiente: "produccion" | "desarrollo";
 }) {
-  // Estado local: las acciones del control plane (cambiar plan, suspender…)
-  // devuelven la consola actualizada y se refresca sin recargar.
-  const [datos, setDatos] = React.useState(datosIniciales);
-  const [vista, setVista] = React.useState<Vista>("observabilidad");
-  const [tenantAbierto, setTenantAbierto] = React.useState<string | null>(null);
+  const [datos, setDatos] = React.useState<ConsolaPlataforma | null>(null);
+  const [errorConsola, setErrorConsola] = React.useState<string | null>(null);
+  const [intento, setIntento] = React.useState(0);
+  const params = useSearchParams();
+  const candidata = params.get("vista");
+  const vista: Vista =
+    candidata && Object.prototype.hasOwnProperty.call(TITULOS, candidata)
+      ? (candidata as Vista)
+      : "observabilidad";
   const [cerrando, setCerrando] = React.useState(false);
   const router = useRouter();
-  const esAdmin = datos.staff?.rol === "ADMIN";
-  // El staff del backoffice no tiene tenant: no puede "volver a la app", sólo
-  // cerrar sesión (que lo deja en su propio login). El que llegó desde su
-  // dashboard sí conserva "Volver a la app".
-  const esSesionPlataforma = datos.staff?.esSesionPlataforma === true;
+  const esAdmin = staff.rol === "ADMIN";
+  const esSesionPlataforma = staff.esSesionPlataforma;
+  const salidaPlanes = React.useRef<SalidaPlanes | null>(null);
+  const [salidaPendiente, setSalidaPendiente] = React.useState<
+    (() => void) | null
+  >(null);
+  const [guardandoSalida, setGuardandoSalida] = React.useState(false);
+  const actualizarSalidaPlanes = React.useCallback(
+    (estado: SalidaPlanes | null) => {
+      salidaPlanes.current = estado;
+    },
+    [],
+  );
+  const navegar = (accion: () => void) => {
+    if (salidaPlanes.current?.cambios) setSalidaPendiente(() => accion);
+    else accion();
+  };
+
+  React.useEffect(() => {
+    if (vista !== "observabilidad" && vista !== "impersonacion") return;
+    let vigente = true;
+    getConsolaPlataforma()
+      .then((c) => {
+        if (vigente) {
+          setDatos(c);
+          setErrorConsola(null);
+        }
+      })
+      .catch((e) => {
+        if (vigente)
+          setErrorConsola(
+            e instanceof Error ? e.message : "No se pudo cargar la consola.",
+          );
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [vista, intento]);
 
   const cerrarSesion = async () => {
     if (cerrando) return;
@@ -128,10 +197,7 @@ export function ConsolaPlataformaView({
   };
 
   const meta = TITULOS[vista];
-  const abierto = tenantAbierto
-    ? (datos.tenants.find((t) => t.id === tenantAbierto) ?? null)
-    : null;
-  const iniciales = (datos.staff?.nombre ?? datos.staff?.email ?? "?")
+  const iniciales = (staff?.nombre ?? staff?.email ?? "?")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -140,114 +206,176 @@ export function ConsolaPlataformaView({
     .toUpperCase();
 
   return (
-    <div className="cpl-bo">
-      <aside className="cpl-rail">
-        <div className="cpl-rail-top">
-          <div className="cpl-rail-brand">
-            <span className="cpl-rail-mark">
-              <BIco.node />
-            </span>
+    <DesignSystemProvider theme="brand" appearance="light">
+      <div
+        className={`${platformTheme} ${styles.shell}`}
+        data-appearance="light"
+        data-ui="heroui"
+      >
+        <aside className="cpl-rail">
+          <div className="cpl-rail-top">
+            <div className="cpl-rail-brand">
+              <div>
+                <GrafoprintBrand />
+                <div className="cpl-rail-sub">Administración de plataforma</div>
+              </div>
+            </div>
+            <div className="cpl-env">
+              <span className={`d ${ambiente === "produccion" ? "" : "dev"}`} />
+              {ambiente === "produccion" ? "Producción" : "Desarrollo"}
+              <span className="who">Equipo Grafo</span>
+            </div>
+          </div>
+          <nav className="cpl-rail-nav" aria-label="Secciones de Plataforma">
+            {NAV.map((g) => (
+              <React.Fragment key={g.grupo}>
+                <div className="cpl-rail-lbl">{g.grupo}</div>
+                {g.items.map((it) => {
+                  const Ni = BIco[it.ic];
+                  return (
+                    <button
+                      key={it.k}
+                      type="button"
+                      className={`cpl-nav-i ${vista === it.k ? "on" : ""}`}
+                      aria-current={vista === it.k ? "page" : undefined}
+                      onClick={() => {
+                        if (vista !== it.k)
+                          navegar(() =>
+                            router.push(`/plataforma?vista=${it.k}`),
+                          );
+                      }}
+                    >
+                      <Ni />
+                      <span>{it.label}</span>
+                    </button>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+            {esSesionPlataforma ? null : (
+              <Link
+                className="cpl-nav-i cpl-nav-volver"
+                href="/"
+                onClick={(e) => {
+                  if (salidaPlanes.current?.cambios) {
+                    e.preventDefault();
+                    navegar(() => router.push("/"));
+                  }
+                }}
+              >
+                <BIco.arrowLeft />
+                <span>Volver a la app</span>
+              </Link>
+            )}
+            <button
+              type="button"
+              className="cpl-nav-i cpl-nav-salir"
+              onClick={() => navegar(() => void cerrarSesion())}
+              disabled={cerrando}
+            >
+              <BIco.logout />
+              <span>{cerrando ? "Cerrando sesión…" : "Cerrar sesión"}</span>
+            </button>
+          </nav>
+          <div className="cpl-rail-user">
+            <span className="av">{iniciales}</span>
             <div>
-              <div className="cpl-rail-name">Grafo</div>
-              <div className="cpl-rail-sub">Control Plane</div>
+              <div className="nm">{staff?.nombre ?? staff?.email}</div>
+              <div className="rl">
+                Staff · {staff?.rol === "ADMIN" ? "Admin" : "Soporte"} de
+                plataforma
+              </div>
             </div>
           </div>
-          <div className="cpl-env">
-            <span className={`d ${ambiente === "produccion" ? "" : "dev"}`} />
-            {ambiente === "produccion" ? "Producción" : "Desarrollo"}
-            <span className="who">grupo idea</span>
-          </div>
-        </div>
-        <nav className="cpl-rail-nav">
-          {NAV.map((g) => (
-            <React.Fragment key={g.grupo}>
-              <div className="cpl-rail-lbl">{g.grupo}</div>
-              {g.items.map((it) => {
-                const Ni = BIco[it.ic];
-                return (
-                  <button
-                    key={it.k}
-                    type="button"
-                    className={`cpl-nav-i ${vista === it.k ? "on" : ""}`}
-                    onClick={() => {
-                      setVista(it.k);
-                      setTenantAbierto(null);
-                    }}
-                  >
-                    <Ni />
-                    <span>{it.label}</span>
-                    {it.k === "tenants" ? (
-                      <span className="cnt">{datos.tenants.length}</span>
-                    ) : null}
+        </aside>
 
-                  </button>
-                );
-              })}
-            </React.Fragment>
-          ))}
-          {esSesionPlataforma ? null : (
-            <Link className="cpl-nav-i cpl-nav-volver" href="/">
-              <BIco.arrowLeft />
-              <span>Volver a la app</span>
-            </Link>
-          )}
-          <button
-            type="button"
-            className="cpl-nav-i cpl-nav-salir"
-            onClick={cerrarSesion}
-            disabled={cerrando}
-          >
-            <BIco.logout />
-            <span>{cerrando ? "Cerrando sesión…" : "Cerrar sesión"}</span>
-          </button>
-        </nav>
-        <div className="cpl-rail-user">
-          <span className="av">{iniciales}</span>
-          <div>
-            <div className="nm">{datos.staff?.nombre ?? datos.staff?.email}</div>
-            <div className="rl">
-              Staff · {datos.staff?.rol === "ADMIN" ? "Admin" : "Soporte"} de
-              plataforma
+        <main
+          key={`${vista}:${params.get("empresa") ?? ""}:${params.get("suscripcion") ?? ""}`}
+          className={`cpl-work ${vista === "planes" ? styles.plansWork : ""}`}
+        >
+          <div className="cpl-topbar">
+            <div>
+              <div className="crumb">{meta.crumb}</div>
+              <h1>
+                {meta.title}
+                <span className="period">.</span>
+              </h1>
+              <p className="description">{DESCRIPCIONES[vista]}</p>
             </div>
+            <span className="grow" />
           </div>
-        </div>
-      </aside>
 
-      <main className="cpl-work">
-        <div className="cpl-topbar">
-          <div>
-            <div className="crumb">{meta.crumb}</div>
-            <h1>{meta.title}</h1>
-          </div>
-          <span className="grow" />
-        </div>
-
-        {vista === "observabilidad" ? (
-          <Observabilidad
-            datos={datos}
-            onVerTenant={(id) => {
-              setVista("tenants");
-              setTenantAbierto(id);
-            }}
-          />
-        ) : null}
-        {vista === "negocio" ? <Negocio /> : null}
-        {vista === "tenants" ? (
-          <Tenants
-            tenants={datos.tenants}
-            abierto={abierto}
-            esAdmin={esAdmin}
-            onAbrir={setTenantAbierto}
-            onCerrar={() => setTenantAbierto(null)}
-            onConsola={setDatos}
-          />
-        ) : null}
-        {vista === "planes" ? <Planes esAdmin={esAdmin} /> : null}
-        {vista === "impersonacion" ? (
-          <Impersonacion datos={datos} esAdmin={esAdmin} />
-        ) : null}
-      </main>
-    </div>
+          {vista === "observabilidad" && datos ? (
+            <Observabilidad
+              datos={datos}
+              onVerTenant={(id) =>
+                router.push(`/plataforma?vista=tenants&empresa=${id}`)
+              }
+            />
+          ) : null}
+          {(vista === "observabilidad" || vista === "impersonacion") &&
+          (!datos || errorConsola) ? (
+            <div className="cpl-page" role="status">
+              {errorConsola ?? "Cargando consola…"}
+              {errorConsola ? (
+                <ActionButton
+                  type="button"
+                  variant="outline"
+                  onPress={() => setIntento((n) => n + 1)}
+                >
+                  Reintentar
+                </ActionButton>
+              ) : null}
+            </div>
+          ) : null}
+          {vista === "negocio" ? <Negocio /> : null}
+          {vista === "tenants" ? <Tenants esAdmin={esAdmin} /> : null}
+          {vista === "planes" ? (
+            <PlanesView
+              esAdmin={esAdmin}
+              planesActuales={<Planes esAdmin={esAdmin} />}
+              onSalidaChange={actualizarSalidaPlanes}
+            />
+          ) : null}
+          {vista === "suscripciones" ? (
+            <SuscripcionesView esAdmin={esAdmin} />
+          ) : null}
+          {vista === "equipo" ? (
+            <EquipoView
+              esAdmin={esAdmin}
+              esSesionPlataforma={esSesionPlataforma}
+            />
+          ) : null}
+          {vista === "impersonacion" && datos ? (
+            <Impersonacion datos={datos} esAdmin={esAdmin} />
+          ) : null}
+        </main>
+        <ConfirmacionSalida
+          open={!!salidaPendiente}
+          cambios={salidaPlanes.current?.cambios ?? 0}
+          donde="la propuesta de planes"
+          guardando={guardandoSalida}
+          onSeguirEditando={() => setSalidaPendiente(null)}
+          onDescartarYSalir={() => {
+            const accion = salidaPendiente;
+            setSalidaPendiente(null);
+            accion?.();
+          }}
+          onGuardarYSalir={async () => {
+            setGuardandoSalida(true);
+            try {
+              if (await salidaPlanes.current?.guardar()) {
+                const accion = salidaPendiente;
+                setSalidaPendiente(null);
+                accion?.();
+              } else setSalidaPendiente(null);
+            } finally {
+              setGuardandoSalida(false);
+            }
+          }}
+        />
+      </div>
+    </DesignSystemProvider>
   );
 }
 
@@ -289,8 +417,18 @@ const fugaLabel = (m: string) => FUGA_LABEL[m] ?? m;
 /** Meses para etiquetas de ejes: las claves de bucket se parten como string,
  *  sin pasar por `Date`/ICU (evita el corrimiento de día por zona). */
 const MES_CORTO = [
-  "ene", "feb", "mar", "abr", "may", "jun",
-  "jul", "ago", "sep", "oct", "nov", "dic",
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
 ];
 
 function Negocio() {
@@ -328,6 +466,7 @@ function Negocio() {
           key={p.k}
           type="button"
           className={periodo === p.k ? "on" : ""}
+          aria-pressed={periodo === p.k}
           onClick={() => setPeriodo(p.k)}
         >
           {p.label}
@@ -362,7 +501,10 @@ function Negocio() {
     value: t.ventas,
     color: PALETA[i % PALETA.length],
   }));
-  const maxTenant = Math.max(1, ...(data?.porTenant ?? []).map((t) => t.ventas));
+  const maxTenant = Math.max(
+    1,
+    ...(data?.porTenant ?? []).map((t) => t.ventas),
+  );
   const mediana = data?.medianaTicket ?? 0;
   // El benchmark ticket-vs-mediana sólo tiene sentido con varias imprentas.
   const mostrarBenchmark = (data?.porTenant.length ?? 0) >= 2 && mediana > 0;
@@ -409,7 +551,9 @@ function Negocio() {
       ) : null}
 
       {data && k ? (
-        <div style={{ opacity: cargando ? 0.55 : 1, transition: "opacity .15s" }}>
+        <div
+          style={{ opacity: cargando ? 0.55 : 1, transition: "opacity .15s" }}
+        >
           <div className="cpl-kgrid">
             <Kpi
               label="Ventas del ecosistema"
@@ -718,11 +862,15 @@ function Negocio() {
                 </div>
                 <div className="cpl-neg-funnel-side">
                   <div className="fk">
-                    <b className="cpl-mono">{data.embudo.tasaAprobacion ?? "—"}%</b>
+                    <b className="cpl-mono">
+                      {data.embudo.tasaAprobacion ?? "—"}%
+                    </b>
                     <span>tasa de aprobación</span>
                   </div>
                   <div className="fk">
-                    <b className="cpl-mono">{data.embudo.tasaEntrega ?? "—"}%</b>
+                    <b className="cpl-mono">
+                      {data.embudo.tasaEntrega ?? "—"}%
+                    </b>
                     <span>emitida → entregada</span>
                   </div>
                   {data.embudo.fugas.length ? (
@@ -823,7 +971,8 @@ function Observabilidad({
   const sparkCotiz = actividadSemanal.map((sem) => sem.cotizaciones);
   const sparkCobros = actividadSemanal.map((sem) => sem.cobros);
   // Tenants acumulados: el spark del KPI, desde las altas mensuales reales.
-  const base = resumen.tenants - altasMensuales.reduce((s, m) => s + m.altas, 0);
+  const base =
+    resumen.tenants - altasMensuales.reduce((s, m) => s + m.altas, 0);
   const sparkTenants = altasMensuales.reduce<number[]>(
     (arr, m) => [...arr, (arr[arr.length - 1] ?? base) + m.altas],
     [],
@@ -831,7 +980,10 @@ function Observabilidad({
 
   // Distribución por plan — real desde la etapa B1. "Sin plan" = legacy.
   const donutPlanes = (() => {
-    const porPlan = new Map<string, { label: string; value: number; color: string }>();
+    const porPlan = new Map<
+      string,
+      { label: string; value: number; color: string }
+    >();
     for (const t of tenants) {
       const clave = t.plan?.codigo ?? "sin-plan";
       const actual = porPlan.get(clave);
@@ -850,12 +1002,12 @@ function Observabilidad({
     <div className="cpl-page">
       <div className="cpl-kgrid">
         <Kpi
-          label="MRR"
+          label="Estimación de catálogo"
           value={mk(resumen.mrr)}
           sub={
             resumen.sinPlan > 0
               ? `${resumen.sinPlan} tenant${resumen.sinPlan === 1 ? "" : "s"} sin plan`
-              : "mensual recurrente"
+              : "precios publicados · no es MRR comercial"
           }
         />
         <Kpi
@@ -892,7 +1044,7 @@ function Observabilidad({
           sparkColor="var(--ok)"
         />
         <Kpi
-          label="Usuarios activos"
+          label="Usuarios habilitados"
           value={fmtN(resumen.usuariosActivos)}
           sub={`storage ${fmtBytes(resumen.storageBytes)}`}
         />
@@ -939,7 +1091,7 @@ function Observabilidad({
           </div>
         </Panel>
 
-        <Panel title="Movimientos de MRR" sub="requiere etapa B">
+        <Panel title="Ingresos recurrentes" sub="medición comercial pendiente">
           {[
             { t: "Nuevos", s: "altas del mes", c: "var(--ok)" },
             { t: "Expansión", s: "upgrades de plan", c: "var(--acc-2)" },
@@ -965,8 +1117,8 @@ function Observabilidad({
           <div className="cpl-callout info" style={{ marginTop: 12 }}>
             <BIco.card />
             <div>
-              Se enciende con <b>planes y suscripciones</b> (etapa B): MRR real,
-              no estimado.
+              El desglose por altas, cambios de plan y bajas todavía no está
+              disponible.
             </div>
           </div>
         </Panel>
@@ -1112,7 +1264,9 @@ function Observabilidad({
                         <TLogo nombre={t.nombre} slug={t.slug} />
                         <div>
                           <div className="n">{t.nombre}</div>
-                          <div className="sub">{t.usuariosActivos} usuarios</div>
+                          <div className="sub">
+                            {t.usuariosActivos} usuarios
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -1127,7 +1281,10 @@ function Observabilidad({
                         </div>
                       </div>
                     </td>
-                    <td className="r cpl-mono" style={{ color: "var(--muted)" }}>
+                    <td
+                      className="r cpl-mono"
+                      style={{ color: "var(--muted-text)" }}
+                    >
                       {fmtN(t.ots30d)}
                     </td>
                   </tr>
@@ -1141,8 +1298,8 @@ function Observabilidad({
       <div className="cpl-note">
         Lectura agregada cross-tenant, todo desde la base: sesiones, órdenes,
         cotizaciones, cobros, storage, integraciones y la cola de WhatsApp. Los
-        deltas comparan contra los 30 días anteriores. MRR, planes y salud de
-        infraestructura (uptime, latencia) llegan con la etapa B y con APM.
+        deltas comparan contra los 30 días anteriores. El monitoreo de
+        disponibilidad y latencia todavía no está conectado.
       </div>
     </div>
   );
@@ -1150,556 +1307,41 @@ function Observabilidad({
 
 // ── Tenants ────────────────────────────────────────────────────────────
 
-type Filtro = "todos" | "activos" | "riesgo" | "suspendidos";
-
-const FILTROS: Array<{ k: Filtro; label: string }> = [
-  { k: "todos", label: "Todos" },
-  { k: "activos", label: "Activos" },
-  { k: "riesgo", label: "En riesgo" },
-  { k: "suspendidos", label: "Suspendidos" },
-];
-
-function Tenants({
-  tenants,
-  abierto,
-  esAdmin,
-  onAbrir,
-  onCerrar,
-  onConsola,
-}: {
-  tenants: TenantConsola[];
-  abierto: TenantConsola | null;
-  esAdmin: boolean;
-  onAbrir: (id: string) => void;
-  onCerrar: () => void;
-  onConsola: (c: ConsolaPlataforma) => void;
-}) {
-  const [q, setQ] = React.useState("");
-  const [filtro, setFiltro] = React.useState<Filtro>("todos");
+function Tenants({ esAdmin }: { esAdmin: boolean }) {
   const [creando, setCreando] = React.useState(false);
-  // El catálogo se pide una vez, cuando un ADMIN lo va a necesitar.
-  const [planes, setPlanes] = React.useState<PlanCatalogo[] | null>(null);
+  const [version, setVersion] = React.useState(0);
+  const [planes, setPlanes] = React.useState<PlanCatalogo[]>([]);
   React.useEffect(() => {
     if (!esAdmin) return;
-    let vivo = true;
+    let vigente = true;
     getPlanesPlataforma()
-      .then((p) => vivo && setPlanes(p))
-      .catch(() => vivo && setPlanes([]));
+      .then((p) => {
+        if (vigente) setPlanes(p);
+      })
+      .catch(() => {
+        if (vigente) toast.error("No se pudo cargar el catálogo de planes.");
+      });
     return () => {
-      vivo = false;
+      vigente = false;
     };
   }, [esAdmin]);
-
-  const filas = tenants.filter((t) => {
-    if (filtro === "activos" && (!t.activo || riesgoDe(t))) return false;
-    if (filtro === "riesgo" && (!t.activo || !riesgoDe(t))) return false;
-    if (filtro === "suspendidos" && t.activo) return false;
-    const s = q.trim().toLowerCase();
-    return (
-      !s || t.nombre.toLowerCase().includes(s) || t.slug.toLowerCase().includes(s)
-    );
-  });
-
-  return (
-    <div className="cpl-page">
-      <div className="cpl-toolbar">
-        <div className="cpl-search">
-          <BIco.search />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nombre o slug…"
-          />
-        </div>
-        <div className="cpl-seg">
-          {FILTROS.map((f) => (
-            <button
-              key={f.k}
-              type="button"
-              className={filtro === f.k ? "on" : ""}
-              onClick={() => setFiltro(f.k)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <span style={{ flex: 1 }} />
-        {esAdmin ? (
-          <button
-            type="button"
-            className="cpl-btn pri"
-            onClick={() => setCreando(true)}
-          >
-            <BIco.building style={{ width: 15 }} />
-            Nuevo tenant
-          </button>
-        ) : null}
-      </div>
-
-      <Panel flush>
-        {filas.length === 0 ? (
-          <div className="cpl-empty">
-            <BIco.search />
-            <div className="t">Sin resultados</div>
-            <div className="s">Ajustá la búsqueda o el filtro.</div>
-          </div>
-        ) : (
-          <table className="cpl-tbl">
-            <thead>
-              <tr>
-                <th>Tenant</th>
-                <th>Plan</th>
-                <th>Estado</th>
-                <th className="r">MRR</th>
-                <th className="r">Usuarios</th>
-                <th className="r">OTs 30d</th>
-                <th className="r">Storage</th>
-                <th>Integraciones</th>
-                <th className="r">Últ. actividad</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((t) => (
-                <tr key={t.id} onClick={() => onAbrir(t.id)}>
-                  <td>
-                    <div className="cpl-tname">
-                      <TLogo nombre={t.nombre} slug={t.slug} />
-                      <div>
-                        <div className="n">{t.nombre}</div>
-                        <div className="sub">{t.slug}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    {t.plan ? (
-                      <PlanBadge codigo={t.plan.codigo} nombre={t.plan.nombre} />
-                    ) : (
-                      <span style={{ color: "var(--muted-2)", fontSize: 11.5 }}>
-                        sin plan
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <EstadoPill t={t} />
-                  </td>
-                  <td className="r cpl-mono">
-                    {t.plan && t.plan.estado === "activa" && t.plan.precioMensual > 0
-                      ? mk(t.plan.precioMensual)
-                      : "—"}
-                  </td>
-                  <td className="r cpl-mono">
-                    {t.usuariosActivos}
-                    {t.plan?.usuariosMax ? (
-                      <span style={{ color: "var(--muted-2)" }}>
-                        {" "}
-                        / {t.plan.usuariosMax}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="r cpl-mono">{t.ots30d}</td>
-                  <td className="r cpl-mono">{fmtBytes(t.storageBytes)}</td>
-                  <td>
-                    <span className="cpl-ints">
-                      {t.integraciones.length === 0 ? (
-                        <span style={{ color: "var(--muted-2)" }}>—</span>
-                      ) : (
-                        t.integraciones.map((i) => (
-                          <span
-                            key={i.proveedor}
-                            className={`cpl-int ${i.estado.toLowerCase()}`}
-                            title={i.ultimoErrorTexto ?? i.estado}
-                          >
-                            {i.proveedor === "MERCADOPAGO" ? "MP" : i.proveedor}
-                          </span>
-                        ))
-                      )}
-                    </span>
-                  </td>
-                  <td
-                    className="r"
-                    style={{
-                      color:
-                        t.sinActividad14d && t.activo
-                          ? "var(--warn)"
-                          : "var(--muted)",
-                      fontSize: 11.5,
-                    }}
-                  >
-                    {haceCuanto(t.ultimoAccesoEl)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Panel>
-
-      <div className="cpl-note">
-        {filas.length} de {tenants.length} tenants. Las acciones de ciclo de
-        vida (plan, suspensión, alta) son de ADMIN y quedan en la auditoría.
-      </div>
-
-      {abierto ? (
-        <TenantDrawer
-          t={abierto}
-          esAdmin={esAdmin}
-          planes={planes ?? []}
-          onCerrar={onCerrar}
-          onConsola={onConsola}
-        />
-      ) : null}
-      {creando ? (
-        <CrearTenantModal
-          planes={planes ?? []}
-          onCerrar={() => setCreando(false)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function TenantDrawer({
-  t,
-  esAdmin,
-  planes,
-  onCerrar,
-  onConsola,
-}: {
-  t: TenantConsola;
-  esAdmin: boolean;
-  planes: PlanCatalogo[];
-  onCerrar: () => void;
-  onConsola: (c: ConsolaPlataforma) => void;
-}) {
-  const riesgo = riesgoDe(t);
-  const [suspendiendo, setSuspendiendo] = React.useState(false);
-  const [ocupado, setOcupado] = React.useState(false);
-
-  const cambiar = async (planId: string) => {
-    if (!planId || ocupado) return;
-    setOcupado(true);
-    try {
-      onConsola(await cambiarPlanTenant(t.id, planId));
-      toast.success("Plan actualizado.");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el plan.");
-    } finally {
-      setOcupado(false);
-    }
-  };
-
-  const reactivar = async () => {
-    if (ocupado) return;
-    setOcupado(true);
-    try {
-      onConsola(await reactivarTenant(t.id));
-      toast.success("Tenant reactivado.");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo reactivar.");
-    } finally {
-      setOcupado(false);
-    }
-  };
-
-  const gb = (n: number) => n / 1024 ** 3;
-  const limites: Array<{
-    k: string;
-    usado: number;
-    tope: number | null;
-    texto: string;
-  }> = t.plan
-    ? [
-        {
-          k: "Usuarios",
-          usado: t.usuariosActivos,
-          tope: t.plan.usuariosMax,
-          texto: `${t.usuariosActivos} / ${t.plan.usuariosMax ?? "∞"}`,
-        },
-        {
-          k: "Órdenes / mes",
-          usado: t.ots30d,
-          tope: t.plan.ordenesMesMax,
-          texto: `${t.ots30d} / ${t.plan.ordenesMesMax ?? "∞"}`,
-        },
-        {
-          k: "Almacenamiento",
-          usado: gb(t.storageBytes),
-          tope: t.plan.storageGb,
-          texto: `${fmtBytes(t.storageBytes)} / ${t.plan.storageGb ?? "∞"} GB`,
-        },
-      ]
-    : [];
-
   return (
     <>
-      <div className="cpl-scrim" onClick={onCerrar} />
-      <aside className="cpl-drawer">
-        <div className="cpl-dh">
-          <TLogo nombre={t.nombre} slug={t.slug} size={46} />
-          <div>
-            <div className="dh-title">{t.nombre}</div>
-            <div className="dh-sub">{t.slug}</div>
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              {t.plan ? (
-                <PlanBadge codigo={t.plan.codigo} nombre={t.plan.nombre} />
-              ) : null}
-              <EstadoPill t={t} />
-            </div>
-          </div>
-          <button type="button" className="x" onClick={onCerrar}>
-            <BIco.x />
-          </button>
-        </div>
-
-        <div className="cpl-db">
-          {riesgo ? (
-            <div className="cpl-callout" style={{ marginBottom: 6 }}>
-              <BIco.alert />
-              <div>
-                <b>Atención.</b> {riesgo}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="cpl-dsec">
-            <div className="dsec-t">Cuenta</div>
-            <div className="cpl-kv2">
-              <div className="c">
-                <div className="k">Alta</div>
-                <div className="v cpl-mono">{fechaCorta(t.creadoEl)}</div>
-              </div>
-              <div className="c">
-                <div className="k">Última actividad</div>
-                <div className="v">{haceCuanto(t.ultimoAccesoEl)}</div>
-              </div>
-              <div className="c">
-                <div className="k">Actividad 30d</div>
-                <div className="v cpl-mono">
-                  {t.ots30d} OTs · {t.cotizaciones30d} cotiz. · {t.cobros30d}{" "}
-                  cobros
-                </div>
-              </div>
-              <div className="c">
-                <div className="k">WhatsApp</div>
-                <div className="v cpl-mono">
-                  {t.whatsappFallidas > 0
-                    ? `${t.whatsappFallidas} fallidas`
-                    : t.whatsappPendientes > 0
-                      ? `${t.whatsappPendientes} pend.`
-                      : "ok"}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="cpl-dsec">
-            <div className="dsec-t">Plan y límites</div>
-            {t.plan ? (
-              <div className="cpl-limits">
-                {limites.map((l) => {
-                  const pct = l.tope
-                    ? Math.min(100, (l.usado / l.tope) * 100)
-                    : 0;
-                  const tono = pct >= 90 ? "dng" : pct >= 75 ? "warn" : "";
-                  return (
-                    <div className="cpl-limit" key={l.k}>
-                      <div className="lt">
-                        <span className="lk">{l.k}</span>
-                        <span className="lv">{l.texto}</span>
-                      </div>
-                      <div className={`cpl-meter ${tono}`}>
-                        <span style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="cpl-callout info">
-                <BIco.card />
-                <div>
-                  <b>Sin plan asignado (legacy).</b> Se lo trata como ilimitado
-                  hasta que se le asigne uno — los gates recién muerden con el
-                  plan puesto.
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="cpl-dsec">
-            <div className="dsec-t">Suscripción · facturación de Grupo Idea</div>
-            <div className="cpl-kv2">
-              <div className="c">
-                <div className="k">MRR</div>
-                <div className="v cpl-mono">
-                  {t.plan && t.plan.estado === "activa"
-                    ? mk(t.plan.precioMensual)
-                    : "—"}
-                </div>
-              </div>
-              <div className="c">
-                <div className="k">Facturas</div>
-                <div className="v" style={{ fontSize: 13 }}>
-                  llegan con la etapa B2
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="cpl-dsec">
-            <div className="dsec-t">Integraciones</div>
-            {t.integraciones.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--muted-2)" }}>
-                Sin integraciones conectadas.
-              </div>
-            ) : (
-              <div className="cpl-kv2">
-                {t.integraciones.map((i) => (
-                  <div className="c" key={i.proveedor}>
-                    <div className="k">{i.proveedor}</div>
-                    <div
-                      className="v"
-                      style={{
-                        color:
-                          i.estado === "CONECTADA"
-                            ? "var(--ok)"
-                            : i.estado === "ERROR"
-                              ? "var(--dng)"
-                              : "var(--muted)",
-                        fontSize: 13,
-                      }}
-                    >
-                      {i.estado === "CONECTADA"
-                        ? "Conectada"
-                        : i.estado === "ERROR"
-                          ? (i.ultimoErrorTexto ?? "En error")
-                          : "Desconectada"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {esAdmin ? (
-          <div className="cpl-dactions">
-            <select
-              className="cpl-select"
-              value=""
-              disabled={ocupado}
-              onChange={(e) => void cambiar(e.target.value)}
-            >
-              <option value="" disabled>
-                {t.plan ? `Cambiar plan (${t.plan.nombre})…` : "Asignar plan…"}
-              </option>
-              {planes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre} · {mk(p.precioMensual)}/mes
-                </option>
-              ))}
-            </select>
-            <span style={{ flex: 1 }} />
-            {t.activo ? (
-              <button
-                type="button"
-                className="cpl-btn dng"
-                disabled={ocupado}
-                onClick={() => setSuspendiendo(true)}
-              >
-                Suspender
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="cpl-btn"
-                disabled={ocupado}
-                onClick={() => void reactivar()}
-              >
-                Reactivar
-              </button>
-            )}
-          </div>
-        ) : null}
-      </aside>
-
-      {suspendiendo ? (
-        <SuspenderModal
-          t={t}
-          onCerrar={() => setSuspendiendo(false)}
-          onConsola={(c) => {
-            onConsola(c);
-            setSuspendiendo(false);
-            onCerrar();
+      <EmpresasView
+        esAdmin={esAdmin}
+        planes={planes}
+        version={version}
+        onCrear={() => setCreando(true)}
+      />
+      {creando ? (
+        <CrearTenantModal
+          planes={planes}
+          onCerrar={() => {
+            setCreando(false);
+            setVersion((v) => v + 1);
           }}
         />
       ) : null}
-    </>
-  );
-}
-
-/** Suspender pide MOTIVO: va a la auditoría y el cliente puede preguntarlo. */
-function SuspenderModal({
-  t,
-  onCerrar,
-  onConsola,
-}: {
-  t: TenantConsola;
-  onCerrar: () => void;
-  onConsola: (c: ConsolaPlataforma) => void;
-}) {
-  const [motivo, setMotivo] = React.useState("");
-  const [ocupado, setOcupado] = React.useState(false);
-
-  const confirmar = async () => {
-    if (motivo.trim().length < 3 || ocupado) return;
-    setOcupado(true);
-    try {
-      onConsola(await suspenderTenant(t.id, motivo.trim()));
-      toast.success(`${t.nombre} suspendido.`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo suspender.");
-      setOcupado(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="cpl-scrim" style={{ zIndex: 90 }} onClick={onCerrar} />
-      <div className="cpl-modal">
-        <div className="cpl-mh">
-          <div className="mt">Suspender {t.nombre}</div>
-          <div className="ms">
-            Corta el acceso de todos sus usuarios en el acto y pausa la
-            suscripción. No borra nada: reactivar lo deja como estaba.
-          </div>
-        </div>
-        <div className="cpl-mb">
-          <div className="cpl-field">
-            <label>Motivo (queda en la auditoría)</label>
-            <textarea
-              rows={3}
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Falta de pago desde…"
-              autoFocus
-            />
-          </div>
-        </div>
-        <div className="cpl-mf">
-          <button type="button" className="cpl-btn" onClick={onCerrar}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="cpl-btn dng"
-            disabled={motivo.trim().length < 3 || ocupado}
-            onClick={() => void confirmar()}
-          >
-            {ocupado ? "Suspendiendo…" : "Suspender tenant"}
-          </button>
-        </div>
-      </div>
     </>
   );
 }
@@ -1736,7 +1378,7 @@ function CrearTenantModal({
         adminEmail: email.trim(),
       });
       setInvitacionUrl(r.invitacionUrl);
-      toast.success("Tenant creado. Mandale el link de invitación.");
+      toast.success("Empresa creada. Mandale el link de invitación.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear.");
       setOcupado(false);
@@ -1744,93 +1386,109 @@ function CrearTenantModal({
   };
 
   return (
-    <>
-      <div className="cpl-scrim" style={{ zIndex: 90 }} onClick={onCerrar} />
-      <div className="cpl-modal">
-        <div className="cpl-mh">
-          <div className="mt">Nuevo tenant</div>
-          <div className="ms">
-            Crea la empresa con su plan e invita al primer administrador. El
-            link de invitación se lo mandás vos — vence en 7 días.
+    <FormDialog
+      isOpen
+      onOpenChange={(open) => {
+        if (!open) onCerrar();
+      }}
+      title="Nueva empresa"
+      description="Creá la empresa, elegí su plan e invitá al primer administrador. El enlace de invitación vence en 7 días."
+      isDismissable={!ocupado || !!invitacionUrl}
+      className={`${platformTheme} ${styles.dialog}`}
+    >
+      {invitacionUrl ? (
+        <div className="cpl-mb">
+          <div className="cpl-field">
+            <label>Link de invitación</label>
+            <div className="cpl-invlink">{invitacionUrl}</div>
+          </div>
+          <ActionButton
+            type="button"
+            variant="primary"
+            onPress={() => {
+              void navigator.clipboard?.writeText(invitacionUrl);
+              toast.success("Link copiado.");
+            }}
+          >
+            Copiar link
+          </ActionButton>
+        </div>
+      ) : (
+        <div className="cpl-mb">
+          <div className="cpl-field">
+            <label htmlFor="empresa-nombre">Nombre de la imprenta</label>
+            <Input
+              className={fieldFocus.singleBorder}
+              fullWidth
+              id="empresa-nombre"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Gráfica del Sur SRL"
+              autoFocus
+            />
+          </div>
+          <div className="cpl-field">
+            <label htmlFor="empresa-slug">Slug (identificador corto)</label>
+            <Input
+              className={fieldFocus.singleBorder}
+              fullWidth
+              id="empresa-slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value.toLowerCase())}
+              placeholder="grafica-del-sur"
+            />
+          </div>
+          <div className="cpl-field">
+            <label htmlFor="empresa-email">Email del administrador</label>
+            <Input
+              className={fieldFocus.singleBorder}
+              fullWidth
+              id="empresa-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="duenio@imprenta.com"
+            />
+          </div>
+          <div className="cpl-field">
+            <label htmlFor="empresa-plan">Plan</label>
+            <SelectField
+              id="empresa-plan"
+              aria-label="Plan"
+              value={planId}
+              onChange={setPlanId}
+              options={[
+                { value: "", label: "Elegí un plan…", disabled: true },
+                ...planes.map((p) => ({
+                  value: p.id,
+                  label: `${p.nombre} · ${mk(p.precioMensual)}/mes`,
+                })),
+              ]}
+            />
           </div>
         </div>
-        {invitacionUrl ? (
-          <div className="cpl-mb">
-            <div className="cpl-field">
-              <label>Link de invitación</label>
-              <div className="cpl-invlink">{invitacionUrl}</div>
-            </div>
-            <button
-              type="button"
-              className="cpl-btn pri"
-              onClick={() => {
-                void navigator.clipboard?.writeText(invitacionUrl);
-                toast.success("Link copiado.");
-              }}
-            >
-              Copiar link
-            </button>
-          </div>
-        ) : (
-          <div className="cpl-mb">
-            <div className="cpl-field">
-              <label>Nombre de la imprenta</label>
-              <input
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Gráfica del Sur SRL"
-                autoFocus
-              />
-            </div>
-            <div className="cpl-field">
-              <label>Slug (identificador corto)</label>
-              <input
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                placeholder="grafica-del-sur"
-              />
-            </div>
-            <div className="cpl-field">
-              <label>Email del administrador</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="duenio@imprenta.com"
-              />
-            </div>
-            <div className="cpl-field">
-              <label>Plan</label>
-              <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
-                <option value="" disabled>
-                  Elegí un plan…
-                </option>
-                {planes.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} · {mk(p.precioMensual)}/mes
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-        <div className="cpl-mf">
-          <button type="button" className="cpl-btn" onClick={onCerrar}>
-            {invitacionUrl ? "Cerrar" : "Cancelar"}
-          </button>
-          {!invitacionUrl ? (
-            <button
-              type="button"
-              className="cpl-btn pri"
-              disabled={!valido || ocupado}
-              onClick={() => void crear()}
-            >
-              {ocupado ? "Creando…" : "Crear tenant"}
-            </button>
-          ) : null}
-        </div>
+      )}
+      <div className="cpl-mf">
+        <ActionButton
+          type="button"
+          variant="outline"
+          isDisabled={ocupado && !invitacionUrl}
+          onPress={onCerrar}
+        >
+          {invitacionUrl ? "Cerrar" : "Cancelar"}
+        </ActionButton>
+        {!invitacionUrl ? (
+          <ActionButton
+            type="button"
+            variant="primary"
+            isDisabled={!valido || ocupado}
+            onPress={() => void crear()}
+          >
+            {ocupado ? "Creando…" : "Crear empresa"}
+          </ActionButton>
+        ) : null}
       </div>
-    </>
+    </FormDialog>
   );
 }
 
@@ -1854,8 +1512,18 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
     };
   }, []);
 
-  if (error) return <div className="cpl-page"><div className="cpl-empty">{error}</div></div>;
-  if (!planes) return <div className="cpl-page"><div className="cpl-empty">Cargando…</div></div>;
+  if (error)
+    return (
+      <div className="cpl-page">
+        <div className="cpl-empty">{error}</div>
+      </div>
+    );
+  if (!planes)
+    return (
+      <div className="cpl-page">
+        <div className="cpl-empty">Cargando…</div>
+      </div>
+    );
 
   const vinculados = planes.filter((p) => p.paddlePriceId).length;
 
@@ -1980,7 +1648,9 @@ function PlanFila({
           <div className="cpl-planedit">
             <label>
               <span>Price ID</span>
-              <input
+              <Input
+                className={fieldFocus.singleBorder}
+                fullWidth
                 value={priceId}
                 onChange={(e) => setPriceId(e.target.value)}
                 placeholder="pri_01j…"
@@ -1990,7 +1660,9 @@ function PlanFila({
             </label>
             <label>
               <span>Price ID anual (opcional)</span>
-              <input
+              <Input
+                className={fieldFocus.singleBorder}
+                fullWidth
                 value={priceIdAnual}
                 onChange={(e) => setPriceIdAnual(e.target.value)}
                 placeholder="pri_01j…"
@@ -1999,29 +1671,31 @@ function PlanFila({
             </label>
             <label>
               <span>Product ID (opcional)</span>
-              <input
+              <Input
+                className={fieldFocus.singleBorder}
+                fullWidth
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
                 placeholder="pro_01j…"
                 disabled={guardando}
               />
             </label>
-            <button
+            <ActionButton
               type="button"
-              className="cpl-btn pri"
-              onClick={guardar}
-              disabled={guardando}
+              variant="primary"
+              onPress={guardar}
+              isDisabled={guardando}
             >
               {guardando ? "Guardando…" : "Guardar"}
-            </button>
-            <button
+            </ActionButton>
+            <ActionButton
               type="button"
-              className="cpl-btn"
-              onClick={onCerrar}
-              disabled={guardando}
+              variant="outline"
+              onPress={onCerrar}
+              isDisabled={guardando}
             >
               Cancelar
-            </button>
+            </ActionButton>
           </div>
         </td>
       </tr>
@@ -2032,7 +1706,10 @@ function PlanFila({
     <tr>
       <td>
         <b>{plan.nombre}</b>
-        <div className="cpl-sub">{plan.codigo}{plan.publico ? "" : " · interno"}</div>
+        <div className="cpl-sub">
+          {plan.codigo}
+          {plan.publico ? "" : " · interno"}
+        </div>
       </td>
       <td>
         <BajadaPlan plan={plan} esAdmin={esAdmin} onGuardado={onGuardado} />
@@ -2069,9 +1746,9 @@ function PlanFila({
       </td>
       <td style={{ textAlign: "right" }}>
         {esAdmin ? (
-          <button type="button" className="cpl-btn" onClick={onEditar}>
+          <ActionButton type="button" variant="outline" onPress={onEditar}>
             {plan.paddlePriceId ? "Cambiar" : "Vincular"}
-          </button>
+          </ActionButton>
         ) : null}
       </td>
     </tr>
@@ -2121,7 +1798,9 @@ function BajadaPlan({
   }
   return (
     <div className="cpl-bajada-edit">
-      <textarea
+      <Textarea
+        fullWidth
+        className={fieldFocus.singleBorder}
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
         placeholder="Para imprentas que arrancan a ordenar su producción."
@@ -2131,20 +1810,25 @@ function BajadaPlan({
         disabled={guardando}
       />
       <div className="acc">
-        <button type="button" className="cpl-btn pri" onClick={guardar} disabled={guardando}>
-          {guardando ? "…" : "Guardar"}
-        </button>
-        <button
+        <ActionButton
           type="button"
-          className="cpl-btn"
-          onClick={() => {
+          variant="primary"
+          onPress={guardar}
+          isDisabled={guardando}
+        >
+          {guardando ? "…" : "Guardar"}
+        </ActionButton>
+        <ActionButton
+          type="button"
+          variant="outline"
+          onPress={() => {
             setTexto(plan.descripcion ?? "");
             setEditando(false);
           }}
-          disabled={guardando}
+          isDisabled={guardando}
         >
           Cancelar
-        </button>
+        </ActionButton>
       </div>
     </div>
   );
@@ -2204,14 +1888,14 @@ function Impersonacion({
         sub={sesiones.length ? `${sesiones.length}` : "ninguna"}
         right={
           esAdmin ? (
-            <button
+            <ActionButton
               type="button"
-              className="cpl-btn pri"
-              onClick={() => setModal(true)}
+              variant="primary"
+              onPress={() => setModal(true)}
             >
               <BIco.eye style={{ width: 15 }} />
               Nueva sesión
-            </button>
+            </ActionButton>
           ) : null
         }
       >
@@ -2226,7 +1910,11 @@ function Impersonacion({
           </div>
         ) : (
           sesiones.map((sesion) => (
-            <SesionActivaCard key={sesion.id} sesion={sesion} onCerrar={cerrar} />
+            <SesionActivaCard
+              key={sesion.id}
+              sesion={sesion}
+              onCerrar={cerrar}
+            />
           ))
         )}
       </Panel>
@@ -2250,9 +1938,7 @@ function Impersonacion({
           <div className="cpl-audit">
             {datos.auditoria.map((e) => (
               <div className="cpl-arow" key={e.id}>
-                <span className="ats">
-                  {fechaHora(e.creadoEl)}
-                </span>
+                <span className="ats">{fechaHora(e.creadoEl)}</span>
                 <span
                   className="aic"
                   style={{ background: "var(--acc-bg)", color: "var(--acc-2)" }}
@@ -2263,9 +1949,11 @@ function Impersonacion({
                   <div className="at">
                     <b>{e.staffNombre ?? e.staffEmail}</b> · {e.descripcion}
                     {e.tenantAfectadoId ? (
-                      <span style={{ color: "var(--muted)" }}>
+                      <span style={{ color: "var(--muted-text)" }}>
                         {" "}
-                        — {nombreDe.get(e.tenantAfectadoId) ?? "tenant dado de baja"}
+                        —{" "}
+                        {nombreDe.get(e.tenantAfectadoId) ??
+                          "tenant dado de baja"}
                       </span>
                     ) : null}
                   </div>
@@ -2320,13 +2008,13 @@ function SesionActivaCard({
         </div>
         <div className="lbl">expira</div>
       </div>
-      <button
+      <ActionButton
         type="button"
-        className="cpl-btn"
-        onClick={() => onCerrar(sesion.id)}
+        variant="outline"
+        onPress={() => onCerrar(sesion.id)}
       >
         Cerrar
-      </button>
+      </ActionButton>
     </div>
   );
 }
@@ -2357,71 +2045,84 @@ function ImpersonarModal({
   };
 
   return (
-    <>
-      <div className="cpl-scrim" style={{ zIndex: 90 }} onClick={onCerrar} />
-      <div className="cpl-modal">
-        <div className="cpl-mh">
-          <div className="mt">Entrar a un tenant</div>
-          <div className="ms">
-            Vas a operar como soporte dentro de la cuenta. Todo queda firmado
-            “en nombre de” y el cliente ve que entraste. Expira en 60 minutos.
-          </div>
+    <FormDialog
+      isOpen
+      onOpenChange={(open) => {
+        if (!open) onCerrar();
+      }}
+      title="Entrar como soporte"
+      description="Acceso auditado y visible para el cliente. La sesión vence en 60 minutos."
+      isDismissable={!ocupado}
+      className={`${platformTheme} ${styles.dialog}`}
+    >
+      <div className="cpl-mb">
+        <div className="cpl-field">
+          <label htmlFor="soporte-tenant">Empresa</label>
+          <SelectField
+            id="soporte-tenant"
+            aria-label="Empresa para sesión de soporte"
+            value={tenantId}
+            onChange={setTenantId}
+            options={[
+              { value: "", label: "Elegí una empresa…", disabled: true },
+              ...tenants.map((t) => ({ value: t.id, label: t.nombre })),
+            ]}
+          />
         </div>
-        <div className="cpl-mb">
-          <div className="cpl-field">
-            <label>Tenant</label>
-            <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
-              <option value="" disabled>
-                Elegí un tenant…
-              </option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="cpl-field">
-            <label>Motivo (obligatorio, queda en la auditoría)</label>
-            <textarea
-              rows={3}
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Ticket 412: el cliente reporta que no le sale el PDF de la factura."
-              autoFocus
-            />
-          </div>
-          <div className="cpl-callout" style={{ marginTop: 4 }}>
-            <BIco.alert />
-            <div>
-              Impersonando NO podés tocar integraciones, administrar usuarios ni
-              borrar archivos: soporte diagnostica, no toma la cuenta.
-            </div>
-          </div>
+        <div className="cpl-field">
+          <label htmlFor="soporte-motivo">
+            Motivo (obligatorio, queda en la auditoría)
+          </label>
+          <Textarea
+            fullWidth
+            className={fieldFocus.singleBorder}
+            id="soporte-motivo"
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Ticket 412: el cliente reporta que no le sale el PDF de la factura."
+            autoFocus
+          />
         </div>
-        <div className="cpl-mf">
-          <button type="button" className="cpl-btn" onClick={onCerrar}>
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="cpl-btn pri"
-            disabled={!valido || ocupado}
-            onClick={() => void entrar()}
-          >
-            {ocupado ? "Entrando…" : "Entrar al tenant"}
-          </button>
+        <div className="cpl-callout" style={{ marginTop: 4 }}>
+          <BIco.alert />
+          <div>
+            Impersonando NO podés tocar integraciones, administrar usuarios ni
+            borrar archivos: soporte diagnostica, no toma la cuenta.
+          </div>
         </div>
       </div>
-    </>
+      <div className="cpl-mf">
+        <ActionButton
+          type="button"
+          variant="outline"
+          isDisabled={ocupado}
+          onPress={onCerrar}
+        >
+          Cancelar
+        </ActionButton>
+        <ActionButton
+          type="button"
+          variant="primary"
+          isDisabled={!valido || ocupado}
+          onPress={() => void entrar()}
+        >
+          {ocupado ? "Entrando…" : "Entrar a la empresa"}
+        </ActionButton>
+      </div>
+    </FormDialog>
   );
 }
 
 /** 403: usuario sin rol de plataforma que adivinó la URL. */
 export function PlataformaSinAcceso() {
   return (
-    <div className="cpl-bo" style={{ display: "grid", placeItems: "center" }}>
+    <div
+      className={`${platformTheme} ${styles.denied}`}
+      data-appearance="light"
+    >
       <div className="cpl-noacceso">
+        <GrafoprintBrand />
         <h1>Esta sección es del equipo de Grafo</h1>
         <p>
           Tu usuario no tiene rol de plataforma. Si creés que deberías tenerlo,

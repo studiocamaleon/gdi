@@ -10,12 +10,14 @@ export function TesoreriaDialog({
   onOpenChange,
   title,
   description,
+  seccion = "Administración · Tesorería",
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
   description: ReactNode;
+  seccion?: string;
   children: ReactNode;
 }) {
   return (
@@ -24,9 +26,7 @@ export function TesoreriaDialog({
       onOpenChange={onOpenChange}
       title={
         <>
-          <span className={styles.dialogEyebrow}>
-            Administración · Tesorería
-          </span>
+          <span className={styles.dialogEyebrow}>{seccion}</span>
           {title}
           <span className={styles.titleDot} aria-hidden="true">
             .

@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -26,11 +27,13 @@ import { AutomaticosWebService } from './automaticos.service';
 @Controller('chrome-whatsapp/automaticos')
 export class AutomaticosWebController {
   constructor(private readonly service: AutomaticosWebService) {}
+  @RequiereCapacidad('whatsapp_web')
   @Get('estado')
   @Header('Cache-Control', 'no-store')
   estado(@CurrentSession() auth: CurrentAuth) {
     return this.service.estado(auth.tenantId);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Put('configuracion')
   configurar(
     @CurrentSession() auth: CurrentAuth,
@@ -38,10 +41,12 @@ export class AutomaticosWebController {
   ) {
     return this.service.configurar(auth.tenantId, dto);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Post('prueba')
   prueba(@CurrentSession() auth: CurrentAuth, @Body() dto: DispositivoWebDto) {
     return this.service.prueba(auth.tenantId, dto);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Post('reservar')
   reservar(
     @CurrentSession() auth: CurrentAuth,
@@ -49,6 +54,7 @@ export class AutomaticosWebController {
   ) {
     return this.service.reservar(auth.tenantId, dto);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Post(':id/iniciar')
   iniciar(
     @CurrentSession() auth: CurrentAuth,

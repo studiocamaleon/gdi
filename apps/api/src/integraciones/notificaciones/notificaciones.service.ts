@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
@@ -52,6 +53,8 @@ export class NotificacionesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly despacho: DespachoService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
   ) {}
 
   /**
@@ -99,6 +102,11 @@ export class NotificacionesService {
     // conectar Wati empezaría a escribirle a todos los clientes sin que nadie
     // lo haya decidido.
     const config = await this.prisma.configuracionNotificaciones.findFirst();
+    const capacidad = config?.canalOrdenes === CANAL_WEB && esOrdenWeb(ctx.evento)
+      ? 'whatsapp_web' : 'whatsapp_automatico';
+    if (!(await this.capacidades.puedeOperar(this.tenantId(), capacidad))) {
+      return { encolada: false, motivo: 'Los avisos de este canal no están disponibles en el plan.' };
+    }
     if (config?.pausado ?? true) {
       return { encolada: false, motivo: 'Los avisos están pausados.' };
     }

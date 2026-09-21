@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -396,6 +397,7 @@ export class AdministracionController {
 
   // ── Tesorería ────────────────────────────────────────────────────────
 
+  @RequiereCapacidad('tesoreria')
   @Get('tesoreria')
   resumenTesoreria(@CurrentSession() auth: CurrentAuth) {
     return this.tesoreriaService.resumen(auth);
@@ -410,6 +412,7 @@ export class AdministracionController {
     return this.tesoreriaService.crearCuenta(auth, payload);
   }
 
+  @RequiereCapacidad('tesoreria')
   @Get('cuentas/:id/movimientos')
   movimientosCuenta(
     @CurrentSession() auth: CurrentAuth,
@@ -430,6 +433,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Post('cuentas/transferencias')
   transferir(
     @CurrentSession() auth: CurrentAuth,
@@ -439,6 +443,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Post('cuentas/:id/arqueo')
   arqueo(
     @CurrentSession() auth: CurrentAuth,
@@ -449,6 +454,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Post('cuentas/:id/ajustes')
   ajustarFondos(
     @CurrentSession() auth: CurrentAuth,
@@ -459,6 +465,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Patch('cuentas/:cuentaId/movimientos/:movimientoId/conciliacion')
   conciliarMovimiento(
     @CurrentSession() auth: CurrentAuth,
@@ -474,12 +481,14 @@ export class AdministracionController {
     );
   }
 
+  @RequiereCapacidad('valores')
   @Get('valores')
   valores(@CurrentSession() auth: CurrentAuth) {
     return this.tesoreriaService.valores(auth);
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/depositar')
   depositarValor(
     @CurrentSession() auth: CurrentAuth,
@@ -490,6 +499,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/acreditar')
   acreditarValor(
     @CurrentSession() auth: CurrentAuth,
@@ -500,6 +510,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/revertir-deposito')
   revertirDepositoValor(
     @CurrentSession() auth: CurrentAuth,
@@ -510,6 +521,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/revertir-acreditacion')
   revertirAcreditacionValor(
     @CurrentSession() auth: CurrentAuth,
@@ -520,6 +532,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/rechazar')
   rechazarValor(
     @CurrentSession() auth: CurrentAuth,

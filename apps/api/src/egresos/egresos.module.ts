@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 
 import { ArchivosModule } from '../archivos/archivos.module';
@@ -9,7 +10,7 @@ import { RecurrentesService } from './recurrentes.service';
 import { RecurrentesScheduler } from './recurrentes.scheduler';
 
 @Module({
-  imports: [ArchivosModule, DatosEmpresaModule],
+  imports: [CapacidadesEmpresaModule, ArchivosModule, DatosEmpresaModule],
   controllers: [EgresosController],
   providers: [
     EgresosService,

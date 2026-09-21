@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../../../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -40,6 +41,7 @@ function tenantId(req: RequestWithAuth): string {
  * id del precio especial es único globalmente.
  */
 @Permiso('costos.ver')
+@RequiereCapacidad('precios_especiales')
 @Controller()
 export class PreciosEspecialesClientesController {
   constructor(private readonly service: PreciosEspecialesClientesService) {}

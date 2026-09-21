@@ -6,6 +6,7 @@ function servicio() {
     {} as never,
     {} as never,
     undefined,
+    { incluida: jest.fn().mockResolvedValue(true) } as never,
   );
 }
 

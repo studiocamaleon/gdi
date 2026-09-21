@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -43,6 +44,7 @@ import {
  */
 @OcultaMargenes()
 @Permiso('administracion.ver')
+@RequiereCapacidad('cuentas_pagar')
 @Controller('egresos')
 export class EgresosController {
   constructor(
@@ -52,12 +54,14 @@ export class EgresosController {
 
   // ── Gastos recurrentes (F3) ────────────────────────────────────────────
 
+  @RequiereCapacidad('gastos_recurrentes')
   @Get('recurrentes')
   listarRecurrentes(@CurrentSession() auth: CurrentAuth) {
     return this.recurrentes.listar(auth);
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('gastos_recurrentes')
   @Post('recurrentes')
   crearRecurrente(
     @CurrentSession() auth: CurrentAuth,
@@ -68,12 +72,14 @@ export class EgresosController {
 
   /** Emitir a mano lo pendiente, sin esperar al cron de la madrugada. */
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('gastos_recurrentes')
   @Post('recurrentes/generar')
   generarRecurrentes(@CurrentSession() auth: CurrentAuth) {
     return this.recurrentes.generarAhora(auth);
   }
 
   /** Presupuestado vs. real de la estructura (journey E4). */
+  @RequiereCapacidad('gastos_recurrentes')
   @Get('presupuestado')
   presupuestadoVsReal(
     @CurrentSession() auth: CurrentAuth,
@@ -83,6 +89,7 @@ export class EgresosController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('gastos_recurrentes')
   @Patch('recurrentes/:id')
   editarRecurrente(
     @CurrentSession() auth: CurrentAuth,
@@ -93,6 +100,7 @@ export class EgresosController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('gastos_recurrentes')
   @Delete('recurrentes/:id')
   borrarRecurrente(
     @CurrentSession() auth: CurrentAuth,
@@ -151,12 +159,14 @@ export class EgresosController {
   }
 
   /** Los cheques de terceros que están en cartera, para poder endosarlos. */
+  @RequiereCapacidad('valores')
   @Get('valores-en-cartera')
   valoresEnCartera(@CurrentSession() auth: CurrentAuth) {
     return this.egresos.valoresEnCartera(auth);
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/debitar')
   debitarValor(
     @CurrentSession() auth: CurrentAuth,
@@ -167,6 +177,7 @@ export class EgresosController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/rechazar')
   rechazarValorPropio(
     @CurrentSession() auth: CurrentAuth,
@@ -177,6 +188,7 @@ export class EgresosController {
   }
 
   /** "¿En qué se me va la plata?" — por categoría y naturaleza, por competencia. */
+  @RequiereCapacidad('reportes_finanzas')
   @Get('reporte')
   reporte(
     @CurrentSession() auth: CurrentAuth,

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ReportesController } from './reportes.controller';
 import { ReportesService } from './reportes.service';
@@ -13,7 +14,7 @@ import { EmbudoService } from './embudo.service';
 import { EtaModule } from '../eta/eta.module';
 
 @Module({
-  imports: [EtaModule],
+  imports: [CapacidadesEmpresaModule, EtaModule],
   controllers: [ReportesController],
   providers: [
     ReportesService,

@@ -5,6 +5,7 @@
 // ver NO se muestra —no se muestra deshabilitado—: la lista de lo que no podés
 // hacer es información que no hace falta dar. Ver docs/usuarios-roles-permisos-diseno.md
 
+import { capacidadDeRuta } from "@/lib/capacidades";
 import type { PermisoClave } from "@/lib/permisos";
 
 export type NavIconKey =
@@ -313,20 +314,25 @@ export function hasChildren(
 export function navPara(
   permisos: Set<string> | null,
   pais: string = "AR",
+  funciones?: Record<string, boolean>,
 ): NavItem[] {
   // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
   // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
-  const porPais = (c: NavChild) => !c.soloPais || c.soloPais === pais;
+  const porPlan = (href: string) => {
+    const clave = capacidadDeRuta(href);
+    return !funciones || !clave || funciones[clave] === true;
+  };
+  const porPais = (c: NavChild) => (!c.soloPais || c.soloPais === pais) && porPlan(c.href);
   if (!permisos) {
     return NAV.flatMap<NavItem>((item) => {
-      if (!hasChildren(item)) return [item];
+      if (!hasChildren(item)) return porPlan(item.href) ? [item] : [];
       const children = item.children.filter(porPais);
       return children.length ? [{ ...item, children }] : [];
     });
   }
   return NAV.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
-      return permisos.has(item.permiso) ? [item] : [];
+      return permisos.has(item.permiso) && porPlan(item.href) ? [item] : [];
     }
     // El permiso del hijo REEMPLAZA al del grupo, no se suma: un hijo que
     // declara el suyo se sostiene solo (Datos fiscales con

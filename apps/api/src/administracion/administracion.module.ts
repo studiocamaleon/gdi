@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
@@ -25,7 +26,7 @@ import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
-  imports: [
+  imports: [CapacidadesEmpresaModule,
     ArchivosModule,
     EnlacesPublicosModule,
     SuscripcionesModule,

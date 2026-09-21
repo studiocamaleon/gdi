@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { leerMaterialesOrden } from '../ordenes-trabajo/materiales-orden.consulta';
 import type { MaterialesOrden } from '../ordenes-trabajo/materiales-orden';
 import { InventarioService } from './inventario.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { normalizeMaterialUnit } from './material-units';
 import { bloquearVariantesStock, reservasPorSaldo } from './stock-reservas';
 import {
@@ -41,6 +42,7 @@ export class ReservasMaterialService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly inventario: InventarioService,
+    private readonly capacidades: CapacidadesEmpresaService,
   ) {}
 
   async politica(tenantId: string) {
@@ -53,6 +55,7 @@ export class ReservasMaterialService {
 
   async guardarPolitica(tenantId: string, data: PoliticaReservasDto) {
     return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigir(tenantId, 'reservas', tx);
       // Serializa también la primera activación (todavía no existe la fila).
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`politica-reservas:${tenantId}`}, 0))::text`;
       await tx.$queryRaw`SELECT "tenantId" FROM "PoliticaReservasMaterial" WHERE "tenantId"=${tenantId}::uuid FOR UPDATE`;
@@ -368,6 +371,15 @@ export class ReservasMaterialService {
       where: { tenantId, id: ordenId },
       select: { materialesControlados: true },
     });
+    if (!(await this.capacidades.incluida(tenantId, 'reservas', tx))) {
+      if (control?.materialesControlados)
+        throw new ConflictException(
+          'La orden tiene control de materiales previo. Resolvé su continuidad antes de modificarla con un plan sin reservas.',
+        );
+      // Emitir una OT nueva sigue siendo válido. No crea necesidades,
+      // reservas ni movimientos como efecto de un complemento excluido.
+      return;
+    }
     if (!control?.materialesControlados && !opciones.alEmitir) return;
     await this.bloquearOrden(tx, tenantId, ordenId);
     const { orden, materiales } = await leerMaterialesOrden(
@@ -481,6 +493,7 @@ export class ReservasMaterialService {
       .digest('hex');
     return this.prisma.$transaction(
       async (tx) => {
+        await this.capacidades.exigir(tenantId, 'reservas', tx);
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`operacion-reserva:${tenantId}:${comando.clave}`}, 0))::text`;
         await this.bloquearOrden(tx, tenantId, ordenId);
         const anterior = await tx.operacionReservasMaterial.findUnique({

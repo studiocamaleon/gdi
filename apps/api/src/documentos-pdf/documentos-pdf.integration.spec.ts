@@ -41,16 +41,7 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
     subir: jest.fn().mockResolvedValue(undefined),
     firmarDescarga: jest.fn().mockResolvedValue('https://storage.test/pdf'),
   };
-  const archivos = new ArchivosService(
-    prisma,
-    storage as never,
-    {
-      limites: jest
-        .fn()
-        .mockResolvedValue({ planNombre: null, storageGb: null }),
-    } as never,
-    {} as never,
-  );
+  const archivos = new ArchivosService(prisma, storage as never, {} as never);
   const renderer = {
     generar: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.7 ejemplo')),
   };
@@ -271,7 +262,7 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
     );
   });
 
-  it('aplica la cuota atómicamente y deja la subida fallida rastreable para limpieza', async () => {
+  it('rechaza por cuota antes de subir y no deja archivos ni reservas', async () => {
     const doc = await registrar();
     await prisma.tenant.update({
       where: { id: tenantId },
@@ -292,7 +283,8 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
     ).toBe(0);
     expect(
       await prisma.archivo.count({ where: { tenantId, estado: 'PENDIENTE' } }),
-    ).toBe(1);
+    ).toBe(0);
+    expect(storage.subir).not.toHaveBeenCalled();
   });
 
   it('un fallo de almacenamiento no publica un PDF incompleto', async () => {
@@ -305,7 +297,7 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
       'PENDIENTE',
     );
     expect(
-      await prisma.archivo.count({ where: { tenantId, estado: 'PENDIENTE' } }),
+      await prisma.archivo.count({ where: { tenantId, estado: 'PURGANDO' } }),
     ).toBe(1);
     expect(
       (await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }))
@@ -367,6 +359,12 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
       'PENDIENTE',
     );
     expect(queue.add).not.toHaveBeenCalled();
+    // El scheduler real vuelve en otra pasada. Forzamos ese instante: un
+    // timestamp(3) recién liberado puede redondearse al mismo ms que NOW().
+    await prisma.cronLock.update({
+      where: { nombre: `pdf-dispatch-${process.env.PDF_QUEUE_NAME}` },
+      data: { expiraEl: new Date(0) },
+    });
     await worker.despachar();
     expect(queue.add).toHaveBeenCalledWith(
       'render',

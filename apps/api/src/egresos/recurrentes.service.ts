@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -90,7 +91,11 @@ export function periodosPendientes(
 export class RecurrentesService {
   private readonly log = new Logger(RecurrentesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService =
+      new CapacidadesEmpresaService(prisma),
+  ) {}
 
   // ── ABM ────────────────────────────────────────────────────────────────
 
@@ -130,6 +135,7 @@ export class RecurrentesService {
   }
 
   async crear(auth: CurrentAuth, dto: CrearRecurrenteDto) {
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
     const cat = await this.prisma.categoriaEgreso.findFirst({
       where: { id: dto.categoriaEgresoId, tenantId: auth.tenantId },
       select: { id: true },
@@ -168,6 +174,7 @@ export class RecurrentesService {
   }
 
   async editar(auth: CurrentAuth, id: string, dto: EditarRecurrenteDto) {
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
     const actual = await this.prisma.gastoRecurrente.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: { id: true, gastoFijoEstructuraId: true },
@@ -244,6 +251,7 @@ export class RecurrentesService {
    * real y quedarían sin explicación de dónde salieron.
    */
   async borrar(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
     const r = await this.prisma.gastoRecurrente.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: { id: true, _count: { select: { egresos: true } } },
@@ -269,6 +277,8 @@ export class RecurrentesService {
    * dos procesos corren a la vez.
    */
   async generarDeTenant(tenantId: string): Promise<number> {
+    if (!(await this.capacidades.puedeOperar(tenantId, 'gastos_recurrentes')) ||
+        !(await this.capacidades.puedeOperar(tenantId, 'cuentas_pagar'))) return 0;
     const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
     const hoy = new Intl.DateTimeFormat('en-CA', {
       timeZone: zonaHoraria,
@@ -371,6 +381,7 @@ export class RecurrentesService {
 
   /** Generación a mano desde la UI, para no esperar al cron. */
   async generarAhora(auth: CurrentAuth) {
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
     const emitidos = await this.generarDeTenant(auth.tenantId);
     return { emitidos };
   }

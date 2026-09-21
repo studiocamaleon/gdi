@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { notFound } from "next/navigation";
 import { CampanaDetalleView } from "@/components/comercial/campana-detalle-view";
 import { ApiError } from "@/lib/api";
@@ -14,6 +16,7 @@ export default async function CampanaDetallePage({
 }: {
   params: Promise<{ campanaId: string }>;
 }) {
+  if (!(await tieneCapacidad("proyectos"))) return <FuncionNoIncluida />;
   const { campanaId } = await params;
   let campana;
   try {

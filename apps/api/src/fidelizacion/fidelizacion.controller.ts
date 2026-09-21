@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -10,6 +11,7 @@ import {
 import { FidelizacionService } from './fidelizacion.service';
 
 @Permiso('crm.ver')
+@RequiereCapacidad('fidelizacion')
 @Controller('fidelizacion')
 export class FidelizacionController {
   constructor(private readonly service: FidelizacionService) {}

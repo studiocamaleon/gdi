@@ -20,6 +20,7 @@ const MODELOS_EXENTOS = new Set<string>([
   'AuthSession',
   'UserMfa',
   'MfaChallenge',
+  'InvitacionPlataforma',
   'Membership',
   'Invitation',
   // Se resuelve por tokenHash único global ANTES de que exista contexto de
@@ -28,6 +29,7 @@ const MODELOS_EXENTOS = new Set<string>([
   'MaterialPreset',
   // Catálogo del SaaS: mismos planes para todos los tenants.
   'Plan',
+  'PlanBorrador',
   'PlanPrecioLegacy',
   // Alta pública anterior a que exista un tenant. El token es global y el
   // tenant nace recién al consumirlo.

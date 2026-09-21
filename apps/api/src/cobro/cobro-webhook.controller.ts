@@ -8,6 +8,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/public.decorator';
 import { SinTenant } from '../common/sin-tenant.decorator';
@@ -67,52 +68,52 @@ export class CobroWebhookController {
       throw new UnauthorizedException('Firma inválida.');
     }
 
-    // ── Idempotencia ────────────────────────────────────────────────────
-    // Paddle reintenta ante cualquier no-2xx, así que el mismo evento puede
-    // llegar varias veces. Se registra por eventoId (unique), pero la guarda
-    // es `procesadoEl`, no la mera existencia: si un intento anterior falló a
-    // mitad de camino, el reintento TIENE que volver a procesarlo.
-    const yaVisto = await this.prisma.eventoCobro.findUnique({
+    const payload = evento.data as Record<string, unknown> | null;
+    const ref = evento.eventType.startsWith('subscription.')
+      ? payload?.id
+      : (payload?.subscriptionId ?? payload?.subscription_id);
+    const registro = await this.prisma.eventoCobro.upsert({
       where: { eventoId: evento.eventId },
-      select: { id: true, procesadoEl: true },
+      create: {
+        proveedor: 'paddle',
+        eventoId: evento.eventId,
+        tipo: evento.eventType,
+        payloadJson: evento.data as object,
+        ocurridoEl: evento.occurredAt,
+        referenciaSuscripcion: typeof ref === 'string' ? ref : null,
+      },
+      update: {},
+      select: { id: true },
     });
-    if (yaVisto?.procesadoEl) {
-      return { ok: true, repetido: true };
-    }
-
-    const registro =
-      yaVisto ??
-      (await this.prisma.eventoCobro.create({
-        data: {
-          proveedor: 'paddle',
-          eventoId: evento.eventId,
-          tipo: evento.eventType,
-          payloadJson: evento.data as object,
-          ocurridoEl: evento.occurredAt,
-        },
-        select: { id: true, procesadoEl: true },
-      }));
-
     try {
-      const resultado = await this.procesar(
-        evento.eventType,
-        evento.data,
-        evento.occurredAt,
-      );
-      await this.prisma.eventoCobro.update({
-        where: { id: registro.id },
-        data: {
-          procesadoEl: new Date(),
-          errorTexto: resultado.nota ?? null,
-        },
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "EventoCobro" WHERE id = ${registro.id}::uuid FOR UPDATE`;
+        const guardado = await tx.eventoCobro.findUniqueOrThrow({
+          where: { id: registro.id },
+        });
+        if (guardado.procesadoEl) return { ok: true, repetido: true };
+        const resultado = await this.procesar(
+          tx,
+          guardado.tipo,
+          guardado.payloadJson,
+          guardado.ocurridoEl,
+        );
+        await tx.eventoCobro.update({
+          where: { id: registro.id },
+          data: {
+            procesadoEl: new Date(),
+            errorTexto: resultado.nota ?? null,
+            resultado: resultado.estado,
+          },
+        });
+        return { ok: true, ...resultado.respuesta };
       });
-      return { ok: true, ...resultado.respuesta };
     } catch (error) {
       const detalle =
         error instanceof Error ? error.message : 'error desconocido';
-      await this.prisma.eventoCobro.update({
-        where: { id: registro.id },
-        data: { errorTexto: detalle },
+      await this.prisma.eventoCobro.updateMany({
+        where: { id: registro.id, procesadoEl: null },
+        data: { errorTexto: detalle, resultado: 'fallido' },
       });
       this.logger.error(
         `Falló el procesamiento de ${evento.eventType} (${evento.eventId}): ${detalle}`,
@@ -127,28 +128,39 @@ export class CobroWebhookController {
    *  (devolver 2xx igual: no queremos que Paddle reintente para siempre algo
    *  que no vamos a procesar nunca). */
   private async procesar(
+    tx: Prisma.TransactionClient,
     tipo: string,
     data: unknown,
     ocurridoEl: Date | null,
-  ): Promise<{ nota?: string; respuesta: Record<string, unknown> }> {
+  ): Promise<{
+    estado: 'aplicado' | 'ignorado' | 'sin_aplicar';
+    nota?: string;
+    respuesta: Record<string, unknown>;
+  }> {
     if (!tipo.startsWith('subscription.')) {
-      return { respuesta: { ignorado: tipo } };
+      return { estado: 'ignorado', respuesta: { ignorado: tipo } };
     }
     const externa = this.sync.extraer(data);
     if (!externa) {
       return {
+        estado: 'sin_aplicar',
         nota: 'Payload de suscripción sin la forma esperada.',
         respuesta: { ignorado: tipo },
       };
     }
-    const resultado = await this.sync.aplicar(externa, {
+    const resultado = await this.sync.aplicarEnTransaccion(tx, externa, {
       ocurridoEl,
       origen: 'webhook',
     });
     return resultado.aplicado
       ? {
+          estado: 'aplicado',
           respuesta: { tenantId: resultado.tenantId, estado: resultado.estado },
         }
-      : { nota: resultado.motivo, respuesta: { sinAplicar: resultado.motivo } };
+      : {
+          estado: 'sin_aplicar',
+          nota: resultado.motivo,
+          respuesta: { sinAplicar: resultado.motivo },
+        };
   }
 }

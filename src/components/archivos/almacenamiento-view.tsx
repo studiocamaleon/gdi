@@ -102,7 +102,7 @@ export function AlmacenamientoView() {
                       <HardDriveIcon />
                     </span>
                     <div className="tot">
-                      <b>{formatBytes(uso.bytes)}</b>
+                      <b>{formatBytes(uso.bytesComprometidos)}</b>
                       <span>{textoDeCuota(uso)}</span>
                     </div>
                     {uso.papelera.cantidad > 0 ? (
@@ -113,6 +113,19 @@ export function AlmacenamientoView() {
                         <Trash2Icon />
                         {formatBytes(uso.papelera.bytes)} en papelera
                       </div>
+                    ) : null}
+                  </div>
+
+                  <div className="arch-uso-restante">
+                    <b>{formatBytes(uso.bytes)}</b> guardados
+                    {uso.cargasPendientes > 0 ? (
+                      <>
+                        {" "}
+                        · <b>{formatBytes(uso.bytesReservados)}</b> reservados
+                        en {uso.cargasPendientes}{" "}
+                        {uso.cargasPendientes === 1 ? "carga" : "cargas"} en
+                        curso
+                      </>
                     ) : null}
                   </div>
 
@@ -140,8 +153,11 @@ export function AlmacenamientoView() {
 
                   {alerta ? (
                     <div className="arch-uso-alerta">
-                      Estás usando el {uso.porcentaje}% del espacio. Cuando se
-                      llene, las subidas se rechazan: liberá archivos
+                      {uso.excedidoBytes > 0
+                        ? `Superaste el cupo en ${formatBytes(uso.excedidoBytes)}. `
+                        : `Estás usando el ${uso.porcentaje}% del espacio. `}
+                      Tus archivos guardados siguen disponibles. Para guardar
+                      más, liberá espacio
                       {uso.cuotaOrigen === "plan"
                         ? " o pasate a un plan con más espacio."
                         : " o pedí que te amplíen el espacio."}
@@ -153,7 +169,7 @@ export function AlmacenamientoView() {
 
             {uso && !error ? (
               <div className="arc-card-sec">
-                <div className="arc-sec-t">Distribución del almacenamiento</div>
+                <div className="arc-sec-t">Archivos guardados</div>
                 {uso.porScope.length > 0 ? (
                   <div className="arch-uso-detalle">
                     {uso.porScope.map((s) => (
