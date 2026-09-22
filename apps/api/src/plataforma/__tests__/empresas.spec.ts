@@ -20,6 +20,7 @@ const plataforma = new PlataformaService(
   db,
   new PaddleService(),
   new TenantProvisioningService(),
+  {} as never,
 );
 const empresas = new EmpresasPlataformaService(db);
 const sync = new SuscripcionSyncService(db);

@@ -29,6 +29,7 @@ export type EmpresaPlataforma = {
   acceso: AccesoEmpresa;
   usuariosHabilitados: number;
   invitacionesPendientes: number;
+  invitacionAdministrador?: InvitacionEmpresa | null;
   storageBytes: number;
   storageCuotaBytes: number | null;
   puedeAsignarPlanManual: boolean;
@@ -405,12 +406,34 @@ export async function reactivarTenant(
   });
 }
 
+export type InvitacionEmpresa = {
+  id: string;
+  email: string;
+  venceEl: string;
+  aceptadaEl: string | null;
+  correoEstado: string;
+  ultimoIntentoEl: string | null;
+  enviadoEl: string | null;
+};
+export type ResultadoInvitacionEmpresa = {
+  tenantId: string;
+  invitacionUrl?: string;
+  invitacion: InvitacionEmpresa;
+};
+
+export const reenviarInvitacionEmpresa = (
+  tenantId: string,
+): Promise<ResultadoInvitacionEmpresa> =>
+  apiRequest(`/plataforma/tenants/${tenantId}/invitacion/reenviar`, {
+    method: "POST",
+  });
+
 export async function crearTenantPlataforma(dto: {
   nombre: string;
   slug: string;
   planId: string;
   adminEmail: string;
-}): Promise<{ tenantId: string; invitacionUrl: string }> {
+}): Promise<ResultadoInvitacionEmpresa> {
   return apiRequest("/plataforma/tenants", {
     method: "POST",
     body: JSON.stringify(dto),

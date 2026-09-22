@@ -12,7 +12,7 @@ import { SESSION_COOKIE_NAME } from "@/lib/session";
 
 // Páginas de autenticación: accesibles sin sesión y, si ya hay sesión, se
 // rebota al home (no tiene sentido re-loguearse).
-const AUTH_PATHS = ["/login", "/aceptar-invitacion"];
+const AUTH_PATHS = ["/login"];
 const PUBLIC_PATHS = ["/registro", "/terminos", "/privacidad"];
 // La salida de emergencia: borra la cookie y manda al login. Tiene que pasar
 // SIEMPRE, con cookie o sin ella, o el bucle que viene a cortar se la come.
@@ -89,13 +89,19 @@ export function proxy(request: NextRequest) {
   const esBackoffice =
     pathname === "/backoffice" || pathname.startsWith("/backoffice/");
 
+  // Una invitación se valida por su token en el API. Tener sesión en otra
+  // empresa o en Plataforma no debe impedir aceptar el acceso recibido.
+  if (pathname === "/aceptar-invitacion") {
+    return limpiando(NextResponse.next(), cookieInservible);
+  }
+
   if (isOpenPath || isPublicPath || pathname === SALIDA_PATH) {
     return NextResponse.next();
   }
 
   // Sesión de plataforma (backoffice): sólo vive en su consola y en su propio
-  // login. Cualquier otra ruta —el dashboard del tenant, /login, /aceptar-
-  // invitacion— la mandamos a /plataforma. Sin esto, /login la rebotaba a "/"
+  // login. Las demás rutas privadas —el dashboard del tenant y /login—
+  // las mandamos a /plataforma. Sin esto, /login la rebotaba a "/"
   // y el dashboard reventaba con 401 → 500 (pantalla en blanco).
   if (token && esSesionPlataforma(token)) {
     const enSuTerritorio =

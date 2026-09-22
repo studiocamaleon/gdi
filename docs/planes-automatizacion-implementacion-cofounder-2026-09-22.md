@@ -25,7 +25,7 @@ Estado: implementado y verificado el 22/09/2026 en desarrollo y Paddle sandbox. 
 2. **Versiones → Revisar publicación → Publicar y preparar oferta**: revisar la versión guardada y publicar.
 3. En **Oferta comercial**, indicar el motivo, revisar y elegir **Sincronizar y activar oferta**. Grafo crea los productos y precios de Paddle y los valida; no se ingresan identificadores.
 4. Una oferta ya publicada conserva sus condiciones. Para cambiarlas, editar el borrador y publicar una nueva versión.
-5. Para Co-founder, **Empresas → Crear empresa**, seleccionar el plan Co-founder y el correo del administrador. Plataforma genera el enlace de invitación. La oferta no aparece en el registro público ni puede contratarla una empresa ajena adivinando su identificador.
+5. Para Co-founder, **Empresas → Crear empresa**, seleccionar el plan Co-founder y el correo del administrador. Elegir **Crear y enviar invitación**: Plataforma envía el correo con las condiciones de la oferta. Su estado y el reenvío están en la ficha de empresa. La prueba empieza al crear la empresa y el correo informa la fecha exacta; reenviar no extiende ese plazo. La oferta no aparece en el registro público ni puede contratarla una empresa ajena adivinando su identificador.
 
 Publicar sólo una versión sigue disponible para revisar capacidades antes de poner una oferta en venta. No se migran silenciosamente los contratos existentes.
 

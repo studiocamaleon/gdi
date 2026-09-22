@@ -10,6 +10,7 @@ import {
 } from "@/lib/ordenes-trabajo";
 import type { Archivo } from "@/lib/archivos";
 import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
+import { PermisosProvider } from "@/components/navigation/permisos-provider";
 import { PropuestaFicha } from "./propuesta-ficha";
 
 vi.mock("react", async (importOriginal) => ({
@@ -42,7 +43,7 @@ describe("una OT se abre en modo consulta", () => {
     "finalizada",
     "entregada",
   ])(
-    "%s: ofrece entrar en edición, pero no modificar ni ejecutar transiciones",
+    "%s: separa editar datos de entregar una orden finalizada",
     (estado) => {
       const orden = { ...getMockOrdenDetalle("mock-0184")!, estado };
       const html = renderToStaticMarkup(
@@ -56,10 +57,26 @@ describe("una OT se abre en modo consulta", () => {
       );
       expect(html).not.toContain("Cancelar orden</");
       expect(html).not.toContain("Emitir OT</");
-      expect(html).not.toContain("Registrar la entrega al cliente");
+      if (estado === "finalizada") {
+        expect(html).toContain("Registrar la entrega al cliente");
+      } else {
+        expect(html).not.toContain("Registrar la entrega al cliente");
+      }
       expect(html).not.toContain('aria-label="Ver datos de entrega"');
     },
   );
+
+  it("una orden finalizada no ofrece entrega sin permiso de gestión", () => {
+    const orden = { ...getMockOrdenDetalle("mock-0184")!, estado: "finalizada" as const };
+    const html = renderToStaticMarkup(
+      <PermisosProvider permisos={["comercial.ver"]}>
+        <NotificacionesProvider>
+          <PropuestaFicha orden={orden} />
+        </NotificacionesProvider>
+      </PermisosProvider>,
+    );
+    expect(html).not.toContain("Registrar la entrega al cliente");
+  });
 
   it("una orden cancelada mantiene la ficha cerrada a edición", () => {
     const orden = {

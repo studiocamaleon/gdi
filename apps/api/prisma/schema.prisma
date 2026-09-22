@@ -1334,6 +1334,11 @@ model Invitation {
   expiresAt             DateTime
   acceptedAt            DateTime?
   revokedAt             DateTime?
+  /// Estado del último envío por correo. Null = enlace histórico sin envío.
+  correoEstado          String?
+  correoIntentoEl       DateTime?
+  correoEnviadoEl       DateTime?
+  correoProveedorId     String?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   tenant                Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)

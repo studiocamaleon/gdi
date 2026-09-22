@@ -6,6 +6,10 @@
     "deleteOutDir": true,
     "assets": [
       {
+        "include": "registro/plantillas/assets/*.png",
+        "outDir": "dist/src"
+      },
+      {
         "include": "**/*.ttf",
         "outDir": "dist/src"
       },

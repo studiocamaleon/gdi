@@ -639,12 +639,18 @@ export class AuthService {
 
   async getInvitation(token: string) {
     const invitation = await this.findInvitationOrThrow(token);
+    const usuario =
+      invitation.user ??
+      (await this.prisma.user.findUnique({
+        where: { email: invitation.email.trim().toLowerCase() },
+        select: { passwordHash: true },
+      }));
 
     return {
       email: invitation.email,
       tenantNombre: invitation.tenant.nombre,
       rol: this.fromPrismaRol(invitation.rol),
-      requiresPasswordSetup: !invitation.user?.passwordHash,
+      requiresPasswordSetup: !usuario?.passwordHash,
     };
   }
 

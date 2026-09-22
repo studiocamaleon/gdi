@@ -3,6 +3,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolverAccesoEmpresa } from '../suscripciones/acceso-empresa';
+import { presentarInvitacionEmpresa } from './invitaciones-empresa.service';
 import {
   contratoSuscripcion,
   funcionHistoricaEnContrato,
@@ -129,6 +130,15 @@ export class EmpresasPlataformaService {
         bytesArchivos: true,
         cuotaBytesArchivos: true,
         suscripcion: { include: { plan: true, planVersion: true } },
+        invitations: {
+          where: {
+            invitedByMembershipId: null,
+            rol: 'ADMINISTRADOR',
+            revokedAt: null,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
         _count: {
           select: {
             memberships: { where: { activa: true, user: { activo: true } } },
@@ -188,6 +198,9 @@ export class EmpresasPlataformaService {
       acceso,
       usuariosHabilitados: cupo.activos,
       invitacionesPendientes: cupo.invitacionesPendientes,
+      invitacionAdministrador: t.invitations[0]
+        ? presentarInvitacionEmpresa(t.invitations[0])
+        : null,
       storageBytes: Number(t.bytesArchivos),
       storageCuotaBytes:
         t.cuotaBytesArchivos === null ? null : Number(t.cuotaBytesArchivos),

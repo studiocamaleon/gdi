@@ -7,14 +7,9 @@ import { CheckCircle2Icon } from "lucide-react";
 import { acceptInvitation, type InvitationState } from "@/lib/auth";
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import { setSessionToken } from "@/lib/session";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ActionButton } from "@/components/design-system/action-button";
+import styles from "@/components/plataforma/seguridad-backoffice.module.css";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Field,
   FieldDescription,
@@ -70,69 +65,75 @@ export function AcceptInvitationForm({
   };
 
   return (
-    <Card className="w-full max-w-lg rounded-3xl border-border/70 shadow-xl">
-      <CardHeader className="gap-2">
-        <CardTitle className="text-2xl">Activar acceso</CardTitle>
-        <CardDescription>
+    <>
+      <header className={styles.intro}>
+        <span>TU INVITACIÓN</span>
+        <h1>
+          Activá tu acceso<span>.</span>
+        </h1>
+        <p>
           Vas a ingresar a <strong>{invitation.tenantNombre}</strong> con el rol{" "}
           <strong>{invitation.rol}</strong>.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
-          <FieldGroup>
+        </p>
+      </header>
+      <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="invitation-email">Correo</FieldLabel>
+            <Input id="invitation-email" value={invitation.email} disabled />
+          </Field>
+
+          {invitation.requiresPasswordSetup ? (
             <Field>
-              <FieldLabel htmlFor="invitation-email">Correo</FieldLabel>
-              <Input id="invitation-email" value={invitation.email} disabled />
+              <FieldLabel htmlFor="invitation-password">
+                Clave inicial
+              </FieldLabel>
+              <Input
+                id="invitation-password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Definí tu clave"
+                autoComplete="new-password"
+                required
+                minLength={8}
+              />
+              <FieldDescription>
+                Usá al menos 8 caracteres. Esta clave queda asociada a tu cuenta
+                de Grafo.
+              </FieldDescription>
             </Field>
+          ) : (
+            <Field>
+              <FieldLabel>Usuario existente</FieldLabel>
+              <FieldDescription>
+                Tu usuario ya tiene clave. Al continuar se agrega esta empresa a
+                tu cuenta, sin cambiar tu contraseña.
+              </FieldDescription>
+            </Field>
+          )}
+        </FieldGroup>
 
-            {invitation.requiresPasswordSetup ? (
-              <Field>
-                <FieldLabel htmlFor="invitation-password">
-                  Clave inicial
-                </FieldLabel>
-                <Input
-                  id="invitation-password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Define tu clave"
-                  autoComplete="new-password"
-                />
-                <FieldDescription>
-                  Esta clave quedara asociada a tu usuario global.
-                </FieldDescription>
-              </Field>
-            ) : (
-              <Field>
-                <FieldLabel>Usuario existente</FieldLabel>
-                <FieldDescription>
-                  Tu usuario ya tiene clave. Al continuar se agregara esta
-                  empresa a tu acceso actual.
-                </FieldDescription>
-              </Field>
-            )}
-          </FieldGroup>
+        {errorMessage ? (
+          <Alert variant="destructive">
+            <AlertTitle>No se pudo activar el acceso</AlertTitle>
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : null}
 
-          {errorMessage ? (
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          ) : null}
-
-          <Button
-            type="submit"
-            variant="brand"
-            className="w-full"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <GdiSpinner className="size-4" />
-            ) : (
-              <CheckCircle2Icon />
-            )}
-            Aceptar invitacion
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <ActionButton
+          type="submit"
+          className="w-full"
+          isDisabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <GdiSpinner className="size-4" />
+          ) : (
+            <CheckCircle2Icon data-icon="inline-start" />
+          )}
+          {isSubmitting ? "Activando…" : "Aceptar invitación"}
+        </ActionButton>
+      </form>
+    </>
   );
 }

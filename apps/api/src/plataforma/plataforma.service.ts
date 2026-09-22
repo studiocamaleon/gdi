@@ -19,6 +19,7 @@ import { PaddleService } from '../cobro/paddle.service';
 import { finDePrueba } from '../suscripciones/trial';
 import { TenantProvisioningService } from '../provisionamiento/tenant-provisioning.service';
 import { SessionCacheService } from '../auth/session-cache.service';
+import { InvitacionesEmpresaService } from './invitaciones-empresa.service';
 
 /**
  * Consultas y acciones administrativas del control plane.
@@ -169,6 +170,7 @@ export class PlataformaService {
     private readonly prisma: PrismaService,
     private readonly paddle: PaddleService,
     private readonly provisionamiento: TenantProvisioningService,
+    private readonly invitaciones: InvitacionesEmpresaService,
     private readonly sessionCache?: SessionCacheService,
   ) {}
 
@@ -467,7 +469,10 @@ export class PlataformaService {
       select: { nombre: true, comercialVersionado: true },
     });
     if (!plan) throw new NotFoundException('El plan no existe.');
-    if (plan.comercialVersionado) throw new ConflictException('Editá el borrador y publicá otra versión para cambiar la descripción de este plan.');
+    if (plan.comercialVersionado)
+      throw new ConflictException(
+        'Editá el borrador y publicá otra versión para cambiar la descripción de este plan.',
+      );
     await this.prisma.$transaction([
       this.prisma.plan.update({
         where: { id: planId },
@@ -515,7 +520,10 @@ export class PlataformaService {
       },
     });
     if (!plan) throw new NotFoundException('El plan no existe.');
-    if (plan.comercialVersionado) throw new ConflictException('Este plan usa ofertas inmutables. Gestioná sus precios desde la versión publicada.');
+    if (plan.comercialVersionado)
+      throw new ConflictException(
+        'Este plan usa ofertas inmutables. Gestioná sus precios desde la versión publicada.',
+      );
 
     const priceLimpio = priceId?.trim() || null;
     const productLimpio = productId?.trim() || null;
@@ -561,8 +569,15 @@ export class PlataformaService {
       // Comparte la exclusión con la activación de ofertas; un precio no puede
       // vincularse a la vez al catálogo anterior y a una versión nueva.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(724611, 1)::text`;
-      if (priceLimpio && await tx.planOfertaPrecio.count({ where: { entorno: this.paddle.entorno, priceId: priceLimpio } }))
-        throw new ConflictException('Ese precio pertenece a una oferta versionada y no se puede reutilizar.');
+      if (
+        priceLimpio &&
+        (await tx.planOfertaPrecio.count({
+          where: { entorno: this.paddle.entorno, priceId: priceLimpio },
+        }))
+      )
+        throw new ConflictException(
+          'Ese precio pertenece a una oferta versionada y no se puede reutilizar.',
+        );
       await tx.plan.update({
         where: { id: planId },
         data: {
@@ -609,7 +624,10 @@ export class PlataformaService {
       if (!tenant) throw new NotFoundException('La empresa no existe.');
       const anterior = tenant.suscripcion;
       await exigirSinContratacionPendiente(tx, tenantId);
-      if (anterior?.planVersionId) throw new ConflictException('Esta empresa utiliza una versión publicada. Revisá el cambio desde Versiones para validar funciones y cupos.');
+      if (anterior?.planVersionId)
+        throw new ConflictException(
+          'Esta empresa utiliza una versión publicada. Revisá el cambio desde Versiones para validar funciones y cupos.',
+        );
       if (
         anterior &&
         (anterior.proveedor !== 'manual' || anterior.referenciaExterna)
@@ -620,14 +638,21 @@ export class PlataformaService {
       }
       const plan = await tx.plan.findUnique({ where: { id: planId } });
       if (plan?.comercialVersionado)
-        throw new ConflictException('Este plan utiliza condiciones publicadas. Asigná su versión después de revisar funciones y cupos.');
+        throw new ConflictException(
+          'Este plan utiliza condiciones publicadas. Asigná su versión después de revisar funciones y cupos.',
+        );
       if (!plan?.activo)
         throw new BadRequestException('El plan no existe o no está activo.');
       if (anterior?.planId === planId) return;
       const cupo = await resumenCupoUsuarios(tx, tenantId);
-      const limite = limiteUsuarios(plan, anterior?.usuariosAdicionales ?? 0).limite;
+      const limite = limiteUsuarios(
+        plan,
+        anterior?.usuariosAdicionales ?? 0,
+      ).limite;
       if (limite !== null && cupo.ocupados > limite)
-        throw new ConflictException(`Hay ${cupo.ocupados} lugares ocupados y el plan de destino admite ${limite}. Ajustá los accesos o los adicionales antes de cambiar de plan.`);
+        throw new ConflictException(
+          `Hay ${cupo.ocupados} lugares ocupados y el plan de destino admite ${limite}. Ajustá los accesos o los adicionales antes de cambiar de plan.`,
+        );
       if (anterior) {
         // Una vinculación concurrente de Paddle impide que pisemos el contrato.
         const cambio = await tx.suscripcion.updateMany({
@@ -748,12 +773,12 @@ export class PlataformaService {
    * Alta de un tenant: tenant + suscripción + invitación del primer admin,
    * en una transacción. La invitación va SIN sender (el staff no tiene
    * membership; por eso Invitation.invitedByMembershipId es nullable) y el
-   * link se devuelve para mandárselo al cliente.
+   * correo se envía después del commit.
    */
   async crearTenant(
     staffUserId: string,
     dto: { nombre: string; slug: string; planId: string; adminEmail: string },
-  ): Promise<{ tenantId: string; invitacionUrl: string }> {
+  ) {
     const slug = dto.slug.trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(slug)) {
       throw new BadRequestException(
@@ -790,13 +815,15 @@ export class PlataformaService {
       };
       await bloquearCupoUsuarios(tx, creado.id);
       await exigirCupoUsuario(tx, creado.id, { email: email });
-      await tx.invitation.create({
+      const invitacion = await tx.invitation.create({
         data: {
           tenantId: creado.id,
           email,
           rol: RolSistema.ADMINISTRADOR,
           rolId: provisionado.administradorRolId,
           tokenHash,
+          correoEstado: 'enviando',
+          correoIntentoEl: new Date(),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         },
       });
@@ -809,15 +836,14 @@ export class PlataformaService {
           datosJson: { planCodigo: plan.codigo, adminEmail: email },
         },
       });
-      return creado;
+      return { ...creado, invitacionId: invitacion.id };
     });
 
-    const base =
-      process.env.FRONTEND_URL?.split(',')[0]?.trim() ??
-      'http://localhost:3000';
-    return {
-      tenantId: tenant.id,
-      invitacionUrl: `${base}/aceptar-invitacion?token=${rawToken}`,
-    };
+    return this.invitaciones.enviar(
+      staffUserId,
+      tenant.id,
+      tenant.invitacionId,
+      rawToken,
+    );
   }
 }

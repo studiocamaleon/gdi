@@ -23,6 +23,7 @@ describe('PlataformaService.consola', () => {
     prisma as unknown as PrismaService,
     new PaddleService(),
     new TenantProvisioningService(),
+  {} as never,
   );
   let tenantVivoId: string;
   let tenantDormidoId: string;

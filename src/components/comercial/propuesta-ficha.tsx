@@ -4884,8 +4884,8 @@ function PropuestaFichaContenido({
   const modoOrden = Boolean(orden);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
-  // Única puerta para las mutaciones de esta ficha; los permisos y estados
-  // de cada operación siguen aplicándose además de este modo de presentación.
+  // Puerta de edición de los datos de la ficha. La entrega es una operación
+  // independiente, con sus propios permisos y validación de estado.
   const puedeEditarOrden = !orden || (editandoOrden && !guardandoEdicion && orden.estado !== "cancelada");
   const permisoEdicionRef = React.useRef(puedeEditarOrden);
   React.useLayoutEffect(() => {
@@ -5016,6 +5016,7 @@ function PropuestaFichaContenido({
   const verMargenes = usePuede("finanzas.ver_margenes");
   const puedeAnular = usePuede("administracion.anular");
   const puedeEntregar = usePuede("produccion.gestionar");
+  const puedeAbrirEntrega = orden?.estado === "finalizada" && puedeEntregar;
   const [confirmCancelar, setConfirmCancelar] = React.useState(false);
   const [cancelando, setCancelando] = React.useState(false);
   const [openIds, setOpenIds] = React.useState<Set<string>>(() => new Set());
@@ -5425,8 +5426,10 @@ function PropuestaFichaContenido({
   React.useEffect(() => {
     if (puedeEditarOrden) return;
     setConfirmCancelar(false);
-    setEntregaManualOpen(false);
   }, [puedeEditarOrden]);
+  React.useEffect(() => {
+    if (!puedeAbrirEntrega) setEntregaManualOpen(false);
+  }, [puedeAbrirEntrega]);
   const [trackCopiado, setTrackCopiado] = React.useState(false);
 
   // Copia el link público de seguimiento del cliente (/t/<token>).
@@ -7672,11 +7675,14 @@ function PropuestaFichaContenido({
                           {emitiendoBorrador ? "Emitiendo…" : "Emitir OT"}
                         </HeroButton>
                       ) : null}
-                      {puedeEditarOrden && orden.estado === "finalizada" && puedeEntregar ? (
+                      {puedeAbrirEntrega ? (
                         <Button
                           size="lg"
                           onClick={() => setEntregaManualOpen(true)}
-                          title="Registrar la entrega al cliente"
+                          disabled={guardandoEdicion || cancelando || cambiosSinGuardar > 0}
+                          title={cambiosSinGuardar > 0
+                            ? "Guardá o descartá los cambios antes de entregar"
+                            : "Registrar la entrega al cliente"}
                         >
                           <PackageCheckIcon data-icon="inline-start" />
                           Entregar
@@ -8631,7 +8637,7 @@ function PropuestaFichaContenido({
             onClose={() => setQrRetiroOpen(false)}
           />
         ) : null}
-        {puedeEditarOrden && entregaManualOpen && orden ? (
+        {puedeAbrirEntrega && entregaManualOpen && orden ? (
           <EntregaModal
             codigo={orden.numero}
             onClose={() => setEntregaManualOpen(false)}
