@@ -3,6 +3,7 @@ import {
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import {
   CBTE_TIPO,
   CBTE_TIPO_CON_RETENCION,
@@ -34,6 +35,7 @@ import type {
 const BASE = 'https://app.afipsdk.com/api/v1/afip';
 
 type TicketAcceso = { token: string; sign: string; expira: number };
+type ConexionAfip = { environment: 'dev' | 'prod'; token: string };
 
 @Injectable()
 export class AfipSdkProvider implements InvoicingProvider {
@@ -41,12 +43,13 @@ export class AfipSdkProvider implements InvoicingProvider {
   private readonly log = new Logger(AfipSdkProvider.name);
 
   /**
-   * ARCA da un ticket de 12hs por certificado y NO deja pedir otro
-   * mientras el anterior siga vivo. Con varias instancias esto tiene que
-   * salir a Redis; en una sola alcanza memoria.
-   * TODO(producción): mover a storage compartido con lock antes de escalar.
+   * /auth de AFIP SDK conserva y renueva el TA en el proveedor, también
+   * cuando Grafo usa varios procesos. Esta caché sólo evita viajes de red;
+   * no forzamos una nueva autorización ni gestionamos WSAA directamente.
+   * https://docs.afipsdk.com/integracion/api
    */
   private readonly tickets = new Map<string, TicketAcceso>();
+  private readonly ticketsEnCurso = new Map<string, Promise<TicketAcceso>>();
 
   get environment(): 'dev' | 'prod' {
     // Default seguro: sandbox. Producción sólo si se pide explícitamente.
@@ -67,7 +70,7 @@ export class AfipSdkProvider implements InvoicingProvider {
    * En producción esto NO aplica nunca: se emite con el CUIT del tenant,
    * que es quien delegó en ARCA.
    */
-  private cuitAUsar(cuitTenant: string): string {
+  cuitOperativo(cuitTenant: string): string {
     if (this.environment !== 'dev') return cuitTenant;
     const demo = process.env.AFIPSDK_DEV_CUIT;
     if (!demo || demo === cuitTenant) return cuitTenant;
@@ -78,15 +81,24 @@ export class AfipSdkProvider implements InvoicingProvider {
     return demo;
   }
 
-  private async post(path: string, body: unknown): Promise<unknown> {
-    const token = process.env.AFIPSDK_ACCESS_TOKEN;
+  private conexion(): ConexionAfip {
+    const token = process.env.AFIPSDK_ACCESS_TOKEN?.trim();
     if (!token) {
       throw new ServiceUnavailableException(
         'Falta AFIPSDK_ACCESS_TOKEN: no se puede emitir con este proveedor.',
       );
     }
+    return { environment: this.environment, token };
+  }
+
+  private async post(
+    path: string,
+    body: unknown,
+    token: string,
+  ): Promise<unknown> {
     const r = await fetch(BASE + path, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -108,27 +120,70 @@ export class AfipSdkProvider implements InvoicingProvider {
     return json;
   }
 
-  /** Ticket de acceso, cacheado. Cubre a TODOS los CUITs representados. */
-  private async ticket(cuitEmisor: string): Promise<TicketAcceso> {
-    const clave = `${this.environment}:${cuitEmisor}`;
+  /** Cacheada por credencial, ambiente, emisor y webservice. */
+  private async ticket(
+    cuitEmisor: string,
+    conexion: ConexionAfip,
+  ): Promise<TicketAcceso> {
+    const credencial = createHash('sha256')
+      .update(conexion.token)
+      .digest('hex');
+    const clave = `${credencial}:${conexion.environment}:${cuitEmisor}:wsfe`;
     const guardado = this.tickets.get(clave);
     // Margen de 5 min: no queremos usar uno que expire en pleno request.
     if (guardado && guardado.expira > Date.now() + 5 * 60_000) {
       return guardado;
     }
-    const r = (await this.post('/auth', {
-      environment: this.environment,
-      tax_id: cuitEmisor,
-      wsid: 'wsfe',
-    })) as { token: string; sign: string; expiration: string };
+    const pendiente = this.ticketsEnCurso.get(clave);
+    if (pendiente) return pendiente;
 
-    const ta: TicketAcceso = {
-      token: r.token,
-      sign: r.sign,
-      expira: new Date(r.expiration).getTime(),
-    };
-    this.tickets.set(clave, ta);
-    return ta;
+    const solicitud = this.obtenerTicket(cuitEmisor, conexion);
+    this.ticketsEnCurso.set(clave, solicitud);
+    try {
+      const ta = await solicitud;
+      for (const [key, ticket] of this.tickets) {
+        if (ticket.expira <= Date.now()) this.tickets.delete(key);
+      }
+      this.tickets.set(clave, ta);
+      return ta;
+    } finally {
+      this.ticketsEnCurso.delete(clave);
+    }
+  }
+
+  private async obtenerTicket(
+    cuitEmisor: string,
+    conexion: ConexionAfip,
+  ): Promise<TicketAcceso> {
+    const raw = await this.post(
+      '/auth',
+      {
+        environment: conexion.environment,
+        tax_id: cuitEmisor,
+        wsid: 'wsfe',
+      },
+      conexion.token,
+    );
+    const r =
+      raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const expira =
+      typeof r.expiration === 'string' ? Date.parse(r.expiration) : NaN;
+    // /auth puede devolver el TA existente durante el margen de renovación.
+    // Debe cubrir al menos el timeout del próximo request, aunque no se cachee
+    // por otros cinco minutos. Nunca forzar una nueva autorización.
+    if (
+      typeof r.token !== 'string' ||
+      !r.token.trim() ||
+      typeof r.sign !== 'string' ||
+      !r.sign.trim() ||
+      !Number.isFinite(expira) ||
+      expira <= Date.now() + 30_000
+    ) {
+      throw new ServiceUnavailableException(
+        'AFIP SDK no devolvió un ticket de acceso válido y vigente.',
+      );
+    }
+    return { token: r.token, sign: r.sign, expira };
   }
 
   private async wsfe(
@@ -136,16 +191,21 @@ export class AfipSdkProvider implements InvoicingProvider {
     method: string,
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const ta = await this.ticket(cuitEmisor);
-    const r = (await this.post('/requests', {
-      environment: this.environment,
-      method,
-      wsid: 'wsfe',
-      params: {
-        Auth: { Token: ta.token, Sign: ta.sign, Cuit: cuitEmisor },
-        ...params,
+    const conexion = this.conexion();
+    const ta = await this.ticket(cuitEmisor, conexion);
+    const r = (await this.post(
+      '/requests',
+      {
+        environment: conexion.environment,
+        method,
+        wsid: 'wsfe',
+        params: {
+          Auth: { Token: ta.token, Sign: ta.sign, Cuit: cuitEmisor },
+          ...params,
+        },
       },
-    })) as Record<string, unknown>;
+      conexion.token,
+    )) as Record<string, unknown>;
     return r;
   }
 
@@ -199,13 +259,19 @@ export class AfipSdkProvider implements InvoicingProvider {
     tipo: EmitirInput['tipo'],
     letra: LetraProvider,
     cuitEmisor?: string,
+    esperado?: EmitirInput,
   ): Promise<number | null> {
     if (!cuitEmisor) return null;
     const clave = `${tipo}:${letra}`;
-    const cbteTipo = CBTE_TIPO[clave];
+    const cbteTipo = esperado
+      ? this.cbteTipo(
+          esperado,
+          esperado.leyenda === 'OPERACIÓN SUJETA A RETENCIÓN',
+        )
+      : CBTE_TIPO[clave];
     if (!cbteTipo) return null;
     const r = await this.wsfe(
-      this.cuitAUsar(cuitEmisor),
+      this.cuitOperativo(cuitEmisor),
       'FECompUltimoAutorizado',
       {
         PtoVta: puntoVenta,
@@ -218,7 +284,7 @@ export class AfipSdkProvider implements InvoicingProvider {
 
   async emitir(input: EmitirInput): Promise<EmitirResultado> {
     const cuitEmisor = input.emisorCuit
-      ? this.cuitAUsar(input.emisorCuit)
+      ? this.cuitOperativo(input.emisorCuit)
       : null;
     if (!cuitEmisor) {
       throw new ServiceUnavailableException(
@@ -322,7 +388,7 @@ export class AfipSdkProvider implements InvoicingProvider {
     if (input.asociados?.length) {
       det.CbtesAsoc = {
         CbteAsoc: input.asociados.map((a) => ({
-          Tipo: CBTE_TIPO[`factura:${input.letra}`] ?? 1,
+          Tipo: a.tipoArca ?? CBTE_TIPO[`${a.tipo}:${input.letra}`],
           PtoVta: a.puntoVenta,
           Nro: a.numero,
           Cuit: a.cuit ?? undefined,
@@ -375,8 +441,13 @@ export class AfipSdkProvider implements InvoicingProvider {
       errores.push(`[${e.Code}] ${e.Msg}`);
     }
 
-    if (cab.Resultado !== 'A' || !detResp?.CAE) {
+    if (cab.Resultado === 'R' || detResp?.Resultado === 'R') {
       return { estado: 'rechazado', errores, raw: r };
+    }
+    if (cab.Resultado !== 'A' || !detResp?.CAE) {
+      throw new ServiceUnavailableException(
+        'ARCA no devolvió una autorización o un rechazo concluyente. Consultá el resultado del envío.',
+      );
     }
 
     return {
@@ -402,20 +473,32 @@ export class AfipSdkProvider implements InvoicingProvider {
     letra: LetraProvider,
     numero: number,
     cuitEmisor?: string,
+    esperado?: EmitirInput,
   ): Promise<EmitirResultado | null> {
     if (!cuitEmisor) return null;
-    const cbteTipo = CBTE_TIPO[`${tipo}:${letra}`];
+    const cbteTipo = esperado
+      ? this.cbteTipo(
+          esperado,
+          esperado.leyenda === 'OPERACIÓN SUJETA A RETENCIÓN',
+        )
+      : CBTE_TIPO[`${tipo}:${letra}`];
     if (!cbteTipo) return null;
-    const r = await this.wsfe(this.cuitAUsar(cuitEmisor), 'FECompConsultar', {
-      FeCompConsReq: {
-        CbteTipo: cbteTipo,
-        CbteNro: numero,
-        PtoVta: puntoVenta,
+    const r = await this.wsfe(
+      this.cuitOperativo(cuitEmisor),
+      'FECompConsultar',
+      {
+        FeCompConsReq: {
+          CbteTipo: cbteTipo,
+          CbteNro: numero,
+          PtoVta: puntoVenta,
+        },
       },
-    });
+    );
     const res = (r.FECompConsultarResult ?? {}) as {
       ResultGet?: { CodAutorizacion?: string; FchVto?: string };
     };
+    if (esperado && res.ResultGet)
+      verificarConsultaFiscal(res.ResultGet, esperado, cbteTipo);
     const cae = res.ResultGet?.CodAutorizacion;
     if (!cae) return null;
     return {
@@ -440,4 +523,48 @@ function fechaArca(v: string): string {
   const d = v.replace(/\D/g, '');
   if (d.length !== 8) return '';
   return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+}
+
+/** FECompConsultar: compara contra el envío congelado, no sólo su número.
+ * Fuente: manual WSFEv1, FECompConsultar/ResultGet, ARCA. */
+export function verificarConsultaFiscal(
+  raw: unknown,
+  input: EmitirInput,
+  tipo: number,
+) {
+  const r =
+    raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const igualNumero = (clave: string, esperado: number, tolerancia = 0) =>
+    r[clave] !== null &&
+    r[clave] !== undefined &&
+    Number.isFinite(Number(r[clave])) &&
+    Math.abs(Number(r[clave]) - esperado) <= tolerancia;
+  if (
+    r.Resultado !== 'A' ||
+    r.EmisionTipo !== 'CAE' ||
+    !igualNumero('PtoVta', input.puntoVenta) ||
+    !igualNumero('CbteTipo', tipo) ||
+    !igualNumero('CbteDesde', input.numero ?? -1) ||
+    !igualNumero('CbteHasta', input.numero ?? -1) ||
+    String(r.CbteFch) !== input.fecha.replaceAll('-', '') ||
+    !igualNumero(
+      'DocTipo',
+      input.receptor.cuit ? DOC_TIPO_CUIT : DOC_TIPO_SIN_IDENTIFICAR,
+    ) ||
+    !igualNumero(
+      'DocNro',
+      input.receptor.cuit ? Number(input.receptor.cuit) : 0,
+    ) ||
+    !igualNumero('ImpTotal', input.total, 0.001) ||
+    r.MonId !== (input.moneda === 'USD' ? 'DOL' : 'PES') ||
+    !igualNumero(
+      'MonCotiz',
+      input.moneda === 'USD' ? (input.cotizacion ?? 1) : 1,
+      0.000001,
+    )
+  ) {
+    throw new ServiceUnavailableException(
+      'El comprobante consultado no coincide con la solicitud original. Se mantiene pendiente de revisión.',
+    );
+  }
 }

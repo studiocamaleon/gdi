@@ -1228,6 +1228,7 @@ div[id] {
   padding: 20px 0;
 }
 .integration-monogram {
+  flex-shrink: 0;
   height: 46px;
   width: 46px;
   display: grid;
@@ -1248,10 +1249,12 @@ div[id] {
   color: var(--muted);
   margin-top: 3px;
 }
-.integration-list > div > svg {
-  margin-left: auto;
-  color: #a1a9a7;
-}
+.integration-detail { min-width: 0; }
+.integration-list small { line-height: 1.7; }
+.integration-requirement { display: block; font-size: 11px; color: var(--muted); margin-top: 7px; line-height: 1.65; }
+.integration-plans { display: block; font: 10px var(--font-mono); color: var(--orange-ink); margin-top: 10px; line-height: 1.7; }
+.integration-compare-link { display: inline-flex; gap: 10px; align-items: center; margin-top: 24px; font-size: 12px; border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+.integration-compare-link:hover { color: var(--orange-ink); }
 .plans-section {
   padding-block: 100px 65px;
   background: #15181a;
@@ -1396,6 +1399,14 @@ div[id] {
   justify-content: space-between;
   font-size: 13px;
 }
+.plan-extra {
+  font-size: 12px;
+  color: #c4ccd0;
+  line-height: 1.7;
+  margin-bottom: 18px;
+}
+.plans-unavailable { text-align: center; color: #c4ccd0; padding: 32px; }
+.plans-unavailable .button { margin-top: 20px; }
 .plans-note {
   display: flex;
   align-items: center;

@@ -5,14 +5,11 @@ import {
   Check,
   ChevronDown,
   FileText,
-  Layers3,
-  LayoutGrid,
   Monitor,
   Printer,
   SlidersHorizontal,
   Waypoints,
   ChartNoAxesCombined,
-  Network,
   ScanLine,
   Mail,
 } from "lucide-react";
@@ -22,7 +19,11 @@ import { CinematicMedia } from "../components/cinematic-media";
 import { SignExperience } from "../components/sign-experience";
 import { ProductionJourney } from "../components/production-journey";
 import { FeatureCard } from "../components/feature-card";
-import { getSiteConfig, planInquiry } from "../lib/site-config";
+import { getSiteConfig } from "../lib/site-config";
+import { Suspense } from "react";
+import { PublicPlans } from "../components/public-plans";
+import { PublicIntegrations } from "../components/public-integrations";
+import { NestingSection } from "../components/nesting-section";
 
 const modules = [
   {
@@ -62,64 +63,14 @@ const modules = [
     tag: "GESTIÓN + MÉTRICAS",
   },
 ];
-const plans = [
-  {
-    name: "Print",
-    number: "01",
-    price: "190",
-    period: "/mes",
-    priceNote: "14 días gratis · Sin tarjeta",
-    icon: Printer,
-    intro: "De un presupuesto preciso a un trabajo bien organizado.",
-    base: "La base de tu operación",
-    features: [
-      "Cotización de trabajos de impresión",
-      "Órdenes y seguimiento de producción",
-      "Materiales, productos y clientes",
-      "Gestión comercial y administrativa",
-    ],
-  },
-  {
-    name: "Sign",
-    number: "02",
-    price: "290",
-    period: "/mes",
-    priceNote: "14 días gratis · Sin tarjeta",
-    icon: Layers3,
-    intro: "Más componentes. Más procesos. El mismo control.",
-    base: "Todo lo de Print, más",
-    features: [
-      "Configuración de cartelería en 3D",
-      "Estructuras y materiales por trabajo",
-      "Iluminación y componentes",
-      "Procesos de fabricación y montaje",
-    ],
-  },
-  {
-    name: "Industrial",
-    number: "03",
-    price: "A medida",
-    period: null,
-    priceNote: "Onboarding y soporte dedicado",
-    icon: Network,
-    intro: "Una mirada completa para una producción más compleja.",
-    base: "Todo lo de Sign, más",
-    features: [
-      "Planificación de la producción",
-      "Capacidad y carga por estación",
-      "Asignación de trabajo y responsables",
-      "Trazabilidad y control de la operación",
-    ],
-  },
-];
 const faqs = [
   [
     "¿Para qué tipo de empresa es Grafo?",
-    "Para empresas de la industria gráfica: impresión digital y gran formato, fabricación de cartelería y operaciones con procesos de producción más complejos. Los planes Print, Sign e Industrial acompañan esa evolución.",
+    "Para empresas de la industria gráfica: impresión digital y gran formato, fabricación de cartelería y operaciones con procesos de producción más complejos. Podés elegir el plan según tu equipo y las funciones que necesitás.",
   ],
   [
-    "¿Los planes incluyen las funciones del nivel anterior?",
-    "Sí. Sign incluye todas las capacidades de Print. Industrial incorpora las de Sign y Print y suma herramientas para coordinar una operación más compleja. Te ayudamos a elegir según tus trabajos y procesos.",
+    "¿Cómo elijo mi plan?",
+    "Compará los usuarios incluidos, el almacenamiento y las funciones de cada plan. Podés consultar el detalle de las capacidades disponibles antes de registrarte y revisar un cambio de plan desde tu cuenta.",
   ],
   [
     "¿Necesito instalar algo?",
@@ -131,7 +82,7 @@ const faqs = [
   ],
   [
     "¿Puedo probarlo antes de elegir?",
-    "Sí. Podés iniciar una prueba gratuita de 14 días, sin tarjeta, o solicitar una demo para recorrer el sistema con el foco en tu operación.",
+    "Los planes con registro disponible indican su período de prueba, sin tarjeta. También podés solicitar una demo para recorrer el sistema con el foco en tu operación.",
   ],
 ];
 
@@ -186,7 +137,7 @@ export default function Page() {
               </a>
             </div>
             <span className="hero-trial">
-              14 días gratis · Sin tarjeta · Configuración guiada
+              Prueba sin tarjeta · Configuración guiada
             </span>
           </div>
           <div className="hero-corner">
@@ -304,6 +255,9 @@ export default function Page() {
             </a>
           </div>
         </section>
+        <Suspense fallback={null}>
+          <NestingSection />
+        </Suspense>
         <SignExperience />
         <section id="industrial" className="industrial-section">
           <div className="section-shell">
@@ -394,65 +348,13 @@ export default function Page() {
             </a>
           </div>
         </section>
-        <section
-          className="integrations-section section-shell"
-          id="integraciones"
-        >
-          <div>
-            <span className="eyebrow dark-eyebrow">INTEGRACIONES</span>
-            <h2>
-              Tu operación,
-              <br />
-              <span>sin islas.</span>
-            </h2>
-            <p>
-              Presupuestos, conversaciones, archivos y cobros conectados con el
-              trabajo.
-            </p>
-          </div>
-          <div className="integration-list">
-            <div>
-              <span className="integration-monogram">Wa</span>
-              <span>
-                <strong>WhatsApp · Wati</strong>
-                <small>Presupuestos y avisos de estado</small>
-              </span>
-              <ArrowUpRight size={18} />
-            </div>
-            <div>
-              <span className="integration-monogram">MP</span>
-              <span>
-                <strong>Mercado Pago</strong>
-                <small>Links de pago y cobros</small>
-              </span>
-              <ArrowUpRight size={18} />
-            </div>
-            <div>
-              <span className="integration-monogram">
-                <FileText size={21} />
-              </span>
-              <span>
-                <strong>Facturación electrónica</strong>
-                <small>Comprobantes vinculados al trabajo</small>
-              </span>
-              <ArrowUpRight size={18} />
-            </div>
-            <div>
-              <span className="integration-monogram">
-                <Layers3 size={21} />
-              </span>
-              <span>
-                <strong>Google Drive</strong>
-                <small>Archivos y artes finales por orden</small>
-              </span>
-              <ArrowUpRight size={18} />
-            </div>
-          </div>
-        </section>
+        <Suspense fallback={null}>
+          <PublicIntegrations />
+        </Suspense>
         <section className="plans-section" id="precios">
           <div className="section-shell">
             <div className="plans-heading">
-              <span className="eyebrow">TRES NIVELES. UNA MISMA VISIÓN.</span>
+              <span className="eyebrow">TU EQUIPO. TU PRÓXIMO PASO.</span>
               <h2>
                 Un sistema que crece
                 <br />
@@ -460,53 +362,15 @@ export default function Page() {
               </h2>
               <p>Empezá donde estás. Sumá capacidades cuando las necesites.</p>
             </div>
-            <div className="plan-grid">
-              {plans.map((plan, index) => (
-                <article
-                  className={`plan-card ${index === 1 ? "plan-featured" : ""}`}
-                  key={plan.name}
-                >
-                  <div className="plan-top">
-                    <plan.icon size={24} />
-                    <span>0{index + 1}</span>
-                  </div>
-                  <h3>{plan.name}</h3>
-                  <p className="plan-intro">{plan.intro}</p>
-                  <div
-                    className={`plan-price ${plan.period ? "" : "plan-price-custom"}`}
-                  >
-                    {plan.period && <span className="plan-currency">USD</span>}
-                    <strong>{plan.price}</strong>
-                    {plan.period && (
-                      <span className="plan-period">{plan.period}</span>
-                    )}
-                  </div>
-                  <p className="plan-price-note">{plan.priceNote}</p>
-                  <div className="plan-inheritance">
-                    {index > 0 ? (
-                      <Layers3 size={16} />
-                    ) : (
-                      <LayoutGrid size={16} />
-                    )}
-                    <strong>{plan.base}</strong>
-                  </div>
-                  <ul>
-                    {plan.features.map((feature) => (
-                      <li key={feature}>
-                        <Check size={15} />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                  <a
-                    href={planInquiry(links.demo, plan.name)}
-                    className={`button ${index === 1 ? "button-orange" : "button-outline"}`}
-                  >
-                    Consultar plan <ArrowUpRight size={16} />
-                  </a>
-                </article>
-              ))}
-            </div>
+            <Suspense
+              fallback={
+                <p className="plans-unavailable" role="status">
+                  Cargando los planes disponibles…
+                </p>
+              }
+            >
+              <PublicPlans signup={links.signup} demo={links.demo} />
+            </Suspense>
             <div className="plans-note">
               <span>
                 <SlidersHorizontal size={17} />

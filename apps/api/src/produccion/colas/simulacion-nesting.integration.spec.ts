@@ -9,6 +9,8 @@ import {
 import { validate } from 'class-validator';
 import { SimularNestingColaDto } from './simular-nesting.dto';
 import { leerConfiguracionesCola, leerFuentesCola } from './configuracion-cola';
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
+import * as computo from './simulacion-rollo-computo';
 
 const db = new PrismaService(),
   service = new SimulacionNestingColaService(db);
@@ -198,6 +200,44 @@ it('simula anchos distintos del mismo material, sin filtrar color, tecnología, 
     /precio|costo|contorno|trazabilidad|tenantId/,
   );
   expect(Buffer.byteLength(JSON.stringify(r))).toBeLessThan(10_000);
+});
+
+it('no devuelve un resultado si se retira P07 durante el cálculo y libera la plaza', async () => {
+  const capacidades = capacidadesDePrueba();
+  const actual = await capacidades.actual(tenantId);
+  const servicio = new SimulacionNestingColaService(db, capacidades);
+  const calcular = computo.calcularRollo;
+  const trabajador = jest
+    .spyOn(computo, 'calcularRollo')
+    .mockImplementationOnce(async (entrada) => {
+      const resultado = await calcular(entrada);
+      actual.contrato.funciones.colas_produccion = false;
+      jest.spyOn(capacidades, 'actual').mockResolvedValue(actual);
+      return resultado;
+    });
+  try {
+    // Se comparten lectura y cálculo, pero ambas solicitudes deben comprobar
+    // los derechos vigentes al recibir el resultado.
+    const resultados = await Promise.allSettled([
+      servicio.simular(tenantId, maquinaId, pasos),
+      servicio.simular(tenantId, maquinaId, [...pasos].reverse()),
+    ]);
+    expect(trabajador).toHaveBeenCalledTimes(1);
+    for (const r of resultados) {
+      expect(r.status).toBe('rejected');
+      if (r.status === 'rejected')
+        expect(r.reason).toMatchObject({
+          status: 403,
+          response: { capacidad: 'colas_produccion' },
+        });
+    }
+    actual.contrato.funciones.colas_produccion = true;
+    await expect(
+      servicio.simular(tenantId, maquinaId, pasos),
+    ).resolves.toHaveProperty('alternativas');
+  } finally {
+    trabajador.mockRestore();
+  }
 });
 
 it('consulta el ancho y los márgenes actuales de la máquina, conservando los paneles cotizados', async () => {

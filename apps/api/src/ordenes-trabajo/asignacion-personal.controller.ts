@@ -10,12 +10,14 @@ import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { Permiso } from '../auth/permiso.decorator';
 import { AsignacionPersonalService } from './asignacion-personal.service';
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   ConfirmarAsignacionPersonalDto,
   SimularAsignacionPersonalDto,
 } from './dto/asignacion-personal.dto';
 
 @Permiso('produccion.supervisar')
+@RequiereCapacidad('asignacion_automatica')
 @Controller('ordenes-trabajo/tablero/pasos/:pasoId/asignacion-personal')
 export class AsignacionPersonalController {
   constructor(private readonly asignacion: AsignacionPersonalService) {}

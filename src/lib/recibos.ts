@@ -20,6 +20,7 @@ export type ReciboOrden = {
 };
 
 export type ReciboPublico = {
+  pdfDisponible?: boolean;
   numero: string;
   negocio: string;
   iniciales: string;

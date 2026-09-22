@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 import {
   activarAfip,
@@ -30,30 +32,52 @@ export function AfipDetalle({
   const [verificando, setVerificando] = React.useState(false);
   const [cambiando, setCambiando] = React.useState(false);
 
+  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeVerificar = puedeGestionar && datos.puedeOperarAfip;
+  const enCurso = React.useRef(false);
+  const refrescar = async () => {
+    try {
+      setDatos(await getAfip());
+    } catch {
+      /* Conserva el último estado conocido. */
+    }
+  };
+
   const activa = datos.estado === "CONECTADA";
   const emisor = datos.emisor;
   const faltanDatos = !emisor.cuit || emisor.puntosVenta.length === 0;
 
   const verificar = async () => {
-    if (verificando) return;
+    if (enCurso.current || !puedeVerificar) return;
+    enCurso.current = true;
     setVerificando(true);
     try {
       const r = await verificarAfip();
       setDatos(await getAfip());
       if (r.ok) {
-        toast.success("Delegación verificada: ARCA nos deja facturar con tu CUIT.");
+        toast.success(
+          "Delegación verificada: ARCA nos deja facturar con tu CUIT.",
+        );
       } else {
         toast.error(r.motivo ?? "No se pudo verificar la delegación.");
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo verificar.");
+      await refrescar();
     } finally {
+      enCurso.current = false;
       setVerificando(false);
     }
   };
 
   const toggle = async () => {
-    if (cambiando) return;
+    if (
+      enCurso.current ||
+      !puedeGestionar ||
+      (activa ? !datos.puedeDesactivarAfip : !datos.puedeOperarAfip)
+    )
+      return;
+    enCurso.current = true;
     setCambiando(true);
     try {
       const d = activa ? await desactivarAfip() : await activarAfip();
@@ -68,13 +92,23 @@ export function AfipDetalle({
         toast.success("Facturación electrónica desactivada.");
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo cambiar el estado.");
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo cambiar el estado.",
+      );
+      await refrescar();
     } finally {
+      enCurso.current = false;
       setCambiando(false);
     }
   };
 
   const estadoPill = (() => {
+    if (activa && !datos.puedeOperarAfip)
+      return {
+        dot: "warn",
+        txt: "Conectada · emisión no disponible",
+        tono: "warn",
+      };
     if (activa) return { dot: "ok", txt: "Delegación verificada", tono: "ok" };
     if (datos.estado === "ERROR")
       return { dot: "warn", txt: "La verificación falló", tono: "warn" };
@@ -105,7 +139,8 @@ export function AfipDetalle({
           </h1>
           <div className="sub">
             Emití facturas directamente desde Grafoprint. No subís ningún
-            certificado: delegás tu facturación a Grafo desde ARCA, una sola vez.
+            certificado: delegás tu facturación a Grafo desde ARCA, una sola
+            vez.
           </div>
         </div>
         <div className="int-hero-side">
@@ -116,13 +151,17 @@ export function AfipDetalle({
             </div>
             <div className="afip-cc-cuit">
               <div className="c">CUIT {emisor.cuit ?? "—"}</div>
-              <div className="r">{emisor.razonSocial ?? "Cargá tus datos fiscales"}</div>
+              <div className="r">
+                {emisor.razonSocial ?? "Cargá tus datos fiscales"}
+              </div>
             </div>
             <button
               className="btn btn-primary"
               style={{ width: "100%", justifyContent: "center" }}
               onClick={() => void verificar()}
-              disabled={verificando || faltanDatos}
+              disabled={
+                verificando || cambiando || faltanDatos || !puedeVerificar
+              }
             >
               {verificando ? "Verificando…" : "Verificar delegación"}
             </button>
@@ -130,12 +169,18 @@ export function AfipDetalle({
         </div>
       </div>
 
-      <div className={`afip-env-switch ${datos.ambiente === "prod" ? "prod" : "homo"}`}>
+      <div
+        className={`afip-env-switch ${datos.ambiente === "prod" ? "prod" : "homo"}`}
+      >
         <div className="afip-env-info">
           <span className="afip-env-label">Ambiente activo</span>
           <div className="afip-env-state">
-            <span className={`dot ${datos.ambiente === "prod" ? "ok" : "warn"}`} />
-            <strong>{datos.ambiente === "prod" ? "Producción" : "Homologación"}</strong>
+            <span
+              className={`dot ${datos.ambiente === "prod" ? "ok" : "warn"}`}
+            />
+            <strong>
+              {datos.ambiente === "prod" ? "Producción" : "Homologación"}
+            </strong>
             <span className="meta">
               {datos.ambiente === "prod"
                 ? "— los comprobantes generan CAE real y son fiscalmente válidos."
@@ -151,8 +196,8 @@ export function AfipDetalle({
             <span className="afip-i">i</span>
             <div>
               <strong>Faltan datos fiscales.</strong> Cargá el CUIT del emisor y
-              al menos un punto de venta en Administración → Configuración fiscal
-              antes de verificar la delegación.
+              al menos un punto de venta en Administración → Configuración
+              fiscal antes de verificar la delegación.
             </div>
           </div>
         )}
@@ -167,7 +212,10 @@ export function AfipDetalle({
               </p>
             </div>
             <div className="cred-card">
-              <div className="cred-row" style={{ gridTemplateColumns: "150px 1fr" }}>
+              <div
+                className="cred-row"
+                style={{ gridTemplateColumns: "150px 1fr" }}
+              >
                 <div className="cred-label">
                   <span className="lbl">CUIT</span>
                   <span className="hint">lo que se delega</span>
@@ -176,7 +224,10 @@ export function AfipDetalle({
                   <code>{emisor.cuit ?? "—"}</code>
                 </div>
               </div>
-              <div className="cred-row" style={{ gridTemplateColumns: "150px 1fr" }}>
+              <div
+                className="cred-row"
+                style={{ gridTemplateColumns: "150px 1fr" }}
+              >
                 <div className="cred-label">
                   <span className="lbl">Razón social</span>
                 </div>
@@ -184,7 +235,10 @@ export function AfipDetalle({
                   {emisor.razonSocial ?? "—"}
                 </div>
               </div>
-              <div className="cred-row" style={{ gridTemplateColumns: "150px 1fr" }}>
+              <div
+                className="cred-row"
+                style={{ gridTemplateColumns: "150px 1fr" }}
+              >
                 <div className="cred-label">
                   <span className="lbl">Condición IVA</span>
                 </div>
@@ -192,13 +246,18 @@ export function AfipDetalle({
                   {emisor.condicionFiscal ?? "—"}
                 </div>
               </div>
-              <div className="cred-row" style={{ gridTemplateColumns: "150px 1fr" }}>
+              <div
+                className="cred-row"
+                style={{ gridTemplateColumns: "150px 1fr" }}
+              >
                 <div className="cred-label">
                   <span className="lbl">Puntos de venta</span>
                 </div>
                 <div className="cred-value afip-plain">
                   {emisor.puntosVenta.length > 0
-                    ? emisor.puntosVenta.map((p) => p.numeroFormateado).join(" · ")
+                    ? emisor.puntosVenta
+                        .map((p) => p.numeroFormateado)
+                        .join(" · ")
                     : "—"}
                 </div>
               </div>
@@ -235,8 +294,8 @@ export function AfipDetalle({
                 <div className="afip-deleg-body">
                   <div className="afip-deleg-propio">
                     Sos el titular del certificado. No hay nada que delegar:
-                    facturás con el CUIT propietario de la plataforma. Verificá y
-                    activá.
+                    facturás con el CUIT propietario de la plataforma. Verificá
+                    y activá.
                   </div>
                 </div>
               ) : (
@@ -256,45 +315,58 @@ export function AfipDetalle({
           </div>
         </div>
 
-        {!datos.planPermiteAfip ? (
-          // El gate del plan (etapa B): sin el feature, el interruptor ni
-          // aparece — y el backend rechaza activar aunque la UI se salte.
-          <div className="int-info-box" style={{ marginTop: 22 }}>
-            <span className="afip-i">i</span>
-            <div>
-              <strong>Tu plan no incluye facturación electrónica.</strong>{" "}
-              Hablá con Grafo para pasar a un plan superior y activar la
-              emisión de comprobantes desde el sistema.
+        {datos.restriccionAfip && (
+          <Alert>
+            <AlertDescription>{datos.restriccionAfip}</AlertDescription>
+          </Alert>
+        )}
+        {(datos.puedeOperarAfip || activa) && (
+          <div className="afip-activar">
+            <div className="afip-activar-txt">
+              <div className="t">Conexión de facturación electrónica</div>
+              <div className="m">
+                {datos.puedeOperarAfip ? (
+                  <>
+                    Con la conexión verificada aparece el botón{" "}
+                    <strong>Facturar</strong> en órdenes y comprobantes.
+                  </>
+                ) : (
+                  <>
+                    La conexión se conserva, pero la cuenta no puede emitir
+                    ahora. Podés desconectarla si tu acceso permite cambios.
+                  </>
+                )}
+              </div>
             </div>
+            <button
+              type="button"
+              className={`afip-toggle ${activa ? "on" : ""}`}
+              role="switch"
+              aria-checked={activa}
+              aria-label={
+                activa
+                  ? "Desactivar facturación electrónica"
+                  : "Activar facturación electrónica"
+              }
+              onClick={() => void toggle()}
+              disabled={
+                cambiando ||
+                verificando ||
+                !puedeGestionar ||
+                (activa ? !datos.puedeDesactivarAfip : !datos.puedeOperarAfip)
+              }
+            >
+              <span className="knob" />
+            </button>
           </div>
-        ) : (
-        <div className="afip-activar">
-          <div className="afip-activar-txt">
-            <div className="t">Facturación electrónica activa</div>
-            <div className="m">
-              Con esto encendido aparece el botón <strong>Facturar</strong> en
-              órdenes y comprobantes. Sólo se activa con{" "}
-              {datos.esCuitPropio ? "la conexión verificada" : "la delegación verificada"}.
-            </div>
-          </div>
-          <button
-            type="button"
-            className={`afip-toggle ${activa ? "on" : ""}`}
-            role="switch"
-            aria-checked={activa}
-            aria-label="Activar facturación electrónica"
-            onClick={() => void toggle()}
-            disabled={cambiando}
-          >
-            <span className="knob" />
-          </button>
-        </div>
         )}
 
         <div className="int-info-box" style={{ marginTop: 12 }}>
           <span className="afip-i">i</span>
           <div>
-            <strong>No necesitás subir tu certificado ni generar un CSR.</strong>{" "}
+            <strong>
+              No necesitás subir tu certificado ni generar un CSR.
+            </strong>{" "}
             {datos.esCuitPropio
               ? "Facturás con el certificado propietario de la plataforma, ya asociado a tu CUIT. No hay ningún paso en ARCA."
               : "Grafo factura con su propio certificado en representación de tu CUIT. Lo único que hacés es la delegación en ARCA, una sola vez."}

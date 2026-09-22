@@ -1,3 +1,5 @@
+import { StreamableFile } from '@nestjs/common';
+import { ColasImpresion, ImpresionRegistrada } from './impresion-directa.guard';
 import { UseGuards } from '@nestjs/common';
 import {
   ImpresionDirectaGuard,
@@ -323,6 +325,7 @@ export class ImpresionController {
     );
   }
 
+  @ColasImpresion()
   @Get('cola')
   @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')
@@ -332,6 +335,7 @@ export class ImpresionController {
   ) {
     return this.documentos.cola(auth, Math.max(0, desde));
   }
+  @ColasImpresion()
   @Post('cola/liberar')
   @Permiso('comercial.gestionar', 'produccion.ejecutar')
   liberarLote(
@@ -345,6 +349,7 @@ export class ImpresionController {
       body.revision,
     );
   }
+  @ColasImpresion()
   @Post('ordenes/:id/cola')
   @Permiso('comercial.gestionar', 'produccion.ejecutar')
   solicitar(
@@ -353,6 +358,7 @@ export class ImpresionController {
   ) {
     return this.documentos.solicitar(auth, id);
   }
+  @ColasImpresion()
   @Post('ordenes/:id/liberar-impresion')
   @Permiso('comercial.gestionar', 'produccion.ejecutar')
   liberar(
@@ -369,6 +375,7 @@ export class ImpresionController {
     );
   }
 
+  @ColasImpresion()
   @Get('ordenes/:id/documentos')
   @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')
@@ -378,6 +385,19 @@ export class ImpresionController {
   ) {
     return this.documentos.vista(auth, id);
   }
+
+  @ImpresionRegistrada()
+  @Get('ordenes/:id/historial-documentos')
+  @Permiso('comercial.ver', 'produccion.ver', 'produccion.ejecutar')
+  @Header('Cache-Control', 'no-store')
+  historialDocumentos(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('desde', new DefaultValuePipe(0), ParseIntPipe) desde: number,
+  ) {
+    return this.documentos.historial(auth, id, Math.max(0, desde));
+  }
+  @ColasImpresion()
   @Post('ordenes/:id/documentos/:itemId')
   @Permiso('comercial.gestionar', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')
@@ -400,6 +420,7 @@ export class ImpresionController {
       body.pagina,
     );
   }
+  @ImpresionRegistrada()
   @Post('ordenes/:id/envios/:intentoId')
   @Permiso('comercial.gestionar', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')
@@ -417,6 +438,7 @@ export class ImpresionController {
       body.detalle,
     );
   }
+  @ImpresionRegistrada()
   @Post('ordenes/:id/confirmacion-documentos')
   @Permiso('comercial.gestionar', 'produccion.ejecutar')
   @Header('Cache-Control', 'no-store')
@@ -427,6 +449,19 @@ export class ImpresionController {
   ) {
     return this.documentos.confirmar(auth, id, body.envioIds);
   }
+  @ImpresionManual()
+  @Get('ordenes/:id/etiqueta/pdf')
+  @Permiso('produccion.ver', 'produccion.ejecutar')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'attachment; filename="etiqueta.pdf"')
+  @Header('Cache-Control', 'no-store')
+  async descargarEtiqueta(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return new StreamableFile(await this.service.descargarPdf(auth, id));
+  }
+
   @ImpresionManual()
   @Get('ordenes/:id/etiqueta')
   @Permiso('produccion.ver', 'produccion.ejecutar')

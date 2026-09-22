@@ -1,4 +1,6 @@
 "use client";
+import { ProductoEdicion } from "./producto-ui";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 /**
  * <ProductoWizard /> — flujo guiado para crear/editar un producto.
@@ -433,6 +435,8 @@ function ProductoWizardContent({
   const searchParams = useSearchParams();
   const stepFromUrl = searchParams.get("step") as StepId | null;
 
+  const conPrecios = useCapacidad("reglas_precio");
+  const conProcesos = useCapacidad("procesos");
   // Si modo editar, default a step desde URL o "identidad"; si crear, siempre "identidad"
   const [stepActivo, setStepActivo] = React.useState<StepId>(() => {
     if (modo === "crear") return "identidad";
@@ -624,7 +628,7 @@ function ProductoWizardContent({
         medidaDefaultAltoMm: medidaDefault?.altoMm,
         medidaDefaultProfundidadMm: medidaDefault?.profundidadMm,
         medidasPredefinidasJson: medidasNormalizadas,
-        precioConfigJson: precioConfig as unknown as Record<string, unknown>,
+        ...(conPrecios ? { precioConfigJson: precioConfig as unknown as Record<string, unknown> } : {}),
       };
       if (modo === "crear") {
         const creado = (await crearProducto(payload)) as { id: string };
@@ -656,6 +660,7 @@ function ProductoWizardContent({
 
   // ── Step 5: guardar precio ────────────────────────────────────────
   const guardarPrecio = async () => {
+    if (!conPrecios) return;
     if (!productoExistente) return;
     const modoMedidasEfectivo = sinMedida ? "FIJA" : modoMedidas;
     const medidasNormalizadas = sinMedida
@@ -687,7 +692,7 @@ function ProductoWizardContent({
         medidaDefaultAltoMm: medidaDefault?.altoMm,
         medidaDefaultProfundidadMm: medidaDefault?.profundidadMm,
         medidasPredefinidasJson: medidasNormalizadas,
-        precioConfigJson: precioConfig as unknown as Record<string, unknown>,
+        ...(conPrecios ? { precioConfigJson: precioConfig as unknown as Record<string, unknown> } : {}),
         activo,
         expectedUpdatedAt: productoExistente.updatedAt,
       });
@@ -836,22 +841,28 @@ function ProductoWizardContent({
           )}
 
           {stepActivo === "rutas" && productoExistente && (
-            <StepRutas
+            <ProductoEdicion disabled={!conProcesos}>
+              {!conProcesos && <p className="text-sm text-muted-foreground">Configuración disponible en modo consulta según tu plan.</p>}
+              <StepRutas
               producto={productoExistente}
               rutasDisponibles={rutasDisponibles}
               validacion={valRutas}
             />
+            </ProductoEdicion>
           )}
 
           {stepActivo === "config-pasos" && productoExistente && (
-            <StepConfigPasos
+            <ProductoEdicion disabled={!conProcesos}>
+              {!conProcesos && <p className="text-sm text-muted-foreground">Configuración disponible en modo consulta según tu plan.</p>}
+              <StepConfigPasos
               producto={productoExistente}
               validacion={valConfigPasos}
             />
+            </ProductoEdicion>
           )}
 
           {stepActivo === "precio" && (
-            <StepPrecio
+              <StepPrecio
               producto={productoExistente}
               precioConfig={precioConfig}
               setPrecioConfig={setPrecioConfig}

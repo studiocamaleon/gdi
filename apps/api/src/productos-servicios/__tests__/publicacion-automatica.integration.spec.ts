@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { randomUUID } from 'node:crypto';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { RecetasProductoService } from '../recetas-producto.service';
@@ -21,6 +22,7 @@ async function escenario(
     tenantId: string,
   ) => Promise<void>,
   concurrente = false,
+  sinCompuestos = false,
 ) {
   const rollback = new Error('rollback publicación automática');
   const ejecutar = async (tx: Prisma.TransactionClient | PrismaClient) => {
@@ -40,11 +42,19 @@ async function escenario(
     });
     const { prisma } = serviciosRecorridoF4(tx);
     const productos = new ProductosService(prisma as never);
+    const capacidades = new CapacidadesEmpresaService(prisma as never);
+    if (sinCompuestos) {
+      const actual = await capacidades.actual(tenant.id);
+      actual.contrato.funciones.productos_compuestos = false;
+      jest.spyOn(capacidades, 'actual').mockResolvedValue(actual);
+    }
     const recetas = new RecetasProductoService(
       prisma as never,
       productos,
       new ProductoValidacionService(productos),
       { publicar: async () => undefined } as never,
+      undefined,
+      capacidades,
     );
     const crear = async (codigo: string, compuesto = false) => {
       const producto = await tx.producto.create({
@@ -353,4 +363,47 @@ it('serializa publicaciones concurrentes entre conexiones sin duplicar versiones
       [2, 'PUBLICADA'],
     ]);
   }, true);
+});
+
+it('mantiene versiones y edición de productos simples sin habilitar componentes fabricados', async () => {
+  await escenario(
+    async (tx, recetas, crear, tenantId) => {
+      const simple = await crear('simple-sin-compuestos');
+      const resultado = await recetas.sincronizarPublicaciones({ tenantId }, [
+        simple.id,
+      ]);
+      expect(resultado.bloqueos).toEqual([]);
+      expect(
+        await recetas.resolverPublicadaParaCotizar(
+          tenantId,
+          simple.id,
+          simple.ruta,
+        ),
+      ).not.toBeNull();
+      const editada = await recetas.guardarConPublicacionAutomatica(
+        { tenantId },
+        simple.id,
+        { rutaAlternativaId: simple.ruta, componentes: [] },
+      );
+      expect(editada.estado).toBe('PUBLICADA');
+      const revisiones = await tx.productoRecetaRevision.count({
+        where: { tenantId },
+      });
+      expect(revisiones).toBeGreaterThan(0);
+      await expect(
+        recetas.guardarConPublicacionAutomatica({ tenantId }, simple.id, {
+          rutaAlternativaId: simple.ruta,
+          componentes: [{ productoComponenteId: simple.id } as never],
+        }),
+      ).rejects.toMatchObject({
+        status: 403,
+        response: { capacidad: 'productos_compuestos' },
+      });
+      expect(
+        await tx.productoRecetaRevision.count({ where: { tenantId } }),
+      ).toBe(revisiones);
+    },
+    false,
+    true,
+  );
 });

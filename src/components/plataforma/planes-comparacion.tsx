@@ -217,8 +217,9 @@ export function PlanesComparacion({
           <p>{resultado.accesoActual.descripcion}</p>
           <p>
             Esta es una foto del uso actual. Repetí el diagnóstico antes de
-            asignar. Publicar versiones y aplicar cambios de plan todavía está
-            pendiente; un resultado sin excedentes no habilita la asignación.
+            asignar. Las versiones se publican y asignan desde la pestaña
+            Versiones. Allí se repite el diagnóstico sobre el contenido
+            publicado antes de aplicar el cambio.
           </p>
           <div className={styles.cards}>
             {resultado.propuestas.map((p, index) => (

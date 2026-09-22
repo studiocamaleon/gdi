@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EstacionesOperativas } from "./estaciones-operativas";
 import { TableroLista } from "./tablero-lista";
+import { CapacidadesProvider } from "../navigation/capacidades-provider";
 import { buildItemView } from "@/lib/produccion-item-view";
 import { calendarioDefault, type Estacion } from "@/lib/estaciones";
 import type { TableroItemData } from "@/lib/tablero-produccion";
@@ -124,5 +125,20 @@ describe("presentación operativa de Estaciones", () => {
     expect(render(true, { iniciadoEl: '2026-09-14T12:00:00Z' })).not.toContain('aria-label="Asignar personal:');
     expect(render(true, { tipoEjecucion: 'tercerizado' })).not.toContain('aria-label="Asignar personal:');
     expect(render(true, { asignacionPersonal: { origen: 'automatica', personas: [{ empleadoId: 'persona', nombre: 'Ana' }], franjas: [], conflicto: null, esMia: false } })).toContain('aria-label="Reasignar personal: Embalaje"');
+  });
+
+  it.each([true, false])("la reasignación depende de P04=%s, independientemente de ETA", (incluida) => {
+    const est = { ...estacion, planificacionPorEmpleados: true };
+    const item = buildItemView({ ...tarea.data, pasos: tarea.data.pasos.map(p => ({ ...p,
+      asignacionPersonal: { origen: "automatica" as const, personas: [{ empleadoId: "persona", nombre: "Ana" }], franjas: [], conflicto: null, esMia: false },
+    })) }, [est]);
+    const html = renderToStaticMarkup(
+      <CapacidadesProvider capacidades={{ funciones: { asignacion_automatica: incluida, eta_capacidad: !incluida } }}>
+        <TableroLista items={[item]} estaciones={[est]} zona="UTC" onOpen={() => {}}
+          asignacionManual={{ puedeReasignar: true, onConfirmar: async () => {}, canManage: false, estacionIdsEjecutables: [], busy: false, onMesa: async () => {} }} />
+      </CapacidadesProvider>,
+    );
+    expect(html.includes('aria-label="Reasignar personal: Embalaje"')).toBe(incluida);
+    expect(html).toContain('Ana');
   });
 });

@@ -1,15 +1,15 @@
 import { tieneCapacidad } from "@/lib/capacidades-server";
-import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { CuponesView } from "@/components/comercial/cupones-view";
 import { getCurrentUserCached } from "@/lib/auth-server";
 import { listarCupones, type CuponesListado } from "@/lib/cupones-api";
 export const dynamic = "force-dynamic";
 export default async function Page() {
-  if (!(await tieneCapacidad("cupones"))) return <FuncionNoIncluida />;
+  const conCupones = await tieneCapacidad("cupones");
   const { currentUser } = await getCurrentUserCached();
   const permisos = currentUser.tenantActual.permisos;
   const puedeEditar =
+    conCupones && !currentUser.tenantActual.suscripcion?.soloLectura &&
     currentUser.tenantActual.rol !== "operador" &&
     (permisos == null || permisos.includes("comercial.aprobar_descuento"));
   let listado: CuponesListado = {
@@ -38,6 +38,7 @@ export default async function Page() {
       <CuponesView
         initial={listado}
         puedeEditar={puedeEditar}
+        conCupones={conCupones}
         errorInicial={errorInicial}
       />
     </DesignSystemProvider>

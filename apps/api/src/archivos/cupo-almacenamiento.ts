@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { contratoCompatible } from '../suscripciones/evaluador-capacidades';
+import { contratoSuscripcion } from '../suscripciones/contrato-suscripcion';
+import { limitesContratacionPendiente } from '../suscripciones/contratacion-pendiente';
 
 type Lectura = Pick<
   Prisma.TransactionClient,
@@ -28,7 +29,10 @@ export async function cupoAlmacenamiento(
       where: { id: tenantId },
       select: { bytesArchivos: true, cuotaBytesArchivos: true },
     }),
-    db.suscripcion.findFirst({ where: { tenantId }, include: { plan: true } }),
+    db.suscripcion.findFirst({
+      where: { tenantId },
+      include: { plan: true, planVersion: true },
+    }),
     db.archivo.aggregate({
       where: {
         tenantId,
@@ -41,7 +45,7 @@ export async function cupoAlmacenamiento(
     }),
   ]);
   if (!tenant) throw new NotFoundException('La empresa no existe.');
-  const contrato = contratoCompatible(suscripcion?.plan ?? null);
+  const contrato = contratoSuscripcion(suscripcion);
   const gb = contrato.limites.almacenamiento.gb;
   // Compatibilidad: en las cuentas anteriores cero significa sin ajuste/tope.
   const ajuste = tenant.cuotaBytesArchivos;
@@ -63,9 +67,7 @@ export async function cupoAlmacenamiento(
     cargasPendientes: reservas._count._all,
     cuotaBytes,
     origen,
-    plan: suscripcion?.plan
-      ? { nombre: suscripcion.plan.nombre, storageGb: gb }
-      : null,
+    plan: suscripcion?.plan ? { nombre: contrato.nombre, storageGb: gb } : null,
   };
 }
 
@@ -78,16 +80,32 @@ export async function exigirEspacio(
   excluirReserva?: string,
 ) {
   const cupo = await cupoAlmacenamiento(tx, tenantId, excluirReserva);
-  if (cupo.cuotaBytes === null || delta <= 0n) return;
-  if (cupo.bytes + cupo.bytesReservados + delta > cupo.cuotaBytes) {
+  if (delta <= 0n) return;
+  const pendiente = await limitesContratacionPendiente(tx, tenantId);
+  // La excepción administrativa de espacio se conserva al cambiar de plan.
+  const destino =
+    cupo.origen === 'ajuste' ? cupo.cuotaBytes : (pendiente?.bytes ?? null);
+  const cuotaBytes =
+    cupo.cuotaBytes === null
+      ? destino
+      : destino === null
+        ? cupo.cuotaBytes
+        : cupo.cuotaBytes < destino
+          ? cupo.cuotaBytes
+          : destino;
+  if (cuotaBytes === null) return;
+  if (cupo.bytes + cupo.bytesReservados + delta > cuotaBytes) {
     const salida =
       cupo.origen === 'plan'
         ? 'Borrá archivos o pasate a un plan con más espacio.'
         : 'Borrá archivos o pedí que te amplíen el espacio.';
     throw new ForbiddenException({
       code: 'CUPO_ALMACENAMIENTO_AGOTADO',
-      message: `No hay espacio disponible para guardar el archivo. Las cargas en curso también reservan espacio. ${salida}`,
-      cuotaBytes: Number(cupo.cuotaBytes),
+      message:
+        pendiente && cuotaBytes === destino && cupo.origen !== 'ajuste'
+          ? 'El archivo supera el espacio del plan con contratación pendiente. Revisá el pago o liberá espacio antes de continuar. Las cargas en curso también reservan espacio.'
+          : `No hay espacio disponible para guardar el archivo. Las cargas en curso también reservan espacio. ${salida}`,
+      cuotaBytes: Number(cuotaBytes),
       bytes: Number(cupo.bytes),
       bytesReservados: Number(cupo.bytesReservados),
     });

@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 /**
  * Alta de cliente escaneando el DNI (docs/entrega-por-escaneo-diseno.md).
@@ -22,10 +23,7 @@ import {
   buscarClientePorDocumento,
 } from "@/lib/clientes-api";
 import type { ClienteDetalle } from "@/lib/clientes";
-import {
-  cuilDesdeDocumento,
-  type DatosDocumento,
-} from "@/lib/dni-argentino";
+import { cuilDesdeDocumento, type DatosDocumento } from "@/lib/dni-argentino";
 import s from "./alta-dni-modal.module.css";
 
 /** "37555536" → "37.555.536" */
@@ -44,6 +42,7 @@ export function AltaDniModal({
   onCreado?: (cliente: ClienteDetalle, yaExistia: boolean) => void;
 }) {
   const [codigo, setCodigo] = React.useState("+54");
+  const conClientes = useCapacidad("clientes");
   const [numero, setNumero] = React.useState("");
   const [guardando, setGuardando] = React.useState(false);
   const cuil = cuilDesdeDocumento(datos.documento, datos.sexo);
@@ -83,6 +82,14 @@ export function AltaDniModal({
   }, [onClose, guardando]);
 
   const crear = async () => {
+    if (!conClientes) {
+      if (existente?.activo) {
+        avisarClienteEscaneado(existente);
+        onCreado?.(existente, true);
+        onClose();
+      }
+      return;
+    }
     setGuardando(true);
     try {
       const r = await altaClientePorDocumento({
@@ -144,7 +151,9 @@ export function AltaDniModal({
                 ? "Buscando si ya está cargado…"
                 : existente
                   ? "Se usa el que ya está, no se crea otro."
-                  : "Se da de alta como cliente."}
+                  : conClientes
+                    ? "Se da de alta como cliente."
+                    : "El alta de clientes no está incluida en tu plan."}
             </div>
           </div>
         </div>
@@ -177,37 +186,45 @@ export function AltaDniModal({
         {/* Con teléfono ya cargado no hay nada que pedir. Si el cliente
             existe pero le falta, es la oportunidad de completarlo: lo tenés
             enfrente. */}
-        {existente?.telefonoNumero ? null : (
-        <div className={s.field}>
-          <label htmlFor="alta-dni-tel">
-            {existente ? "Celular que falta (opcional)" : "Celular (opcional)"}
-          </label>
-          <div className={s.tel}>
-            <input
-              className={s.cod}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              aria-label="Código de país"
-            />
-            <input
-              id="alta-dni-tel"
-              className={s.num}
-              value={numero}
-              inputMode="tel"
-              placeholder="11 5555 5555"
-              onChange={(e) => setNumero(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !guardando) void crear();
-              }}
-            />
+        {existente?.telefonoNumero || !conClientes ? null : (
+          <div className={s.field}>
+            <label htmlFor="alta-dni-tel">
+              {existente
+                ? "Celular que falta (opcional)"
+                : "Celular (opcional)"}
+            </label>
+            <div className={s.tel}>
+              <input
+                className={s.cod}
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                aria-label="Código de país"
+              />
+              <input
+                id="alta-dni-tel"
+                className={s.num}
+                value={numero}
+                inputMode="tel"
+                placeholder="11 5555 5555"
+                onChange={(e) => setNumero(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !guardando) void crear();
+                }}
+              />
+            </div>
+            <span className={s.hint}>
+              Sin celular no se le puede avisar por WhatsApp cuando el trabajo
+              esté listo. Se puede cargar después.
+            </span>
           </div>
-          <span className={s.hint}>
-            Sin celular no se le puede avisar por WhatsApp cuando el trabajo
-            esté listo. Se puede cargar después.
-          </span>
-        </div>
         )}
 
+        {!conClientes && !existente?.activo && existente !== undefined && (
+          <p className={s.hint}>
+            Podés elegir un cliente activo ya registrado o continuar con la
+            venta de mostrador.
+          </p>
+        )}
         {existente ? (
           <div className={s.existe}>
             <InfoIcon />
@@ -234,7 +251,11 @@ export function AltaDniModal({
             type="button"
             className="btn btn-primary"
             onClick={() => void crear()}
-            disabled={guardando || existente === undefined}
+            disabled={
+              guardando ||
+              existente === undefined ||
+              (!conClientes && !existente?.activo)
+            }
           >
             {guardando
               ? "Guardando…"

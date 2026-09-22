@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { useEffect, useState } from "react";
 import {
@@ -8,13 +9,14 @@ import {
 import type { NestingViewerInput } from "@/lib/productos-servicios-api";
 
 export function useCapasFabricacion(original: NestingViewerInput) {
+  const incluida = useCapacidad("exportacion_fabricacion");
   const [estado, setEstado] = useState<{
     original: NestingViewerInput;
     resultado?: NestingViewerInput;
     error?: string;
   }>();
   const [intento, setIntento] = useState(0);
-  const faltan = faltanCapasFabricacion(original);
+  const faltan = incluida && faltanCapasFabricacion(original);
   useEffect(() => {
     if (!faltan) return;
     let activo = true;

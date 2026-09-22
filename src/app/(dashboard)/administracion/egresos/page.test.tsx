@@ -30,6 +30,7 @@ vi.mock("@/components/administracion/tesoreria-view", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.egresos.mockResolvedValue({ egresos: [] });
+  mocks.tesoreria.mockResolvedValue({ cuentas: [], kpis: {}, monedaLocal: "ARS" });
 });
 it("carga Egresos sin consultar Gastos fijos cuando el plan no los incluye", async () => {
   mocks.incluida.mockImplementation(async (clave) => clave === "cuentas_pagar");
@@ -39,12 +40,16 @@ it("carga Egresos sin consultar Gastos fijos cuando el plan no los incluye", asy
   expect(mocks.egresos).toHaveBeenCalledOnce();
   expect(mocks.gastos).not.toHaveBeenCalled();
 });
-it("al entrar por URL rechaza Egresos y Tesorería antes de cargar sus datos", async () => {
+it("conserva Egresos y Tesorería como historial sin cargar catálogos de gestión ni abrir altas por URL", async () => {
   mocks.incluida.mockResolvedValue(false);
-  expect((await Page({ searchParams: Promise.resolve({}) })).type).toBe(
-    FuncionNoIncluida,
-  );
-  expect((await TesoreriaPage()).type).toBe(FuncionNoIncluida);
-  expect(mocks.egresos).not.toHaveBeenCalled();
-  expect(mocks.tesoreria).not.toHaveBeenCalled();
+  const egresos = await Page({ searchParams: Promise.resolve({ accion: "nuevo" }) });
+  expect(egresos.type).not.toBe(FuncionNoIncluida);
+  expect(egresos.props.altaInicial).toBe(false);
+  expect(egresos.props.proveedores).toEqual([]);
+  expect(egresos.props.metodosPago).toEqual([]);
+  expect(egresos.props.cuentas).toEqual([]);
+  expect((await TesoreriaPage()).type).not.toBe(FuncionNoIncluida);
+  expect(mocks.egresos).toHaveBeenCalledOnce();
+  expect(mocks.tesoreria).toHaveBeenCalledOnce();
+  expect(mocks.gastos).not.toHaveBeenCalled();
 });

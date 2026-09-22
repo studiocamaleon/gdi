@@ -20,6 +20,7 @@ function setup({
     createdAt: new Date(),
   };
   const tx = {
+    planContratacion: { findFirst: jest.fn().mockResolvedValue(null) },
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'tenant-1' }]),
     suscripcion: { findFirst: jest.fn().mockResolvedValue(null) },
     archivo: {

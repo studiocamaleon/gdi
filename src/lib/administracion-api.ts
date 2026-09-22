@@ -182,6 +182,18 @@ export async function emitirComprobante(id: string): Promise<Comprobante> {
   });
 }
 
+export async function consultarEmisionComprobante(
+  id: string,
+): Promise<{
+  aplicada: boolean;
+  detalle: string | null;
+  comprobante: ComprobanteDetalle;
+}> {
+  return apiRequest(`/administracion/comprobantes/${id}/consultar-emision`, {
+    method: "POST",
+  });
+}
+
 /** Provider manual: el CAE lo saca el usuario del portal de ARCA. */
 export async function cargarCae(
   id: string,

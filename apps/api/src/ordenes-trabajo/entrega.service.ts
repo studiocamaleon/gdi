@@ -106,6 +106,10 @@ export class EntregaService {
     return {
       id: orden.id,
       numero: orden.numero,
+      puedeCobrar: await this.cobros.puedeRegistrarEnOrden(auth, orden.id),
+      produccionControlada: orden.produccionControlada !== false,
+      requiereConfirmacionManual:
+        orden.produccionControlada === false && orden.estado !== 'finalizada',
       estado: orden.estado,
       creadaEl: orden.createdAt.toISOString(),
       cliente: orden.cliente
@@ -224,6 +228,15 @@ export class EntregaService {
       }
     }
 
+    if (
+      orden.produccionControlada === false &&
+      orden.estado !== 'finalizada' &&
+      !dto.confirmarPreparacionManual
+    )
+      throw new BadRequestException(
+        'Confirmá que los productos seleccionados están preparados para entregar: esta orden tiene seguimiento manual.',
+      );
+
     const cobroCreado = dto.cobro
       ? await this.cobros.create(auth, { ...dto.cobro, ordenId: orden.id })
       : null;
@@ -288,6 +301,9 @@ export class EntregaService {
                 }
               : {}),
             ...(cobroCreado ? { cobroId: cobroCreado.id } : {}),
+            ...(orden.produccionControlada === false
+              ? { preparacionManualConfirmada: true }
+              : {}),
           },
         },
       });

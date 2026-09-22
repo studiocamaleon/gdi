@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useState } from "react";
 import { Label, Switch } from "@heroui/react";
 import Link from "next/link";
@@ -17,6 +18,8 @@ import { stockUnitLabel } from "./stock-conversion-fields";
 import styles from "../comercial/materiales-orden.module.css";
 
 export function ConfiguracionReservas() {
+  const conReservas = useCapacidad("reservas");
+  const conExistencias = useCapacidad("existencias");
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<PoliticaReservas | null>(null);
   const [error, setError] = useState("");
@@ -50,6 +53,7 @@ export function ConfiguracionReservas() {
       setBusy(false);
     }
   }
+  if (!conReservas || !conExistencias) return null;
   return (
     <>
       <ActionButton variant="outline" onPress={cargar}>

@@ -2,20 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { ESTADOS } from '../estados';
 
-/**
- * El barrido de reservas vencidas — la contracara del candado.
- *
- * Reservar la fila antes de mandar (`despacho-sin-duplicar.spec`) evita el
- * mensaje doble, pero abre un riesgo nuevo: si el proceso se muere hablando
- * con Wati, la fila queda en `enviando` para siempre y el aviso no sale nunca.
- * El cron la suelta pasados diez minutos.
- *
- * Lo que fija esta suite es el CORTE, que es la decisión delicada: soltar
- * demasiado pronto significa reintentar algo que quizás ya se mandó —el
- * duplicado que veníamos de arreglar— y soltar demasiado tarde deja al cliente
- * sin su aviso. Diez minutos separa "el proceso murió" de "todavía está
- * mandando", porque una llamada a Wati tarda segundos.
- */
+/** Recuperación real del scheduler: preparar admite reintento; un POST
+ * autorizado queda incierto. No se envían mensajes en estas pruebas. */
+import { NotificacionesScheduler } from '../notificaciones.scheduler';
+import type { PrismaService } from '../../../prisma/prisma.service';
 
 const prisma = new PrismaClient();
 
@@ -41,12 +31,15 @@ describe('barrido de reservas vencidas', () => {
     await prisma.$disconnect();
   });
 
-  async function reservadaHace(minutos: number): Promise<string> {
+  async function reservadaHace(
+    minutos: number,
+    estado: string = ESTADOS.enviando,
+  ): Promise<string> {
     const fila = await prisma.notificacionWhatsapp.create({
       data: {
         tenantId,
         evento: 'pago_recibido',
-        estado: ESTADOS.enviando,
+        estado,
         reservadaEl: new Date(Date.now() - minutos * 60 * 1000),
         claveUnica: `test-barrido:${randomUUID()}`,
         telefono: '5490000000000',
@@ -58,17 +51,14 @@ describe('barrido de reservas vencidas', () => {
     return fila.id;
   }
 
-  /** El UPDATE del scheduler, con el mismo criterio. */
   async function barrer(): Promise<void> {
-    const corte = new Date(Date.now() - CORTE_MIN * 60 * 1000);
-    await prisma.notificacionWhatsapp.updateMany({
-      where: {
-        tenantId,
-        estado: ESTADOS.enviando,
-        OR: [{ reservadaEl: null }, { reservadaEl: { lt: corte } }],
-      },
-      data: { estado: ESTADOS.pendiente, reservadaEl: null },
-    });
+    const scheduler = new NotificacionesScheduler(
+      prisma as unknown as PrismaService,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    await scheduler.soltarReservasVencidas();
   }
 
   async function estadoDe(id: string): Promise<string | undefined> {
@@ -79,16 +69,22 @@ describe('barrido de reservas vencidas', () => {
     return f?.estado;
   }
 
+  it('recupera sólo una preparación anterior al POST', async () => {
+    const id = await reservadaHace(30, ESTADOS.reservada);
+    await barrer();
+    expect(await estadoDe(id)).toBe(ESTADOS.pendiente);
+  });
+
   it('no toca la que se acaba de reservar: puede estar en vuelo', async () => {
     const enVuelo = await reservadaHace(1);
     await barrer();
     expect(await estadoDe(enVuelo)).toBe(ESTADOS.enviando);
   });
 
-  it('suelta la que quedó colgada de un proceso muerto', async () => {
+  it('un envío sin confirmación queda incierto, sin reenvío automático', async () => {
     const colgada = await reservadaHace(30);
     await barrer();
-    expect(await estadoDe(colgada)).toBe(ESTADOS.pendiente);
+    expect(await estadoDe(colgada)).toBe(ESTADOS.incierta);
   });
 
   it('el borde: justo antes del corte no se suelta, justo después sí', async () => {
@@ -96,10 +92,10 @@ describe('barrido de reservas vencidas', () => {
     const despues = await reservadaHace(CORTE_MIN + 1);
     await barrer();
     expect(await estadoDe(antes)).toBe(ESTADOS.enviando);
-    expect(await estadoDe(despues)).toBe(ESTADOS.pendiente);
+    expect(await estadoDe(despues)).toBe(ESTADOS.incierta);
   });
 
-  it('una reserva sin fecha se suelta (fila de antes de esta migración)', async () => {
+  it('un envío histórico sin fecha también requiere revisión', async () => {
     const sinFecha = await prisma.notificacionWhatsapp.create({
       data: {
         tenantId,
@@ -114,6 +110,6 @@ describe('barrido de reservas vencidas', () => {
       select: { id: true },
     });
     await barrer();
-    expect(await estadoDe(sinFecha.id)).toBe(ESTADOS.pendiente);
+    expect(await estadoDe(sinFecha.id)).toBe(ESTADOS.incierta);
   });
 });

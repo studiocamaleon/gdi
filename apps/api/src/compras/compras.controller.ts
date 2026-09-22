@@ -1,4 +1,7 @@
-import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
+import {
+  RequiereCapacidad,
+  RequiereCapacidades,
+} from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -22,7 +25,6 @@ import {
   OfertaCompraDto,
   RecibirCompraDto,
 } from './dto/compras.dto';
-@RequiereCapacidad('compras')
 @Controller('compras')
 @Permiso('inventario.ver')
 export class ComprasController {
@@ -32,15 +34,21 @@ export class ComprasController {
       throw new BadRequestException('Página no válida.');
     return value;
   }
-  @Get('catalogo') catalogo(@CurrentSession() a: CurrentAuth) {
+  @RequiereCapacidad('compras')
+  @Get('catalogo')
+  catalogo(@CurrentSession() a: CurrentAuth) {
     return this.service.catalogo(a);
   }
-  @Get('necesidades') necesidades(
+  @RequiereCapacidad('compras')
+  @Get('necesidades')
+  necesidades(
     @CurrentSession() a: CurrentAuth,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
   ) {
     return this.service.necesidades(a, this.page(page));
   }
+  // La consulta de antecedentes sobrevive a la retirada del módulo.
+  // Se conservan permiso de inventario, permiso de costos y filtro por empresa.
   @Get() listar(
     @CurrentSession() a: CurrentAuth,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -66,27 +74,32 @@ export class ComprasController {
   ) {
     return this.service.detalle(a, id);
   }
-  @Put('ofertas') @Permiso('inventario.gestionar') oferta(
-    @CurrentSession() a: CurrentAuth,
-    @Body() d: OfertaCompraDto,
-  ) {
+  @RequiereCapacidad('compras')
+  @Put('ofertas')
+  @Permiso('inventario.gestionar')
+  oferta(@CurrentSession() a: CurrentAuth, @Body() d: OfertaCompraDto) {
     return this.service.guardarOferta(a, d);
   }
-  @Post() @Permiso('inventario.gestionar') crear(
-    @CurrentSession() a: CurrentAuth,
-    @Body() d: CrearCompraDto,
-  ) {
+  @RequiereCapacidad('compras')
+  @Post()
+  @Permiso('inventario.gestionar')
+  crear(@CurrentSession() a: CurrentAuth, @Body() d: CrearCompraDto) {
     return this.service.crear(a, d);
   }
-  @Post(':id/acciones') @Permiso('inventario.gestionar') actuar(
+  @RequiereCapacidad('compras')
+  @Post(':id/acciones')
+  @Permiso('inventario.gestionar')
+  actuar(
     @CurrentSession() a: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() d: AccionCompraDto,
   ) {
     return this.service.actuar(a, id, d);
   }
-  @RequiereCapacidad('recepciones')
-  @Post(':id/recepciones') @Permiso('inventario.gestionar') recibir(
+  @RequiereCapacidades('compras', 'recepciones')
+  @Post(':id/recepciones')
+  @Permiso('inventario.gestionar')
+  recibir(
     @CurrentSession() a: CurrentAuth,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() d: RecibirCompraDto,

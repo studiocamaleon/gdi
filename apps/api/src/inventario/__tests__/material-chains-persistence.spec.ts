@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient, RolSistema } from '@prisma/client';
 import { InventarioService } from '../inventario.service';
@@ -18,7 +19,7 @@ import type { TipoCambioSnapshot } from '../../cotizaciones/tipo-cambio.types';
 // jest-setup-db fuerza la base dedicada de pruebas.
 describe('Compra → stock → consumo con trazabilidad', () => {
   const prisma = new PrismaClient();
-  const service = new InventarioService(prisma as never);
+  const service = new InventarioService(prisma as never, undefined, capacidadesDePrueba());
   const tenantId = randomUUID();
   const auth = {
     tenantId,
@@ -438,10 +439,7 @@ describe('Compra → stock → consumo con trazabilidad', () => {
       precioPorUnidadUsoOrigen: 5,
       conversionPrecio: { ok: true, factor: 100 },
     });
-    const conCambio = new InventarioService(
-      prisma as never,
-      { resolver: jest.fn().mockResolvedValue(cambio) } as never,
-    );
+    const conCambio = new InventarioService(prisma as never, { resolver: jest.fn().mockResolvedValue(cambio) } as never, capacidadesDePrueba());
     const ingresoUSD = await conCambio.registrarMovimiento(auth, {
       varianteId: record.id,
       ubicacionId,

@@ -21,6 +21,8 @@ export type ComprobanteTipo = (typeof COMPROBANTE_TIPOS)[number];
 
 export const COMPROBANTE_ESTADOS = [
   'borrador',
+  'en_proceso',
+  'por_verificar',
   'emitido',
   'rechazado',
   'anulado',

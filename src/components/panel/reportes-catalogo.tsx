@@ -1,5 +1,7 @@
 "use client";
 import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
+import { SinPermiso } from "@/components/navigation/sin-permiso";
 
 import Link from "next/link";
 import {
@@ -31,6 +33,12 @@ export function ReportesCatalogo() {
   const puede = usePuedeFn();
   const funciones = useFuncionesPlan();
   const visibles = reportesVisibles(puede, funciones);
+
+  if (!visibles.length) {
+    return reportesVisibles(() => true, funciones).length
+      ? <SinPermiso modulo="los reportes disponibles" />
+      : <FuncionNoIncluida />;
+  }
 
   return (
     <div className={styles.catalogo}>

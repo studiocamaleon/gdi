@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { PublicacionAutomaticaInterceptor } from './publicacion-automatica.interceptor';
 import { ExportarFabricacionController } from './geometrias/exportar-fabricacion.controller';
 import { GeometriasProductoController } from './geometrias/geometrias-producto.controller';
@@ -33,7 +34,13 @@ import { EventosSistemaModule } from '../eventos-sistema/eventos-sistema.module'
  *               por cliente, servicio AplicarPrecio (pure function).
  */
 @Module({
-  imports: [StorageModule, PrismaModule, PrecioModule, EventosSistemaModule],
+  imports: [
+    CapacidadesEmpresaModule,
+    StorageModule,
+    PrismaModule,
+    PrecioModule,
+    EventosSistemaModule,
+  ],
   controllers: [
     ProductosServiciosController,
     GeometriasProductoController,

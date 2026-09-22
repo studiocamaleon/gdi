@@ -1,5 +1,7 @@
 "use client";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+
 /**
  * Presupuestos — listado + detalle del ciclo comercial
  * (docs/presupuestos-modulo-estudio.md). Comparte la base visual de los
@@ -70,6 +72,8 @@ function PresupuestosContent({
 }: PresupuestosViewProps) {
   const scope = useDesignScope();
   const themeClass = useDesignTheme();
+  const conPresupuestos = useCapacidad("presupuestos");
+  const conCotizacion = useCapacidad("cotizacion");
   const { moneda } = useConfigRegional();
   const router = useRouter();
   const [data, setData] = React.useState(initial);
@@ -189,7 +193,7 @@ function PresupuestosContent({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {puedeAprobar ? (
+          {puedeAprobar && conPresupuestos ? (
             <ActionButton
               variant="outline"
               onPress={() => setConfigAbierta(true)}
@@ -198,13 +202,17 @@ function PresupuestosContent({
               Configuración
             </ActionButton>
           ) : null}
-          <ActionLink href="/comercial/crear-propuesta">
+          {conPresupuestos && conCotizacion && <ActionLink href="/comercial/crear-propuesta">
             <PlusIcon size={15} aria-hidden />
             Nuevo presupuesto <ArrowUpRight aria-hidden />
-          </ActionLink>
+          </ActionLink>}
         </div>
       </header>
 
+      {!conPresupuestos && <p className={layout.subtitle}>
+        El plan actual permite consultar y resolver los presupuestos ya emitidos.
+        La creación de nuevos presupuestos no está incluida.
+      </p>}
       <div className={s.kpis}>
         <ListMetric
           label="Pipeline abierto"

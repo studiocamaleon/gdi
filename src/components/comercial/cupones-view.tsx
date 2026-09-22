@@ -170,10 +170,12 @@ function fechaCalendario(fecha: string) {
 export function CuponesView({
   initial,
   puedeEditar,
+  conCupones = true,
   errorInicial,
 }: {
   initial: CuponesListado;
   puedeEditar: boolean;
+  conCupones?: boolean;
   errorInicial: string | null;
 }) {
   const { moneda } = useConfigRegional();
@@ -341,7 +343,9 @@ export function CuponesView({
               Cupones<span className={s.dot}>.</span>
             </h1>
             <p className={listPage.subtitle}>
-              Creá descuentos, definí su alcance y seguí cada uso.
+              {conCupones
+                ? "Creá descuentos, definí su alcance y seguí cada uso."
+                : "Historial de cupones y descuentos aplicados. Tu plan actual no permite crear, editar ni aplicar cupones."}
             </p>
           </div>
           {puedeEditar ? (
@@ -358,7 +362,7 @@ export function CuponesView({
             value={metricas.vigentes}
             icon={CircleCheckBigIcon}
             tone="brand"
-            hint="Disponibles para aplicar"
+            hint={conCupones ? "Disponibles para aplicar" : "Según sus reglas guardadas"}
           />
           <ListMetric
             label="Por vencer"
@@ -463,7 +467,9 @@ export function CuponesView({
                   ? "Probá con otra búsqueda o limpiá los filtros."
                   : puedeEditar
                   ? "Creá el primero para una campaña, un cliente frecuente o un sorteo."
-                  : "Cuando un supervisor cree cupones, van a aparecer acá."}
+                  : conCupones
+                  ? "Cuando un supervisor cree cupones, van a aparecer acá."
+                  : "No hay cupones guardados para consultar."}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

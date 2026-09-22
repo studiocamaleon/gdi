@@ -3,8 +3,14 @@ import { apiRequest } from "./api";
 import type { AccesoEmpresa } from "./plataforma-api";
 
 export type CupoSuscripcion = CupoUsuarios & { editable: boolean };
-export const ajustarCupoUsuarios = (id: string, datos: { adicionales: number; anteriores: number; motivo: string }) =>
-  apiRequest<CupoUsuarios>(`/plataforma/suscripciones/${id}/cupo-usuarios`, { method: "PUT", body: JSON.stringify(datos) });
+export const ajustarCupoUsuarios = (
+  id: string,
+  datos: { adicionales: number; anteriores: number; motivo: string },
+) =>
+  apiRequest<CupoUsuarios>(`/plataforma/suscripciones/${id}/cupo-usuarios`, {
+    method: "PUT",
+    body: JSON.stringify(datos),
+  });
 
 export type IntegracionPaddle = {
   apiConfigurada: boolean;
@@ -45,6 +51,59 @@ export type PaginaSuscripciones = {
 export type DetalleSuscripcion = SuscripcionPlataforma & {
   integracion: IntegracionPaddle;
 };
+export type ContratacionPlataforma = {
+  id: string;
+  tipo: string;
+  estado: string;
+  entorno: string;
+  plan: string;
+  ciclo: string;
+  adicionales: number;
+  creadaEl: string;
+  enviadaEl: string | null;
+  finalizadaEl: string | null;
+  transaccionId: string | null;
+  referencia: string | null;
+  detalle: string | null;
+};
+export type PaginaContrataciones = {
+  total: number;
+  pagina: number;
+  limite: number;
+  contrataciones: ContratacionPlataforma[];
+};
+export type HistorialContratacion = {
+  total: number;
+  pagina: number;
+  limite: number;
+  eventos: {
+    id: string;
+    tipo: string;
+    fecha: string;
+    actor: string;
+    descripcion: string;
+    resultado: string | null;
+  }[];
+};
+export type ResultadoRecuperacionContratacion = {
+  solicitudId: string;
+  resultado: string;
+  detalle: string;
+  estado: string;
+  transaccionId: string | null;
+};
+export const recuperarContratacionPlataforma = (
+  id: string,
+  contratacionId: string,
+  datos: { solicitudId: string; motivo: string; transaccionId?: string },
+) =>
+  apiRequest<ResultadoRecuperacionContratacion>(
+    `/plataforma/suscripciones/${id}/contrataciones/${contratacionId}/consultar`,
+    {
+      method: "POST",
+      body: JSON.stringify(datos),
+    },
+  );
 export type EventoSuscripcion = {
   id: string;
   eventoId: string;

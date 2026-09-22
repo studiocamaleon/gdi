@@ -1,5 +1,7 @@
 "use client";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+
 import { CheckIcon, ExternalLinkIcon, SaveIcon } from "lucide-react";
 import { ActionButton as HeroButton } from "@/components/design-system/action-button";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
@@ -167,6 +169,10 @@ export function OrdenSaveActions({
   guardandoBorrador?: boolean;
   operacionPendiente?: boolean;
 }) {
+  const conCotizacion = useCapacidad("cotizacion");
+  const conOrdenes = useCapacidad("ordenes");
+  const conPresupuestos = useCapacidad("presupuestos");
+  const disponible = conCotizacion && (tipo === "orden" ? conOrdenes : conPresupuestos);
   return (
     <div className={resumenBar.saveActions}>
       {tipo === "orden" && (
@@ -175,7 +181,7 @@ export function OrdenSaveActions({
           size="sm"
           onPress={onGuardarBorrador}
           isDisabled={
-            guardandoBorrador || emitiendo || empty || operacionPendiente
+            !disponible || guardandoBorrador || emitiendo || empty || operacionPendiente
           }
         >
           <SaveIcon />
@@ -186,6 +192,7 @@ export function OrdenSaveActions({
         variant="primary"
         size="sm"
         isDisabled={
+          !disponible ||
           emitiendo ||
           guardandoBorrador ||
           empty ||
@@ -193,6 +200,7 @@ export function OrdenSaveActions({
           operacionPendiente
         }
         title={
+          !disponible ? "Esta operación no está incluida en el plan actual." :
           !clienteSeleccionado ? "Seleccioná un cliente para emitir" : undefined
         }
         onPress={tipo === "orden" ? onEmitir : onEmitirPresupuesto}

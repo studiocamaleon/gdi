@@ -48,6 +48,45 @@ export type NestingAlgorithmPolicy =
   | 'grid-2d-single'
   | 'grid-2d-multi';
 
+/** Las familias de corte que admiten medidas también acomodan rectángulos.
+ * Desactivar el ingreso vectorial no desactiva el aprovechamiento. */
+export function debeEjecutarNestingRectangularCorte(
+  paso: Pick<PasoCargado, 'familiaCodigo' | 'paramsPasoJson'>,
+  jobContext: JobContext,
+): boolean {
+  const familia = resolverFamilia(paso.familiaCodigo);
+  if (
+    familia?.nestingConfig?.estrategia !== 'irregular_placa' ||
+    !familia.paramsPasoSchema?.some(
+      (p) => p.campo === 'permitirIngresoPorMedidas',
+    )
+  )
+    return false;
+  if (jobContext.modoCotizacionVectorial) {
+    return jobContext.modoCotizacionVectorial === 'medidas';
+  }
+  return !debeEjecutarNestingVectorial(paso, jobContext);
+}
+
+export function resolverEstrategiaCosteoPaso(
+  paso: Pick<PasoCargado, 'familiaCodigo' | 'paramsPasoJson'> &
+    Partial<Pick<PasoCargado, 'mecanismoCantidad'>>,
+  jobContext: JobContext,
+): NestingCostingConfig['strategy'] {
+  const costing = asRecord(
+    asRecord(asRecord(paso.paramsPasoJson).nestingConfig).costing,
+  );
+  if (typeof costing.strategy === 'string')
+    return normalizeCostingStrategy(costing.strategy);
+  // Las recetas antiguas con cantidad directa cotizaban la superficie neta.
+  // Agregar su acomodo no las convierte implícitamente en cobro por placa.
+  return (paso.mecanismoCantidad ?? 'DIRECT_FROM_JOBCONTEXT') ===
+    'DIRECT_FROM_JOBCONTEXT' &&
+    debeEjecutarNestingRectangularCorte(paso, jobContext)
+    ? 'm2-exact'
+    : 'simple';
+}
+
 export interface NestingCostingConfig {
   strategy: 'simple' | CostingStrategyKind;
   segmentSteps: number[];
@@ -154,6 +193,7 @@ export type PasoParaNestingConfig = Pick<
   PasoCargado,
   'configPasoId' | 'familiaCodigo' | 'paramsPasoJson' | 'maquina' | 'perfil'
 > & {
+  mecanismoCantidad?: PasoCargado['mecanismoCantidad'];
   defaultsFamilia?: Pick<
     NonNullable<PasoCargado['defaultsFamilia']>,
     'demasiaMm' | 'solapePanelMm'
@@ -220,7 +260,7 @@ export function resolveNestingConfig(
       ? maqParams.geometria.toUpperCase()
       : null;
   const costingConfig = asRecord(nestingConfig.costing);
-  const strategy = normalizeCostingStrategy(costingConfig.strategy);
+  const strategy = resolverEstrategiaCosteoPaso(paso, jobContext);
   const campoSeparacionMaquina = campoSeparacionMaquinaDeFamilia(
     paso.familiaCodigo,
   );

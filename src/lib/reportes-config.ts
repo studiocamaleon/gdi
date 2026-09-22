@@ -112,6 +112,7 @@ export function reportesVisibles(
   puede: (permiso: PermisoClave) => boolean,
   funciones?: Record<string, boolean>,
 ): Reporte[] {
+  if (!puede("reportes.ver")) return [];
   return REPORTES.filter((reporte) => {
     const clave = capacidadDeRuta(reporte.href);
     return (

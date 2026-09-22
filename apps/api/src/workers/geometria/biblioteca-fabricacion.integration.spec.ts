@@ -222,6 +222,11 @@ describe('biblioteca → cantidad nueva → fabricación con capas originales', 
           },
         } as never,
         { leer: jest.fn().mockResolvedValue(bytes) } as never,
+        {
+          exigirTodas: jest.fn().mockResolvedValue(undefined),
+          exigir: jest.fn().mockResolvedValue(undefined),
+          puedeOperar: jest.fn().mockResolvedValue(true),
+        } as never,
       );
       const exportado = await controlador.exportar({ tenantId } as never, {
         altoMm: 3000,

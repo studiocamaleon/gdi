@@ -20,7 +20,6 @@ import {
 
 @Permiso('comercial.gestionar')
 @OcultaMargenes()
-@RequiereCapacidad('planificacion_avanzada')
 @Controller('cotizaciones/items/:itemId/planificacion-entregas')
 export class PlanificacionCotizacionController {
   constructor(private readonly planes: PlanificacionEntregasService) {}
@@ -32,6 +31,7 @@ export class PlanificacionCotizacionController {
     return this.planes.consultar(auth.tenantId, itemId, true);
   }
   @Post()
+  @RequiereCapacidad('planificacion_avanzada')
   solicitar(
     @CurrentSession() auth: CurrentAuth,
     @Param('itemId', ParseUUIDPipe) itemId: string,
@@ -40,12 +40,17 @@ export class PlanificacionCotizacionController {
     return this.planes.solicitar(auth, itemId, dto, true);
   }
   @Post('reprogramar')
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('produccion.supervisar')
-  reprogramar(@CurrentSession() auth: CurrentAuth,
-    @Param('itemId', ParseUUIDPipe) itemId: string, @Body() dto: ReprogramarEntregasDto) {
+  reprogramar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ReprogramarEntregasDto,
+  ) {
     return this.planes.reprogramar(auth, itemId, dto, true);
   }
   @Post('elegir')
+  @RequiereCapacidad('planificacion_avanzada')
   elegir(
     @CurrentSession() auth: CurrentAuth,
     @Param('itemId', ParseUUIDPipe) itemId: string,

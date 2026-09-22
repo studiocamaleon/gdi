@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 import { randomUUID } from 'node:crypto';
 import { ValidationPipe } from '@nestjs/common';
@@ -114,10 +115,17 @@ describe('fuentes grandes por HTTP y persistencia real', () => {
             new AplicarPrecioService(),
             new PreciosEspecialesClientesService(prisma as never),
           );
-          const cotizacionesAsync = new CotizacionJobsService();
+          const cotizacionesAsync = new CotizacionJobsService({
+            exigirTodas: jest.fn().mockResolvedValue(undefined),
+            exigir: jest.fn().mockResolvedValue(undefined),
+          } as never);
           const module = await Test.createTestingModule({
             controllers: [MotorUniversalController],
             providers: [
+              {
+                provide: CapacidadesEmpresaService,
+                useValue: new CapacidadesEmpresaService(prisma as never),
+              },
               { provide: MotorUniversalService, useValue: motor },
               { provide: GeometriaVectorialCacheService, useValue: {} },
               { provide: AnalisisVectorialAsyncService, useValue: {} },
@@ -215,7 +223,10 @@ describe('fuentes grandes por HTTP y persistencia real', () => {
               const queue = new Queue('grafo-quotes-v1', { connection });
               const events = new QueueEvents('grafo-quotes-v1', { connection });
               const concurrencia = new TenantConcurrencyService();
-              const worker = new CotizacionWorker(motor, concurrencia);
+              const worker = new CotizacionWorker(motor, concurrencia, {
+                exigirTodas: jest.fn().mockResolvedValue(undefined),
+                exigir: jest.fn().mockResolvedValue(undefined),
+              } as never);
               try {
                 await events.waitUntilReady();
                 await worker.onApplicationBootstrap();

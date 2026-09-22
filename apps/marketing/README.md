@@ -1,8 +1,7 @@
 # Web comercial de Grafoprint
 
-Landing pública independiente del SaaS y de la API. La portada presenta a Grafo
-como **el sistema operativo de la industria gráfica**, con niveles acumulativos:
-Print → Sign → Industrial.
+Landing pública de Grafo, **el sistema operativo de la industria gráfica**.
+Su sección de planes consulta el mismo catálogo público que el registro del SaaS.
 
 ## Desarrollo y validación
 
@@ -15,6 +14,10 @@ npm run build
 
 La web se abre en `http://localhost:3002`. `npm start` sirve la compilación de
 producción en ese mismo puerto.
+
+Si el renderizador de PDF ocupa el puerto 3002, usar `npx next dev -p 3003`.
+Pruebas del catálogo, desde la raíz del monorepo:
+`npx vitest run --config apps/marketing/vitest.config.ts`.
 
 ## Estructura
 
@@ -34,12 +37,17 @@ El HTML original (`src/landing.html`, `public/marketing.css` y
 
 ## Contenido comercial
 
-Los planes muestran capacidades acumulativas y abren una consulta con el equipo.
-Se recuperaron los precios de la web original: Print cuesta USD 190/mes, Sign
-cuesta USD 290/mes e Industrial se cotiza a medida. Los límites de usuarios y la
-correspondencia con códigos de suscripción se definirán comercialmente. Esta web
-no modifica facturación ni permisos del SaaS. El registro general sigue usando
-su URL configurada.
+Los nombres, descripciones, precios, recomendación, trial, usuarios y espacio
+proceden de `GET /registro/planes`. Las ofertas versionadas incluyen las funciones
+de su contrato publicado y el importe de los usuarios adicionales. La anualidad
+sólo aparece si tiene un precio activo. No se presume herencia entre planes.
+
+Los botones de prueba llevan el código y el identificador de la oferta al
+registro. Si una oferta cambió, el registro pide revisar las condiciones actuales.
+Los planes a consultar conservan el contacto comercial. Esta web no modifica
+facturación ni permisos. Un fallo o catálogo vacío muestra un estado de consulta,
+sin precios ni capacidades de respaldo. El catálogo anterior permanece visible
+hasta retirarlo explícitamente en Plataforma, una vez activada la nueva oferta.
 
 La escena 3D y la orden de ejemplo son demostraciones visuales; no calculan
 materiales ni precios. La planta es un recurso conceptual generado, no una
@@ -57,6 +65,10 @@ una explicación alternativa si WebGL no está disponible.
 ## Configuración y despliegue
 
 Usar `apps/marketing` como directorio raíz y las variables de `.env.example`.
+`MARKETING_API_URL` es la base de la API, incluido `/api`, consultada sólo por el
+servidor, sin credenciales. Es obligatoria en producción; en desarrollo usa
+`http://localhost:3001/api`. La sección espera una petición real y consulta sin
+caché, con un timeout de 5 segundos, para no publicar precios retenidos del build.
 `MARKETING_SIGNUP_URL` apunta al onboarding público; `MARKETING_DEMO_URL` puede
 ser un correo o una URL comercial. Los enlaces de planes agregan su nombre al
 asunto solo cuando el destino es `mailto:`.

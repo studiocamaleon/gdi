@@ -195,6 +195,11 @@ describe('DXF conservado desde el original hasta fabricación', () => {
     const c = new ExportarFabricacionController(
       db as unknown as PrismaService,
       storage as unknown as StorageDriver,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
     const request: ExportarFabricacionDto = {
       altoMm: 2000,

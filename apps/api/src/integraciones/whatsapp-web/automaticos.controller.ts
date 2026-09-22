@@ -27,13 +27,11 @@ import { AutomaticosWebService } from './automaticos.service';
 @Controller('chrome-whatsapp/automaticos')
 export class AutomaticosWebController {
   constructor(private readonly service: AutomaticosWebService) {}
-  @RequiereCapacidad('whatsapp_web')
   @Get('estado')
   @Header('Cache-Control', 'no-store')
   estado(@CurrentSession() auth: CurrentAuth) {
     return this.service.estado(auth.tenantId);
   }
-  @RequiereCapacidad('whatsapp_web')
   @Put('configuracion')
   configurar(
     @CurrentSession() auth: CurrentAuth,

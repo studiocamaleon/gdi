@@ -25,8 +25,9 @@ import {
 export class PreciosEspecialesClientesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async listarPorProducto(tenantId: string, productoId: string) {
@@ -45,22 +46,28 @@ export class PreciosEspecialesClientesService {
     productoId: string,
     dto: CrearPrecioEspecialClienteDto,
   ) {
-    await this.capacidades.exigir(tenantId, 'precios_especiales');
-    await this.assertProductoExiste(tenantId, productoId);
-    await this.assertClienteExiste(tenantId, dto.clienteId);
-
     try {
-      return await this.prisma.productoPrecioEspecialClienteV2.create({
-        data: {
+      return await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
           tenantId,
-          productoId,
-          clienteId: dto.clienteId,
-          configJson: dto.configJson as Prisma.InputJsonValue,
-          activo: true,
-        },
-        include: {
-          cliente: { select: { id: true, nombre: true, razonSocial: true } },
-        },
+          ['precios_especiales'],
+          ['precios_especiales'],
+        );
+        await this.assertProductoExiste(tenantId, productoId, tx);
+        await this.assertClienteExiste(tenantId, dto.clienteId, tx);
+        return tx.productoPrecioEspecialClienteV2.create({
+          data: {
+            tenantId,
+            productoId,
+            clienteId: dto.clienteId,
+            configJson: dto.configJson as Prisma.InputJsonValue,
+            activo: true,
+          },
+          include: {
+            cliente: { select: { id: true, nombre: true, razonSocial: true } },
+          },
+        });
       });
     } catch (err) {
       if (
@@ -80,38 +87,50 @@ export class PreciosEspecialesClientesService {
     id: string,
     dto: ActualizarPrecioEspecialClienteDto,
   ) {
-    await this.capacidades.exigir(tenantId, 'precios_especiales');
-    const existente =
-      await this.prisma.productoPrecioEspecialClienteV2.findFirst({
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        tenantId,
+        ['precios_especiales'],
+        ['precios_especiales'],
+      );
+      const existente = await tx.productoPrecioEspecialClienteV2.findFirst({
         where: { id, tenantId },
       });
-    if (!existente)
-      throw new NotFoundException(`Precio especial ${id} no encontrado`);
+      if (!existente)
+        throw new NotFoundException(`Precio especial ${id} no encontrado`);
 
-    const data: Prisma.ProductoPrecioEspecialClienteV2UpdateInput = {};
-    if (dto.configJson !== undefined)
-      data.configJson = dto.configJson as Prisma.InputJsonValue;
-    if (dto.activo !== undefined) data.activo = dto.activo;
+      const data: Prisma.ProductoPrecioEspecialClienteV2UpdateInput = {};
+      if (dto.configJson !== undefined)
+        data.configJson = dto.configJson as Prisma.InputJsonValue;
+      if (dto.activo !== undefined) data.activo = dto.activo;
 
-    return this.prisma.productoPrecioEspecialClienteV2.update({
-      where: { id },
-      data,
-      include: {
-        cliente: { select: { id: true, nombre: true, razonSocial: true } },
-      },
+      return tx.productoPrecioEspecialClienteV2.update({
+        where: { id },
+        data,
+        include: {
+          cliente: { select: { id: true, nombre: true, razonSocial: true } },
+        },
+      });
     });
   }
 
   async eliminar(tenantId: string, id: string) {
-    await this.capacidades.exigir(tenantId, 'precios_especiales');
-    const existente =
-      await this.prisma.productoPrecioEspecialClienteV2.findFirst({
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        tenantId,
+        ['precios_especiales'],
+        ['precios_especiales'],
+      );
+      const existente = await tx.productoPrecioEspecialClienteV2.findFirst({
         where: { id, tenantId },
       });
-    if (!existente)
-      throw new NotFoundException(`Precio especial ${id} no encontrado`);
-    return this.prisma.productoPrecioEspecialClienteV2.delete({
-      where: { id },
+      if (!existente)
+        throw new NotFoundException(`Precio especial ${id} no encontrado`);
+      return tx.productoPrecioEspecialClienteV2.delete({
+        where: { id },
+      });
     });
   }
 
@@ -120,24 +139,40 @@ export class PreciosEspecialesClientesService {
    * Usado por `aplicar-precio.service` cuando se cotiza con cliente.
    */
   async buscarActivo(tenantId: string, productoId: string, clienteId: string) {
-    if (!(await this.capacidades.incluida(tenantId, 'precios_especiales'))) return null;
+    if (!(await this.capacidades.puedeOperar(tenantId, 'precios_especiales')))
+      return null;
     return this.prisma.productoPrecioEspecialClienteV2.findFirst({
-      where: { tenantId, productoId, clienteId, activo: true },
+      where: {
+        tenantId,
+        productoId,
+        clienteId,
+        activo: true,
+        cliente: { tenantId, activo: true },
+        producto: { tenantId },
+      },
     });
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────
 
-  private async assertProductoExiste(tenantId: string, productoId: string) {
-    const p = await this.prisma.producto.findFirst({
+  private async assertProductoExiste(
+    tenantId: string,
+    productoId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    const p = await db.producto.findFirst({
       where: { id: productoId, tenantId },
       select: { id: true },
     });
     if (!p) throw new NotFoundException(`Producto ${productoId} no encontrado`);
   }
 
-  private async assertClienteExiste(tenantId: string, clienteId: string) {
-    const c = await this.prisma.cliente.findFirst({
+  private async assertClienteExiste(
+    tenantId: string,
+    clienteId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    const c = await db.cliente.findFirst({
       where: { id: clienteId, tenantId, activo: true },
       select: { id: true },
     });

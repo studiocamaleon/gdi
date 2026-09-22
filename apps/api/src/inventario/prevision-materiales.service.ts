@@ -70,9 +70,12 @@ export class PrevisionMaterialesService {
           fechaPedidoSupuesto: hoy,
           zona: regional.zonaHoraria,
           modoReserva:
-            politica?.modo === 'MANUAL'
-              ? ('MANUAL' as const)
-              : ('AL_EMITIR' as const),
+            politica?.habilitada &&
+            (await this.capacidades.incluida(tenantId, 'reservas', tx))
+              ? politica.modo === 'MANUAL'
+                ? ('MANUAL' as const)
+                : ('AL_EMITIR' as const)
+              : null,
         };
         if (!incluida)
           return {
@@ -82,20 +85,14 @@ export class PrevisionMaterialesService {
             materiales: [] as MaterialPrevisto[],
             pendientes: 0,
           };
-        if (!politica?.habilitada)
-          return {
-            ...base,
-            estado: 'sin_control' as const,
-            disponibleDesde: null,
-            materiales: [] as MaterialPrevisto[],
-            pendientes: 0,
-          };
+        // Consultar existencias y reposición no requiere activar las reservas.
+        // La política sólo define cómo se compromete stock al emitir una OT.
         const agrupadas = new Map<
           string,
           { cantidad: Prisma.Decimal | null; unidad: string | null }
         >();
         for (const m of dto.materiales.filter(
-          (m) => !m.consumible || politica.incluirConsumibles,
+          (m) => !m.consumible || politica?.incluirConsumibles,
         )) {
           const prev = agrupadas.get(m.varianteId),
             unidad = m.unidad ? normalizeMaterialUnit(m.unidad) : null;

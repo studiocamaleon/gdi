@@ -11,6 +11,8 @@ import { InventarioService } from '../../inventario/inventario.service';
 import { ReservasMaterialService } from '../../inventario/reservas-material.service';
 import { ComprasService } from '../../compras/compras.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
+import { FidelizacionService } from '../../fidelizacion/fidelizacion.service';
+import { DesarrolloDocumentalService } from '../../desarrollo-documental/desarrollo-documental.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 import type { CrearOrdenTrabajoDto } from '../dto/crear-orden-trabajo.dto';
 
@@ -47,15 +49,14 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     {} as never,
     {} as never,
     { asegurarParaItem: jest.fn() } as never,
-    {
-      simular: jest.fn().mockResolvedValue({
-        maximoCanjeable: 0,
-        canjeMonto: 0,
-        canjePuntos: 0,
-      }),
-      reconciliarOrden: jest.fn(),
-    } as never,
-    {} as never,
+    new FidelizacionService(db, capacidades),
+    new DesarrolloDocumentalService(
+      db,
+      {} as never,
+      {} as never,
+      undefined,
+      capacidades,
+    ),
     undefined,
     reservas,
     capacidades,

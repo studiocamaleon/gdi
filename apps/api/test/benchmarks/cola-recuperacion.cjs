@@ -60,7 +60,7 @@ async function hijo(mode,folder) {
     }
   }
   const capacity=new CapacidadGeometriaService(), tenant=new TenantConcurrencyService();
-  const engine=new GeometriaWorker(new SolverControlado(new GuardadosBarrera(db)),{leerCancelacion:async()=>false},tenant,capacity);
+  const engine=new GeometriaWorker(new SolverControlado(new GuardadosBarrera(db)),{leerCancelacion:async()=>false},tenant,capacity,{exigirTodas:async()=>{}});
   await capacity.estado();
   const worker=new Worker(COLA_GEOMETRIA_INTENSIVA,j=>engine.procesar(j,worker),{prefix:config.prefix,connection:conexionRedisWorker(),concurrency:1,lockDuration:5000,stalledInterval:1000,maxStalledCount:2});
   engine.conectarEventos(worker);

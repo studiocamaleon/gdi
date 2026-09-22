@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Body,
@@ -69,6 +70,9 @@ export class ExportarFabricacionController {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   private async leerOriginal(
@@ -95,6 +99,7 @@ export class ExportarFabricacionController {
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: CapasFabricacionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'exportacion_fabricacion');
     const ids = [...new Set(dto.geometriaIds)];
     const guardadas = await this.prisma.geometriaProducto.findMany({
       where: { tenantId: auth.tenantId, id: { in: ids } },
@@ -137,6 +142,7 @@ export class ExportarFabricacionController {
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: ExportarFabricacionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'exportacion_fabricacion');
     const ids = [...new Set(dto.instancias.map((i) => i.geometriaId))];
     if (ids.length > 100)
       throw new BadRequestException(

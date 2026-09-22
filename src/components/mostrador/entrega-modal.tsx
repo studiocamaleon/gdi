@@ -74,6 +74,7 @@ export function EntregaModal({
   const [error, setError] = React.useState<string | null>(null);
   const [sel, setSel] = React.useState<Record<string, boolean>>({});
   const [guardando, setGuardando] = React.useState(false);
+  const [preparacionConfirmada, setPreparacionConfirmada] = React.useState(false);
 
   // Cobro (sólo si hay saldo).
   const [metodos, setMetodos] = React.useState<MetodoPago[]>([]);
@@ -95,6 +96,7 @@ export function EntregaModal({
       .then((o) => {
         if (!vivo) return;
         setOrden(o);
+        setPreparacionConfirmada(false);
         const inicial: Record<string, boolean> = {};
         for (const item of o.items) {
           if (item.listo && !item.entregadoEl) inicial[item.id] = true;
@@ -116,7 +118,7 @@ export function EntregaModal({
 
   // Catálogos del cobro: sólo si hay algo que cobrar.
   React.useEffect(() => {
-    if (!orden || orden.saldo <= 0) return;
+    if (!orden || orden.saldo <= 0 || orden.puedeCobrar === false) return;
     let vivo = true;
     void Promise.all([getMetodosPago(), getCuentasFondos()])
       .then(([ms, cs]) => {
@@ -161,7 +163,7 @@ export function EntregaModal({
   };
 
   const confirmar = async () => {
-    if (!orden || elegidos.length === 0) return;
+    if (!orden || elegidos.length === 0 || (orden.requiereConfirmacionManual && !preparacionConfirmada)) return;
     if (tercero && (!tNombre.trim() || !tDni.trim())) return;
     setGuardando(true);
     try {
@@ -169,7 +171,7 @@ export function EntregaModal({
       // disponible: en el mostrador nadie elige la caja a mano.
       const cuentaDestinoId =
         medio?.cuentaDestinoId ?? cuentas[0]?.id ?? null;
-      const cobra = saldo > 0 && medio != null && montoNum > 0;
+      const cobra = orden.puedeCobrar !== false && saldo > 0 && medio != null && montoNum > 0;
       if (cobra && !cuentaDestinoId) {
         toast.error(
           "No hay una cuenta de fondos configurada para acreditar el cobro.",
@@ -178,6 +180,7 @@ export function EntregaModal({
         return;
       }
       const r = await entregarItems(orden.id, {
+        ...(orden.requiereConfirmacionManual ? { confirmarPreparacionManual: preparacionConfirmada } : {}),
         itemIds: elegidos.map((i) => i.id),
         ...(tercero
           ? { retiraTercero: { nombre: tNombre.trim(), dni: tDni.trim() } }
@@ -243,13 +246,14 @@ export function EntregaModal({
     if (tercero && (!tNombre.trim() || !tDni.trim()))
       return "Completá quién retira";
     const ent = `${elegidos.length} ${elegidos.length === 1 ? "producto" : "productos"}`;
-    return saldo > 0 && medio && montoNum > 0
+    return orden?.puedeCobrar !== false && saldo > 0 && medio && montoNum > 0
       ? `Cobrar ${fmt(montoNum)} y entregar ${ent}`
       : `Entregar ${ent}`;
   })();
   const puedeConfirmar =
     !guardando &&
     elegidos.length > 0 &&
+    (!orden?.requiereConfirmacionManual || preparacionConfirmada) &&
     (!tercero || (tNombre.trim() !== "" && tDni.trim() !== ""));
 
   return (
@@ -314,6 +318,12 @@ export function EntregaModal({
 
         {orden ? (
           <>
+            {orden.requiereConfirmacionManual && !todoEntregado ? (
+              <label className={s.note}>
+                <input type="checkbox" checked={preparacionConfirmada} onChange={(event) => setPreparacionConfirmada(event.target.checked)} />
+                Confirmo que los productos seleccionados están preparados para entregar.
+              </label>
+            ) : null}
             {todoEntregado ? (
               <div className={`${s.note} ${s.done}`}>
                 <CheckIcon />
@@ -464,6 +474,8 @@ export function EntregaModal({
                     <CheckIcon />
                     Orden paga en su totalidad
                   </div>
+                ) : orden.puedeCobrar === false ? (
+                  <p className={s.k}>El registro de cobros no está habilitado para esta orden.</p>
                 ) : !todoEntregado ? (
                   <div className={s.payBox}>
                     <div className={s.h}>Cobrar ahora</div>

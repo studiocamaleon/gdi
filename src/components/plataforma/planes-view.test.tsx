@@ -205,12 +205,14 @@ it("busca por nombre y muestra sólo las diferencias entre planes", async () => 
   await click(container.querySelector<HTMLElement>("#solo-diferencias")!);
   expect(container.textContent).toContain("No hay funciones que coincidan");
 });
-it("conserva los cambios al cambiar de pestaña y deja los precios como pendientes", async () => {
+it("conserva funciones, recursos y precios al cambiar de pestaña", async () => {
   await render();
   await click(checkbox("Cupones · Grafo Pro"));
   await click(boton("Usuarios y oferta"));
   await escribir("#usuarios-1", "21");
-  expect(container.textContent).toContain("Precio del plan y de adicionales");
+  expect(container.textContent).toContain("Precios en USD");
+  await escribir('[aria-label="Plan mensual · Grafo Pro"]', "290");
+  await escribir('[aria-label="Usuario adicional mensual · Grafo Pro"]', "15");
   await click(boton("Planes actuales"));
   expect(container.textContent).toContain("Catálogo vigente");
   await click(boton("Funciones"));
@@ -218,6 +220,20 @@ it("conserva los cambios al cambiar de pestaña y deja los precios como pendient
     "false",
   );
   expect(boton("Guardar borradores").disabled).toBe(false);
+  await click(boton("Guardar borradores"));
+  const guardado = mocks.request.mock.calls.find(
+    ([url, options]) =>
+      url === "/plataforma/planes-borradores" && options?.method === "PUT",
+  )!;
+  const body = JSON.parse(guardado[1].body);
+  expect(
+    body.cambios.find((c: { id: string }) => c.id === "1").contenido.precios,
+  ).toMatchObject({
+    mensual: 290,
+    usuarioMensual: 15,
+    anual: null,
+    moneda: "USD",
+  });
 });
 it("un conflicto conserva la edición y pide descartar antes de recargar", async () => {
   await render();
@@ -235,12 +251,126 @@ it("un conflicto conserva la edición y pide descartar antes de recargar", async
   await click(boton("Seguir editando"));
   expect(boton("Guardar borradores").disabled).toBe(false);
 });
-it("no ofrece publicar borradores y explica las validaciones pendientes", async () => {
+it("la revisión explica las validaciones comerciales pendientes", async () => {
   await render();
   await click(boton("Revisión"));
   expect(container.textContent).toContain(
-    "Las empresas conservan su plan actual",
+    "Los cambios del borrador no modifican las ofertas ni los planes ya asignados.",
   );
-  expect(container.textContent).toContain("Vincular precios");
+  expect(container.textContent).toContain("la oferta y los precios vinculados a Paddle");
   expect(boton("Publicar")).toBeUndefined();
+});
+
+it("exige almacenamiento definido y cambios guardados antes de revisar la publicación", async () => {
+  await render();
+  mocks.request.mockResolvedValue({ versiones: [], siguiente: null });
+  await click(boton("Versiones"));
+  expect(container.textContent).toContain("Definí el almacenamiento incluido");
+  expect(boton("Revisar publicación").disabled).toBe(true);
+  await click(boton("Funciones"));
+  await click(checkbox("Cupones · Grafo Esencial"));
+  await click(boton("Versiones"));
+  expect(container.textContent).toContain("Guardá los cambios de este plan");
+  expect(boton("Revisar publicación").disabled).toBe(true);
+});
+
+it("publica la revisión guardada tras revisarla y muestra el snapshot devuelto", async () => {
+  datos.borradores[0].contenido.almacenamientoModo = "limitado";
+  datos.borradores[0].contenido.almacenamientoGb = 10;
+  await render();
+  const version = {
+    ...datos.borradores[0],
+    numero: 1,
+    revisionBorrador: 1,
+    publicadoEl: "2026-09-21T12:00:00Z",
+    publicadoPorNombre: "Admin de prueba",
+    motivo: "Primera propuesta",
+    catalogoSnapshot: { capacidades: CATALOGO_PLANES, grupos: GRUPOS_PLANES },
+  };
+  let publicada = false;
+  mocks.request.mockImplementation(async (_path, init) => {
+    if (init?.method === "POST") {
+      publicada = true;
+      return version;
+    }
+    return { versiones: publicada ? [version] : [], siguiente: null };
+  });
+  await click(boton("Versiones"));
+  await click(boton("Revisar publicación"));
+  expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+    "10 GB",
+  );
+  expect(boton("Publicar versión").disabled).toBe(true);
+  await escribir("#motivo-publicacion", "Primera propuesta");
+  const publicar = boton("Publicar versión");
+  await act(async () => {
+    publicar.click();
+    publicar.click();
+  });
+  expect(
+    mocks.request.mock.calls.filter(([, init]) => init?.method === "POST"),
+  ).toHaveLength(1);
+  const envio = mocks.request.mock.calls.find(
+    ([, init]) => init?.method === "POST",
+  )!;
+  expect(envio[0]).toContain("/borrador/0");
+  expect(JSON.parse(envio[1].body)).toEqual({
+    revision: 1,
+    catalogoVersion: 1,
+    motivo: "Primera propuesta",
+  });
+  expect(container.textContent).toContain("Versión 1");
+  expect(container.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Admin de prueba",
+  );
+  expect(boton("Revisión publicada").disabled).toBe(true);
+});
+
+it("un conflicto de publicación conserva la revisión y el motivo para revisarlos", async () => {
+  datos.borradores[0].contenido.almacenamientoModo = "ilimitado";
+  await render();
+  mocks.request.mockImplementation(async (_path, init) => {
+    if (init?.method === "POST")
+      throw new Error(
+        "El borrador cambió. Recargá y revisá su contenido antes de publicar.",
+      );
+    return { versiones: [], siguiente: null };
+  });
+  await click(boton("Versiones"));
+  await click(boton("Revisar publicación"));
+  await escribir("#motivo-publicacion", "Primera propuesta");
+  await click(boton("Publicar versión"));
+  expect(container.textContent).toContain("El borrador cambió");
+  expect(
+    container.querySelector<HTMLInputElement>("#motivo-publicacion")?.value,
+  ).toBe("Primera propuesta");
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  mocks.request.mockImplementation(async (path) =>
+    path === "/plataforma/planes-borradores"
+      ? datos
+      : { versiones: [], siguiente: null },
+  );
+  await click(boton("Recargar borradores"));
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(boton("Revisar publicación").disabled).toBe(false);
+});
+
+it("soporte consulta el historial sin controles de publicación", async () => {
+  await render(false);
+  mocks.request.mockResolvedValue({ versiones: [], siguiente: null });
+  await click(boton("Versiones"));
+  expect(container.textContent).toContain("Historial de versiones");
+  expect(boton("Revisar publicación")).toBeUndefined();
+});
+
+it("un error al cargar el historial bloquea publicar y permite reintentar", async () => {
+  datos.borradores[0].contenido.almacenamientoModo = "ilimitado";
+  await render();
+  mocks.request.mockRejectedValueOnce(new Error("Sesión vencida"));
+  await click(boton("Versiones"));
+  expect(container.textContent).toContain("Sesión vencida");
+  expect(boton("Revisar publicación").disabled).toBe(true);
+  mocks.request.mockResolvedValue({ versiones: [], siguiente: null });
+  await click(boton("Actualizar historial"));
+  expect(boton("Revisar publicación").disabled).toBe(false);
 });

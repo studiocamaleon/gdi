@@ -146,7 +146,7 @@ describe('reutilización exacta consulta lo aprendido con otras cantidades', () 
         const service = new GeometriaJobsService(
           {} as ControlTrabajosGeometriaService,
           { registrar } as unknown as CapacidadGeometriaService,
-          guardados,
+          { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, guardados,
           biblioteca,
         );
         const vista = await service.crear({

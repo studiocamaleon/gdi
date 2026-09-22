@@ -32,6 +32,7 @@ export type ComprobanteItemProvider = {
 };
 
 export type ComprobanteAsociado = {
+  tipoArca?: number;
   tipo: string;
   puntoVenta: number;
   numero: number;
@@ -132,6 +133,7 @@ export interface InvoicingProvider {
     letra: LetraProvider,
     numero: number,
     cuitEmisor?: string,
+    esperado?: EmitirInput,
   ): Promise<EmitirResultado | null>;
 
   /**
@@ -143,6 +145,7 @@ export interface InvoicingProvider {
     tipo: EmitirInput['tipo'],
     letra: LetraProvider,
     cuitEmisor?: string,
+    esperado?: EmitirInput,
   ): Promise<number | null>;
 
   /** Condición fiscal del receptor según el padrón. null si no se puede consultar. */

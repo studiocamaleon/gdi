@@ -1,5 +1,7 @@
 "use client";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+
 import * as React from "react";
 
 import Link from "next/link";
@@ -113,6 +115,7 @@ function PresupuestoDetalleContent({
   inicial,
   rol,
 }: PresupuestoDetalleViewProps) {
+  const conPdf = useCapacidad("documentos_pdf");
   const scope = useDesignScope();
   const themeClass = useDesignTheme();
   const router = useRouter();
@@ -278,7 +281,7 @@ function PresupuestoDetalleContent({
           )}
         </div>
         <div className={s.headerActions}>
-          <ActionLink
+          {(d.pdfDisponible ?? conPdf) && <ActionLink
             variant="outline"
             href={presupuestoPdfUrl(id)}
             prefetch={false}
@@ -287,7 +290,7 @@ function PresupuestoDetalleContent({
           >
             <FileTextIcon aria-hidden />
             PDF
-          </ActionLink>
+          </ActionLink>}
           {d.publicToken && (
             <>
               <ActionButton variant="outline" onPress={copiarLink}>
@@ -679,6 +682,9 @@ function AccionesEstado({
   seleccionadas: number;
   disponibles: number;
 }) {
+  const conPresupuestos = useCapacidad("presupuestos");
+  const conOrdenes = useCapacidad("ordenes");
+  const conEnlace = useCapacidad("aprobacion_presupuestos");
   if (d.estado === "convertido") {
     return (
       <div className={s.actionBar} data-tone="success">
@@ -708,10 +714,14 @@ function AccionesEstado({
         <div>
           <div className={s.actionTitle}>Listo para enviar</div>
           <div className={s.actionDescription}>
-            Al enviarlo se genera el link para que el cliente lo apruebe.
+            {!conPresupuestos
+              ? "La emisión de presupuestos no está incluida en el plan actual."
+              : conEnlace
+                ? "Al enviarlo se genera el link para que el cliente lo apruebe."
+                : "Podés registrar la decisión del cliente desde esta ficha."}
           </div>
         </div>
-        <ActionButton type="button" isDisabled={trabajando} onPress={onEnviar}>
+        <ActionButton type="button" isDisabled={trabajando || !conPresupuestos} onPress={onEnviar}>
           <SendIcon /> Enviar al cliente
         </ActionButton>
       </div>
@@ -741,7 +751,7 @@ function AccionesEstado({
             </ActionButton>
             <ActionButton
               type="button"
-              isDisabled={trabajando}
+              isDisabled={trabajando || !conPresupuestos}
               onPress={onAprobar}
             >
               <CheckIcon /> Aprobar y enviar
@@ -762,7 +772,9 @@ function AccionesEstado({
         <div>
           <div className={s.actionTitle}>Esperando la decisión del cliente</div>
           <div className={s.actionDescription}>
-            {d.primeraVistaEl
+            {!d.publicToken
+              ? "Registrá la respuesta que recibiste del cliente."
+              : d.primeraVistaEl
               ? "Ya lo vio. Podés registrar la respuesta si te contestó por otro canal."
               : "Todavía no lo abrió. Compartile el link."}
           </div>
@@ -801,7 +813,8 @@ function AccionesEstado({
         </div>
         <ActionButton
           type="button"
-          isDisabled={trabajando || seleccionadas === 0}
+          isDisabled={trabajando || seleccionadas === 0 || !conOrdenes}
+          title={!conOrdenes ? "La creación de órdenes no está incluida en el plan actual." : undefined}
           onPress={onConvertir}
         >
           Convertir en orden

@@ -166,6 +166,7 @@ export type EstadoNotificaciones = {
 
 export type LineaLog = {
   id: string;
+  canal?: string;
   evento: string;
   titulo: string;
   estado: string;

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -54,7 +55,33 @@ export class PreparacionesRecorridoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly recorridos: RecorridosVectorialesService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
+
+  async consultarGuardados(
+    auth: CurrentAuth,
+    itemId: string,
+    seleccion: SeleccionRecorrido = {},
+  ) {
+    const item = await this.leerItem(auth, itemId, seleccion);
+    const revisiones = await this.prisma.recorridoVectorialRevision.findMany({
+      where: {
+        tenantId: auth.tenantId,
+        ordenTrabajoItemId: item.id,
+        estado: { in: ESTADOS_ACTIVOS },
+      },
+      orderBy: [{ placaIndice: 'asc' }, { revision: 'desc' }],
+    });
+    const nesting = item.pasoCotizado
+      ? this.nestingDelPaso(item.pasoCotizado)
+      : null;
+    return revisiones.map((revision) => ({
+      ...this.proyectar(revision),
+      copias: nesting?.substrates?.[revision.placaIndice]?.count ?? 1,
+    }));
+  }
 
   async asegurarParaItem(
     auth: CurrentAuth,
@@ -62,6 +89,16 @@ export class PreparacionesRecorridoService {
     forzar = false,
     seleccion: SeleccionRecorrido = {},
   ) {
+    if (forzar) {
+      await this.capacidades.exigir(auth.tenantId, 'recorridos_fabricacion');
+    } else if (
+      !(await this.capacidades.puedeOperar(
+        auth.tenantId,
+        'recorridos_fabricacion',
+      ))
+    ) {
+      return this.consultarGuardados(auth, itemId, seleccion);
+    }
     const item = await this.leerItem(auth, itemId, seleccion);
     const paso = item.pasoCotizado;
     if (!paso) return [];
@@ -337,6 +374,7 @@ export class PreparacionesRecorridoService {
       return this.proyectar(latest);
     }
 
+    await this.capacidades.exigir(args.auth.tenantId, 'recorridos_fabricacion');
     const name = `${this.safeName(args.itemName)}-placa-${args.plateIndex + 1}.svg`;
     const result = await this.recorridos.generar({
       modo: 'CORTE',
@@ -468,6 +506,7 @@ export class PreparacionesRecorridoService {
     configuracion?: ConfiguracionPlantillaInstalacion,
     seleccion: SeleccionRecorrido = {},
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'recorridos_fabricacion');
     const item = await this.leerItem(auth, itemId, seleccion);
     const paso = item.pasoCotizado;
     if (!paso) {

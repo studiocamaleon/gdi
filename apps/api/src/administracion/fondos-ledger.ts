@@ -40,7 +40,12 @@ export async function ejecutarTransaccionFondos<T>(
     } catch (error) {
       const reintentable =
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034';
+        (error.code === 'P2034' ||
+          // PostgreSQL entrega el mismo conflicto por SQL crudo como P2010.
+          // Ambos códigos SQLSTATE abortan la transacción: es seguro repetir
+          // sólo sus escrituras locales, nunca un envío externo incierto.
+          (error.code === 'P2010' &&
+            ['40001', '40P01'].includes(String(error.meta?.code))));
       if (reintentable && intento < 3) continue;
       if (reintentable) {
         throw new ConflictException(

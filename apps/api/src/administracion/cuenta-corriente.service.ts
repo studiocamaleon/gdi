@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -41,7 +42,12 @@ const deudaDe = (o: { total: unknown; cobradoTotal: unknown }) =>
  */
 @Injectable()
 export class CuentaCorrienteService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   /**
    * Matriz de deudores: un cliente por fila con su saldo repartido en los
@@ -56,6 +62,7 @@ export class CuentaCorrienteService {
    * deudores, no de clientes.
    */
   async deudores(auth: CurrentAuth) {
+    await this.capacidades.exigirIncluida(auth.tenantId, 'cuentas_cobrar');
     const ordenes = await this.prisma.ordenTrabajo.findMany({
       where: {
         tenantId: auth.tenantId,
@@ -169,6 +176,7 @@ export class CuentaCorrienteService {
   }
 
   async obtener(auth: CurrentAuth, clienteId: string) {
+    await this.capacidades.exigirIncluida(auth.tenantId, 'cuentas_cobrar');
     const cliente = await this.prisma.cliente.findFirst({
       where: { id: clienteId, tenantId: auth.tenantId },
       select: {

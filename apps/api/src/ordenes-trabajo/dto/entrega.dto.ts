@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsOptional,
   IsString,
   IsUUID,
@@ -33,6 +34,10 @@ export class RetiraTerceroDto {
 }
 
 export class EntregarItemsDto {
+  @IsOptional()
+  @IsBoolean()
+  confirmarPreparacionManual?: boolean;
+
   /** Qué se lleva el cliente ahora. Los demás quedan pendientes de retiro. */
   @IsArray()
   @IsUUID(undefined, { each: true })

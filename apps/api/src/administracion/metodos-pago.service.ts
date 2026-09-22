@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -119,7 +120,12 @@ function slugify(nombre: string): string {
 
 @Injectable()
 export class MetodosPagoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async findAll(auth: CurrentAuth) {
     const metodos = await this.prisma.metodoPago.findMany({
@@ -131,6 +137,7 @@ export class MetodosPagoService {
   }
 
   async create(auth: CurrentAuth, payload: UpsertMetodoPagoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cobros');
     const cuentaDestinoId =
       payload.tipo === 'cheque_echeq' ? null : payload.cuentaDestinoId;
     await this.validarCuentaDestino(auth, cuentaDestinoId);
@@ -159,6 +166,7 @@ export class MetodosPagoService {
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMetodoPagoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cobros');
     const existente = await this.prisma.metodoPago.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
@@ -186,6 +194,7 @@ export class MetodosPagoService {
   }
 
   async toggle(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'cobros');
     const existente = await this.prisma.metodoPago.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
@@ -206,6 +215,7 @@ export class MetodosPagoService {
    * Idempotente: correrlo dos veces no duplica nada.
    */
   async instalarCatalogo(auth: CurrentAuth) {
+    await this.capacidades.exigir(auth.tenantId, 'cobros');
     let creados = 0;
     for (const [indice, sugerido] of CATALOGO_SUGERIDO.entries()) {
       const existe = await this.prisma.metodoPago.findFirst({

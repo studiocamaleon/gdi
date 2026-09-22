@@ -7,7 +7,7 @@ import {
 import { Prisma, type PlanBorrador } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CurrentAuth } from '../../auth/auth.types';
-import { mfaPlataformaCompleta } from '../../auth/enrolamiento-plataforma';
+import { autorizarEdicionPlanes } from './autorizar-edicion-planes';
 import {
   CATALOGO_PLANES,
   GRUPOS_PLANES,
@@ -71,38 +71,7 @@ export class PlanesBorradoresService {
       if (errores.length) throw new BadRequestException(errores);
     }
     return this.prisma.$transaction(async (tx) => {
-      // Mismo lock que la gestión de equipo: una revocación de staff no puede
-      // intercalarse entre la comprobación de permisos y el guardado.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(724611, 1)::text`;
-      const actor = await tx.user.findUnique({
-        where: { id: auth.userId },
-        select: {
-          activo: true,
-          rolPlataforma: true,
-          mfa: {
-            select: { activatedAt: true, recuperacionConfirmadaEl: true },
-          },
-        },
-      });
-      const sesion = await tx.authSession.findFirst({
-        where: {
-          id: auth.sessionId,
-          userId: auth.userId,
-          currentTenantId: null,
-          revokedAt: null,
-          expiresAt: { gt: new Date() },
-        },
-        select: { mfaVerificadoEl: true },
-      });
-      if (
-        !actor?.activo ||
-        actor.rolPlataforma !== 'ADMIN' ||
-        !sesion ||
-        !mfaPlataformaCompleta(actor.mfa, sesion.mfaVerificadoEl)
-      )
-        throw new ForbiddenException(
-          'Esta acción requiere una sesión vigente de administración de Plataforma.',
-        );
+      await autorizarEdicionPlanes(tx, auth);
       const guardados: BorradorPlan[] = [];
       // Orden estable para que dos guardados de varios planes no se bloqueen en orden inverso.
       for (const cambio of [...dto.cambios].sort((a, b) =>

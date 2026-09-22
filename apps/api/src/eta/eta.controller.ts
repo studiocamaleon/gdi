@@ -52,8 +52,9 @@ export class EtaController {
 
   /** Dispara la foto del día para este tenant (backfill / "actualizar ahora"). */
   @Post('snapshot')
+  @Permiso('produccion.supervisar')
   async snapshot(@CurrentSession() auth: CurrentAuth) {
-    await this.eta.snapshotDiario(auth.tenantId);
-    return { ok: true };
+    const ok = await this.eta.snapshotDiario(auth.tenantId);
+    return { ok };
   }
 }

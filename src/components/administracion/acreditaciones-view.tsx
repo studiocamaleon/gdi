@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   useConfigRegional,
@@ -365,8 +367,16 @@ export function AcreditacionesView({
   const router = useRouter();
   const scope = useLegacyDesignScope();
   const designScope = useDesignScope();
-  const puedeGestionar = usePuede("administracion.gestionar");
-  const puedeAnular = usePuede("administracion.anular");
+  const permisoGestionar = usePuede("administracion.gestionar");
+  const permisoAnular = usePuede("administracion.anular");
+  const conValores = useCapacidad("valores");
+  const conTesoreria = useCapacidad("tesoreria");
+  const conEgresos = useCapacidad("cuentas_pagar");
+  const puedeGestionar = permisoGestionar && conValores && conTesoreria;
+  const puedeAnular = permisoAnular && conValores && conTesoreria;
+  // Completar una acreditación anterior pertenece a la continuidad de cobros.
+  const conIdentidad = useCapacidad("identidad");
+  const puedeAcreditarCobros = permisoGestionar && conIdentidad;
   const { zonaHoraria } = useConfigRegional();
   const { fechaNumerica } = useFecha();
   const hoy = React.useMemo(() => hoyEnZona(zonaHoraria), [zonaHoraria]);
@@ -375,7 +385,7 @@ export function AcreditacionesView({
   );
   const [valores, setValores] = React.useState(initialValores);
   const [busqueda, setBusqueda] = React.useState("");
-  const [estado, setEstado] = React.useState("activos");
+  const [estado, setEstado] = React.useState(conValores ? "activos" : "todos");
   const [ocupadoId, setOcupadoId] = React.useState<string | null>(null);
   const [operacion, setOperacion] = React.useState<OperacionValor>(null);
   const fmt = (importe: number, codigo: string) =>
@@ -402,6 +412,10 @@ export function AcreditacionesView({
     }
   };
 
+  const operacionPermitida = operacion !== null &&
+    (operacion.valor.origen !== "propio" || conEgresos) &&
+    (["depositar", "acreditar", "debitar"].includes(operacion.tipo) ? puedeGestionar : puedeAnular);
+
   const operarValor = async (payload: {
     cuentaDestinoId?: string;
     fecha?: string;
@@ -409,7 +423,7 @@ export function AcreditacionesView({
     notas?: string;
     motivo?: string;
   }) => {
-    if (!operacion) return;
+    if (!operacion || !operacionPermitida) return;
     const actual = operacion;
     setOcupadoId(actual.valor.id);
     try {
@@ -569,6 +583,10 @@ export function AcreditacionesView({
       {...scope}
       className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
     >
+      {!conValores ? <Alert>
+        <AlertTitle>Historial de valores</AlertTitle>
+        <AlertDescription>Conservás la consulta de los cheques y sus eventos. El plan actual no incluye la gestión de valores.</AlertDescription>
+      </Alert> : null}
       <header className={styles.subEncabezado}>
         <Link
           href="/administracion/tesoreria"
@@ -658,7 +676,7 @@ export function AcreditacionesView({
                   <TableHead>Cuenta</TableHead>
                   <TableHead className="text-right">Bruto</TableHead>
                   <TableHead className="text-right">Disponible</TableHead>
-                  {puedeGestionar ? <TableHead /> : null}
+                  {puedeAcreditarCobros ? <TableHead /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -687,7 +705,7 @@ export function AcreditacionesView({
                     <TableCell className="text-right font-medium">
                       {fmt(fila.disponibleReal, fila.moneda)}
                     </TableCell>
-                    {puedeGestionar ? (
+                    {puedeAcreditarCobros ? (
                       <TableCell className="text-right">
                         <Button
                           size="sm"
@@ -861,7 +879,7 @@ export function AcreditacionesView({
                         Depositar
                       </Button>
                     ) : null}
-                    {puedeGestionar &&
+                    {puedeGestionar && conEgresos &&
                     valor.origen === "tercero" &&
                     valor.estado === "cartera" ? (
                       <Button
@@ -925,7 +943,7 @@ export function AcreditacionesView({
                         Deshacer acreditación
                       </Button>
                     ) : null}
-                    {puedeGestionar &&
+                    {puedeGestionar && conEgresos &&
                     valor.origen === "propio" &&
                     valor.estado === "emitido" ? (
                       <Button
@@ -937,7 +955,7 @@ export function AcreditacionesView({
                         Confirmar débito
                       </Button>
                     ) : null}
-                    {puedeAnular &&
+                    {puedeAnular && conEgresos &&
                     valor.origen === "propio" &&
                     ["emitido", "debitado"].includes(valor.estado) ? (
                       <Button
@@ -957,7 +975,7 @@ export function AcreditacionesView({
                       ["cartera", "depositado", "acreditado"].includes(
                         valor.estado,
                       )) ||
-                      (valor.origen === "propio" &&
+                      (conEgresos && valor.origen === "propio" &&
                         valor.estado === "emitido" &&
                         valor.pagoId)) ? (
                       <Button
@@ -1043,7 +1061,7 @@ export function AcreditacionesView({
         </CardContent>
       </Card>
 
-      {operacion ? (
+      {operacion && operacionPermitida ? (
         <ValorOperacionDialog
           key={`${operacion.tipo}-${operacion.valor.id}`}
           operacion={operacion}

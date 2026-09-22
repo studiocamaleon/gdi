@@ -10,7 +10,7 @@ export type PrevisionMateriales = {
     | "disponible"
     | "requiere_compra"
     | "por_confirmar";
-  modoReserva: "MANUAL" | "AL_EMITIR";
+  modoReserva: "MANUAL" | "AL_EMITIR" | null;
   calculadoEl: string;
   fechaPedidoSupuesto: string;
   zona: string;

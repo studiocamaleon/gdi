@@ -16,7 +16,7 @@ const operativo = resolverAccesoEmpresa(true, null);
 describe('Contrato común de capacidades', () => {
   it('mantiene explícita la lista de compatibilidad y deniega claves desconocidas', () => {
     expect([...CAPACIDADES_COMPATIBLES_V1].sort()).toEqual(
-      CATALOGO_PLANES.map((c) => c.clave).sort(),
+      CATALOGO_PLANES.filter((c) => c.clave !== 'nesting_irregular').map((c) => c.clave).sort(),
     );
     const actual = contratoCompatible(null);
     actual.funciones.funcion_futura = true;

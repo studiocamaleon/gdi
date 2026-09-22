@@ -12,9 +12,11 @@ import { Permiso } from '../auth/permiso.decorator';
 import { OrdenesTrabajoService } from './ordenes-trabajo.service';
 import { AccionPasoOrdenTrabajoDto } from './dto/accion-paso.dto';
 import { CompletarColaDto } from './dto/completar-cola.dto';
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 
 /** Vive junto al comando canónico para no crear una dependencia circular con ETA. */
 @Controller('produccion/colas')
+@RequiereCapacidad('colas_produccion')
 export class AccionesColaController {
   constructor(private readonly ordenes: OrdenesTrabajoService) {}
 

@@ -40,8 +40,9 @@ type ItemCotizadoConCupon = {
 export class CuponesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async listar(auth: CurrentAuth, filtros: ListarCuponesDto) {
@@ -126,6 +127,12 @@ export class CuponesService {
     const actor = await this.actor(auth);
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['cupones'],
+          ['cupones'],
+        );
         const cupon = await tx.cupon.create({
           data: {
             tenantId: auth.tenantId,
@@ -196,6 +203,12 @@ export class CuponesService {
     }
     const actor = await this.actor(auth);
     const actualizado = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['cupones'],
+        ['cupones'],
+      );
       const result = await tx.cupon.updateMany({
         where: { id, tenantId: auth.tenantId, version: dto.version },
         data: {
@@ -312,7 +325,12 @@ export class CuponesService {
       ),
     );
     if (ids.length === 0) return;
-    await this.capacidades.exigir(auth.tenantId, 'cupones', tx);
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      auth.tenantId,
+      ['cupones'],
+      ['cupones'],
+    );
     const [cupones, referencias, regional, actor] = await Promise.all([
       tx.cupon.findMany({
         where: { tenantId: auth.tenantId, id: { in: ids } },
@@ -436,6 +454,7 @@ export class CuponesService {
     cotizacionId: string,
     motivo: string,
   ) {
+    // El cierre sigue disponible sin Cupones y sólo reduce compromisos.
     const reservas = await tx.cuponRedencion.findMany({
       where: { tenantId, cotizacionId, estado: 'RESERVADA' },
       select: { id: true, cuponId: true },
@@ -498,11 +517,15 @@ export class CuponesService {
   }
 
   async eliminar(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'cupones');
     const cupon = await this.exigir(auth, id);
     const actor = await this.actor(auth);
     try {
       return await this.prisma.$transaction(
         async (tx) => {
+          await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+            'cupones',
+          ]);
           const redenciones = await tx.cuponRedencion.count({
             where: { tenantId: auth.tenantId, cuponId: cupon.id },
           });

@@ -79,7 +79,7 @@ export const CAPACIDADES_COMPATIBLES_V1 = [
   'whatsapp_web',
   'mcp',
 ] as const;
-export type ClaveCapacidad = (typeof CAPACIDADES_COMPATIBLES_V1)[number];
+export type ClaveCapacidad = (typeof CAPACIDADES_COMPATIBLES_V1)[number] | 'nesting_irregular';
 export type AccesoEmpresa = ReturnType<typeof resolverAccesoEmpresa>;
 const equivalencias: Partial<Record<ClaveCapacidad, ClaveFuncionPlan>> = {
   centro_copiado: 'centroCopiado',
@@ -92,7 +92,10 @@ const equivalencias: Partial<Record<ClaveCapacidad, ClaveFuncionPlan>> = {
   whatsapp_web: 'whatsapp',
 };
 export type ContratoCapacidades = {
-  origen: 'compatibilidad' | 'borrador';
+  origen: 'compatibilidad' | 'borrador' | 'version';
+  versionId?: string;
+  numeroVersion?: number;
+  adicionalesPermitidos?: boolean;
   catalogoVersion: number;
   nombre: string;
   funciones: Record<string, boolean>;
@@ -125,7 +128,7 @@ export function contratoCompatible(
     origen: 'compatibilidad',
     catalogoVersion: VERSION_CATALOGO_PLANES,
     nombre: plan?.nombre ?? 'Cuenta sin plan asignado',
-    funciones: Object.fromEntries(
+    funciones: { ...Object.fromEntries(
       CAPACIDADES_COMPATIBLES_V1.map((clave) => [
         clave,
         equivalencias[clave]
@@ -133,6 +136,10 @@ export function contratoCompatible(
           : true,
       ]),
     ),
+      // Es una separación de la capacidad histórica de aprovechamiento.
+      // Las cuentas legacy conservan su cálculo hasta asignar un contrato nuevo.
+      nesting_irregular: true,
+    },
     limites: {
       usuariosMax: limite('usuariosMax'),
       ordenesMesMax: limite('ordenesMesMax'),
@@ -144,8 +151,8 @@ export function contratoCompatible(
   };
 }
 
-/** Una propuesta no es un contrato asignado. Sólo sirve para comparar y para
- * verificar recorridos aislados hasta implementar publicación/versiones. */
+/** La propuesta se usa para comparación y pruebas. Los contratos vigentes
+ * se resuelven desde una versión publicada o desde compatibilidad. */
 export function contratoPropuesto(
   plan: ContenidoPlan,
   version: number,

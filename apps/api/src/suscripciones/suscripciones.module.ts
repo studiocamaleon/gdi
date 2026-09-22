@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ContratacionController } from './contratacion.controller';
+import { ContratacionService } from './contratacion.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CobroModule } from '../cobro/cobro.module';
 import { SuscripcionController } from './suscripcion.controller';
@@ -12,8 +14,9 @@ import { SuscripcionReconciliacionScheduler } from './suscripcion-reconciliacion
  */
 @Module({
   imports: [PrismaModule, CobroModule],
-  controllers: [SuscripcionController],
+  controllers: [SuscripcionController, ContratacionController],
   providers: [
+    ContratacionService,
     SuscripcionesService,
     TrialScheduler,
     SuscripcionReconciliacionScheduler,

@@ -1,9 +1,23 @@
-import { RequiereAlgunaCapacidad } from '../../suscripciones/capacidad.guard';
-import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Put,
+  Query,
+  Post,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 
 import { Roles } from '../../auth/roles.decorator';
-import { CambiarConfigDto, CambiarEventoDto } from './notificaciones.dto';
+import {
+  CambiarConfigDto,
+  CambiarEventoDto,
+  ResolverAvisoDto,
+} from './notificaciones.dto';
+import { CurrentSession } from '../../auth/current-auth.decorator';
+import type { CurrentAuth } from '../../auth/auth.types';
 import { NotificacionesService } from './notificaciones.service';
 import type { EventoNotificacion } from '../wati/catalogo';
 import { Permiso } from '../../auth/permiso.decorator';
@@ -17,7 +31,6 @@ import { Permiso } from '../../auth/permiso.decorator';
  * desde el número oficial de la empresa.
  */
 @Permiso('configuracion.ver')
-@RequiereAlgunaCapacidad('whatsapp_automatico', 'whatsapp_web')
 @Controller('integraciones/notificaciones')
 export class NotificacionesController {
   constructor(private readonly service: NotificacionesService) {}
@@ -36,6 +49,17 @@ export class NotificacionesController {
   log(@Query('limite') limite?: string) {
     const n = Number(limite);
     return this.service.log(Number.isFinite(n) && n > 0 ? n : 100);
+  }
+
+  @Post(':id/resolver')
+  @Permiso('configuracion.gestionar')
+  @Roles(RolSistema.ADMINISTRADOR)
+  resolver(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolverAvisoDto,
+  ) {
+    return this.service.resolver(auth, id, dto);
   }
 
   @Permiso('configuracion.gestionar')

@@ -1,6 +1,10 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { contratoCompatible } from './evaluador-capacidades';
+import { limitesContratacionPendiente } from './contratacion-pendiente';
+import {
+  contratoSuscripcion,
+  type VersionContrato,
+} from './contrato-suscripcion';
 
 type Lectura = Pick<
   Prisma.TransactionClient,
@@ -11,8 +15,10 @@ const normalizar = (email: string) => email.trim().toLowerCase();
 export function limiteUsuarios(
   plan: { featuresJson: unknown } | null,
   adicionales = 0,
+  planVersion: VersionContrato | null = null,
 ) {
-  const incluidos = contratoCompatible(plan).limites.usuariosMax;
+  const incluidos = contratoSuscripcion(plan ? { plan, planVersion } : null)
+    .limites.usuariosMax;
   return {
     incluidos,
     adicionales,
@@ -20,14 +26,19 @@ export function limiteUsuarios(
   };
 }
 
-/** Toda escritura de accesos y cupos toma este lock ANTES de leer o contar.
- * Con READ COMMITTED, la siguiente alta ve lo que confirmó la anterior. */
+/** Toda escritura de accesos, cupos y contrato toma este lock ANTES de leer.
+ * Con READ COMMITTED, la siguiente alta ve lo que confirmó la anterior.
+ * La actualización sin cambio de valor toma NO KEY UPDATE y deja una versión
+ * MVCC. Así una transacción SERIALIZABLE que esperaba con una foto anterior
+ * debe reintentarse; un SELECT con lock por sí solo no renueva esa foto.
+ * No cambia updatedAt ni bloquea los KEY SHARE de relaciones foráneas. */
 export async function bloquearCupoUsuarios(
   tx: Prisma.TransactionClient,
   tenantId: string,
 ) {
   const filas = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM "Tenant" WHERE id = ${tenantId}::uuid FOR UPDATE`;
+    UPDATE "Tenant" SET "updatedAt" = "updatedAt"
+    WHERE id = ${tenantId}::uuid RETURNING id`;
   if (!filas.length) throw new NotFoundException('La empresa no existe.');
 }
 
@@ -77,12 +88,16 @@ export async function ocupacionUsuarios(db: Lectura, tenantId: string) {
 
 export async function resumenCupoUsuarios(db: Lectura, tenantId: string) {
   const [suscripcion, ocupacion] = await Promise.all([
-    db.suscripcion.findFirst({ where: { tenantId }, include: { plan: true } }),
+    db.suscripcion.findFirst({
+      where: { tenantId },
+      include: { plan: true, planVersion: true },
+    }),
     ocupacionUsuarios(db, tenantId),
   ]);
   const limites = limiteUsuarios(
     suscripcion?.plan ?? null,
     suscripcion?.usuariosAdicionales ?? 0,
+    suscripcion?.planVersion,
   );
   const ocupados = ocupacion.activos + ocupacion.pendientes.length;
   return {
@@ -105,16 +120,19 @@ export async function exigirCupoUsuario(
   persona: { email: string; userId?: string | null },
 ) {
   const [s, uso] = await Promise.all([
-    tx.suscripcion.findFirst({ where: { tenantId }, include: { plan: true } }),
+    tx.suscripcion.findFirst({
+      where: { tenantId },
+      include: { plan: true, planVersion: true },
+    }),
     ocupacionUsuarios(tx, tenantId),
   ]);
   const { limite } = limiteUsuarios(
     s?.plan ?? null,
     s?.usuariosAdicionales ?? 0,
+    s?.planVersion,
   );
   const email = normalizar(persona.email);
   if (
-    limite === null ||
     uso.correosActivos.has(email) ||
     (persona.userId && uso.idsActivos.has(persona.userId))
   )
@@ -123,12 +141,23 @@ export async function exigirCupoUsuario(
     uso.correosPendientes.has(email) ||
     (persona.userId && uso.idsPendientes.has(persona.userId));
   const ocupados = uso.activos + uso.pendientes.length;
-  if (ocupados + (reservado ? 0 : 1) > limite) {
+  const pendiente = await limitesContratacionPendiente(tx, tenantId);
+  const destino = pendiente?.usuarios ?? null;
+  const efectivo =
+    limite === null
+      ? destino
+      : destino === null
+        ? limite
+        : Math.min(limite, destino);
+  if (efectivo !== null && ocupados + (reservado ? 0 : 1) > efectivo) {
     throw new ConflictException({
       code: 'CUPO_USUARIOS_AGOTADO',
-      limite,
+      limite: efectivo,
       ocupados,
-      message: `La empresa tiene ${ocupados} lugares ocupados y un cupo de ${limite}. Desactivá un acceso, cancelá una invitación pendiente o ampliá el cupo.`,
+      message:
+        pendiente && efectivo === destino
+          ? `La contratación pendiente admite ${efectivo} lugares y ya hay ${ocupados} ocupados. Revisá el pago o liberá un acceso antes de sumar otro.`
+          : `La empresa tiene ${ocupados} lugares ocupados y un cupo de ${efectivo}. Desactivá un acceso, cancelá una invitación pendiente o ampliá el cupo.`,
     });
   }
 }

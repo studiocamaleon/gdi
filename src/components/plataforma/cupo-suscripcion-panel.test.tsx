@@ -84,7 +84,9 @@ it("no ofrece ajustes manuales de una suscripción cobrada por pasarela", async 
     root.render(<CupoSuscripcionPanel id="s1" esAdmin version={0} />),
   );
   expect(button("Ajustar adicionales")).toBeUndefined();
-  expect(container.textContent).toContain("pasarela aún no está habilitada");
+  expect(container.textContent).toContain(
+    "gestiona los adicionales desde Suscripción",
+  );
 });
 it("envía la cantidad y valor anterior sólo al guardar, conservando el formulario si falla", async () => {
   const guardado = vi.fn();

@@ -1,6 +1,7 @@
 "use client";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
-import { useProductoVisual } from "./producto-ui";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { ProductoEdicion, useProductoVisual } from "./producto-ui";
 
 /**
  * <TabPrecioCompleto /> — Tab Precio del producto con las 5 secciones
@@ -100,6 +101,7 @@ import type { ClienteDetalle } from "@/lib/clientes";
 import { getLabel, metodoPrecioLabels } from "@/lib/labels-humanos";
 
 interface Props {
+  reglaGeneralEditable?: boolean;
   /** ID del producto; si es null el producto aún no existe (crear mode no guardado). */
   productoId: string | null;
   /** Config del método de cálculo (sección 1). */
@@ -128,6 +130,7 @@ const idleSaveState: PricingSaveState = {
 };
 
 export function TabPrecioCompleto({
+  reglaGeneralEditable = true,
   productoId,
   precioConfig,
   onChangePrecioConfig,
@@ -137,6 +140,9 @@ export function TabPrecioCompleto({
   onGuardarPrecio,
   pricingCompuestoSection,
 }: Props) {
+  const conReglas = useCapacidad("reglas_precio");
+  const permisoPrecios = usePuede("costos.gestionar");
+  const puedeReglas = reglaGeneralEditable && conReglas && permisoPrecios;
   const productoVisual = useProductoVisual();
   const [impuestosState, setImpuestosState] =
     React.useState<PricingSaveState>(idleSaveState);
@@ -156,7 +162,7 @@ export function TabPrecioCompleto({
     comisionesState.saving;
 
   const guardarCambios = async () => {
-    if (!onGuardarPrecio || !productoId || !isDirty || isSaving) return;
+    if (!puedeReglas || !onGuardarPrecio || !productoId || !isDirty || isSaving) return;
     setGuardandoTodo(true);
     try {
       if (impuestosState.loaded && impuestosState.dirty)
@@ -176,6 +182,7 @@ export function TabPrecioCompleto({
 
   return (
     <div className={pricingStyles.root}>
+      <ProductoEdicion disabled={!puedeReglas}>
       {/* Sección 1 — Método de cálculo (siempre visible, no requiere productoId) */}
       <Card className={pricingStyles.section}>
         <PricingSectionHeader
@@ -228,14 +235,15 @@ export function TabPrecioCompleto({
               onStateChange={hasUnifiedSave ? setComisionesState : undefined}
             />
           </div>
-          <PreciosEspecialesClientesCard
-            productoId={productoId}
-            step={pricingCompuestoSection ? "04" : "03"}
-            unidadComercial={unidadComercial}
-          />
         </>
       )}
-      {hasUnifiedSave && (isDirty || isSaving) && (
+      </ProductoEdicion>
+      {productoId ? <PreciosEspecialesClientesCard
+        productoId={productoId}
+        step={pricingCompuestoSection ? "04" : "03"}
+        unidadComercial={unidadComercial}
+      /> : null}
+      {puedeReglas && hasUnifiedSave && (isDirty || isSaving) && (
         <div
           className={
             productoVisual
@@ -670,8 +678,8 @@ function SeccionComisiones({
 export function PreciosEspecialesClientesCard(
   props: React.ComponentProps<typeof PreciosEspecialesClientesContenido>,
 ) {
-  const incluida = useCapacidad("precios_especiales");
-  return incluida ? <PreciosEspecialesClientesContenido {...props} /> : null;
+  const puedeVer = usePuede("costos.ver");
+  return puedeVer ? <PreciosEspecialesClientesContenido {...props} /> : null;
 }
 
 function PreciosEspecialesClientesContenido({
@@ -685,9 +693,13 @@ function PreciosEspecialesClientesContenido({
   unidadComercial?: string;
   descripcion?: string;
 }) {
+  const incluida = useCapacidad("precios_especiales");
+  const permisoGestion = usePuede("costos.gestionar");
+  const puedeGestionar = incluida && permisoGestion;
   const [items, setItems] = React.useState<PrecioEspecialClienteItem[]>([]);
   const [clientes, setClientes] = React.useState<ClienteDetalle[]>([]);
   const [cargando, setCargando] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
   const [editando, setEditando] =
     React.useState<PrecioEspecialClienteItem | null>(null);
   const [creandoNuevo, setCreandoNuevo] = React.useState(false);
@@ -704,14 +716,15 @@ function PreciosEspecialesClientesContenido({
 
   const recargar = React.useCallback(() => {
     setCargando(true);
-    Promise.all([getPreciosEspecialesProducto(productoId), getClientes()])
+    setError(null);
+    return Promise.all([getPreciosEspecialesProducto(productoId), puedeGestionar ? getClientes() : Promise.resolve([])])
       .then(([list, clis]) => {
         setItems(list);
         setClientes(clis);
       })
-      .catch(() => undefined)
+      .catch(cause => setError(cause instanceof Error ? cause.message : "No se pudieron cargar los precios especiales."))
       .finally(() => setCargando(false));
-  }, [productoId]);
+  }, [productoId, puedeGestionar]);
 
   React.useEffect(() => {
     recargar();
@@ -737,6 +750,7 @@ function PreciosEspecialesClientesContenido({
   };
 
   const guardar = async () => {
+    if (!puedeGestionar) return;
     if (!clienteId) {
       toast.error("Elegí un cliente");
       return;
@@ -768,6 +782,7 @@ function PreciosEspecialesClientesContenido({
     item: PrecioEspecialClienteItem,
     nuevoActivo: boolean,
   ) => {
+    if (!puedeGestionar) return;
     try {
       await actualizarPrecioEspecialCliente(item.id, { activo: nuevoActivo });
       recargar();
@@ -777,7 +792,7 @@ function PreciosEspecialesClientesContenido({
   };
 
   const ejecutarBorrado = async () => {
-    if (!aBorrar) return;
+    if (!aBorrar || !puedeGestionar) return;
     try {
       await eliminarPrecioEspecialCliente(aBorrar.id);
       toast.success("Precio especial eliminado");
@@ -803,20 +818,21 @@ function PreciosEspecialesClientesContenido({
         step={step}
         eyebrow="Excepciones comerciales"
         title="Precios especiales por cliente"
-        description={descripcion}
+        description={incluida ? descripcion : "Reglas conservadas para consulta. Las nuevas cotizaciones usan el precio general; los presupuestos y las OT guardados mantienen sus importes."}
         icon={UsersRoundIcon}
         action={
-          <Button
+          puedeGestionar ? <Button
             size="sm"
             onClick={abrirNuevo}
             disabled={creandoNuevo || clientesDisponibles.length === 0}
           >
             <PlusIcon data-icon="inline-start" />
             Precio especial
-          </Button>
+          </Button> : null
         }
       />
       <CardContent className={pricingStyles.sectionContent}>
+        {error ? <Alert variant="destructive"><AlertTitle>No se pudieron cargar las reglas</AlertTitle><AlertDescription>{error}<Button variant="outline" size="sm" onClick={() => void recargar()}>Reintentar</Button></AlertDescription></Alert> : null}
         {cargando ? (
           <div
             className={pricingStyles.loading}
@@ -825,13 +841,13 @@ function PreciosEspecialesClientesContenido({
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
-        ) : items.length === 0 && !creandoNuevo ? (
+        ) : !error && items.length === 0 && !creandoNuevo ? (
           <EstadoVacio
             variant="compacto"
             className={pricingStyles.specialEmpty}
             icon={<UsersRoundIcon aria-hidden="true" />}
             titulo="Sin precios especiales configurados"
-            descripcion="Todos los clientes usan la regla general. Agregá una excepción cuando necesites acordar un precio distinto."
+            descripcion={puedeGestionar ? "Todos los clientes usan la regla general. Agregá una excepción cuando necesites acordar un precio distinto." : "Todos los clientes usan la regla general del producto."}
           />
         ) : items.length > 0 ? (
           <div className={pricingStyles.tableShell}>
@@ -841,7 +857,7 @@ function PreciosEspecialesClientesContenido({
                   <TableHead>Cliente</TableHead>
                   <TableHead>Método</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  {puedeGestionar ? <TableHead className="text-right">Acciones</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -864,15 +880,16 @@ function PreciosEspecialesClientesContenido({
                               .label
                           }
                         </Badge>
+                        <ResumenReglaPrecio config={cfg} />
                       </TableCell>
                       <TableCell>
-                        <Switch
+                        {puedeGestionar ? <Switch
                           aria-label={`${item.activo ? "Desactivar" : "Activar"} precio especial de ${item.cliente.nombre}`}
                           checked={item.activo}
                           onCheckedChange={(c) => togglearActivo(item, c)}
-                        />
+                        /> : <Badge variant="outline">{!incluida ? "Sin aplicar por plan" : item.activo ? "Activo" : "Inactivo"}</Badge>}
                       </TableCell>
-                      <TableCell className="text-right">
+                      {puedeGestionar ? <TableCell className="text-right">
                         <Button
                           aria-label={`Editar precio especial de ${item.cliente.nombre}`}
                           variant="ghost"
@@ -889,7 +906,7 @@ function PreciosEspecialesClientesContenido({
                         >
                           <Trash2Icon />
                         </Button>
-                      </TableCell>
+                      </TableCell> : null}
                     </TableRow>
                   );
                 })}
@@ -898,7 +915,7 @@ function PreciosEspecialesClientesContenido({
           </div>
         ) : null}
 
-        {creandoNuevo && (
+        {creandoNuevo && puedeGestionar && (
           <Card className={pricingStyles.specialEditor}>
             <CardHeader className={pricingStyles.specialEditorHeader}>
               <CardTitle>
@@ -983,7 +1000,7 @@ function PreciosEspecialesClientesContenido({
       </CardContent>
 
       <ConfirmacionDestructiva
-        open={!!aBorrar}
+        open={!!aBorrar && puedeGestionar}
         onOpenChange={(open) => !open && setABorrar(null)}
         titulo="Eliminar precio especial"
         descripcion={
@@ -1005,4 +1022,23 @@ function PreciosEspecialesClientesContenido({
       />
     </Card>
   );
+}
+
+function ResumenReglaPrecio({ config }: { config: TabPrecioConfig }) {
+  const detalle = config.detalle ?? {};
+  const numero = (valor: unknown) => typeof valor === "number" ? valor.toLocaleString("es-AR", { maximumFractionDigits: 4 }) : "—";
+  const tramos = Array.isArray(detalle.tiers) ? detalle.tiers as Array<Record<string, unknown>> : [];
+  return <details className="mt-2 text-xs">
+    <summary>Ver regla guardada</summary>
+    <dl className="mt-2 grid gap-1">
+      {detalle.price !== undefined ? <div><dt className="inline">Precio: </dt><dd className="inline">{numero(detalle.price)}</dd></div> : null}
+      {detalle.marginPct !== undefined ? <div><dt className="inline">Margen: </dt><dd className="inline">{numero(detalle.marginPct)}%</dd></div> : null}
+      {detalle.minimumMarginPct !== undefined ? <div><dt className="inline">Margen mínimo: </dt><dd className="inline">{numero(detalle.minimumMarginPct)}%</dd></div> : null}
+      {(detalle.price !== undefined || tramos.some(t => t.price !== undefined)) ? <div><dt className="inline">IVA: </dt><dd className="inline">{detalle.precioIncluyeIva === false ? "No incluido" : "Incluido"}</dd></div> : null}
+      {tramos.map((tramo, i) => <div key={i}>
+        <dt className="inline">{tramo.quantityUntil !== undefined ? `Hasta ${numero(tramo.quantityUntil)}` : `Cantidad ${numero(tramo.quantity)}`}: </dt>
+        <dd className="inline">{tramo.price !== undefined ? `Precio ${numero(tramo.price)}` : `Margen ${numero(tramo.marginPct)}%`}</dd>
+      </div>)}
+    </dl>
+  </details>;
 }

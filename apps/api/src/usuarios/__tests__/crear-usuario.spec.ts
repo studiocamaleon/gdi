@@ -64,10 +64,22 @@ function armar(existente: Record<string, unknown> | null = null) {
     .mockResolvedValue({});
 
   const tx = {
-    user: { findUnique: jest.fn().mockResolvedValue(existente), create: userCreate, update: userUpdate },
-    membership: { upsert: membershipUpsert, findMany: jest.fn().mockResolvedValue([]) },
-    suscripcion: { findFirst: jest.fn().mockResolvedValue({ plan: { featuresJson: { usuariosMax: 40 } } }) },
-    $queryRaw: jest.fn().mockResolvedValue([{ id: "t1" }]),
+    planContratacion: { findFirst: jest.fn().mockResolvedValue(null) },
+    user: {
+      findUnique: jest.fn().mockResolvedValue(existente),
+      create: userCreate,
+      update: userUpdate,
+    },
+    membership: {
+      upsert: membershipUpsert,
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    suscripcion: {
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({ plan: { featuresJson: { usuariosMax: 40 } } }),
+    },
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 't1' }]),
     invitation: {
       findMany: jest.fn().mockResolvedValue([]),
       updateMany: invitationUpdateMany,

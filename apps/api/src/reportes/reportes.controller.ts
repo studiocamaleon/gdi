@@ -1,5 +1,12 @@
 import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
-import { Body, Controller, Get, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ReportesService } from './reportes.service';
@@ -48,6 +55,15 @@ export class ReportesController {
     private readonly etaSvc: EtaService,
   ) {}
 
+  /** El permiso específico del handler reemplaza @Permiso en Nest. Conserva
+   * además la entrada al módulo, igual que el layout y el menú de Reportes. */
+  private exigirAccesoModulo(auth: CurrentAuth) {
+    if (!auth.permisos?.has('reportes.ver'))
+      throw new ForbiddenException(
+        'No tenés permisos para acceder a Reportes.',
+      );
+  }
+
   /**
    * Resumen ejecutivo. Pide su propio permiso —pisa al `reportes.ver` del
    * controller—: es el único reporte que junta facturación, margen, punto de
@@ -58,23 +74,40 @@ export class ReportesController {
   @OcultaMargenes(false)
   @RequiereCapacidad('reportes_resumen')
   @Get('resumen')
-  async resumen(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
-    const rentabilidadPromise = this.rentabilidad.bloque(auth.tenantId, rango, anterior);
-    const [{ actual, sinComparativa, deltas }, topClientes, topProductos, prodKpis, alertas, serie] =
-      await Promise.all([
-        rentabilidadPromise,
-        this.ventas.topClientes(auth.tenantId, rango, 5),
-        this.productos.topProductos(auth.tenantId, rango, 5),
-        this.produccionSvc.resumenKpis(auth.tenantId, rango),
-        this.alertas.activas(
-          auth.tenantId,
-          rango,
-          new Date(),
-          rentabilidadPromise.then((resultado) => resultado.actual),
-        ),
-        this.ventas.serie(auth.tenantId, rango),
-      ]);
+  async resumen(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    this.exigirAccesoModulo(auth);
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
+    const rentabilidadPromise = this.rentabilidad.bloque(
+      auth.tenantId,
+      rango,
+      anterior,
+    );
+    const [
+      { actual, sinComparativa, deltas },
+      topClientes,
+      topProductos,
+      prodKpis,
+      alertas,
+      serie,
+    ] = await Promise.all([
+      rentabilidadPromise,
+      this.ventas.topClientes(auth.tenantId, rango, 5),
+      this.productos.topProductos(auth.tenantId, rango, 5),
+      this.produccionSvc.resumenKpis(auth.tenantId, rango),
+      this.alertas.activas(
+        auth.tenantId,
+        rango,
+        new Date(),
+        rentabilidadPromise.then((resultado) => resultado.actual),
+      ),
+      this.ventas.serie(auth.tenantId, rango),
+    ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
         limites: this.rentabilidad.limites(actual),
@@ -104,9 +137,19 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_resumen')
   @Get('comercial')
-  async comercial(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
-    const comercial = await this.ventas.comercial(auth.tenantId, rango, anterior);
+  async comercial(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
+    const comercial = await this.ventas.comercial(
+      auth.tenantId,
+      rango,
+      anterior,
+    );
     return {
       meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas', {
         limites: [
@@ -120,18 +163,29 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_resumen')
   @Get('embudo')
-  async embudo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+  async embudo(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
     const { otManualesFuera, ...embudo } = await this.embudoSvc.embudo(
       auth.tenantId,
       rango,
       anterior,
     );
     return {
-      meta: this.service.metaBase(rango, anterior, 'Presupuestos emitidos (cohorte)', {
-        limites: this.embudoSvc.limites(otManualesFuera),
-        sinComparativa: embudo.sinComparativa,
-      }),
+      meta: this.service.metaBase(
+        rango,
+        anterior,
+        'Presupuestos emitidos (cohorte)',
+        {
+          limites: this.embudoSvc.limites(otManualesFuera),
+          sinComparativa: embudo.sinComparativa,
+        },
+      ),
       ...embudo,
     };
   }
@@ -146,15 +200,25 @@ export class ReportesController {
   @Permiso('finanzas.ver_margenes')
   @RequiereCapacidad('reportes_finanzas')
   @Get('finanzas')
-  async finanzas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+  async finanzas(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    this.exigirAccesoModulo(auth);
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
     const [{ actual, sinComparativa, deltas }, cobranza] = await Promise.all([
       this.rentabilidad.bloque(auth.tenantId, rango, anterior),
       this.cobranza.finanzas(auth.tenantId, rango),
     ]);
     return {
       meta: this.service.metaBase(rango, anterior, 'Comprobantes y costos', {
-        limites: [...this.rentabilidad.limites(actual), ...this.cobranza.limites()],
+        limites: [
+          ...this.rentabilidad.limites(actual),
+          ...this.cobranza.limites(),
+        ],
         sinComparativa,
       }),
       rentabilidad: {
@@ -177,8 +241,14 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_produccion')
   @Get('produccion')
-  async produccion(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+  async produccion(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
     const prod = await this.produccionSvc.produccion(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Pasos de producción', {
@@ -190,19 +260,41 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_produccion')
   @Get('alertas')
-  async alertasActivas(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
-    const activas = await this.alertas.activas(auth.tenantId, rango);
+  async alertasActivas(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
+    const activas = await this.alertas.activas(
+      auth.tenantId,
+      rango,
+      new Date(),
+      undefined,
+      Boolean(auth.permisos?.has('finanzas.ver_margenes')),
+    );
     return {
-      meta: this.service.metaBase(rango, anterior, 'Reglas sobre los agregados del período'),
+      meta: this.service.metaBase(
+        rango,
+        anterior,
+        'Reglas sobre los agregados del período',
+      ),
       activas,
     };
   }
 
   @RequiereCapacidad('reportes_comerciales')
   @Get('producto')
-  async producto(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+  async producto(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
     const producto = await this.productos.producto(auth.tenantId, rango);
     return {
       meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización', {
@@ -215,9 +307,19 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_comerciales')
   @Get('producto/mix-categoria')
-  async mixCategoria(@CurrentSession() auth: CurrentAuth, @Query() query: MixCategoriaDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
-    const drill = await this.productos.mixCategoria(auth.tenantId, rango, query.categoria);
+  async mixCategoria(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: MixCategoriaDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
+    const drill = await this.productos.mixCategoria(
+      auth.tenantId,
+      rango,
+      query.categoria,
+    );
     return {
       meta: this.service.metaBase(rango, anterior, 'Snapshot de cotización'),
       ...drill,
@@ -226,14 +328,29 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_comerciales')
   @Get('clientes')
-  async clientes(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
-    const clientes = await this.clientesSvc.clientes(auth.tenantId, rango, anterior);
+  async clientes(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
+    const clientes = await this.clientesSvc.clientes(
+      auth.tenantId,
+      rango,
+      anterior,
+    );
     return {
-      meta: this.service.metaBase(rango, anterior, 'Órdenes emitidas (historial completo)', {
-        limites: this.clientesSvc.limites(clientes.rfm.diasActivo),
-        sinComparativa: clientes.sinComparativa,
-      }),
+      meta: this.service.metaBase(
+        rango,
+        anterior,
+        'Órdenes emitidas (historial completo)',
+        {
+          limites: this.clientesSvc.limites(clientes.rfm.diasActivo),
+          sinComparativa: clientes.sinComparativa,
+        },
+      ),
       margenesVisibles: Boolean(auth.permisos?.has('finanzas.ver_margenes')),
       ...clientes,
     };
@@ -241,8 +358,14 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_produccion')
   @Get('equipo')
-  async equipo(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+  async equipo(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
     const equipo = await this.equipoSvc.equipo(
       auth.tenantId,
       rango,
@@ -250,9 +373,14 @@ export class ReportesController {
         Boolean(auth.permisos?.has('registros.ver_comisiones')),
     );
     return {
-      meta: this.service.metaBase(rango, anterior, 'Tramos de trabajo y pasos completados', {
-        limites: this.equipoSvc.limites(),
-      }),
+      meta: this.service.metaBase(
+        rango,
+        anterior,
+        'Tramos de trabajo y pasos completados',
+        {
+          limites: this.equipoSvc.limites(),
+        },
+      ),
       margenesVisibles: Boolean(auth.permisos?.has('finanzas.ver_margenes')),
       ...equipo,
     };
@@ -260,18 +388,29 @@ export class ReportesController {
 
   @RequiereCapacidad('reportes_produccion')
   @Get('salud-eta')
-  async saludEta(@CurrentSession() auth: CurrentAuth, @Query() query: RangoReporteDto) {
-    const { rango, anterior } = await this.service.resolverRango(auth.tenantId, query);
+  async saludEta(
+    @CurrentSession() auth: CurrentAuth,
+    @Query() query: RangoReporteDto,
+  ) {
+    const { rango, anterior } = await this.service.resolverRango(
+      auth.tenantId,
+      query,
+    );
     const [precision, salud] = await Promise.all([
       this.etaSvc.precisionEnRango(auth.tenantId, rango),
       this.etaSvc.saludModelo(auth.tenantId, rango),
     ]);
     return {
-      meta: this.service.metaBase(rango, anterior, 'Promesas ETA y tiempos medidos', {
-        limites: [
-          'La precisión usa promesas congeladas en el período que ya cerraron; la calibración usa pasos medidos completados en el mismo rango.',
-        ],
-      }),
+      meta: this.service.metaBase(
+        rango,
+        anterior,
+        'Promesas ETA y tiempos medidos',
+        {
+          limites: [
+            'La precisión usa promesas congeladas en el período que ya cerraron; la calibración usa pasos medidos completados en el mismo rango.',
+          ],
+        },
+      ),
       precision,
       salud,
     };
@@ -290,6 +429,7 @@ export class ReportesController {
     @CurrentSession() auth: CurrentAuth,
     @Body() payload: ActualizarUmbralesDto,
   ) {
+    this.exigirAccesoModulo(auth);
     return this.alertas.actualizarUmbrales(auth.tenantId, payload);
   }
 }

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -18,7 +19,12 @@ import {
  */
 @Injectable()
 export class ComisionesCatalogoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async listar(tenantId: string, soloActivos = true) {
     return this.prisma.productoComisionCatalogo.findMany({
@@ -38,6 +44,7 @@ export class ComisionesCatalogoService {
   }
 
   async crear(tenantId: string, dto: CrearComisionCatalogoDto) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     try {
       return await this.prisma.productoComisionCatalogo.create({
         data: {
@@ -70,6 +77,7 @@ export class ComisionesCatalogoService {
     id: string,
     dto: ActualizarComisionCatalogoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente = await this.prisma.productoComisionCatalogo.findFirst({
       where: { id, tenantId },
     });
@@ -88,6 +96,7 @@ export class ComisionesCatalogoService {
   }
 
   async eliminar(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente = await this.prisma.productoComisionCatalogo.findFirst({
       where: { id, tenantId },
       include: { _count: { select: { productosAplicados: true } } },

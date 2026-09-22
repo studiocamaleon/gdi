@@ -1,3 +1,6 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { capacidadesJobGeometria } from '../../suscripciones/capacidades-geometria';
+import { capacidadesJobCopiado } from '../../suscripciones/capacidades-copiado';
 import {
   Injectable,
   Logger,
@@ -80,12 +83,25 @@ export class CotizacionJobsService implements OnApplicationShutdown {
     typeof TRABAJO_COTIZAR
   >;
 
+  constructor(private readonly capacidadesPlan: CapacidadesEmpresaService) {}
+
   async crear(input: {
     cotizacion: CotizarInput;
     claveSolicitud?: string;
     preparacionNestingId?: string;
     jobId?: string;
   }): Promise<VistaTrabajoCotizacion> {
+    await this.capacidadesPlan.exigirTodas(input.cotizacion.tenantId, [
+      'cotizacion',
+      ...capacidadesJobGeometria(input.cotizacion.jobContext),
+      ...capacidadesJobCopiado(input.cotizacion.jobContext),
+    ]);
+    if (input.preparacionNestingId)
+      await this.capacidadesPlan.exigirTodas(input.cotizacion.tenantId, [
+        'analisis_vectorial',
+        'aprovechamiento_cotizacion',
+      'nesting_irregular',
+      ]);
     const data: CotizacionJobData = {
       preparacionNestingId: input.preparacionNestingId,
       schemaVersion: 1,
@@ -93,17 +109,23 @@ export class CotizacionJobsService implements OnApplicationShutdown {
       correlationId: randomUUID(),
       input: input.cotizacion,
     };
-    let jobId = input.jobId ?? idTrabajoCotizacion(
-      input.cotizacion.tenantId,
-      input.claveSolicitud,
-      input.cotizacion,
-    );
+    let jobId =
+      input.jobId ??
+      idTrabajoCotizacion(
+        input.cotizacion.tenantId,
+        input.claveSolicitud,
+        input.cotizacion,
+      );
     try {
       // Sólo compartimos cálculos en curso. Reutilizar una cotización terminada
       // congelaría tarifas y precios; el acomodo tiene su propia persistencia.
       if (!input.jobId) {
         const anterior = await this.getQueue().getJob(jobId);
-        if (anterior && ['completed', 'failed'].includes(await anterior.getState())) jobId = `${jobId}-${randomUUID()}`;
+        if (
+          anterior &&
+          ['completed', 'failed'].includes(await anterior.getState())
+        )
+          jobId = `${jobId}-${randomUUID()}`;
       }
       const queued = await this.getQueue().add(TRABAJO_COTIZAR, data, {
         jobId,
@@ -366,8 +388,9 @@ export function idTrabajoCotizacion(
 ): string {
   if (!scope) return `quote-${randomUUID()}`;
   const digest = createHash('sha256')
-    // No reutilizar respuestas anteriores a la inclusión de interiores en TAP.
-    .update('cotizacion-cortes-interiores-v2\0')
+    // No reutilizar cotizaciones previas al consumo dimensional y al nesting
+    // rectangular de los pasos de corte configurados con cantidad directa.
+    .update('cotizacion-corte-rectangular-v3\0')
     .update(tenantId)
     .update('\0')
     .update(scope)

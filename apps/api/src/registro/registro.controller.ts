@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import { SoloAutenticado } from '../auth/permiso.decorator';
@@ -16,6 +16,7 @@ export class RegistroController {
 
   @Public()
   @Get('planes')
+  @Header('Cache-Control', 'no-store')
   planes() {
     return this.registro.planes();
   }

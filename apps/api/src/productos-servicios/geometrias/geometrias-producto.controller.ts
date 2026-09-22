@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Body,
@@ -81,9 +82,16 @@ export class GeometriasProductoController {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   private async leer(auth: CurrentAuth, productoId: string, archivoId: string) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'analisis_vectorial',
+      'geometrias',
+    ]);
     const archivo = await this.prisma.archivo.findFirst({
       where: {
         id: archivoId,

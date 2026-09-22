@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { Suspense } from "react";
 
 import { PropuestaFicha } from "@/components/comercial/propuesta-ficha";
@@ -19,6 +21,7 @@ export default function CrearPropuestaPage() {
 }
 
 async function CrearPropuestaContent() {
+  if (!(await tieneCapacidad("cotizacion"))) return <FuncionNoIncluida />;
   const [clientesResult, productosResult, cargosResult, usuarioResult] =
     await Promise.allSettled([
       getClientes({ limit: 30 }),

@@ -1,3 +1,5 @@
+import { contratoSuscripcion } from '../suscripciones/contrato-suscripcion';
+import { exigirSinContratacionPendiente } from '../suscripciones/contratacion-pendiente';
 import {
   bloquearCupoUsuarios,
   resumenCupoUsuarios,
@@ -37,7 +39,10 @@ const include = {
       bloqueoAccesoMotivo: true,
     },
   },
-  plan: { select: { id: true, nombre: true, codigo: true } },
+  plan: {
+    select: { id: true, nombre: true, codigo: true, featuresJson: true },
+  },
+  planVersion: true,
 } satisfies Prisma.SuscripcionInclude;
 type Fila = Prisma.SuscripcionGetPayload<{ include: typeof include }>;
 
@@ -147,7 +152,11 @@ export class SuscripcionesPlataformaService {
         nombre: s.tenant.nombre,
         slug: s.tenant.slug,
       },
-      plan: s.plan,
+      plan: {
+        id: s.plan.id,
+        codigo: s.plan.codigo,
+        nombre: contratoSuscripcion(s).nombre,
+      },
       proveedor: s.proveedor,
       referencia: s.referenciaExterna,
       estado: s.estado,
@@ -325,10 +334,21 @@ export class SuscripcionesPlataformaService {
       });
       if (!referencia) throw new NotFoundException('La suscripción no existe.');
       await bloquearCupoUsuarios(tx, referencia.tenantId);
-      const s = await tx.suscripcion.findUniqueOrThrow({ where: { id } });
+      await exigirSinContratacionPendiente(tx, referencia.tenantId);
+      const s = await tx.suscripcion.findUniqueOrThrow({
+        where: { id },
+        include: { plan: true, planVersion: true },
+      });
       if (s.proveedor !== 'manual' || s.referenciaExterna)
         throw new BadRequestException(
           'Los adicionales de suscripciones con cobro automático requieren su integración comercial.',
+        );
+      if (
+        dto.adicionales > 0 &&
+        contratoSuscripcion(s).adicionalesPermitidos === false
+      )
+        throw new BadRequestException(
+          'La versión asignada no admite usuarios adicionales.',
         );
       if (s.usuariosAdicionales !== dto.anteriores)
         throw new ConflictException(
@@ -425,7 +445,9 @@ export class SuscripcionesPlataformaService {
                 ? 'Falló el procesamiento. Paddle puede reintentar; también podés consultar su estado actual.'
                 : resultado === 'pendiente'
                   ? 'Recibido; aún no hay un resultado de procesamiento.'
-                  : 'Grafo aplicó el estado informado por Paddle.';
+                  : e.errorTexto?.startsWith('Se aplicó el estado de cobro conservando el contrato anterior:')
+                    ? 'Estado de cobro aplicado. Los ítems requieren revisión; se conservó la versión anterior del contrato.'
+                    : 'Grafo aplicó el estado informado por Paddle.';
         return {
           id: e.id,
           eventoId: e.eventoId,

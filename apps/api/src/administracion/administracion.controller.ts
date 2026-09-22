@@ -101,8 +101,12 @@ export class AdministracionController {
 
   /** El comprobante impreso: todo lo que la ley exige que figure. */
   @Get('comprobantes/:id/factura')
-  factura(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
-    return this.facturaService.documento(auth.tenantId, id);
+  async factura(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    const [doc, pdfDisponible] = await Promise.all([
+      this.facturaService.documento(auth.tenantId, id),
+      this.comprobantesService.pdfDisponible(auth.tenantId, id),
+    ]);
+    return { ...doc, pdfDisponible };
   }
 
   // ── Cuenta corriente ─────────────────────────────────────────────────
@@ -125,6 +129,7 @@ export class AdministracionController {
    * server (mismo patrón que el PDF del comprobante).
    */
   @Get('clientes/:clienteId/cuenta-corriente/pdf')
+  @RequiereCapacidad('documentos_pdf')
   async cuentaCorrientePdf(
     @CurrentSession() auth: CurrentAuth,
     @Param('clienteId') clienteId: string,
@@ -221,8 +226,12 @@ export class AdministracionController {
 
   /** El gate del botón Facturar. Liviano: sólo el booleano. */
   @Get('facturacion/estado')
-  async estadoFacturacion() {
-    return { habilitada: await this.afipIntegracion.facturacionHabilitada() };
+  async estadoFacturacion(@CurrentSession() auth: CurrentAuth) {
+    return {
+      habilitada: await this.afipIntegracion.facturacionHabilitada(
+        auth.tenantId,
+      ),
+    };
   }
 
   /** Órdenes finalizadas con saldo sin facturar (vista Facturación). */
@@ -275,7 +284,7 @@ export class AdministracionController {
     return this.comprobantesService.obtener(auth, id);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso('administracion.gestionar', 'administracion.anular')
   @Post('comprobantes')
   crearComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -284,13 +293,22 @@ export class AdministracionController {
     return this.comprobantesService.crear(auth, body);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso('administracion.gestionar', 'administracion.anular')
   @Post('comprobantes/:id/emitir')
   emitirComprobante(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
   ) {
     return this.comprobantesService.emitir(auth, id);
+  }
+
+  @Permiso('administracion.gestionar', 'administracion.anular')
+  @Post('comprobantes/:id/consultar-emision')
+  consultarEmision(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.comprobantesService.consultarEmision(auth, id);
   }
 
   @Permiso('administracion.gestionar')
@@ -397,7 +415,6 @@ export class AdministracionController {
 
   // ── Tesorería ────────────────────────────────────────────────────────
 
-  @RequiereCapacidad('tesoreria')
   @Get('tesoreria')
   resumenTesoreria(@CurrentSession() auth: CurrentAuth) {
     return this.tesoreriaService.resumen(auth);
@@ -412,7 +429,6 @@ export class AdministracionController {
     return this.tesoreriaService.crearCuenta(auth, payload);
   }
 
-  @RequiereCapacidad('tesoreria')
   @Get('cuentas/:id/movimientos')
   movimientosCuenta(
     @CurrentSession() auth: CurrentAuth,
@@ -481,7 +497,6 @@ export class AdministracionController {
     );
   }
 
-  @RequiereCapacidad('valores')
   @Get('valores')
   valores(@CurrentSession() auth: CurrentAuth) {
     return this.tesoreriaService.valores(auth);

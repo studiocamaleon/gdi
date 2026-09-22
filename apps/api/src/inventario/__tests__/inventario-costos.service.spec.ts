@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { NotFoundException } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 import { InventarioService } from '../inventario.service';
@@ -36,7 +37,7 @@ describe('InventarioService.bulkUpdateCostos', () => {
         }),
       ),
     };
-    const service = new InventarioService(prisma as never);
+    const service = new InventarioService(prisma as never, undefined, capacidadesDePrueba());
 
     const res = await service.bulkUpdateCostos(auth, {
       variantes: [
@@ -69,7 +70,7 @@ describe('InventarioService.bulkUpdateCostos', () => {
       materiaPrima: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(),
     };
-    const service = new InventarioService(prisma as never);
+    const service = new InventarioService(prisma as never, undefined, capacidadesDePrueba());
 
     await expect(
       service.bulkUpdateCostos(auth, {
@@ -88,7 +89,7 @@ describe('InventarioService.bulkUpdateCostos', () => {
       materiaPrima: { findMany: jest.fn() },
       $transaction: jest.fn(),
     };
-    const service = new InventarioService(prisma as never);
+    const service = new InventarioService(prisma as never, undefined, capacidadesDePrueba());
 
     const res = await service.bulkUpdateCostos(auth, {});
     expect(res).toEqual({

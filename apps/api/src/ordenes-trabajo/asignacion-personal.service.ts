@@ -33,6 +33,7 @@ import type {
   RevisionAsignacionPersonal,
 } from './asignacion-personal.contrato';
 import type { ConfirmarAsignacionPersonalDto } from './dto/asignacion-personal.dto';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 
 type Entrada = Awaited<ReturnType<EtaService['contextoSimulacion']>>;
 type Foto = Awaited<ReturnType<AsignacionPersonalService['leer']>>;
@@ -65,6 +66,9 @@ export class AsignacionPersonalService {
     private readonly prisma: PrismaService,
     private readonly eta: EtaService,
     private readonly eventos: EventosSistemaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   private autorizar(auth: CurrentAuth) {
@@ -77,8 +81,14 @@ export class AsignacionPersonalService {
   /** Una foto coherente y sin backfill: revisar una propuesta nunca escribe. */
   async leer(auth: CurrentAuth, pasoId: string, db: Prisma.TransactionClient) {
     this.autorizar(auth);
+    await this.capacidades.exigir(auth.tenantId, 'asignacion_automatica', db);
     const [entrada, pasos, empleados] = await Promise.all([
-      this.eta.contextoSimulacion(auth.tenantId, db, false),
+      this.eta.contextoSimulacion(
+        auth.tenantId,
+        db,
+        false,
+        'asignacion_automatica',
+      ),
       db.ordenTrabajoItemPaso.findMany({
         where: {
           tenantId: auth.tenantId,
@@ -219,7 +229,9 @@ export class AsignacionPersonalService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
+        (error.code === 'P2034' ||
+          (error.code === 'P2010' &&
+            ['40001', '40P01'].includes(String(error.meta?.code))))
       )
         throw new ConflictException(
           'El taller cambió durante la confirmación. Volvé a revisar el impacto.',
@@ -466,8 +478,15 @@ export class AsignacionPersonalService {
     body: ConfirmarAsignacionPersonalDto,
   ) {
     this.autorizar(auth);
+    await this.capacidades.exigir(auth.tenantId, 'asignacion_automatica');
     const propuesta = this.leerToken(auth, pasoId, body.token);
     return this.transaccion(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['asignacion_automatica'],
+        ['asignacion_automatica'],
+      );
       const foto = await this.leer(auth, pasoId, tx);
       if (foto.huella !== propuesta.contexto)
         throw new ConflictException(

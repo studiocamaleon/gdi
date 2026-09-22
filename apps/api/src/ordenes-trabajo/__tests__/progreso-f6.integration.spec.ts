@@ -4,6 +4,7 @@ import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
 import { CampanasService } from '../../campanas/campanas.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { crearFixtureLotesF6 } from '../../../test/soporte-lotes-f6';
+import { serviciosRecorridoF4 } from '../../../test/soporte-recorridos-f4';
 import { OrdenesTrabajoQueryDto } from '../dto/ordenes-trabajo-query.dto';
 import { CampanasQueryDto } from '../../campanas/dto/campanas.dto';
 
@@ -15,10 +16,7 @@ it('OT, seguimiento, lotes y campaña derivan avance del trabajo real persistido
     db.$transaction(
       async (tx) => {
         const f = await crearFixtureLotesF6(tx, db);
-        const productor = Object.create(
-          OrdenesTrabajoService.prototype,
-        ) as OrdenesTrabajoService;
-        Object.assign(productor, { prisma: db, eta: {} });
+        const { ordenes: productor } = serviciosRecorridoF4(tx);
         await productor.sincronizarLotesEntrega(tx, f.tenantId, f.raiz.id);
         const auth = {
           tenantId: f.tenantId,

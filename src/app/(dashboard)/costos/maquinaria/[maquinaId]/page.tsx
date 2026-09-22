@@ -1,3 +1,4 @@
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import { notFound } from "next/navigation";
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
@@ -5,7 +6,6 @@ import { Suspense } from "react";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getCentrosCosto, getPlantas } from "@/lib/costos-api";
 import { getMaquina, getMaquinaHistorial } from "@/lib/maquinaria-api";
-import { tienePermiso } from "@/lib/permisos-server";
 import { ApiError } from "@/lib/api";
 
 const MaquinaFicha = dynamicImport(
@@ -50,7 +50,7 @@ async function MaquinariaDetalleContent({
       }),
       getPlantas(),
       getCentrosCosto(),
-      tienePermiso("costos.gestionar"),
+      puedeConfigurar("maquinaria", "costos.gestionar"),
     ]);
 
   return (

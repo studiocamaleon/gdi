@@ -8,6 +8,8 @@ import { PERMISO_KEY } from '../../auth/permiso.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { calendarioDefault } from '../../eta/motor/estaciones-tipos';
 import { huellaContextoPlan } from '../../planificacion-entregas/planificacion-contrato';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { contratoCompatible } from '../../suscripciones/evaluador-capacidades';
 
 const db = new PrismaService(),
   a = randomUUID(),
@@ -137,4 +139,70 @@ it('rechaza horarios vacíos y restringe las mutaciones a configuración', async
       },
     }),
   ).rejects.toBeInstanceOf(BadRequestException);
+});
+
+it('sin equipos permite estaciones básicas y conserva el personal al editar una estación histórica', async () => {
+  const caps = new CapacidadesEmpresaService(db);
+  const contrato = contratoCompatible(null);
+  contrato.funciones.equipos_produccion = false;
+  const actual = caps.actual.bind(caps);
+  jest.spyOn(caps, 'actual').mockImplementation(async (...args) => ({
+    ...(await actual(...args)),
+    contrato,
+  }));
+  const limitado = new ProduccionService(db, caps);
+  const basica = await limitado.createEstacion(auth, {
+    nombre: 'Estación básica sin equipo',
+    activo: true,
+  });
+  expect(basica.empleados).toHaveLength(0);
+  const empleado = await db.empleado.create({
+    data: {
+      tenantId: a,
+      nombreCompleto: 'Operario QA',
+      emailPrincipal: 'qa@test.local',
+      telefonoCodigo: '54',
+      telefonoNumero: '',
+      sector: 'Taller',
+      fechaIngreso: new Date(),
+    },
+  });
+  const historica = await produccion.createEstacion(auth, {
+    nombre: 'Estación con personal',
+    activo: true,
+    empleadoIds: [empleado.id],
+    planificacionPorEmpleados: true,
+    horariosEmpleados: [
+      { empleadoId: empleado.id, calendario: calendarioDefault() },
+    ],
+  });
+  const guardada = await limitado.updateEstacion(auth, historica.id, {
+    nombre: 'Nombre corregido',
+    activo: true,
+  });
+  expect(guardada.nombre).toBe('Nombre corregido');
+  expect(guardada.empleados.map((e) => e.id)).toEqual([empleado.id]);
+  expect(guardada.planificacionPorEmpleados).toBe(true);
+  for (const cambio of [
+    { empleadoIds: [] },
+    { planificacionPorEmpleados: false },
+    { equipoProduccionId: randomUUID() },
+    {
+      horariosEmpleados: [
+        { empleadoId: empleado.id, calendario: calendarioDefault() },
+      ],
+    },
+  ]) {
+    await expect(
+      limitado.updateEstacion(auth, historica.id, {
+        nombre: 'No debe cambiar',
+        activo: true,
+        ...cambio,
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+  }
+  expect(
+    (await produccion.findEstaciones(a)).find((e) => e.id === historica.id)
+      ?.nombre,
+  ).toBe('Nombre corregido');
 });

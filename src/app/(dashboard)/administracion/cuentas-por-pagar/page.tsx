@@ -1,5 +1,4 @@
 import { tieneCapacidad } from "@/lib/capacidades-server";
-import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { EgresosView } from "@/components/administracion/egresos-view";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 import {
@@ -27,16 +26,16 @@ export default async function CuentasPorPagarPage({
 }: {
   searchParams: Promise<{ endosarValorId?: string }>;
 }) {
-  if (!(await tieneCapacidad("cuentas_pagar"))) return <FuncionNoIncluida />;
+  const conEgresos = await tieneCapacidad("cuentas_pagar");
   const { endosarValorId } = await searchParams;
   const [egresos, resumen, categorias, proveedores, metodosPago, cuentas] =
     await Promise.all([
       getEgresos({ soloPendientes: true }).then((r) => r.egresos),
       getResumenEgresos(),
       getCategoriasEgreso(),
-      getProveedores(),
-      getMetodosPago(),
-      getCuentasFondos(),
+      conEgresos ? getProveedores() : Promise.resolve([]),
+      conEgresos ? getMetodosPago() : Promise.resolve([]),
+      conEgresos ? getCuentasFondos() : Promise.resolve([]),
     ]);
 
   return (
@@ -48,7 +47,7 @@ export default async function CuentasPorPagarPage({
       proveedores={proveedores}
       metodosPago={metodosPago.filter((m) => m.activo)}
       cuentas={cuentas}
-      valorEndosoInicialId={endosarValorId}
+      valorEndosoInicialId={conEgresos ? endosarValorId : undefined}
     />
   );
 }

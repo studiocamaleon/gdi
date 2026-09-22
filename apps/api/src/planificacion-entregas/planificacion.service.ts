@@ -80,8 +80,9 @@ export class PlanificacionEntregasService {
     private readonly db: PrismaService,
     private readonly eta: EtaService,
     @Optional() private readonly ordenes?: OrdenesTrabajoService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(db),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      db,
+    ),
   ) {}
 
   private async origen(
@@ -364,6 +365,12 @@ export class PlanificacionEntregasService {
     });
     await this.db.$transaction(
       async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['planificacion_avanzada'],
+          ['planificacion_avanzada'],
+        );
         // Orden estable de cerrojos: empresa antes de plan. Serializa también
         // la primera creación y el cupo de cálculos entre productos.
         await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${auth.tenantId}::uuid FOR UPDATE`;
@@ -731,6 +738,12 @@ export class PlanificacionEntregasService {
     });
     await this.db.$transaction(
       async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['planificacion_avanzada'],
+          ['planificacion_avanzada'],
+        );
         await bloquearColaEntrega(tx, auth.tenantId);
         const actual = await tx.planEntregaItem.findFirstOrThrow({
           where: { id: revision.planId, tenantId: auth.tenantId },
@@ -815,6 +828,12 @@ export class PlanificacionEntregasService {
     if (!plan) throw new NotFoundException('No se encontró el plan.');
     await this.db.$transaction(
       async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['planificacion_avanzada'],
+          ['planificacion_avanzada'],
+        );
         await bloquearColaEntrega(tx, auth.tenantId);
         const contexto = await this.contexto(auth.tenantId, origen.ids, tx);
         if (
@@ -1000,6 +1019,12 @@ export class PlanificacionEntregasService {
   ) {
     const origen = await this.origen(auth.tenantId, itemId);
     await this.db.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['identidad'],
+        [],
+      );
       await tx.$queryRaw`SELECT "id" FROM "Tenant" WHERE "id" = ${auth.tenantId}::uuid FOR UPDATE`;
       await tx.$queryRaw`SELECT "id" FROM "PlanEntregaItem" WHERE "id" = ${dto.planId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       const actual = await tx.planEntregaItem.findFirst({
@@ -1043,7 +1068,6 @@ export class PlanificacionEntregasService {
     ) => Promise<CotizarOutput>,
     signal?: AbortSignal,
   ) {
-    await this.capacidades.exigir(tenantId, 'planificacion_avanzada');
     const revision = await this.db.planEntregaRevision.findFirst({
       where: { id: revisionId, tenantId },
       include: { plan: true },
@@ -1051,13 +1075,44 @@ export class PlanificacionEntregasService {
     if (!revision || ['LISTA', 'SUPERADA', 'FALLIDA'].includes(revision.estado))
       return;
     const ejecucionId = randomUUID();
-    const reclamo = await this.db.planEntregaRevision.updateMany({
-      where: {
-        id: revision.id,
-        tenantId,
-        estado: { in: ['SOLICITADA', 'CALCULANDO'] },
-      },
-      data: { estado: 'CALCULANDO', ejecucionId, error: null },
+    const reclamo = await this.db.$transaction(async (tx) => {
+      try {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          tenantId,
+          ['planificacion_avanzada'],
+          ['planificacion_avanzada'],
+        );
+      } catch (error) {
+        if (
+          !(
+            error instanceof ForbiddenException ||
+            error instanceof ConflictException
+          )
+        )
+          throw error;
+        await tx.planEntregaRevision.updateMany({
+          where: {
+            id: revision.id,
+            tenantId,
+            estado: { in: ['SOLICITADA', 'CALCULANDO'] },
+          },
+          data: {
+            estado: 'FALLIDA',
+            ejecucionId: null,
+            error: respuestaError(error),
+          },
+        });
+        return { count: 0 };
+      }
+      return tx.planEntregaRevision.updateMany({
+        where: {
+          id: revision.id,
+          tenantId,
+          estado: { in: ['SOLICITADA', 'CALCULANDO'] },
+        },
+        data: { estado: 'CALCULANDO', ejecucionId, error: null },
+      });
     });
     if (!reclamo.count) return;
     // El pulso usa el token de esta ejecución: un worker anterior nunca renueva
@@ -1182,15 +1237,18 @@ export class PlanificacionEntregasService {
           ejecucion?: { costos?: CotizacionResultado['costos'] };
         } | null;
         if (traza?.pasos)
-          originales = planesGuardadosF6({
-            ...fuentes[0],
-            cotizacion: {
-              ...fuentes[0].cotizacion,
-              ...traza,
-              costos:
-                snapshot?.ejecucion?.costos ?? fuentes[0].cotizacion.costos,
+          originales = planesGuardadosF6(
+            {
+              ...fuentes[0],
+              cotizacion: {
+                ...fuentes[0].cotizacion,
+                ...traza,
+                costos:
+                  snapshot?.ejecucion?.costos ?? fuentes[0].cotizacion.costos,
+              },
             },
-          }, true);
+            true,
+          );
       } catch {
         /* Un histórico incompleto no permite afirmar que conserva sus layouts. */
       }
@@ -1220,6 +1278,12 @@ export class PlanificacionEntregasService {
           }),
         );
       await this.db.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          tenantId,
+          ['planificacion_avanzada'],
+          ['planificacion_avanzada'],
+        );
         await tx.$queryRaw`SELECT "id" FROM "PlanEntregaItem" WHERE "id" = ${revision.planId}::uuid AND "tenantId" = ${tenantId}::uuid FOR UPDATE`;
         const plan = await tx.planEntregaItem.findFirstOrThrow({
           where: { id: revision.planId, tenantId },

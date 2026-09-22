@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call */
 import { BadRequestException } from '@nestjs/common';
 import { OrdenProductosDto } from '../dto/list-productos-query.dto';
@@ -18,7 +19,7 @@ describe('Catálogo de productos', () => {
         create,
       },
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await service.crearProducto('tenant-1', {
       nombre: 'Producto de prueba',
@@ -60,7 +61,7 @@ describe('Catálogo de productos', () => {
         .fn()
         .mockImplementation((promises) => Promise.all(promises)),
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     const result = await service.listarProductos('tenant-1', {
       pagination: { page: 1, limit: 25, skip: 0 } as never,
@@ -104,7 +105,7 @@ describe('Catálogo de productos', () => {
         return null;
       });
     const prisma = { producto: { findFirst, update } };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await service.actualizarProducto('tenant-1', 'p1', {
       nombre: 'Nuevo nombre del producto',
@@ -138,7 +139,7 @@ describe('Catálogo de productos', () => {
         .fn()
         .mockImplementation((promises) => Promise.all(promises)),
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await service.listarProductos('tenant-1', {
       pagination: { page: 1, limit: 25, skip: 0 } as never,
@@ -164,7 +165,7 @@ describe('Catálogo de productos', () => {
         .fn()
         .mockImplementation((promises) => Promise.all(promises)),
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await service.listarProductos('tenant-1', {
       pagination: { page: 1, limit: 25, skip: 0 } as never,
@@ -206,7 +207,7 @@ describe('Catálogo de productos', () => {
         findFirst: jest.fn().mockResolvedValue({ id: 'componente-1' }),
       },
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await expect(
       service.actualizarProducto('tenant-1', 'p1', {
@@ -258,7 +259,7 @@ describe('Catálogo de productos', () => {
         findFirst: jest.fn().mockResolvedValue(null),
       },
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     const result = await service.actualizarProducto('tenant-1', 'p1', {
       estructuraProducto: 'SIMPLE',
@@ -435,7 +436,7 @@ describe('Catálogo de productos', () => {
       },
       $transaction: jest.fn().mockImplementation((callback) => callback(tx)),
     };
-    const service = new ProductosService(prisma as never);
+    const service = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await service.duplicarProducto('tenant-1', 'original', { nombre: 'Copia' });
 

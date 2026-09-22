@@ -252,6 +252,10 @@ export type OrdenTrabajoPago = {
  * del snapshot de `CotizacionItem` referenciado.
  */
 export type OrdenTrabajoDetalle = OrdenTrabajoListItem & {
+  /** Incluye solicitudes aún no enviadas; independiente del plan vigente. */
+  tieneHistorialImpresion?: boolean;
+  produccionControlada?: boolean;
+  cobrosHabilitadosEmision?: boolean;
   progresoLotes?: import("./progreso-produccion").ProgresoLote[];
   cotizacionId: string | null;
   observaciones: string | null;

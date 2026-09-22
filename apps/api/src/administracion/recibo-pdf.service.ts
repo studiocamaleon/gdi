@@ -64,6 +64,7 @@ export type ReciboOrden = {
 };
 
 export type ReciboDoc = {
+  pdfDisponible?: boolean;
   numero: string;
   negocio: string;
   /** Contacto del negocio (Configuración › Empresa). Ver `PresupuestoPdfDatos`. */

@@ -7,6 +7,7 @@ import {
   Req,
   Res,
   Header,
+  HttpCode,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { MFA_HEADERS, MFA_RECORDADO_HEADER } from './mfa-dispositivo-cookie';
@@ -93,6 +94,7 @@ export class AuthController {
   @SinTenant()
   @PermitirEnrolamientoPlataforma()
   @Post('logout')
+  @HttpCode(204)
   logout(@CurrentSession() auth: CurrentAuth) {
     return this.authService.logout(auth);
   }

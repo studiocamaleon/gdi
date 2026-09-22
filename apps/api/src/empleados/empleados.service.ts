@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -43,6 +44,9 @@ export class EmpleadosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async findAll(auth: CurrentAuth, query: EmpleadosQueryDto) {
@@ -139,6 +143,7 @@ export class EmpleadosService {
   }
 
   async create(auth: CurrentAuth, payload: UpsertEmpleadoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'empleados');
     this.exigirPermisoComisionesSiCorresponde(auth, payload);
     const empleado = await this.createNormalized(
       this.prisma,
@@ -149,6 +154,7 @@ export class EmpleadosService {
   }
 
   async importar(auth: CurrentAuth, payloads: UpsertEmpleadoDto[]) {
+    await this.capacidades.exigir(auth.tenantId, 'empleados');
     if (payloads.length === 0) return { data: [], total: 0 };
     payloads.forEach((payload) =>
       this.exigirPermisoComisionesSiCorresponde(auth, payload),
@@ -229,6 +235,7 @@ export class EmpleadosService {
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpdateEmpleadoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'empleados');
     const normalized = this.normalizePayload(payload);
     return this.prisma.$transaction(async (tx) => {
       const actual = await this.findEmpleadoOrThrow(auth, id, tx);
@@ -296,6 +303,7 @@ export class EmpleadosService {
     activo: boolean,
     motivo?: string,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'empleados');
     return this.prisma.$transaction(async (tx) => {
       await this.fijarActivoEnTransaccion(tx, auth, id, activo, motivo);
       return this.toResponse(
@@ -311,6 +319,7 @@ export class EmpleadosService {
     activo: boolean,
     motivo?: string,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'empleados');
     const unicos = [...new Set(ids)];
     return this.prisma.$transaction(
       async (tx) => {
@@ -332,6 +341,7 @@ export class EmpleadosService {
   }
 
   async remove(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'empleados');
     await this.fijarActivo(auth, id, false);
   }
 

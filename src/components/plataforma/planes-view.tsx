@@ -1,4 +1,5 @@
 "use client";
+import { PlanPreciosFields, PlanComercialFields } from "./plan-precios-fields";
 
 import fieldFocus from "@/components/design-system/field-focus.module.css";
 
@@ -38,6 +39,7 @@ import {
 } from "@/lib/plataforma-planes-api";
 import styles from "./planes.module.css";
 import { PlanesComparacion } from "./planes-comparacion";
+import { PlanesVersiones } from "./planes-versiones";
 
 export type SalidaPlanes = { cambios: number; guardar: () => Promise<boolean> };
 type Props = {
@@ -55,6 +57,10 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
   const [guardando, setGuardando] = React.useState(false);
   const [cargando, setCargando] = React.useState(true);
   const [pestana, setPestana] = React.useState("matriz");
+  const [grupoOferta, setGrupoOferta] = React.useState("publico");
+  const planesVisibles = planes.filter(
+    (p) => (p.contenido.comercial?.acceso ?? "publico") === grupoOferta,
+  );
   const [busqueda, setBusqueda] = React.useState("");
   const [diferencias, setDiferencias] = React.useState(false);
   const [cerrados, setCerrados] = React.useState<string[]>(["B"]);
@@ -168,7 +174,8 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
           `${c.nombre} ${c.descripcion} ${datos.grupos[c.grupo]}`,
         ).includes(filtrar(busqueda)) &&
         (!diferencias ||
-          new Set(planes.map((p) => p.contenido.funciones[c.clave])).size > 1),
+          new Set(planesVisibles.map((p) => p.contenido.funciones[c.clave]))
+            .size > 1),
     ) ?? [];
 
   return (
@@ -179,13 +186,24 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
       <header className={styles.intro}>
         <div>
           <span className={styles.eyebrow}>OFERTA DE GRAFO</span>
-          <h2>Tres planes. Una operación que crece.</h2>
+          <h2>Planes para cada etapa.</h2>
           <p>Compará funciones y ajustá la propuesta comercial.</p>
         </div>
         <Badge variant="outline">
           <FilePenLine /> Borradores
         </Badge>
       </header>
+      {["matriz", "recursos"].includes(pestana) && (
+        <SelectField
+          aria-label="Grupo de planes"
+          value={grupoOferta}
+          onChange={setGrupoOferta}
+          options={[
+            { value: "publico", label: "Planes comerciales" },
+            { value: "invitacion", label: "Co-founder · Por invitación" },
+          ]}
+        />
+      )}
       <Tabs
         className={styles.tabs}
         value={pestana}
@@ -199,6 +217,7 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
           <TabsTrigger value="matriz">Funciones</TabsTrigger>
           <TabsTrigger value="recursos">Usuarios y oferta</TabsTrigger>
           <TabsTrigger value="revision">Revisión</TabsTrigger>
+          <TabsTrigger value="versiones">Versiones</TabsTrigger>
           <TabsTrigger value="actuales">Planes actuales</TabsTrigger>
         </TabsList>
         <TabsContent value={pestana} className={styles.content}>
@@ -282,12 +301,12 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                       >
                         <table className={styles.matrix}>
                           <caption className="sr-only">
-                            Funciones propuestas para Esencial, Pro y Avanzado
+                            Funciones propuestas por plan
                           </caption>
                           <thead>
                             <tr>
                               <th scope="col">Funciones del sistema</th>
-                              {planes.map((p) => (
+                              {planesVisibles.map((p) => (
                                 <th key={p.id} scope="col">
                                   <span>{p.contenido.nombre}</span>
                                   <strong>
@@ -311,7 +330,7 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                                 return (
                                   <React.Fragment key={grupo}>
                                     <tr className={styles.group}>
-                                      <th colSpan={planes.length + 1}>
+                                      <th colSpan={planesVisibles.length + 1}>
                                         <ActionButton
                                           variant="ghost"
                                           size="sm"
@@ -362,20 +381,24 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                                                 Control por plan:{" "}
                                                 {c.cobertura === "base"
                                                   ? "base de la cuenta"
-                                                  : c.cobertura === "parcial"
-                                                    ? "existente, requiere completar validación"
-                                                    : "pendiente de implementar"}
+                                                  : c.cobertura ===
+                                                      "implementada"
+                                                    ? "implementado en el sistema"
+                                                    : c.cobertura === "parcial"
+                                                      ? "existente, requiere completar validación"
+                                                      : "pendiente de implementar"}
                                                 .
                                               </p>
                                               {c.revisionOperativa && (
                                                 <p>
-                                                  Revisión operativa pendiente
-                                                  antes de ofrecerla.
+                                                  Revisá la configuración y el
+                                                  circuito operativo antes de
+                                                  ofrecerla.
                                                 </p>
                                               )}
                                             </details>
                                           </th>
-                                          {planes.map((p) => (
+                                          {planesVisibles.map((p) => (
                                             <td key={p.id}>
                                               {c.base ? (
                                                 <Badge variant="secondary">
@@ -433,7 +456,7 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                             )}
                             {!visibles.length && (
                               <tr>
-                                <td colSpan={planes.length + 1}>
+                                <td colSpan={planesVisibles.length + 1}>
                                   No hay funciones que coincidan con estos
                                   filtros.
                                 </td>
@@ -446,7 +469,7 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                   )}
                   {pestana === "recursos" && (
                     <div className={styles.cards}>
-                      {planes.map((p) => (
+                      {planesVisibles.map((p) => (
                         <section
                           className={styles.card}
                           key={p.id}
@@ -574,15 +597,23 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                                 Sin cupo comercial en la propuesta.
                               </FieldDescription>
                             </Field>
-                            <Field>
-                              <FieldLabel>
-                                Precio del plan y de adicionales
-                              </FieldLabel>
-                              <FieldDescription>
-                                Por definir. La vinculación de precios actuales
-                                permanece en su propia pestaña.
-                              </FieldDescription>
-                            </Field>
+                            <PlanPreciosFields
+                              id={p.id}
+                              nombre={p.contenido.nombre}
+                              precios={p.contenido.precios}
+                              adicionales={p.contenido.adicionalesPermitidos}
+                              readonly={readonly}
+                              onChange={(precios) => editar(p.id, { precios })}
+                            />
+                            <PlanComercialFields
+                              id={p.id}
+                              nombre={p.contenido.nombre}
+                              comercial={p.contenido.comercial}
+                              readonly={readonly}
+                              onChange={(comercial) =>
+                                editar(p.id, { comercial })
+                              }
+                            />
                           </FieldGroup>
                         </section>
                       ))}
@@ -597,14 +628,12 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                       />
                       <Alert>
                         <ListChecks />
-                        <AlertTitle>
-                          Propuesta comercial en preparación
-                        </AlertTitle>
+                        <AlertTitle>Borradores y ofertas publicadas</AlertTitle>
                         <AlertDescription>
-                          Guardar conserva estos borradores. Para ofrecerlos
-                          faltan los precios, la publicación con versiones y
-                          completar los controles de acceso. Las empresas
-                          conservan su plan actual.
+                          Esta revisión evalúa los borradores en pantalla. En
+                          Versiones podés consultar, publicar y preparar la
+                          contratación de cada versión. Los cambios del borrador
+                          no modifican las ofertas ni los planes ya asignados.
                         </AlertDescription>
                       </Alert>
                       <div className={styles.cards}>
@@ -628,7 +657,7 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                               {r.revisionOperativa.length > 0 && (
                                 <details>
                                   <summary>
-                                    Funciones por validar operativamente
+                                    Funciones con revisión operativa
                                   </summary>
                                   <ul>
                                     {r.revisionOperativa.map((v) => (
@@ -653,6 +682,16 @@ export function PlanesView({ esAdmin, planesActuales, onSalidaChange }: Props) {
                         </AlertDescription>
                       </Alert>
                     </>
+                  )}
+                  {pestana === "versiones" && (
+                    <PlanesVersiones
+                      datos={datos}
+                      modificados={cambios.map((p) => p.id)}
+                      esAdmin={esAdmin}
+                      onRecargar={() =>
+                        cambios.length ? setRecargar(true) : void cargar()
+                      }
+                    />
                   )}
                   {errores.length > 0 && (
                     <Alert variant="destructive">

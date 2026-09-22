@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Archivo,
   ArchivoScope,
@@ -33,6 +39,9 @@ export class RecibosService {
     private readonly enlaces: EnlacesPublicosService,
     private readonly pdf: ReciboPdfService,
     private readonly empresa: DatosEmpresaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /**
@@ -152,6 +161,20 @@ export class RecibosService {
 
     const empresa = await this.empresa.paraDocumentos(cobro.tenantId);
     return {
+      pdfDisponible:
+        (await this.capacidades.incluida(cobro.tenantId, 'documentos_pdf')) ||
+        Boolean(
+          await this.prisma.archivo.findFirst({
+            where: {
+              tenantId: cobro.tenantId,
+              cobroId,
+              scope: ArchivoScope.COBRO,
+              generado: true,
+              estado: 'LISTO',
+            },
+            select: { id: true },
+          }),
+        ),
       numero: cobro.numeroRecibo,
       negocio,
       empresa,
@@ -186,12 +209,13 @@ export class RecibosService {
 
   /** Rehace el PDF y reemplaza el anterior. */
   async materializarPdf(cobroId: string, tenantId?: string): Promise<Archivo> {
-    const doc = await this.documento(cobroId, tenantId);
     const cobro = await this.prisma.cobro.findFirst({
-      where: { id: cobroId },
+      where: { id: cobroId, ...(tenantId ? { tenantId } : {}) },
       select: { tenantId: true },
     });
     if (!cobro) throw new NotFoundException('No se encontró el cobro.');
+    await this.capacidades.exigir(cobro.tenantId, 'documentos_pdf');
+    const doc = await this.documento(cobroId, cobro.tenantId);
 
     return this.archivos.materializar({
       tenantId: cobro.tenantId,
@@ -210,6 +234,15 @@ export class RecibosService {
    */
   materializarPdfEnSegundoPlano(cobroId: string): void {
     void this.materializarPdf(cobroId).catch((error: unknown) => {
+      if (error instanceof ForbiddenException) {
+        const respuesta = error.getResponse();
+        if (
+          typeof respuesta === 'object' &&
+          'code' in respuesta &&
+          respuesta.code === 'CAPACIDAD_NO_DISPONIBLE'
+        )
+          return;
+      }
       this.logger.warn(
         `No pude materializar el PDF del recibo de ${cobroId}: ${
           error instanceof Error ? error.message : String(error)

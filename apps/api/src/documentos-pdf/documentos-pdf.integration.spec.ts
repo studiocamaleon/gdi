@@ -4,6 +4,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ArchivosService } from '../archivos/archivos.service';
 import { PresupuestosService } from '../presupuestos/presupuestos.service';
+import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 import type { PresupuestoPdfDatos } from '../presupuestos/presupuesto-pdf.service';
 import { DocumentosPdfService, hashDatosPdf } from './documentos-pdf.service';
 import { DocumentosPdfWorker, PdfJob } from './documentos-pdf.worker';
@@ -160,7 +161,7 @@ describe('documentos PDF durables (PostgreSQL de test)', () => {
       {
         reservarParaPresupuesto: jest.fn().mockResolvedValue(undefined),
       } as never,
-      {} as never,
+      new FidelizacionService(prisma),
       documentos,
     );
   }

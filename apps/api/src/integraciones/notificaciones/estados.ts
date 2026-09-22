@@ -6,8 +6,10 @@
  */
 export const ESTADOS = {
   pendiente: 'pendiente',
+  reservada: 'wati_reservada',
+  incierta: 'wati_incierta',
   /**
-   * Reservada por un despachador que está hablando con Wati justo ahora.
+   * POST autorizado; puede haber sido recibido por Wati aunque falte la respuesta.
    * No es un estado de negocio: es el candado que evita el envío doble.
    */
   enviando: 'enviando',

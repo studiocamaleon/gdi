@@ -1,8 +1,8 @@
+import { contratoSuscripcion } from '../suscripciones/contrato-suscripcion';
 import {
   bloquearCupoUsuarios,
   exigirCupoUsuario,
 } from '../suscripciones/cupos-usuarios';
-import { incluyeImpresionDirecta } from '../suscripciones/capacidades-plan';
 import {
   BadRequestException,
   Injectable,
@@ -1197,17 +1197,15 @@ export class AuthService {
         periodoDesde: true,
         proximoCobro: true,
         plan: { select: { nombre: true, trialDias: true, featuresJson: true } },
+        planVersion: true,
       },
     });
     if (!suscripcion) return null;
 
     return {
-      planNombre: suscripcion.plan.nombre,
+      planNombre: contratoSuscripcion(suscripcion).nombre,
       capacidades: {
-        impresionDirecta: incluyeImpresionDirecta(
-          suscripcion.estado,
-          suscripcion.plan.featuresJson,
-        ),
+        impresionDirecta: suscripcion.estado === 'activa' && contratoSuscripcion(suscripcion).funciones.impresion_directa === true,
       },
       estado: suscripcion.estado,
       estadoProveedor: suscripcion.estadoProveedor,

@@ -1,10 +1,8 @@
-import { tieneCapacidad } from "@/lib/capacidades-server";
-import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import { CampanasView } from "@/components/comercial/campanas-view";
 import { listarCampanas, type CampanasListado } from "@/lib/campanas-api";
 import { getClientes } from "@/lib/clientes-api";
 import { getEmpleados } from "@/lib/empleados-api";
-import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +11,6 @@ export default async function CampanasPage({
 }: {
   searchParams: Promise<{ clienteId?: string }>;
 }) {
-  if (!(await tieneCapacidad("proyectos"))) return <FuncionNoIncluida />;
   const { clienteId } = await searchParams;
   const empty: CampanasListado = {
     data: [],
@@ -27,7 +24,7 @@ export default async function CampanasPage({
     listarCampanas({ limit: 100, clienteId }).catch(() => empty),
     getClientes({ limit: 200 }).catch(() => []),
     getEmpleados().catch(() => []),
-    tienePermiso("comercial.gestionar"),
+    puedeConfigurar("proyectos", "comercial.gestionar"),
   ]);
   return (
     <CampanasView

@@ -1,3 +1,5 @@
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -44,9 +46,36 @@ export class CobrosService {
     private readonly recibos: RecibosService,
     private readonly avisos: NotificacionesCobrosService,
     private readonly fidelizacion: FidelizacionService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
+
+  async puedeRegistrarEnOrden(
+    auth: CurrentAuth,
+    ordenId?: string,
+  ): Promise<boolean> {
+    if (await this.capacidades.puedeOperar(auth.tenantId, 'cobros'))
+      return true;
+    if (!ordenId) return false;
+    // La continuidad conserva los permisos y el estado de acceso de la empresa.
+    await this.capacidades.exigir(auth.tenantId, 'identidad');
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId: auth.tenantId },
+      select: {
+        estado: true,
+        cobrosHabilitadosEmision: true,
+        total: true,
+        cobradoTotal: true,
+      },
+    });
+    return (
+      !!orden &&
+      !['borrador', 'cancelada'].includes(orden.estado) &&
+      orden.cobrosHabilitadosEmision !== false &&
+      Number(orden.total) > Number(orden.cobradoTotal)
+    );
+  }
 
   /** Cálculo canónico de las tres cifras. */
   calcularCifras(input: {
@@ -126,6 +155,8 @@ export class CobrosService {
       });
       if (existente) return this.findOne(auth, existente.id);
     }
+    if (!(await this.puedeRegistrarEnOrden(auth, payload.ordenId)))
+      await this.capacidades.exigir(auth.tenantId, 'cobros');
     const [metodo, cuenta, orden, cliente] = await Promise.all([
       this.prisma.metodoPago.findFirst({
         where: {
@@ -305,6 +336,60 @@ export class CobrosService {
     let cobroId: string;
     try {
       cobroId = await ejecutarTransaccionFondos(this.prisma, async (tx) => {
+        await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+          'identidad',
+        ]);
+        if (esCheque) {
+          await this.capacidades.exigir(auth.tenantId, 'valores', tx);
+          await exigirContinuidadCompromiso(tx, auth.tenantId, [
+            'valores',
+            'tesoreria',
+          ]);
+        }
+        if (!(await this.capacidades.incluida(auth.tenantId, 'cobros', tx))) {
+          await this.capacidades.exigir(auth.tenantId, 'identidad', tx);
+          if (!orden)
+            await this.capacidades.exigir(auth.tenantId, 'cobros', tx);
+          const [pendiente] = await tx.$queryRaw<
+            Array<{
+              total: Prisma.Decimal;
+              cobradoTotal: Prisma.Decimal;
+              estado: string;
+              cobrosHabilitadosEmision: boolean;
+            }>
+          >`
+            SELECT "total", "cobradoTotal", "estado", "cobrosHabilitadosEmision" FROM "OrdenTrabajo"
+            WHERE "id" = ${orden!.id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE
+          `;
+          if (payload.idempotencyKey) {
+            const yaRegistrado = await tx.cobro.findUnique({
+              where: {
+                tenantId_idempotencyKey: {
+                  tenantId: auth.tenantId,
+                  idempotencyKey: payload.idempotencyKey,
+                },
+              },
+              select: { id: true },
+            });
+            if (yaRegistrado) return yaRegistrado.id;
+          }
+          const saldo = pendiente
+            ? Math.max(
+                0,
+                Number(pendiente.total) - Number(pendiente.cobradoTotal),
+              )
+            : 0;
+          if (
+            !pendiente?.cobrosHabilitadosEmision ||
+            ['borrador', 'cancelada'].includes(pendiente.estado) ||
+            saldo <= 0 ||
+            payload.montoBruto > saldo + 0.001
+          )
+            throw new BadRequestException(
+              'Sin la función de cobros sólo se puede cancelar el saldo pendiente de una orden emitida previamente.',
+            );
+        }
+
         // El número de recibo se asigna acá y no después: un cobro registrado
         // sin comprobante sería un cobro sin respaldo para el cliente.
         const numeroRecibo = await this.recibos.numerar(
@@ -561,7 +646,6 @@ export class CobrosService {
 
   /** Los cobros electrónicos que todavía no acreditaron, con su fecha. */
   async pendientesAcreditacion(auth: CurrentAuth) {
-    await this.barrerVencidos(auth.tenantId);
     const cobros = await this.prisma.cobro.findMany({
       where: {
         tenantId: auth.tenantId,
@@ -602,48 +686,59 @@ export class CobrosService {
   /**
    * Acredita los cobros electrónicos cuya fecha estimada ya pasó.
    * Idempotente y seguro ante concurrencia (el UPDATE condicional decide
-   * quién gana), así que lo pueden llamar a la vez el cron y una lectura
-   * de Tesorería. Los cheques quedan afuera: acreditan vía su Valor.
+   * quién gana). Lo ejecuta el cron; consultar el historial no mueve fondos.
+   * Los cheques quedan afuera: acreditan vía su Valor.
    * @param tenantId acota a un tenant; sin él barre todos (cron nocturno).
    */
   async barrerVencidos(tenantId?: string) {
-    const vencidos = await this.prisma.cobro.findMany({
-      where: {
-        ...(tenantId ? { tenantId } : {}),
-        anuladoEl: null,
-        estadoAcreditacion: 'pendiente',
-        fechaAcreditacionEstimada: { not: null, lte: new Date() },
-        cuentaDestinoId: { not: null },
-        metodoPago: { tipo: { not: 'cheque_echeq' } },
-      },
-      select: {
-        id: true,
-        tenantId: true,
-        cuentaDestinoId: true,
-        disponibleReal: true,
-        fechaAcreditacionEstimada: true,
-        orden: { select: { id: true, numero: true } },
-      },
-      take: 500,
-    });
-
+    const hasta = new Date();
+    let ultimoId: string | undefined;
     let acreditados = 0;
-    for (const cobro of vencidos) {
-      if (!cobro.cuentaDestinoId) continue;
-      const ok = await this.acreditarUno({
-        id: cobro.id,
-        tenantId: cobro.tenantId,
-        cuentaDestinoId: cobro.cuentaDestinoId,
-        disponibleReal: Number(cobro.disponibleReal),
-        ordenId: cobro.orden?.id ?? null,
-        ordenNumero: cobro.orden?.numero ?? null,
-        // El movimiento lleva la fecha en que la plata realmente entró,
-        // no la del barrido: si el job corrió tarde, el saldo corrido
-        // igual queda ordenado.
-        fecha: cobro.fechaAcreditacionEstimada ?? undefined,
-        actor: { userId: null, nombre: 'Sistema' },
+    // Avanzar también sobre las empresas en sólo lectura: de lo contrario sus
+    // primeros 500 pendientes podrían postergar indefinidamente a las demás.
+    for (;;) {
+      const vencidos = await this.prisma.cobro.findMany({
+        where: {
+          ...(tenantId ? { tenantId } : {}),
+          anuladoEl: null,
+          estadoAcreditacion: 'pendiente',
+          fechaAcreditacionEstimada: { not: null, lte: hasta },
+          ...(ultimoId ? { id: { gt: ultimoId } } : {}),
+          cuentaDestinoId: { not: null },
+          metodoPago: { tipo: { not: 'cheque_echeq' } },
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          cuentaDestinoId: true,
+          disponibleReal: true,
+          fechaAcreditacionEstimada: true,
+          orden: { select: { id: true, numero: true } },
+        },
+        orderBy: { id: 'asc' },
+        take: 500,
       });
-      if (ok) acreditados += 1;
+
+      for (const cobro of vencidos) {
+        if (!cobro.cuentaDestinoId) continue;
+        const ok = await this.acreditarUno({
+          id: cobro.id,
+          tenantId: cobro.tenantId,
+          cuentaDestinoId: cobro.cuentaDestinoId,
+          disponibleReal: Number(cobro.disponibleReal),
+          ordenId: cobro.orden?.id ?? null,
+          ordenNumero: cobro.orden?.numero ?? null,
+          // El movimiento lleva la fecha en que la plata realmente entró,
+          // no la del barrido: si el job corrió tarde, el saldo corrido
+          // igual queda ordenado.
+          fecha: cobro.fechaAcreditacionEstimada ?? undefined,
+          actor: { userId: null, nombre: 'Sistema' },
+          automatico: true,
+        });
+        if (ok) acreditados += 1;
+      }
+      if (vencidos.length < 500) break;
+      ultimoId = vencidos[vencidos.length - 1].id;
     }
     return acreditados;
   }
@@ -661,8 +756,16 @@ export class CobrosService {
     ordenNumero: string | null;
     fecha?: Date;
     actor: ActorFondos;
+    automatico?: boolean;
   }) {
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await bloquearCupoUsuarios(tx, cobro.tenantId);
+      if (
+        cobro.automatico &&
+        !(await this.capacidades.puedeOperar(cobro.tenantId, 'identidad', tx))
+      )
+        return false;
+      await this.capacidades.exigir(cobro.tenantId, 'identidad', tx);
       const { count } = await tx.cobro.updateMany({
         where: {
           id: cobro.id,
@@ -710,6 +813,9 @@ export class CobrosService {
   async anular(auth: CurrentAuth, id: string, payload: AnularCobroDto) {
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       const cobro = await tx.cobro.findFirst({
         where: { id, tenantId: auth.tenantId },
         include: {
@@ -724,6 +830,16 @@ export class CobrosService {
         return { ok: true, idempotente: true };
       }
       const valor = cobro.valores[0];
+      if (
+        valor &&
+        ['cartera', 'depositado', 'acreditado'].includes(valor.estado)
+      ) {
+        await this.capacidades.exigir(auth.tenantId, 'valores', tx);
+        await exigirContinuidadCompromiso(tx, auth.tenantId, [
+          'valores',
+          'tesoreria',
+        ]);
+      }
       if (valor?.estado === 'endosado') {
         throw new ConflictException(
           'El cheque fue endosado a un proveedor. Primero anulá ese pago para devolverlo a cartera.',

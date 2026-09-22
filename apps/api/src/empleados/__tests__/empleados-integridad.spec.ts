@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { RolSistema } from '@prisma/client';
 
@@ -84,7 +85,7 @@ describe('integridad de empleados', () => {
     const query = new EmpleadosQueryDto();
     query.q = 'Ana';
 
-    await new EmpleadosService(prisma, authService).findAll(AUTH, query);
+    await new EmpleadosService(prisma, authService, capacidadesDePrueba()).findAll(AUTH, query);
 
     const consulta = JSON.stringify(findMany.mock.calls[0]);
     expect(consulta).toContain(`"tenantId":"${AUTH.tenantId}"`);
@@ -96,7 +97,7 @@ describe('integridad de empleados', () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const prisma = { empleado: { findMany } } as unknown as PrismaService;
 
-    await new EmpleadosService(prisma, authService).opciones(AUTH);
+    await new EmpleadosService(prisma, authService, capacidadesDePrueba()).opciones(AUTH);
 
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -123,12 +124,12 @@ describe('integridad de empleados', () => {
         update,
       },
       empleadoEvento: { create: createEvento },
-    } as unknown as PrismaService & { $transaction: jest.Mock };
+    } as unknown as Omit<PrismaService, '$transaction'> & { $transaction: jest.Mock };
     prisma.$transaction = jest.fn(
       (callback: (tx: PrismaService) => Promise<unknown>) => callback(prisma),
     );
 
-    await new EmpleadosService(prisma, authService).fijarEstadoMuchos(
+    await new EmpleadosService(prisma, authService, capacidadesDePrueba()).fijarEstadoMuchos(
       AUTH,
       ['e1'],
       false,
@@ -146,7 +147,7 @@ describe('integridad de empleados', () => {
   });
 
   it('rechaza fechas incoherentes y porcentajes fuera de rango', () => {
-    const service = new EmpleadosService({} as PrismaService, authService);
+    const service = new EmpleadosService({} as PrismaService, authService, capacidadesDePrueba());
     const normalizePayload = Reflect.get(service, 'normalizePayload') as (
       input: Record<string, unknown>,
     ) => unknown;
@@ -173,13 +174,13 @@ describe('integridad de empleados', () => {
         findFirst: jest.fn().mockResolvedValue(empleado()),
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
-    } as unknown as PrismaService & { $transaction: jest.Mock };
+    } as unknown as Omit<PrismaService, '$transaction'> & { $transaction: jest.Mock };
     prisma.$transaction = jest.fn(
       (callback: (tx: PrismaService) => Promise<unknown>) => callback(prisma),
     );
 
     await expect(
-      new EmpleadosService(prisma, authService).update(AUTH, 'e1', {
+      new EmpleadosService(prisma, authService, capacidadesDePrueba()).update(AUTH, 'e1', {
         ...payload,
         updatedAt: FECHA.toISOString(),
       }),

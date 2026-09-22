@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -11,7 +12,12 @@ import { normalizarCalendarioAlmacenado, parseCalendario } from './calendario';
 
 @Injectable()
 export class EquiposProduccionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async listar(tenantId: string) {
     const equipos = await this.prisma.equipoProduccion.findMany({
@@ -25,6 +31,7 @@ export class EquiposProduccionService {
   }
 
   async guardar(tenantId: string, dto: EquipoProduccionDto, id?: string) {
+    await this.capacidades.exigir(tenantId, 'equipos_produccion');
     const calendario = parseCalendario(dto.calendario);
     if (!dto.nombre.trim() || !calendario)
       throw new BadRequestException(

@@ -1,12 +1,10 @@
-import { tieneCapacidad } from "@/lib/capacidades-server";
-import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import { notFound } from "next/navigation";
 import { CampanaDetalleView } from "@/components/comercial/campana-detalle-view";
 import { ApiError } from "@/lib/api";
 import { listarArchivos } from "@/lib/archivos-api";
 import { getCampana } from "@/lib/campanas-api";
 import { getEmpleados } from "@/lib/empleados-api";
-import { tienePermiso } from "@/lib/permisos-server";
 import { getDesarrolloCampana } from "@/lib/desarrollo-documental-api";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +14,6 @@ export default async function CampanaDetallePage({
 }: {
   params: Promise<{ campanaId: string }>;
 }) {
-  if (!(await tieneCapacidad("proyectos"))) return <FuncionNoIncluida />;
   const { campanaId } = await params;
   let campana;
   try {
@@ -28,7 +25,7 @@ export default async function CampanaDetallePage({
   const [archivos, empleados, canManage, desarrollo] = await Promise.all([
     listarArchivos("CAMPANA", campanaId).catch(() => []),
     getEmpleados().catch(() => []),
-    tienePermiso("comercial.gestionar"),
+    puedeConfigurar("proyectos", "comercial.gestionar"),
     getDesarrolloCampana(campanaId).catch(() => ({ maestros: [] })),
   ]);
   return (

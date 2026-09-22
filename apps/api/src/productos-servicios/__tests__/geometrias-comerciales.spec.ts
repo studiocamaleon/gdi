@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { BadRequestException } from '@nestjs/common';
 import {
   leerGeometriasComerciales,
@@ -135,7 +136,7 @@ describe('geometrías comerciales', () => {
         ]),
       },
     };
-    const servicio = new ProductosService(prisma as never);
+    const servicio = new ProductosService(prisma as never, capacidadesDePrueba());
 
     await expect(
       servicio.actualizarProducto('tenant-1', 'producto-padre', {

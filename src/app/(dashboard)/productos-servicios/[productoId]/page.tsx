@@ -1,3 +1,4 @@
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -8,7 +9,6 @@ import {
   type ProductoWorkspaceTab,
 } from "@/components/productos-servicios/producto-workspace";
 import { ApiError } from "@/lib/api";
-import { tienePermiso } from "@/lib/permisos-server";
 import {
   getCargosDirectosCatalogo,
   getCatalogoFamilias,
@@ -106,7 +106,7 @@ async function ProductoDetalleContent({
         : Promise.resolve(undefined),
       getRecetasProducto(productoId),
       getEstadoPublicacionProducto(productoId),
-      tienePermiso("costos.gestionar"),
+      puedeConfigurar("productos", "costos.gestionar"),
     ]);
 
     return (

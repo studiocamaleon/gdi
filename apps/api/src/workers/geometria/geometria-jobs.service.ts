@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { esPreparacionNesting, timeoutOpenNestMs } from './politica-busqueda';
 import {
   BadRequestException,
@@ -76,6 +77,7 @@ export class GeometriaJobsService implements OnApplicationShutdown {
   constructor(
     private readonly control: ControlTrabajosGeometriaService,
     private readonly capacidad: CapacidadGeometriaService,
+    private readonly capacidadesPlan: CapacidadesEmpresaService,
     @Optional() private readonly guardados?: NestingsGuardadosService,
     @Optional() private readonly biblioteca?: BibliotecaPatronesService,
   ) {}
@@ -84,9 +86,31 @@ export class GeometriaJobsService implements OnApplicationShutdown {
     tenantId: string;
     dto: CrearTrabajoNestingOpenNestDto;
   }): Promise<VistaTrabajoGeometria> {
+    await this.capacidadesPlan.exigirTodas(input.tenantId, [
+      'analisis_vectorial',
+      'aprovechamiento_cotizacion',
+      'nesting_irregular',
+    ]);
+    return this.encolar(input, false);
+  }
+
+  /** El origen interno no concede la optimización irregular al contrato. */
+  async crearParaCotizacion(input: {
+    tenantId: string;
+    dto: CrearTrabajoNestingOpenNestDto;
+  }) {
+    await this.capacidadesPlan.exigir(input.tenantId, 'nesting_irregular');
+    return this.encolar(input, true);
+  }
+
+  private async encolar(
+    input: { tenantId: string; dto: CrearTrabajoNestingOpenNestDto },
+    calculoCotizacion: boolean,
+  ): Promise<VistaTrabajoGeometria> {
     const correlationId = randomUUID();
     const data: NestingIrregularOpenNestData = {
       schemaVersion: 1,
+      calculoCotizacion,
       tenantId: input.tenantId,
       correlationId,
       solicitadoEl: new Date().toISOString(),
@@ -503,6 +527,7 @@ export function idTrabajo(
     .update('\0')
     .update(
       JSON.stringify({
+        calculoCotizacion: data.calculoCotizacion === true,
         versionPoliticaOrientacion: VERSION_POLITICA_ORIENTACION_GRAFONEST,
         versionPoliticaBusqueda: VERSION_POLITICA_BUSQUEDA_GRAFONEST,
         motor: data.motor,

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 /**
  * Pasos propios del TENANT: instancias de una plantilla del catálogo del
  * sistema (docs/pasos-tenant-por-plantilla-diseno.md).
@@ -77,6 +78,9 @@ export class PasosTenantService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configPasos: ConfigPasosService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /** Boot: TODAS las instancias (de todos los tenants, incluidas las
@@ -153,6 +157,7 @@ export class PasosTenantService implements OnModuleInit {
   }
 
   async crear(tenantId: string, input: UpsertPasoTenantInput) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const errores = validarPasoTenant(input);
     if (errores.length > 0) {
       throw new BadRequestException(errores.map((e) => e.mensaje));
@@ -195,6 +200,7 @@ export class PasosTenantService implements OnModuleInit {
     id: string,
     input: UpsertProductoConfigPasoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const existente = await this.prisma.pasoTenant.findFirst({
       where: { id, tenantId },
     });
@@ -230,6 +236,7 @@ export class PasosTenantService implements OnModuleInit {
     familiaCodigo: string,
     input: UpsertProductoConfigPasoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     if (!FAMILIAS[familiaCodigo as keyof typeof FAMILIAS]) {
       throw new NotFoundException('El paso de Grafo no existe.');
     }
@@ -323,6 +330,7 @@ export class PasosTenantService implements OnModuleInit {
     id: string,
     input: Partial<UpsertPasoTenantInput>,
   ) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const existente = await this.prisma.pasoTenant.findFirst({
       where: { id, tenantId },
     });
@@ -403,6 +411,7 @@ export class PasosTenantService implements OnModuleInit {
   }
 
   async eliminar(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const existente = await this.prisma.pasoTenant.findFirst({
       where: { id, tenantId },
     });

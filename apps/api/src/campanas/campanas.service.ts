@@ -1,3 +1,5 @@
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   progresoDeOrden,
   progresoDeCampana,
@@ -110,6 +112,9 @@ export class CampanasService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly eventosSistema?: EventosSistemaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async listar(auth: CurrentAuth, query: CampanasQueryDto) {
@@ -278,6 +283,12 @@ export class CampanasService {
     const ahora = new Date();
 
     const creada = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['proyectos'],
+        ['proyectos'],
+      );
       const anio = ahora.getFullYear();
       const contador = await tx.proyectoCampanaContador.upsert({
         where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
@@ -388,6 +399,12 @@ export class CampanasService {
       data.observaciones = this.texto(dto.observaciones);
     const actorNombre = await this.actorNombre(auth);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['proyectos'],
+        [],
+      );
       const resultado = await tx.proyectoCampana.updateMany({
         where: {
           id,
@@ -427,17 +444,23 @@ export class CampanasService {
     id: string,
     dto: CambiarEstadoCampanaDto,
   ) {
-    const actual = await this.buscar(auth, id);
-    if (actual.estado === dto.estado) return this.detalle(auth, id);
-    if (
-      !transicionCampanaPermitida(actual.estado as CampanaEstado, dto.estado)
-    ) {
-      throw new BadRequestException(
-        `No se puede pasar una campaña de ${actual.estado} a ${dto.estado}.`,
-      );
-    }
     const actorNombre = await this.actorNombre(auth);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'proyectos',
+      ]);
+      const actual = await this.buscar(auth, id, tx);
+      if (actual.estado === dto.estado) return;
+      if (
+        !transicionCampanaPermitida(actual.estado as CampanaEstado, dto.estado)
+      ) {
+        throw new BadRequestException(
+          `No se puede pasar una campaña de ${actual.estado} a ${dto.estado}.`,
+        );
+      }
+      if (dto.estado === 'activo') {
+        await exigirContinuidadCompromiso(tx, auth.tenantId, ['proyectos']);
+      }
       const cambio = await tx.proyectoCampana.updateMany({
         where: {
           id,
@@ -480,6 +503,14 @@ export class CampanasService {
     });
     const actorNombre = await this.actorNombre(auth);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['proyectos'],
+        !dto.estado || ['pendiente', 'en_curso'].includes(dto.estado)
+          ? ['proyectos']
+          : [],
+      );
       await tx.proyectoCampanaHito.create({
         data: {
           tenantId: auth.tenantId,
@@ -554,6 +585,14 @@ export class CampanasService {
     }
     const actorNombre = await this.actorNombre(auth);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['proyectos'],
+        dto.estado && ['pendiente', 'en_curso'].includes(dto.estado)
+          ? ['proyectos']
+          : [],
+      );
       const cambio = await tx.proyectoCampanaHito.updateMany({
         where: {
           id: hitoId,
@@ -598,6 +637,12 @@ export class CampanasService {
     await this.validarReferencias(auth, { equipo: dto.equipo });
     const actorNombre = await this.actorNombre(auth);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['proyectos'],
+        [],
+      );
       await tx.proyectoCampanaMiembro.deleteMany({
         where: { proyectoCampanaId: campanaId, tenantId: auth.tenantId },
       });
@@ -710,16 +755,27 @@ export class CampanasService {
     }
     const actorNombre = await this.actorNombre(auth);
     await this.prisma.$transaction(async (tx) => {
-      if (tipo === 'cotizacion') {
-        await tx.cotizacion.updateMany({
-          where: { id: documentoId, tenantId: auth.tenantId },
-          data: { proyectoCampanaId: agregar ? campanaId : null },
-        });
-      } else {
-        await tx.ordenTrabajo.updateMany({
-          where: { id: documentoId, tenantId: auth.tenantId },
-          data: { proyectoCampanaId: agregar ? campanaId : null },
-        });
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['proyectos'],
+        agregar ? ['proyectos'] : [],
+      );
+      const where = {
+        id: documentoId,
+        tenantId: auth.tenantId,
+        clienteId: documento.clienteId,
+        proyectoCampanaId: documento.proyectoCampanaId,
+      };
+      const data = { proyectoCampanaId: agregar ? campanaId : null };
+      const cambio =
+        tipo === 'cotizacion'
+          ? await tx.cotizacion.updateMany({ where, data })
+          : await tx.ordenTrabajo.updateMany({ where, data });
+      if (cambio.count !== 1) {
+        throw new ConflictException(
+          'El documento cambió de cliente o campaña. Actualizá antes de volver a vincularlo.',
+        );
       }
       await tx.proyectoCampanaEvento.create({
         data: this.evento(
@@ -745,8 +801,12 @@ export class CampanasService {
     return this.detalle(auth, campanaId);
   }
 
-  private async buscar(auth: CurrentAuth, id: string) {
-    const campana = await this.prisma.proyectoCampana.findFirst({
+  private async buscar(
+    auth: CurrentAuth,
+    id: string,
+    db: Pick<Prisma.TransactionClient, 'proyectoCampana'> = this.prisma,
+  ) {
+    const campana = await db.proyectoCampana.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
     if (!campana) throw new NotFoundException('La campaña no existe.');

@@ -14,6 +14,9 @@ import type { ClaveCapacidad } from './evaluador-capacidades';
 
 const CLAVE = 'capacidad:requerida';
 const ALGUNA = 'capacidad:alguna';
+const TODAS = 'capacidad:todas';
+export const RequiereCapacidades = (...claves: ClaveCapacidad[]) =>
+  applyDecorators(SetMetadata(TODAS, claves), UseGuards(CapacidadGuard));
 export const RequiereAlgunaCapacidad = (...claves: ClaveCapacidad[]) =>
   applyDecorators(SetMetadata(ALGUNA, claves), UseGuards(CapacidadGuard));
 export const RequiereCapacidad = (clave: ClaveCapacidad) =>
@@ -29,7 +32,10 @@ export class CapacidadGuard implements CanActivate {
     const claves = [
       ...new Set(
         [context.getClass(), context.getHandler()]
-          .map((target) => this.reflector.get<ClaveCapacidad>(CLAVE, target))
+          .flatMap((target) => [
+            this.reflector.get<ClaveCapacidad>(CLAVE, target),
+            ...(this.reflector.get<ClaveCapacidad[]>(TODAS, target) ?? []),
+          ])
           .filter((clave): clave is ClaveCapacidad => Boolean(clave)),
       ),
     ];

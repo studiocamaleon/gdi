@@ -38,6 +38,12 @@ import {
   SolicitarAprobacionDocumentoDto,
 } from './dto/desarrollo-documental.dto';
 
+type AmbitoDocumento = {
+  tenantId: string;
+  proyectoCampanaId: string | null;
+  ordenId?: string | null;
+};
+
 const INCLUDE_MAESTRO = {
   revisionAprobada: { select: { id: true, numero: true } },
   revisionLiberada: {
@@ -122,13 +128,14 @@ export class DesarrolloDocumentalService {
     private readonly enlaces: EnlacesPublicosService,
     private readonly archivos: ArchivosService,
     @Optional() private readonly eventosSistema?: EventosSistemaService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /**
    * Convierte los requisitos declarativos de la receta congelada en documentos
-   * reales de la campaña y, cuando corresponde, en gates de la OT. Es
+   * reales de la campaña o la OT y, cuando corresponde, en controles de la OT. Es
    * idempotente: guardar/emitir más de una vez reutiliza maestro y gate.
    */
   async materializarRequisitosReceta(
@@ -136,21 +143,23 @@ export class DesarrolloDocumentalService {
     args: {
       tenantId: string;
       ordenId: string;
-      proyectoCampanaId: string;
+      proyectoCampanaId?: string | null;
       actorUserId?: string | null;
       actorNombre: string;
     },
   ) {
-    if (!(await this.capacidades.incluida(args.tenantId, 'aprobacion_arte', tx))) return;
+    if (
+      !(await this.capacidades.incluida(args.tenantId, 'aprobacion_arte', tx))
+    )
+      return;
     const orden = await tx.ordenTrabajo.findFirst({
       where: {
         id: args.ordenId,
         tenantId: args.tenantId,
-        proyectoCampanaId: args.proyectoCampanaId,
+        proyectoCampanaId: args.proyectoCampanaId ?? null,
       },
       select: {
         items: {
-          where: { recetaRevisionId: { not: null } },
           select: {
             id: true,
             codigo: true,
@@ -168,6 +177,28 @@ export class DesarrolloDocumentalService {
       },
     });
     if (!orden) throw new NotFoundException('Orden o campaña inexistente.');
+    const tieneRequisitos = orden.items.some(
+      (item) => item.recetaRevision?.documentos.length,
+    );
+    if (
+      !tieneRequisitos &&
+      !(await tx.gateProduccionDocumento.findFirst({
+        where: {
+          tenantId: args.tenantId,
+          ordenId: args.ordenId,
+          recetaDocumentoId: { not: null },
+          activo: true,
+        },
+        select: { id: true },
+      }))
+    )
+      return;
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      args.tenantId,
+      ['aprobacion_arte'],
+      tieneRequisitos ? ['aprobacion_arte'] : [],
+    );
 
     let documentosCreados = 0;
     let gatesCreados = 0;
@@ -189,13 +220,21 @@ export class DesarrolloDocumentalService {
       for (const requisito of requisitos) {
         const nombre = `${item.codigo} · ${requisito.nombre}`.slice(0, 180);
         const existente = await tx.archivoMaestro.findUnique({
-          where: {
-            tenantId_proyectoCampanaId_nombre: {
-              tenantId: args.tenantId,
-              proyectoCampanaId: args.proyectoCampanaId,
-              nombre,
-            },
-          },
+          where: args.proyectoCampanaId
+            ? {
+                tenantId_proyectoCampanaId_nombre: {
+                  tenantId: args.tenantId,
+                  proyectoCampanaId: args.proyectoCampanaId,
+                  nombre,
+                },
+              }
+            : {
+                tenantId_ordenId_nombre: {
+                  tenantId: args.tenantId,
+                  ordenId: args.ordenId,
+                  nombre,
+                },
+              },
           select: { id: true },
         });
         const maestro =
@@ -203,7 +242,8 @@ export class DesarrolloDocumentalService {
           (await tx.archivoMaestro.create({
             data: {
               tenantId: args.tenantId,
-              proyectoCampanaId: args.proyectoCampanaId,
+              proyectoCampanaId: args.proyectoCampanaId ?? null,
+              ordenId: args.proyectoCampanaId ? null : args.ordenId,
               nombre,
               proposito: requisito.proposito,
               etapa: requisito.etapa,
@@ -273,7 +313,23 @@ export class DesarrolloDocumentalService {
       select: { id: true },
     });
     if (!campana) throw new NotFoundException('Campaña no encontrada.');
-    return this.listar(campanaId);
+    return this.listar({
+      tenantId: auth.tenantId,
+      proyectoCampanaId: campanaId,
+    });
+  }
+
+  async listarOrden(auth: CurrentAuth, ordenId: string) {
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId: auth.tenantId },
+      select: { id: true },
+    });
+    if (!orden) throw new NotFoundException('Orden no encontrada.');
+    return this.listar({
+      tenantId: auth.tenantId,
+      proyectoCampanaId: null,
+      ordenId,
+    });
   }
 
   async estadoOrden(auth: CurrentAuth, ordenId: string) {
@@ -338,20 +394,42 @@ export class DesarrolloDocumentalService {
   }
 
   async crearMaestro(auth: CurrentAuth, dto: CrearArchivoMaestroDto) {
-    const campana = await this.prisma.proyectoCampana.findFirst({
-      where: { id: dto.proyectoCampanaId, tenantId: auth.tenantId },
-      select: { id: true },
-    });
-    if (!campana) throw new NotFoundException('Campaña no encontrada.');
+    await this.capacidades.exigir(auth.tenantId, 'aprobacion_arte');
+    if (!!dto.proyectoCampanaId === !!dto.ordenId)
+      throw new BadRequestException(
+        'Indicá una OT o una campaña, sin combinar ambas.',
+      );
+    const ambito: AmbitoDocumento = {
+      tenantId: auth.tenantId,
+      proyectoCampanaId: dto.proyectoCampanaId ?? null,
+      ordenId: dto.ordenId ?? null,
+    };
+    const entidad = dto.proyectoCampanaId
+      ? await this.prisma.proyectoCampana.findFirst({
+          where: { id: dto.proyectoCampanaId, tenantId: auth.tenantId },
+          select: { id: true },
+        })
+      : await this.prisma.ordenTrabajo.findFirst({
+          where: { id: dto.ordenId, tenantId: auth.tenantId },
+          select: { id: true },
+        });
+    if (!entidad) throw new NotFoundException('OT o campaña no encontrada.');
     const nombre = dto.nombre.trim();
     if (!nombre) throw new BadRequestException('El nombre es obligatorio.');
     const actor = this.actor(auth);
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['aprobacion_arte'],
+          ['aprobacion_arte'],
+        );
         await tx.archivoMaestro.create({
           data: {
             tenantId: auth.tenantId,
-            proyectoCampanaId: campana.id,
+            proyectoCampanaId: ambito.proyectoCampanaId,
+            ordenId: ambito.ordenId,
             nombre,
             proposito: dto.proposito,
             etapa: dto.etapa,
@@ -364,7 +442,7 @@ export class DesarrolloDocumentalService {
         await this.evento(
           tx,
           auth.tenantId,
-          campana.id,
+          ambito,
           actor,
           {
             tipo: 'archivo_maestro_creado',
@@ -377,12 +455,12 @@ export class DesarrolloDocumentalService {
     } catch (error) {
       if (this.esUnico(error)) {
         throw new ConflictException(
-          'Ya existe un documento con ese nombre en la campaña.',
+          'Ya existe un documento con ese nombre en esta OT o campaña.',
         );
       }
       throw error;
     }
-    return this.listar(campana.id);
+    return this.listar(ambito);
   }
 
   async crearRevision(
@@ -390,12 +468,19 @@ export class DesarrolloDocumentalService {
     maestroId: string,
     dto: CrearRevisionArchivoDto,
   ) {
-    const maestro = await this.maestro(maestroId);
+    const maestro = await this.maestro(auth.tenantId, maestroId);
     const archivo = await this.prisma.archivo.findFirst({
       where: {
         id: dto.archivoId,
         tenantId: auth.tenantId,
-        proyectoCampanaId: maestro.proyectoCampanaId,
+        ...(maestro.proyectoCampanaId
+          ? { proyectoCampanaId: maestro.proyectoCampanaId }
+          : {
+              OR: [
+                { ordenId: maestro.ordenId },
+                { ordenItem: { ordenId: maestro.ordenId! } },
+              ],
+            }),
         estado: ArchivoEstado.LISTO,
         generado: false,
       },
@@ -403,17 +488,23 @@ export class DesarrolloDocumentalService {
     });
     if (!archivo) {
       throw new BadRequestException(
-        'El archivo debe ser un adjunto vigente de esta campaña.',
+        'El archivo debe ser un adjunto vigente de esta OT o campaña.',
       );
     }
     if (!archivo.hash) {
       throw new BadRequestException(
-        'El archivo no tiene hash SHA-256. Volvé a subirlo como revisión controlada.',
+        'Este archivo se subió sin control de versiones. Volvé a subirlo desde Archivos para incorporarlo como revisión.',
       );
     }
     const actor = this.actor(auth);
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['aprobacion_arte'],
+          ['aprobacion_arte'],
+        );
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${maestro.id}))`;
         const ultima = await tx.archivoRevision.aggregate({
           where: { archivoMaestroId: maestro.id },
@@ -435,7 +526,7 @@ export class DesarrolloDocumentalService {
         await this.evento(
           tx,
           auth.tenantId,
-          maestro.proyectoCampanaId,
+          maestro,
           actor,
           {
             tipo: 'revision_documental_creada',
@@ -453,7 +544,7 @@ export class DesarrolloDocumentalService {
       }
       throw error;
     }
-    return this.listar(maestro.proyectoCampanaId);
+    return this.listar(maestro);
   }
 
   async solicitar(
@@ -461,7 +552,7 @@ export class DesarrolloDocumentalService {
     revisionId: string,
     dto: SolicitarAprobacionDocumentoDto,
   ) {
-    const revision = await this.revision(revisionId);
+    const revision = await this.revision(auth.tenantId, revisionId);
     if (revision.estado === EstadoRevisionArchivo.OBSOLETA) {
       throw new BadRequestException(
         'Una revisión obsoleta no puede enviarse a aprobación.',
@@ -501,6 +592,15 @@ export class DesarrolloDocumentalService {
     }
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['aprobacion_arte'],
+          ['aprobacion_arte'],
+        );
+        const vigente = await this.revision(auth.tenantId, revisionId, tx);
+        if (vigente.estado === EstadoRevisionArchivo.OBSOLETA)
+          throw new ConflictException('La revisión quedó obsoleta.');
         await tx.solicitudAprobacionDocumento.create({
           data: {
             tenantId: auth.tenantId,
@@ -522,7 +622,7 @@ export class DesarrolloDocumentalService {
         await this.evento(
           tx,
           auth.tenantId,
-          revision.maestro.proyectoCampanaId,
+          revision.maestro,
           actor,
           {
             tipo: 'aprobacion_documental_solicitada',
@@ -540,7 +640,7 @@ export class DesarrolloDocumentalService {
       }
       throw error;
     }
-    return this.listar(revision.maestro.proyectoCampanaId);
+    return this.listar(revision.maestro);
   }
 
   async emitirLink(
@@ -548,7 +648,7 @@ export class DesarrolloDocumentalService {
     solicitudId: string,
     dto: EmitirLinkAprobacionDto,
   ) {
-    const solicitud = await this.solicitud(solicitudId);
+    const solicitud = await this.solicitud(auth.tenantId, solicitudId);
     if (!solicitud.permiteDecisionExterna) {
       throw new BadRequestException('La solicitud no admite decisión externa.');
     }
@@ -560,6 +660,19 @@ export class DesarrolloDocumentalService {
     const expiraEl =
       solicitud.expiraEl ?? new Date(Date.now() + dias * 86_400_000);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['aprobacion_arte'],
+        ['aprobacion_arte'],
+      );
+      const vigente = await this.solicitud(auth.tenantId, solicitudId, tx);
+      if (
+        vigente.estado !== EstadoSolicitudAprobacion.PENDIENTE ||
+        !vigente.permiteDecisionExterna ||
+        (vigente.expiraEl && vigente.expiraEl <= new Date())
+      )
+        throw new ConflictException('La solicitud ya no admite un enlace.');
       await this.enlaces.emitir(tx, {
         tenantId: auth.tenantId,
         tipo: TipoEnlacePublico.APROBACION_DOCUMENTAL,
@@ -582,8 +695,11 @@ export class DesarrolloDocumentalService {
   }
 
   async revocarLink(auth: CurrentAuth, solicitudId: string) {
-    const solicitud = await this.solicitud(solicitudId);
+    const solicitud = await this.solicitud(auth.tenantId, solicitudId);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       await this.enlaces.revocar(
         tx,
         TipoEnlacePublico.APROBACION_DOCUMENTAL,
@@ -592,7 +708,7 @@ export class DesarrolloDocumentalService {
       await this.evento(
         tx,
         auth.tenantId,
-        solicitud.revision.maestro.proyectoCampanaId,
+        solicitud.revision.maestro,
         this.actor(auth),
         {
           tipo: 'link_aprobacion_documental_revocado',
@@ -602,7 +718,7 @@ export class DesarrolloDocumentalService {
         auth.userId,
       );
     });
-    return this.listar(solicitud.revision.maestro.proyectoCampanaId);
+    return this.listar(solicitud.revision.maestro);
   }
 
   async decidir(
@@ -610,7 +726,7 @@ export class DesarrolloDocumentalService {
     solicitudId: string,
     dto: DecidirAprobacionDocumentoDto,
   ) {
-    const solicitud = await this.solicitud(solicitudId);
+    const solicitud = await this.solicitud(auth.tenantId, solicitudId);
     const privilegiado =
       auth.role === RolSistema.ADMINISTRADOR ||
       auth.role === RolSistema.SUPERVISOR;
@@ -632,7 +748,11 @@ export class DesarrolloDocumentalService {
     }
     if (dto.evidenciaArchivoId) {
       const evidencia = await this.prisma.archivo.findFirst({
-        where: { id: dto.evidenciaArchivoId, estado: ArchivoEstado.LISTO },
+        where: {
+          id: dto.evidenciaArchivoId,
+          tenantId: auth.tenantId,
+          estado: ArchivoEstado.LISTO,
+        },
         select: { id: true },
       });
       if (!evidencia)
@@ -648,28 +768,37 @@ export class DesarrolloDocumentalService {
       actorRol: auth.role,
       origen: 'INTERNO',
     });
-    return this.listar(solicitud.revision.maestro.proyectoCampanaId);
+    return this.listar(solicitud.revision.maestro);
   }
 
   async liberar(auth: CurrentAuth, revisionId: string) {
-    const revision = await this.revision(revisionId);
-    if (revision.estado !== EstadoRevisionArchivo.APROBADA) {
-      throw new BadRequestException(
-        'Sólo una revisión aprobada puede liberarse a producción.',
-      );
-    }
-    const aprobacion = await this.prisma.solicitudAprobacionDocumento.findFirst(
-      {
-        where: { revisionId, estado: EstadoSolicitudAprobacion.APROBADA },
-        select: { id: true },
-      },
-    );
-    if (!aprobacion)
-      throw new BadRequestException(
-        'La revisión no tiene una decisión aprobatoria vigente.',
-      );
+    const revision = await this.revision(auth.tenantId, revisionId);
     const actor = this.actor(auth);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'aprobacion_arte',
+      ]);
+      const vigente = await this.revision(auth.tenantId, revisionId, tx);
+      if (
+        vigente.estado !== EstadoRevisionArchivo.APROBADA ||
+        vigente.maestro.revisionAprobadaId !== revisionId
+      )
+        throw new ConflictException(
+          'Sólo la revisión aprobada vigente puede liberarse a producción.',
+        );
+      if (
+        !(await tx.solicitudAprobacionDocumento.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            revisionId,
+            estado: EstadoSolicitudAprobacion.APROBADA,
+          },
+          select: { id: true },
+        }))
+      )
+        throw new BadRequestException(
+          'La revisión no tiene una aprobación vigente.',
+        );
       await tx.archivoMaestro.update({
         where: { id: revision.archivoMaestroId },
         data: { revisionLiberadaId: revision.id, liberadaEl: new Date() },
@@ -685,7 +814,7 @@ export class DesarrolloDocumentalService {
       await this.evento(
         tx,
         auth.tenantId,
-        revision.maestro.proyectoCampanaId,
+        revision.maestro,
         actor,
         {
           tipo: 'revision_documental_liberada',
@@ -698,80 +827,117 @@ export class DesarrolloDocumentalService {
         auth.userId,
       );
     });
-    return this.listar(revision.maestro.proyectoCampanaId);
+    return this.listar(revision.maestro);
   }
 
   async crearGate(auth: CurrentAuth, dto: CrearGateDocumentoDto) {
-    const [campana, orden, maestro, paso] = await Promise.all([
-      this.prisma.proyectoCampana.findFirst({
-        where: { id: dto.proyectoCampanaId },
-        select: { id: true },
-      }),
-      this.prisma.ordenTrabajo.findFirst({
-        where: { id: dto.ordenId },
-        select: { id: true, proyectoCampanaId: true, numero: true },
-      }),
-      this.prisma.archivoMaestro.findFirst({
-        where: { id: dto.archivoMaestroId },
-        select: { id: true, proyectoCampanaId: true, nombre: true },
-      }),
-      dto.pasoId
-        ? this.prisma.ordenTrabajoItemPaso.findFirst({
-            where: { id: dto.pasoId },
-            select: { id: true, ordenId: true },
-          })
-        : Promise.resolve(null),
-    ]);
-    if (!campana || !orden || !maestro)
-      throw new NotFoundException(
-        'No se encontraron las referencias del gate.',
+    const ambito = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['aprobacion_arte'],
+        ['aprobacion_arte'],
       );
-    if (
-      orden.proyectoCampanaId !== campana.id ||
-      maestro.proyectoCampanaId !== campana.id
-    ) {
-      throw new BadRequestException(
-        'La campaña, la OT y el documento deben pertenecer al mismo proyecto.',
+      const maestro = await this.maestro(
+        auth.tenantId,
+        dto.archivoMaestroId,
+        tx,
       );
-    }
-    if (dto.pasoId && (!paso || paso.ordenId !== orden.id)) {
-      throw new BadRequestException(
-        'El paso no pertenece a la orden indicada.',
-      );
-    }
-    try {
-      await this.prisma.gateProduccionDocumento.create({
+      const orden = await tx.ordenTrabajo.findFirst({
+        where: { id: dto.ordenId, tenantId: auth.tenantId },
+        select: { id: true, proyectoCampanaId: true },
+      });
+      if (!orden) throw new NotFoundException('Orden no encontrada.');
+      if (
+        maestro.ordenId
+          ? maestro.ordenId !== orden.id
+          : maestro.proyectoCampanaId !== orden.proyectoCampanaId
+      )
+        throw new BadRequestException(
+          'La OT y el documento deben pertenecer al mismo ámbito.',
+        );
+      if (
+        dto.proyectoCampanaId &&
+        dto.proyectoCampanaId !== maestro.proyectoCampanaId
+      )
+        throw new BadRequestException(
+          'La campaña no corresponde al documento.',
+        );
+      if (
+        dto.pasoId &&
+        !(await tx.ordenTrabajoItemPaso.findFirst({
+          where: { id: dto.pasoId, tenantId: auth.tenantId, ordenId: orden.id },
+          select: { id: true },
+        }))
+      )
+        throw new BadRequestException('El paso no pertenece a esta orden.');
+      const where = {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        pasoId: dto.pasoId ?? null,
+        archivoMaestroId: maestro.id,
+        tipoAprobacion: dto.tipoAprobacion,
+        activo: true,
+      };
+      if (await tx.gateProduccionDocumento.findFirst({ where }))
+        throw new ConflictException('Ese control ya está configurado.');
+      await tx.gateProduccionDocumento.create({
         data: {
-          tenantId: auth.tenantId,
-          proyectoCampanaId: campana.id,
-          ordenId: orden.id,
-          pasoId: dto.pasoId ?? null,
+          ...where,
+          proyectoCampanaId: maestro.proyectoCampanaId,
           alcance: dto.pasoId
             ? AlcanceDocumentoProduccion.PASO
             : AlcanceDocumentoProduccion.ORDEN,
-          archivoMaestroId: maestro.id,
-          tipoAprobacion: dto.tipoAprobacion,
           nombre: dto.nombre.trim(),
         },
       });
-    } catch (error) {
-      if (this.esUnico(error))
-        throw new ConflictException('Ese gate ya está configurado.');
-      throw error;
-    }
-    return this.listar(campana.id);
+      await this.evento(
+        tx,
+        auth.tenantId,
+        maestro,
+        this.actor(auth),
+        {
+          tipo: 'control_documental_creado',
+          descripcion: `Se exige ${dto.nombre.trim()} para producir la orden.`,
+          datosJson: { ordenId: orden.id, maestroId: maestro.id },
+        },
+        auth.userId,
+      );
+      return maestro;
+    });
+    return this.listar(ambito);
   }
 
   async eliminarGate(auth: CurrentAuth, gateId: string) {
-    const gate = await this.prisma.gateProduccionDocumento.findFirst({
-      where: { id: gateId },
-      select: { id: true, proyectoCampanaId: true },
+    const ambito = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      const gate = await tx.gateProduccionDocumento.findFirst({
+        where: { id: gateId, tenantId: auth.tenantId },
+        include: { archivoMaestro: true },
+      });
+      if (!gate) throw new NotFoundException('Control no encontrado.');
+      const cambio = await tx.gateProduccionDocumento.updateMany({
+        where: { id: gateId, tenantId: auth.tenantId, activo: true },
+        data: { activo: false },
+      });
+      if (cambio.count)
+        await this.evento(
+          tx,
+          auth.tenantId,
+          gate.archivoMaestro,
+          this.actor(auth),
+          {
+            tipo: 'control_documental_desactivado',
+            descripcion: `Se retiró el requisito “${gate.nombre}”.`,
+            datosJson: { gateId, ordenId: gate.ordenId },
+          },
+          auth.userId,
+        );
+      return gate.archivoMaestro;
     });
-    if (!gate) throw new NotFoundException('Gate no encontrado.');
-    await this.prisma.gateProduccionDocumento.delete({
-      where: { id: gate.id },
-    });
-    return this.listar(gate.proyectoCampanaId);
+    return this.listar(ambito);
   }
 
   async exigirGatesCumplidos(
@@ -783,14 +949,20 @@ export class DesarrolloDocumentalService {
     const idsItem = new Set(ordenItemId ? [ordenItemId] : []);
     if (ordenItemId) {
       const item = await db.ordenTrabajoItem.findFirst({
-        where: { id: ordenItemId, ordenId }, select: { loteEntregaId: true, parentItemId: true },
+        where: { id: ordenItemId, ordenId },
+        select: { loteEntregaId: true, parentItemId: true },
       });
       if (item?.loteEntregaId) {
         let padre = item.parentItemId;
         while (padre && !idsItem.has(padre)) {
           idsItem.add(padre);
-          padre = (await db.ordenTrabajoItem.findFirst({ where: { id: padre, ordenId },
-            select: { parentItemId: true } }))?.parentItemId ?? null;
+          padre =
+            (
+              await db.ordenTrabajoItem.findFirst({
+                where: { id: padre, ordenId },
+                select: { parentItemId: true },
+              })
+            )?.parentItemId ?? null;
         }
       }
     }
@@ -843,7 +1015,15 @@ export class DesarrolloDocumentalService {
 
   async publico(token: string) {
     const solicitud = await this.solicitudPublica(token, true);
-    return this.aPublico(solicitud);
+    return {
+      ...this.aPublico(solicitud),
+      puedeDecidir:
+        solicitud.estado === EstadoSolicitudAprobacion.PENDIENTE &&
+        (await this.capacidades.puedeOperar(
+          solicitud.tenantId,
+          'aprobacion_arte',
+        )),
+    };
   }
 
   async archivoPublico(token: string): Promise<string> {
@@ -868,6 +1048,7 @@ export class DesarrolloDocumentalService {
       actorNombre: dto.actorNombre.trim(),
       actorRol: 'CLIENTE_EXTERNO',
       origen: 'EXTERNO',
+      tokenPublico: token,
     });
     return { estado: this.estadoSolicitud(dto.decision) };
   }
@@ -881,12 +1062,17 @@ export class DesarrolloDocumentalService {
     actorNombre: string;
     actorRol: string;
     origen: string;
+    tokenPublico?: string;
   }) {
-    const { solicitud } = params;
+    let { solicitud } = params;
     if (solicitud.estado !== EstadoSolicitudAprobacion.PENDIENTE) {
       throw new ConflictException('La solicitud ya fue resuelta.');
     }
-    if (solicitud.expiraEl && solicitud.expiraEl.getTime() < Date.now()) {
+    if (
+      params.decision !== DecisionAprobacionDocumento.CANCELAR &&
+      solicitud.expiraEl &&
+      solicitud.expiraEl.getTime() < Date.now()
+    ) {
       throw new BadRequestException('La solicitud de aprobación venció.');
     }
     const comentario = params.comentario?.trim() || null;
@@ -903,6 +1089,36 @@ export class DesarrolloDocumentalService {
           ? EstadoRevisionArchivo.BORRADOR
           : EstadoRevisionArchivo.OBSERVADA;
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, solicitud.tenantId, [
+        params.decision === DecisionAprobacionDocumento.CANCELAR
+          ? 'identidad'
+          : 'aprobacion_arte',
+      ]);
+      solicitud = await this.solicitud(solicitud.tenantId, solicitud.id, tx);
+      if (
+        params.decision !== DecisionAprobacionDocumento.CANCELAR &&
+        (solicitud.revision.estado === EstadoRevisionArchivo.OBSOLETA ||
+          (solicitud.expiraEl && solicitud.expiraEl <= new Date()))
+      )
+        throw new ConflictException(
+          'La solicitud venció o su revisión quedó obsoleta.',
+        );
+      if (
+        params.tokenPublico &&
+        !(await tx.enlacePublico.findFirst({
+          where: {
+            token: params.tokenPublico,
+            tenantId: solicitud.tenantId,
+            entidadId: solicitud.id,
+            tipo: TipoEnlacePublico.APROBACION_DOCUMENTAL,
+            revocadoEl: null,
+            OR: [{ expiraEl: null }, { expiraEl: { gt: new Date() } }],
+          },
+          select: { id: true },
+        }))
+      )
+        throw new NotFoundException('El enlace ya no está disponible.');
+
       const cambio = await tx.solicitudAprobacionDocumento.updateMany({
         where: {
           id: solicitud.id,
@@ -945,6 +1161,15 @@ export class DesarrolloDocumentalService {
           },
         });
       }
+      if (params.decision !== DecisionAprobacionDocumento.APROBAR) {
+        await tx.archivoMaestro.updateMany({
+          where: {
+            id: solicitud.revision.archivoMaestroId,
+            revisionLiberadaId: solicitud.revision.id,
+          },
+          data: { revisionLiberadaId: null, liberadaEl: null },
+        });
+      }
       await tx.archivoRevision.update({
         where: { id: solicitud.revision.id },
         data: { estado: estadoRevision },
@@ -952,7 +1177,7 @@ export class DesarrolloDocumentalService {
       await this.evento(
         tx,
         solicitud.tenantId,
-        solicitud.revision.maestro.proyectoCampanaId,
+        solicitud.revision.maestro,
         params.actorNombre,
         {
           tipo: `aprobacion_documental_${estado.toLowerCase()}`,
@@ -969,9 +1194,14 @@ export class DesarrolloDocumentalService {
     });
   }
 
-  private async listar(campanaId: string) {
+  private async listar(ambito: AmbitoDocumento) {
     const maestros = await this.prisma.archivoMaestro.findMany({
-      where: { proyectoCampanaId: campanaId },
+      where: {
+        tenantId: ambito.tenantId,
+        ...(ambito.proyectoCampanaId
+          ? { proyectoCampanaId: ambito.proyectoCampanaId }
+          : { ordenId: ambito.ordenId }),
+      },
       include: INCLUDE_MAESTRO,
       orderBy: [{ etapa: 'asc' }, { createdAt: 'asc' }],
     });
@@ -982,6 +1212,7 @@ export class DesarrolloDocumentalService {
     return {
       id: m.id,
       proyectoCampanaId: m.proyectoCampanaId,
+      ordenId: m.ordenId,
       nombre: m.nombre,
       proposito: m.proposito,
       etapa: m.etapa,
@@ -1052,11 +1283,21 @@ export class DesarrolloDocumentalService {
     };
   }
 
-  private maestro(id: string) {
-    return this.prisma.archivoMaestro
+  private maestro(
+    tenantId: string,
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    return db.archivoMaestro
       .findFirst({
-        where: { id },
-        select: { id: true, nombre: true, proyectoCampanaId: true },
+        where: { id, tenantId },
+        select: {
+          id: true,
+          tenantId: true,
+          ordenId: true,
+          nombre: true,
+          proyectoCampanaId: true,
+        },
       })
       .then(
         (row) =>
@@ -1067,16 +1308,22 @@ export class DesarrolloDocumentalService {
       );
   }
 
-  private revision(id: string) {
-    return this.prisma.archivoRevision
+  private revision(
+    tenantId: string,
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    return db.archivoRevision
       .findFirst({
-        where: { id },
+        where: { id, tenantId },
         include: {
           maestro: {
             select: {
               id: true,
               nombre: true,
               proyectoCampanaId: true,
+              tenantId: true,
+              ordenId: true,
               revisionAprobadaId: true,
             },
           },
@@ -1089,10 +1336,14 @@ export class DesarrolloDocumentalService {
       );
   }
 
-  private solicitud(id: string) {
-    return this.prisma.solicitudAprobacionDocumento
+  private solicitud(
+    tenantId: string,
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    return db.solicitudAprobacionDocumento
       .findFirst({
-        where: { id },
+        where: { id, tenantId },
         include: {
           revision: {
             include: {
@@ -1101,6 +1352,8 @@ export class DesarrolloDocumentalService {
                   id: true,
                   nombre: true,
                   proyectoCampanaId: true,
+                  tenantId: true,
+                  ordenId: true,
                   revisionAprobadaId: true,
                 },
               },
@@ -1138,6 +1391,7 @@ export class DesarrolloDocumentalService {
             maestro: {
               include: {
                 proyectoCampana: { select: { codigo: true, nombre: true } },
+                orden: { select: { id: true, numero: true } },
               },
             },
           },
@@ -1158,6 +1412,7 @@ export class DesarrolloDocumentalService {
     return {
       negocio: s.tenant.nombre,
       campana: s.revision.maestro.proyectoCampana,
+      orden: s.revision.maestro.orden,
       documento: {
         nombre: s.revision.maestro.nombre,
         proposito: s.revision.maestro.proposito,
@@ -1218,7 +1473,7 @@ export class DesarrolloDocumentalService {
   private async evento(
     tx: Prisma.TransactionClient,
     tenantId: string,
-    proyectoCampanaId: string,
+    ambito: AmbitoDocumento,
     actorNombre: string,
     data: {
       tipo: string;
@@ -1228,18 +1483,32 @@ export class DesarrolloDocumentalService {
     },
     actorUserId: string | null,
   ) {
-    const eventoCampana = await tx.proyectoCampanaEvento.create({
-      data: {
-        tenantId,
-        proyectoCampanaId,
-        actorUserId,
-        actorNombre,
-        tipo: data.tipo,
-        descripcion: data.descripcion,
-        datosJson: data.datosJson,
-        origen: data.origen ?? 'usuario',
-      },
-    });
+    const proyectoCampanaId = ambito.proyectoCampanaId;
+    const evento = proyectoCampanaId
+      ? await tx.proyectoCampanaEvento.create({
+          data: {
+            tenantId,
+            proyectoCampanaId,
+            actorUserId,
+            actorNombre,
+            tipo: data.tipo,
+            descripcion: data.descripcion,
+            datosJson: data.datosJson,
+            origen: data.origen ?? 'usuario',
+          },
+        })
+      : await tx.ordenTrabajoEvento.create({
+          data: {
+            tenantId,
+            ordenId: ambito.ordenId!,
+            usuarioId: actorUserId,
+            usuarioNombre: actorNombre,
+            tipo: data.tipo,
+            descripcion: data.descripcion,
+            datosJson: data.datosJson,
+            origen: data.origen ?? 'usuario',
+          },
+        });
     const decisionNegativa = /RECHAZ|OBSERV|BLOQUE/i.test(data.tipo);
     const decisionPositiva = /APROB|LIBER|COMPLET/i.test(data.tipo);
     await this.eventosSistema?.publicar(
@@ -1248,26 +1517,32 @@ export class DesarrolloDocumentalService {
         actorUserId,
         actorNombre,
         tipo: `documento.${data.tipo.toLowerCase()}`,
-        entidadTipo: 'campana',
-        entidadId: proyectoCampanaId,
+        entidadTipo: proyectoCampanaId ? 'campana' : 'orden_trabajo',
+        entidadId: proyectoCampanaId ?? ambito.ordenId!,
         titulo: decisionNegativa
           ? 'Documento requiere atención'
           : decisionPositiva
             ? 'Documento aprobado'
             : 'Actualización documental',
         mensaje: data.descripcion,
-        href: `/comercial/campanas/${proyectoCampanaId}`,
+        href: proyectoCampanaId
+          ? `/comercial/campanas/${proyectoCampanaId}`
+          : `/comercial/ordenes/${ambito.ordenId}`,
         severidad: decisionNegativa
           ? SeveridadNotificacionInterna.ADVERTENCIA
           : decisionPositiva
             ? SeveridadNotificacionInterna.EXITO
             : SeveridadNotificacionInterna.INFO,
-        topicos: [`campana:${proyectoCampanaId}`],
-        proyectoCampanaId,
+        topicos: [
+          proyectoCampanaId
+            ? `campana:${proyectoCampanaId}`
+            : `orden:${ambito.ordenId}`,
+        ],
+        proyectoCampanaId: proyectoCampanaId ?? undefined,
       },
       tx,
     );
-    return eventoCampana;
+    return evento;
   }
 
   private esUnico(error: unknown) {

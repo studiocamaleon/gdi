@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   CanActivate,
   ExecutionContext,
@@ -32,6 +33,9 @@ export class AuthGuard implements CanActivate {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly sessionCache: SessionCacheService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -349,6 +353,7 @@ export class AuthGuard implements CanActivate {
           'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
         );
       }
+      await this.capacidades.exigir(cached.tenantId, 'mcp');
       request.auth = cached;
       return true;
     }
@@ -380,6 +385,7 @@ export class AuthGuard implements CanActivate {
       throw rechazo;
     }
 
+    await this.capacidades.exigir(credencial.tenantId, 'mcp');
     const membership = credencial.membership;
     if (!ipPermitida(ipDeRequest(request), membership.ipsPermitidas)) {
       throw new UnauthorizedException(

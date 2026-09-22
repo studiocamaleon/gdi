@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import { crearFixtureLotesF6 } from '../../test/soporte-lotes-f6';
 import { productosComercialesConTrabajo } from '../ordenes-trabajo/productos-comerciales';
+import { DesarrolloDocumentalService } from '../desarrollo-documental/desarrollo-documental.service';
 
 const db = new PrismaService();
 const service = new OrdenesTrabajoService(
@@ -18,7 +19,7 @@ const service = new OrdenesTrabajoService(
   {} as never,
   {} as never,
   {} as never,
-  {} as never,
+  new DesarrolloDocumentalService(db, {} as never, {} as never),
 );
 const rollback = new Error('rollback de la prueba');
 afterAll(() => db.$disconnect());

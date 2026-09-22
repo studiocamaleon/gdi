@@ -26,6 +26,9 @@ export type ItemEntrega = {
 };
 
 export type OrdenEscaneada = {
+  puedeCobrar?: boolean;
+  produccionControlada?: boolean;
+  requiereConfirmacionManual?: boolean;
   id: string;
   numero: string;
   estado: string;
@@ -47,6 +50,7 @@ export function escanearOrden(codigo: string) {
 }
 
 export type EntregarPayload = {
+  confirmarPreparacionManual?: boolean;
   itemIds: string[];
   retiraTercero?: { nombre: string; dni: string };
   /** Cobro a registrar en el mismo acto (sin ordenId: lo pone el backend). */

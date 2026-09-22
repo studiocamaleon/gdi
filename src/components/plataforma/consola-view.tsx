@@ -51,6 +51,7 @@ import {
   getPlanesPlataforma,
   describirPlan,
   vincularPlanPaddle,
+  retirarPlanAnterior,
   getSesionesImpersonacion,
   iniciarImpersonacion,
   type ConsolaPlataforma,
@@ -1501,6 +1502,10 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
   const [planes, setPlanes] = React.useState<PlanCatalogo[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [editando, setEditando] = React.useState<string | null>(null);
+  const [retirar, setRetirar] = React.useState<PlanCatalogo | null>(null);
+  const [motivo, setMotivo] = React.useState("");
+  const [retirando, setRetirando] = React.useState(false);
+  const [errorRetiro, setErrorRetiro] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let vivo = true;
@@ -1525,14 +1530,15 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
       </div>
     );
 
-  const vinculados = planes.filter((p) => p.paddlePriceId).length;
+  const vinculados = planes.filter((p) => p.comercialVersionado ? p.ofertaActualId : p.paddlePriceId).length;
 
   return (
     <div className="cpl-page cpl-planes">
       <p className="cpl-neg-intro" style={{ marginBottom: 18 }}>
-        Cada plan se vende a través de su precio en Paddle. El <b>monto</b> vive
-        en el catálogo de Paddle; las <b>features y los límites</b> viven acá.
-        El id del precio los une — cargalo abajo.
+        Los planes nuevos se administran desde{" "}
+        <b>Versiones → Oferta comercial</b>. Acá podés consultar los planes
+        anteriores y sus vínculos con Paddle. Retirarlos de nuevas altas
+        conserva sus contratos y precios históricos.
       </p>
 
       <Panel
@@ -1544,10 +1550,10 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
           <thead>
             <tr>
               <th>Plan</th>
-              <th>Bajada (la ve el tenant)</th>
+              <th>Descripción</th>
               <th>Precio</th>
               <th>Tenants</th>
-              <th>Precio en Paddle</th>
+              <th>Oferta / Paddle</th>
               <th />
             </tr>
           </thead>
@@ -1557,6 +1563,14 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
                 key={p.id}
                 plan={p}
                 esAdmin={esAdmin}
+                puedeRetirar={planes.some(
+                  (v) => v.comercialVersionado && v.ofertaActualId && v.publico,
+                )}
+                onRetirar={() => {
+                  setRetirar(p);
+                  setMotivo("");
+                  setErrorRetiro(null);
+                }}
                 editando={editando === p.id}
                 onEditar={() => setEditando(p.id)}
                 onCerrar={() => setEditando(null)}
@@ -1569,6 +1583,71 @@ function Planes({ esAdmin }: { esAdmin: boolean }) {
           </tbody>
         </table>
       </Panel>
+      <FormDialog
+        isOpen={Boolean(retirar)}
+        onOpenChange={(open) => {
+          if (!open && !retirando) setRetirar(null);
+        }}
+        title={`Retirar ${retirar?.nombre ?? "plan"} de nuevas altas`}
+        description="Se dejará de ofrecer en la web, el registro y las nuevas contrataciones. Las empresas que ya lo tienen conservan su contrato."
+        isDismissable={!retirando}
+        className={`${platformTheme} ${styles.dialog}`}
+      >
+        <div className="cpl-mb">
+          <label className="cpl-field">
+            <span>Motivo del retiro</span>
+            <Textarea
+              aria-label="Motivo del retiro"
+              fullWidth
+              className={fieldFocus.singleBorder}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              maxLength={500}
+              disabled={retirando}
+            />
+          </label>
+          {errorRetiro && <p role="alert">{errorRetiro}</p>}
+        </div>
+        <div className="cpl-mf">
+          <ActionButton
+            variant="outline"
+            isDisabled={retirando}
+            onPress={() => setRetirar(null)}
+          >
+            Volver
+          </ActionButton>
+          <ActionButton
+            isDisabled={retirando || motivo.trim().length < 5}
+            onPress={async () => {
+              if (!retirar || retirando) return;
+              setRetirando(true);
+              setErrorRetiro(null);
+              try {
+                await retirarPlanAnterior(
+                  retirar.id,
+                  retirar.revisionOferta ?? 0,
+                  motivo.trim(),
+                );
+                setPlanes(await getPlanesPlataforma());
+                setRetirar(null);
+                toast.success(
+                  "El plan se retiró de nuevas altas. Sus contratos se conservan.",
+                );
+              } catch (e) {
+                setErrorRetiro(
+                  e instanceof Error
+                    ? e.message
+                    : "No se pudo retirar el plan.",
+                );
+              } finally {
+                setRetirando(false);
+              }
+            }}
+          >
+            {retirando ? "Retirando…" : "Retirar de nuevas altas"}
+          </ActionButton>
+        </div>
+      </FormDialog>
 
       {vinculados === 0 ? (
         <div className="cpl-nota" style={{ marginTop: 14 }}>
@@ -1588,6 +1667,8 @@ function PlanFila({
   onEditar,
   onCerrar,
   onGuardado,
+  puedeRetirar,
+  onRetirar,
 }: {
   plan: PlanCatalogo;
   esAdmin: boolean;
@@ -1595,6 +1676,8 @@ function PlanFila({
   onEditar: () => void;
   onCerrar: () => void;
   onGuardado: (planes: PlanCatalogo[]) => void;
+  puedeRetirar: boolean;
+  onRetirar: () => void;
 }) {
   const [priceId, setPriceId] = React.useState(plan.paddlePriceId ?? "");
   const [priceIdAnual, setPriceIdAnual] = React.useState(
@@ -1712,7 +1795,11 @@ function PlanFila({
         </div>
       </td>
       <td>
-        <BajadaPlan plan={plan} esAdmin={esAdmin} onGuardado={onGuardado} />
+        <BajadaPlan
+          plan={plan}
+          esAdmin={esAdmin && !plan.comercialVersionado}
+          onGuardado={onGuardado}
+        />
       </td>
       <td className="cpl-mono">
         {plan.moneda === "USD" ? "US$" : "$"}
@@ -1721,7 +1808,15 @@ function PlanFila({
       </td>
       <td className="cpl-mono">{fmtN(plan.tenants)}</td>
       <td>
-        {plan.paddlePriceId ? (
+        {plan.comercialVersionado ? (
+          <span className="cpl-sub">
+            {plan.ofertaActualId
+              ? "Oferta versionada activa"
+              : "Sin oferta vigente"}
+            <br />
+            Gestionar desde Versiones
+          </span>
+        ) : plan.paddlePriceId ? (
           <div className="cpl-precios">
             <span className="cpl-invlink">
               <b>mes</b> {plan.paddlePriceId}
@@ -1745,11 +1840,20 @@ function PlanFila({
         )}
       </td>
       <td style={{ textAlign: "right" }}>
-        {esAdmin ? (
+        {esAdmin && !plan.comercialVersionado ? (
           <ActionButton type="button" variant="outline" onPress={onEditar}>
             {plan.paddlePriceId ? "Cambiar" : "Vincular"}
           </ActionButton>
         ) : null}
+        {esAdmin && !plan.comercialVersionado && plan.publico && (
+          <ActionButton
+            variant="outline"
+            isDisabled={!puedeRetirar}
+            onPress={onRetirar}
+          >
+            Retirar de nuevas altas
+          </ActionButton>
+        )}
       </td>
     </tr>
   );

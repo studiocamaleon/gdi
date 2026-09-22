@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -19,7 +20,12 @@ import {
  */
 @Injectable()
 export class ImpuestosCatalogoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async listar(tenantId: string, soloActivos = true) {
     return this.prisma.productoImpuestoCatalogo.findMany({
@@ -39,6 +45,7 @@ export class ImpuestosCatalogoService {
   }
 
   async crear(tenantId: string, dto: CrearImpuestoCatalogoDto) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     try {
       return await this.prisma.productoImpuestoCatalogo.create({
         data: {
@@ -72,6 +79,7 @@ export class ImpuestosCatalogoService {
     id: string,
     dto: ActualizarImpuestoCatalogoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente = await this.prisma.productoImpuestoCatalogo.findFirst({
       where: { id, tenantId },
     });
@@ -97,6 +105,7 @@ export class ImpuestosCatalogoService {
    * Devuelve `{ tipo: 'soft' | 'hard', item }`.
    */
   async eliminar(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente = await this.prisma.productoImpuestoCatalogo.findFirst({
       where: { id, tenantId },
       include: { _count: { select: { productosAplicados: true } } },

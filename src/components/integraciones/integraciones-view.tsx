@@ -1,5 +1,6 @@
 "use client";
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { ActionButton } from "@/components/design-system/action-button";
 import {
   ConfiguracionPage,
   ConfiguracionHeader,
@@ -40,6 +41,7 @@ import {
   someterPlantillaWati,
   cambiarEventoNotificacion,
   getLogNotificaciones,
+  resolverAviso,
   getNotificaciones,
   guardarConfigNotificaciones,
   type AfipIntegracion,
@@ -223,8 +225,10 @@ function Logo({
 export function IntegracionesView({
   inicial,
   mcp,
+  puedeResolverAvisos = false,
 }: {
   inicial: EstadoIntegraciones;
+  puedeResolverAvisos?: boolean;
   /**
    * Credenciales MCP ("Conectá tu IA"). undefined = el usuario no puede
    * gestionarlas y la sección no se muestra. Como Wati/AFIP, la card de la
@@ -240,7 +244,10 @@ export function IntegracionesView({
   const [afip, setAfip] = React.useState<AfipIntegracion | null>(null);
   // MCP va aparte del union de proveedores: no es una IntegracionTenant.
   const [mcpAbierto, setMcpAbierto] = React.useState(false);
-  useConfiguracionInicio(mcpAbierto ? "mcp" : (abierta ?? "lista"));
+  const [historial, setHistorial] = React.useState(false);
+  useConfiguracionInicio(
+    historial ? "historial" : mcpAbierto ? "mcp" : (abierta ?? "lista"),
+  );
   const [credencialesMcp, setCredencialesMcp] = React.useState<CredencialMcp[]>(
     mcp?.inicial ?? [],
   );
@@ -282,6 +289,22 @@ export function IntegracionesView({
     datos.integraciones.find((i) => i.proveedor === p)?.estado ??
     "DESCONECTADA";
 
+  if (historial)
+    return (
+      <ConfiguracionPage>
+        <ConfiguracionHeader
+          titulo="Historial de avisos"
+          descripcion="Mensajes de Wati y WhatsApp Web, incluidos los que necesitan revisión."
+          acciones={
+            <ActionButton variant="outline" onPress={() => setHistorial(false)}>
+              Volver a integraciones
+            </ActionButton>
+          }
+        />
+        <MensajesTab puedeResolver={puedeResolverAvisos} />
+      </ConfiguracionPage>
+    );
+
   if (mcpAbierto && mcp) {
     return (
       <McpDetalle
@@ -296,6 +319,7 @@ export function IntegracionesView({
   if (abierta === "WATI" && conWati) {
     return (
       <WatiDetalle
+        puedeResolverAvisos={puedeResolverAvisos}
         integracion={
           datos.integraciones.find((i) => i.proveedor === "WATI") ?? null
         }
@@ -333,6 +357,11 @@ export function IntegracionesView({
       <ConfiguracionHeader
         titulo="Integraciones"
         descripcion="Conectá tu empresa con las herramientas y servicios que usás cada día."
+        acciones={
+          <ActionButton variant="outline" onPress={() => setHistorial(true)}>
+            Historial de avisos
+          </ActionButton>
+        }
       />
 
       {!datos.cifradoDisponible && (
@@ -481,11 +510,13 @@ function WatiDetalle({
   cifradoDisponible,
   onVolver,
   onCambio,
+  puedeResolverAvisos,
 }: {
   integracion: Integracion | null;
   cifradoDisponible: boolean;
   onVolver: () => void;
   onCambio: () => Promise<void>;
+  puedeResolverAvisos: boolean;
 }) {
   const [actual, setActual] = React.useState(integracion);
   const [tab, setTab] = React.useState<
@@ -562,7 +593,7 @@ function WatiDetalle({
           ) : tab === "notificaciones" ? (
             <NotificacionesTab />
           ) : (
-            <MensajesTab />
+            <MensajesTab puedeResolver={puedeResolverAvisos} />
           )}
         </TabsContent>
       </Tabs>
@@ -1513,9 +1544,18 @@ const ESTADOS_MSJ = [
   { valor: "enviada", label: "Enviados" },
   { valor: "pendiente", label: "En espera" },
   { valor: "enviando", label: "Saliendo" },
+  { valor: "incierta", label: "Por confirmar" },
   { valor: "fallida", label: "Fallaron" },
   { valor: "descartada", label: "Descartados" },
 ] as const;
+const GRUPOS_ESTADO: Record<string, string> = {
+  wati_reservada: "pendiente",
+  web_reservada: "pendiente",
+  web_enviando: "enviando",
+  wati_incierta: "incierta",
+  web_incierta: "incierta",
+};
+const estadoMensaje = (estado: string) => GRUPOS_ESTADO[estado] ?? estado;
 
 const PASOS_LIMITE = [100, 250, 500];
 
@@ -1527,7 +1567,16 @@ const PASOS_LIMITE = [100, 250, 500];
  * tenerla debajo de tres bloques de configuración obligaba a scrollear toda la
  * pantalla para llegar.
  */
-function MensajesTab() {
+export function MensajesTab({
+  puedeResolver = false,
+}: {
+  puedeResolver?: boolean;
+}) {
+  const operativa = useCapacidad("identidad");
+  const [resolucion, setResolucion] = React.useState<{
+    fila: LineaLog;
+    accion: "descartar" | "confirmar_enviada";
+  } | null>(null);
   const { fechaHora } = useFecha();
   const [log, setLog] = React.useState<LineaLog[]>([]);
   const [error, setError] = React.useState<string | null>(null);
@@ -1556,12 +1605,15 @@ function MensajesTab() {
   // lectura de "cómo viene saliendo últimamente", y por eso el rótulo dice
   // sobre cuántos mensajes está hecha la cuenta.
   const conteos = new Map<string, number>();
-  for (const l of log) conteos.set(l.estado, (conteos.get(l.estado) ?? 0) + 1);
+  for (const l of log) {
+    const estado = estadoMensaje(l.estado);
+    conteos.set(estado, (conteos.get(estado) ?? 0) + 1);
+  }
 
   const q = busqueda.trim().toLowerCase();
   const visibles = log.filter(
     (l) =>
-      (!filtro || l.estado === filtro) &&
+      (!filtro || estadoMensaje(l.estado) === filtro) &&
       (!q ||
         (l.cliente ?? "").toLowerCase().includes(q) ||
         l.telefono.toLowerCase().includes(q) ||
@@ -1587,7 +1639,7 @@ function MensajesTab() {
   return (
     <div className="int-content">
       <div className="int-section-intro">
-        <h3>Mensajes enviados</h3>
+        <h3>Historial de mensajes</h3>
         <p>
           Todo lo que el sistema generó para WhatsApp, incluido lo que NO se
           mandó y por qué. Es donde se responde &ldquo;¿por qué a este cliente
@@ -1603,7 +1655,10 @@ function MensajesTab() {
             key={e.valor}
             v={conteos.get(e.valor) ?? 0}
             k={e.label}
-            alerta={e.valor === "fallida" && (conteos.get("fallida") ?? 0) > 0}
+            alerta={
+              ["fallida", "incierta"].includes(e.valor) &&
+              (conteos.get(e.valor) ?? 0) > 0
+            }
           />
         ))}
       </div>
@@ -1680,13 +1735,90 @@ function MensajesTab() {
                     : ""}
                 </div>
               </div>
-              <span className={`int-pill ${pillLog(l.estado)}`}>
-                {l.estado}
-              </span>
+              <div className="flex flex-col items-end gap-2">
+                <span className={`int-pill ${pillLog(l.estado)}`}>
+                  {ESTADOS_MSJ.find((e) => e.valor === estadoMensaje(l.estado))
+                    ?.label ?? l.estado}
+                </span>
+                <small>
+                  {l.canal === "WHATSAPP_WEB" ? "WhatsApp Web" : "Wati"}
+                </small>
+                {puedeResolver &&
+                  operativa &&
+                  [
+                    "pendiente",
+                    "wati_reservada",
+                    "web_reservada",
+                    "fallida",
+                    "wati_incierta",
+                    "web_incierta",
+                  ].includes(l.estado) && (
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {estadoMensaje(l.estado) === "incierta" && (
+                        <ActionButton
+                          variant="outline"
+                          onPress={() =>
+                            setResolucion({
+                              fila: l,
+                              accion: "confirmar_enviada",
+                            })
+                          }
+                        >
+                          Confirmar enviada
+                        </ActionButton>
+                      )}
+                      <ActionButton
+                        variant="outline"
+                        onPress={() =>
+                          setResolucion({ fila: l, accion: "descartar" })
+                        }
+                      >
+                        Descartar
+                      </ActionButton>
+                    </div>
+                  )}
+              </div>
             </div>
           ))
         )}
       </div>
+
+      <ConfirmacionDestructiva
+        apariencia="heroui"
+        open={resolucion !== null}
+        onOpenChange={(open) => {
+          if (!open) setResolucion(null);
+        }}
+        titulo={
+          resolucion?.accion === "confirmar_enviada"
+            ? "Confirmar aviso enviado"
+            : "Descartar aviso"
+        }
+        descripcion={
+          resolucion?.accion === "confirmar_enviada"
+            ? "Verificá en Wati o WhatsApp que el mensaje fue enviado. Se registrará tu confirmación sin volver a enviarlo."
+            : "El aviso saldrá de la cola y quedará en el historial con tu motivo. Esta acción no retira un mensaje que ya se haya enviado."
+        }
+        requiereTipear={false}
+        motivo={{ label: "Motivo o verificación realizada", minimo: 5 }}
+        accionLabel="Guardar resolución"
+        onConfirmar={async (motivo) => {
+          if (!resolucion) return;
+          try {
+            await resolverAviso(resolucion.fila.id, {
+              accion: resolucion.accion,
+              estadoEsperado: resolucion.fila.estado,
+              motivo,
+            });
+            setResolucion(null);
+            await cargar();
+          } catch (e) {
+            toast.error(
+              e instanceof Error ? e.message : "No se pudo resolver el aviso.",
+            );
+          }
+        }}
+      />
 
       {/* Sólo si la tanda vino completa: si trajo menos que el límite, ya no
           hay más para traer y el botón mentiría. */}
@@ -1712,9 +1844,10 @@ function MensajesTab() {
 }
 
 /** Enviada verde, fallida roja, el resto neutro. */
-function pillLog(estado: string): string {
+function pillLog(valor: string): string {
+  const estado = estadoMensaje(valor);
   if (estado === "enviada") return "int-pill-ok";
   if (estado === "fallida") return "int-pill-bad";
-  if (estado === "pendiente") return "int-pill-warn";
+  if (estado === "pendiente" || estado === "incierta") return "int-pill-warn";
   return "";
 }

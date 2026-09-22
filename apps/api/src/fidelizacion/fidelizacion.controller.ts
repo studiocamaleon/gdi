@@ -11,14 +11,16 @@ import {
 import { FidelizacionService } from './fidelizacion.service';
 
 @Permiso('crm.ver')
-@RequiereCapacidad('fidelizacion')
 @Controller('fidelizacion')
 export class FidelizacionController {
   constructor(private readonly service: FidelizacionService) {}
   @Get('configuracion') configuracion(@CurrentSession() auth: CurrentAuth) {
     return this.service.configuracion(auth.tenantId);
   }
-  @Permiso('crm.configurar_fidelizacion') @Patch('configuracion') actualizar(
+  @RequiereCapacidad('fidelizacion')
+  @Permiso('crm.configurar_fidelizacion')
+  @Patch('configuracion')
+  actualizar(
     @CurrentSession() auth: CurrentAuth,
     @Body() dto: ActualizarFidelizacionDto,
   ) {
@@ -34,6 +36,7 @@ export class FidelizacionController {
     return this.service.cuenta(auth, clienteId);
   }
   @Permiso('crm.configurar_fidelizacion')
+  @RequiereCapacidad('fidelizacion')
   @Post('clientes/:clienteId/ajustes')
   ajustar(
     @CurrentSession() auth: CurrentAuth,
@@ -42,7 +45,10 @@ export class FidelizacionController {
   ) {
     return this.service.ajustar(auth, clienteId, dto);
   }
-  @Permiso('comercial.gestionar') @Post('clientes/:clienteId/simular') simular(
+  @RequiereCapacidad('fidelizacion')
+  @Permiso('comercial.gestionar')
+  @Post('clientes/:clienteId/simular')
+  simular(
     @CurrentSession() auth: CurrentAuth,
     @Param('clienteId') clienteId: string,
     @Body() dto: SimularFidelizacionDto,

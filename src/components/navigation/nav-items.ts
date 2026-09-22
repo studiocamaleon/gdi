@@ -6,6 +6,7 @@
 // hacer es información que no hace falta dar. Ver docs/usuarios-roles-permisos-diseno.md
 
 import { capacidadDeRuta } from "@/lib/capacidades";
+import { reportesVisibles } from "@/lib/reportes-config";
 import type { PermisoClave } from "@/lib/permisos";
 
 export type NavIconKey =
@@ -319,14 +320,30 @@ export function navPara(
   // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
   // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
   const porPlan = (href: string) => {
+    if (href === "/reportes")
+      return reportesVisibles(p => !permisos || permisos.has(p), funciones).length > 0;
     const clave = capacidadDeRuta(href);
     return !funciones || !clave || funciones[clave] === true;
+  };
+  const presentar = (c: NavChild): NavChild => {
+    const historiales: Record<string, { capacidad: string; label: string }> = {
+      compras: { capacidad: "compras", label: "Historial de compras" },
+      cupones: { capacidad: "cupones", label: "Historial de cupones" },
+      fidelizacion: { capacidad: "fidelizacion", label: "Historial de puntos" },
+      tesoreria: { capacidad: "tesoreria", label: "Historial de tesorería" },
+      egresos: { capacidad: "cuentas_pagar", label: "Historial de egresos" },
+      "cuentas-por-pagar": { capacidad: "cuentas_pagar", label: "Historial por proveedor" },
+    };
+    const historial = historiales[c.key];
+    return historial && funciones?.[historial.capacidad] === false
+      ? { ...c, label: historial.label }
+      : c;
   };
   const porPais = (c: NavChild) => (!c.soloPais || c.soloPais === pais) && porPlan(c.href);
   if (!permisos) {
     return NAV.flatMap<NavItem>((item) => {
       if (!hasChildren(item)) return porPlan(item.href) ? [item] : [];
-      const children = item.children.filter(porPais);
+      const children = item.children.filter(porPais).map(presentar);
       return children.length ? [{ ...item, children }] : [];
     });
   }
@@ -341,7 +358,7 @@ export function navPara(
     // Reportes). El grupo aparece si le queda al menos un hijo.
     const children = item.children.filter(
       (c) => permisos.has(c.permiso ?? item.permiso) && porPais(c),
-    );
+    ).map(presentar);
     return children.length ? [{ ...item, children }] : [];
   });
 }

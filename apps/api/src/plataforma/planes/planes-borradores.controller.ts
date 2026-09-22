@@ -15,6 +15,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -31,10 +32,46 @@ import type { CurrentAuth } from '../../auth/auth.types';
 import { PlataformaGuard } from '../plataforma.guard';
 import { PlataformaAdminGuard } from '../plataforma-admin.guard';
 import { PlanesBorradoresService } from './planes-borradores.service';
-import type { ContenidoPlan } from './catalogo-planes';
+import type { ContenidoPlan, PreciosPlan } from './catalogo-planes';
 import { PlanesComparacionService } from './planes-comparacion.service';
 
+export class PreciosPlanDto implements PreciosPlan {
+  @IsIn(['USD']) moneda: 'USD';
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000000)
+  mensual: number | null;
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000000)
+  anual: number | null;
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000000)
+  usuarioMensual: number | null;
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000000)
+  usuarioAnual: number | null;
+}
+export class ComercialPlanDto {
+  @IsIn(['publico', 'invitacion']) acceso: 'publico' | 'invitacion';
+  @IsInt() @Min(1) @Max(90) trialDias: number;
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(1000000)
+  implementacion: number;
+}
 export class ContenidoPlanDto implements ContenidoPlan {
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => ComercialPlanDto)
+  comercial?: ComercialPlanDto;
   @IsString() @MaxLength(60) nombre: string;
   @IsString() @MaxLength(200) descripcion: string;
   @IsInt() @Min(1) @Max(10000) usuariosIncluidos: number;
@@ -43,6 +80,11 @@ export class ContenidoPlanDto implements ContenidoPlan {
   almacenamientoModo: ContenidoPlan['almacenamientoModo'];
   @IsOptional() @IsInt() @Min(1) @Max(100000) almacenamientoGb: number | null;
   @IsObject() funciones: Record<string, boolean>;
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PreciosPlanDto)
+  precios?: PreciosPlanDto;
 }
 export class CambioBorradorDto {
   @IsUUID() id: string;

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -25,6 +26,9 @@ export class RutasProduccionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly familias: FamiliasPasosService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async listarRutas(tenantId: string, incluirInactivas = false) {
@@ -102,6 +106,7 @@ export class RutasProduccionService {
   }
 
   async crearRuta(tenantId: string, dto: CrearRutaDto) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const workflowEntrada = await this.prepararWorkflowEntrada(
       tenantId,
       dto.workflow,
@@ -165,6 +170,7 @@ export class RutasProduccionService {
   }
 
   async duplicarRuta(tenantId: string, id: string, dto: DuplicarRutaDto = {}) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const origen = await this.prisma.ruta.findFirst({
       where: { id, tenantId },
       include: {
@@ -253,6 +259,7 @@ export class RutasProduccionService {
   }
 
   async actualizarRuta(tenantId: string, id: string, dto: ActualizarRutaDto) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const existente = await this.prisma.ruta.findFirst({
       where: { id, tenantId },
       include: {
@@ -493,6 +500,7 @@ export class RutasProduccionService {
     rutaId: string,
     rutaAlternativaIds: string[],
   ) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const ids = [...new Set(rutaAlternativaIds)];
     const ruta = await this.prisma.ruta.findFirst({
       where: { id: rutaId, tenantId },
@@ -644,6 +652,7 @@ export class RutasProduccionService {
   }
 
   async eliminarRuta(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'procesos');
     const existente = await this.prisma.ruta.findFirst({
       where: { id, tenantId },
       include: { _count: { select: { productosAlternativas: true } } },

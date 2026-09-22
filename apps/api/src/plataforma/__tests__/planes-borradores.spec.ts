@@ -7,7 +7,7 @@ import {
   PROPUESTA_PLANES,
   VERSION_CATALOGO_PLANES,
 } from '../planes/catalogo-planes';
-import { problemasPlan } from '../planes/validacion-planes';
+import { problemasPlan, revisionComercial } from '../planes/validacion-planes';
 import { PlanesBorradoresService } from '../planes/planes-borradores.service';
 import {
   GuardarPlanesDto,
@@ -88,8 +88,8 @@ afterAll(async () => {
 });
 
 it('incluye el catálogo del barrido y dependencias conocidas sin ciclos', () => {
-  expect(CATALOGO_PLANES).toHaveLength(65);
-  expect(new Set(CATALOGO_PLANES.map((c) => c.clave)).size).toBe(65);
+  expect(CATALOGO_PLANES).toHaveLength(66);
+  expect(new Set(CATALOGO_PLANES.map((c) => c.clave)).size).toBe(66);
   function recorrer(clave: string, anteriores: string[] = []) {
     expect(anteriores).not.toContain(clave);
     const c = CATALOGO_PLANES.find((c) => c.clave === clave)!;
@@ -97,6 +97,42 @@ it('incluye el catálogo del barrido y dependencias conocidas sin ciclos', () =>
     for (const d of c.requiere) recorrer(d, [...anteriores, clave]);
   }
   CATALOGO_PLANES.forEach((c) => recorrer(c.clave));
+});
+it('una oferta mensual configurada sólo deja pendiente el anual opcional', () => {
+  const p = contenido();
+  p.almacenamientoModo = 'limitado';
+  p.almacenamientoGb = 250;
+  p.precios = {
+    moneda: 'USD',
+    mensual: 190,
+    anual: null,
+    usuarioMensual: 15,
+    usuarioAnual: null,
+  };
+  const revision = revisionComercial(p);
+  expect(revision.controlesPendientes).toBe(0);
+  expect(revision.pendientes).toContain(
+    'Definir el precio anual si se ofrecerá esa modalidad.',
+  );
+  expect(revision.pendientes).not.toContain('Definir el precio mensual.');
+  expect(
+    revision.pendientes.some((s) =>
+      s.includes('Definir el precio de usuarios adicionales'),
+    ),
+  ).toBe(false);
+});
+it('al incorporar modalidad anual exige su precio de usuarios adicionales', () => {
+  const p = contenido();
+  p.precios = {
+    moneda: 'USD',
+    mensual: 190,
+    anual: 2280,
+    usuarioMensual: 15,
+    usuarioAnual: null,
+  };
+  expect(revisionComercial(p).pendientes).toContain(
+    'Definir el precio de usuarios adicionales para las modalidades ofrecidas.',
+  );
 });
 it('precarga la propuesta acumulativa 3/20/40 sin impresión directa ni fabricación adicional', () => {
   expect(PROPUESTA_PLANES.map((p) => p.contenido.usuariosIncluidos)).toEqual([
@@ -147,7 +183,7 @@ it('separa cuotas y funciones y valida dependencias y bases obligatorias', () =>
 });
 it('valida DTO anidado y rechaza campos extra, coerciones y revisiones ausentes', async () => {
   const good = {
-    catalogoVersion: 1,
+    catalogoVersion: 2,
     cambios: [{ id: randomUUID(), revision: 1, contenido: contenido() }],
   };
   expect(
@@ -195,11 +231,23 @@ it('persiste varios borradores, aumenta revisiones y audita sin alterar planes v
         ...contenido(),
         nombre: 'Propuesta editada',
         usuariosIncluidos: 5,
+        precios: {
+          moneda: 'USD',
+          mensual: 190,
+          anual: null,
+          usuarioMensual: 15,
+          usuarioAnual: null,
+        },
       },
     })),
   });
   expect(result.borradores.map((x) => x.revision)).toEqual([2, 2]);
   expect(result.borradores[0].contenido.usuariosIncluidos).toBe(5);
+  expect(result.borradores[0].contenido.precios).toMatchObject({
+    mensual: 190,
+    anual: null,
+    usuarioMensual: 15,
+  });
   expect(await prisma.plan.findMany({ orderBy: { id: 'asc' } })).toEqual(
     planesAntes,
   );
@@ -215,10 +263,57 @@ it('persiste varios borradores, aumenta revisiones y audita sin alterar planes v
     despues: { usuariosIncluidos: 5 },
   });
 });
+it('valida precios positivos y decimales sin convertir pendientes en gratuitos', async () => {
+  const precios = {
+    moneda: 'USD' as const,
+    mensual: 190,
+    anual: null,
+    usuarioMensual: 15,
+    usuarioAnual: null,
+  };
+  expect(problemasPlan({ ...contenido(), precios })).toEqual([]);
+  for (const mensual of [0, -1, 190.001, Infinity, NaN, '190', undefined]) {
+    expect(
+      problemasPlan({
+        ...contenido(),
+        precios: { ...precios, mensual } as never,
+      }).join(' '),
+    ).toContain('precio mensual');
+  }
+  expect(
+    problemasPlan({
+      ...contenido(),
+      precios: { ...precios, moneda: 'ARS' } as never,
+    }).join(' '),
+  ).toContain('USD');
+  const dto = {
+    catalogoVersion: 2,
+    cambios: [
+      { id: randomUUID(), revision: 1, contenido: { ...contenido(), precios } },
+    ],
+  };
+  expect(
+    await validate(plainToInstance(GuardarPlanesDto, dto), {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  ).toHaveLength(0);
+  Object.assign(dto.cambios[0].contenido.precios, {
+    paddlePriceId: 'no-autorizado',
+  });
+  expect(
+    (
+      await validate(plainToInstance(GuardarPlanesDto, dto), {
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      })
+    ).length,
+  ).toBeGreaterThan(0);
+});
 it('soporte y sesiones ajenas o sin MFA no pueden guardar ni llamando al servicio', async () => {
   const p = await borrador();
   const dto = {
-    catalogoVersion: 1,
+    catalogoVersion: 2,
     cambios: [{ id: p.id, revision: 1, contenido: contenido() }],
   };
   for (const a of [
@@ -242,14 +337,14 @@ it('rechaza catálogos viejos y cambios duplicados', async () => {
     service.guardar(admin, { catalogoVersion: 0, cambios: [cambio] }),
   ).rejects.toThrow('catálogo');
   await expect(
-    service.guardar(admin, { catalogoVersion: 1, cambios: [cambio, cambio] }),
+    service.guardar(admin, { catalogoVersion: 2, cambios: [cambio, cambio] }),
   ).rejects.toThrow('lista');
 });
 it('dos editores no se pisan y un conflicto revierte el lote completo', async () => {
   const a = await borrador(),
     b = await borrador();
   const dto = {
-    catalogoVersion: 1,
+    catalogoVersion: 2,
     cambios: [{ id: a.id, revision: 1, contenido: contenido() }],
   };
   const resultados = await Promise.allSettled([
@@ -260,7 +355,7 @@ it('dos editores no se pisan y un conflicto revierte el lote completo', async ()
   expect(resultados.filter((r) => r.status === 'rejected')).toHaveLength(1);
   await expect(
     service.guardar(admin, {
-      catalogoVersion: 1,
+      catalogoVersion: 2,
       cambios: [
         { id: b.id, revision: 1, contenido: contenido() },
         { id: a.id, revision: 1, contenido: contenido() },

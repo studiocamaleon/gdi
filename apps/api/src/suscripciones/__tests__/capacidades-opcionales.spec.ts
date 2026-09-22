@@ -67,18 +67,32 @@ function contexto(
   } as ExecutionContext;
 }
 
+// Stub de transacción para los tests unitarios: las carreras y persistencia
+// se verifican en las suites de planes asignados con PostgreSQL.
+function transaccional<T extends object>(datos: T) {
+  const tx = {
+    ...datos,
+    $queryRaw: jest.fn().mockResolvedValue([{ id: auth.tenantId }]),
+  };
+  return {
+    ...tx,
+    $transaction: jest.fn(async (fn: (db: typeof tx) => Promise<unknown>) =>
+      fn(tx),
+    ),
+  };
+}
+
 describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => {
   it.each([
     [ComprasController, 'crear'],
     [ComprasController, 'recibir'],
-    [AdministracionController, 'resumenTesoreria'],
+    [AdministracionController, 'transferir'],
     [EgresosController, 'crear'],
-    [EgresosController, 'listarRecurrentes'],
+    [EgresosController, 'crearRecurrente'],
     [ReportesController, 'finanzas'],
     [ReportesController, 'producto'],
     [ReportesController, 'equipo'],
     [PreciosEspecialesClientesController, 'crear'],
-    [NotificacionesController, 'estado'],
     [AutomaticosWebController, 'iniciar'],
   ] as const)(
     'Esencial impide %p.%s aunque el cliente declare la función',
@@ -111,6 +125,9 @@ describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => 
     const guard = new CapacidadGuard(new Reflector(), plan());
     for (const [controller, metodo] of [
       [AdministracionController, 'listarCuentas'],
+      [AdministracionController, 'resumenTesoreria'],
+      [EgresosController, 'listarRecurrentes'],
+      [NotificacionesController, 'estado'],
       [AdministracionController, 'crearCuenta'],
       [ProveedoresController, 'opciones'],
       [ReportesController, 'resumen'],
@@ -121,7 +138,7 @@ describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => 
       ).resolves.toBe(true);
   });
 
-  it('recepciones requiere también compras; el método no reemplaza el requisito de clase', async () => {
+  it('recepciones exige compras y recepciones de forma conjunta', async () => {
     const ctx = contexto(ComprasController, 'recibir');
     for (const funciones of [
       { compras: false, recepciones: true },
@@ -184,7 +201,9 @@ describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => 
       configJson: { metodoCalculo: 'por_margen' },
     };
     const findFirst = jest.fn().mockResolvedValue(especial);
-    const db = { productoPrecioEspecialClienteV2: { findFirst } };
+    const db = transaccional({
+      productoPrecioEspecialClienteV2: { findFirst },
+    });
     const excluido = new PreciosEspecialesClientesService(db as never, plan());
     await expect(
       excluido.buscarActivo(auth.tenantId, 'producto', 'cliente'),
@@ -203,6 +222,8 @@ describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => 
         productoId: 'producto',
         clienteId: 'cliente',
         activo: true,
+        cliente: { tenantId: auth.tenantId, activo: true },
+        producto: { tenantId: auth.tenantId },
       },
     });
   });
@@ -230,7 +251,7 @@ describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => 
         notificacionWhatsapp: { create },
       };
       const avisos = new NotificacionesService(
-        db as never,
+        transaccional(db) as never,
         {} as never,
         plan(),
       );
@@ -262,30 +283,31 @@ describe('Funciones opcionales: accesos, fallback y tareas automáticas', () => 
     };
     const enviarPlantilla = jest.fn();
     const despacho = new DespachoService(
-      db as never,
+      transaccional(db) as never,
       {} as never,
       { enviarPlantilla } as never,
       plan(),
     );
-    await expect(despacho.despachar('aviso')).resolves.toMatchObject({
-      estado: 'pendiente',
-      motivo: expect.stringContaining('plan') as unknown,
+    await expect(despacho.despachar('aviso')).resolves.toEqual({
+      estado: 'nada',
     });
     expect(enviarPlantilla).not.toHaveBeenCalled();
-    expect(updateMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        data: { estado: 'pendiente', reservadaEl: null },
-      }),
-    );
+    expect(updateMany).not.toHaveBeenCalled();
   });
 
   it('la extensión no obtiene trabajos ni inicia envíos fuera del plan', async () => {
-    const web = new AutomaticosWebService({} as never, plan());
-    await expect(web.reservar(auth.tenantId, {} as never)).resolves.toEqual({
+    const web = new AutomaticosWebService(transaccional({}) as never, plan());
+    const dispositivo = {
+      tenantId: auth.tenantId,
+      dispositivoId: 'equipo',
+      numero: '5491111111111',
+      token: 'reserva',
+    };
+    await expect(web.reservar(auth.tenantId, dispositivo)).resolves.toEqual({
       trabajo: null,
     });
     await expect(
-      web.iniciar(auth.tenantId, 'aviso', {} as never),
+      web.iniciar(auth.tenantId, 'aviso', dispositivo),
     ).rejects.toMatchObject({ status: 403 });
   });
 

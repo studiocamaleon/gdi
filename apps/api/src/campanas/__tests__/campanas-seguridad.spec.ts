@@ -77,7 +77,9 @@ function escenario(opciones?: {
       Promise.resolve(fn(tx)),
     ),
   };
-  const service = new CampanasService(prisma as never);
+  const service = new CampanasService(prisma as never, undefined, {
+    exigirOperacionTx: jest.fn().mockResolvedValue(undefined),
+  } as never);
   jest.spyOn(service, 'detalle').mockResolvedValue({ id: campana.id } as never);
   return {
     service,
@@ -158,6 +160,8 @@ describe('CampanasService — aislamiento y consistencia', () => {
       where: {
         id: '33333333-3333-4333-a333-333333333333',
         tenantId: auth.tenantId,
+        clienteId: campana.clienteId,
+        proyectoCampanaId: null,
       },
       data: { proyectoCampanaId: campana.id },
     });

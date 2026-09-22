@@ -54,6 +54,7 @@ import { SelectField } from "@/components/design-system/select-field";
 import theme from "@/components/design-system/brand-workspace-theme.module.css";
 import { fmtBytes, TLogo } from "./kit";
 import styles from "./empresas.module.css";
+import { PlanAsignacionDialog } from "./plan-asignacion-dialog";
 
 const estado = (valor?: string | null) =>
   ({
@@ -438,6 +439,7 @@ function FichaEmpresa({
   planes: PlanCatalogo[];
   onVolver: () => void;
 }) {
+  const [restaurarContrato, setRestaurarContrato] = useState(false);
   const [version, setVersion] = useState(0);
   const [accion, setAccion] = useState<
     "bloquear" | "reactivar" | "plan" | null
@@ -651,6 +653,15 @@ function FichaEmpresa({
                         </ActionButton>
                       ) : null}
                     </>
+                  ) : e.suscripcion?.versionId ? (
+                    <Alert>
+                      <AlertTitle>Versión publicada asignada</AlertTitle>
+                      <AlertDescription>
+                        Las funciones y los cupos se administran desde Planes →
+                        Versiones. Para volver al contrato anterior, usá
+                        Funciones y límites.
+                      </AlertDescription>
+                    </Alert>
                   ) : (
                     <Alert>
                       <AlertTitle>
@@ -668,6 +679,24 @@ function FichaEmpresa({
               </Seccion>
             </TabsContent>
             <TabsContent value="funciones">
+              {e.suscripcion?.versionId && (
+                <Seccion titulo="Versión operativa asignada">
+                  <p>
+                    {e.suscripcion.planNombre} · versión{" "}
+                    {e.suscripcion.versionNumero}
+                  </p>
+                  <p>
+                    Contrato comercial conservado:{" "}
+                    {e.suscripcion.planComercialNombre}.
+                  </p>
+                  <ActionButton
+                    variant="outline"
+                    onPress={() => setRestaurarContrato(true)}
+                  >
+                    Revisar vuelta al contrato anterior
+                  </ActionButton>
+                </Seccion>
+              )}
               <Seccion titulo="Funciones disponibles">
                 <Table>
                   <TableHeader>
@@ -726,6 +755,15 @@ function FichaEmpresa({
               <Historial key={version} id={id} />
             </TabsContent>
           </Tabs>
+          {restaurarContrato && (
+            <PlanAsignacionDialog
+              version={null}
+              empresaInicial={{ id: e.id, nombre: e.nombre }}
+              esAdmin={esAdmin}
+              cerrar={() => setRestaurarContrato(false)}
+              completada={() => setVersion((v) => v + 1)}
+            />
+          )}
           {accion ? (
             <AccionEmpresa
               empresa={e}

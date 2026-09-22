@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import {
   ConfiguracionPage,
   ConfiguracionHeader,
@@ -130,6 +131,7 @@ function dinero(valor: number) {
 }
 
 export function CentroCopiadoConfigView() {
+  const conTerminaciones = useCapacidad("terminaciones_copiado");
   const [cfg, setCfg] = React.useState<CentroCopiadoConfig | null>(null);
   const [salud, setSalud] = React.useState<SaludCentroCopiado | null>(null);
   const [historial, setHistorial] = React.useState<EventoCentroCopiado[]>([]);
@@ -457,7 +459,11 @@ export function CentroCopiadoConfigView() {
       );
       return;
     }
-    if (terminaciones.has("Anillado") && !tiposAnillo.size) {
+    if (
+      conTerminaciones &&
+      terminaciones.has("Anillado") &&
+      !tiposAnillo.size
+    ) {
       toast.error("Habilitá Espiral plástico, Wire-O o ambos.");
       return;
     }
@@ -493,20 +499,25 @@ export function CentroCopiadoConfigView() {
           tamanos.size === cfg.disponibles.formatos.length
             ? null
             : [...tamanos],
-        terminaciones:
-          terminaciones.size === cfg.disponibles.terminaciones.length
-            ? null
-            : [...terminaciones],
-        tiposAnillo:
-          tiposAnillo.size ===
-          cfg.disponibles.tiposAnillo.filter((tipo) => tipo.instalado).length
-            ? null
-            : [...tiposAnillo],
+        ...(conTerminaciones
+          ? {
+              terminaciones:
+                terminaciones.size === cfg.disponibles.terminaciones.length
+                  ? null
+                  : [...terminaciones],
+              tiposAnillo:
+                tiposAnillo.size ===
+                cfg.disponibles.tiposAnillo.filter((tipo) => tipo.instalado)
+                  .length
+                  ? null
+                  : [...tiposAnillo],
+              maquinaAnilladoraId: maquinaAnilladora,
+              tapaFrontalMateriaPrimaId: tapaFrontal,
+              tapaContratapaMateriaPrimaId: tapaContratapa,
+            }
+          : {}),
         maquinaColorId: maquinaColor,
         maquinaBnId: maquinaBn,
-        maquinaAnilladoraId: maquinaAnilladora,
-        tapaFrontalMateriaPrimaId: tapaFrontal,
-        tapaContratapaMateriaPrimaId: tapaContratapa,
       });
       cargarFormulario(actualizada);
       const [diagnostico, eventos] = await Promise.all([
@@ -1109,83 +1120,103 @@ export function CentroCopiadoConfigView() {
                 />
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen /> Anillado
-                </CardTitle>
-                <CardDescription>
-                  Configura el paso opcional y las dos tecnologías disponibles.
-                </CardDescription>
-                <CardAction>
-                  <Switch
-                    checked={terminaciones.has("Anillado")}
-                    onCheckedChange={() =>
-                      toggleSet("Anillado", setTerminaciones)
-                    }
-                    aria-label="Ofrecer anillado"
-                  />
-                </CardAction>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <FieldGroup>
-                  {cfg.disponibles.tiposAnillo.map((tipo) => (
-                    <Field
-                      key={tipo.value}
-                      orientation="horizontal"
-                      data-disabled={
-                        !terminaciones.has("Anillado") || !tipo.instalado
+            <fieldset
+              disabled={!conTerminaciones}
+              className="min-w-0 border-0 p-0 m-0"
+            >
+              {!conTerminaciones && (
+                <Alert>
+                  <AlertDescription>
+                    Las terminaciones no están incluidas en el plan. Se conserva
+                    la configuración guardada.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BookOpen /> Anillado
+                  </CardTitle>
+                  <CardDescription>
+                    Configura el paso opcional y las dos tecnologías
+                    disponibles.
+                  </CardDescription>
+                  <CardAction>
+                    <Switch
+                      checked={terminaciones.has("Anillado")}
+                      onCheckedChange={() =>
+                        toggleSet("Anillado", setTerminaciones)
                       }
-                    >
-                      <FieldContent>
-                        <FieldTitle>{tipo.label}</FieldTitle>
-                        <FieldDescription>
-                          {tipo.instalado
-                            ? tipo.value === "WIRE_O"
-                              ? "Anillado metálico Wire-O."
-                              : "Espiral plástico seleccionado por capacidad."
-                            : "No hay consumibles instalados para este tipo."}
-                        </FieldDescription>
-                      </FieldContent>
-                      <Checkbox
-                        checked={tiposAnillo.has(tipo.value)}
-                        disabled={
+                      aria-label="Ofrecer anillado"
+                    />
+                  </CardAction>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <FieldGroup>
+                    {cfg.disponibles.tiposAnillo.map((tipo) => (
+                      <Field
+                        key={tipo.value}
+                        orientation="horizontal"
+                        data-disabled={
                           !terminaciones.has("Anillado") || !tipo.instalado
                         }
-                        onCheckedChange={() =>
-                          toggleSet(tipo.value, setTiposAnillo)
-                        }
-                        aria-label={`Ofrecer ${tipo.label}`}
-                      />
-                    </Field>
-                  ))}
-                </FieldGroup>
-                <SelectorMaquina
-                  label="Anilladora"
-                  value={maquinaAnilladora}
-                  setValue={setMaquinaAnilladora}
-                  opciones={cfg.disponibles.anilladoras}
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
+                      >
+                        <FieldContent>
+                          <FieldTitle>{tipo.label}</FieldTitle>
+                          <FieldDescription>
+                            {tipo.instalado
+                              ? tipo.value === "WIRE_O"
+                                ? "Anillado metálico Wire-O."
+                                : "Espiral plástico seleccionado por capacidad."
+                              : "No hay consumibles instalados para este tipo."}
+                          </FieldDescription>
+                        </FieldContent>
+                        <Checkbox
+                          checked={tiposAnillo.has(tipo.value)}
+                          disabled={
+                            !terminaciones.has("Anillado") || !tipo.instalado
+                          }
+                          onCheckedChange={() =>
+                            toggleSet(tipo.value, setTiposAnillo)
+                          }
+                          aria-label={`Ofrecer ${tipo.label}`}
+                        />
+                      </Field>
+                    ))}
+                  </FieldGroup>
                   <SelectorMaquina
-                    label="Tapa frontal"
-                    value={tapaFrontal}
-                    setValue={setTapaFrontal}
-                    opciones={cfg.disponibles.tapas
-                      .filter((t) => t.esFrontal)
-                      .map((t) => ({ id: t.materiaPrimaId, nombre: t.nombre }))}
+                    label="Anilladora"
+                    value={maquinaAnilladora}
+                    setValue={setMaquinaAnilladora}
+                    opciones={cfg.disponibles.anilladoras}
                   />
-                  <SelectorMaquina
-                    label="Contratapa"
-                    value={tapaContratapa}
-                    setValue={setTapaContratapa}
-                    opciones={cfg.disponibles.tapas
-                      .filter((t) => !t.esFrontal)
-                      .map((t) => ({ id: t.materiaPrimaId, nombre: t.nombre }))}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SelectorMaquina
+                      label="Tapa frontal"
+                      value={tapaFrontal}
+                      setValue={setTapaFrontal}
+                      opciones={cfg.disponibles.tapas
+                        .filter((t) => t.esFrontal)
+                        .map((t) => ({
+                          id: t.materiaPrimaId,
+                          nombre: t.nombre,
+                        }))}
+                    />
+                    <SelectorMaquina
+                      label="Contratapa"
+                      value={tapaContratapa}
+                      setValue={setTapaContratapa}
+                      opciones={cfg.disponibles.tapas
+                        .filter((t) => !t.esFrontal)
+                        .map((t) => ({
+                          id: t.materiaPrimaId,
+                          nombre: t.nombre,
+                        }))}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </fieldset>
           </div>
         </TabsContent>
 

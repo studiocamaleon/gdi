@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { ComprobantesSetup as SinConfig } from "@/components/administracion/comprobantes-setup";
 import { tienePermiso } from "@/lib/permisos-server";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
@@ -23,9 +25,14 @@ export default async function NuevoComprobantePage({
 }: {
   searchParams: Promise<{ origen?: string; ordenId?: string }>;
 }) {
-  if (!(await tienePermiso("administracion.gestionar")))
-    return <SinPermiso modulo="Emisión de comprobantes" />;
   const { origen: origenId } = await searchParams;
+  if (
+    !(await tienePermiso(
+      origenId ? "administracion.anular" : "administracion.gestionar",
+    ))
+  )
+    return <SinPermiso modulo="Emisión de comprobantes" />;
+  if (!(await tieneCapacidad("fiscal_argentina"))) return <FuncionNoIncluida />;
 
   const config = await getConfiguracionFiscal();
   let clientes: ClienteOpcion[] = [];

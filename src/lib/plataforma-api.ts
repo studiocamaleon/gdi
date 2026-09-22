@@ -36,6 +36,9 @@ export type EmpresaPlataforma = {
     id: string;
     planId: string;
     planNombre: string;
+    versionId?: string | null;
+    versionNumero?: number | null;
+    planComercialNombre?: string;
     planCodigo: string;
     proveedor: string;
     estado: string;
@@ -96,7 +99,9 @@ export type UsuariosEmpresa = {
     habilitado: boolean;
   }>;
 };
-export type StaffPlataforma = NonNullable<ConsolaPlataforma["staff"]> & { requiereSeguridad: boolean };
+export type StaffPlataforma = NonNullable<ConsolaPlataforma["staff"]> & {
+  requiereSeguridad: boolean;
+};
 export const getContextoPlataforma = () =>
   apiRequest<StaffPlataforma>("/plataforma/contexto", { cache: "no-store" });
 export const getEmpresasPlataforma = (query: URLSearchParams) =>
@@ -159,6 +164,9 @@ export type TenantConsola = {
 };
 
 export type PlanCatalogo = {
+  comercialVersionado?: boolean;
+  revisionOferta?: number;
+  ofertaActualId?: string | null;
   id: string;
   codigo: string;
   nombre: string;
@@ -322,6 +330,20 @@ export async function getNegocioPlataforma(
 
 export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
   return apiRequest("/plataforma/planes", { cache: "no-store" });
+}
+
+export function retirarPlanAnterior(
+  planId: string,
+  revision: number,
+  motivo: string,
+) {
+  return apiRequest<{ ok: true }>(
+    "/plataforma/planes-ofertas/retirar-anterior",
+    {
+      method: "POST",
+      body: JSON.stringify({ planId, revision, motivo }),
+    },
+  );
 }
 
 /** Edita la bajada comercial del plan (la que ve el tenant). */

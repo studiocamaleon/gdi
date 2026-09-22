@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { declararUnidadPrecioFixture } from '../../../test/fixture-unidad-precio';
 /**
  * Etapa F — E2E backend del camino de staging del modal:
@@ -30,12 +31,37 @@ beforeAll(async () => {
   if (!tenantId) return;
   restaurarUnidades = await declararUnidadPrecioFixture(prisma, tenantId);
 
+  const capacidades = new CapacidadesEmpresaService(prisma as never);
+  const actual = capacidades.actual.bind(capacidades);
+  jest.spyOn(capacidades, 'actual').mockImplementation(async (id, db) => {
+    const estado = await actual(id, db);
+    Object.assign(estado.contrato.funciones, {
+      cotizacion_cad: false,
+      terminaciones_copiado: false,
+      impresion_directa: false,
+      colas_impresion: false,
+    });
+    return estado;
+  });
   motor = new MotorUniversalService(
     prisma as never,
     new AplicarPrecioService(),
     new PreciosEspecialesClientesService(prisma as never),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    capacidades,
   );
-  service = new CentroCopiadoService(prisma as never, motor);
+  service = new CentroCopiadoService(
+    prisma as never,
+    motor,
+    undefined,
+    undefined,
+    undefined,
+    capacidades,
+  );
 
   const p = await prisma.materiaPrima.findFirstOrThrow({
     where: { tenantId, subfamilia: 'SUSTRATO_HOJA' },
@@ -50,7 +76,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-it('construir-items → cotizarYGuardar → CotizacionItem materializable con metadata', async () => {
+it('sin CAD, terminaciones ni impresión: construir-items → cotizarYGuardar → CotizacionItem materializable', async () => {
   if (!tenantId) return;
 
   // 1) El modal arma el payload del documento.

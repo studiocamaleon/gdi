@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { CargosDirectosProductoService } from '../cargos-directos-producto.service';
@@ -17,10 +18,7 @@ function serviceCon(
   prisma: Record<string, unknown>,
   familias: Partial<FamiliasPasosService> = {},
 ) {
-  return new CargosDirectosProductoService(
-    prisma as unknown as PrismaService,
-    familias as FamiliasPasosService,
-  );
+  return new CargosDirectosProductoService(prisma as unknown as PrismaService, familias as FamiliasPasosService, capacidadesDePrueba());
 }
 
 describe('CargosDirectosProductoService', () => {

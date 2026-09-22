@@ -298,9 +298,11 @@ function createEmptyDireccion(countryCode: string): ClienteDireccion {
 
 export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
   const conFidelizacion = useCapacidad("fidelizacion");
+  const conCuentasCobrar = useCapacidad("cuentas_cobrar");
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const puedeAjustarPuntos = usePuede("crm.configurar_fidelizacion");
+  const puedeConsultarPuntos = usePuede("crm.ver");
   const router = useRouter();
   const { fechaHora } = useFecha();
   const [isSaving, startSaving] = React.useTransition();
@@ -665,7 +667,7 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
               Campañas
             </ActionLink>
           ) : null}
-          {mode !== "create" ? (
+          {mode !== "create" && conCuentasCobrar ? (
             <ActionLink
               href={`/crm/clientes/${cliente.id}/cuenta-corriente`}
               onNavigate={confirmNavigation}
@@ -760,9 +762,9 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
                 description: "Datos y contactos",
                 icon: <UserRoundIcon />,
               },
-              ...(conFidelizacion ? [{
+              ...(puedeConsultarPuntos ? [{
                 id: "fidelizacion",
-                label: "Fidelización",
+                label: conFidelizacion ? "Fidelización" : "Historial de puntos",
                 description: "Puntos y movimientos",
                 icon: <StarIcon />,
               }] : []),
@@ -1686,11 +1688,11 @@ export function ClienteFicha({ cliente, mode }: ClienteFichaProps) {
           </fieldset>
         </Tabs.Panel>
 
-        {mode !== "create" && conFidelizacion ? (
+        {mode !== "create" && puedeConsultarPuntos ? (
           <Tabs.Panel id="fidelizacion" className={styles.tabPanel}>
             <ClienteFidelizacionCard
               clienteId={cliente.id}
-              puedeAjustar={puedeAjustarPuntos}
+              puedeAjustar={puedeAjustarPuntos && conFidelizacion}
             />
           </Tabs.Panel>
         ) : null}

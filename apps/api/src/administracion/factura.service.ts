@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type ConfiguracionFiscal } from '@prisma/client';
 import { formatearCuit } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
 import { DatosEmpresaService } from '../tenants/datos-empresa.service';
@@ -101,9 +101,17 @@ export class FacturaService {
     });
     if (!c) throw new NotFoundException(`No existe el comprobante ${id}`);
 
-    const config = await this.prisma.configuracionFiscal.findUnique({
-      where: { tenantId },
-    });
+    const guardado = c.emisorSnapshot as {
+      config?: ConfiguracionFiscal;
+      puntoVenta?: { numero: number };
+    } | null;
+    const config =
+      guardado?.config ??
+      (await this.prisma.configuracionFiscal.findUnique({
+        where: { tenantId },
+      }));
+    const numeroPuntoVenta =
+      guardado?.puntoVenta?.numero ?? c.puntoVenta.numero;
     if (!config) {
       throw new NotFoundException(
         'Faltan los datos fiscales del emisor: no se puede armar el comprobante.',
@@ -149,7 +157,7 @@ export class FacturaService {
         ? construirUrlQr({
             fecha: c.fecha.toISOString().slice(0, 10),
             cuitEmisor: config.cuit,
-            puntoVenta: c.puntoVenta.numero,
+            puntoVenta: numeroPuntoVenta,
             tipoComprobante: tipoArca,
             numero: c.numero ?? 0,
             importeTotal: total,
@@ -178,7 +186,7 @@ export class FacturaService {
         cuit: formatearCuit(config.cuit),
         ingresosBrutos: config.ingresosBrutos,
         inicioActividades: config.inicioActividades
-          ? config.inicioActividades.toISOString().slice(0, 10)
+          ? new Date(config.inicioActividades).toISOString().slice(0, 10)
           : null,
       },
       // ── Comprobante ──
@@ -186,7 +194,7 @@ export class FacturaService {
       /** El recuadro central de la letra lo exige la norma: "COD. 01". */
       codigoArca: codigo,
       tipoLabel: `${TIPO_LABEL[c.tipo] ?? c.tipo} ${c.letra}`,
-      puntoVenta: String(c.puntoVenta.numero).padStart(4, '0'),
+      puntoVenta: String(numeroPuntoVenta).padStart(4, '0'),
       numero: c.numero ? String(c.numero).padStart(8, '0') : '—',
       fecha: c.fecha.toISOString().slice(0, 10),
       vencimientoPago: c.vencimiento

@@ -68,6 +68,7 @@ function escenario(actualizadas = 1) {
     {} as never,
     {} as never,
     {
+      exigirCompromisoTx: jest.fn().mockResolvedValue(undefined),
       simularCotizacion: jest.fn().mockResolvedValue({
         margen: 500,
         puntosEstimados: 0,
@@ -78,6 +79,7 @@ function escenario(actualizadas = 1) {
       }),
     } as never,
     {} as never,
+    { exigir: jest.fn().mockResolvedValue(undefined) } as never,
   );
   jest
     .spyOn(service, 'enviar')

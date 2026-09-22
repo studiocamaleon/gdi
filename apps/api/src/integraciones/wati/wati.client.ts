@@ -115,7 +115,10 @@ export class WatiClient {
        */
       mediaHeaderUrl?: string;
     },
-  ): Promise<{ ok: true; id: string | null } | { ok: false; motivo: string }> {
+  ): Promise<
+    | { ok: true; id: string | null }
+    | { ok: false; motivo: string; incierto: boolean }
+  > {
     try {
       const json = await this.pedir<{
         result?: boolean;
@@ -153,6 +156,7 @@ export class WatiClient {
       if (json?.result === false) {
         return {
           ok: false,
+          incierto: false,
           motivo:
             typeof json.info === 'string' && json.info.trim()
               ? json.info.trim()
@@ -161,9 +165,23 @@ export class WatiClient {
       }
       const msg = (json?.message ?? {}) as Record<string, unknown>;
       const id = typeof msg.id === 'string' ? msg.id : null;
+      if (json?.result !== true && !id)
+        return {
+          ok: false,
+          incierto: true,
+          motivo:
+            'Wati no confirmó si aceptó el mensaje. Revisá el envío antes de reintentarlo.',
+        };
       return { ok: true, id };
     } catch (error) {
-      return { ok: false, motivo: mensajeDeError(error) };
+      return {
+        ok: false,
+        motivo: mensajeDeError(error),
+        incierto: !(
+          error instanceof ErrorWati &&
+          [400, 401, 403, 404, 422, 429].includes(error.status)
+        ),
+      };
     }
   }
 

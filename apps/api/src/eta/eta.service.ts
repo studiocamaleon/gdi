@@ -2,13 +2,25 @@ import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.
 import { sincronizarAsignaciones } from './asignacion-automatica';
 import { personalFijoDelPaso } from '../produccion/asignacion-personal';
 import { recuperarDemandasHistoricas } from './demanda-historica';
-import { aplicarOperacionMaquina, leerDemandaHumana, leerModoOperacionMaquina, type ModoOperacionMaquina, type DemandaHumana } from './motor/demanda-humana';
+import {
+  aplicarOperacionMaquina,
+  leerDemandaHumana,
+  leerModoOperacionMaquina,
+  type ModoOperacionMaquina,
+  type DemandaHumana,
+} from './motor/demanda-humana';
 import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
 import { agregarEtaEntregas, descendientesEntrega } from './eta-lotes-entrega';
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { ProduccionService } from '../produccion/produccion.service';
 import { regionalDelTenant } from '../common/regional';
 import { resolverTecnologiaMaquina } from '../common/tecnologia-maquina';
@@ -54,13 +66,23 @@ export class EtaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly produccion: ProduccionService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async sincronizarAsignaciones(tenantId: string) {
-    if (!(await this.capacidades.incluida(tenantId, 'asignacion_automatica'))) return;
-    return sincronizarAsignaciones(this.prisma, tenantId, db => this.contextoSimulacion(tenantId, db, false));
+    if (
+      !(await this.capacidades.puedeOperar(tenantId, 'asignacion_automatica'))
+    )
+      return;
+    return sincronizarAsignaciones(
+      this.prisma,
+      tenantId,
+      (db) =>
+        this.contextoSimulacion(tenantId, db, false, 'asignacion_automatica'),
+      this.capacidades,
+    );
   }
 
   // ── Ensamblado de entradas + corrida del motor ─────────────────────────
@@ -69,17 +91,32 @@ export class EtaService {
   async correr(tenantId: string): Promise<ResultadoSimulacion> {
     const resultado = simularFlujo(await this.contextoSimulacion(tenantId));
     const arbol = await this.prisma.ordenTrabajoItem.findMany({
-      where: { tenantId, orden: { estado: { in: ESTADOS_TABLERO } }, OR: [{ contieneLotesEntrega: true }, { loteEntregaId: { not: null } }] },
-      select: { id: true, parentItemId: true, contieneLotesEntrega: true, loteEntregaId: true },
+      where: {
+        tenantId,
+        orden: { estado: { in: ESTADOS_TABLERO } },
+        OR: [{ contieneLotesEntrega: true }, { loteEntregaId: { not: null } }],
+      },
+      select: {
+        id: true,
+        parentItemId: true,
+        contieneLotesEntrega: true,
+        loteEntregaId: true,
+      },
     });
     agregarEtaEntregas(resultado.porItem, arbol);
     return resultado;
   }
 
-  /** Contexto compartido por ETA y F6. Recupera metadatos históricos de
-   * atención ausentes; no reserva capacidad ni modifica fechas o tiempos. */
-  async contextoSimulacion(tenantId: string, db: Prisma.TransactionClient = this.prisma, recuperarHistoricos = true) {
-    await this.capacidades.exigirIncluida(tenantId, 'eta_capacidad', db);
+  /** Contexto compartido por ETA y F6. Recupera metadatos en memoria. Sólo
+   * una operación escritora ya autorizada puede pedir guardar el backfill. */
+  async contextoSimulacion(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+    recuperarHistoricos: boolean | 'lectura' = 'lectura',
+    finalidad: 'eta_capacidad' | 'asignacion_automatica' = 'eta_capacidad',
+  ) {
+    // El motor se comparte; asignar personal no requiere contratar la ETA.
+    await this.capacidades.exigirIncluida(tenantId, finalidad, db);
     const [items, estaciones, duraciones, dias, config, regional] =
       await Promise.all([
         this.assembleItems(tenantId, db, recuperarHistoricos),
@@ -108,7 +145,11 @@ export class EtaService {
   }
 
   /** El subconjunto de `TableroItemData` que el motor necesita, desde Prisma. */
-  private async assembleItems(tenantId: string, db: Prisma.TransactionClient, recuperarHistoricos = true): Promise<TableroItemData[]> {
+  private async assembleItems(
+    tenantId: string,
+    db: Prisma.TransactionClient,
+    recuperarHistoricos: boolean | 'lectura',
+  ): Promise<TableroItemData[]> {
     const ordenes = await db.ordenTrabajo.findMany({
       where: { tenantId, estado: { in: ESTADOS_TABLERO } },
       select: {
@@ -140,7 +181,9 @@ export class EtaService {
                 demandaHumanaJson: true,
                 estado: true,
                 iniciadoEl: true,
-                tramos: { select: { inicioEl: true, finEl: true, usuarioId: true } },
+                tramos: {
+                  select: { inicioEl: true, finEl: true, usuarioId: true },
+                },
                 planificadoDesde: true,
                 planificadoHasta: true,
                 atencionPlanificadaJson: true,
@@ -163,15 +206,24 @@ export class EtaService {
         },
       },
     });
-    // Las revisiones puras no hacen backfill ni leen snapshots de geometría.
-    // Si falta atención congelada, el motor conserva su fallback orientativo.
-    const recuperadas = recuperarHistoricos
-      ? await recuperarDemandasHistoricas(db, tenantId, ordenes.flatMap(o => o.items.flatMap(i => i.pasos)))
-      : new Map<string, DemandaHumana>();
-    for (const orden of ordenes) for (const item of orden.items) for (const paso of item.pasos) {
-      const demanda = recuperadas.get(paso.id);
-      if (demanda) paso.demandaHumanaJson = demanda as unknown as Prisma.JsonValue;
-    }
+    // false conserva el camino liviano del reparto; 'lectura' recupera las
+    // fases históricas sin escribir; true exige una transacción ya autorizada.
+    const recuperadas =
+      recuperarHistoricos === false
+        ? new Map<string, DemandaHumana>()
+        : await recuperarDemandasHistoricas(
+            db,
+            tenantId,
+            ordenes.flatMap((o) => o.items.flatMap((i) => i.pasos)),
+            recuperarHistoricos === true,
+          );
+    for (const orden of ordenes)
+      for (const item of orden.items)
+        for (const paso of item.pasos) {
+          const demanda = recuperadas.get(paso.id);
+          if (demanda)
+            paso.demandaHumanaJson = demanda as unknown as Prisma.JsonValue;
+        }
     const fechaEntregaIso = (f: Date | null) =>
       f ? f.toISOString().slice(0, 10) : null;
     // Tecnología por máquina (derivada, no persistida): habilita el ruteo a
@@ -183,7 +235,10 @@ export class EtaService {
       ),
       db,
     );
-    const empleadosAsignables = await db.empleado.findMany({ where: { tenantId }, select: { id: true, userId: true } });
+    const empleadosAsignables = await db.empleado.findMany({
+      where: { tenantId },
+      select: { id: true, userId: true },
+    });
     return ordenes.flatMap((orden) =>
       orden.items.map((item) => ({
         id: item.id,
@@ -204,7 +259,14 @@ export class EtaService {
             planificadoDesde: paso.planificadoDesde?.toISOString() ?? null,
             planificadoHasta: paso.planificadoHasta?.toISOString() ?? null,
             atencionPlanificada: paso.atencionPlanificadaJson,
-            personalFijo: personalFijoDelPaso({ ...paso, operadorActualUsuarioId: paso.tramos.find(t => !t.finEl)?.usuarioId }, empleadosAsignables),
+            personalFijo: personalFijoDelPaso(
+              {
+                ...paso,
+                operadorActualUsuarioId: paso.tramos.find((t) => !t.finEl)
+                  ?.usuarioId,
+              },
+              empleadosAsignables,
+            ),
             predecesorPasoIds: paso.dependenciasEntrantes.map(
               (dependencia) => dependencia.predecesorPasoId,
             ),
@@ -217,11 +279,21 @@ export class EtaService {
               resolverFamilia(paso.familiaCodigo)?.plantillaCodigo ?? null,
             centroCostoId: paso.centroCostoId,
             maquinaId: paso.maquinaId,
-        requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
-            demandaHumana: paso.maquinaId && paso.estado !== 'hecho'
-              ? aplicarOperacionMaquina(leerDemandaHumana(paso.demandaHumanaJson, Number(paso.duracionEstimadaMin ?? -1)), tecnologias.get(paso.maquinaId)?.operacionMaquina ?? null)
-              : paso.demandaHumanaJson,
-            tramosEjecucion: paso.tramos.map((t) => ({ inicio: t.inicioEl.toISOString(), fin: t.finEl?.toISOString() ?? null })),
+            requiereMaquina: !admitePasoSinMaquina(paso.familiaCodigo),
+            demandaHumana:
+              paso.maquinaId && paso.estado !== 'hecho'
+                ? aplicarOperacionMaquina(
+                    leerDemandaHumana(
+                      paso.demandaHumanaJson,
+                      Number(paso.duracionEstimadaMin ?? -1),
+                    ),
+                    tecnologias.get(paso.maquinaId)?.operacionMaquina ?? null,
+                  )
+                : paso.demandaHumanaJson,
+            tramosEjecucion: paso.tramos.map((t) => ({
+              inicio: t.inicioEl.toISOString(),
+              fin: t.finEl?.toISOString() ?? null,
+            })),
             tecnologia: paso.maquinaId
               ? (tecnologias.get(paso.maquinaId)?.tecnologia ?? null)
               : null,
@@ -247,7 +319,15 @@ export class EtaService {
     tenantId: string,
     maquinaIds: Array<string | null>,
     db: Prisma.TransactionClient,
-  ): Promise<Map<string, { tecnologia: string | null; operacionMaquina: ModoOperacionMaquina | null }>> {
+  ): Promise<
+    Map<
+      string,
+      {
+        tecnologia: string | null;
+        operacionMaquina: ModoOperacionMaquina | null;
+      }
+    >
+  > {
     const ids = Array.from(
       new Set(maquinaIds.filter((id): id is string => id !== null)),
     );
@@ -262,7 +342,19 @@ export class EtaService {
       },
     });
     return new Map(
-      maquinas.map((m) => [m.id, { tecnologia: resolverTecnologiaMaquina(m), operacionMaquina: leerModoOperacionMaquina((m.parametrosTecnicosJson as Record<string, unknown> | null)?.operacionMaquina) }] as const),
+      maquinas.map(
+        (m) =>
+          [
+            m.id,
+            {
+              tecnologia: resolverTecnologiaMaquina(m),
+              operacionMaquina: leerModoOperacionMaquina(
+                (m.parametrosTecnicosJson as Record<string, unknown> | null)
+                  ?.operacionMaquina,
+              ),
+            },
+          ] as const,
+      ),
     );
   }
 
@@ -274,10 +366,19 @@ export class EtaService {
    * fallo del motor deja una fila con `sinEstimar` para no perder cobertura.
    */
   async capturarEmision(auth: CurrentAuth, ordenId: string): Promise<void> {
-    if (!(await this.capacidades.incluida(auth.tenantId, 'eta_capacidad'))) return;
+    if (!(await this.capacidades.puedeOperar(auth.tenantId, 'eta_capacidad')))
+      return;
     const items = await this.prisma.ordenTrabajoItem.findMany({
-      where: { tenantId: auth.tenantId, ordenId },
-      select: { id: true, fechaEntrega: true, orden: { select: { fechaEntrega: true } } },
+      where: {
+        tenantId: auth.tenantId,
+        ordenId,
+        orden: { estado: { in: ESTADOS_TABLERO } },
+      },
+      select: {
+        id: true,
+        fechaEntrega: true,
+        orden: { select: { fechaEntrega: true } },
+      },
     });
     if (items.length === 0) return;
 
@@ -285,26 +386,55 @@ export class EtaService {
     try {
       porItem = (await this.correr(auth.tenantId)).porItem;
     } catch (error) {
+      if (this.esRetiradaEta(error)) return;
       this.logger.error(
         `No se pudo correr el motor para la promesa de emisión (orden ${ordenId}).`,
         error instanceof Error ? error.stack : String(error),
       );
     }
 
-    await this.prisma.etaPromesa.createMany({
-      data: items.map((item) => {
-        const eta = porItem?.get(item.id) ?? null;
-        return {
-          tenantId: auth.tenantId,
-          ordenId,
-          itemId: item.id,
-          hito: 'emision',
-          finEstimado: eta?.finEstimado ?? null,
-          sinEstimar: eta ? eta.sinEstimar : true,
-          parcial: eta?.parcial ?? false,
-          fechaEntrega: item.fechaEntrega ?? item.orden.fechaEntrega,
-        };
-      }),
+    await this.persistirConEta(auth.tenantId, async (tx) => {
+      const ordenes = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "OrdenTrabajo"
+        WHERE "tenantId" = ${auth.tenantId}::uuid AND id = ${ordenId}::uuid
+          AND estado IN ('pendiente', 'produccion') FOR UPDATE`;
+      if (!ordenes.length) return;
+      // Serializa reintentos de emisión y no reemplaza la promesa original.
+      const [vigentes, existentes] = await Promise.all([
+        tx.ordenTrabajoItem.findMany({
+          where: {
+            tenantId: auth.tenantId,
+            ordenId,
+            id: { in: items.map((i) => i.id) },
+          },
+          select: { id: true },
+        }),
+        tx.etaPromesa.findMany({
+          where: { tenantId: auth.tenantId, ordenId, hito: 'emision' },
+          select: { itemId: true },
+        }),
+      ]);
+      const ids = new Set(vigentes.map((i) => i.id));
+      const capturados = new Set(existentes.map((p) => p.itemId));
+      const nuevos = items.filter(
+        (i) => ids.has(i.id) && !capturados.has(i.id),
+      );
+      if (!nuevos.length) return;
+      await tx.etaPromesa.createMany({
+        data: nuevos.map((item) => {
+          const eta = porItem?.get(item.id) ?? null;
+          return {
+            tenantId: auth.tenantId,
+            ordenId,
+            itemId: item.id,
+            hito: 'emision',
+            finEstimado: eta?.finEstimado ?? null,
+            sinEstimar: eta ? eta.sinEstimar : true,
+            parcial: eta?.parcial ?? false,
+            fechaEntrega: item.fechaEntrega ?? item.orden.fechaEntrega,
+          };
+        }),
+      });
     });
   }
 
@@ -316,60 +446,74 @@ export class EtaService {
    * Idempotente: sólo toca promesas con `finReal` nulo y recomputa el ciclo.
    */
   async capturarCierre(tenantId: string, ordenId: string): Promise<void> {
-    if (!(await this.capacidades.incluida(tenantId, 'eta_capacidad'))) return;
-    const items = await this.prisma.ordenTrabajoItem.findMany({
-      where: { tenantId, ordenId },
-      select: {
-        id: true,
-        parentItemId: true,
-        contieneLotesEntrega: true,
-        loteEntregaId: true,
-        pasos: {
+    // Es el cierre de una operación ya confirmada, incluso si luego se retiró
+    // ETA o la cuenta pasó a sólo lectura. No corre el motor ni crea proyecciones.
+    await this.prisma.$transaction(
+      async (tx) => {
+        await bloquearCupoUsuarios(tx, tenantId);
+        const ordenes = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "OrdenTrabajo"
+      WHERE "tenantId" = ${tenantId}::uuid AND id = ${ordenId}::uuid
+        AND estado IN ('finalizada', 'entregada') FOR UPDATE`;
+        if (!ordenes.length) return;
+        const items = await tx.ordenTrabajoItem.findMany({
+          where: { tenantId, ordenId },
           select: {
-            iniciadoEl: true,
-            completadoEl: true,
-            tiempoRealMin: true,
-            tipoEjecucion: true,
+            id: true,
+            parentItemId: true,
+            contieneLotesEntrega: true,
+            loteEntregaId: true,
+            pasos: {
+              select: {
+                iniciadoEl: true,
+                completadoEl: true,
+                tiempoRealMin: true,
+                tipoEjecucion: true,
+              },
+            },
           },
-        },
-      },
-    });
-
-    for (const item of items) {
-      const pasos = item.contieneLotesEntrega || item.loteEntregaId
-        ? descendientesEntrega(items, item).flatMap(i => i.pasos) : item.pasos;
-      const ciclo = descomponerCiclo(
-        pasos.map((p) => ({
-          iniciadoEl: p.iniciadoEl,
-          completadoEl: p.completadoEl,
-          tiempoRealMin:
-            p.tiempoRealMin === null ? null : Number(p.tiempoRealMin),
-          tipoEjecucion: p.tipoEjecucion,
-        })),
-      );
-      const { finReal, ...campos } = ciclo;
-      await this.prisma.ordenTrabajoItem.update({
-        where: { id: item.id },
-        data: campos,
-      });
-      if (!finReal) continue;
-
-      const abiertas = await this.prisma.etaPromesa.findMany({
-        where: { tenantId, itemId: item.id, finReal: null },
-        select: { id: true, finEstimado: true },
-      });
-      for (const promesa of abiertas) {
-        const errorMin = promesa.finEstimado
-          ? Math.round(
-              (finReal.getTime() - promesa.finEstimado.getTime()) / 60000,
-            )
-          : null;
-        await this.prisma.etaPromesa.update({
-          where: { id: promesa.id },
-          data: { finReal, errorMin },
         });
-      }
-    }
+
+        for (const item of items) {
+          const pasos =
+            item.contieneLotesEntrega || item.loteEntregaId
+              ? descendientesEntrega(items, item).flatMap((i) => i.pasos)
+              : item.pasos;
+          const ciclo = descomponerCiclo(
+            pasos.map((p) => ({
+              iniciadoEl: p.iniciadoEl,
+              completadoEl: p.completadoEl,
+              tiempoRealMin:
+                p.tiempoRealMin === null ? null : Number(p.tiempoRealMin),
+              tipoEjecucion: p.tipoEjecucion,
+            })),
+          );
+          const { finReal, ...campos } = ciclo;
+          await tx.ordenTrabajoItem.update({
+            where: { id: item.id, tenantId },
+            data: campos,
+          });
+          if (!finReal) continue;
+
+          const abiertas = await tx.etaPromesa.findMany({
+            where: { tenantId, ordenId, itemId: item.id, finReal: null },
+            select: { id: true, finEstimado: true },
+          });
+          for (const promesa of abiertas) {
+            const errorMin = promesa.finEstimado
+              ? Math.round(
+                  (finReal.getTime() - promesa.finEstimado.getTime()) / 60000,
+                )
+              : null;
+            await tx.etaPromesa.update({
+              where: { id: promesa.id, tenantId },
+              data: { finReal, errorMin },
+            });
+          }
+        }
+      },
+      { timeout: 15_000 },
+    );
   }
 
   /**
@@ -406,8 +550,9 @@ export class EtaService {
    * item. Idempotente: upsert por (tenant, fecha, clave) — re-correr el mismo
    * día pisa, no duplica.
    */
-  async snapshotDiario(tenantId: string, ahora = new Date()): Promise<void> {
-    if (!(await this.capacidades.incluida(tenantId, 'eta_capacidad'))) return;
+  async snapshotDiario(tenantId: string, ahora = new Date()): Promise<boolean> {
+    if (!(await this.capacidades.puedeOperar(tenantId, 'eta_capacidad')))
+      return false;
     const [{ porItem, traza }, estaciones, dias, entregas, regional] =
       await Promise.all([
         this.correr(tenantId),
@@ -418,7 +563,11 @@ export class EtaService {
             tenantId,
             orden: { estado: { in: ESTADOS_TABLERO } },
           },
-          select: { id: true, fechaEntrega: true, orden: { select: { fechaEntrega: true } } },
+          select: {
+            id: true,
+            fechaEntrega: true,
+            orden: { select: { fechaEntrega: true } },
+          },
         }),
         regionalDelTenant(this.prisma, tenantId),
       ]);
@@ -458,8 +607,8 @@ export class EtaService {
     const entregaPorItem = new Map(
       entregas.map((e) => [
         e.id,
-        e.orden.fechaEntrega
-          ? e.orden.fechaEntrega.toISOString().slice(0, 10)
+        (e.fechaEntrega ?? e.orden.fechaEntrega)
+          ? (e.fechaEntrega ?? e.orden.fechaEntrega)!.toISOString().slice(0, 10)
           : null,
       ]),
     );
@@ -469,24 +618,73 @@ export class EtaService {
       regional.zonaHoraria,
     );
 
-    for (const foto of fotosEstacion) {
-      const { estacionKey, ...campos } = foto;
-      await this.prisma.etaSnapshotEstacion.upsert({
-        where: {
-          tenantId_fecha_estacionKey: { tenantId, fecha, estacionKey },
+    return this.persistirConEta(tenantId, async (tx) => {
+      for (const foto of fotosEstacion) {
+        const { estacionKey, ...campos } = foto;
+        await tx.etaSnapshotEstacion.upsert({
+          where: {
+            tenantId_fecha_estacionKey: { tenantId, fecha, estacionKey },
+          },
+          create: { tenantId, fecha, estacionKey, ...campos },
+          update: campos,
+        });
+      }
+      for (const foto of fotosItem) {
+        const { itemId, ...campos } = foto;
+        await tx.etaSnapshotItem.upsert({
+          where: { tenantId_fecha_itemId: { tenantId, fecha, itemId } },
+          create: { tenantId, fecha, itemId, ...campos },
+          update: campos,
+        });
+      }
+    });
+  }
+
+  /** El cálculo no mantiene un lock largo; la publicación sí revalida el
+   * contrato con el mismo cerrojo que usa el cambio de plan. Todo o nada. */
+  private async persistirConEta(
+    tenantId: string,
+    guardar: (tx: Prisma.TransactionClient) => Promise<void>,
+  ) {
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          await this.capacidades.exigirOperacionTx(
+            tx,
+            tenantId,
+            ['eta_capacidad'],
+            ['eta_capacidad'],
+          );
+          await guardar(tx);
         },
-        create: { tenantId, fecha, estacionKey, ...campos },
-        update: campos,
-      });
+        { timeout: 30_000 },
+      );
+      return true;
+    } catch (error) {
+      if (this.esRetiradaEta(error)) return false;
+      throw error;
     }
-    for (const foto of fotosItem) {
-      const { itemId, ...campos } = foto;
-      await this.prisma.etaSnapshotItem.upsert({
-        where: { tenantId_fecha_itemId: { tenantId, fecha, itemId } },
-        create: { tenantId, fecha, itemId, ...campos },
-        update: campos,
-      });
-    }
+  }
+
+  private esRetiradaEta(error: unknown) {
+    if (
+      !(
+        error instanceof ForbiddenException ||
+        error instanceof ConflictException
+      )
+    )
+      return false;
+    const respuesta = error.getResponse();
+    return (
+      typeof respuesta === 'object' &&
+      respuesta &&
+      'code' in respuesta &&
+      [
+        'CAPACIDAD_NO_DISPONIBLE',
+        'CAPACIDAD_NO_INCLUIDA',
+        'CAMBIO_PLAN_PENDIENTE',
+      ].includes(String(respuesta.code))
+    );
   }
 
   /** Serie diaria de la cola por estación (opcional: una estación / rango). */
@@ -494,6 +692,10 @@ export class EtaService {
     tenantId: string,
     filtro?: { estacionKey?: string; desde?: string; hasta?: string },
   ) {
+    await this.capacidades.exigirAlgunaIncluida(tenantId, [
+      'eta_capacidad',
+      'reportes_produccion',
+    ]);
     const fecha: Prisma.DateTimeFilter = {};
     if (filtro?.desde) fecha.gte = new Date(`${filtro.desde}T00:00:00.000Z`);
     if (filtro?.hasta) fecha.lte = new Date(`${filtro.hasta}T00:00:00.000Z`);
@@ -519,6 +721,10 @@ export class EtaService {
     auth: CurrentAuth,
     rango?: { desde?: string; hasta?: string },
   ) {
+    await this.capacidades.exigirAlgunaIncluida(auth.tenantId, [
+      'eta_capacidad',
+      'reportes_produccion',
+    ]);
     const congeladaEl: Prisma.DateTimeFilter = {};
     if (rango?.desde)
       congeladaEl.gte = new Date(`${rango.desde}T00:00:00.000Z`);
@@ -537,6 +743,10 @@ export class EtaService {
 
   /** Variante usada por Reportes: recibe los bordes ya resueltos en la zona del tenant. */
   async precisionEnRango(tenantId: string, rango: Rango) {
+    await this.capacidades.exigirAlgunaIncluida(tenantId, [
+      'eta_capacidad',
+      'reportes_produccion',
+    ]);
     const promesas = await this.prisma.etaPromesa.findMany({
       where: {
         tenantId,
@@ -557,6 +767,10 @@ export class EtaService {
    * corrección sigue siendo decisión humana.
    */
   async saludModelo(tenantId: string, rango?: Rango) {
+    await this.capacidades.exigirAlgunaIncluida(tenantId, [
+      'eta_capacidad',
+      'reportes_produccion',
+    ]);
     const borde = rango
       ? { gte: rango.desde, lt: finExclusivo(rango) }
       : undefined;

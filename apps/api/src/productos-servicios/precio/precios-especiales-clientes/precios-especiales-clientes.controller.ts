@@ -41,7 +41,6 @@ function tenantId(req: RequestWithAuth): string {
  * id del precio especial es único globalmente.
  */
 @Permiso('costos.ver')
-@RequiereCapacidad('precios_especiales')
 @Controller()
 export class PreciosEspecialesClientesController {
   constructor(private readonly service: PreciosEspecialesClientesService) {}
@@ -55,6 +54,7 @@ export class PreciosEspecialesClientesController {
   }
 
   @Permiso('costos.gestionar')
+  @RequiereCapacidad('precios_especiales')
   @Post('productos-servicios/productos/:productoId/precios-especiales')
   async crear(
     @Req() req: RequestWithAuth,
@@ -65,6 +65,7 @@ export class PreciosEspecialesClientesController {
   }
 
   @Permiso('costos.gestionar')
+  @RequiereCapacidad('precios_especiales')
   @Patch('productos-servicios/precios-especiales/:id')
   async actualizar(
     @Req() req: RequestWithAuth,
@@ -75,6 +76,7 @@ export class PreciosEspecialesClientesController {
   }
 
   @Permiso('costos.gestionar')
+  @RequiereCapacidad('precios_especiales')
   @Delete('productos-servicios/precios-especiales/:id')
   @HttpCode(200)
   async eliminar(@Req() req: RequestWithAuth, @Param('id') id: string) {

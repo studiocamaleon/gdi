@@ -80,5 +80,20 @@ it("descarga la etiqueta sin consultar certificados, cargar QZ ni pedir una impr
     (b) => b.textContent === "Descargar PDF",
   )!;
   await act(async () => boton.click());
-  expect(mocks.descargar).toHaveBeenCalledWith(vista);
+  expect(mocks.descargar).toHaveBeenCalledWith(vista, "ot");
+});
+
+it("no ofrece descarga ni consulta la vista previa cuando ambas capacidades están excluidas", async () => {
+  el = document.createElement("div");
+  document.body.append(el);
+  root = createRoot(el);
+  await act(async () => root.render(
+    <CapacidadesProvider capacidades={{ funciones: { etiquetas_pdf: false, impresion_directa: false } }}>
+      <EtiquetaOrdenDialog ordenId="ot" onClose={() => {}} />
+    </CapacidadesProvider>,
+  ));
+  expect(mocks.vista).not.toHaveBeenCalled();
+  expect(mocks.configuracion).not.toHaveBeenCalled();
+  expect(el.textContent).not.toContain("Descargar PDF");
+  expect(el.textContent).not.toContain("Imprimir etiqueta");
 });

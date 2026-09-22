@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ConfigPasosService } from '../config-pasos.service';
@@ -40,7 +41,7 @@ describe('PasosTenantService', () => {
     } as unknown as PrismaService;
     const config = {} as ConfigPasosService;
 
-    await new PasosTenantService(prisma, config).actualizar(
+    await new PasosTenantService(prisma, config, capacidadesDePrueba()).actualizar(
       FILA.tenantId,
       FILA.id,
       { defaults: { productividadHora: 25 } },
@@ -78,10 +79,7 @@ describe('PasosTenantService', () => {
       paramsPasoJson: { productivityValue: 20 },
     };
 
-    const resultado = await new PasosTenantService(
-      prisma,
-      config,
-    ).actualizarConfiguracionBase(FILA.tenantId, FILA.id, payload);
+    const resultado = await new PasosTenantService(prisma, config, capacidadesDePrueba()).actualizarConfiguracionBase(FILA.tenantId, FILA.id, payload);
 
     expect(validarConfiguracionBase).toHaveBeenCalledWith(
       FILA.tenantId,
@@ -143,7 +141,7 @@ describe('PasosTenantService', () => {
       upsertConfigPaso,
     } as unknown as ConfigPasosService;
 
-    await new PasosTenantService(prisma, config).actualizarConfiguracionBase(
+    await new PasosTenantService(prisma, config, capacidadesDePrueba()).actualizarConfiguracionBase(
       FILA.tenantId,
       FILA.id,
       {
@@ -198,10 +196,7 @@ describe('PasosTenantService', () => {
       modoTiempo: 'T-2' as const,
     };
 
-    const resultado = await new PasosTenantService(
-      prisma,
-      config,
-    ).actualizarConfiguracionBaseSistema(
+    const resultado = await new PasosTenantService(prisma, config, capacidadesDePrueba()).actualizarConfiguracionBaseSistema(
       FILA.tenantId,
       'trabajo_manual',
       payload,
@@ -243,7 +238,7 @@ describe('PasosTenantService', () => {
     } as unknown as PrismaService;
 
     await expect(
-      new PasosTenantService(prisma, {} as ConfigPasosService).actualizar(
+      new PasosTenantService(prisma, {} as ConfigPasosService, capacidadesDePrueba()).actualizar(
         FILA.tenantId,
         FILA.id,
         {

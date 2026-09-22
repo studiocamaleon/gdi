@@ -1,3 +1,5 @@
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
@@ -118,8 +120,9 @@ export class EgresosService {
     private readonly empresa: DatosEmpresaService,
     private readonly archivos: ArchivosService,
     private readonly ordenPagoPdf: OrdenPagoPdfService,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /** "Grafica Corporearte" → "GC". El fallback del logo, igual que el recibo. */
@@ -257,20 +260,28 @@ export class EgresosService {
    * lecturas simultáneas no duplican nada.
    */
   async asegurarCategorias(tenantId: string): Promise<void> {
-    const cuantas = await this.prisma.categoriaEgreso.count({
-      where: { tenantId },
-    });
-    if (cuantas > 0) return;
-    await this.prisma.categoriaEgreso.createMany({
-      data: CATEGORIAS_SEMILLA.map((c, i) => ({
-        tenantId,
-        codigo: c.codigo,
-        nombre: c.nombre,
-        naturaleza: c.naturaleza,
-        esSistema: true,
-        orden: i,
-      })),
-      skipDuplicates: true,
+    if (await this.prisma.categoriaEgreso.count({ where: { tenantId } }))
+      return;
+    // El historial de una función retirada o una empresa en sólo lectura
+    // nunca inicializa un catálogo. Revalidar bajo el lock del contrato.
+    if (!(await this.capacidades.puedeOperar(tenantId, 'cuentas_pagar')))
+      return;
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, tenantId);
+      if (!(await this.capacidades.puedeOperar(tenantId, 'cuentas_pagar', tx)))
+        return;
+      if (await tx.categoriaEgreso.count({ where: { tenantId } })) return;
+      await tx.categoriaEgreso.createMany({
+        data: CATEGORIAS_SEMILLA.map((c, i) => ({
+          tenantId,
+          codigo: c.codigo,
+          nombre: c.nombre,
+          naturaleza: c.naturaleza,
+          esSistema: true,
+          orden: i,
+        })),
+        skipDuplicates: true,
+      });
     });
   }
 
@@ -293,40 +304,46 @@ export class EgresosService {
   }
 
   async crearCategoria(auth: CurrentAuth, dto: CrearCategoriaEgresoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     await this.asegurarCategorias(auth.tenantId);
-    // Código derivado del nombre: el nombre se puede editar después, el código
-    // es la identidad y no se toca.
-    const base = dto.nombre
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 40);
-    let codigo = base || 'categoria';
-    let intento = 1;
-    while (
-      await this.prisma.categoriaEgreso.findUnique({
-        where: { tenantId_codigo: { tenantId: auth.tenantId, codigo } },
-        select: { id: true },
-      })
-    ) {
-      intento += 1;
-      codigo = `${base}_${intento}`;
-    }
-    const max = await this.prisma.categoriaEgreso.aggregate({
-      where: { tenantId: auth.tenantId },
-      _max: { orden: true },
-    });
-    return this.prisma.categoriaEgreso.create({
-      data: {
-        tenantId: auth.tenantId,
-        codigo,
-        nombre: dto.nombre.trim(),
-        naturaleza: dto.naturaleza,
-        esSistema: false,
-        orden: (max._max.orden ?? 0) + 1,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'cuentas_pagar',
+      ]);
+      // Código derivado del nombre: el nombre se puede editar después, el código
+      // es la identidad y no se toca.
+      const base = dto.nombre
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40);
+      let codigo = base || 'categoria';
+      let intento = 1;
+      while (
+        await tx.categoriaEgreso.findUnique({
+          where: { tenantId_codigo: { tenantId: auth.tenantId, codigo } },
+          select: { id: true },
+        })
+      ) {
+        intento += 1;
+        codigo = `${base}_${intento}`;
+      }
+      const max = await tx.categoriaEgreso.aggregate({
+        where: { tenantId: auth.tenantId },
+        _max: { orden: true },
+      });
+      return tx.categoriaEgreso.create({
+        data: {
+          tenantId: auth.tenantId,
+          codigo,
+          nombre: dto.nombre.trim(),
+          naturaleza: dto.naturaleza,
+          esSistema: false,
+          orden: (max._max.orden ?? 0) + 1,
+        },
+      });
     });
   }
 
@@ -335,18 +352,23 @@ export class EgresosService {
     id: string,
     dto: EditarCategoriaEgresoDto,
   ) {
-    const actual = await this.prisma.categoriaEgreso.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      select: { id: true },
-    });
-    if (!actual) throw new NotFoundException('No encontramos esa categoría.');
-    return this.prisma.categoriaEgreso.update({
-      where: { id },
-      data: {
-        ...(dto.nombre !== undefined ? { nombre: dto.nombre.trim() } : {}),
-        ...(dto.activo !== undefined ? { activo: dto.activo } : {}),
-        ...(dto.orden !== undefined ? { orden: dto.orden } : {}),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'cuentas_pagar',
+      ]);
+      const actual = await tx.categoriaEgreso.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!actual) throw new NotFoundException('No encontramos esa categoría.');
+      return tx.categoriaEgreso.update({
+        where: { id },
+        data: {
+          ...(dto.nombre !== undefined ? { nombre: dto.nombre.trim() } : {}),
+          ...(dto.activo !== undefined ? { activo: dto.activo } : {}),
+          ...(dto.orden !== undefined ? { orden: dto.orden } : {}),
+        },
+      });
     });
   }
 
@@ -356,27 +378,32 @@ export class EgresosService {
    * sin clasificación y reportes que no cierran.
    */
   async borrarCategoria(auth: CurrentAuth, id: string) {
-    const cat = await this.prisma.categoriaEgreso.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      select: {
-        id: true,
-        esSistema: true,
-        _count: { select: { egresos: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'cuentas_pagar',
+      ]);
+      const cat = await tx.categoriaEgreso.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: {
+          id: true,
+          esSistema: true,
+          _count: { select: { egresos: true } },
+        },
+      });
+      if (!cat) throw new NotFoundException('No encontramos esa categoría.');
+      if (cat.esSistema) {
+        throw new ConflictException(
+          'Las categorías del sistema no se borran: desactivala y deja de aparecer en el selector.',
+        );
+      }
+      if (cat._count.egresos > 0) {
+        throw new ConflictException(
+          `Esa categoría tiene ${cat._count.egresos} egreso(s) cargados. Desactivala en vez de borrarla.`,
+        );
+      }
+      await tx.categoriaEgreso.delete({ where: { id } });
+      return { ok: true };
     });
-    if (!cat) throw new NotFoundException('No encontramos esa categoría.');
-    if (cat.esSistema) {
-      throw new ConflictException(
-        'Las categorías del sistema no se borran: desactivala y deja de aparecer en el selector.',
-      );
-    }
-    if (cat._count.egresos > 0) {
-      throw new ConflictException(
-        `Esa categoría tiene ${cat._count.egresos} egreso(s) cargados. Desactivala en vez de borrarla.`,
-      );
-    }
-    await this.prisma.categoriaEgreso.delete({ where: { id } });
-    return { ok: true };
   }
 
   // ── Numeración ─────────────────────────────────────────────────────────
@@ -698,6 +725,12 @@ export class EgresosService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          auth.tenantId,
+          ['cuentas_pagar'],
+          ['cuentas_pagar'],
+        );
         if (cuotas > 1) {
           // El resto de la división va en la PRIMERA cuota, no en la última:
           // así el total siempre cierra y la diferencia se paga antes, no
@@ -851,83 +884,92 @@ export class EgresosService {
    */
   async editar(auth: CurrentAuth, id: string, dto: EditarEgresoDto) {
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
-    const egreso = await this.prisma.egreso.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      select: { id: true, estado: true, pagadoTotal: true },
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'cuentas_pagar',
+      ]);
+      const egreso = await tx.egreso.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: { id: true, estado: true, pagadoTotal: true },
+      });
+      if (!egreso) throw new NotFoundException('No encontramos ese egreso.');
+      if (egreso.estado === 'anulado') {
+        throw new ConflictException('Un egreso anulado no se edita.');
+      }
+      const tienePagos = dec(egreso.pagadoTotal) > 0;
+      const tocaImportes =
+        dto.neto !== undefined ||
+        dto.iva !== undefined ||
+        dto.otrosImpuestos !== undefined;
+      if (tienePagos && tocaImportes) {
+        throw new ConflictException(
+          'Ese egreso ya tiene pagos: para cambiarle el importe hay que anular el pago primero. La categoría y las fechas sí se pueden corregir.',
+        );
+      }
+      const data: Prisma.EgresoUpdateInput = {};
+      if (dto.descripcion !== undefined)
+        data.descripcion = dto.descripcion.trim();
+      if (dto.categoriaEgresoId !== undefined) {
+        const categoria = await tx.categoriaEgreso.findFirst({
+          where: {
+            id: dto.categoriaEgresoId,
+            tenantId: auth.tenantId,
+            activo: true,
+          },
+          select: { id: true },
+        });
+        if (!categoria) {
+          throw new BadRequestException(
+            'La categoría no existe, está inactiva o pertenece a otra empresa.',
+          );
+        }
+        data.categoria = { connect: { id: dto.categoriaEgresoId } };
+      }
+      if (dto.fechaCompetencia !== undefined) {
+        data.fechaCompetencia = soloFecha(dto.fechaCompetencia);
+      }
+      if (dto.fechaVencimiento !== undefined) {
+        data.fechaVencimiento = soloFecha(dto.fechaVencimiento);
+      }
+      if (dto.centroCostoId !== undefined) {
+        const centro = await tx.centroCosto.findFirst({
+          where: {
+            id: dto.centroCostoId,
+            tenantId: auth.tenantId,
+            activo: true,
+          },
+          select: { id: true },
+        });
+        if (!centro) {
+          throw new BadRequestException(
+            'El centro de costo no existe, está inactivo o pertenece a otra empresa.',
+          );
+        }
+        data.centroCosto = { connect: { id: dto.centroCostoId } };
+      }
+      if (dto.notas !== undefined) data.notas = dto.notas.trim() || null;
+      if (tocaImportes) {
+        const actual = await tx.egreso.findUniqueOrThrow({
+          where: { id },
+          select: { neto: true, iva: true, otrosImpuestos: true },
+        });
+        const neto = r2(dto.neto ?? dec(actual.neto));
+        const iva = r2(dto.iva ?? dec(actual.iva));
+        const otros = r2(dto.otrosImpuestos ?? dec(actual.otrosImpuestos));
+        data.neto = neto;
+        data.iva = iva;
+        data.otrosImpuestos = otros;
+        const total = r2(neto + iva + otros);
+        if (total <= 0) {
+          throw new BadRequestException(
+            'El importe total debe ser mayor que cero.',
+          );
+        }
+        data.total = total;
+      }
+      await tx.egreso.update({ where: { id }, data });
+      return { ok: true };
     });
-    if (!egreso) throw new NotFoundException('No encontramos ese egreso.');
-    if (egreso.estado === 'anulado') {
-      throw new ConflictException('Un egreso anulado no se edita.');
-    }
-    const tienePagos = dec(egreso.pagadoTotal) > 0;
-    const tocaImportes =
-      dto.neto !== undefined ||
-      dto.iva !== undefined ||
-      dto.otrosImpuestos !== undefined;
-    if (tienePagos && tocaImportes) {
-      throw new ConflictException(
-        'Ese egreso ya tiene pagos: para cambiarle el importe hay que anular el pago primero. La categoría y las fechas sí se pueden corregir.',
-      );
-    }
-    const data: Prisma.EgresoUpdateInput = {};
-    if (dto.descripcion !== undefined)
-      data.descripcion = dto.descripcion.trim();
-    if (dto.categoriaEgresoId !== undefined) {
-      const categoria = await this.prisma.categoriaEgreso.findFirst({
-        where: {
-          id: dto.categoriaEgresoId,
-          tenantId: auth.tenantId,
-          activo: true,
-        },
-        select: { id: true },
-      });
-      if (!categoria) {
-        throw new BadRequestException(
-          'La categoría no existe, está inactiva o pertenece a otra empresa.',
-        );
-      }
-      data.categoria = { connect: { id: dto.categoriaEgresoId } };
-    }
-    if (dto.fechaCompetencia !== undefined) {
-      data.fechaCompetencia = soloFecha(dto.fechaCompetencia);
-    }
-    if (dto.fechaVencimiento !== undefined) {
-      data.fechaVencimiento = soloFecha(dto.fechaVencimiento);
-    }
-    if (dto.centroCostoId !== undefined) {
-      const centro = await this.prisma.centroCosto.findFirst({
-        where: { id: dto.centroCostoId, tenantId: auth.tenantId, activo: true },
-        select: { id: true },
-      });
-      if (!centro) {
-        throw new BadRequestException(
-          'El centro de costo no existe, está inactivo o pertenece a otra empresa.',
-        );
-      }
-      data.centroCosto = { connect: { id: dto.centroCostoId } };
-    }
-    if (dto.notas !== undefined) data.notas = dto.notas.trim() || null;
-    if (tocaImportes) {
-      const actual = await this.prisma.egreso.findUniqueOrThrow({
-        where: { id },
-        select: { neto: true, iva: true, otrosImpuestos: true },
-      });
-      const neto = r2(dto.neto ?? dec(actual.neto));
-      const iva = r2(dto.iva ?? dec(actual.iva));
-      const otros = r2(dto.otrosImpuestos ?? dec(actual.otrosImpuestos));
-      data.neto = neto;
-      data.iva = iva;
-      data.otrosImpuestos = otros;
-      const total = r2(neto + iva + otros);
-      if (total <= 0) {
-        throw new BadRequestException(
-          'El importe total debe ser mayor que cero.',
-        );
-      }
-      data.total = total;
-    }
-    await this.prisma.egreso.update({ where: { id }, data });
-    return { ok: true };
   }
 
   /**
@@ -937,28 +979,33 @@ export class EgresosService {
    */
   async anular(auth: CurrentAuth, id: string, dto: AnularDto) {
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
-    const egreso = await this.prisma.egreso.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      select: { id: true, estado: true, pagadoTotal: true },
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'cuentas_pagar',
+      ]);
+      const egreso = await tx.egreso.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: { id: true, estado: true, pagadoTotal: true },
+      });
+      if (!egreso) throw new NotFoundException('No encontramos ese egreso.');
+      if (egreso.estado === 'anulado') {
+        throw new ConflictException('Ese egreso ya está anulado.');
+      }
+      if (dec(egreso.pagadoTotal) > 0) {
+        throw new ConflictException(
+          'Ese egreso tiene pagos registrados: anulá primero el pago.',
+        );
+      }
+      await tx.egreso.update({
+        where: { id },
+        data: {
+          estado: 'anulado',
+          anuladoEl: new Date(),
+          motivoAnulacion: dto.motivo.trim(),
+        },
+      });
+      return { ok: true };
     });
-    if (!egreso) throw new NotFoundException('No encontramos ese egreso.');
-    if (egreso.estado === 'anulado') {
-      throw new ConflictException('Ese egreso ya está anulado.');
-    }
-    if (dec(egreso.pagadoTotal) > 0) {
-      throw new ConflictException(
-        'Ese egreso tiene pagos registrados: anulá primero el pago.',
-      );
-    }
-    await this.prisma.egreso.update({
-      where: { id },
-      data: {
-        estado: 'anulado',
-        anuladoEl: new Date(),
-        motivoAnulacion: dto.motivo.trim(),
-      },
-    });
-    return { ok: true };
   }
 
   // ── Pagos ──────────────────────────────────────────────────────────────
@@ -1050,6 +1097,9 @@ export class EgresosService {
     dto: RegistrarPagoDto,
     registradoPor: string,
   ) {
+    await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+      'cuentas_pagar',
+    ]);
     if (dto.idempotencyKey) {
       const existente = await tx.pago.findUnique({
         where: {
@@ -1079,7 +1129,13 @@ export class EgresosService {
     // valor va a cartera y recién impacta la cuenta cuando se debita. Es el
     // mismo criterio que usa Cobros con los cheques de terceros.
     const esCheque = metodo.tipo === 'cheque_echeq';
-    if (esCheque) await this.capacidades.exigir(auth.tenantId, 'valores', tx);
+    if (esCheque) {
+      await this.capacidades.exigir(auth.tenantId, 'valores', tx);
+      await exigirContinuidadCompromiso(tx, auth.tenantId, [
+        'valores',
+        'tesoreria',
+      ]);
+    }
     if (esCheque && !dto.cheque && !dto.valorId) {
       throw new BadRequestException(
         'Pagando con cheque hay que emitir uno propio o endosar uno de la cartera.',
@@ -1150,7 +1206,7 @@ export class EgresosService {
     if (egresos.length !== dto.imputaciones.length) {
       throw new NotFoundException('Alguno de los egresos no existe.');
     }
-    const monedaPago = esEndoso ? egresos[0]!.moneda : cuenta!.moneda;
+    const monedaPago = esEndoso ? egresos[0].moneda : cuenta!.moneda;
     const porId = new Map(egresos.map((e) => [e.id, e]));
 
     for (const imp of dto.imputaciones) {
@@ -1456,6 +1512,9 @@ export class EgresosService {
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'cuentas_pagar',
+      ]);
       const pago = await tx.pago.findFirst({
         where: { id, tenantId: auth.tenantId },
         include: { imputaciones: true },
@@ -1463,6 +1522,15 @@ export class EgresosService {
       if (!pago) throw new NotFoundException('No encontramos ese pago.');
       if (pago.anuladoEl) {
         return { ok: true, idempotente: true };
+      }
+
+      await exigirContinuidadCompromiso(tx, auth.tenantId, ['cuentas_pagar']);
+      if (pago.valorId) {
+        await this.capacidades.exigir(auth.tenantId, 'valores', tx);
+        await exigirContinuidadCompromiso(tx, auth.tenantId, [
+          'valores',
+          'tesoreria',
+        ]);
       }
 
       for (const imp of pago.imputaciones) {
@@ -1772,6 +1840,10 @@ export class EgresosService {
     }
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'valores',
+        'cuentas_pagar',
+      ]);
       const valor = await tx.valor.findFirst({
         where: { id, tenantId: auth.tenantId, origen: 'propio' },
         include: {
@@ -1859,6 +1931,10 @@ export class EgresosService {
     await this.capacidades.exigir(auth.tenantId, 'cuentas_pagar');
     const actor = await resolverActorFondos(this.prisma, auth);
     return ejecutarTransaccionFondos(this.prisma, async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'valores',
+        'cuentas_pagar',
+      ]);
       const valor = await tx.valor.findFirst({
         where: { id, tenantId: auth.tenantId, origen: 'propio' },
         include: {
@@ -1874,6 +1950,11 @@ export class EgresosService {
       if (valor.estado === 'rechazado') {
         return { ok: true, idempotente: true };
       }
+      await exigirContinuidadCompromiso(tx, auth.tenantId, [
+        'cuentas_pagar',
+        'valores',
+        'tesoreria',
+      ]);
       if (!['emitido', 'debitado'].includes(valor.estado)) {
         throw new ConflictException(
           `El cheque está ${valor.estado}; no puede registrarse como rechazado.`,

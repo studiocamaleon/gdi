@@ -82,6 +82,20 @@ export async function getLogNotificaciones(limite = 100): Promise<LineaLog[]> {
   );
 }
 
+export function resolverAviso(
+  id: string,
+  data: {
+    accion: "descartar" | "confirmar_enviada";
+    estadoEsperado: string;
+    motivo: string;
+  },
+) {
+  return apiRequest(`/integraciones/notificaciones/${id}/resolver`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function guardarConfigNotificaciones(
   datos: Partial<ConfigNotificaciones>,
 ): Promise<ConfigNotificaciones> {
@@ -112,6 +126,9 @@ export type AfipIntegracion = {
   esCuitPropio: boolean;
   /** false = el plan del tenant no incluye facturación electrónica. */
   planPermiteAfip: boolean;
+  puedeOperarAfip: boolean;
+  puedeDesactivarAfip: boolean;
+  restriccionAfip: string | null;
   emisor: {
     cuit: string | null;
     razonSocial: string | null;
@@ -147,4 +164,3 @@ export async function activarAfip(): Promise<AfipIntegracion> {
 export async function desactivarAfip(): Promise<AfipIntegracion> {
   return apiRequest("/administracion/afip/desactivar", { method: "POST" });
 }
-

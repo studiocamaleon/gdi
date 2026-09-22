@@ -33,6 +33,7 @@ function armar({
   usadoBytes = 0,
 }: Opciones = {}) {
   const prisma = {
+    planContratacion: { findFirst: jest.fn().mockResolvedValue(null) },
     tenant: {
       findUnique: jest.fn().mockResolvedValue({
         bytesArchivos: BigInt(usadoBytes),

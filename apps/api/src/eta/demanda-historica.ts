@@ -51,8 +51,12 @@ export function demandaHistorica(
   ];
   if (tiempos.length !== 1) return null;
   const t = tiempos[0];
-  const dotacion = Number.isInteger(t.dotacionOperarios) && Number(t.dotacionOperarios) >= 1 && Number(t.dotacionOperarios) <= 99
-    ? Number(t.dotacionOperarios) : undefined;
+  const dotacion =
+    Number.isInteger(t.dotacionOperarios) &&
+    Number(t.dotacionOperarios) >= 1 &&
+    Number(t.dotacionOperarios) <= 99
+      ? Number(t.dotacionOperarios)
+      : undefined;
   if (
     paso.maquinaId &&
     primitivasDeFamilia(paso.familiaCodigo)?.tiempoRun &&
@@ -63,7 +67,13 @@ export function demandaHistorica(
       ...t,
       fasesRun: [{ minutos: t.runMin, operario: true }],
     });
-    return d && { ...d, verificada: false, ...(dotacion != null ? { dotacionOperarios: dotacion } : {}) };
+    return (
+      d && {
+        ...d,
+        verificada: false,
+        ...(dotacion != null ? { dotacionOperarios: dotacion } : {}),
+      }
+    );
   }
   return demandaDesdeTiempo(t);
 }
@@ -81,9 +91,12 @@ export async function recuperarDemandasHistoricas(
     tipoEjecucion?: string;
     estado?: string;
   }>,
+  persistir = true,
 ): Promise<Map<string, DemandaHumana>> {
-  const necesitaRecuperar = (value: unknown) => value == null ||
-    (registro(value).verificada === false && registro(value).revisionOperacion !== 1);
+  const necesitaRecuperar = (value: unknown) =>
+    value == null ||
+    (registro(value).verificada === false &&
+      registro(value).revisionOperacion !== 1);
   const ids = candidatos
     .filter(
       (p) =>
@@ -167,11 +180,19 @@ export async function recuperarDemandasHistoricas(
         fases: total > 0 ? [{ minutos: total, personas: 1 }] : [],
       };
       demanda.revisionOperacion = 1;
+      // Las consultas de ETA deben recuperar la misma información sin
+      // modificar pasos ni realizar un backfill fuera de una escritura admitida.
+      if (!persistir) {
+        resultado.set(paso.id, demanda);
+        continue;
+      }
       const actualizado = await db.ordenTrabajoItemPaso.updateMany({
         where: {
           tenantId,
           id: paso.id,
-          demandaHumanaJson: { equals: paso.demandaHumanaJson ?? Prisma.AnyNull },
+          demandaHumanaJson: {
+            equals: paso.demandaHumanaJson ?? Prisma.AnyNull,
+          },
           duracionEstimadaMin: paso.duracionEstimadaMin,
           maquinaId: paso.maquinaId,
           rutaPasoId: paso.rutaPasoId,

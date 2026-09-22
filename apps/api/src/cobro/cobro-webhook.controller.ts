@@ -86,28 +86,31 @@ export class CobroWebhookController {
       select: { id: true },
     });
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "EventoCobro" WHERE id = ${registro.id}::uuid FOR UPDATE`;
-        const guardado = await tx.eventoCobro.findUniqueOrThrow({
-          where: { id: registro.id },
-        });
-        if (guardado.procesadoEl) return { ok: true, repetido: true };
-        const resultado = await this.procesar(
-          tx,
-          guardado.tipo,
-          guardado.payloadJson,
-          guardado.ocurridoEl,
-        );
-        await tx.eventoCobro.update({
-          where: { id: registro.id },
-          data: {
-            procesadoEl: new Date(),
-            errorTexto: resultado.nota ?? null,
-            resultado: resultado.estado,
-          },
-        });
-        return { ok: true, ...resultado.respuesta };
-      });
+      return await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "EventoCobro" WHERE id = ${registro.id}::uuid FOR UPDATE`;
+          const guardado = await tx.eventoCobro.findUniqueOrThrow({
+            where: { id: registro.id },
+          });
+          if (guardado.procesadoEl) return { ok: true, repetido: true };
+          const resultado = await this.procesar(
+            tx,
+            guardado.tipo,
+            guardado.payloadJson,
+            guardado.ocurridoEl,
+          );
+          await tx.eventoCobro.update({
+            where: { id: registro.id },
+            data: {
+              procesadoEl: new Date(),
+              errorTexto: resultado.nota ?? null,
+              resultado: resultado.estado,
+            },
+          });
+          return { ok: true, ...resultado.respuesta };
+        },
+        { timeout: 30000 },
+      );
     } catch (error) {
       const detalle =
         error instanceof Error ? error.message : 'error desconocido';
@@ -137,6 +140,33 @@ export class CobroWebhookController {
     nota?: string;
     respuesta: Record<string, unknown>;
   }> {
+    if (tipo === 'transaction.completed' && data && typeof data === 'object') {
+      const d = data as Record<string, unknown>;
+      const ref = d.subscriptionId ?? d.subscription_id;
+      if (typeof ref === 'string' && /^sub_[a-z0-9]{26}$/.test(ref)) {
+        const remoto = await this.paddle.obtenerSuscripcion(ref);
+        const externa = this.sync.extraer(remoto);
+        if (!externa)
+          throw new ServiceUnavailableException(
+            'No se pudo verificar la suscripción del pago completado.',
+          );
+        if (externa) {
+          const resultado = await this.sync.aplicarEnTransaccion(tx, externa, {
+            origen: 'reconciliacion',
+          });
+          return resultado.aplicado
+            ? {
+                estado: 'aplicado',
+                respuesta: { tenantId: resultado.tenantId },
+              }
+            : {
+                estado: 'sin_aplicar',
+                nota: resultado.motivo,
+                respuesta: { sinAplicar: resultado.motivo },
+              };
+        }
+      }
+    }
     if (!tipo.startsWith('subscription.')) {
       return { estado: 'ignorado', respuesta: { ignorado: tipo } };
     }
@@ -155,6 +185,7 @@ export class CobroWebhookController {
     return resultado.aplicado
       ? {
           estado: 'aplicado',
+          nota: resultado.advertencia,
           respuesta: { tenantId: resultado.tenantId, estado: resultado.estado },
         }
       : {

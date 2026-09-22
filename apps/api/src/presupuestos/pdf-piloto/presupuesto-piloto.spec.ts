@@ -120,7 +120,7 @@ describe('caché acotado del piloto', () => {
       generar,
       service: new PresupuestoPilotoService({
         generar,
-      } as unknown as PresupuestoRenderService),
+      } as unknown as PresupuestoRenderService, { exigir: jest.fn().mockResolvedValue(undefined) } as never),
     };
   };
 

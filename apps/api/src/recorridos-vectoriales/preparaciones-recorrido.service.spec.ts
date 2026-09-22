@@ -105,6 +105,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
         maquina: { findFirst: maquina },
       } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
     const preparar = jest
       .spyOn(
@@ -156,6 +161,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
     const service = new PreparacionesRecorridoService(
       { ordenTrabajoItem: { findFirst } } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
     const result = await service.plantillaInstalacion(
       { tenantId: 'tenant-a' } as never,
@@ -186,6 +196,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
         },
       } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
     await expect(
       service.plantillaInstalacion(
@@ -206,6 +221,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
         ordenTrabajoItem: { findFirst: jest.fn().mockResolvedValue(base) },
       } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
     expect(
       await service.asegurarParaItem(
@@ -248,6 +268,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
     const service = new PreparacionesRecorridoService(
       { ordenTrabajoItem: { findFirst } } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
 
     const result = await service.plantillaInstalacion(
@@ -276,6 +301,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
         ordenTrabajoItem: { findFirst: jest.fn().mockResolvedValue(item) },
       } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
 
     await expect(
@@ -308,6 +338,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
         ordenTrabajoItem: { findFirst: jest.fn().mockResolvedValue(item) },
       } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
 
     const result = await service.plantillaInstalacion(
@@ -326,6 +361,11 @@ describe('PreparacionesRecorridoService · plantilla de instalación', () => {
         },
       } as never,
       {} as never,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+        puedeOperar: jest.fn().mockResolvedValue(true),
+      } as never,
     );
     const auth = { tenantId: 'tenant-a' } as never;
     const pdf = await service.descargarArchivoInstalacion(

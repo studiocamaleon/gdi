@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import {
   FamiliaMateriaPrima,
   RolSistema,
@@ -80,7 +81,7 @@ describe('InventarioBibliotecaService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
     };
-    const service = new InventarioBibliotecaService(prisma as never);
+    const service = new InventarioBibliotecaService(prisma as never, capacidadesDePrueba());
 
     const [item] = await service.listar(auth);
 
@@ -131,7 +132,7 @@ describe('InventarioBibliotecaService', () => {
           }),
         ),
       };
-      const service = new InventarioBibliotecaService(prisma as never);
+      const service = new InventarioBibliotecaService(prisma as never, capacidadesDePrueba());
 
       await service.instalar(auth, 'PAPEL_OBRA', {
         visibleName: 'Papel obra',
@@ -218,7 +219,7 @@ describe('InventarioBibliotecaService', () => {
         }),
       ),
     };
-    const service = new InventarioBibliotecaService(prisma as never);
+    const service = new InventarioBibliotecaService(prisma as never, capacidadesDePrueba());
 
     await service.instalar(auth, 'TINTA_ECOSOLVENTE_CMYK', {
       visibleName: 'Tinta ecosolvente CMYK',
@@ -270,7 +271,7 @@ describe('InventarioBibliotecaService', () => {
         }),
       ),
     };
-    const service = new InventarioBibliotecaService(prisma as never);
+    const service = new InventarioBibliotecaService(prisma as never, capacidadesDePrueba());
 
     await service.instalar(auth, 'PAPEL_OBRA', {
       visibleName: 'Papel obra premium',

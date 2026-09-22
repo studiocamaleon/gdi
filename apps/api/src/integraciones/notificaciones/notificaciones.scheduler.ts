@@ -29,9 +29,8 @@ import { ESTADOS } from './estados';
 const POR_CORRIDA = 25;
 
 /**
- * Cuánto puede estar una fila reservada (`enviando`) antes de darla por
- * abandonada. Una llamada a Wati tarda segundos: diez minutos sólo se
- * alcanzan si el proceso que la reservó se murió en el medio.
+ * Plazo para recuperar una preparación abandonada o marcar sin confirmación
+ * un POST ya autorizado. Nunca se deduce que un envío no salió por su edad.
  */
 const RESERVA_VENCIDA_MIN = 10;
 
@@ -142,32 +141,26 @@ export class NotificacionesScheduler {
     }
   }
 
-  /**
-   * Devuelve a la cola las filas que quedaron reservadas por un proceso que se
-   * murió mientras hablaba con Wati.
-   *
-   * Es la contracara de la reserva: sin esto, un deploy en el momento justo
-   * dejaría un aviso colgado para siempre. El corte de diez minutos es lo que
-   * hace que soltar una fila signifique "el proceso murió" y no "todavía está
-   * mandando" — que es el caso en el que reintentar duplicaría el mensaje.
-   *
-   * Cross-tenant y sin contexto, igual que `tenantsConWati`.
-   */
-  private async soltarReservasVencidas(): Promise<void> {
+  /** Recupera sólo preparación previa al POST. Un envío abandonado queda
+   * incierto: ni un timeout ni la muerte del proceso prueban que no se entregó.
+   * Cross-tenant y sin contexto, igual que tenantsConWati. */
+  async soltarReservasVencidas(): Promise<void> {
     const corte = new Date(Date.now() - RESERVA_VENCIDA_MIN * 60 * 1000);
-    const filas = await this.prisma.$executeRawUnsafe(
-      `UPDATE "NotificacionWhatsapp"
-          SET "estado" = $1, "reservadaEl" = NULL
-        WHERE "estado" = $2 AND ("reservadaEl" IS NULL OR "reservadaEl" < $3)`,
-      ESTADOS.pendiente,
-      ESTADOS.enviando,
-      corte,
-    );
-    if (filas > 0) {
+    await this.prisma.$executeRaw`
+      UPDATE "NotificacionWhatsapp"
+      SET "estado" = ${ESTADOS.pendiente}, "reservadaEl" = NULL, "reservaToken" = NULL
+      WHERE "canal" = 'WATI' AND "estado" = ${ESTADOS.reservada}
+        AND ("reservadaEl" IS NULL OR "reservadaEl" < ${corte})`;
+    const filas = await this.prisma.$executeRaw`
+      UPDATE "NotificacionWhatsapp"
+      SET "estado" = ${ESTADOS.incierta},
+          "motivo" = 'Se interrumpió la confirmación del envío. Revisá Wati antes de resolverlo; no se reenvía automáticamente.'
+      WHERE "canal" = 'WATI' AND "estado" = ${ESTADOS.enviando}
+        AND ("reservadaEl" IS NULL OR "reservadaEl" < ${corte})`;
+    if (filas > 0)
       this.logger.warn(
-        `${filas} notificación(es) quedaron reservadas sin terminar y vuelven a la cola.`,
+        `${filas} aviso(s) de Wati quedaron con resultado por confirmar.`,
       );
-    }
   }
 
   /**

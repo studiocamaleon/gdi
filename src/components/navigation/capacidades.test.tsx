@@ -10,7 +10,7 @@ import { PROPUESTA_PLANES } from "../../../apps/api/src/plataforma/planes/catalo
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
-const mocks = vi.hoisted(() => ({ ruta: "/crm/cupones" }));
+const mocks = vi.hoisted(() => ({ ruta: "/produccion/colas" }));
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.ruta }));
 const esencial = PROPUESTA_PLANES[0].contenido.funciones;
 const pro = PROPUESTA_PLANES[1].contenido.funciones;
@@ -22,22 +22,31 @@ const rutas = (
     hasChildren(i) ? i.children.map((c) => c.href) : [i.href],
   );
 
-it("Esencial conserva el trabajo diario y no ofrece módulos opcionales ni siquiera al administrador", () => {
+it("Esencial conserva trabajo diario e historiales sin ofrecer funciones de gestión excluidas", () => {
   const visibles = rutas(esencial);
   expect(visibles).toContain("/produccion/tablero");
+  expect(visibles).toContain("/inventario/compras");
+  expect(
+    navPara(null, "AR", esencial)
+      .flatMap((i) => (hasChildren(i) ? i.children : []))
+      .find((c) => c.href === "/inventario/compras")?.label,
+  ).toBe("Historial de compras");
   expect(visibles).toContain("/administracion/deudores");
+  expect(visibles).toContain("/comercial/campanas");
+  for (const ruta of ["/administracion/tesoreria", "/administracion/egresos", "/administracion/cuentas-por-pagar"])
+    expect(visibles).toContain(ruta);
+  expect(rutas(esencial, new Set(["comercial.ver"])) ).not.toContain("/administracion/tesoreria");
   for (const ruta of [
-    "/crm/cupones",
-    "/crm/fidelizacion",
-    "/comercial/campanas",
     "/produccion/planificacion",
     "/produccion/colas",
-    "/inventario/compras",
-    "/administracion/tesoreria",
-    "/administracion/egresos",
-    "/administracion/cuentas-por-pagar",
   ])
     expect(visibles).not.toContain(ruta);
+  expect(visibles).toContain("/crm/fidelizacion");
+  expect(visibles).toContain("/crm/cupones");
+  expect(
+    navPara(null, "AR", esencial).flatMap(i => hasChildren(i) ? i.children : [])
+      .find(c => c.href === "/crm/cupones")?.label,
+  ).toBe("Historial de cupones");
 });
 
 it("Pro habilita sus funciones sin habilitar la planificación de Avanzado ni reemplazar los permisos", () => {
@@ -70,7 +79,7 @@ it("una URL directa excluida no monta el contenido ni sus consultas", async () =
     expect(consulta).not.toHaveBeenCalled();
     await act(async () =>
       root.render(
-        <CapacidadesProvider capacidades={{ funciones: pro }}>
+        <CapacidadesProvider capacidades={{ funciones: PROPUESTA_PLANES[2].contenido.funciones }}>
           <AccesoPorPlan>
             <Contenido />
           </AccesoPorPlan>

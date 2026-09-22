@@ -61,6 +61,22 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
           const contenido = structuredClone(PROPUESTA_PLANES[0].contenido);
           // Cobrar y entregar también debe funcionar sin la integración fiscal.
           contenido.funciones.fiscal_argentina = false;
+          for (const clave of [
+            'analisis_vectorial',
+            'geometrias',
+            'aprovechamiento_cotizacion',
+            'exportacion_fabricacion',
+            'recorridos_fabricacion',
+            'mcp',
+            'aprobacion_presupuestos',
+            'documentos_pdf',
+            'seguimiento_qr',
+            'etiquetas_pdf',
+            'existencias',
+            'equipos_produccion',
+            'cuentas_cobrar',
+          ] as const)
+            contenido.funciones[clave] = false;
           const contrato = contratoPropuesto(
             contenido,
             VERSION_CATALOGO_PLANES,
@@ -137,6 +153,12 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
             prisma as never,
             new AplicarPrecioService(),
             new PreciosEspecialesClientesService(prisma as never, capacidades),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            capacidades,
           );
           const producto = await tx.producto.findFirstOrThrow({
             where: { tenantId, codigo: 'TARJ-PREMIUM-300' },
@@ -151,7 +173,8 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
           expect(guardada.cotizacionItemId).toBeTruthy();
           const payload = {
             idempotencyKey: randomUUID(),
-            estado: 'pendiente',
+            estado: 'pendiente' as const,
+            canalVenta: 'mostrador',
             clienteId: cliente.id,
             fechaEntrega: '2099-12-01',
             items: [
@@ -185,6 +208,7 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
           expect(persistida.fechaEntrega?.toISOString().slice(0, 10)).toBe(
             '2099-12-01',
           );
+          expect(persistida.publicToken).toBeNull();
           expect(persistida.materialesControlados).toBe(false);
           expect(persistida.fidelizacionPuntosEstimados).toBe(0);
           expect(
@@ -192,6 +216,57 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
               where: { ordenId: orden.id },
             }),
           ).toBe(0);
+          // El borrador no conserva derechos de una emisión futura.
+          const borrador = await ordenes.create(auth, {
+            ...payload,
+            estado: 'borrador',
+            idempotencyKey: randomUUID(),
+          });
+          await ordenes.pasosDeOrden(auth, borrador.id);
+          expect(
+            await tx.ordenTrabajoItemPaso.count({
+              where: { ordenId: borrador.id },
+            }),
+          ).toBe(0);
+          contrato.funciones.tablero = false;
+          contrato.funciones.estaciones = false;
+          contrato.funciones.cobros = false;
+          const manual = await ordenes.create(auth, {
+            ...payload,
+            idempotencyKey: randomUUID(),
+          });
+          const emitidaDesdeBorrador = await ordenes.cambiarEstado(
+            auth,
+            borrador.id,
+            { estado: 'pendiente' },
+          );
+          for (const nueva of [manual, emitidaDesdeBorrador]) {
+            expect(nueva.produccionControlada).toBe(false);
+            expect(nueva.cobrosHabilitadosEmision).toBe(false);
+            await ordenes.pasosDeOrden(auth, nueva.id); // Tampoco materializar al leer.
+            expect(
+              await tx.ordenTrabajoItemPaso.count({
+                where: { ordenId: nueva.id },
+              }),
+            ).toBe(0);
+          }
+          // Simula la retirada del circuito comercial con la OT ya emitida.
+          contrato.funciones.ordenes = false;
+          contrato.funciones.presupuestos = false;
+          contrato.funciones.cotizacion = false;
+          for (const clave of [
+            'clientes',
+            'empleados',
+            'materiales',
+            'productos',
+            'productos_compuestos',
+            'procesos',
+            'centros_costo',
+            'maquinaria',
+            'reglas_precio',
+          ] as const) {
+            contrato.funciones[clave] = false;
+          }
           const { ejecutados } = await ejecutarOrdenF4(
             tx,
             ordenes,
@@ -248,6 +323,16 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
               tipo: 'efectivo',
             },
           });
+          await expect(
+            cobros.create(auth, {
+              ordenId: orden.id,
+              fecha: '2026-09-21',
+              metodoPagoId: metodo.id,
+              cuentaDestinoId: cuenta.id,
+              montoBruto: mostrador.saldo + 1,
+              comisionPctAplicada: 0,
+            }),
+          ).rejects.toThrow('saldo pendiente');
           await cobros.create(auth, {
             idempotencyKey: randomUUID(),
             ordenId: orden.id,
@@ -265,6 +350,34 @@ describe('Esencial: cotización → emisión → producción manual → cobro �
           expect(final.estado).toBe('entregada');
           expect(final.saldo).toBe(0);
           expect(final.cobrado).toBe(final.total);
+          const manualEscaneada = await entrega.escanear(auth, manual.numero);
+          expect(manualEscaneada.puedeCobrar).toBe(false);
+          expect(manualEscaneada.requiereConfirmacionManual).toBe(true);
+          await expect(
+            cobros.create(auth, {
+              ordenId: manual.id,
+              metodoPagoId: metodo.id,
+              cuentaDestinoId: cuenta.id,
+              fecha: '2026-09-21',
+              montoBruto: 10,
+              comisionPctAplicada: 0,
+            }),
+          ).rejects.toMatchObject({ status: 403 });
+          const entregaManual = {
+            itemIds: manualEscaneada.items.map((item) => item.id),
+          };
+          await expect(
+            entrega.entregar(auth, manual.id, entregaManual),
+          ).rejects.toThrow('Confirmá');
+          await entrega.entregar(auth, manual.id, {
+            ...entregaManual,
+            confirmarPreparacionManual: true,
+          });
+          const manualEntregada = await entrega.escanear(auth, manual.numero);
+          expect(manualEntregada.estado).toBe('entregada');
+          expect(manualEntregada.cobrado).toBe(0);
+          expect(manualEntregada.saldo).toBe(manualEntregada.total);
+
           expect(
             await tx.fidelizacionMovimiento.count({
               where: { tenantId, clienteId: cliente.id },

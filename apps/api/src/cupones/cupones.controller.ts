@@ -24,7 +24,6 @@ import {
 } from './dto/cupones.dto';
 
 @Permiso('crm.ver')
-@RequiereCapacidad('cupones')
 @Controller('cupones')
 export class CuponesController {
   constructor(private readonly service: CuponesService) {}
@@ -41,6 +40,7 @@ export class CuponesController {
   // gatea): mismo permiso y roles que resolver una aprobación.
   @Permiso('comercial.aprobar_descuento')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
+  @RequiereCapacidad('cupones')
   @Post()
   crear(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearCuponDto) {
     return this.service.crear(auth, dto);
@@ -48,6 +48,7 @@ export class CuponesController {
 
   @Permiso('comercial.aprobar_descuento')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
+  @RequiereCapacidad('cupones')
   @Patch(':id')
   actualizar(
     @CurrentSession() auth: CurrentAuth,
@@ -59,6 +60,7 @@ export class CuponesController {
 
   @Permiso('comercial.aprobar_descuento')
   @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
+  @RequiereCapacidad('cupones')
   @Delete(':id')
   eliminar(
     @CurrentSession() auth: CurrentAuth,
@@ -69,6 +71,7 @@ export class CuponesController {
 
   /** El comercial valida el código (tecleado o escaneado) contra su carrito. */
   @Permiso('comercial.gestionar')
+  @RequiereCapacidad('cupones')
   @Post('validar')
   validar(@CurrentSession() auth: CurrentAuth, @Body() dto: ValidarCuponDto) {
     return this.service.validar(auth, dto);

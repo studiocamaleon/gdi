@@ -1,4 +1,8 @@
 import {
+  incluirOferta,
+  presentarOferta,
+} from '../plataforma/planes/ofertas-planes';
+import {
   bloquearCupoUsuarios,
   exigirCupoUsuario,
 } from '../suscripciones/cupos-usuarios';
@@ -34,19 +38,32 @@ export class RegistroService {
     const planes = await this.prisma.plan.findMany({
       where: { activo: true, publico: true },
       orderBy: { orden: 'asc' },
+      include: { ofertaActual: { include: incluirOferta } },
     });
-    return planes.map((plan) => ({
-      codigo: plan.codigo,
-      nombre: plan.nombre,
-      descripcion: plan.descripcion,
-      precioMensual: plan.precioAConsultar ? null : Number(plan.precioMensual),
-      moneda: plan.moneda,
-      trialDias: plan.registroPublico ? plan.trialDias : null,
-      registroPublico: plan.registroPublico,
-      recomendado: plan.recomendado,
-      precioAConsultar: plan.precioAConsultar,
-      features: plan.featuresJson,
-    }));
+    const entorno =
+      process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox';
+    return planes
+      .filter(
+        (p) => !p.comercialVersionado || p.ofertaActual?.entorno === entorno,
+      )
+      .map((plan) =>
+        plan.ofertaActual && plan.comercialVersionado
+          ? presentarOferta(plan.ofertaActual)
+          : {
+              codigo: plan.codigo,
+              nombre: plan.nombre,
+              descripcion: plan.descripcion,
+              precioMensual: plan.precioAConsultar
+                ? null
+                : Number(plan.precioMensual),
+              moneda: plan.moneda,
+              trialDias: plan.registroPublico ? plan.trialDias : null,
+              registroPublico: plan.registroPublico,
+              recomendado: plan.recomendado,
+              precioAConsultar: plan.precioAConsultar,
+              features: plan.featuresJson,
+            },
+      );
   }
 
   async iniciar(dto: IniciarRegistroDto) {
@@ -58,9 +75,25 @@ export class RegistroService {
     }
     validarZona(dto.zonaHoraria);
     const plan = await this.prisma.plan.findFirst({
-      where: { codigo: dto.planCodigo, activo: true, registroPublico: true },
+      where: { codigo: dto.planCodigo, activo: true, publico: true },
+      include: { ofertaActual: { include: incluirOferta } },
     });
     if (!plan) throw new BadRequestException('Ese plan no admite alta Trial.');
+    const oferta = plan.comercialVersionado ? plan.ofertaActual : null;
+    if (plan.comercialVersionado) {
+      const entorno =
+        process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox';
+      if (
+        !oferta?.registroPublico ||
+        oferta.entorno !== entorno ||
+        dto.ofertaId !== oferta.id
+      )
+        throw new ConflictException(
+          'La oferta cambió o ya no admite altas. Actualizá los planes antes de continuar.',
+        );
+    } else if (!plan.registroPublico || dto.ofertaId) {
+      throw new BadRequestException('Ese plan no admite alta Trial.');
+    }
 
     const email = dto.email.trim().toLowerCase();
     const anterior = await this.prisma.registroTenant.findFirst({
@@ -91,6 +124,7 @@ export class RegistroService {
         ? null
         : await bcrypt.hash(dto.password, 10),
       planId: plan.id,
+      ofertaId: oferta?.id ?? null,
       paisCodigo: dto.paisCodigo.toUpperCase(),
       zonaHoraria: dto.zonaHoraria,
       tokenHash,
@@ -109,6 +143,7 @@ export class RegistroService {
         ? null
         : await bcrypt.hash(dto.password, 10),
       planId: plan.id,
+      ofertaId: oferta?.id ?? null,
       paisCodigo: dto.paisCodigo.toUpperCase(),
       zonaHoraria: dto.zonaHoraria,
       tokenHash,
@@ -160,7 +195,9 @@ export class RegistroService {
       ),
       email: ocultarEmail(registro.email),
       empresa: registro.empresaNombre,
-      plan: registro.plan.nombre,
+      plan: registro.oferta
+        ? presentarOferta(registro.oferta).nombre
+        : registro.plan.nombre,
     };
   }
 
@@ -181,7 +218,7 @@ export class RegistroService {
           revocadoEl: null,
           tokenExpiraEl: { gt: new Date() },
         },
-        include: { plan: true },
+        include: { plan: true, oferta: { include: incluirOferta } },
       });
       if (!vigente)
         throw new ConflictException('Este registro ya fue utilizado o venció.');
@@ -213,7 +250,7 @@ export class RegistroService {
           revocadoEl: null,
           tokenExpiraEl: { gt: new Date() },
         },
-        include: { plan: true },
+        include: { plan: true, oferta: { include: incluirOferta } },
       });
       if (!vigente)
         throw new ConflictException('Este registro ya fue utilizado o venció.');
@@ -245,7 +282,14 @@ export class RegistroService {
   ) {
     const provisionado = await this.provisionamiento.provisionarBase(tx, {
       nombre: registro.empresaNombre,
-      plan: { id: registro.plan.id, trialDias: registro.plan.trialDias },
+      plan: {
+        id: registro.plan.id,
+        trialDias: registro.oferta
+          ? registro.oferta.trialDias
+          : registro.plan.trialDias,
+        versionId: registro.oferta?.versionId,
+        ofertaId: registro.ofertaId,
+      },
       origen: 'registro_publico',
       paisCodigo: registro.paisCodigo,
       zonaHoraria: registro.zonaHoraria,
@@ -253,7 +297,9 @@ export class RegistroService {
       iniciaTrial: true,
     });
     await bloquearCupoUsuarios(tx, provisionado.tenantId);
-    await exigirCupoUsuario(tx, provisionado.tenantId, { email: registro.email });
+    await exigirCupoUsuario(tx, provisionado.tenantId, {
+      email: registro.email,
+    });
     const membership = await tx.membership.create({
       data: {
         userId: user.id,
@@ -293,7 +339,7 @@ export class RegistroService {
   private async buscarToken(raw: string) {
     const registro = await this.prisma.registroTenant.findUnique({
       where: { tokenHash: hash(raw) },
-      include: { plan: true },
+      include: { plan: true, oferta: { include: incluirOferta } },
     });
     if (!registro) throw new NotFoundException('El enlace no es válido.');
     return registro;

@@ -61,7 +61,7 @@ export function AprobacionDocumentalPublicaView({
     }
   }
 
-  const pendiente = data.solicitud.estado === "PENDIENTE";
+  const pendiente = data.solicitud.estado === "PENDIENTE" && data.puedeDecidir !== false;
   return (
     <main className={styles.page}>
       <header className={styles.brand}>
@@ -71,7 +71,7 @@ export function AprobacionDocumentalPublicaView({
       </header>
 
       <section className={styles.hero}>
-        <p>{data.campana.codigo} · {data.campana.nombre}</p>
+        <p>{data.campana ? `${data.campana.codigo} · ${data.campana.nombre}` : data.orden?.numero}</p>
         <h1>{data.documento.nombre}</h1>
         <div className={styles.tags}>
           <span>{data.documento.etapa.toLowerCase()}</span>
@@ -100,7 +100,7 @@ export function AprobacionDocumentalPublicaView({
         ) : (
           <div className={styles.resolved} data-status={data.solicitud.estado}>
             <CheckCircle2Icon />
-            <div><strong>Decisión registrada</strong><span>Estado: {data.solicitud.estado.toLowerCase()}</span></div>
+            <div><strong>{data.solicitud.estado === "PENDIENTE" ? "Solicitud en consulta" : "Decisión registrada"}</strong><span>{data.solicitud.estado === "PENDIENTE" ? "Contactá a la empresa para continuar con esta aprobación." : `Estado: ${data.solicitud.estado.toLowerCase()}`}</span></div>
           </div>
         )}
       </section>

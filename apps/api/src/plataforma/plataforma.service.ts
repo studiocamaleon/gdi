@@ -1,3 +1,5 @@
+import { contratoSuscripcion } from '../suscripciones/contrato-suscripcion';
+import { exigirSinContratacionPendiente } from '../suscripciones/contratacion-pendiente';
 import {
   bloquearCupoUsuarios,
   exigirCupoUsuario,
@@ -98,6 +100,9 @@ export type PlanCatalogo = {
   registroPublico: boolean;
   recomendado: boolean;
   precioAConsultar: boolean;
+  comercialVersionado?: boolean;
+  revisionOferta?: number;
+  ofertaActualId?: string | null;
   /** Cuántos tenants están hoy en este plan (para no cambiar a ciegas). */
   tenants: number;
 };
@@ -207,6 +212,7 @@ export class PlataformaService {
             select: {
               estado: true,
               usuariosAdicionales: true,
+              planVersion: true,
               plan: {
                 select: {
                   codigo: true,
@@ -319,19 +325,15 @@ export class PlataformaService {
           wa.find((w) => w.estado === 'fallida')?._count._all ?? 0,
         plan: t.suscripcion
           ? (() => {
-              const f = (t.suscripcion.plan.featuresJson ?? {}) as {
-                usuariosMax?: number;
-                ordenesMesMax?: number;
-                storageGb?: number;
-              };
+              const c = contratoSuscripcion(t.suscripcion);
               return {
                 codigo: t.suscripcion.plan.codigo,
-                nombre: t.suscripcion.plan.nombre,
+                nombre: c.nombre,
                 precioMensual: Number(t.suscripcion.plan.precioMensual),
                 estado: t.suscripcion.estado,
-                usuariosMax: limiteUsuarios(t.suscripcion.plan, t.suscripcion.usuariosAdicionales).limite,
-                ordenesMesMax: f.ordenesMesMax ?? null,
-                storageGb: f.storageGb ?? null,
+                usuariosMax: c.limites.usuariosMax,
+                ordenesMesMax: c.limites.ordenesMesMax,
+                storageGb: c.limites.almacenamiento.gb,
               };
             })()
           : null,
@@ -447,6 +449,9 @@ export class PlataformaService {
       registroPublico: p.registroPublico,
       recomendado: p.recomendado,
       precioAConsultar: p.precioAConsultar,
+      comercialVersionado: p.comercialVersionado,
+      revisionOferta: p.revisionOferta,
+      ofertaActualId: p.ofertaActualId,
       tenants: p._count.suscripciones,
     }));
   }
@@ -459,9 +464,10 @@ export class PlataformaService {
   ): Promise<PlanCatalogo[]> {
     const plan = await this.prisma.plan.findUnique({
       where: { id: planId },
-      select: { nombre: true },
+      select: { nombre: true, comercialVersionado: true },
     });
     if (!plan) throw new NotFoundException('El plan no existe.');
+    if (plan.comercialVersionado) throw new ConflictException('Editá el borrador y publicá otra versión para cambiar la descripción de este plan.');
     await this.prisma.$transaction([
       this.prisma.plan.update({
         where: { id: planId },
@@ -505,9 +511,11 @@ export class PlataformaService {
         nombre: true,
         paddlePriceId: true,
         paddlePriceIdAnual: true,
+        comercialVersionado: true,
       },
     });
     if (!plan) throw new NotFoundException('El plan no existe.');
+    if (plan.comercialVersionado) throw new ConflictException('Este plan usa ofertas inmutables. Gestioná sus precios desde la versión publicada.');
 
     const priceLimpio = priceId?.trim() || null;
     const productLimpio = productId?.trim() || null;
@@ -549,8 +557,13 @@ export class PlataformaService {
         : { precioMensual: precio.monto, moneda: precio.moneda };
     }
 
-    await this.prisma.$transaction([
-      this.prisma.plan.update({
+    await this.prisma.$transaction(async (tx) => {
+      // Comparte la exclusión con la activación de ofertas; un precio no puede
+      // vincularse a la vez al catálogo anterior y a una versión nueva.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(724611, 1)::text`;
+      if (priceLimpio && await tx.planOfertaPrecio.count({ where: { entorno: this.paddle.entorno, priceId: priceLimpio } }))
+        throw new ConflictException('Ese precio pertenece a una oferta versionada y no se puede reutilizar.');
+      await tx.plan.update({
         where: { id: planId },
         data: {
           ...(esAnual
@@ -558,8 +571,8 @@ export class PlataformaService {
             : { paddlePriceId: priceLimpio, paddleProductId: productLimpio }),
           ...(espejo ?? {}),
         },
-      }),
-      this.prisma.plataformaEvento.create({
+      });
+      await tx.plataformaEvento.create({
         data: {
           staffUserId,
           tipo: 'plan_vinculado_paddle',
@@ -573,8 +586,8 @@ export class PlataformaService {
             nuevo: priceLimpio,
           },
         },
-      }),
-    ]);
+      });
+    });
     return this.planes();
   }
 
@@ -588,13 +601,15 @@ export class PlataformaService {
   ) {
     const razon = this.motivoAccion(motivo);
     await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId}::uuid FOR UPDATE`;
+      await bloquearCupoUsuarios(tx, tenantId);
       const tenant = await tx.tenant.findUnique({
         where: { id: tenantId },
         include: { suscripcion: { include: { plan: true } } },
       });
       if (!tenant) throw new NotFoundException('La empresa no existe.');
       const anterior = tenant.suscripcion;
+      await exigirSinContratacionPendiente(tx, tenantId);
+      if (anterior?.planVersionId) throw new ConflictException('Esta empresa utiliza una versión publicada. Revisá el cambio desde Versiones para validar funciones y cupos.');
       if (
         anterior &&
         (anterior.proveedor !== 'manual' || anterior.referenciaExterna)
@@ -604,6 +619,8 @@ export class PlataformaService {
         );
       }
       const plan = await tx.plan.findUnique({ where: { id: planId } });
+      if (plan?.comercialVersionado)
+        throw new ConflictException('Este plan utiliza condiciones publicadas. Asigná su versión después de revisar funciones y cupos.');
       if (!plan?.activo)
         throw new BadRequestException('El plan no existe o no está activo.');
       if (anterior?.planId === planId) return;

@@ -13,6 +13,7 @@ import { AcreditacionesScheduler } from './acreditaciones.scheduler';
 import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { AfipIntegracionService } from './afip-integracion.service';
+import { EmisionFiscalService } from './emision-fiscal.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
@@ -26,7 +27,8 @@ import { ManualProvider } from './invoicing/manual.provider';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
-  imports: [CapacidadesEmpresaModule,
+  imports: [
+    CapacidadesEmpresaModule,
     ArchivosModule,
     EnlacesPublicosModule,
     SuscripcionesModule,
@@ -47,6 +49,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     ConfiguracionFiscalService,
     AfipIntegracionService,
     ComprobantesService,
+    EmisionFiscalService,
     ImputacionesService,
     CuentaCorrienteService,
     FacturaService,

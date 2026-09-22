@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -27,6 +28,9 @@ export class CredencialesMcpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionCache: SessionCacheService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /**
@@ -75,6 +79,7 @@ export class CredencialesMcpService {
     dto: { nombre: string; scopes?: string[]; expiraEl?: string | null },
   ) {
     this.soloHumanos(auth);
+    await this.capacidades.exigir(auth.tenantId, 'mcp');
 
     const scopes = dto.scopes?.length ? dto.scopes : SCOPES_DEFAULT;
     if (scopes.includes('finanzas.ver_margenes')) {

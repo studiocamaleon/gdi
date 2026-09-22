@@ -157,6 +157,7 @@ export class PresupuestosService {
     tenantId: string,
     dto: ActualizarConfigPresupuestosDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'presupuestos');
     await this.prisma.configuracionPresupuestos.upsert({
       where: { tenantId },
       create: { tenantId, ...dto },
@@ -167,6 +168,7 @@ export class PresupuestosService {
 
   // ── Emitir: la Cotizacion de la ficha se vuelve presupuesto formal ─
   async emitir(auth: CurrentAuth, dto: EmitirPresupuestoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'presupuestos');
     const cotizacion = await this.prisma.cotizacion.findFirst({
       where: { id: dto.cotizacionId },
       select: { id: true, numero: true },
@@ -281,6 +283,7 @@ export class PresupuestosService {
     };
 
     const numero = await this.prisma.$transaction(async (tx) => {
+      await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, fidelizacion);
       const anio = ahora.getFullYear();
       const contador = await tx.cotizacionContador.upsert({
         where: { tenantId_anio: { tenantId: auth.tenantId, anio } },
@@ -403,6 +406,7 @@ export class PresupuestosService {
           estado: 'listo' as const,
           url: await this.archivos.urlDeDescarga(historico.id),
         };
+      await this.capacidades.exigir(auth.tenantId, 'documentos_pdf');
       if (!pdfAsincronoHabilitado()) {
         const archivo = await this.materializarPdf(auth, id);
         return {
@@ -431,6 +435,7 @@ export class PresupuestosService {
         revision: doc.revision,
       };
     }
+    await this.capacidades.exigir(auth.tenantId, 'documentos_pdf');
     return {
       estado:
         doc.estado === 'FALLIDO'
@@ -502,6 +507,7 @@ export class PresupuestosService {
   async materializarPdf(auth: CurrentAuth, id: string): Promise<Archivo> {
     const existente = await this.pdfHistorico(auth.tenantId, id);
     if (existente) return existente;
+    await this.capacidades.exigir(auth.tenantId, 'documentos_pdf');
     const datos = await this.datosPdf(auth, id);
     const contenido = await this.pdf.generar(datos);
 
@@ -714,6 +720,32 @@ export class PresupuestosService {
     return {
       id: c.id,
       numero: extra?.numero ?? c.numero,
+      pdfDisponible:
+        (await this.capacidades.incluida(auth.tenantId, 'documentos_pdf')) ||
+        Boolean(
+          await this.prisma.archivo.findFirst({
+            where: {
+              tenantId: auth.tenantId,
+              cotizacionId: id,
+              scope: ArchivoScope.COTIZACION,
+              generado: true,
+              estado: 'LISTO',
+              OR: [
+                { documentoPdfId: null },
+                {
+                  documentoPdf: {
+                    revision:
+                      c.fechaEnvio ||
+                      !['borrador', 'pendiente_aprobacion'].includes(c.estado)
+                        ? REVISION_EMITIDA
+                        : REVISION_BORRADOR,
+                  },
+                },
+              ],
+            },
+            select: { id: true },
+          }),
+        ),
       estado: c.estado as PresupuestoEstado,
       cliente: c.cliente
         ? { id: c.cliente.id, nombre: c.cliente.nombre }
@@ -802,6 +834,7 @@ export class PresupuestosService {
     }
 
     if (c.estado === 'borrador') {
+      await this.capacidades.exigir(auth.tenantId, 'presupuestos');
       const motivos = await this.evaluarReglas(
         auth.tenantId,
         id,
@@ -861,10 +894,17 @@ export class PresupuestosService {
       fechaValidez?: Date | null;
       emisionJson?: Prisma.JsonValue | null;
       fidelizacionCanjePuntos?: number;
+      fidelizacionPuntosEstimados?: number | null;
     },
     opts: { reenvio: boolean; descripcion?: string },
   ) {
-    const token = c.publicToken ?? generarTokenPublico();
+    if (!opts.reenvio)
+      await this.capacidades.exigir(auth.tenantId, 'presupuestos');
+    const [conEnlace, conPdf] = await Promise.all([
+      this.capacidades.puedeOperar(auth.tenantId, 'aprobacion_presupuestos'),
+      this.capacidades.puedeOperar(auth.tenantId, 'documentos_pdf'),
+    ]);
+    const token = c.publicToken ?? (conEnlace ? generarTokenPublico() : null);
     const emision = (c.emisionJson ?? { items: [] }) as unknown as EmisionJson;
     const fechaValidez =
       c.fechaValidez ??
@@ -875,6 +915,7 @@ export class PresupuestosService {
       ));
     let documento: ReturnType<DocumentosPdfService['preparar']> | undefined;
     if (
+      conPdf &&
       pdfAsincronoHabilitado() &&
       !(await this.pdfHistorico(auth.tenantId, c.id)) &&
       !(await this.documentos.buscar(auth.tenantId, c.id, REVISION_EMITIDA))
@@ -890,6 +931,10 @@ export class PresupuestosService {
       );
     }
     await this.prisma.$transaction(async (tx) => {
+      await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, {
+        puntosEstimados: c.fidelizacionPuntosEstimados,
+        canjePuntos: c.fidelizacionCanjePuntos,
+      });
       await this.cupones.reservarParaPresupuesto(
         tx,
         auth,
@@ -931,11 +976,12 @@ export class PresupuestosService {
       }
       // Reenviar no acuña token nuevo: `emitir` es idempotente por entidad, así
       // que el link que el cliente ya tiene sigue siendo el mismo.
-      await this.enlaces.emitir(tx, {
-        tenantId: auth.tenantId,
-        tipo: TipoEnlacePublico.PRESUPUESTO,
-        entidadId: c.id,
-        token,
+      if (conEnlace && token)
+        await this.enlaces.emitir(tx, {
+          tenantId: auth.tenantId,
+          tipo: TipoEnlacePublico.PRESUPUESTO,
+          entidadId: c.id,
+          token,
       });
       if (documento) await this.documentos.registrar(tx, documento);
     });
@@ -947,7 +993,7 @@ export class PresupuestosService {
           ? 'Presupuesto reenviado al cliente.'
           : 'Presupuesto enviado al cliente.'),
     });
-    if (!pdfAsincronoHabilitado())
+    if (conPdf && !pdfAsincronoHabilitado())
       await this.materializarPdf(auth, c.id).catch((error: unknown) => {
         this.logger.warn(
           `No pude materializar el PDF del presupuesto ${c.id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -1026,6 +1072,8 @@ export class PresupuestosService {
     id: string,
     dto: { decision: 'aprobar' | 'devolver'; comentario?: string },
   ) {
+    if (dto.decision === 'aprobar')
+      await this.capacidades.exigir(auth.tenantId, 'presupuestos');
     const c = await this.exigir(id, ['pendiente_aprobacion']);
     const nombre = await this.nombreDe(auth);
     await this.prisma.cotizacion.update({
@@ -1128,6 +1176,7 @@ export class PresupuestosService {
   // Sólo desde APROBADO: convertir sin la decisión del cliente saltearía
   // el ciclo (decisión del usuario 2026-07-18).
   async convertir(auth: CurrentAuth, id: string, dto: ConvertirPresupuestoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const c = await this.exigir(id, ['aprobado']);
     const emision = (c.emisionJson ?? null) as unknown as EmisionJson | null;
     if (!emision?.items?.length) {

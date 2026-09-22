@@ -6,7 +6,10 @@ function servicio() {
     {} as never,
     {} as never,
     undefined,
-    { incluida: jest.fn().mockResolvedValue(true) } as never,
+    {
+      incluida: jest.fn().mockResolvedValue(true),
+      exigirOperacionTx: jest.fn(),
+    } as never,
   );
 }
 
@@ -14,6 +17,7 @@ function txFixture(opts?: {
   existente?: boolean;
   conPaso?: boolean;
   alcance?: 'ORDEN' | 'ITEM' | 'PASO';
+  sinRequisitos?: boolean;
 }) {
   const alcance = opts?.alcance ?? 'PASO';
   const documento = {
@@ -39,7 +43,7 @@ function txFixture(opts?: {
             pasos: opts?.conPaso
               ? [{ id: 'paso-ot-1', rutaPasoId: 'paso-ruta-1' }]
               : [],
-            recetaRevision: { documentos: [documento] },
+            recetaRevision: { documentos: opts?.sinRequisitos ? [] : [documento] },
           },
         ],
       }),
@@ -51,6 +55,7 @@ function txFixture(opts?: {
       create: jest.fn().mockResolvedValue({ id: 'maestro-1' }),
     },
     gateProduccionDocumento: {
+      findFirst: jest.fn().mockResolvedValue(opts?.existente ? { id: 'gate-1' } : null),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       findUnique: jest
         .fn()
@@ -110,6 +115,27 @@ describe('requisitos documentales de receta en OT', () => {
       data: expect.objectContaining({ pasoId: 'paso-ot-1', activo: true }),
     });
     expect(resultado).toEqual({ documentosCreados: 0, gatesCreados: 0 });
+  });
+
+  it('materializa los requisitos de una OT independiente sin exigir una campaña', async () => {
+    const tx = txFixture({ conPaso: true });
+    await servicio().materializarRequisitosReceta(tx as never, { ...args, proyectoCampanaId: null });
+    expect(tx.archivoMaestro.findUnique.mock.calls[0][0]).toEqual({
+      where: { tenantId_ordenId_nombre: { tenantId: args.tenantId, ordenId: args.ordenId, nombre: 'EXH-01 · Arte final aprobado' } },
+      select: { id: true },
+    });
+    expect(tx.archivoMaestro.create.mock.calls[0][0].data).toMatchObject({ ordenId: args.ordenId, proyectoCampanaId: null });
+    expect(tx.gateProduccionDocumento.create.mock.calls[0][0].data).toMatchObject({ ordenId: args.ordenId, proyectoCampanaId: null });
+  });
+
+  it('retira controles anteriores si la receta ya no requiere documentos', async () => {
+    const tx = txFixture({ existente: true, sinRequisitos: true });
+    await servicio().materializarRequisitosReceta(tx as never, args);
+    expect(tx.gateProduccionDocumento.updateMany.mock.calls[0][0]).toMatchObject({
+      where: { ordenItemId: 'item-1', recetaDocumentoId: { not: null } }, data: { activo: false },
+    });
+    expect(tx.archivoMaestro.create).not.toHaveBeenCalled();
+    expect(tx.gateProduccionDocumento.create).not.toHaveBeenCalled();
   });
 
   it('un requisito de subruta se congela en el item sin apuntar a un paso', async () => {

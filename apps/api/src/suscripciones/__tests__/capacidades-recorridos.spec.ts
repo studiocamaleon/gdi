@@ -36,7 +36,9 @@ describe('Capacidades: HTTP, servicios y tareas automáticas', () => {
   const contexto = (sesion?: CurrentAuth) =>
     ({
       getClass: () => FidelizacionController,
-      getHandler: () => function ruta() {},
+      // Referencia para inspeccionar metadatos, sin invocar la ruta.
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      getHandler: () => FidelizacionController.prototype.simular,
       switchToHttp: () => ({
         getRequest: () => ({
           auth: sesion,
@@ -116,16 +118,14 @@ describe('Capacidades: HTTP, servicios y tareas automáticas', () => {
     await expect(
       planificacion.solicitar(auth, 'item', {} as never),
     ).rejects.toMatchObject({ status: 403 });
-    await expect(
-      planificacion.calcular(auth.tenantId, 'revision', jest.fn()),
-    ).rejects.toMatchObject({ status: 403 });
+    // El worker reconcilia revisiones pendientes como FALLIDA al retirar el
+    // plan; ese recorrido con persistencia se verifica en planificacion-planes.
   });
 
   it('el scheduler no calcula fechas ni asigna personal si se excluye del plan', async () => {
     const eta = new EtaService({} as never, {} as never, contrato());
     await eta.sincronizarAsignaciones(auth.tenantId);
     await eta.capturarEmision(auth, 'orden');
-    await eta.capturarCierre(auth.tenantId, 'orden');
     await eta.snapshotDiario(auth.tenantId);
     await expect(eta.contextoSimulacion(auth.tenantId)).rejects.toMatchObject({
       status: 403,
@@ -164,7 +164,13 @@ describe('Capacidades: HTTP, servicios y tareas automáticas', () => {
           findFirst: jest.fn().mockResolvedValue(ganancia),
           create: jest.fn(),
         },
-        fidelizacionCuenta: { update: jest.fn() },
+        cliente: { findFirst: jest.fn().mockResolvedValue({ id: 'cliente' }) },
+        $queryRaw: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'cuenta', saldoPuntos: 10, reservadosPuntos: 0 },
+          ]),
+        fidelizacionCuenta: { update: jest.fn(), createMany: jest.fn() },
       };
       await new FidelizacionService({} as never, contrato()).reconciliarOrden(
         tx as never,

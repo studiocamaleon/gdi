@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   useConfigRegional,
@@ -554,7 +555,9 @@ export function TesoreriaView({
   const router = useRouter();
   const scope = useLegacyDesignScope();
   const designScope = useDesignScope();
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const conTesoreria = useCapacidad("tesoreria");
+  const permisoGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = permisoGestionar && conTesoreria;
   const { moneda, zonaHoraria } = useConfigRegional();
   const { fechaHora, fechaNumerica } = useFecha();
   const hoy = React.useMemo(() => hoyEnZona(zonaHoraria), [zonaHoraria]);
@@ -748,6 +751,10 @@ export function TesoreriaView({
       {...scope}
       className={[scope.className, styles.pagina].filter(Boolean).join(" ")}
     >
+      {!conTesoreria ? <Alert>
+        <AlertTitle>Historial de tesorería</AlertTitle>
+        <AlertDescription>Podés consultar las cuentas, sus movimientos y valores. El plan actual no incluye transferencias, ajustes, arqueos ni conciliación.</AlertDescription>
+      </Alert> : null}
       <header className={styles.encabezado}>
         <div>
           <span className={styles.eyebrow}>Administración · Fondos</span>
@@ -1354,7 +1361,7 @@ export function TesoreriaView({
         ) : null}
       </section>
 
-      {modal?.tipo === "cuenta" ? (
+      {puedeGestionar && modal?.tipo === "cuenta" ? (
         <CuentaDialog
           key={modal.cuenta?.id ?? "nueva"}
           open
@@ -1373,7 +1380,7 @@ export function TesoreriaView({
           }
         />
       ) : null}
-      {modal?.tipo === "transferir" ? (
+      {puedeGestionar && modal?.tipo === "transferir" ? (
         <TransferenciaDialog
           key={modal.desde ?? "transferir"}
           open
@@ -1389,7 +1396,7 @@ export function TesoreriaView({
           }
         />
       ) : null}
-      {modal?.tipo === "ajuste" ? (
+      {puedeGestionar && modal?.tipo === "ajuste" ? (
         <AjusteDialog
           key={modal.cuenta.id}
           open
@@ -1405,7 +1412,7 @@ export function TesoreriaView({
           }
         />
       ) : null}
-      {modal?.tipo === "arqueo" ? (
+      {puedeGestionar && modal?.tipo === "arqueo" ? (
         <ArqueoDialog
           key={modal.cuenta.id}
           open

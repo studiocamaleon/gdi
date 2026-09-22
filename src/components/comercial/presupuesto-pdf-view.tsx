@@ -54,8 +54,8 @@ export function PresupuestoPdfView({ id }: { id: string }) {
               "No se pudo preparar el PDF. Podés volver a intentarlo.",
           });
         } else setVista({ estado: "demorado" });
-      } catch {
-        if (!controller.signal.aborted) setVista({ estado: "error" });
+      } catch (error) {
+        if (!controller.signal.aborted) setVista({ estado: "error", mensaje: error instanceof Error ? error.message : undefined });
       }
     }
     void abrir();

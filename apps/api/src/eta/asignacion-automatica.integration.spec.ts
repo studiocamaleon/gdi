@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProduccionService } from '../produccion/produccion.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
 import { EtaService } from './eta.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   leerAsignacionPersonal,
   proyectarAsignacionPersonal,
@@ -354,6 +355,7 @@ it('un asignado ejecuta sin mesa y registra al actor real; otro empleado no pued
     Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService,
     {
       prisma: db,
+      capacidades: new CapacidadesEmpresaService(db),
       eta,
       logger: new Logger('QA'),
       reconciliarTramosVencidos: jest.fn(),

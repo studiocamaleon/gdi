@@ -165,14 +165,14 @@ export function ComprobantePublicoView({
             </div>
           </div>
 
-          <a className="rc-dl" href={comprobantePdfUrl(token)}>
+          {datos.pdfDisponible !== false && <a className="rc-dl" href={comprobantePdfUrl(token)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
               <path d="M12 3v12" />
               <path d="M7 12l5 5 5-5" />
               <path d="M4 20h16" />
             </svg>
             Descargar el comprobante en PDF
-          </a>
+          </a>}
         </div>
 
         <div className="rc-foot">

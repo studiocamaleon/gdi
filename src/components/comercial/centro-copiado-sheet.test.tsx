@@ -2,6 +2,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
 import CentroCopiadoSheet from "./centro-copiado-sheet";
 import { itemConstruidoAPropuestaItem } from "@/lib/centro-copiado-api";
 import type { CentroCopiadoMeta } from "@/lib/centro-copiado-api";
@@ -129,7 +130,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
-async function montar(meta = doc) {
+async function montar(meta = doc, funciones?: Record<string, boolean>) {
   const item = itemConstruidoAPropuestaItem({
     documentoId: "item",
     grupoTomoId: null,
@@ -148,12 +149,14 @@ async function montar(meta = doc) {
   });
   await act(async () =>
     root.render(
-      <CentroCopiadoSheet
-        open
-        onOpenChange={() => {}}
-        onAgregar={() => false}
-        editItems={[item]}
-      />,
+      <CapacidadesProvider capacidades={{ funciones }}>
+        <CentroCopiadoSheet
+          open
+          onOpenChange={() => {}}
+          onAgregar={() => false}
+          editItems={[item]}
+        />
+      </CapacidadesProvider>,
     ),
   );
 }
@@ -342,7 +345,10 @@ const perfilCarga = {
   materialNombre: "Obra",
   rollo: { anchoRolloMm: 914, margenMm: 5 },
 };
-async function montarCarga(perfiles: object[] = [perfilCarga]) {
+async function montarCarga(
+  perfiles: object[] = [perfilCarga],
+  funciones?: Record<string, boolean>,
+) {
   mocks.opciones.mockResolvedValue({
     papelDefaultId: "papel",
     papeles: [
@@ -359,11 +365,13 @@ async function montarCarga(perfiles: object[] = [perfilCarga]) {
   mocks.opcionesCad.mockResolvedValue({ perfiles });
   await act(async () =>
     root.render(
-      <CentroCopiadoSheet
-        open
-        onOpenChange={() => {}}
-        onAgregar={() => false}
-      />,
+      <CapacidadesProvider capacidades={{ funciones }}>
+        <CentroCopiadoSheet
+          open
+          onOpenChange={() => {}}
+          onAgregar={() => false}
+        />
+      </CapacidadesProvider>,
     ),
   );
 }
@@ -614,4 +622,67 @@ it("rehidrata copias por página, edita páginas posteriores a la 100 y conserva
       { pagina: 101, copias: 4 },
     ],
   });
+});
+
+it("Documentos sin CAD ni terminaciones cotiza A4 sin consultar perfiles ni montar esos controles", async () => {
+  await montarCarga([], {
+    centro_copiado: true,
+    cotizacion_cad: false,
+    terminaciones_copiado: false,
+    impresion_directa: false,
+    colas_impresion: false,
+  });
+  expect(mocks.opcionesCad).not.toHaveBeenCalled();
+  expect(el.textContent).not.toContain("Planos CAD");
+  expect(el.textContent).not.toContain("Anillar juntos");
+  await cargarPdfs([[a4], [a1]]);
+  await avanzar();
+  expect(mocks.cotizar).toHaveBeenCalled();
+  const documentos = mocks.cotizar.mock.calls.at(-1)![0].documentos;
+  expect(documentos).toHaveLength(1);
+  expect(documentos[0]).toMatchObject({
+    modo: "HOJAS",
+    tamano: "A4",
+    terminaciones: [],
+  });
+  expect(documentos[0].archivoNombre).toBe("archivo-1.pdf");
+});
+
+it("un plano guardado permanece visible pero no se recotiza al perder CAD", async () => {
+  const plano = {
+    ...doc,
+    modo: "CAD" as const,
+    tamano: "CAD",
+    medidasPaginas: Array(20).fill(a1),
+  };
+  await montar(plano, {
+    centro_copiado: true,
+    cotizacion_cad: false,
+    terminaciones_copiado: true,
+  });
+  await avanzar();
+  expect(el.textContent).toContain("Esta carga contiene planos CAD");
+  expect(mocks.opcionesCad).not.toHaveBeenCalled();
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  expect(mocks.construir).not.toHaveBeenCalled();
+  expect(el.querySelector<HTMLButtonElement>("footer button")?.disabled).toBe(
+    true,
+  );
+});
+
+it("una terminación guardada se conserva y bloquea la recotización sin esa función", async () => {
+  await montar(
+    { ...doc, terminaciones: ["Anillado"] },
+    {
+      centro_copiado: true,
+      cotizacion_cad: true,
+      terminaciones_copiado: false,
+    },
+  );
+  await avanzar();
+  expect(el.textContent).toContain("Esta carga contiene terminaciones o tomos");
+  expect(mocks.cotizar).not.toHaveBeenCalled();
+  expect(el.querySelector<HTMLButtonElement>("footer button")?.disabled).toBe(
+    true,
+  );
 });

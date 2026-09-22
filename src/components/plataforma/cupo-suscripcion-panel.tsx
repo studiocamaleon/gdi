@@ -131,7 +131,7 @@ export function CupoSuscripcionPanel({
             <p className={styles.note}>
               {datos.editable
                 ? "Los adicionales se acuerdan manualmente. Este ajuste no genera un cobro."
-                : "El cupo se consulta aquí. La contratación de adicionales mediante la pasarela aún no está habilitada."}
+                : "El cupo se consulta aquí. En las ofertas publicadas, el administrador de la empresa gestiona los adicionales desde Suscripción, con revisión del cobro."}
             </p>
           </>
         )}

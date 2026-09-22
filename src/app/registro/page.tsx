@@ -81,10 +81,10 @@ export default async function RegistroPage() {
             <div className={s.storyFooter}>
               <div className={s.specialties}>
                 <span>
-                  <Printer /> Print
+                  <Printer /> Impresión
                 </span>
                 <span>
-                  <Layers3 /> Sign
+                  <Layers3 /> Cartelería
                 </span>
                 <span>
                   <Network /> Industrial

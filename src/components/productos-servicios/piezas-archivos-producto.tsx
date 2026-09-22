@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import { FileUpIcon, PlusIcon, Trash2Icon, ShapesIcon } from "lucide-react";
@@ -90,6 +91,9 @@ export function PiezasArchivosProducto({
   titulo?: string;
   descripcion?: string;
 }) {
+  const conAnalisis = useCapacidad("analisis_vectorial");
+  const conGeometrias = useCapacidad("geometrias");
+  const habilitado = conAnalisis && conGeometrias;
   const productoVisual = useProductoVisual();
   const accionesDeComponente = paraComponente && productoVisual;
   const [pendiente, setPendiente] = React.useState<{
@@ -126,6 +130,7 @@ export function PiezasArchivosProducto({
   };
 
   async function abrir(file: File, fuenteId?: string) {
+    if (!habilitado) return;
     setOcupado(true);
     setError("");
     try {
@@ -156,6 +161,7 @@ export function PiezasArchivosProducto({
     }
   }
   async function revisarCapas(fuente: FuenteGeometriaComercial) {
+    if (!habilitado) return;
     const guardada = fuente.predeterminada;
     if (!guardada?.procedencia?.archivoId) return;
     setOcupado(true);
@@ -218,6 +224,7 @@ export function PiezasArchivosProducto({
     }
   }
   async function confirmar() {
+    if (!habilitado) return;
     if (!pendiente) return;
     setOcupado(true);
     setError("");
@@ -278,7 +285,8 @@ export function PiezasArchivosProducto({
     : fuentes;
 
   return (
-    <section
+    <fieldset
+      disabled={!habilitado}
       className={styles.editor}
       data-cotizacion={paraCotizacion || undefined}
       aria-label={
@@ -289,6 +297,7 @@ export function PiezasArchivosProducto({
             : "Piezas y archivos"
       }
     >
+      {!habilitado && <p className="text-sm text-muted-foreground">La edición de geometrías no está incluida en tu plan. Los diseños guardados se conservan.</p>}
       <header className={styles.sectionHead}>
         <div className={styles.heading}>
           <span className={styles.sectionIcon}>
@@ -809,6 +818,6 @@ export function PiezasArchivosProducto({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </fieldset>
   );
 }

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -43,6 +44,9 @@ export class DocumentosOrdenService {
     private readonly archivos: ArchivosService,
     private readonly impresion: ImpresionService,
     private readonly perfiles: PerfilesImpresionService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   private esTrabajo(datos: unknown, itemId: string, pagina = 0) {
@@ -266,6 +270,10 @@ export class DocumentosOrdenService {
   }
 
   async vista(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'impresion_directa',
+      'colas_impresion',
+    ]);
     const orden = await this.orden(auth, id);
     const historial = await this.prisma.ordenTrabajoEvento.findMany({
       where: { tenantId: auth.tenantId, ordenId: id, tipo: TIPO },
@@ -314,6 +322,8 @@ export class DocumentosOrdenService {
       numero: orden.numero,
       estado: orden.estado,
       documentos: documentos.map(
+        // Se omite la lista interna: cada página CAD ya se expone como trabajo.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         ({ archivos, segmentos, pasos, paginasCad: _paginasCad, ...doc }) => ({
           ...doc,
           pasoId: pasos[0]?.id ?? null,
@@ -341,6 +351,71 @@ export class DocumentosOrdenService {
     };
   }
 
+  /** Consulta histórica sin resolver perfiles actuales ni conectar QZ. Los
+   * permisos personales siguen en el controlador, incluso al retirar el plan. */
+  async historial(auth: CurrentAuth, ordenId: string, desde = 0) {
+    const orden = await this.prisma.ordenTrabajo.findFirst({
+      where: { id: ordenId, tenantId: auth.tenantId },
+      select: { id: true, numero: true, estado: true },
+    });
+    if (!orden) throw new NotFoundException('Orden no encontrada.');
+    const where = { tenantId: auth.tenantId, ordenId, tipo: TIPO };
+    const [envios, total, pendientes, operativa] = await Promise.all([
+      this.prisma.ordenTrabajoEvento.findMany({
+        where,
+        orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+        skip: desde,
+        take: 50,
+        select: { id: true, fecha: true, usuarioNombre: true, datosJson: true },
+      }),
+      this.prisma.ordenTrabajoEvento.count({ where }),
+      this.prisma.$queryRaw<Array<{ cantidad: bigint }>>`
+        SELECT COUNT(*) AS cantidad FROM "OrdenTrabajoEvento"
+        WHERE "tenantId" = ${auth.tenantId}::uuid AND "ordenId" = ${ordenId}::uuid
+          AND tipo = 'cola_impresion' AND "datosJson"->>'intentoId' IS NULL`,
+      this.capacidades.puedeOperar(auth.tenantId, 'identidad'),
+    ]);
+    const claves = new Map<string, { itemId: string; pagina: number }>();
+    for (const envio of envios) {
+      const d = objeto(envio.datosJson);
+      if (typeof d.itemId === 'string')
+        claves.set(`${d.itemId}:${Number(d.pagina ?? 0)}`, {
+          itemId: d.itemId,
+          pagina: Number(d.pagina ?? 0),
+        });
+    }
+    const ultimos = new Set(
+      (
+        await Promise.all(
+          [...claves.values()].map((d) =>
+            this.prisma.ordenTrabajoEvento.findFirst({
+              where: { ...where, AND: this.filtroTrabajo(d.itemId, d.pagina) },
+              orderBy: { fecha: 'desc' },
+              select: { id: true },
+            }),
+          ),
+        )
+      ).flatMap((e) => (e ? [e.id] : [])),
+    );
+    return {
+      ordenId,
+      numero: orden.numero,
+      estado: orden.estado,
+      pendientesSinEnvio: Number(pendientes[0]?.cantidad ?? 0),
+      total,
+      siguiente: desde + envios.length < total ? desde + envios.length : null,
+      puedeConfirmar:
+        operativa && !['borrador', 'cancelada'].includes(orden.estado),
+      envios: envios.map((e) => ({
+        ...objeto(e.datosJson),
+        id: e.id,
+        fecha: e.fecha.toISOString(),
+        usuario: e.usuarioNombre,
+        vigente: ultimos.has(e.id),
+      })),
+    };
+  }
+
   async preparar(
     auth: CurrentAuth,
     ordenId: string,
@@ -353,6 +428,10 @@ export class DocumentosOrdenService {
     perfilRevision?: string,
     pagina = 0,
   ) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'impresion_directa',
+      'colas_impresion',
+    ]);
     const orden = await this.orden(auth, ordenId);
     if (['borrador', 'cancelada'].includes(orden.estado))
       throw new BadRequestException('Primero emití la orden.');
@@ -496,8 +575,6 @@ export class DocumentosOrdenService {
         },
       ],
     };
-    // Validar la firma antes de reservar; una configuración rota no crea un envío.
-    const firma = this.impresion.firmarDocumento(params);
     const datos = {
       itemId,
       trabajoId: doc.trabajoId,
@@ -531,7 +608,13 @@ export class DocumentosOrdenService {
       reimpresionDe: reimpresionDe ?? null,
       eventos: [] as Array<{ estado: string; fecha: string; detalle: string }>,
     };
-    await this.prisma.$transaction(async (tx) => {
+    const firma = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['impresion_directa', 'colas_impresion'],
+        ['impresion_directa', 'colas_impresion'],
+      );
       // Serializa envíos de una misma OT incluso desde dos pestañas/usuarios.
       await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       const actual = await tx.ordenTrabajo.findFirst({
@@ -592,6 +675,9 @@ export class DocumentosOrdenService {
         throw new ConflictException(
           'Este documento ya tiene un envío. Actualizá el panel y revisá la cola antes de reimprimir.',
         );
+      // La firma sólo se genera después de revalidar contrato y turno. Si falla
+      // el certificado o la persistencia, no se devuelve una orden imprimible.
+      const firma = this.impresion.firmarDocumento(params);
       await tx.ordenTrabajoEvento.create({
         data: {
           id: intentoId,
@@ -608,6 +694,7 @@ export class DocumentosOrdenService {
         estado: 'PREPARADO',
         intentoId,
       });
+      return firma;
     });
     return {
       ...firma,
@@ -624,7 +711,17 @@ export class DocumentosOrdenService {
 
   /** Intenciones pequeñas y durables; los PDF permanecen en almacenamiento de archivos. */
   async solicitar(auth: CurrentAuth, ordenId: string) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'impresion_directa',
+      'colas_impresion',
+    ]);
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['impresion_directa', 'colas_impresion'],
+        ['impresion_directa', 'colas_impresion'],
+      );
       await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       const orden = await this.orden(auth, ordenId, tx);
       if (['borrador', 'cancelada'].includes(orden.estado))
@@ -671,7 +768,9 @@ export class DocumentosOrdenService {
                 numero: orden.numero,
                 estado: datos.confirmacion
                   ? 'VERIFICADO'
-                  : String(datos.estado ?? 'PENDIENTE'),
+                  : typeof datos.estado === 'string'
+                    ? datos.estado
+                    : 'PENDIENTE',
                 intentoId: previo?.id ?? null,
               },
             };
@@ -682,6 +781,10 @@ export class DocumentosOrdenService {
   }
 
   async cola(auth: CurrentAuth, desde = 0) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'impresion_directa',
+      'colas_impresion',
+    ]);
     const where: Prisma.OrdenTrabajoEventoWhereInput = {
       tenantId: auth.tenantId,
       tipo: COLA,
@@ -840,9 +943,19 @@ export class DocumentosOrdenService {
     perfilId: string,
     revision: string,
   ) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'impresion_directa',
+      'colas_impresion',
+    ]);
     const ids = [...new Set(grupos.map((g) => g.ordenId))].sort();
     for (const id of ids) await this.solicitar(auth, id);
     return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['impresion_directa', 'colas_impresion'],
+        ['impresion_directa', 'colas_impresion'],
+      );
       // Mismo orden de bloqueo que reserva/confirmación, también entre varias OT.
       for (const id of ids)
         await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${id}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
@@ -920,6 +1033,9 @@ export class DocumentosOrdenService {
 
   async confirmar(auth: CurrentAuth, ordenId: string, envioIds: string[]) {
     return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       // Comparte el bloqueo con preparar: no confirma una versión anterior si
       // otra pestaña acaba de reimprimir o de modificar los documentos de la OT.
       await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
@@ -979,7 +1095,11 @@ export class DocumentosOrdenService {
           auth,
           tx,
           ordenId,
-          String(datos.trabajoId ?? `${datos.itemId}:0`),
+          typeof datos.trabajoId === 'string'
+            ? datos.trabajoId
+            : typeof datos.itemId === 'string'
+              ? `${datos.itemId}:0`
+              : '',
           { estado: 'VERIFICADO' },
         );
         nuevos++;
@@ -1008,6 +1128,9 @@ export class DocumentosOrdenService {
     detalle: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       await tx.$queryRaw`SELECT id FROM "OrdenTrabajo" WHERE id = ${ordenId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM "OrdenTrabajoEvento" WHERE id = ${intentoId}::uuid AND "tenantId" = ${auth.tenantId}::uuid FOR UPDATE`;
       const evento = await tx.ordenTrabajoEvento.findFirst({
@@ -1036,7 +1159,11 @@ export class DocumentosOrdenService {
         auth,
         tx,
         ordenId,
-        String(datos.trabajoId ?? `${datos.itemId}:0`),
+        typeof datos.trabajoId === 'string'
+          ? datos.trabajoId
+          : typeof datos.itemId === 'string'
+            ? `${datos.itemId}:0`
+            : '',
         { estado: datos.confirmacion ? 'VERIFICADO' : datos.estado },
         intentoId,
       );

@@ -43,7 +43,8 @@ export type DesarrolloDocumental = {
 
 export type ArchivoMaestro = {
   id: string;
-  proyectoCampanaId: string;
+  proyectoCampanaId?: string | null;
+  ordenId?: string | null;
   nombre: string;
   proposito: PropositoArchivoMaestro;
   etapa: EtapaDesarrolloDocumento;
@@ -145,7 +146,8 @@ export function getEstadoDocumentalOrden(ordenId: string) {
 }
 
 export function crearArchivoMaestro(payload: {
-  proyectoCampanaId: string;
+  proyectoCampanaId?: string;
+  ordenId?: string;
   nombre: string;
   proposito: PropositoArchivoMaestro;
   etapa: EtapaDesarrolloDocumento;
@@ -216,7 +218,7 @@ export function liberarRevision(revisionId: string) {
 }
 
 export function crearGateDocumento(payload: {
-  proyectoCampanaId: string;
+  proyectoCampanaId?: string;
   ordenId: string;
   archivoMaestroId: string;
   tipoAprobacion: TipoAprobacionDocumento;
@@ -230,7 +232,9 @@ export function crearGateDocumento(payload: {
 
 export type AprobacionDocumentalPublica = {
   negocio: string;
-  campana: { codigo: string; nombre: string };
+  campana: { codigo: string; nombre: string } | null;
+  orden?: { id: string; numero: string } | null;
+  puedeDecidir?: boolean;
   documento: {
     nombre: string;
     proposito: PropositoArchivoMaestro;
@@ -278,4 +282,11 @@ export function decidirAprobacionDocumentalPublica(
     { method: "POST", body: JSON.stringify(payload) },
     { auth: false },
   );
+}
+
+export function getDesarrolloOrden(ordenId: string) {
+  return apiRequest<DesarrolloDocumental>(`/desarrollo-documental/ordenes/${ordenId}/documentos`);
+}
+export function desactivarGateDocumento(gateId: string) {
+  return apiRequest<DesarrolloDocumental>(`/desarrollo-documental/gates/${gateId}`, { method: "DELETE" });
 }

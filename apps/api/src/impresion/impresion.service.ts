@@ -1,3 +1,5 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { jsPDF } from 'jspdf';
 import {
   BadRequestException,
   Injectable,
@@ -31,6 +33,9 @@ export class ImpresionService {
     private readonly prisma: PrismaService,
     private readonly archivos: ArchivosService,
     private readonly config: ConfigService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   private claves() {
@@ -220,6 +225,10 @@ export class ImpresionService {
   }
 
   async vistaPrevia(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigirAlguna(auth.tenantId, [
+      'etiquetas_pdf',
+      'impresion_directa',
+    ]);
     const { numero, paginas } = await this.paginas(auth, id);
     return {
       numero,
@@ -231,6 +240,22 @@ export class ImpresionService {
     };
   }
 
+  async descargarPdf(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'etiquetas_pdf');
+    const { paginas } = await this.paginas(auth, id);
+    const pdf = new jsPDF({
+      unit: 'mm',
+      format: [100, 150],
+      orientation: 'portrait',
+      compress: true,
+    });
+    paginas.forEach((pagina, i) => {
+      if (i) pdf.addPage([100, 150], 'portrait');
+      pdf.addImage(new Uint8Array(pagina), 'PNG', 0, 0, 100, 150);
+    });
+    return Buffer.from(pdf.output('arraybuffer'));
+  }
+
   async preparar(
     auth: CurrentAuth,
     id: string,
@@ -238,6 +263,7 @@ export class ImpresionService {
     copias: number,
     pagina: number,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'impresion_directa');
     this.claves();
     const { numero, paginas, totalPaginas } = await this.paginas(
       auth,

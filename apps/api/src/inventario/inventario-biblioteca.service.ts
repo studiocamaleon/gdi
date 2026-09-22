@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { regionalDelTenant } from '../common/regional';
 import {
   BadRequestException,
@@ -29,7 +30,12 @@ type PresetEntity = Prisma.MaterialPresetGetPayload<{
 
 @Injectable()
 export class InventarioBibliotecaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async listar(auth: CurrentAuth) {
     const presets = await this.prisma.materialPreset.findMany({
@@ -68,6 +74,7 @@ export class InventarioBibliotecaService {
     key: string,
     payload: InstallMaterialPresetDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'materiales');
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const preset = await this.prisma.materialPreset.findUnique({
       where: { key },

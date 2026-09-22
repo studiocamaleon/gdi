@@ -22,7 +22,6 @@ import {
 
 @Permiso('comercial.ver', 'produccion.ver')
 @OcultaMargenes()
-@RequiereCapacidad('planificacion_avanzada')
 @Controller('ordenes-trabajo/items/:itemId/planificacion-entregas')
 export class PlanificacionEntregasController {
   constructor(private readonly planes: PlanificacionEntregasService) {}
@@ -51,6 +50,7 @@ export class PlanificacionEntregasController {
     return this.planes.consultar(auth.tenantId, itemId);
   }
   @Post()
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('comercial.gestionar')
   solicitar(
     @CurrentSession() auth: CurrentAuth,
@@ -60,12 +60,17 @@ export class PlanificacionEntregasController {
     return this.planes.solicitar(auth, itemId, dto);
   }
   @Post('reprogramar')
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('produccion.supervisar')
-  reprogramar(@CurrentSession() auth: CurrentAuth,
-    @Param('itemId', ParseUUIDPipe) itemId: string, @Body() dto: ReprogramarEntregasDto) {
+  reprogramar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ReprogramarEntregasDto,
+  ) {
     return this.planes.reprogramar(auth, itemId, dto, false);
   }
   @Post('elegir')
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('comercial.gestionar')
   elegir(
     @CurrentSession() auth: CurrentAuth,

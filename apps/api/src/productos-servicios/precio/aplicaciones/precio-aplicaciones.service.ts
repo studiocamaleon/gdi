@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -30,7 +31,12 @@ import {
  */
 @Injectable()
 export class PrecioAplicacionesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   // ── Listar lo aplicado ──────────────────────────────────────────────
 
@@ -59,6 +65,10 @@ export class PrecioAplicacionesService {
     productoId: string,
     dto: AsignarImpuestosBatchDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'productos',
+      'reglas_precio',
+    ]);
     await this.assertProductoExiste(tenantId, productoId);
 
     // Validar que todos los catálogos referenciados existan y pertenezcan al tenant
@@ -131,6 +141,10 @@ export class PrecioAplicacionesService {
     productoId: string,
     dto: AsignarComisionesBatchDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'productos',
+      'reglas_precio',
+    ]);
     await this.assertProductoExiste(tenantId, productoId);
 
     if (dto.items.length > 0) {
@@ -201,6 +215,10 @@ export class PrecioAplicacionesService {
     productoId: string,
     impuestoCatalogoId: string,
   ) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'productos',
+      'reglas_precio',
+    ]);
     await this.assertProductoExiste(tenantId, productoId);
     try {
       return await this.prisma.productoImpuestoAplicado.delete({
@@ -230,6 +248,10 @@ export class PrecioAplicacionesService {
     productoId: string,
     comisionCatalogoId: string,
   ) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'productos',
+      'reglas_precio',
+    ]);
     await this.assertProductoExiste(tenantId, productoId);
     try {
       return await this.prisma.productoComisionAplicada.delete({
@@ -275,6 +297,10 @@ export class PrecioAplicacionesService {
     productoId: string,
     dto: CategoriaFiscalDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'productos',
+      'reglas_precio',
+    ]);
     await this.assertProductoExiste(tenantId, productoId);
     // updateMany con tenantId: tenant-safe (el id es global, el guard es el par).
     await this.prisma.producto.updateMany({

@@ -10,6 +10,11 @@ import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.servic
 import { puedeConsultarActividadGeneral } from './panel-actividad.service';
 import { PanelAdminService } from './panel-admin.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import {
+  decisionCapacidad,
+  type ClaveCapacidad,
+} from '../suscripciones/evaluador-capacidades';
 
 type KpiFormato = 'cantidad' | 'moneda';
 type Tono = 'neutro' | 'ok' | 'atencion' | 'critico';
@@ -106,9 +111,23 @@ export class PanelGeneralService {
     private readonly prisma: PrismaService,
     private readonly ordenesTrabajo: OrdenesTrabajoService,
     private readonly admin: PanelAdminService,
+    private readonly capacidades: CapacidadesEmpresaService,
   ) {}
 
   async obtener(auth: CurrentAuth) {
+    const capacidades = await this.capacidades.actual(auth.tenantId);
+    const permiteAccion = (id: string) => {
+      const nuevas: Record<string, ClaveCapacidad> = {
+        'crear-orden': 'cotizacion',
+        egreso: 'cuentas_pagar',
+      };
+      const clave = nuevas[id];
+      return (
+        !clave ||
+        decisionCapacidad(capacidades.contrato, clave, capacidades.acceso)
+          .puedeOperar
+      );
+    };
     const permisos = auth.permisos ?? new Set<string>();
     const veComercial = permisos.has('comercial.ver');
     const gestionaComercial = permisos.has('comercial.gestionar');
@@ -261,7 +280,7 @@ export class PanelGeneralService {
         gestionaProduccion,
         gestionaAdministracion,
         perfilSoloProductivo,
-      }),
+      }).filter((a) => permiteAccion(a.id)),
     };
   }
 

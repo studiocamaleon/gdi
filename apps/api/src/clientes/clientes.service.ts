@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -33,7 +34,12 @@ type ClienteCompleto = Cliente & {
 
 @Injectable()
 export class ClientesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async findAll(auth: CurrentAuth, pagination: ClientesQueryDto) {
     const query = pagination.q?.trim();
@@ -130,6 +136,7 @@ export class ClientesService {
    * a mano después.
    */
   async altaPorDocumento(auth: CurrentAuth, payload: AltaPorDocumentoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'clientes');
     const documento = payload.documento.replace(/\D/g, '');
     const existente = await this.prisma.cliente.findFirst({
       where: { tenantId: auth.tenantId, documentoNumero: documento },
@@ -211,6 +218,7 @@ export class ClientesService {
   }
 
   async create(auth: CurrentAuth, payload: UpsertClienteDto) {
+    await this.capacidades.exigir(auth.tenantId, 'clientes');
     const normalized = this.normalizePayload(payload);
     try {
       const cliente = await this.createNormalized(
@@ -227,6 +235,7 @@ export class ClientesService {
   }
 
   async importar(auth: CurrentAuth, payloads: UpsertClienteDto[]) {
+    await this.capacidades.exigir(auth.tenantId, 'clientes');
     if (payloads.length === 0) return { data: [], total: 0 };
     const normalized = payloads.map((payload) =>
       this.normalizePayload(payload),
@@ -328,6 +337,7 @@ export class ClientesService {
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpdateClienteDto) {
+    await this.capacidades.exigir(auth.tenantId, 'clientes');
     const normalized = this.normalizePayload(payload);
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -493,6 +503,7 @@ export class ClientesService {
    * comprobantes zafaban de casualidad porque congelan el receptor al emitir.
    */
   async remove(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'clientes');
     try {
       await this.prisma.$transaction(
         async (tx) => {
@@ -524,6 +535,7 @@ export class ClientesService {
 
   /** Fija el estado pedido; repetir la misma solicitud es idempotente. */
   async fijarActivo(auth: CurrentAuth, id: string, activo: boolean) {
+    await this.capacidades.exigir(auth.tenantId, 'clientes');
     const cliente = await this.findClienteOrThrow(auth, id, this.prisma);
     if (cliente.activo === activo) return this.toResponse(cliente);
     const actualizado = await this.prisma.cliente.update({

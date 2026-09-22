@@ -308,6 +308,8 @@ export const COMPROBANTE_TIPO_LABELS: Record<ComprobanteTipo, string> = {
 
 export const COMPROBANTE_ESTADOS = [
   "borrador",
+  "en_proceso",
+  "por_verificar",
   "emitido",
   "rechazado",
   "anulado",
@@ -316,6 +318,8 @@ export type ComprobanteEstado = (typeof COMPROBANTE_ESTADOS)[number];
 
 export const COMPROBANTE_ESTADO_LABELS: Record<ComprobanteEstado, string> = {
   borrador: "Borrador",
+  en_proceso: "Enviando",
+  por_verificar: "Por verificar",
   emitido: "Emitido",
   rechazado: "Rechazado",
   anulado: "Anulado",
@@ -399,6 +403,15 @@ export type CobroImputado = {
 };
 
 export type ComprobanteDetalle = Comprobante & {
+  emision?: {
+    id: string;
+    estado: string;
+    proveedor: string;
+    ambiente: string;
+    detalle: string | null;
+    creadaEl: string;
+    enviadaEl: string | null;
+  } | null;
   cobrosImputados: CobroImputado[];
 };
 
@@ -454,6 +467,7 @@ export function estadoCobranzaOrden(
  * y RG 5614 (transparencia fiscal al consumidor).
  */
 export type FacturaDocumento = {
+  pdfDisponible?: boolean;
   emisor: {
     razonSocial: string;
     domicilioFiscal: string | null;

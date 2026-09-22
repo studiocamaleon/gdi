@@ -142,7 +142,7 @@ it("consulta sólo por pedido, compara la edición actual y muestra excedentes s
   });
   expect(container.textContent).toContain("Falta 1 lugar");
   expect(container.textContent).toContain("Hay reservas pendientes.");
-  expect(container.textContent).toContain("todavía está pendiente");
+  expect(container.textContent).toContain("Las versiones se publican y asignan");
   expect(
     [...container.querySelectorAll("button")].some((b) =>
       b.textContent?.includes("Asignar"),

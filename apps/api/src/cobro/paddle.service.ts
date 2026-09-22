@@ -44,6 +44,79 @@ export class PaddleService {
     return this.cliente !== null;
   }
 
+  get entorno(): 'sandbox' | 'production' {
+    return process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox';
+  }
+
+  /** Lectura completa para activar ofertas: ciclo, moneda y cantidad forman
+   * parte de la comprobación, no basta con que el price_id exista. */
+  async leerPrecioOferta(priceId: string) {
+    if (!this.cliente) return null;
+    return this.cliente.prices.get(priceId, { include: ['product'] });
+  }
+
+  async buscarRecursoPlan(versionId: string, clave: string) {
+    if (!this.cliente) throw new Error('Paddle no disponible');
+    const lista = clave.startsWith('producto:')
+      ? this.cliente.products.list({ perPage: 100 })
+      : this.cliente.prices.list({ perPage: 100 });
+    const coincidencias: string[] = [];
+    for await (const recurso of lista) {
+      if (
+        recurso.customData?.grafoVersionId === versionId &&
+        recurso.customData?.grafoClave === clave
+      )
+        coincidencias.push(recurso.id);
+    }
+    if (coincidencias.length > 1)
+      throw new Error('Hay recursos duplicados en Paddle; requieren revisión.');
+    return coincidencias[0] ?? null;
+  }
+
+  async crearProductoPlan(versionId: string, clave: string, nombre: string) {
+    if (!this.cliente) throw new Error('Paddle no disponible');
+    return this.cliente.products.create({
+      name: nombre,
+      type: 'standard',
+      taxCategory: 'saas',
+      customData: { grafoVersionId: versionId, grafoClave: clave },
+    });
+  }
+
+  async crearPrecioPlan(args: {
+    versionId: string;
+    clave: string;
+    productId: string;
+    nombre: string;
+    importe: number;
+    ciclo: 'mensual' | 'anual' | 'unico';
+    cantidadMaxima: number;
+  }) {
+    if (!this.cliente) throw new Error('Paddle no disponible');
+    return this.cliente.prices.create({
+      productId: args.productId,
+      name: args.nombre,
+      description: args.nombre,
+      type: 'standard',
+      taxMode: 'external',
+      trialPeriod: null,
+      billingCycle:
+        args.ciclo === 'unico'
+          ? null
+          : {
+              interval: args.ciclo === 'mensual' ? 'month' : 'year',
+              frequency: 1,
+            },
+      unitPrice: {
+        amount: String(Math.round(args.importe * 100)),
+        currencyCode: 'USD',
+      },
+      unitPriceOverrides: [],
+      quantity: { minimum: 1, maximum: args.cantidadMaxima },
+      customData: { grafoVersionId: args.versionId, grafoClave: args.clave },
+    });
+  }
+
   /** ¿Se pueden recibir webhooks? (hay secret de firma). */
   get puedeVerificarFirma(): boolean {
     return this.webhookSecret !== null;
@@ -144,7 +217,7 @@ export class PaddleService {
   }
 
   /** Estado autoritativo de una suscripción, usado por la reconciliación. */
-  async obtenerSuscripcion(suscripcionId: string): Promise<unknown | null> {
+  async obtenerSuscripcion(suscripcionId: string): Promise<unknown> {
     if (!this.cliente) return null;
     try {
       return await this.cliente.subscriptions.get(suscripcionId);
@@ -362,6 +435,88 @@ export class PaddleService {
       items: [{ priceId, quantity: 1 }],
       prorationBillingMode: 'prorated_immediately',
     });
+  }
+
+  /** Lista completa: omitir un adicional lo elimina en Paddle. */
+  async cambiarItems(
+    suscripcionId: string,
+    items: { priceId: string; quantity: number }[],
+  ) {
+    if (!this.cliente) throw new Error('Paddle no disponible');
+    return this.cliente.subscriptions.update(suscripcionId, {
+      items,
+      prorationBillingMode: 'prorated_immediately',
+      onPaymentFailure: 'prevent_change',
+    });
+  }
+
+  async previsualizarItems(
+    suscripcionId: string,
+    items: { priceId: string; quantity: number }[],
+  ) {
+    if (!this.cliente) throw new Error('Paddle no disponible');
+    const p = await this.cliente.subscriptions.previewUpdate(suscripcionId, {
+      items,
+      prorationBillingMode: 'prorated_immediately',
+      onPaymentFailure: 'prevent_change',
+    });
+    const t = p.immediateTransaction?.details?.totals;
+    return {
+      aCobrar: Number(t?.grandTotal ?? 0) / 100,
+      aCredito: Number(t?.creditToBalance ?? 0) / 100,
+      moneda: p.currencyCode,
+      impuestosEnCheckout: false,
+    };
+  }
+
+  async crearCheckoutContratacion(
+    items: { priceId: string; quantity: number }[],
+    tenantId: string,
+    contratacionId: string,
+  ) {
+    if (!this.cliente) throw new Error('Paddle no disponible');
+    return this.cliente.transactions.create({
+      items,
+      collectionMode: 'automatic',
+      currencyCode: 'USD',
+      customData: { tenantId, contratacionId },
+    });
+  }
+
+  /** Recuperación por lectura: nunca repetir un POST si se perdió su respuesta. */
+  async buscarCheckoutContratacion(contratacionId: string, desde: Date) {
+    if (!this.cliente) return null;
+    const coleccion = this.cliente.transactions.list({
+      'createdAt[GTE]': new Date(desde.getTime() - 300000).toISOString(),
+      perPage: 100,
+    });
+    for (let pagina = 0; pagina < 5; pagina++) {
+      const filas = await coleccion.next();
+      const encontrada = filas.find(
+        (t) => t.customData?.contratacionId === contratacionId,
+      );
+      if (encontrada) return encontrada;
+      if (filas.length < 100) break;
+    }
+    return null;
+  }
+
+  async leerCheckoutContratacion(id: string) {
+    if (!this.cliente) return null;
+    return this.cliente.transactions.get(id);
+  }
+
+  async cancelarCheckoutContratacion(id: string) {
+    if (!this.cliente) throw new Error('Paddle no está disponible.');
+    return this.cliente.transactions.update(id, { status: 'canceled' });
+  }
+
+  esRechazoDefinitivo(error: unknown) {
+    return (
+      error instanceof Error &&
+      'type' in error &&
+      error.type === 'request_error'
+    );
   }
 
   /**

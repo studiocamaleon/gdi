@@ -110,7 +110,7 @@ it('el API entrega el resultado completado de Redis aunque falle el guardado dur
     {
       cancelar: jest.fn().mockResolvedValue(undefined),
     } as unknown as CapacidadGeometriaService,
-    servicio,
+    { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, servicio,
   );
   jest
     .spyOn(jobs as unknown as { buscarJob(): unknown }, 'buscarJob')

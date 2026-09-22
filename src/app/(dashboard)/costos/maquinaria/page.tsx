@@ -1,3 +1,4 @@
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 
@@ -8,7 +9,6 @@ import type {
   EstadoMaquina,
   PlantillaMaquinaria,
 } from "@/lib/maquinaria";
-import { tienePermiso } from "@/lib/permisos-server";
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 
 const MaquinariaPanel = dynamicImport(
@@ -50,7 +50,8 @@ async function MaquinariaPageContent({
   const plantilla = value("plantilla") as PlantillaMaquinaria | undefined;
   const estado = value("estado") as EstadoMaquina | undefined;
   const estadoConfiguracion = value("config") as
-    EstadoConfiguracionMaquina | undefined;
+    | EstadoConfiguracionMaquina
+    | undefined;
   const [maquinasPage, plantas, puedeGestionar] = await Promise.all([
     getMaquinasPage({
       page,
@@ -61,7 +62,7 @@ async function MaquinariaPageContent({
       estadoConfiguracion,
     }),
     getPlantas(),
-    tienePermiso("costos.gestionar"),
+    puedeConfigurar("maquinaria", "costos.gestionar"),
   ]);
 
   return (

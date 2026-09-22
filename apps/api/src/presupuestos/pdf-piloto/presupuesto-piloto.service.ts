@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -23,7 +24,10 @@ export class PresupuestoPilotoService {
   private readonly pendientes = new Map<string, Promise<Buffer>>();
   private bytes = 0;
 
-  constructor(private readonly renderer: PresupuestoRenderService) {}
+  constructor(
+    private readonly renderer: PresupuestoRenderService,
+    private readonly capacidades: CapacidadesEmpresaService,
+  ) {}
 
   async generar(
     tenantId: string,
@@ -32,6 +36,7 @@ export class PresupuestoPilotoService {
   ): Promise<Buffer> {
     if (!pilotoPdfHabilitado())
       throw new NotFoundException('PDF piloto no habilitado.');
+    await this.capacidades.exigir(tenantId, 'documentos_pdf');
     const json = JSON.stringify(datos);
     if (datos.items.length > 500 || Buffer.byteLength(json) > 4 * 1024 * 1024) {
       throw new BadRequestException(

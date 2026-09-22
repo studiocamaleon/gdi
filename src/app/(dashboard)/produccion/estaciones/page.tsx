@@ -1,3 +1,4 @@
+import { puedeConfigurar as puedeConfigurarFuncion } from "@/lib/capacidades-server";
 import { EstacionesView } from "@/components/produccion/estaciones-view";
 import { getFamiliasPasos, getRecursosEstaciones } from "@/lib/estaciones-api";
 import { cargarDatosTableroProduccion } from "@/lib/tablero-produccion-server";
@@ -10,7 +11,10 @@ export const dynamic = "force-dynamic";
 export default async function EstacionesPage() {
   if (!(await tienePermiso("produccion.ver")))
     return <SinPermiso modulo="Estaciones de producción" />;
-  const puedeConfigurar = await tienePermiso("produccion.configurar");
+  const puedeConfigurar = await puedeConfigurarFuncion(
+    "estaciones",
+    "produccion.configurar",
+  );
   const [datos, familias, recursos] = await Promise.all([
     cargarDatosTableroProduccion({ soloPendientes: true }),
     puedeConfigurar

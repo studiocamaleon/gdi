@@ -19,6 +19,8 @@ const MODELOS_EXENTOS = new Set<string>([
   'User',
   'AuthSession',
   'UserMfa',
+  // Navegadores recordados por identidad, compartidos entre sus empresas.
+  'MfaDispositivo',
   'MfaChallenge',
   'InvitacionPlataforma',
   'Membership',
@@ -30,6 +32,11 @@ const MODELOS_EXENTOS = new Set<string>([
   // Catálogo del SaaS: mismos planes para todos los tenants.
   'Plan',
   'PlanBorrador',
+  'PlanVersion',
+  // Oferta global y precios asociados a versiones inmutables.
+  'PlanOferta',
+  'PlanOfertaPrecio',
+  'PlanPaddleRecurso',
   'PlanPrecioLegacy',
   // Alta pública anterior a que exista un tenant. El token es global y el
   // tenant nace recién al consumirlo.

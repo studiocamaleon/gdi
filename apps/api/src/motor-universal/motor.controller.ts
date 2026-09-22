@@ -1,3 +1,4 @@
+import { RequiereCapacidad, RequiereCapacidades } from '../suscripciones/capacidad.guard';
 import {
   BadRequestException,
   Body,
@@ -58,6 +59,7 @@ export class MotorUniversalController {
 
   /** Puerta única de ingreso para SVG y DXF. Devuelve un SVG canónico para
    * mantener compatibles recetas y cotizaciones históricas. */
+  @RequiereCapacidad('analisis_vectorial')
   @Post('geometria-vectorial/normalizar')
   normalizarFuente(
     @Body() dto: NormalizarFuenteVectorialDto,
@@ -95,6 +97,7 @@ export class MotorUniversalController {
    * No ejecuta nesting ni persiste: permite dimensionar una fuente compartida
    * con el mismo criterio geométrico que luego utilizará el costeo.
    */
+  @RequiereCapacidad('analisis_vectorial')
   @Post('geometria-vectorial/medir')
   medirSvg(@Body() dto: MedirSvgFabricacionDto, @Req() req: RequestWithAuth) {
     if (!req.auth?.tenantId) {
@@ -124,6 +127,7 @@ export class MotorUniversalController {
   }
 
   /** Interpreta la fuente para el editor de capas, sin ejecutar nesting. */
+  @RequiereCapacidad('analisis_vectorial')
   @Post('geometria-vectorial/preparar')
   prepararSvg(
     @Body() dto: AnalizarSvgFabricacionDto,
@@ -159,6 +163,7 @@ export class MotorUniversalController {
 
   /** Encola el nesting real. El worker devuelve y valida el único layout que
    * luego usan tanto la vista como la cotización. */
+  @RequiereCapacidades('analisis_vectorial', 'aprovechamiento_cotizacion', 'nesting_irregular')
   @Post('geometria-vectorial/analizar-asincrono')
   @HttpCode(HttpStatus.ACCEPTED)
   async analizarSvgAsincrono(
@@ -224,6 +229,7 @@ export class MotorUniversalController {
    * persiste todavía: permite validar el archivo antes de incorporarlo al
    * JobContext y mantiene el parser fuera del navegador.
    */
+  @RequiereCapacidades('analisis_vectorial', 'aprovechamiento_cotizacion', 'nesting_irregular')
   @Post('geometria-vectorial/analizar')
   analizarSvg(
     @Body() dto: AnalizarSvgFabricacionDto,

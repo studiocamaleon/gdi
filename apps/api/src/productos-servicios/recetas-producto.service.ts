@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { pasosEfectivos, proyectarBomEfectivo } from './bom-efectivo';
 import {
   BadRequestException,
@@ -151,6 +152,9 @@ export class RecetasProductoService {
     private readonly validacionProducto: ProductoValidacionService,
     private readonly eventos: EventosSistemaService,
     @Optional() private readonly configPasos?: ConfigPasosService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /** Una publicación y sus dependencias se congelan juntas. El lock también
@@ -179,6 +183,7 @@ export class RecetasProductoService {
           new ProductoValidacionService(productos),
           this.eventos,
           this.configPasos,
+          this.capacidades,
         );
         return ejecutar(servicio);
       },
@@ -237,20 +242,20 @@ export class RecetasProductoService {
         // Guardar sin cambios no consume otra versión. Sólo se elimina el
         // borrador idéntico; las publicaciones y sus snapshots son inmutables.
         if (fuente.estado === 'BORRADOR') {
-          await this.descartarBorrador(auth, fuente.id, {
+          await this.descartarBorradorInterno(auth, fuente.id, {
             expectedUpdatedAt: fuente.updatedAt.toISOString(),
           });
         }
         return;
       }
     }
-    const borrador = await this.guardarBorrador(auth, productoId, {
+    const borrador = await this.guardarBorradorInterno(auth, productoId, {
       rutaAlternativaId,
       cambios:
         fuente?.cambios ??
         'Actualización automática de la configuración productiva',
     });
-    await this.publicar(auth, borrador.id, {
+    await this.publicarInterno(auth, borrador.id, {
       expectedUpdatedAt: borrador.updatedAt.toISOString(),
       cambios: borrador.cambios ?? 'Publicación automática',
     });
@@ -341,11 +346,87 @@ export class RecetasProductoService {
     return { bloqueos };
   }
 
+  // El editor usa revisiones también para rutas simples. T03 corresponde a
+  // componentes fabricados; la configuración de un simple usa T02/T04.
+  private async exigirEdicionProducto(
+    auth: AutorReceta,
+    productoId: string,
+    conComponentes = false,
+  ) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'productos',
+      'procesos',
+    ]);
+    if (conComponentes)
+      await this.capacidades.exigir(auth.tenantId, 'productos_compuestos');
+    const producto = await this.prisma.producto.findFirst({
+      where: { id: productoId, tenantId: auth.tenantId },
+      select: { estructuraProducto: true },
+    });
+    if (!producto) throw new NotFoundException('Producto no encontrado.');
+    if (producto.estructuraProducto === 'COMPUESTO')
+      await this.capacidades.exigir(auth.tenantId, 'productos_compuestos');
+  }
+
+  private async exigirEdicionRevision(auth: AutorReceta, revisionId: string) {
+    await this.capacidades.exigirTodas(auth.tenantId, [
+      'productos',
+      'procesos',
+    ]);
+    const revision = await this.prisma.productoRecetaRevision.findFirst({
+      where: { id: revisionId, tenantId: auth.tenantId },
+      select: {
+        receta: { select: { productoId: true } },
+        _count: { select: { componentes: true } },
+      },
+    });
+    if (!revision) throw new NotFoundException('Revisión no encontrada.');
+    await this.exigirEdicionProducto(
+      auth,
+      revision.receta.productoId,
+      revision._count.componentes > 0,
+    );
+  }
+
+  async guardarBorrador(
+    auth: AutorReceta,
+    productoId: string,
+    dto: GuardarBorradorRecetaDto,
+  ) {
+    await this.exigirEdicionProducto(
+      auth,
+      productoId,
+      Boolean(dto.componentes?.length),
+    );
+    return this.guardarBorradorInterno(auth, productoId, dto);
+  }
+  async publicar(
+    auth: AutorReceta,
+    revisionId: string,
+    dto: PublicarRecetaDto,
+  ) {
+    await this.exigirEdicionRevision(auth, revisionId);
+    return this.publicarInterno(auth, revisionId, dto);
+  }
+  async descartarBorrador(
+    auth: AutorReceta,
+    revisionId: string,
+    dto: DescartarBorradorRecetaDto,
+  ) {
+    await this.exigirEdicionRevision(auth, revisionId);
+    return this.descartarBorradorInterno(auth, revisionId, dto);
+  }
+
   async guardarConPublicacionAutomatica(
     auth: AutorReceta,
     productoId: string,
     dto: GuardarBorradorRecetaDto,
   ) {
+    await this.exigirEdicionProducto(
+      auth,
+      productoId,
+      Boolean(dto.componentes?.length),
+    );
     await this.conPublicacionSerializada(auth, async (servicio) => {
       // Publicar primero los hijos también permite crear un compuesto a partir
       // de productos simples que todavía no tenían receta versionada.
@@ -356,7 +437,7 @@ export class RecetasProductoService {
           [productoId],
         );
       }
-      await servicio.guardarBorrador(auth, productoId, dto);
+      await servicio.guardarBorradorInterno(auth, productoId, dto);
     });
     const publicacionAutomatica = await this.sincronizarPublicaciones(auth, [
       productoId,
@@ -691,7 +772,7 @@ export class RecetasProductoService {
     };
   }
 
-  async guardarBorrador(
+  private async guardarBorradorInterno(
     auth: AutorReceta,
     productoId: string,
     dto: GuardarBorradorRecetaDto,
@@ -1126,7 +1207,7 @@ export class RecetasProductoService {
     return this.obtenerRevision(auth.tenantId, revisionId);
   }
 
-  async publicar(
+  private async publicarInterno(
     auth: AutorReceta,
     revisionId: string,
     dto: PublicarRecetaDto,
@@ -1303,7 +1384,7 @@ export class RecetasProductoService {
     return this.obtenerRevision(auth.tenantId, revision.id);
   }
 
-  async descartarBorrador(
+  private async descartarBorradorInterno(
     auth: AutorReceta,
     revisionId: string,
     dto: DescartarBorradorRecetaDto,
@@ -1392,6 +1473,7 @@ export class RecetasProductoService {
     revisionId: string,
     dto: DeprecarRecetaDto,
   ) {
+    await this.exigirEdicionRevision(auth, revisionId);
     const revision = await this.prisma.productoRecetaRevision.findFirst({
       where: { id: revisionId, tenantId: auth.tenantId },
       include: { receta: { include: { producto: true } } },

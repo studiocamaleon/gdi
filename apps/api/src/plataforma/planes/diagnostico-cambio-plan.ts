@@ -13,7 +13,14 @@ export type OperacionCambioPlan = {
   cantidad: number;
   titulo: string;
   detalle: string;
+  /** Sólo para circuitos que conservan una vía de continuidad sin la función. */
+  permiteRetiradaConRevision?: boolean;
+  /** Identidad opaca de los pendientes; se incluye en la huella de aceptación. */
+  revision?: string;
 };
+
+export const requiereCerrarOperacion = (op: OperacionCambioPlan) =>
+  op.cantidad > 0 && !op.permiteRetiradaConRevision;
 
 export function diagnosticarCambioPlan(
   actual: ContratoCapacidades,

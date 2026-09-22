@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { PlanificacionEntregasCoreModule } from '../planificacion-entregas/planificacion-core.module';
 import { PlanificacionEntregasWorker } from '../planificacion-entregas/planificacion.worker';
 import { Module } from '@nestjs/common';
@@ -17,7 +18,15 @@ import { CapacidadGeometriaModule } from './geometria/capacidad-geometria.servic
  * propósito: así no levanta controllers, guards ni crons del proceso web.
  */
 @Module({
-  imports: [PlanificacionEntregasCoreModule, ConfigModule.forRoot({ isGlobal: true }), MotorUniversalModule, NestingsGuardadosModule, CotizacionJobsModule, CapacidadGeometriaModule],
+  imports: [
+    CapacidadesEmpresaModule,
+    PlanificacionEntregasCoreModule,
+    ConfigModule.forRoot({ isGlobal: true }),
+    MotorUniversalModule,
+    NestingsGuardadosModule,
+    CotizacionJobsModule,
+    CapacidadGeometriaModule,
+  ],
   providers: [
     GeometriaWorker,
     OpenNestService,

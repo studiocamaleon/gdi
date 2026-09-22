@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -406,7 +407,12 @@ export class MaquinariaService {
       UnidadProduccionMaquinaDto.mm_min,
     ]);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async findAll(auth: CurrentAuth, pagination: ListMaquinasQueryDto) {
     const search = pagination.search?.trim();
@@ -497,6 +503,7 @@ export class MaquinariaService {
   }
 
   async create(auth: CurrentAuth, payload: UpsertMaquinaDto) {
+    await this.capacidades.exigir(auth.tenantId, 'maquinaria');
     await this.validateReferences(auth, payload);
 
     for (
@@ -578,6 +585,7 @@ export class MaquinariaService {
   }
 
   async update(auth: CurrentAuth, id: string, payload: UpsertMaquinaDto) {
+    await this.capacidades.exigir(auth.tenantId, 'maquinaria');
     const existing = await this.findMaquinaOrThrow(auth, id);
     if (
       payload.expectedUpdatedAt &&
@@ -656,12 +664,14 @@ export class MaquinariaService {
   }
 
   async toggle(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'maquinaria');
     const maquina = await this.findMaquinaBaseOrThrow(auth, id);
 
     return this.setActivo(auth, id, !maquina.activo);
   }
 
   async setActivo(auth: CurrentAuth, id: string, activo: boolean) {
+    await this.capacidades.exigir(auth.tenantId, 'maquinaria');
     const maquina = await this.findMaquinaBaseOrThrow(auth, id);
 
     if (

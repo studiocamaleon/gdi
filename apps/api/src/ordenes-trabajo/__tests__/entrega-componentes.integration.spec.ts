@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { EntregaService } from '../entrega.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
 import { PanelGeneralService } from '../../panel-general/panel-general.service';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 
 describe('productos comerciales con componentes en entrega y seguimiento (PostgreSQL)', () => {
@@ -94,7 +95,10 @@ describe('productos comerciales con componentes en entrega y seguimiento (Postgr
           });
           const servicio = new EntregaService(
             prisma as never,
-            { create: jest.fn() } as never,
+            {
+              create: jest.fn(),
+              puedeRegistrarEnOrden: jest.fn().mockResolvedValue(true),
+            } as never,
             { reconciliarOrden: jest.fn() } as never,
           );
           const escaneo = await servicio.escanear(auth, orden.numero!);
@@ -138,6 +142,8 @@ describe('productos comerciales con componentes en entrega y seguimiento (Postgr
           const panel = new PanelGeneralService(
             tx as never,
             {} as never,
+            {} as never,
+            new CapacidadesEmpresaService(tx as never),
           ) as any;
           const entregas = await panel.ordenesProximas(
             tenantId,

@@ -164,6 +164,17 @@ function resolveGraph(context: MaterialUnitContext, includeManual: boolean) {
     if (width) add('metro_lineal', 'm2', width, 'medidas');
   } else if (width && height) {
     add('hoja', 'm2', width * height, 'medidas');
+    // En la plantilla de rígidos las medidas pertenecen a una placa física.
+    // Algunos catálogos históricos la llaman "unidad" (por ejemplo Polyfan).
+    // Una equivalencia explícita del usuario conserva su propio significado.
+    const unidadDefinida = materialEquivalences(context).some((relation) =>
+      [relation?.origen, relation?.destino].some(
+        (unit) =>
+          typeof unit === 'string' && normalizeMaterialUnit(unit) === 'unidad',
+      ),
+    );
+    if (context.templateId === 'sustrato_rigido_v1' && !unidadDefinida)
+      add('unidad', 'm2', width * height, 'medidas');
   }
   if (context.templateId === 'perfil_estructural_v1') {
     const barLength = positive(attrs.largoBarra);

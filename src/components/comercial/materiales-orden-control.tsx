@@ -27,6 +27,8 @@ export function MaterialesOrdenControl({
 }) {
   const canManage = usePuede("inventario.gestionar");
   const conCompras = useCapacidad("compras");
+  const conReservas = useCapacidad("reservas");
+  const conExistencias = useCapacidad("existencias");
   const canBuy = usePuede("finanzas.ver_margenes") && canManage && conCompras;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +52,10 @@ export function MaterialesOrdenControl({
       (control.iniciado &&
         ["finalizada", "entregada"].includes(control.estadoOrden)));
   async function ejecutar(args: Omit<OperacionMaterial, "clave" | "revision">) {
+    if (
+      !["consumir", "liberar"].includes(args.accion) &&
+      (!conReservas || !conExistencias)
+    ) return;
     const payload = { ...args, revision: data.revision };
     const contenido = JSON.stringify(payload);
     if (pendiente.current?.contenido !== contenido)
@@ -129,7 +135,7 @@ export function MaterialesOrdenControl({
               : "El control de reservas está desactivado. Podés activarlo en Stock → Reservas por OT."}
           </p>
         </div>
-        {operable &&
+        {operable && conReservas && conExistencias &&
           activa &&
           (!automatica || !control.iniciado || hayStockParaReservar) && (
             <ActionButton
@@ -251,7 +257,7 @@ export function MaterialesOrdenControl({
                   {operable && (
                     <td>
                       <div className={styles.rowActions}>
-                        {m.unidad && activa && (
+                        {m.unidad && activa && conReservas && conExistencias && (
                           <ActionButton
                             variant="outline"
                             isDisabled={busy}

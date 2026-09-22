@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { BadRequestException } from '@nestjs/common';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { ConfigPasosService } from '../config-pasos.service';
@@ -12,10 +13,7 @@ function crearServicio(prisma: Record<string, unknown> = {}) {
     validarConfigPasoContraFamilia: jest.fn(),
   };
   return {
-    service: new ConfigPasosService(
-      prisma as unknown as PrismaService,
-      familias as unknown as FamiliasPasosService,
-    ),
+    service: new ConfigPasosService(prisma as unknown as PrismaService, familias as unknown as FamiliasPasosService, capacidadesDePrueba()),
     familias,
   };
 }

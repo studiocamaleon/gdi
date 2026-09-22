@@ -223,3 +223,16 @@ Cierre conjunto con MFA recordada: 56 pruebas API y 21 web, TypeScript API/web, 
 ## Revisión posterior del editor y Plataforma — 21/09/2026
 
 Se completó un nuevo barrido del estado de las 65 capacidades y una revisión visual autenticada en Chrome. El estado actualizado, la matriz por función y el orden de cierre están en [Planes: estado real y camino de cierre](planes-estado-real-y-cierre-2026-09-21.md). Se unificaron controles, tablas y formularios de Plataforma y se dividió la ficha de suscripción en pestañas. Pasaron 40 pruebas de interfaz. Este incremento no publica ni asigna contratos nuevos.
+
+## Copiado e impresión — 21/09/2026
+
+Se incorporaron controles separados de Documentos, CAD, terminaciones, conexión y colas, tanto en la interfaz como en los servicios. El motor general controla también los guardados alternativos de copiado. La emisión normal sigue disponible sin impresión y los resultados de envíos anteriores pueden registrarse sin autorizar nuevos envíos. Alcance, continuidad, pruebas y límites en [Desacople de copiado e impresión](planes-copiado-impresion-2026-09-21.md). Los borradores siguen sin asignarse a empresas reales.
+
+
+## Geometría, fabricación y MCP
+
+Implementado el control por contrato en análisis vectorial, geometrías del catálogo, fuentes y referencias al cotizar, nesting/preparaciones, exportación, recorridos y credenciales MCP. Los workers revalidan antes de ejecutar. Se preservan el cálculo interno del producto y los recorridos guardados. Detalle, continuidad y evidencia en [Geometría, fabricación y MCP](planes-geometria-fabricacion-mcp-2026-09-21.md). Las versiones siguen sin publicarse ni asignarse a empresas.
+
+## Circuito comercial, PDF y enlaces
+
+Se agregaron controles para C01–C06 y una política de continuidad para documentos y órdenes existentes. Ver [alcance, pruebas y pendientes](planes-comercial-pdf-enlaces-2026-09-21.md). El contrato de ejecución sigue siendo el vigente compatible; las propuestas del editor no se aplican a empresas todavía.

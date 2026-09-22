@@ -18,11 +18,26 @@ export function CapacidadesProvider({
   );
 }
 export function useImpresionDirecta() {
-  return useContext(Contexto).impresionDirecta === true;
+  const capacidades = useContext(Contexto);
+  return capacidades.funciones
+    ? capacidades.funciones.impresion_directa === true
+    : capacidades.impresionDirecta === true;
 }
 export function useFuncionesPlan() {
   return useContext(Contexto).funciones ?? funcionesCompatibles;
 }
 export function useCapacidad(clave: ClaveCapacidad) {
   return useFuncionesPlan()[clave] === true;
+}
+
+/** La cola de documentos es un complemento de la conexión a impresoras. */
+export function useColasImpresion() {
+  const capacidades = useContext(Contexto);
+  const directa = useImpresionDirecta();
+  return (
+    directa &&
+    (capacidades.funciones
+      ? capacidades.funciones.colas_impresion === true
+      : true)
+  );
 }

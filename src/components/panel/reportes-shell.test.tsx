@@ -24,7 +24,7 @@ describe("los reportes que se ofrecen", () => {
     expect(soloReportes).toContain("Embudo");
   });
 
-  /** El permiso del reporte reemplaza al del módulo, no se suma. */
+  /** Las vistas sensibles requieren su permiso además del acceso al módulo. */
   it("tener Reportes no alcanza para el Resumen ejecutivo", () => {
     const soloReportes = labels(["reportes.ver"]);
     expect(soloReportes).not.toContain("Resumen ejecutivo");
@@ -40,5 +40,9 @@ describe("los reportes que se ofrecen", () => {
 
   it("Finanzas pide la llave de márgenes", () => {
     expect(labels(["reportes.ver", "finanzas.ver_margenes"])).toContain("Finanzas");
+  });
+  it("los permisos sensibles no abren Reportes sin el acceso al módulo", () => {
+    expect(labels(["reportes.ver_resumen", "finanzas.ver_margenes"])).toEqual([]);
+    expect(labels([])).toEqual([]);
   });
 });

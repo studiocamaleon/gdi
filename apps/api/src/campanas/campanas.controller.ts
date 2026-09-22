@@ -29,11 +29,11 @@ import {
 
 @OcultaMargenes()
 @Permiso('comercial.ver')
-@RequiereCapacidad('proyectos')
 @Controller('campanas')
 export class CampanasController {
   constructor(private readonly service: CampanasService) {}
 
+  // Consulta histórica disponible aunque el nuevo contrato retire Proyectos.
   @Get()
   listar(
     @CurrentSession() auth: CurrentAuth,
@@ -42,6 +42,7 @@ export class CampanasController {
     return this.service.listar(auth, query);
   }
 
+  @RequiereCapacidad('proyectos')
   @Get('opciones')
   opciones(
     @CurrentSession() auth: CurrentAuth,
@@ -58,12 +59,14 @@ export class CampanasController {
     return this.service.detalle(auth, id);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Post()
   crear(@CurrentSession() auth: CurrentAuth, @Body() dto: CrearCampanaDto) {
     return this.service.crear(auth, dto);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Patch(':id')
   editar(
@@ -74,6 +77,7 @@ export class CampanasController {
     return this.service.editar(auth, id, dto);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Patch(':id/estado')
   cambiarEstado(
@@ -84,6 +88,7 @@ export class CampanasController {
     return this.service.cambiarEstado(auth, id, dto);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Put(':id/equipo')
   reemplazarEquipo(
@@ -94,6 +99,7 @@ export class CampanasController {
     return this.service.reemplazarEquipo(auth, id, dto);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Post(':id/hitos')
   crearHito(
@@ -104,6 +110,7 @@ export class CampanasController {
     return this.service.crearHito(auth, id, dto);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Patch(':id/hitos/:hitoId')
   editarHito(
@@ -115,6 +122,7 @@ export class CampanasController {
     return this.service.editarHito(auth, id, hitoId, dto);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Post(':id/cotizaciones/:cotizacionId')
   vincularCotizacion(
@@ -125,6 +133,7 @@ export class CampanasController {
     return this.service.vincularCotizacion(auth, id, cotizacionId);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Delete(':id/cotizaciones/:cotizacionId')
   desvincularCotizacion(
@@ -135,6 +144,7 @@ export class CampanasController {
     return this.service.desvincularCotizacion(auth, id, cotizacionId);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Post(':id/ordenes/:ordenId')
   vincularOrden(
@@ -145,6 +155,7 @@ export class CampanasController {
     return this.service.vincularOrden(auth, id, ordenId);
   }
 
+  @RequiereCapacidad('proyectos')
   @Permiso('comercial.gestionar')
   @Delete(':id/ordenes/:ordenId')
   desvincularOrden(

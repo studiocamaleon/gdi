@@ -36,7 +36,7 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
   let tenantId: string;
   let planId: string;
   const priceId = `pri_${randomUUID().slice(0, 10)}`;
-  const subId = `sub_${randomUUID().slice(0, 10)}`;
+  const subId = `sub_${randomUUID().replaceAll('-', '').slice(0, 26)}`;
   const eventoIds: string[] = [];
 
   beforeAll(async () => {
@@ -176,5 +176,48 @@ describe('POST /webhooks/paddle (HTTP real)', () => {
     const s = await prisma.suscripcion.findFirst({ where: { tenantId } });
     expect(s?.estado).toBe('activa');
     expect(s?.estadoProveedor).toBe('past_due');
+  });
+  it('transaction.completed reintenta si no puede consultar Paddle y luego reconcilia sin duplicar', async () => {
+    const id = `evt_pago_${randomUUID().slice(0, 8)}`;
+    eventoIds.push(id);
+    const body = JSON.stringify({
+      event_id: id,
+      event_type: 'transaction.completed',
+      occurred_at: new Date().toISOString(),
+      data: { id: 'txn_pago', subscription_id: subId },
+    });
+    const consulta = jest
+      .spyOn(app.get(PaddleService), 'obtenerSuscripcion')
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue({
+        id: subId,
+        status: 'active',
+        items: [{ price: { id: priceId }, quantity: 1 }],
+        customData: { tenantId },
+      } as never);
+    const enviar = () =>
+      request(app.getHttpServer())
+        .post('/webhooks/paddle')
+        .set('content-type', 'application/json')
+        .set('paddle-signature', firmar(body))
+        .send(body);
+    try {
+      await enviar().expect(503);
+      const pendiente = await prisma.eventoCobro.findUniqueOrThrow({
+        where: { eventoId: id },
+      });
+      expect(pendiente.procesadoEl).toBeNull();
+      await enviar().expect(200);
+      expect(
+        (await prisma.suscripcion.findUniqueOrThrow({ where: { tenantId } }))
+          .estadoProveedor,
+      ).toBe('active');
+      expect((await enviar().expect(200)).body).toMatchObject({
+        repetido: true,
+      });
+      expect(consulta).toHaveBeenCalledTimes(2);
+    } finally {
+      consulta.mockRestore();
+    }
   });
 });

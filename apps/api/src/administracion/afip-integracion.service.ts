@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import {
   EstadoIntegracion,
   Prisma,
@@ -8,7 +8,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
-import { SuscripcionesService } from '../suscripciones/suscripciones.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { decisionCapacidad } from '../suscripciones/evaluador-capacidades';
+import { regionalDelTenant } from '../common/regional';
 
 /**
  * La integración con AFIP, que NO es "conectar con credenciales": es
@@ -54,11 +56,12 @@ export type AfipIntegracionDto = {
    */
   esCuitPropio: boolean;
   /**
-   * ¿El plan del tenant incluye facturación electrónica? Sin suscripción
-   * (tenant legacy) es true. Con false, la vista reemplaza el interruptor
-   * por el aviso de plan — y activar() lo rechaza aunque la UI se salte.
+   * Inclusión en el contrato vigente; no implica acceso operativo.
    */
   planPermiteAfip: boolean;
+  puedeOperarAfip: boolean;
+  puedeDesactivarAfip: boolean;
+  restriccionAfip: string | null;
   /** Datos fiscales del emisor (de ConfiguracionFiscal). */
   emisor: {
     cuit: string | null;
@@ -74,13 +77,11 @@ export type AfipIntegracionDto = {
 
 @Injectable()
 export class AfipIntegracionService {
-  private readonly logger = new Logger(AfipIntegracionService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly configFiscal: ConfiguracionFiscalService,
     private readonly afip: AfipSdkProvider,
-    private readonly suscripciones: SuscripcionesService,
+    private readonly capacidades: CapacidadesEmpresaService,
   ) {}
 
   private get representanteCuit(): string | null {
@@ -96,14 +97,24 @@ export class AfipIntegracionService {
 
   /** El estado + los datos que la vista necesita. */
   async obtener(auth: CurrentAuth): Promise<AfipIntegracionDto> {
-    const [fila, config, planPermiteAfip] = await Promise.all([
+    const [fila, config, actual, regional] = await Promise.all([
       this.prisma.integracionTenant.findFirst({
-        where: { proveedor: ProveedorIntegracion.AFIP },
+        where: {
+          tenantId: auth.tenantId,
+          proveedor: ProveedorIntegracion.AFIP,
+        },
       }),
       this.configFiscal.obtener(auth),
-      this.suscripciones.feature(auth.tenantId, 'afip'),
+      this.capacidades.actual(auth.tenantId),
+      regionalDelTenant(this.prisma, auth.tenantId),
     ]);
 
+    const decision = decisionCapacidad(
+      actual.contrato,
+      'fiscal_argentina',
+      actual.acceso,
+    );
+    const argentina = regional.paisCodigo === 'AR';
     return {
       estado: fila?.estado ?? EstadoIntegracion.DESCONECTADA,
       ambiente: this.afip.environment,
@@ -112,16 +123,32 @@ export class AfipIntegracionService {
         config?.cuit ?? null,
         this.representanteCuit,
       ),
-      planPermiteAfip,
+      planPermiteAfip: decision.incluida,
+      puedeOperarAfip: decision.puedeOperar && argentina,
+      puedeDesactivarAfip: decisionCapacidad(
+        actual.contrato,
+        'identidad',
+        actual.acceso,
+      ).puedeOperar,
+      restriccionAfip:
+        actual.acceso.modo !== 'operativo'
+          ? actual.acceso.descripcion
+          : !decision.incluida
+            ? 'Tu plan no incluye facturación electrónica. Los datos y el historial se conservan.'
+            : !argentina
+              ? 'La integración ARCA corresponde a empresas de Argentina.'
+              : null,
       emisor: {
         cuit: config?.cuit ?? null,
         razonSocial: config?.razonSocial ?? null,
         condicionFiscal: config?.condicionFiscal ?? null,
         domicilioFiscal: config?.domicilioFiscal ?? null,
-        puntosVenta: (config?.puntosVenta ?? []).map((pv) => ({
-          numero: pv.numero,
-          numeroFormateado: pv.numeroFormateado,
-        })),
+        puntosVenta: (config?.puntosVenta ?? [])
+          .filter((pv) => pv.activo)
+          .map((pv) => ({
+            numero: pv.numero,
+            numeroFormateado: pv.numeroFormateado,
+          })),
       },
       ultimoChequeoEl: fila?.ultimoChequeoEl?.toISOString() ?? null,
       ultimoErrorTexto: fila?.ultimoErrorTexto ?? null,
@@ -129,162 +156,165 @@ export class AfipIntegracionService {
     };
   }
 
-  /**
-   * Verifica la delegación sin cambiar el estado: sirve para chequear ANTES de
-   * activar. Persiste el resultado (chequeo/error/metadata) para que la vista
-   * lo muestre aunque no se active.
-   */
+  /** Verificar consulta ARCA; sólo activar modifica el interruptor. */
   async verificar(auth: CurrentAuth): Promise<ResultadoVerificacion> {
-    const config = await this.configFiscal.obtener(auth);
-    const cuit = config?.cuit ?? null;
-    const pv =
-      config?.puntosVenta?.find((p) => p.activo) ?? config?.puntosVenta?.[0];
+    return this.comprobar(auth, false);
+  }
 
-    // Precondición: sin CUIT ni punto de venta no hay nada contra qué probar.
+  async activar(auth: CurrentAuth): Promise<AfipIntegracionDto> {
+    await this.comprobar(auth, true);
+    return this.obtener(auth);
+  }
+
+  private async comprobar(auth: CurrentAuth, activar: boolean) {
+    // La consulta externa no conserva una transacción abierta. Capturamos los
+    // datos probados y volvemos a autorizar antes de publicar el resultado.
+    const inicial = await this.prisma.$transaction(async (tx) => {
+      await this.exigirFiscal(tx, auth.tenantId);
+      return this.contexto(tx, auth);
+    });
+    const config = inicial.config;
+    const cuit = config?.cuit ?? null;
+    const pv = config?.puntosVenta.find((p) => p.activo);
+    let res: ResultadoVerificacion;
     if (!cuit || !pv) {
-      const motivo =
-        'Cargá el CUIT del emisor y al menos un punto de venta antes de verificar.';
-      await this.persistirChequeo(auth, { ok: false, motivo });
-      return {
+      res = {
         ok: false,
         cuit,
         puntoVenta: pv?.numero ?? null,
         ultimoNumero: null,
-        motivo,
+        motivo:
+          'Cargá el CUIT del emisor y al menos un punto de venta activo antes de verificar.',
       };
-    }
-
-    if (!this.afip.disponible) {
-      const motivo =
-        'La facturación electrónica no está disponible en este entorno.';
-      await this.persistirChequeo(auth, { ok: false, motivo });
-      return {
+    } else if (!this.afip.disponible) {
+      res = {
         ok: false,
         cuit,
         puntoVenta: pv.numero,
         ultimoNumero: null,
-        motivo,
+        motivo:
+          'La facturación electrónica no está disponible en este entorno.',
+      };
+    } else {
+      const remoto = await this.afip.verificarDelegacion(cuit, pv.numero);
+      res = {
+        ok: remoto.ok,
+        cuit,
+        puntoVenta: pv.numero,
+        ultimoNumero: remoto.numero,
+        motivo: remoto.ok
+          ? null
+          : (remoto.motivo ?? 'ARCA rechazó la consulta.'),
       };
     }
 
-    const res = await this.afip.verificarDelegacion(cuit, pv.numero);
-    await this.persistirChequeo(auth, {
-      ok: res.ok,
-      motivo: res.motivo ?? null,
-      cuit,
-      puntoVenta: pv.numero,
-      ultimoNumero: res.numero,
-    });
-
-    return {
-      ok: res.ok,
-      cuit,
-      puntoVenta: pv.numero,
-      ultimoNumero: res.numero,
-      motivo: res.ok ? null : (res.motivo ?? 'ARCA rechazó la consulta.'),
-    };
-  }
-
-  /**
-   * Enciende la facturación electrónica. Verifica primero: no se puede activar
-   * una delegación rota. Si pasa → CONECTADA (aparece el botón Facturar); si
-   * no → ERROR con el motivo.
-   */
-  async activar(auth: CurrentAuth): Promise<AfipIntegracionDto> {
-    // El gate del plan va ANTES que el de ARCA: si el plan no lo incluye, no
-    // tiene sentido verificar la delegación — y el motivo es comercial, no
-    // técnico. Ver docs/control-plane-diseno.md (etapa B).
-    if (!(await this.suscripciones.feature(auth.tenantId, 'afip'))) {
-      await this.upsert(auth, {
-        estado: EstadoIntegracion.DESCONECTADA,
-        ultimoErrorTexto:
-          'Tu plan no incluye facturación electrónica. Hablá con Grafo para pasar a un plan superior.',
-      });
-      return this.obtener(auth);
-    }
-    const res = await this.verificar(auth);
-    if (res.ok) {
-      await this.upsert(auth, {
-        estado: EstadoIntegracion.CONECTADA,
-        conectadaEl: new Date(),
-        conectadaPorId: auth.userId,
-        ultimoErrorTexto: null,
-      });
-    } else {
-      await this.upsert(auth, {
-        estado: EstadoIntegracion.ERROR,
+    await this.prisma.$transaction(async (tx) => {
+      await this.exigirFiscal(tx, auth.tenantId);
+      const actual = await this.contexto(tx, auth);
+      if (JSON.stringify(actual) !== JSON.stringify(inicial)) {
+        throw new ConflictException(
+          'La configuración fiscal o la integración cambió durante la consulta. Volvé a verificar con los datos actuales.',
+        );
+      }
+      const metadata: AfipMetadata = {
+        ambiente: this.afip.environment,
+        representanteCuit: this.representanteCuit,
+        cuitVerificado: res.ok ? res.cuit : null,
+        puntoVentaProbado: res.puntoVenta,
+        ultimoNumeroVisto: res.ultimoNumero,
+      };
+      await this.upsert(tx, auth, {
+        ultimoChequeoEl: new Date(),
         ultimoErrorTexto: res.motivo,
+        metadataJson: metadata as unknown as Prisma.InputJsonValue,
+        ...(activar
+          ? {
+              estado: res.ok
+                ? EstadoIntegracion.CONECTADA
+                : EstadoIntegracion.ERROR,
+              conectadaEl: res.ok ? new Date() : null,
+              conectadaPorId: res.ok ? auth.userId : null,
+            }
+          : {}),
       });
-    }
-    return this.obtener(auth);
+    });
+    return res;
   }
 
-  /** Apaga la facturación: el botón Facturar desaparece. No borra la config fiscal. */
-  async desactivar(auth: CurrentAuth): Promise<AfipIntegracionDto> {
-    const fila = await this.prisma.integracionTenant.findFirst({
-      where: { proveedor: ProveedorIntegracion.AFIP },
-    });
-    if (fila) {
-      await this.prisma.integracionTenant.update({
-        where: { id: fila.id },
-        data: {
-          estado: EstadoIntegracion.DESCONECTADA,
-          conectadaEl: null,
+  private async exigirFiscal(tx: Prisma.TransactionClient, tenantId: string) {
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      tenantId,
+      ['fiscal_argentina'],
+      ['fiscal_argentina'],
+    );
+    if ((await regionalDelTenant(tx, tenantId)).paisCodigo !== 'AR') {
+      throw new ConflictException(
+        'La integración ARCA corresponde a empresas de Argentina.',
+      );
+    }
+  }
+
+  private async contexto(tx: Prisma.TransactionClient, auth: CurrentAuth) {
+    const [config, fila] = await Promise.all([
+      this.configFiscal.obtener(auth, tx),
+      tx.integracionTenant.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          proveedor: ProveedorIntegracion.AFIP,
         },
+        select: { id: true, updatedAt: true, estado: true },
+      }),
+    ]);
+    return { config, integracion: fila };
+  }
+
+  /** Desactivar sigue permitido al retirar la función, con acceso operativo. */
+  async desactivar(auth: CurrentAuth): Promise<AfipIntegracionDto> {
+    await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      await tx.integracionTenant.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          proveedor: ProveedorIntegracion.AFIP,
+        },
+        data: { estado: EstadoIntegracion.DESCONECTADA, conectadaEl: null },
       });
-    }
+    });
     return this.obtener(auth);
   }
 
-  /**
-   * ¿Se puede facturar? La usa el gate del botón y la red del backend.
-   * Dos condiciones: la integración CONECTADA y el plan que lo incluya — un
-   * downgrade corta la facturación aunque la delegación siga verificada.
-   */
-  async facturacionHabilitada(tenantId?: string): Promise<boolean> {
-    const fila = await this.prisma.integracionTenant.findFirst({
-      where: { proveedor: ProveedorIntegracion.AFIP },
-      select: { estado: true, tenantId: true },
-    });
-    if (fila?.estado !== EstadoIntegracion.CONECTADA) return false;
-    return this.suscripciones.feature(tenantId ?? fila.tenantId, 'afip');
+  /** Estado efectivo: tener la delegación conectada no concede la función. */
+  async facturacionHabilitada(tenantId: string): Promise<boolean> {
+    const [fila, permitida, regional] = await Promise.all([
+      this.prisma.integracionTenant.findFirst({
+        where: { tenantId, proveedor: ProveedorIntegracion.AFIP },
+        select: { estado: true },
+      }),
+      this.capacidades.puedeOperar(tenantId, 'fiscal_argentina'),
+      regionalDelTenant(this.prisma, tenantId),
+    ]);
+    return (
+      fila?.estado === EstadoIntegracion.CONECTADA &&
+      permitida &&
+      regional.paisCodigo === 'AR'
+    );
   }
 
   // ── internos ─────────────────────────────────────────────────────────
-
-  private async persistirChequeo(
-    auth: CurrentAuth,
-    r: {
-      ok: boolean;
-      motivo?: string | null;
-      cuit?: string | null;
-      puntoVenta?: number | null;
-      ultimoNumero?: number | null;
-    },
-  ): Promise<void> {
-    const metadata: AfipMetadata = {
-      ambiente: this.afip.environment,
-      representanteCuit: this.representanteCuit,
-      cuitVerificado: r.ok ? (r.cuit ?? null) : null,
-      puntoVentaProbado: r.puntoVenta ?? null,
-      ultimoNumeroVisto: r.ultimoNumero ?? null,
-    };
-    await this.upsert(auth, {
-      ultimoChequeoEl: new Date(),
-      ultimoErrorTexto: r.ok ? null : (r.motivo ?? null),
-      metadataJson: metadata as unknown as Prisma.InputJsonValue,
-    });
-  }
 
   /**
    * Upsert que NO pisa el estado si no se lo pasan: verificar en seco actualiza
    * el chequeo sin encender ni apagar nada. La fila nace DESCONECTADA.
    */
   private async upsert(
+    tx: Prisma.TransactionClient,
     auth: CurrentAuth,
     data: Prisma.IntegracionTenantUncheckedUpdateInput,
   ): Promise<void> {
-    await this.prisma.integracionTenant.upsert({
+    await tx.integracionTenant.upsert({
       where: {
         tenantId_proveedor: {
           tenantId: auth.tenantId,

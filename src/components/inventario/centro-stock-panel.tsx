@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import {
   StockConversionFields,
@@ -126,7 +127,9 @@ export function CentroStockPanel({
   const router = useRouter();
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const canManage = usePuede("inventario.gestionar");
+  const conExistencias = useCapacidad("existencias");
+  const permisoGestionar = usePuede("inventario.gestionar");
+  const canManage = conExistencias && permisoGestionar;
   const query = useInventoryQuery();
   const { result, loading, error, refresh } = useStockPage({
     materiaPrimaId: query.materiaPrimaId,
@@ -738,6 +741,9 @@ export function CentroStockPanel({
           )}
         </div>
       </header>
+      {!conExistencias && <p className={layout.subtitle}>
+        Consulta de existencias registradas. El plan actual no incluye nuevos ingresos, ajustes ni transferencias.
+      </p>}
       <Card className={`${layout.results} ${styles.results}`}>
         {(query.materiaPrimaId || query.ubicacionId) && (
           <div className={styles.context}>

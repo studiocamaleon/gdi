@@ -1,5 +1,9 @@
 "use client";
-import { useImpresionDirecta, useCapacidad } from "@/components/navigation/capacidades-provider";
+import {
+  useImpresionDirecta,
+  useColasImpresion,
+  useCapacidad,
+} from "@/components/navigation/capacidades-provider";
 
 import { TipoCambioPanel } from "./tipo-cambio-panel";
 import type { TipoCambioSnapshot } from "@/lib/tipo-cambio-api";
@@ -157,6 +161,7 @@ import {
 import { useImpresionDocumentos } from "@/components/impresion/documentos-impresion-contexto";
 import { EmisionDocumentosDialog } from "@/components/impresion/emision-documentos-dialog";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
+import { HistorialImpresionDialog } from "@/components/impresion/historial-impresion-dialog";
 import { QrRetiroModal } from "@/components/comercial/qr-retiro-modal";
 import { enlacePublicoUrl } from "@/lib/enlaces-publicos";
 import { itemsConSelloDe } from "@/lib/sello-arte/diseno";
@@ -4872,6 +4877,10 @@ function PropuestaFichaContenido({
       .then(setOrden)
       .catch(() => {});
   }, [ordenProp?.id]);
+  const conCotizacion = useCapacidad("cotizacion");
+  const conOrdenes = useCapacidad("ordenes");
+  const conPresupuestos = useCapacidad("presupuestos");
+  const conCobros = useCapacidad("cobros");
   const modoOrden = Boolean(orden);
   const [editandoOrden, setEditandoOrden] = React.useState(false);
   const [guardandoEdicion, setGuardandoEdicion] = React.useState(false);
@@ -4974,7 +4983,11 @@ function PropuestaFichaContenido({
   );
   // QR que el cliente presenta en el mostrador para retirar.
   const [etiquetaOpen, setEtiquetaOpen] = React.useState(false);
+  const [historialImpresionOpen, setHistorialImpresionOpen] = React.useState(false);
   const impresionDirecta = useImpresionDirecta();
+  const conEtiquetasPdf = useCapacidad("etiquetas_pdf");
+  const colasImpresion = useColasImpresion();
+  const conCopiado = useCapacidad("centro_copiado");
   const conFidelizacion = useCapacidad("fidelizacion");
   const conCupones = useCapacidad("cupones");
   const conProyectos = useCapacidad("proyectos");
@@ -4985,6 +4998,7 @@ function PropuestaFichaContenido({
   const imprimirAlEmitirRef = React.useRef(false);
   const puedeImprimirEtiqueta = usePuede("produccion.ver");
   const puedeVerMaterialesComercial = usePuede("comercial.ver");
+  const puedeEjecutarProduccion = usePuede("produccion.ejecutar");
   const puedeVerMateriales =
     puedeImprimirEtiqueta || puedeVerMaterialesComercial;
   const [qrRetiroOpen, setQrRetiroOpen] = React.useState(false);
@@ -5068,6 +5082,10 @@ function PropuestaFichaContenido({
   // Se inicia cerrado hasta confirmar el estado; el backend también lo exige.
   const [ccActivo, setCcActivo] = React.useState(false);
   React.useEffect(() => {
+    if (!conCopiado) {
+      setCcActivo(false);
+      return;
+    }
     let vivo = true;
     void estadoCentroCopiado()
       .then((e) => {
@@ -5079,7 +5097,7 @@ function PropuestaFichaContenido({
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [conCopiado]);
   // Resumen de precios de impresión por hoja (modal OT-wide).
   const [preciosOpen, setPreciosOpen] = React.useState(false);
   // Edición: la CARGA completa (todos los renglones que entraron juntos).
@@ -5442,9 +5460,10 @@ function PropuestaFichaContenido({
    * habilitan DENTRO del modo "Editar orden", igual que los field-cards.
    * TODO es staging local — nada pega en la base hasta "Guardar cambios".
    */
-  const itemsEnEdicion = puedeTocarItems && puedeEditarOrden;
+  const itemsEnEdicion = conCotizacion && conOrdenes && puedeTocarItems && puedeEditarOrden;
   // Misma puerta para botones, atajos y confirmación de ambos sheets.
   const puedeModificarProductos =
+    conCotizacion &&
     !guardandoEdicion &&
     !cuponValidando &&
     !descuentoAplicando &&
@@ -6079,6 +6098,10 @@ function PropuestaFichaContenido({
    */
   const [emitiendoBorrador, setEmitiendoBorrador] = React.useState(false);
   const emitirBorrador = React.useCallback(async (imprimir = false) => {
+    if (!conOrdenes) {
+      toast.error("Esta operación no está incluida en el plan actual.");
+      return;
+    }
     if (!permisoEdicionRef.current || !orden || cambiosSinGuardar > 0) return;
     if (!canalVentaValido(orden.canalVenta ?? "", orden.canalVenta)) {
       setEditandoOrden(true);
@@ -6119,7 +6142,7 @@ function PropuestaFichaContenido({
     } finally {
       setEmitiendoBorrador(false);
     }
-  }, [orden, router, zonaHoraria, cambiosSinGuardar, impresionDocumentos]);
+  }, [conOrdenes, orden, router, zonaHoraria, cambiosSinGuardar, impresionDocumentos]);
 
   // El aviso lleva a edición; la emisión se confirma desde la cabecera.
   const emitirDesdeAviso = React.useCallback(() => {
@@ -6323,6 +6346,10 @@ function PropuestaFichaContenido({
    */
   const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
   const emitirPresupuestoCb = React.useCallback(async () => {
+    if (!conPresupuestos || !conCotizacion) {
+      toast.error("Esta operación no está incluida en el plan actual.");
+      return;
+    }
     if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error(
@@ -6377,6 +6404,8 @@ function PropuestaFichaContenido({
       setEmitiendoPresupuesto(false);
     }
   }, [
+    conPresupuestos,
+    conCotizacion,
     items,
     cargosOrden,
     clienteId,
@@ -6390,6 +6419,10 @@ function PropuestaFichaContenido({
   ]);
 
   const emitirOrden = React.useCallback(async (imprimir = false) => {
+    if (!conOrdenes || !conCotizacion) {
+      toast.error("Esta operación no está incluida en el plan actual.");
+      return;
+    }
     if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error("Agregá al menos un producto antes de emitir la orden.");
@@ -6500,6 +6533,8 @@ function PropuestaFichaContenido({
       );
     }
   }, [
+    conOrdenes,
+    conCotizacion,
     items,
     cargosOrden,
     clienteId,
@@ -6542,6 +6577,10 @@ function PropuestaFichaContenido({
    */
   const [guardandoBorrador, setGuardandoBorrador] = React.useState(false);
   const guardarBorrador = React.useCallback(async () => {
+    if (!conOrdenes || !conCotizacion) {
+      toast.error("Esta operación no está incluida en el plan actual.");
+      return;
+    }
     if (!validarCanalVenta()) return;
     if (items.length === 0) {
       toast.error("Agregá al menos un producto antes de guardar el borrador.");
@@ -6606,6 +6645,8 @@ function PropuestaFichaContenido({
       setGuardandoBorrador(false);
     }
   }, [
+    conOrdenes,
+    conCotizacion,
     items,
     cargosOrden,
     clienteId,
@@ -7530,7 +7571,11 @@ function PropuestaFichaContenido({
                       tipo={ordenTipo}
                       clienteSeleccionado={Boolean(clienteId)}
                       empty={items.length === 0}
-                      onEmitir={() => impresionDirecta && documentosCentroCopiado ? setConfirmarEmisionDocumentos("nueva") : void emitirOrden()}
+                      onEmitir={() =>
+                        colasImpresion && documentosCentroCopiado
+                          ? setConfirmarEmisionDocumentos("nueva")
+                          : void emitirOrden()
+                      }
                       onEmitirPresupuesto={emitirPresupuestoCb}
                       emitiendo={emitiendo || emitiendoPresupuesto}
                       guardandoBorrador={guardandoBorrador}
@@ -7575,6 +7620,8 @@ function PropuestaFichaContenido({
                           variant="primary"
                           size="sm"
                           onPress={() => setEditandoOrden(true)}
+                          isDisabled={orden.estado === "borrador" && !conOrdenes}
+                          title={orden.estado === "borrador" && !conOrdenes ? "La edición de borradores no está incluida en el plan actual." : undefined}
                         >
                           <Edit3Icon />
                           Editar orden
@@ -7604,8 +7651,13 @@ function PropuestaFichaContenido({
                           type="button"
                           variant="primary"
                           size="sm"
-                          onPress={() => impresionDirecta && documentosCentroCopiado ? setConfirmarEmisionDocumentos("borrador") : void emitirBorrador()}
+                          onPress={() =>
+                            colasImpresion && documentosCentroCopiado
+                              ? setConfirmarEmisionDocumentos("borrador")
+                              : void emitirBorrador()
+                          }
                           isDisabled={
+                            !conOrdenes ||
                             emitiendoBorrador ||
                             cambiosSinGuardar > 0 ||
                             !orden.clienteId
@@ -7630,18 +7682,38 @@ function PropuestaFichaContenido({
                           Entregar
                         </Button>
                       ) : null}
-                      {impresionDirecta && orden && items.some(item => metaCentroCopiado(item.jobContext)) && !["borrador", "cancelada"].includes(orden.estado) && (
-                        <HeroButton variant="tertiary" onPress={() => impresionDocumentos.abrir(orden.id)}>
-                          <PrinterIcon />
-                          Impresión de documentos
+                      {colasImpresion &&
+                        orden &&
+                        items.some((item) =>
+                          metaCentroCopiado(item.jobContext),
+                        ) &&
+                        !["borrador", "cancelada"].includes(orden.estado) && (
+                          <HeroButton
+                            variant="tertiary"
+                            onPress={() => impresionDocumentos.abrir(orden.id)}
+                          >
+                            <PrinterIcon />
+                            Impresión de documentos
+                          </HeroButton>
+                        )}
+                      {orden?.tieneHistorialImpresion && (puedeVerMateriales || puedeEjecutarProduccion) && (
+                        <HeroButton variant="tertiary" onPress={() => setHistorialImpresionOpen(true)}>
+                          <PrinterIcon />Historial de impresión
                         </HeroButton>
                       )}
-                      {puedeImprimirEtiqueta && orden && !["borrador", "cancelada"].includes(orden.estado) && (
-                        <HeroButton variant="tertiary" onPress={() => setEtiquetaOpen(true)}>
-                          <PrinterIcon />
-                          {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}
-                        </HeroButton>
-                      )}
+                      {(impresionDirecta || conEtiquetasPdf) && puedeImprimirEtiqueta &&
+                        orden &&
+                        !["borrador", "cancelada"].includes(orden.estado) && (
+                          <HeroButton
+                            variant="tertiary"
+                            onPress={() => setEtiquetaOpen(true)}
+                          >
+                            <PrinterIcon />
+                            {impresionDirecta
+                              ? "Imprimir etiqueta"
+                              : "Descargar etiqueta"}
+                          </HeroButton>
+                        )}
                       {publicToken ? (
                         <HeroButton
                           type="button"
@@ -8132,7 +8204,9 @@ function PropuestaFichaContenido({
             )}
 
             {tab === "produccion" ? (
-              orden ? (
+              orden?.produccionControlada === false ? (
+                <EmptyTab title="Seguimiento manual" description="Esta orden se emitió sin tablero de tareas. Verificá el trabajo antes de confirmar su entrega desde el mostrador." />
+              ) : orden ? (
                 <ProduccionOrdenTab
                   ordenId={orden.id}
                   onOrdenActualizada={recargarOrden}
@@ -8155,7 +8229,7 @@ function PropuestaFichaContenido({
                     pago={orden.pago}
                     total={orden.total}
                     ordenId={orden.id}
-                    puedeCobrar={orden.estado !== "borrador"}
+                    puedeCobrar={orden.estado !== "borrador" && (conCobros || (orden.cobrosHabilitadosEmision !== false && orden.total > (orden.cobradoTotal ?? 0)))}
                     soloLectura={!puedeEditarOrden}
                     sinComprobante={
                       orden.tratamientoFiscal === "SIN_COMPROBANTE"
@@ -8532,7 +8606,7 @@ function PropuestaFichaContenido({
           onCerrar={() => setAvisoCupon(null)}
         />
 
-        {impresionDirecta && confirmarEmisionDocumentos && (
+        {colasImpresion && confirmarEmisionDocumentos && (
           <EmisionDocumentosDialog
             items={items}
             onClose={() => setConfirmarEmisionDocumentos(null)}
@@ -8543,6 +8617,9 @@ function PropuestaFichaContenido({
               else void emitirOrden(imprimir);
             }}
           />
+        )}
+        {historialImpresionOpen && orden && (
+          <HistorialImpresionDialog key={orden.id} ordenId={orden.id} onClose={() => setHistorialImpresionOpen(false)} />
         )}
         {etiquetaOpen && orden && (
           <EtiquetaOrdenDialog ordenId={orden.id} onClose={() => setEtiquetaOpen(false)} />

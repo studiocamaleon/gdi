@@ -2,6 +2,7 @@
 
 import fieldFocus from "@/components/design-system/field-focus.module.css";
 import { CupoSuscripcionPanel } from "./cupo-suscripcion-panel";
+import { ContratacionesPanel } from "./contrataciones-panel";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -482,6 +483,7 @@ function FichaSuscripcion({ id, esAdmin }: { id: string; esAdmin: boolean }) {
           <TabsList variant="graphite" aria-label="Detalle de suscripción">
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
             <TabsTrigger value="cupos">Usuarios y cupos</TabsTrigger>
+            <TabsTrigger value="contrataciones">Contrataciones</TabsTrigger>
             <TabsTrigger value="eventos">Eventos de Paddle</TabsTrigger>
             <TabsTrigger value="consultas">Historial de consultas</TabsTrigger>
           </TabsList>
@@ -591,6 +593,14 @@ function FichaSuscripcion({ id, esAdmin }: { id: string; esAdmin: boolean }) {
         </TabsContent>
         <TabsContent value="eventos" className={styles.tabContent}>
           <Eventos id={id} version={version} />
+        </TabsContent>
+        <TabsContent value="contrataciones" className={styles.tabContent}>
+          <ContratacionesPanel
+            id={id}
+            esAdmin={esAdmin}
+            version={version}
+            actualizado={() => setVersion((v) => v + 1)}
+          />
         </TabsContent>
         <TabsContent value="consultas" className={styles.tabContent}>
           <Historial id={id} version={version} />

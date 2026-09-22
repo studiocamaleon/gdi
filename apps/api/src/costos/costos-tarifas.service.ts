@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -26,6 +27,9 @@ export class CostosTarifasService {
     private readonly mapper: CostosMapper,
     private readonly reparto: CostosRepartoService,
     private readonly validaciones: CostosValidacionesService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /**
@@ -42,6 +46,7 @@ export class CostosTarifasService {
    * que la imprenta acaba de cargar, sin un paso extra que nadie recuerda.
    */
   async recalcularYPublicarPeriodo(auth: CurrentAuth, periodo: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     return this.prisma.$transaction(
       (tx) => this.recalcularYPublicarPeriodoEnTx(auth, normalizedPeriodo, tx),
@@ -54,6 +59,7 @@ export class CostosTarifasService {
     periodo: string,
     tx: Prisma.TransactionClient,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo', tx);
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     // El lock devuelve void: ejecutarlo sin intentar deserializar una fila.
     // Conserva la exclusión por empresa/período hasta terminar la transacción.
@@ -175,6 +181,7 @@ export class CostosTarifasService {
   }
 
   async calcularTarifaCentro(auth: CurrentAuth, id: string, periodo: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     // Guardar un centro deja al día a todo el período: ver
     // `recalcularYPublicarPeriodo`.
@@ -223,6 +230,7 @@ export class CostosTarifasService {
   }
 
   async publicarTarifaCentro(auth: CurrentAuth, id: string, periodo: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     const snapshot = await this.buildTarifaSnapshot(
       auth,

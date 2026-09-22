@@ -12,6 +12,8 @@ import {
   vincularEntregasAlCrear,
 } from './vincular-plan-entrega';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
+import { DesarrolloDocumentalService } from '../desarrollo-documental/desarrollo-documental.service';
+import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
 import type { CrearOrdenTrabajoDto } from '../ordenes-trabajo/dto/crear-orden-trabajo.dto';
 import { PlanificacionEntregasService } from './planificacion.service';
 import {
@@ -171,12 +173,8 @@ const ordenes = new OrdenesTrabajoService(
   {} as never,
   {} as never,
   { asegurarParaItem: jest.fn().mockResolvedValue(undefined) } as never,
-  {
-    simular: jest
-      .fn()
-      .mockResolvedValue({ maximoCanjeable: 0, canjeMonto: 0, canjePuntos: 0 }),
-  } as never,
-  {} as never,
+  new FidelizacionService(db),
+  new DesarrolloDocumentalService(db, {} as never, {} as never),
 );
 // Esta suite verifica el alta y el vínculo. La ejecución real (sin estos dobles)
 // se verifica en lotes-ejecutables.integration.spec.ts.

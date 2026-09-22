@@ -64,6 +64,15 @@ export class DesarrolloDocumentalController {
   }
 
   @Permiso('produccion.ver', 'comercial.ver')
+  @Get('ordenes/:ordenId/documentos')
+  listarOrden(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('ordenId', ParseUUIDPipe) ordenId: string,
+  ) {
+    return this.service.listarOrden(auth, ordenId);
+  }
+
+  @Permiso('produccion.ver', 'comercial.ver')
   @Get('ordenes/:ordenId')
   estadoOrden(
     @CurrentSession() auth: CurrentAuth,
@@ -115,7 +124,6 @@ export class DesarrolloDocumentalController {
     return this.service.emitirLink(auth, solicitudId, dto);
   }
 
-  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Delete('solicitudes/:solicitudId/link')
   revocarLink(
@@ -125,7 +133,6 @@ export class DesarrolloDocumentalController {
     return this.service.revocarLink(auth, solicitudId);
   }
 
-  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Post('solicitudes/:solicitudId/decision')
   decidir(
@@ -156,7 +163,6 @@ export class DesarrolloDocumentalController {
     return this.service.crearGate(auth, dto);
   }
 
-  @RequiereCapacidad('aprobacion_arte')
   @Permiso('comercial.gestionar')
   @Delete('gates/:gateId')
   eliminarGate(

@@ -28,6 +28,7 @@ export function SiteHeader({
   const links = [
     ["La experiencia", "#experiencia"],
     ["El sistema", "#modulos"],
+    ["GrafoNest", "#nesting"],
     ["Planes", "#precios"],
   ];
   return (

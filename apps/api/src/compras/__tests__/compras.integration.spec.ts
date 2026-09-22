@@ -935,20 +935,17 @@ describe('Compras y recepciones: DB exclusiva de tests', () => {
         ).estado,
       ).toBe('por_confirmar');
     });
-    it('respeta consumibles excluidos y tenants sin control', async () => {
+    it('respeta consumibles excluidos y consulta faltantes aunque las reservas estén desactivadas', async () => {
       expect(await consultar(20, true)).toMatchObject({
         estado: 'disponible',
         materiales: [],
       });
+      const anterior = await consultar();
       await prisma.politicaReservasMaterial.update({
         where: { tenantId },
         data: { habilitada: false },
       });
-      expect(await consultar()).toMatchObject({
-        estado: 'sin_control',
-        materiales: [],
-        disponibleDesde: null,
-      });
+      expect(await consultar()).toEqual({ ...anterior, modoReserva: null });
     });
   });
 });

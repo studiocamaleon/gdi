@@ -28,6 +28,7 @@ import {
   getPlanImposicion,
   placementAreaMm2,
 } from "./nesting-canvas";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -198,6 +199,7 @@ export function NestingViewer({
   archivos,
   modificaciones,
 }: NestingViewerProps) {
+  const conExportacion = useCapacidad("exportacion_fabricacion");
   const designScope = useLegacyDesignScope();
   const viewerTheme = designScope.className ?? theme.theme;
   const contenedor = React.useRef<HTMLElement>(null);
@@ -221,7 +223,7 @@ export function NestingViewer({
   const tab =
     vigente?.tab &&
     (vigente.tab !== "layouts" || navegacion.patrones.length > 0) &&
-    (vigente.tab !== "archivos" || archivos)
+    (vigente.tab !== "archivos" || (archivos && conExportacion))
       ? vigente.tab
       : navegacion.vistaInicial;
   const indice = Math.min(
@@ -314,7 +316,7 @@ export function NestingViewer({
               <ListChecks />
               Balance de piezas
             </TabsTrigger>
-            {archivos && (
+            {archivos && conExportacion && (
               <TabsTrigger value="archivos">
                 <Files />
                 Archivos
@@ -490,7 +492,7 @@ export function NestingViewer({
           </p>
           <NestingBalance result={result} />
         </TabsContent>
-        {archivos && (
+        {archivos && conExportacion && (
           <TabsContent value="archivos" className={v.panel}>
             {archivos}
           </TabsContent>

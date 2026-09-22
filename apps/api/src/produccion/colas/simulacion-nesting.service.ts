@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { restaurarDatosSnapshot } from '../../prisma/snapshots.extension';
 import { configurarFilaCola, leerFuentesCola } from './configuracion-cola';
 import { nombreLoteProduccion } from '../../planificacion-entregas/materializar-lotes-entrega';
@@ -106,9 +107,15 @@ export class SimulacionNestingColaService {
       resultado: ReturnType<SimulacionNestingColaService['preparar']>;
     }
   >();
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async simular(tenantId: string, maquinaId: string, pasoIds: string[]) {
+    await this.capacidades.exigir(tenantId, 'colas_produccion');
     if (
       !pasoIds.length ||
       pasoIds.length > 50 ||
@@ -121,7 +128,11 @@ export class SimulacionNestingColaService {
     const pendiente = this.calculando.get(tenantId);
     // Una reapertura o solicitud duplicada espera el mismo cálculo. No consume
     // otra plaza ni comparte resultados entre tenants o selecciones diferentes.
-    if (pendiente?.clave === clave) return pendiente.resultado;
+    if (pendiente?.clave === clave) {
+      const resultado = await pendiente.resultado;
+      await this.capacidades.exigir(tenantId, 'colas_produccion');
+      return resultado;
+    }
     if (pendiente || this.calculando.size >= 2)
       throw new ServiceUnavailableException(
         'Hay otra simulación en curso. Volvé a intentar en unos segundos.',
@@ -375,6 +386,7 @@ export class SimulacionNestingColaService {
         : politicas.length === 1
           ? politicas[0]
           : 'auto';
+    await this.capacidades.exigir(tenantId, 'colas_produccion');
     const resultado = await calcularRollo({
       piezas,
       anchos,
@@ -384,6 +396,9 @@ export class SimulacionNestingColaService {
       anchoMaximoMm,
       algoritmo,
     });
+    // El cálculo corre fuera de una transacción. Una retirada del plan durante
+    // la simulación no debe entregar un resultado nuevo de esa función.
+    await this.capacidades.exigir(tenantId, 'colas_produccion');
     return {
       materialNombre: base.materiaPrima.nombre,
       maquina: { id: maquina.id, nombre: maquina.nombre, anchoMaximoMm },

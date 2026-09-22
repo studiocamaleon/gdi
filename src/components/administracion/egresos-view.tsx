@@ -463,6 +463,7 @@ export function EgresosView({
   const brand = modo === "cuentas-por-pagar";
   const scope = useDesignScope();
   const theme = useDesignTheme();
+  const conEgresos = useCapacidad("cuentas_pagar");
   const conValores = useCapacidad("valores");
   const metodosDisponibles = metodosPago.filter(
     (m) => conValores || m.tipo !== "cheque_echeq",
@@ -470,12 +471,14 @@ export function EgresosView({
   const conRecurrentes = useCapacidad("gastos_recurrentes");
   const conAnalisis = useCapacidad("reportes_finanzas");
   const tabsVisibles = TABS_POR_MODO[modo].filter(
-    (t) => (t !== "recurrentes" || conRecurrentes) && (t !== "analisis" || conAnalisis),
+    (t) => t !== "analisis" || (conEgresos && conAnalisis),
   );
   // Los permisos se resuelven en el cliente (patrón de la casa): el guard del
   // API es el que manda, esto sólo evita ofrecer botones que van a dar 403.
-  const puedeGestionar = usePuede("administracion.gestionar");
-  const puedeAnular = usePuede("administracion.anular");
+  const permisoGestionar = usePuede("administracion.gestionar");
+  const puedeGestionar = permisoGestionar && conEgresos;
+  const permisoAnular = usePuede("administracion.anular");
+  const puedeAnular = permisoAnular && conEgresos;
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
   const hoy = React.useMemo(() => hoyIso(), []);
@@ -486,7 +489,7 @@ export function EgresosView({
   const [cargando, setCargando] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [texto, setTexto] = React.useState("");
-  const [altaAbierta, setAltaAbierta] = React.useState(altaInicial);
+  const [altaAbierta, setAltaAbierta] = React.useState(altaInicial && puedeGestionar);
   const [pagoAbierto, setPagoAbierto] = React.useState(false);
   const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
   const [detalle, setDetalle] = React.useState<Egreso | null>(null);
@@ -538,7 +541,7 @@ export function EgresosView({
       setRecurrentes(null);
       getRecurrentes()
         .then((r) => setRecurrentes(r.recurrentes))
-        .catch(() => setRecurrentes([]));
+        .catch((e) => { setError(e instanceof Error ? e.message : "No se pudieron cargar los recurrentes."); setRecurrentes([]); });
       return;
     }
     if (t === "analisis") {
@@ -581,13 +584,17 @@ export function EgresosView({
     <EgresosBrand value={brand}>
     <div {...(brand ? scope : {})} className={brand ? `${theme} ${listPage.page} ${pagarStyles.page}` : "egr-page"}>
       <div className={brand ? undefined : "egr-wrap"}>
+        {!conEgresos ? <Alert>
+          <AlertTitle>Historial de egresos</AlertTitle>
+          <AlertDescription>Podés consultar los registros y sus pagos. El plan actual no incluye la gestión de egresos ni cuentas por pagar.</AlertDescription>
+        </Alert> : null}
         {brand ? <CuentasPagarWorkspace
           resumen={resumen} tab={tab === "proveedores" ? "proveedores" : "por-pagar"} onTab={cambiarTab}
           egresos={visibles} saldos={saldos} texto={texto} onTexto={setTexto}
           seleccion={seleccion} onSeleccion={setSeleccion} seleccionados={seleccionados}
           seleccionPagable={seleccionPagable} totalSeleccion={totalSeleccion}
           puedeGestionar={puedeGestionar} cargando={cargando} error={error}
-          onReintentar={() => cambiarTab(tab)} hoy={hoy} endosar={!!valorEndosoInicialId}
+          onReintentar={() => cambiarTab(tab)} hoy={hoy} endosar={!!valorEndosoInicialId && puedeGestionar && conValores}
           onAlta={() => setAltaAbierta(true)} onPago={() => setPagoAbierto(true)} onDetalle={setDetalle}
         /> : <>
         <div className="egr-head">
@@ -675,7 +682,7 @@ export function EgresosView({
                 className={tab === t ? "on" : ""}
                 onClick={() => cambiarTab(t)}
               >
-                {TAB_LABELS[t]}
+                {t === "recurrentes" && !conRecurrentes ? "Historial de recurrentes" : TAB_LABELS[t]}
               </button>
             ))}
           </div>
@@ -705,7 +712,7 @@ export function EgresosView({
           ) : null}
         </div>
 
-        {valorEndosoInicialId ? (
+        {valorEndosoInicialId && puedeGestionar && conValores ? (
           <Alert>
             <HandCoinsIcon />
             <AlertTitle>Endosar cheque desde cartera</AlertTitle>
@@ -719,7 +726,7 @@ export function EgresosView({
 
         {error ? <div className="egr-error mod-suelto">{error}</div> : null}
 
-        {tab === "analisis" ? (
+        {tab === "analisis" && conEgresos && conAnalisis ? (
           <Analisis reporte={reporte} presu={presu} fmt={fmt} />
         ) : tab === "recurrentes" ? (
           <Recurrentes
@@ -728,7 +735,7 @@ export function EgresosView({
             proveedores={proveedores}
             gastosFijos={gastosFijos}
             hoy={hoy}
-            puedeGestionar={puedeGestionar}
+            puedeGestionar={puedeGestionar && conRecurrentes}
             fmt={fmt}
             onCambio={() => cambiarTab("recurrentes")}
           />
@@ -860,7 +867,7 @@ export function EgresosView({
         {cargando ? <div className="egr-cargando">Actualizando…</div> : null}
         </>}
 
-        {altaAbierta ? (
+        {altaAbierta && puedeGestionar ? (
           <AltaEgreso
             modo={modo}
             categorias={categorias}
@@ -886,7 +893,7 @@ export function EgresosView({
           />
         ) : null}
 
-        {pagoAbierto ? (
+        {pagoAbierto && puedeGestionar ? (
           <RegistrarPago
             egresos={seleccionados}
             metodosPago={metodosDisponibles}
@@ -923,7 +930,7 @@ export function EgresosView({
 
         <ConfirmacionDestructiva
           apariencia={brand ? "heroui" : undefined}
-          open={anulando !== null}
+          open={anulando !== null && puedeAnular}
           onOpenChange={(v) => {
             if (!v) setAnulando(null);
           }}
@@ -937,7 +944,7 @@ export function EgresosView({
           }}
           accionLabel="Anular egreso"
           onConfirmar={async (motivo) => {
-            if (!anulando) return;
+            if (!anulando || !puedeAnular) return;
             await anularEgreso(anulando.id, motivo);
             setAnulando(null);
             void recargar();
@@ -1203,7 +1210,7 @@ function Recurrentes({
         </div>
       )}
 
-      {alta || editando ? (
+      {puedeGestionar && (alta || editando) ? (
         <div className="mod-bg" role="dialog" aria-modal="true">
           <div className="mod mod-sm">
             <div className="mod-head">
@@ -2895,6 +2902,7 @@ function DetalleEgreso({
   onCambio: () => void;
 }) {
   useCerrarConEscape(onCerrar);
+  const conPdf = useCapacidad("documentos_pdf");
   const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
   const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
@@ -2963,7 +2971,7 @@ function DetalleEgreso({
       <EgresoDialog compact legacySubtitle={egreso.numero} title={egreso.descripcion} description={`${egreso.numero} · ${egreso.beneficiarioNombre}`} onCerrar={onCerrar} bloqueado={guardandoEdicion}>
         {brand && <div className={pagarStyles.detailSummary}><div><span>Total</span><strong>{fmt(egreso.total)}</strong></div><div><span>Pagado</span><strong>{fmt(egreso.pagadoTotal)}</strong></div><div><span>Pendiente</span><strong>{fmt(egreso.saldo)}</strong></div></div>}
         <div className="mod-body">
-          {editando ? (
+          {editando && puedeGestionar ? (
             <div className="egr-grid">
               <label className="egr-f egr-f-wide">
                 <span>Descripción</span>
@@ -3115,7 +3123,7 @@ function DetalleEgreso({
               entidadId={egreso.id}
               archivos={archivos}
               onCambio={setArchivos}
-              soloLectura={!puedeAnular && egreso.estado === "anulado"}
+              soloLectura={!puedeGestionar || egreso.estado === "anulado"}
               titulo="Arrastrá la factura del proveedor"
               vacio="Sin la factura adjunta."
             />
@@ -3143,7 +3151,7 @@ function DetalleEgreso({
                     </span>
                   </div>
                   <span className="mono">{fmt(p.monto)}</span>
-                  {!p.anuladoEl ? (
+                  {!p.anuladoEl && conPdf ? (
                     <a
                       className="egr-link"
                       href={`/api/backend/egresos/pagos/${p.id}/orden-pago.pdf`}
@@ -3169,7 +3177,7 @@ function DetalleEgreso({
         </div>
         <div className="mod-foot">
           {puedeGestionar && egreso.estado !== "anulado" ? (
-            editando ? (
+            editando && puedeGestionar ? (
               <>
                 <EgresoButton
                   type="button"
@@ -3217,7 +3225,7 @@ function DetalleEgreso({
 
       <ConfirmacionDestructiva
         apariencia={brand ? "heroui" : undefined}
-        open={anulandoPago !== null}
+        open={anulandoPago !== null && puedeAnular}
         onOpenChange={(v) => {
           if (!v) setAnulandoPago(null);
         }}
@@ -3230,7 +3238,7 @@ function DetalleEgreso({
         }}
         accionLabel="Anular pago"
         onConfirmar={async (motivo) => {
-          if (!anulandoPago) return;
+          if (!anulandoPago || !puedeAnular) return;
           await anularPagoEgreso(anulandoPago.id, motivo);
           setAnulandoPago(null);
           cargar();

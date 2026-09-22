@@ -1,12 +1,13 @@
-import { limiteUsuarios, resumenCupoUsuarios } from '../suscripciones/cupos-usuarios';
+import { resumenCupoUsuarios } from '../suscripciones/cupos-usuarios';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolverAccesoEmpresa } from '../suscripciones/acceso-empresa';
 import {
-  funcionIncluidaEnPlan,
-  type ClaveFuncionPlan,
-} from '../suscripciones/capacidades-plan';
+  contratoSuscripcion,
+  funcionHistoricaEnContrato,
+} from '../suscripciones/contrato-suscripcion';
+import type { ClaveFuncionPlan } from '../suscripciones/capacidades-plan';
 
 export type ConsultaEmpresas = {
   pagina: number;
@@ -79,7 +80,12 @@ export class EmpresasPlataformaService {
             },
           },
           suscripcion: {
-            include: { plan: { select: { nombre: true, codigo: true } } },
+            include: {
+              plan: {
+                select: { nombre: true, codigo: true, featuresJson: true },
+              },
+              planVersion: true,
+            },
           },
         },
       }),
@@ -100,7 +106,7 @@ export class EmpresasPlataformaService {
           t.suscripcion,
           t.bloqueoAccesoMotivo,
         ),
-        plan: t.suscripcion?.plan.nombre ?? null,
+        plan: t.suscripcion ? contratoSuscripcion(t.suscripcion).nombre : null,
         proveedor: t.suscripcion?.proveedor ?? null,
         estadoSuscripcion: t.suscripcion?.estado ?? null,
         estadoProveedor: t.suscripcion?.estadoProveedor ?? null,
@@ -122,7 +128,7 @@ export class EmpresasPlataformaService {
         origenAlta: true,
         bytesArchivos: true,
         cuotaBytesArchivos: true,
-        suscripcion: { include: { plan: true } },
+        suscripcion: { include: { plan: true, planVersion: true } },
         _count: {
           select: {
             memberships: { where: { activa: true, user: { activo: true } } },
@@ -145,7 +151,7 @@ export class EmpresasPlataformaService {
       t.bloqueoAccesoMotivo,
     );
     const s = t.suscripcion;
-    const features = (s?.plan.featuresJson ?? {}) as Record<string, unknown>;
+    const contrato = contratoSuscripcion(s);
     const catalogo: Array<[ClaveFuncionPlan, string]> = [
       ['afip', 'Facturación electrónica'],
       ['whatsapp', 'WhatsApp'],
@@ -153,7 +159,7 @@ export class EmpresasPlataformaService {
       ['impresionDirecta', 'Impresión directa'],
     ];
     const funciones = catalogo.map(([clave, nombre]) => {
-      const incluida = funcionIncluidaEnPlan(clave, s?.plan ?? null);
+      const incluida = funcionHistoricaEnContrato(contrato, clave);
       return {
         clave,
         nombre,
@@ -164,14 +170,10 @@ export class EmpresasPlataformaService {
           : acceso.modo !== 'operativo'
             ? acceso.descripcion
             : s
-              ? `Incluida en ${s.plan.nombre}. Requiere los permisos y la configuración de la empresa.`
+              ? `Incluida en ${contrato.nombre}. Requiere los permisos y la configuración de la empresa.`
               : 'Disponible por compatibilidad con la cuenta anterior a los planes.',
       };
     });
-    const limite = (clave: string) =>
-      features.todo === true || typeof features[clave] !== 'number'
-        ? null
-        : features[clave];
     return {
       id: t.id,
       nombre: t.nombre,
@@ -190,12 +192,16 @@ export class EmpresasPlataformaService {
       storageCuotaBytes:
         t.cuotaBytesArchivos === null ? null : Number(t.cuotaBytesArchivos),
       puedeAsignarPlanManual:
-        !s || (s.proveedor === 'manual' && !s.referenciaExterna),
+        !s ||
+        (s.proveedor === 'manual' && !s.referenciaExterna && !s.planVersionId),
       suscripcion: s
         ? {
             id: s.id,
             planId: s.planId,
-            planNombre: s.plan.nombre,
+            planNombre: contrato.nombre,
+            versionId: s.planVersionId,
+            versionNumero: s.planVersion?.numero ?? null,
+            planComercialNombre: s.plan.nombre,
             planCodigo: s.plan.codigo,
             proveedor: s.proveedor,
             estado: s.estado,
@@ -217,9 +223,9 @@ export class EmpresasPlataformaService {
         : null,
       funciones,
       limites: {
-        usuariosMax: limiteUsuarios(s?.plan ?? null, s?.usuariosAdicionales ?? 0).limite,
-        ordenesMesMax: limite('ordenesMesMax'),
-        storageGb: limite('storageGb'),
+        usuariosMax: contrato.limites.usuariosMax,
+        ordenesMesMax: contrato.limites.ordenesMesMax,
+        storageGb: contrato.limites.almacenamiento.gb,
       },
     };
   }

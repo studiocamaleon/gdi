@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -28,6 +29,9 @@ export class CargosDirectosProductoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly familias: FamiliasPasosService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   listarCargosDirectos(tenantId: string, soloActivos = true) {
@@ -38,6 +42,7 @@ export class CargosDirectosProductoService {
   }
 
   async crearCargoDirecto(tenantId: string, dto: CrearCargoDirectoDto) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const modos = dto.modosActivacionSoportados ?? ['OPCIONAL'];
     if (modos.length === 0) {
       throw new BadRequestException(
@@ -87,6 +92,7 @@ export class CargosDirectosProductoService {
     id: string,
     dto: ActualizarCargoDirectoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente = await this.prisma.cargoDirectoCatalogo.findFirst({
       where: { id, tenantId },
     });
@@ -130,6 +136,7 @@ export class CargosDirectosProductoService {
   }
 
   async eliminarCargoDirecto(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const [existente, pasosExtras] = await Promise.all([
       this.prisma.cargoDirectoCatalogo.findFirst({
         where: { id, tenantId },
@@ -177,6 +184,7 @@ export class CargosDirectosProductoService {
     productoId: string,
     dto: AsociarCargoCotizacionDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const [producto, cargo] = await Promise.all([
       this.prisma.producto.findFirst({ where: { id: productoId, tenantId } }),
       this.prisma.cargoDirectoCatalogo.findFirst({
@@ -216,6 +224,7 @@ export class CargosDirectosProductoService {
     asociacionId: string,
     dto: ActualizarAsociacionCargoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const asociacion =
       await this.prisma.productoCargoDirectoCotizacion.findFirst({
         where: { id: asociacionId, tenantId },
@@ -258,6 +267,7 @@ export class CargosDirectosProductoService {
   }
 
   async desasociarCargoCotizacion(tenantId: string, asociacionId: string) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente =
       await this.prisma.productoCargoDirectoCotizacion.findFirst({
         where: { id: asociacionId, tenantId },
@@ -274,6 +284,7 @@ export class CargosDirectosProductoService {
     configPasoId: string,
     dto: AsociarCargoPasoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const [configPaso, cargo] = await Promise.all([
       this.prisma.productoConfigPaso.findFirst({
         where: { id: configPasoId, tenantId },
@@ -332,6 +343,7 @@ export class CargosDirectosProductoService {
     asociacionId: string,
     dto: ActualizarAsociacionCargoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const asociacion = await this.prisma.productoCargoDirectoPaso.findFirst({
       where: { id: asociacionId, tenantId },
       include: { cargoDirectoCatalogo: true },
@@ -373,6 +385,7 @@ export class CargosDirectosProductoService {
   }
 
   async desasociarCargoPaso(tenantId: string, asociacionId: string) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const existente = await this.prisma.productoCargoDirectoPaso.findFirst({
       where: { id: asociacionId, tenantId },
     });
@@ -384,6 +397,7 @@ export class CargosDirectosProductoService {
   }
 
   async distribuirCargoPasoPorNiveles(tenantId: string, asociacionId: string) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const asociacion = await this.prisma.productoCargoDirectoPaso.findFirst({
       where: { id: asociacionId, tenantId },
       include: { productoConfigPaso: true },
@@ -620,6 +634,7 @@ export class CargosDirectosProductoService {
     productoId: string,
     dto: AgregarPasoExtraDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const producto = await this.prisma.producto.findFirst({
       where: { id: productoId, tenantId },
     });
@@ -761,6 +776,7 @@ export class CargosDirectosProductoService {
     pasoExtraId: string,
     dto: ActualizarPasoExtraDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const existente = await this.prisma.productoPasoExtra.findFirst({
       where: { id: pasoExtraId, tenantId },
     });
@@ -939,6 +955,7 @@ export class CargosDirectosProductoService {
   }
 
   async eliminarPasoExtra(tenantId: string, pasoExtraId: string) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const existente = await this.prisma.productoPasoExtra.findFirst({
       where: { id: pasoExtraId, tenantId },
     });

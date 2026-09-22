@@ -1,0 +1,148 @@
+.scene {
+  position: relative;
+  background: radial-gradient(
+    ellipse at 50% 30%,
+    #23332c 0%,
+    #17211e 46%,
+    #141a1c 80%
+  );
+}
+.legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 0;
+  color: #a2b29f;
+  font: 9px var(--font-mono);
+  letter-spacing: 0.1em;
+}
+.legend > span:last-child {
+  color: #daaa7e;
+}
+.canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.story {
+  text-align: center;
+  padding: 0 20px 24px;
+  display: grid;
+  gap: 7px;
+  min-height: 75px;
+}
+.story > span {
+  color: #98ad9d;
+  font-size: 11px;
+}
+.story > strong {
+  font-size: clamp(17px, 1.5vw, 23px);
+  color: #f0eddf;
+  letter-spacing: -0.035em;
+  font-weight: 450;
+}
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-top: 1px solid #3b4940;
+  background: #18221ed9;
+}
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.steps button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a9b8ac;
+  font-size: 11px;
+  border: 0;
+  background: transparent;
+  padding: 7px 3px;
+  white-space: nowrap;
+}
+.steps button > span {
+  font: 9px var(--font-mono);
+  color: #778d7d;
+}
+.steps button > svg {
+  color: #566c5d;
+  margin-left: 5px;
+}
+.steps button[aria-pressed="true"] {
+  color: #ffb083;
+}
+.steps button[aria-pressed="true"] > span {
+  color: #ffb083;
+}
+.play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 95px;
+  padding: 9px 12px;
+  border: 1px solid #6c816e;
+  border-radius: 5px;
+  background: #334838;
+  color: #e8ead7;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.play:hover {
+  background: #425b46;
+}
+.steps button:focus-visible,
+.play:focus-visible {
+  outline: 2px solid #ffad7f;
+  outline-offset: 3px;
+}
+.caption {
+  color: #91a497;
+  padding: 0 22px 18px;
+  background: #18221ed9;
+  font-size: 10px;
+  line-height: 1.65;
+}
+@media (max-width: 1000px) {
+  .controls {
+    flex-wrap: wrap;
+  }
+  .play {
+    margin-left: auto;
+  }
+}
+@media (max-width: 760px) {
+  .legend {
+    padding: 20px 15px 0;
+    font-size: 8px;
+  }
+  .story {
+    padding-bottom: 18px;
+  }
+  .controls {
+    padding: 14px;
+    gap: 10px;
+  }
+  .steps {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .steps button {
+    font-size: 11px;
+    gap: 6px;
+  }
+  .play {
+    width: 100%;
+    margin: 0;
+  }
+  .caption {
+    padding-inline: 15px;
+  }
+}

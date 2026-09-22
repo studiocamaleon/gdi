@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   bloquearVariantesStock,
   exigirStockLibre,
@@ -80,6 +81,9 @@ export class InventarioService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly tipoCambio?: TipoCambioService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async findAllMateriasPrimas(
@@ -159,6 +163,7 @@ export class InventarioService {
   }
 
   async createMateriaPrima(auth: CurrentAuth, payload: UpsertMateriaPrimaDto) {
+    await this.capacidades.exigir(auth.tenantId, 'materiales');
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const normalized = this.normalizePayload({
       ...payload,
@@ -280,6 +285,7 @@ export class InventarioService {
     id: string,
     payload: UpsertMateriaPrimaDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'materiales');
     const previous = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     const normalized = this.normalizePayload({
@@ -463,6 +469,7 @@ export class InventarioService {
   }
 
   async toggleMateriaPrima(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'materiales');
     const item = await this.findMateriaPrimaOrThrow(auth, id, this.prisma);
 
     await this.prisma.materiaPrima.update({
@@ -481,6 +488,7 @@ export class InventarioService {
     varianteId: string,
     payload: UpdateVariantePrecioReferenciaDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'materiales');
     await this.findVarianteOrThrow(auth, varianteId, this.prisma);
     if (payload.moneda) this.validarMoneda(payload.moneda);
 
@@ -520,6 +528,7 @@ export class InventarioService {
    * costos" que carga precios de muchos materiales sin entrar uno por uno.
    */
   async bulkUpdateCostos(auth: CurrentAuth, payload: BulkUpdateCostosDto) {
+    await this.capacidades.exigir(auth.tenantId, 'materiales');
     const variantes = payload.variantes ?? [];
     variantes.forEach((v) => {
       if (v.moneda) this.validarMoneda(v.moneda);
@@ -783,6 +792,7 @@ export class InventarioService {
   }
 
   async createAlmacen(auth: CurrentAuth, payload: UpsertAlmacenDto) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     const normalized = this.normalizeAlmacenPayload(payload);
 
     try {
@@ -822,6 +832,7 @@ export class InventarioService {
     id: string,
     payload: UpsertAlmacenDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     await this.findAlmacenOrThrow(auth, id, this.prisma);
     const normalized = this.normalizeAlmacenPayload(payload);
 
@@ -841,6 +852,7 @@ export class InventarioService {
   }
 
   async toggleAlmacen(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     const current = await this.findAlmacenOrThrow(auth, id, this.prisma);
 
     return this.prisma.almacenMateriaPrima.update({
@@ -879,6 +891,7 @@ export class InventarioService {
     almacenId: string,
     payload: UpsertUbicacionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     await this.findAlmacenOrThrow(auth, almacenId, this.prisma);
     const normalized = this.normalizeUbicacionPayload(payload);
 
@@ -903,6 +916,7 @@ export class InventarioService {
     id: string,
     payload: UpsertUbicacionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     await this.findUbicacionOrThrow(auth, id, this.prisma);
     const normalized = this.normalizeUbicacionPayload(payload);
 
@@ -922,6 +936,7 @@ export class InventarioService {
   }
 
   async toggleUbicacion(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     const current = await this.findUbicacionOrThrow(auth, id, this.prisma);
     return this.prisma.almacenMateriaPrimaUbicacion.update({
       where: { id },
@@ -935,6 +950,7 @@ export class InventarioService {
     auth: CurrentAuth,
     payload: RegistrarMovimientoStockDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     if (!this.isSupportedSimpleMovement(payload.tipo)) {
       throw new BadRequestException(
         'Tipo de movimiento no soportado por este endpoint.',
@@ -951,9 +967,12 @@ export class InventarioService {
         ? await this.tipoCambio.resolver(auth.tenantId, auth.userId)
         : null;
 
-    return this.prisma.$transaction((tx) =>
-      this.registrarMovimientoTx(tx, auth, payload, cambioStock),
-    );
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'existencias',
+      ]);
+      return this.registrarMovimientoTx(tx, auth, payload, cambioStock);
+    });
   }
 
   /** Reutilizable por consumo y futuras recepciones: conserva la transacción del llamador. */
@@ -1211,11 +1230,15 @@ export class InventarioService {
     auth: CurrentAuth,
     payload: RegistrarTransferenciaStockDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'existencias');
     if (payload.ubicacionOrigenId === payload.ubicacionDestinoId) {
       throw new BadRequestException('Origen y destino deben ser distintos.');
     }
 
     return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'existencias',
+      ]);
       await bloquearVariantesStock(tx, auth.tenantId, [payload.varianteId]);
       const qtyTransfer = this.roundToScale(payload.cantidad, 8);
       const cantidad = this.toDecimal(qtyTransfer);
@@ -1861,9 +1884,16 @@ export class InventarioService {
       where: { tenantId: auth.tenantId, varianteId },
     });
     const compras = await db.lineaOrdenCompra.count({
-      where: { tenantId: auth.tenantId, varianteId, orden: { estado: { in: ['BORRADOR', 'EMITIDA', 'PARCIAL'] } } },
+      where: {
+        tenantId: auth.tenantId,
+        varianteId,
+        orden: { estado: { in: ['BORRADOR', 'EMITIDA', 'PARCIAL'] } },
+      },
     });
-    if (compras > 0) throw new BadRequestException('Esta variante tiene compras abiertas. Resolvelas antes de cambiar su unidad de stock.');
+    if (compras > 0)
+      throw new BadRequestException(
+        'Esta variante tiene compras abiertas. Resolvelas antes de cambiar su unidad de stock.',
+      );
     if (movements > 0 || balance || necesidades > 0)
       throw new BadRequestException(
         movements > 0 || balance

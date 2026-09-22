@@ -5,6 +5,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   MaxLength,
   MinLength,
@@ -30,8 +31,12 @@ export class IniciarRegistroDto {
   password!: string;
 
   @IsString()
-  @IsIn(['taller', 'estudio'])
+  @Length(1, 80)
   planCodigo!: string;
+
+  @IsOptional()
+  @IsUUID()
+  ofertaId?: string;
 
   @IsString()
   @IsIn(PAISES_LATAM as unknown as string[], {

@@ -33,7 +33,18 @@ const findFirst = jest.fn<Promise<typeof orden | null>, [Consulta]>();
 const logoDataUri = jest.fn().mockResolvedValue(null);
 const service = (config: Record<string, string> = {}) =>
   new ImpresionService(
-    { ordenTrabajo: { findFirst } } as unknown as PrismaService,
+    {
+      ordenTrabajo: { findFirst },
+      tenant: {
+        findUnique: () => Promise.resolve({
+          activo: true,
+          suscripcion: {
+            estado: 'activa',
+            plan: { featuresJson: { impresionDirecta: true } },
+          },
+        }),
+      },
+    } as unknown as PrismaService,
     { logoDataUri } as unknown as ArchivosService,
     { get: (key: string) => config[key] } as ConfigService,
   );

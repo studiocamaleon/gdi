@@ -51,7 +51,9 @@ export function PrevisionMaterialesPanel({
                   : data?.estado === "disponible"
                     ? data.modoReserva === "AL_EMITIR"
                       ? "El stock libre alcanza para esta cotización. Se volverá a verificar y reservar al emitir."
-                      : "El stock libre alcanza para esta cotización. El control de esta empresa usa reservas manuales."
+                      : data.modoReserva === "MANUAL"
+                        ? "El stock libre alcanza para esta cotización. El control de esta empresa usa reservas manuales."
+                        : "El stock libre alcanza para esta cotización. Esta consulta no reserva materiales."
                     : data?.estado === "por_confirmar"
                       ? "Podés cotizar. Antes de comprometer la entrega, confirmá la reposición de los faltantes."
                       : `Materiales previstos para el ${fecha(data?.disponibleDesde ?? "")}. ${entregasDistribuidas ? "Revisá las fechas de las entregas distribuidas teniendo en cuenta esta reposición." : "La entrega sugerida incluye esta espera y la producción."}`)}

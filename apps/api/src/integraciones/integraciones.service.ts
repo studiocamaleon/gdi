@@ -7,6 +7,8 @@ import {
   ProveedorIntegracion,
 } from '@prisma/client';
 import QRCode from 'qrcode';
+import { randomUUID } from 'node:crypto';
+import { ESTADOS } from './notificaciones/estados';
 
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -75,8 +77,9 @@ export class IntegracionesService {
     private readonly secretos: SecretosService,
     private readonly wati: WatiClient,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
-    private readonly capacidades: CapacidadesEmpresaService =
-      new CapacidadesEmpresaService(prisma),
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /** ¿Se pueden guardar credenciales en este entorno? */
@@ -196,6 +199,20 @@ export class IntegracionesService {
    * pasara. La fila se conserva sólo para recordar que estuvo conectada.
    */
   async desconectar(proveedor: ProveedorIntegracion): Promise<void> {
+    // La ruta genérica también puede recibir AFIP. Debe coordinarse con la
+    // activación específica y conservar el chequeo, igual que /afip/desactivar.
+    if (proveedor === ProveedorIntegracion.AFIP) {
+      const tenantId = getCurrentTenantId();
+      if (!tenantId) throw new NotFoundException('No se encontró la empresa.');
+      await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
+        await tx.integracionTenant.updateMany({
+          where: { tenantId, proveedor },
+          data: { estado: EstadoIntegracion.DESCONECTADA, conectadaEl: null },
+        });
+      });
+      return;
+    }
     const fila = await this.prisma.integracionTenant.findFirst({
       where: { proveedor },
     });
@@ -428,6 +445,7 @@ export class IntegracionesService {
     telefono?: string;
     motivo?: string;
     parametros?: Record<string, string>;
+    incierto?: boolean;
   }> {
     await this.capacidades.exigir(
       getCurrentTenantId() ?? '',
@@ -470,17 +488,101 @@ export class IntegracionesService {
     // un número propio y se mira si llega el QR real o la muestra.
     const mediaHeaderUrl = await this.mediaHeaderDe(dto.plantilla, parametros);
 
-    const res = await this.wati.enviarPlantilla(cred, {
-      telefono: tel.e164,
-      plantilla: plantilla.nombre,
-      parametros,
-      broadcastName: `grafo_prueba_${plantilla.nombre}`,
-      mediaHeaderUrl,
+    const tenantId = getCurrentTenantId() ?? '';
+    const aviso = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        tenantId,
+        ['whatsapp_automatico'],
+        ['whatsapp_automatico'],
+      );
+      return tx.notificacionWhatsapp.create({
+        data: {
+          tenantId,
+          evento: 'prueba_wati',
+          canal: 'WATI',
+          claveUnica: `prueba_wati:${randomUUID()}`,
+          telefono: tel.e164,
+          plantilla: plantilla.nombre,
+          parametros: dto.parametros,
+          estado: ESTADOS.enviando,
+          reservadaEl: new Date(),
+          reservaToken: randomUUID(),
+          intentos: 1,
+        },
+      });
     });
+    let res: Awaited<ReturnType<WatiClient['enviarPlantilla']>>;
+    try {
+      res = await this.wati.enviarPlantilla(cred, {
+        telefono: tel.e164,
+        plantilla: plantilla.nombre,
+        parametros,
+        broadcastName: `grafo_prueba_${plantilla.nombre}`,
+        mediaHeaderUrl,
+      });
+
+      await this.prisma.notificacionWhatsapp.updateMany({
+        where: {
+          id: aviso.id,
+          tenantId,
+          reservaToken: aviso.reservaToken,
+          estado: { in: [ESTADOS.enviando, ESTADOS.incierta] },
+        },
+        data: {
+          estado: res.ok
+            ? ESTADOS.enviada
+            : res.incierto
+              ? ESTADOS.incierta
+              : ESTADOS.fallida,
+          enviadaEl: res.ok ? new Date() : null,
+          reservadaEl: null,
+          motivo: res.ok ? null : res.motivo,
+        },
+      });
+    } catch {
+      try {
+        await this.prisma.notificacionWhatsapp.updateMany({
+          where: {
+            id: aviso.id,
+            tenantId,
+            reservaToken: aviso.reservaToken,
+            estado: ESTADOS.enviando,
+          },
+          data: {
+            estado: ESTADOS.incierta,
+            motivo:
+              'No se pudo guardar la confirmación del envío de prueba. Revisá Wati antes de resolverlo.',
+          },
+        });
+      } catch {
+        this.logger.error(
+          `No se pudo guardar el resultado del aviso de prueba ${aviso.id}.`,
+        );
+      }
+      this.logger.warn(
+        `Resultado sin confirmar del aviso de prueba ${aviso.id}.`,
+      );
+      return {
+        ok: false,
+        incierto: true,
+        telefono: tel.e164,
+        motivo:
+          'No se pudo confirmar el envío. Revisá Wati y resolvelo en el historial de avisos antes de intentar otra prueba.',
+      };
+    }
 
     return res.ok
       ? { ok: true, telefono: tel.e164, parametros }
-      : { ok: false, telefono: tel.e164, motivo: res.motivo, parametros };
+      : {
+          ok: false,
+          telefono: tel.e164,
+          motivo: res.incierto
+            ? `${res.motivo} Revisá Wati y el historial de avisos antes de intentar otra prueba.`
+            : res.motivo,
+          parametros,
+          incierto: res.incierto,
+        };
   }
 
   /**
@@ -493,7 +595,8 @@ export class IntegracionesService {
         getCurrentTenantId() ?? '',
         'whatsapp_automatico',
       ))
-    ) return null;
+    )
+      return null;
     const fila = await this.prisma.integracionTenant.findFirst({
       where: {
         proveedor: ProveedorIntegracion.WATI,

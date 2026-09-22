@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { MembershipRole } from "@/lib/auth";
 import type { PresupuestoDetalle } from "@/lib/presupuestos-api";
 import { PresupuestoDetalleView } from "./presupuesto-detalle-view";
+import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
+import { OrdenSaveActions } from "./orden-resumen-financiero";
+import { funcionesCompatibles } from "@/lib/capacidades";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -77,6 +80,51 @@ const button = (html: string, label: string) =>
   )?.[0];
 
 describe("acciones y datos de la ficha de presupuesto", () => {
+  const sinFunciones = (props: Partial<PresupuestoDetalle> = {}) =>
+    renderToStaticMarkup(
+      <CapacidadesProvider capacidades={{ funciones: {
+        ...funcionesCompatibles, presupuestos: false, ordenes: false,
+        aprobacion_presupuestos: false, documentos_pdf: false,
+      } }}>
+        <PresupuestoDetalleView inicial={{ ...inicial, ...props }} rol="administrador" />
+      </CapacidadesProvider>,
+    );
+
+  it("preserva decisiones y enlaces previos al retirar la función; no ofrece generar PDF", () => {
+    const html = sinFunciones({ pdfDisponible: false });
+    expect(button(html, "Registrar aprobación")).not.toContain("disabled");
+    expect(html).toContain("Copiar link");
+    expect(html).not.toContain("/presupuesto-1/pdf");
+    expect(html).toContain("Producto de prueba");
+  });
+
+  it("permite descargar un PDF guardado aunque la generación esté excluida", () => {
+    expect(sinFunciones({ pdfDisponible: true })).toContain("/presupuesto-1/pdf");
+  });
+
+  it("deshabilita emisión y conversión pero conserva la consulta", () => {
+    expect(button(sinFunciones({ estado: "borrador" }), "Enviar al cliente")).toContain("disabled");
+    expect(button(sinFunciones({ estado: "aprobado" }), "Convertir en orden")).toContain("disabled");
+  });
+
+  it("sin enlace público explica cómo registrar la decisión por otro canal", () => {
+    const html = sinFunciones({ publicToken: null });
+    expect(html).toContain("Registrá la respuesta que recibiste del cliente.");
+    expect(html).not.toContain("Compartile el link");
+  });
+
+  it.each(["orden", "presupuesto"] as const)("protege la acción comercial %s desde la cabecera", (tipo) => {
+    const html = renderToStaticMarkup(
+      <CapacidadesProvider capacidades={{ funciones: {
+        ...funcionesCompatibles, [tipo === "orden" ? "ordenes" : "presupuestos"]: false,
+      } }}>
+        <OrdenSaveActions tipo={tipo} empty={false} clienteSeleccionado />
+      </CapacidadesProvider>,
+    );
+    expect(button(html, tipo === "orden" ? "Emitir OT" : "Emitir presupuesto")).toContain("disabled");
+    if (tipo === "orden") expect(button(html, "Guardar borrador")).toContain("disabled");
+  });
+
   it("ofrece una única descarga con preparación asíncrona", () => {
     const html = render();
     expect(html).not.toContain("PDF piloto");

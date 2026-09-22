@@ -48,17 +48,17 @@ const planes: PlanRegistro[] = [
 ];
 
 describe("Formulario de registro con el catálogo real", () => {
-  it("usa importes de la API, códigos estables y una consulta para Industrial", () => {
+  it("usa importes de la API, códigos estables y una consulta para planes a medida", () => {
     const html = renderToStaticMarkup(<RegistroForm planes={planes} />);
-    expect(html).toContain('aria-label="Plan Print"');
-    expect(html).toContain('aria-label="Plan Sign"');
+    expect(html).toContain('aria-label="Plan Taller"');
+    expect(html).toContain('aria-label="Plan Producción"');
     expect(html).toContain('value="taller"');
     expect(html).toContain(">219<");
     expect(html).toContain(">329<");
     expect(html).not.toContain(">190<");
     expect(html).not.toContain('value="diamante"');
     expect(html).toContain(
-      "mailto:soporte@grafoprint.com.ar?subject=Plan%20Industrial",
+      "mailto:soporte@grafoprint.com.ar?subject=Plan%20Enterprise",
     );
     expect(html).not.toContain("−20%");
   });

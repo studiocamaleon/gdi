@@ -1,3 +1,4 @@
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { comprasPorNecesidad } from '../compras/cobertura-compra';
 import {
   BadRequestException,
@@ -55,7 +56,12 @@ export class ReservasMaterialService {
 
   async guardarPolitica(tenantId: string, data: PoliticaReservasDto) {
     return this.prisma.$transaction(async (tx) => {
-      await this.capacidades.exigir(tenantId, 'reservas', tx);
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        tenantId,
+        ['reservas', 'existencias'],
+        data.habilitada ? ['reservas', 'existencias'] : [],
+      );
       // Serializa también la primera activación (todavía no existe la fila).
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`politica-reservas:${tenantId}`}, 0))::text`;
       await tx.$queryRaw`SELECT "tenantId" FROM "PoliticaReservasMaterial" WHERE "tenantId"=${tenantId}::uuid FOR UPDATE`;
@@ -367,11 +373,16 @@ export class ReservasMaterialService {
     ordenId: string,
     opciones: { alEmitir?: boolean; auth?: CurrentAuth } = {},
   ) {
+    // El llamador toma este mismo lock antes de cualquier escritura/lock de OT.
+    await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
     const control = await tx.ordenTrabajo.findFirst({
       where: { tenantId, id: ordenId },
       select: { materialesControlados: true },
     });
-    if (!(await this.capacidades.incluida(tenantId, 'reservas', tx))) {
+    if (
+      !(await this.capacidades.incluida(tenantId, 'reservas', tx)) ||
+      !(await this.capacidades.incluida(tenantId, 'existencias', tx))
+    ) {
       if (control?.materialesControlados)
         throw new ConflictException(
           'La orden tiene control de materiales previo. Resolvé su continuidad antes de modificarla con un plan sin reservas.',
@@ -395,6 +406,10 @@ export class ReservasMaterialService {
       return;
     const politica = await this.politicaTx(tx, tenantId);
     if (!orden.materialesControlados && !politica.habilitada) return;
+    await exigirContinuidadCompromiso(tx, tenantId, [
+      'reservas',
+      'existencias',
+    ]);
     await this.reconciliar(
       tx,
       tenantId,
@@ -433,12 +448,41 @@ export class ReservasMaterialService {
     );
   }
 
+  async exigirReaperturaTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    ordenId: string,
+  ) {
+    await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
+    const pendientes = await tx.necesidadMaterialOt.count({
+      where: {
+        tenantId,
+        ordenId,
+        estado: { not: 'CANCELADA' },
+        cantidad: { gt: tx.necesidadMaterialOt.fields.consumida },
+      },
+    });
+    if (pendientes) {
+      await this.capacidades.exigirTodas(
+        tenantId,
+        ['reservas', 'existencias'],
+        tx,
+      );
+      await exigirContinuidadCompromiso(tx, tenantId, [
+        'reservas',
+        'existencias',
+      ]);
+    }
+  }
+
   async cancelarOrdenTx(
     tx: Prisma.TransactionClient,
     tenantId: string,
     ordenId: string,
     auth?: CurrentAuth,
   ) {
+    // El llamador toma este mismo lock antes de cualquier escritura/lock de OT.
+    await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
     await this.bloquearOrden(tx, tenantId, ordenId);
     const needs = await tx.necesidadMaterialOt.findMany({
       where: { tenantId, ordenId },
@@ -493,7 +537,12 @@ export class ReservasMaterialService {
       .digest('hex');
     return this.prisma.$transaction(
       async (tx) => {
-        await this.capacidades.exigir(tenantId, 'reservas', tx);
+        const cierre = ['consumir', 'liberar'].includes(comando.accion);
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          tenantId,
+          cierre ? ['identidad'] : ['reservas', 'existencias'],
+        );
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`operacion-reserva:${tenantId}:${comando.clave}`}, 0))::text`;
         await this.bloquearOrden(tx, tenantId, ordenId);
         const anterior = await tx.operacionReservasMaterial.findUnique({
@@ -506,11 +555,23 @@ export class ReservasMaterialService {
             );
           return { ok: true, repetida: true };
         }
+        if (!cierre)
+          await exigirContinuidadCompromiso(tx, tenantId, [
+            'reservas',
+            'existencias',
+          ]);
         const { orden, materiales } = await leerMaterialesOrden(
           tx,
           tenantId,
           ordenId,
         );
+        // Consumir/liberar cierra necesidades existentes; no descubre ni reserva
+        // materiales nuevos como efecto secundario, incluso si el plan los incluye.
+        const soloContinuidad = cierre;
+        if (soloContinuidad && !orden.materialesControlados)
+          throw new ConflictException(
+            'Sólo se pueden cerrar reservas existentes con el plan actual.',
+          );
         if (comando.revision !== materiales.revision)
           throw new ConflictException(
             'La OT cambió. Actualizá los materiales antes de continuar.',
@@ -527,20 +588,22 @@ export class ReservasMaterialService {
             'El control se inicia en órdenes pendientes o en producción.',
           );
         const politica = await this.politicaTx(tx, tenantId);
-        if (!politica.habilitada)
+        if (!politica.habilitada && !cierre)
           throw new ConflictException(
             'Activá las reservas por OT en Stock antes de continuar.',
           );
-        await this.reconciliar(
-          tx,
-          tenantId,
-          materiales,
-          politica.incluirConsumibles,
-        );
-        await tx.ordenTrabajo.update({
-          where: { id: ordenId },
-          data: { materialesControlados: true },
-        });
+        if (!soloContinuidad) {
+          await this.reconciliar(
+            tx,
+            tenantId,
+            materiales,
+            politica.incluirConsumibles,
+          );
+          await tx.ordenTrabajo.update({
+            where: { id: ordenId },
+            data: { materialesControlados: true },
+          });
+        }
         const necesidades = await tx.necesidadMaterialOt.findMany({
           where: {
             tenantId,
@@ -548,6 +611,12 @@ export class ReservasMaterialService {
             ...(comando.varianteId ? { varianteId: comando.varianteId } : {}),
           },
         });
+        if (cierre)
+          await bloquearVariantesStock(
+            tx,
+            tenantId,
+            necesidades.map((n) => n.varianteId),
+          );
         if (
           comando.varianteId &&
           (!necesidades.length ||

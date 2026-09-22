@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import Link from "next/link";
@@ -246,6 +247,7 @@ function AgingModal({
 }
 
 export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
+  const conPdf = useCapacidad("documentos_pdf");
   const fmt = useFmt();
   const theme = useDesignTheme();
   const scope = useDesignScope();
@@ -290,7 +292,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
           </div>
         </div>
         <div className={styles.actions}>
-          <ActionLink
+          {conPdf && <ActionLink
             href={`/api/backend/administracion/clientes/${cc.cliente.id}/cuenta-corriente/pdf`}
             prefetch={false}
             target="_blank"
@@ -299,7 +301,7 @@ export function CuentaCorrienteView({ cc }: { cc: CuentaCorriente }) {
           >
             <FileTextIcon />
             Estado de cuenta PDF
-          </ActionLink>
+          </ActionLink>}
           <ActionLink
             href={`/administracion/cobros/nuevo?clienteId=${cc.cliente.id}`}
             prefetch={false}

@@ -1,3 +1,5 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { capacidadesCargaCopiado } from '../suscripciones/capacidades-copiado';
 import { CentroCopiadoCadService } from './centro-copiado-cad.service';
 import { errorMedidasDocumento } from '../common/medidas-documento';
 import { errorCopiasPorPagina } from '../common/copias-paginas-cad';
@@ -324,9 +326,16 @@ export class CentroCopiadoService {
     private readonly auditoria?: CentroCopiadoAuditoriaService,
     private readonly idempotencia?: CentroCopiadoIdempotenciaService,
     private readonly cad?: CentroCopiadoCadService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
-  opcionesCad(tenantId: string) {
+  async opcionesCad(tenantId: string) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'centro_copiado',
+      'cotizacion_cad',
+    ]);
     return this.cad!.opciones(tenantId);
   }
 
@@ -356,6 +365,11 @@ export class CentroCopiadoService {
     /** El tenant tiene el módulo activo. */
     activo: boolean;
   }> {
+    await this.capacidades.exigirIncluida(tenantId, 'centro_copiado');
+    const conTerminaciones = await this.capacidades.incluida(
+      tenantId,
+      'terminaciones_copiado',
+    );
     const ctx = await this.contexto(tenantId);
     const config = await this.configDe(tenantId);
     // La config es CURACIÓN opcional: papelesJson null = todos los papeles; si
@@ -408,8 +422,11 @@ export class CentroCopiadoService {
       terminaciones: (
         (config.terminacionesJson as string[] | null) ??
         TERMINACIONES_DISPONIBLES
-      ).filter((t) => t !== 'Anillado' || !!ctx.anilladoConfigPasoId),
-      tiposAnillo,
+      ).filter(
+        (t) =>
+          conTerminaciones && (t !== 'Anillado' || !!ctx.anilladoConfigPasoId),
+      ),
+      tiposAnillo: conTerminaciones ? tiposAnillo : [],
       tamanosOfrecidos: (config.tamanosJson as string[] | null) ?? null,
       activo: config.activo,
     };
@@ -464,6 +481,7 @@ export class CentroCopiadoService {
 
   /** Mutación explícita para tenants que aún no tienen la plantilla técnica. */
   async inicializar(tenantId: string, actorUserId?: string) {
+    await this.capacidades.exigir(tenantId, 'centro_copiado');
     return this.actualizarConfig(tenantId, {}, actorUserId);
   }
 
@@ -472,6 +490,7 @@ export class CentroCopiadoService {
    * persistida. Es una mutación explícita; los endpoints GET siguen siendo puros.
    */
   async reparar(tenantId: string, actorUserId?: string) {
+    await this.capacidades.exigir(tenantId, 'centro_copiado');
     await provisionarPlantillaCentroCopiado(this.prisma, tenantId);
     const config = await this.configDe(tenantId);
     await this.prisma.$transaction(async (tx) => {
@@ -793,6 +812,18 @@ export class CentroCopiadoService {
     dto: ActualizarCentroCopiadoConfigDto,
     actorUserId?: string,
   ) {
+    await this.capacidades.exigir(tenantId, 'centro_copiado');
+    if (
+      [
+        dto.terminaciones,
+        dto.tiposAnillo,
+        dto.maquinaAnilladoraId,
+        dto.tapaFrontalMateriaPrimaId,
+        dto.tapaContratapaMateriaPrimaId,
+      ].some((v) => v !== undefined)
+    )
+      await this.capacidades.exigir(tenantId, 'terminaciones_copiado');
+
     await this.validarActualizacionConfig(tenantId, dto);
     // El producto y su ruta son infraestructura del módulo. Se provisionan
     // antes del commit de configuración; desde este punto, config + margen +
@@ -1909,6 +1940,7 @@ export class CentroCopiadoService {
     /** Período de tarifas; null = mes actual (lo usa el endpoint en vivo). */
     periodo: string | null = null,
   ): Promise<CotizarCentroCopiadoResultado> {
+    await this.capacidades.exigirTodas(tenantId, capacidadesCargaCopiado(dto));
     if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
       return this.motor.conTipoCambio(
         tenantId,
@@ -2035,6 +2067,7 @@ export class CentroCopiadoService {
     dto: AgregarAOrdenCentroCopiadoDto,
     periodo: string | null = null,
   ): Promise<AgregarAOrdenResultado> {
+    await this.capacidades.exigirTodas(tenantId, capacidadesCargaCopiado(dto));
     if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
       return this.motor.conTipoCambio(
         tenantId,
@@ -2427,6 +2460,7 @@ export class CentroCopiadoService {
     dto: AgregarAOrdenCentroCopiadoDto,
     periodo: string | null = null,
   ): Promise<ConstruirItemsResultado> {
+    await this.capacidades.exigirTodas(tenantId, capacidadesCargaCopiado(dto));
     if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
       return this.motor.conTipoCambio(
         tenantId,
@@ -2980,6 +3014,10 @@ export class CentroCopiadoService {
     total: number;
     error: string | null;
   }> {
+    await this.capacidades.exigirTodas(tenantId, [
+      ...capacidadesCargaCopiado(dto),
+      'terminaciones_copiado',
+    ]);
     if (!monedaCotizacionContext.getStore() && this.motor.usaTipoCambio)
       return this.motor.conTipoCambio(
         tenantId,
@@ -3044,6 +3082,11 @@ export class CentroCopiadoService {
     }
     const desg = a.base.desglosePrecio;
     const persistido = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, tenantId, [
+        'cotizacion',
+        ...capacidadesCargaCopiado(dto),
+        'terminaciones_copiado',
+      ]);
       let cotizacionId = dto.cotizacionId;
       if (cotizacionId) {
         const existente = await tx.cotizacion.findFirst({

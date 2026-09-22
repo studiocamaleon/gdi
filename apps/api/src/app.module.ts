@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from './suscripciones/capacidades-empresa.module';
 import { ComprasModule } from './compras/compras.module';
 import { ImpresionModule } from './impresion/impresion.module';
 import { PlanificacionEntregasModule } from './planificacion-entregas/planificacion.module';
@@ -62,6 +63,7 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
 
 @Module({
   imports: [
+    CapacidadesEmpresaModule,
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     LoggerModule.forRoot({

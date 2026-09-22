@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import type { SeleccionCad } from "../../../apps/api/src/common/seleccion-cad";
 
 import { useMotorConTipoCambio } from "./tipo-cambio-documento";
@@ -323,6 +324,9 @@ function CentroCopiadoContenido({
   clienteId,
   editItems,
 }: Props) {
+  const conCopiado = useCapacidad("centro_copiado");
+  const conCad = useCapacidad("cotizacion_cad");
+  const conTerminaciones = useCapacidad("terminaciones_copiado");
   const { cotizarCentroCopiado, construirItemsCentroCopiado } =
     useMotorConTipoCambio();
   const [perfilesCad, setPerfilesCad] = React.useState<PerfilCadCopiado[]>([]);
@@ -390,6 +394,15 @@ function CentroCopiadoContenido({
     ) ?? perfilCadPreferido(perfilesCad, cadDefaults.color);
   const [docs, setDocs] = React.useState<DocRow[]>([]);
   const [grupos, setGrupos] = React.useState<Record<string, GrupoState>>({});
+  const errorPlan = !conCopiado
+    ? "El Centro de copiado no está incluido en el plan. Los documentos guardados se conservan."
+    : !conCad && docs.some((d) => d.modo === "CAD")
+      ? "Esta carga contiene planos CAD, una función no incluida en el plan. Los archivos guardados se conservan; no se modificará la carga."
+      : !conTerminaciones &&
+          (Object.keys(grupos).length > 0 ||
+            docs.some((d) => d.grupoId || d.terminaciones.length > 0))
+        ? "Esta carga contiene terminaciones o tomos, una función no incluida en el plan. Se conserva su configuración; no se modificará la carga."
+        : null;
   // Terminaciones (pasos opcionales) disponibles; las trae el backend.
   const [terminacionesDisp, setTerminacionesDisp] = React.useState<string[]>(
     [],
@@ -415,15 +428,15 @@ function CentroCopiadoContenido({
 
   // Cargar opciones (papeles) al abrir.
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || !conCopiado) return;
     let vivo = true;
     setCargandoHojas(true);
     void opcionesCentroCopiado()
       .then((o) => {
         if (!vivo) return;
         setPapeles(o.papeles);
-        setTerminacionesDisp(o.terminaciones ?? []);
-        setTiposAnilloDisp(o.tiposAnillo ?? []);
+        setTerminacionesDisp(conTerminaciones ? (o.terminaciones ?? []) : []);
+        setTiposAnilloDisp(conTerminaciones ? (o.tiposAnillo ?? []) : []);
         setTamanosOfrecidos(o.tamanosOfrecidos ?? null);
         if (o.papelDefaultId) {
           const tipo = o.papeles.find(
@@ -469,10 +482,10 @@ function CentroCopiadoContenido({
     return () => {
       vivo = false;
     };
-  }, [open]);
+  }, [open, conCopiado, conTerminaciones]);
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || !conCopiado || !conCad) return;
     let vivo = true;
     setCargandoCad(true);
     setErrorPerfilesCad("");
@@ -496,7 +509,7 @@ function CentroCopiadoContenido({
     return () => {
       vivo = false;
     };
-  }, [open]);
+  }, [open, conCopiado, conCad]);
 
   const formatosHojas = React.useMemo(
     () =>
@@ -651,6 +664,10 @@ function CentroCopiadoContenido({
     setPreviewError(null);
     setCotizando(false);
     if (!open) return;
+    if (errorPlan) {
+      setPreviewError(errorPlan);
+      return;
+    }
     if (docs.length === 0) {
       setPreview(null);
       return;
@@ -711,7 +728,7 @@ function CentroCopiadoContenido({
         });
     }, 350);
     return () => clearTimeout(handle);
-  }, [open, docs, grupos, clienteId, cotizarCentroCopiado]);
+  }, [open, docs, grupos, clienteId, cotizarCentroCopiado, errorPlan]);
 
   const agregarDocs = React.useCallback(
     (
@@ -724,13 +741,19 @@ function CentroCopiadoContenido({
         file?: File | null;
       }[],
     ) => {
-      const filas: DocRow[] = nuevos.map((n) => {
+      const filas: DocRow[] = nuevos.flatMap((n): DocRow[] => {
         const esCad =
           n.paginasAuto &&
           !!n.medidasPaginas?.length &&
           (tab === "CAD" ||
             (formatosHojas.length > 0 &&
               sugerirCad(n.medidasPaginas, formatosHojas)));
+        if (esCad && !conCad) {
+          toast.error(
+            `${n.nombre}: el tamaño corresponde a Planos CAD, que no está incluido en el plan. No se agregó ni se redujo el archivo.`,
+          );
+          return [];
+        }
         const base: DocRow = {
           id: nextId(),
           modo: "HOJAS",
@@ -747,17 +770,19 @@ function CentroCopiadoContenido({
           file: n.file ?? null,
           grupoId: null,
         };
-        if (!esCad) return base;
+        if (!esCad) return [base];
         const perfil =
           tab === "CAD"
             ? perfilCadDefault
             : perfilCadPreferido(perfilesCad, defaults.color);
-        return {
-          ...base,
-          color: tab === "CAD" ? cadDefaults.color : defaults.color,
-          copias: tab === "CAD" ? cadDefaults.copias : defaults.copias,
-          ...aplicarPerfilCad(base, perfil),
-        };
+        return [
+          {
+            ...base,
+            color: tab === "CAD" ? cadDefaults.color : defaults.color,
+            copias: tab === "CAD" ? cadDefaults.copias : defaults.copias,
+            ...aplicarPerfilCad(base, perfil),
+          },
+        ];
       });
       setDocs((prev) => [...prev, ...filas]);
       const cad = filas.filter((d) => d.modo === "CAD").length;
@@ -768,7 +793,15 @@ function CentroCopiadoContenido({
         if (cad === filas.length) setTab("CAD");
       }
     },
-    [defaults, tab, formatosHojas, perfilesCad, perfilCadDefault, cadDefaults],
+    [
+      defaults,
+      tab,
+      formatosHojas,
+      perfilesCad,
+      perfilCadDefault,
+      cadDefaults,
+      conCad,
+    ],
   );
 
   const onArchivos = React.useCallback(
@@ -869,6 +902,7 @@ function CentroCopiadoContenido({
     setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
   const cambiarModo = (d: DocRow, modo: DocRow["modo"]) => {
+    if (modo === "CAD" && !conCad) return;
     if (modo === "HOJAS" && d.copiasPorPagina) return;
     setTab(modo);
     if (modo === "CAD") {
@@ -955,7 +989,11 @@ function CentroCopiadoContenido({
   };
 
   const anillarJuntos = React.useCallback(() => {
-    if (sel.size < 2 || docs.some((d) => sel.has(d.id) && d.modo === "CAD"))
+    if (
+      !conTerminaciones ||
+      sel.size < 2 ||
+      docs.some((d) => sel.has(d.id) && d.modo === "CAD")
+    )
       return;
     const gid = `g${Date.now().toString(36)}`;
     // Un tomo nace Anillado (si el backend lo ofrece); el usuario puede cambiarlo.
@@ -973,7 +1011,7 @@ function CentroCopiadoContenido({
       prev.map((d) => (sel.has(d.id) ? { ...d, grupoId: gid } : d)),
     );
     setSel(new Set());
-  }, [sel, docs, terminacionesDisp, tiposAnilloDisp]);
+  }, [sel, docs, terminacionesDisp, tiposAnilloDisp, conTerminaciones]);
 
   const desagrupar = (gid: string) => {
     setDocs((prev) =>
@@ -1024,6 +1062,10 @@ function CentroCopiadoContenido({
     });
 
   const agregar = React.useCallback(async () => {
+    if (errorPlan) {
+      toast.error(errorPlan);
+      return;
+    }
     if (docs.length === 0) return;
     if (guardando || leyendo) return;
     if (docs.some((d) => seleccionDe(d).error || faltaConfiguracion(d))) {
@@ -1105,6 +1147,7 @@ function CentroCopiadoContenido({
   }, [
     docs,
     grupos,
+    errorPlan,
     clienteId,
     onAgregar,
     onOpenChange,
@@ -1215,7 +1258,7 @@ function CentroCopiadoContenido({
                 type="checkbox"
                 className={s.chk}
                 checked={sel.has(d.id)}
-                disabled={esCad}
+                disabled={esCad || !conTerminaciones}
                 onChange={() => toggleSel(d.id)}
                 aria-label={`Seleccionar ${nombre}`}
               />
@@ -1578,22 +1621,25 @@ function CentroCopiadoContenido({
                   </ActionButton>
                 </div>
               )}
-              {opciones && !enGrupo && !!d.medidasPaginas?.length && (
-                <div className={s.moverArchivo}>
-                  <ActionButton
-                    variant="tertiary"
-                    onPress={() => cambiarModo(d, esCad ? "HOJAS" : "CAD")}
-                    isDisabled={desglosado}
-                    title={
-                      desglosado
-                        ? "Unificá las copias antes de mover a Documentos."
-                        : undefined
-                    }
-                  >
-                    {esCad ? "Mover a Documentos" : "Mover a Planos CAD"}
-                  </ActionButton>
-                </div>
-              )}
+              {opciones &&
+                !enGrupo &&
+                (esCad || conCad) &&
+                !!d.medidasPaginas?.length && (
+                  <div className={s.moverArchivo}>
+                    <ActionButton
+                      variant="tertiary"
+                      onPress={() => cambiarModo(d, esCad ? "HOJAS" : "CAD")}
+                      isDisabled={desglosado}
+                      title={
+                        desglosado
+                          ? "Unificá las copias antes de mover a Documentos."
+                          : undefined
+                      }
+                    >
+                      {esCad ? "Mover a Documentos" : "Mover a Planos CAD"}
+                    </ActionButton>
+                  </div>
+                )}
               {opciones && esCad && (
                 <DetallePaginasCad
                   key={`${d.id}-${d.rangoPaginas}`}
@@ -1634,21 +1680,23 @@ function CentroCopiadoContenido({
                       triggerClassName="w-[120px]"
                     />
                   </label>
-                  {!enGrupo && terminacionesDisp.length > 0 && (
-                    <label className={s.campo}>
-                      <span>Terminaciones</span>
-                      <SysMultiSelect
-                        values={d.terminaciones}
-                        onChange={(v) => editar(d.id, { terminaciones: v })}
-                        options={terminacionesDisp.map((t) => ({
-                          value: t,
-                          label: t,
-                        }))}
-                        ariaLabel={`Terminaciones de ${nombre}`}
-                        triggerClassName="w-[160px]"
-                      />
-                    </label>
-                  )}
+                  {conTerminaciones &&
+                    !enGrupo &&
+                    terminacionesDisp.length > 0 && (
+                      <label className={s.campo}>
+                        <span>Terminaciones</span>
+                        <SysMultiSelect
+                          values={d.terminaciones}
+                          onChange={(v) => editar(d.id, { terminaciones: v })}
+                          options={terminacionesDisp.map((t) => ({
+                            value: t,
+                            label: t,
+                          }))}
+                          ariaLabel={`Terminaciones de ${nombre}`}
+                          triggerClassName="w-[160px]"
+                        />
+                      </label>
+                    )}
                   {!enGrupo &&
                     tiposAnilloDisp.length > 1 &&
                     d.terminaciones.includes("Anillado") && (
@@ -1796,7 +1844,9 @@ function CentroCopiadoContenido({
                 <div className={s.dropHint}>
                   {tab === "CAD"
                     ? "Arrastrá planos PDF de cualquier tamaño."
-                    : "PDF, Word o Excel. Los PDF grandes pasan a CAD."}
+                    : conCad
+                      ? "PDF, Word o Excel. Los PDF grandes pasan a CAD."
+                      : "PDF, Word o Excel en los tamaños disponibles para documentos."}
                 </div>
               </div>
 
@@ -2044,7 +2094,12 @@ function CentroCopiadoContenido({
                         count: docs.filter((d) => d.modo === "CAD").length,
                         warning: avisoTab("CAD"),
                       },
-                    ]}
+                    ].filter(
+                      (item) =>
+                        item.id !== "CAD" ||
+                        conCad ||
+                        docs.some((d) => d.modo === "CAD"),
+                    )}
                   />
                   {tab === "HOJAS" && (
                     <div className={s.tablaHeadBtns}>
@@ -2055,25 +2110,27 @@ function CentroCopiadoContenido({
                       >
                         <Plus data-icon="inline-start" /> Fila manual
                       </ActionButton>
-                      <ActionButton
-                        type="button"
-                        variant="outline"
-                        onPress={anillarJuntos}
-                        isDisabled={
-                          sel.size < 2 ||
-                          !terminacionesDisp.includes("Anillado")
-                        }
-                        title={
-                          !terminacionesDisp.includes("Anillado")
-                            ? "Configurá una anilladora y anillos para crear tomos"
-                            : sel.size < 2
-                              ? "Seleccioná dos o más"
-                              : "Anillar juntos"
-                        }
-                      >
-                        <Layers data-icon="inline-start" />
-                        Anillar juntos ({sel.size})
-                      </ActionButton>
+                      {conTerminaciones && (
+                        <ActionButton
+                          type="button"
+                          variant="outline"
+                          onPress={anillarJuntos}
+                          isDisabled={
+                            sel.size < 2 ||
+                            !terminacionesDisp.includes("Anillado")
+                          }
+                          title={
+                            !terminacionesDisp.includes("Anillado")
+                              ? "Configurá una anilladora y anillos para crear tomos"
+                              : sel.size < 2
+                                ? "Seleccioná dos o más"
+                                : "Anillar juntos"
+                          }
+                        >
+                          <Layers data-icon="inline-start" />
+                          Anillar juntos ({sel.size})
+                        </ActionButton>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2379,8 +2436,9 @@ function CentroCopiadoContenido({
             <div className={s.totalNetoSub}>
               {t && !tieneErroresCotizacion ? (
                 <>
-                  Impresión {fmt(impresionNeto)} · Anillado {fmt(anilladoNeto)}{" "}
-                  · IVA {fmt(t.iva)}
+                  Impresión {fmt(impresionNeto)}
+                  {conTerminaciones && <> · Anillado {fmt(anilladoNeto)}</>} ·
+                  IVA {fmt(t.iva)}
                 </>
               ) : cotizando ? (
                 "Calculando precio…"
@@ -2394,6 +2452,7 @@ function CentroCopiadoContenido({
             onPress={() => void agregar()}
             isDisabled={
               docs.length === 0 ||
+              !!errorPlan ||
               incompletos > 0 ||
               tieneErroresCotizacion ||
               guardando ||
@@ -2401,26 +2460,30 @@ function CentroCopiadoContenido({
               cotizando
             }
             title={
-              incompletos > 0
-                ? `${incompletos} fila(s) con páginas, rangos o papel por completar`
-                : tieneErroresCotizacion
-                  ? "Corregí los errores de cotización antes de agregar la carga"
-                  : undefined
+              errorPlan
+                ? errorPlan
+                : incompletos > 0
+                  ? `${incompletos} fila(s) con páginas, rangos o papel por completar`
+                  : tieneErroresCotizacion
+                    ? "Corregí los errores de cotización antes de agregar la carga"
+                    : undefined
             }
           >
-            {guardando
-              ? "Guardando…"
-              : leyendo
-                ? "Leyendo archivos…"
-                : cotizando
-                  ? "Cotizando…"
-                  : incompletos > 0
-                    ? `Completá ${incompletos} fila(s)`
-                    : tieneErroresCotizacion
-                      ? "Corregí los errores"
-                      : editItems?.length
-                        ? "Guardar cambios"
-                        : "Agregar a la OT"}
+            {errorPlan
+              ? "Función no incluida"
+              : guardando
+                ? "Guardando…"
+                : leyendo
+                  ? "Leyendo archivos…"
+                  : cotizando
+                    ? "Cotizando…"
+                    : incompletos > 0
+                      ? `Completá ${incompletos} fila(s)`
+                      : tieneErroresCotizacion
+                        ? "Corregí los errores"
+                        : editItems?.length
+                          ? "Guardar cambios"
+                          : "Agregar a la OT"}
           </ActionButton>
         </footer>
       </FormDialog>
@@ -2451,6 +2514,7 @@ function CentroCopiadoContenido({
           </ActionButton>
           <ActionButton
             isDisabled={
+              !!errorPlan ||
               guardando ||
               leyendo ||
               cotizando ||
