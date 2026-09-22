@@ -2,6 +2,8 @@ import { PlanesPaddleService } from './planes/planes-paddle.service';
 import { PlanesOfertasController } from './planes/planes-ofertas.controller';
 import { PlanesOfertasService } from './planes/planes-ofertas.service';
 import { Module } from '@nestjs/common';
+import { CorreoTransaccionalModule } from '../registro/correo-transaccional.module';
+import { InvitacionesEmpresaService } from './invitaciones-empresa.service';
 import { ContratacionesPlataformaController } from './contrataciones-plataforma.controller';
 import { ContratacionesPlataformaService } from './contrataciones-plataforma.service';
 import { ConsultaContratacionService } from '../suscripciones/consulta-contratacion.service';
@@ -36,6 +38,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
 @Module({
   imports: [
     PrismaModule,
+    CorreoTransaccionalModule,
     AuthModule,
     CobroModule,
     ProvisionamientoModule,
@@ -52,6 +55,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
     SuscripcionesPlataformaController,
   ],
   providers: [
+    InvitacionesEmpresaService,
     ContratacionesPlataformaService,
     ConsultaContratacionService,
     PlanesOfertasService,

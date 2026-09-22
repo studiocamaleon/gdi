@@ -110,6 +110,9 @@ const EXENTOS_CON_TENANT_ID = new Set(['Membership', 'Invitation']);
 const ARCHIVOS_AUTORIZADOS = new Set([
   'auth/auth.service.ts',
   'plataforma/plataforma.service.ts',
+  // Envío/reenvío del primer administrador: sólo staff ADMIN, tenantId
+  // explícito, token hasheado y resultado auditado. No lista invitaciones globales.
+  'plataforma/invitaciones-empresa.service.ts',
   // Alta pública: crea una única membership ADMINISTRADOR, dentro de la misma
   // transacción que crea su tenant y siempre con ese tenantId explícito.
   'registro/registro.service.ts',

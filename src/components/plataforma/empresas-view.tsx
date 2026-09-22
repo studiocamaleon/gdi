@@ -55,6 +55,7 @@ import theme from "@/components/design-system/brand-workspace-theme.module.css";
 import { fmtBytes, TLogo } from "./kit";
 import styles from "./empresas.module.css";
 import { PlanAsignacionDialog } from "./plan-asignacion-dialog";
+import { InvitacionEmpresaPanel } from "./invitacion-empresa-panel";
 
 const estado = (valor?: string | null) =>
   ({
@@ -490,6 +491,10 @@ function FichaEmpresa({
             </AlertTitle>
             <AlertDescription>{e.acceso.descripcion}</AlertDescription>
           </Alert>
+          {e.invitacionAdministrador && <InvitacionEmpresaPanel
+            tenantId={e.id} invitacion={e.invitacionAdministrador}
+            puedeEnviar={esAdmin && e.activo} onCambio={() => setVersion((v) => v + 1)}
+          />}
           <Tabs defaultValue="resumen">
             <div className={styles.tabScroll}>
               <TabsList variant="graphite">

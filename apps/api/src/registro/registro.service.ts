@@ -167,6 +167,8 @@ export class RegistroService {
       para: email,
       nombre: registro.nombreCompleto,
       empresa: registro.empresaNombre,
+      plan: oferta ? presentarOferta(oferta).nombre : plan.nombre,
+      trialDias: oferta ? oferta.trialDias : plan.trialDias,
       url,
     });
     await this.prisma.registroTenant.update({

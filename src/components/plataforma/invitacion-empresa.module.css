@@ -1,0 +1,41 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.body {
+  padding: 24px;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted-text);
+}
+.link {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  font-size: 12px;
+}
+.link summary {
+  cursor: pointer;
+}
+.link p {
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+  color: var(--muted-text);
+}
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--border);
+}

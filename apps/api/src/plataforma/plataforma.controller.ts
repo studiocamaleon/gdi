@@ -33,6 +33,7 @@ import { ImpersonacionService } from './impersonacion.service';
 import { NegocioService } from './negocio.service';
 import { PlataformaGuard } from './plataforma.guard';
 import { PlataformaService } from './plataforma.service';
+import { InvitacionesEmpresaService } from './invitaciones-empresa.service';
 
 export class CambiarPlanDto {
   @IsUUID()
@@ -159,6 +160,7 @@ export class PlataformaController {
     private readonly impersonacion: ImpersonacionService,
     private readonly negocio: NegocioService,
     private readonly empresas: EmpresasPlataformaService,
+    private readonly invitaciones: InvitacionesEmpresaService,
   ) {}
 
   @Get('contexto')
@@ -308,7 +310,16 @@ export class PlataformaController {
     return this.empresas.detalle(id);
   }
 
-  /** Alta de tenant + invitación del primer admin. Devuelve el link. */
+  @Post('tenants/:id/invitacion/reenviar')
+  @UseGuards(PlataformaAdminGuard)
+  reenviarInvitacion(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.invitaciones.reenviar(auth.userId, id);
+  }
+
+  /** Alta de tenant + invitación del primer admin por correo. */
   @Post('tenants')
   @UseGuards(PlataformaAdminGuard)
   crearTenant(

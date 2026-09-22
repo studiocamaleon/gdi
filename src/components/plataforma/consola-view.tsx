@@ -13,6 +13,7 @@ import Link from "next/link";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { EmpresasView } from "./empresas-view";
+import { CrearEmpresaDialog } from "./crear-empresa-dialog";
 import { EquipoView } from "./equipo-view";
 import { SuscripcionesView } from "./suscripciones-view";
 import { PlanesView, type SalidaPlanes } from "./planes-view";
@@ -46,7 +47,6 @@ import {
 } from "@/components/plataforma/kit";
 import {
   cerrarImpersonacion,
-  crearTenantPlataforma,
   getNegocioPlataforma,
   getPlanesPlataforma,
   describirPlan,
@@ -1335,7 +1335,7 @@ function Tenants({ esAdmin }: { esAdmin: boolean }) {
         onCrear={() => setCreando(true)}
       />
       {creando ? (
-        <CrearTenantModal
+        <CrearEmpresaDialog
           planes={planes}
           onCerrar={() => {
             setCreando(false);
@@ -1344,152 +1344,6 @@ function Tenants({ esAdmin }: { esAdmin: boolean }) {
         />
       ) : null}
     </>
-  );
-}
-
-/** Alta de tenant: crea empresa + suscripción + invitación del primer admin. */
-function CrearTenantModal({
-  planes,
-  onCerrar,
-}: {
-  planes: PlanCatalogo[];
-  onCerrar: () => void;
-}) {
-  const [nombre, setNombre] = React.useState("");
-  const [slug, setSlug] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [planId, setPlanId] = React.useState("");
-  const [ocupado, setOcupado] = React.useState(false);
-  const [invitacionUrl, setInvitacionUrl] = React.useState<string | null>(null);
-
-  const valido =
-    nombre.trim().length >= 2 &&
-    /^[a-z0-9][a-z0-9-]{1,40}$/.test(slug) &&
-    /.+@.+\..+/.test(email) &&
-    planId !== "";
-
-  const crear = async () => {
-    if (!valido || ocupado) return;
-    setOcupado(true);
-    try {
-      const r = await crearTenantPlataforma({
-        nombre: nombre.trim(),
-        slug,
-        planId,
-        adminEmail: email.trim(),
-      });
-      setInvitacionUrl(r.invitacionUrl);
-      toast.success("Empresa creada. Mandale el link de invitación.");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo crear.");
-      setOcupado(false);
-    }
-  };
-
-  return (
-    <FormDialog
-      isOpen
-      onOpenChange={(open) => {
-        if (!open) onCerrar();
-      }}
-      title="Nueva empresa"
-      description="Creá la empresa, elegí su plan e invitá al primer administrador. El enlace de invitación vence en 7 días."
-      isDismissable={!ocupado || !!invitacionUrl}
-      className={`${platformTheme} ${styles.dialog}`}
-    >
-      {invitacionUrl ? (
-        <div className="cpl-mb">
-          <div className="cpl-field">
-            <label>Link de invitación</label>
-            <div className="cpl-invlink">{invitacionUrl}</div>
-          </div>
-          <ActionButton
-            type="button"
-            variant="primary"
-            onPress={() => {
-              void navigator.clipboard?.writeText(invitacionUrl);
-              toast.success("Link copiado.");
-            }}
-          >
-            Copiar link
-          </ActionButton>
-        </div>
-      ) : (
-        <div className="cpl-mb">
-          <div className="cpl-field">
-            <label htmlFor="empresa-nombre">Nombre de la imprenta</label>
-            <Input
-              className={fieldFocus.singleBorder}
-              fullWidth
-              id="empresa-nombre"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Gráfica del Sur SRL"
-              autoFocus
-            />
-          </div>
-          <div className="cpl-field">
-            <label htmlFor="empresa-slug">Slug (identificador corto)</label>
-            <Input
-              className={fieldFocus.singleBorder}
-              fullWidth
-              id="empresa-slug"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value.toLowerCase())}
-              placeholder="grafica-del-sur"
-            />
-          </div>
-          <div className="cpl-field">
-            <label htmlFor="empresa-email">Email del administrador</label>
-            <Input
-              className={fieldFocus.singleBorder}
-              fullWidth
-              id="empresa-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="duenio@imprenta.com"
-            />
-          </div>
-          <div className="cpl-field">
-            <label htmlFor="empresa-plan">Plan</label>
-            <SelectField
-              id="empresa-plan"
-              aria-label="Plan"
-              value={planId}
-              onChange={setPlanId}
-              options={[
-                { value: "", label: "Elegí un plan…", disabled: true },
-                ...planes.map((p) => ({
-                  value: p.id,
-                  label: `${p.nombre} · ${mk(p.precioMensual)}/mes`,
-                })),
-              ]}
-            />
-          </div>
-        </div>
-      )}
-      <div className="cpl-mf">
-        <ActionButton
-          type="button"
-          variant="outline"
-          isDisabled={ocupado && !invitacionUrl}
-          onPress={onCerrar}
-        >
-          {invitacionUrl ? "Cerrar" : "Cancelar"}
-        </ActionButton>
-        {!invitacionUrl ? (
-          <ActionButton
-            type="button"
-            variant="primary"
-            isDisabled={!valido || ocupado}
-            onPress={() => void crear()}
-          >
-            {ocupado ? "Creando…" : "Crear empresa"}
-          </ActionButton>
-        ) : null}
-      </div>
-    </FormDialog>
   );
 }
 

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PlataformaService } from '../plataforma.service';
+import { InvitacionesEmpresaService } from '../invitaciones-empresa.service';
 import { SuscripcionesService } from '../../suscripciones/suscripciones.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { PaddleService } from '../../cobro/paddle.service';
@@ -11,8 +12,8 @@ import { TenantProvisioningService } from '../../provisionamiento/tenant-provisi
  * Las escrituras del control plane (etapa B1) y el lector de features, contra
  * la base real: lo que importa es la CADENA — cambiar un plan tiene que
  * mover el feature gate del tenant y dejar rastro en la auditoría, no sólo
- * escribir una fila. La migración seedea el catálogo (trial/taller/estudio/
- * diamante y founder), así que los planes están.
+ * escribir una fila. Trial/Founder son internos; los escenarios de cambio usan
+ * planes propios y no dependen de planes comerciales archivados.
  */
 
 const prisma = new PrismaClient();
@@ -22,6 +23,14 @@ describe('Control plane — escrituras y feature gates', () => {
     prisma as unknown as PrismaService,
     new PaddleService(),
     new TenantProvisioningService(),
+    new InvitacionesEmpresaService(
+      prisma as unknown as PrismaService,
+      {
+        enviarInvitacionEmpresa: jest
+          .fn()
+          .mockResolvedValue({ id: 'simulado' }),
+      } as never,
+    ),
   );
   const suscripciones = new SuscripcionesService(
     prisma as unknown as PrismaService,
@@ -31,6 +40,11 @@ describe('Control plane — escrituras y feature gates', () => {
   let staffId: string;
   let tenantId: string;
   const tenantsCreados: string[] = [];
+  const planesPrueba: string[] = [];
+  const codigosPrueba = {
+    base: `base-${randomUUID()}`,
+    ampliado: `ampliado-${randomUUID()}`,
+  };
 
   beforeAll(async () => {
     const staff = await prisma.user.create({
@@ -41,6 +55,29 @@ describe('Control plane — escrituras y feature gates', () => {
       select: { id: true },
     });
     staffId = staff.id;
+    for (const [codigo, nombre, featuresJson] of [
+      [
+        codigosPrueba.base,
+        'Base de prueba',
+        { afip: false, whatsapp: true, usuariosMax: 6 },
+      ],
+      [
+        codigosPrueba.ampliado,
+        'Ampliado de prueba',
+        { afip: true, whatsapp: true, usuariosMax: 20 },
+      ],
+    ] as const) {
+      const plan = await prisma.plan.create({
+        data: {
+          codigo,
+          nombre,
+          featuresJson: { ...featuresJson },
+          precioMensual: 100,
+          publico: false,
+        },
+      });
+      planesPrueba.push(plan.id);
+    }
     const t = await prisma.tenant.create({
       data: { nombre: 'B1 escrituras', slug: `test-b1-${randomUUID()}` },
       select: { id: true },
@@ -54,6 +91,7 @@ describe('Control plane — escrituras y feature gates', () => {
       where: { staffUserId: staffId },
     });
     await prisma.tenant.deleteMany({ where: { id: { in: tenantsCreados } } });
+    await prisma.plan.deleteMany({ where: { id: { in: planesPrueba } } });
     await prisma.user.deleteMany({ where: { id: staffId } });
     await prisma.$disconnect();
   });
@@ -67,22 +105,10 @@ describe('Control plane — escrituras y feature gates', () => {
   it('el catálogo seedeado está y expone sus features', async () => {
     const planes = await plataforma.planes();
     const codigos = planes.map((p) => p.codigo);
-    expect(codigos).toEqual(
-      expect.arrayContaining([
-        'trial',
-        'taller',
-        'estudio',
-        'diamante',
-        'founder',
-      ]),
+    expect(codigos).toEqual(expect.arrayContaining(['trial', 'founder']));
+    expect(codigos).not.toEqual(
+      expect.arrayContaining(['taller', 'estudio', 'diamante']),
     );
-    const estudio = planes.find((p) => p.codigo === 'estudio')!;
-    expect(estudio.features.afip).toBe(true);
-    expect(estudio.precioMensual).toBe(290);
-    expect(estudio.nombre).toBe('Producción');
-    expect(estudio.recomendado).toBe(true);
-    const diamante = planes.find((p) => p.codigo === 'diamante')!;
-    expect(diamante.features.centroCopiado).toBe(true);
     const founder = planes.find((p) => p.codigo === 'founder')!;
     expect(founder.precioMensual).toBe(1);
     expect(founder.moneda).toBe('USD');
@@ -98,10 +124,10 @@ describe('Control plane — escrituras y feature gates', () => {
   });
 
   it('cambiarPlan asigna, el gate obedece al plan, y queda auditado', async () => {
-    const taller = await planPorCodigo('taller');
+    const taller = await planPorCodigo(codigosPrueba.base);
     await plataforma.cambiarPlan(staffId, tenantId, taller.id);
 
-    // Taller NO incluye AFIP: el gate del tenant lo refleja al instante.
+    // El plan base de prueba NO incluye AFIP: el gate del tenant lo refleja al instante.
     await expect(suscripciones.feature(tenantId, 'afip')).resolves.toBe(false);
     await expect(suscripciones.feature(tenantId, 'whatsapp')).resolves.toBe(
       true,
@@ -110,7 +136,7 @@ describe('Control plane — escrituras y feature gates', () => {
     expect(limites.usuariosMax).toBe(6);
 
     // Upgrade: upsert, no una segunda fila.
-    const estudio = await planPorCodigo('estudio');
+    const estudio = await planPorCodigo(codigosPrueba.ampliado);
     await plataforma.cambiarPlan(staffId, tenantId, estudio.id);
     await expect(suscripciones.feature(tenantId, 'afip')).resolves.toBe(true);
     expect(await prisma.suscripcion.count({ where: { tenantId } })).toBe(1);
@@ -119,7 +145,9 @@ describe('Control plane — escrituras y feature gates', () => {
       where: { staffUserId: staffId, tipo: 'plan_cambiado' },
     });
     expect(eventos).toHaveLength(2);
-    expect(eventos[1].descripcion).toContain('Taller → Producción');
+    expect(eventos[1].descripcion).toContain(
+      'Base de prueba → Ampliado de prueba',
+    );
   });
 
   it('Founder habilita todo, no impone límites y permanece privado', async () => {

@@ -263,6 +263,12 @@ it('el registro conserva la oferta elegida aunque otra versión se active durant
       aceptaTerminos: true,
     };
     await x.registro.iniciar(dto);
+    expect(x.correo.enviarVerificacion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: x.contenido.nombre,
+        trialDias: x.dto.trialDias,
+      }),
+    );
     const token = new URL(
       x.correo.enviarVerificacion.mock.calls[0][0].url,
     ).searchParams.get('token')!;
