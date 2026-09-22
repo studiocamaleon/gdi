@@ -62,6 +62,12 @@ export type PreparacionRecorridoCorte = {
   updatedAt: string;
 };
 
+export function getRecorridosGuardados(itemId: string, seleccion?: SeleccionRecorrido) {
+  return apiRequest<PreparacionRecorridoCorte[]>(
+    `/recorridos-vectoriales/items/${itemId}/corte?${seleccionParams(seleccion)}`,
+  );
+}
+
 export function getPreparacionesRecorridoCorte(itemId: string, seleccion?: SeleccionRecorrido) {
   return apiRequest<PreparacionRecorridoCorte[]>(
     `/recorridos-vectoriales/items/${itemId}/corte/preparar?${seleccionParams(seleccion)}`,

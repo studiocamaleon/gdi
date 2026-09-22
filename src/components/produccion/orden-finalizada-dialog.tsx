@@ -1,5 +1,5 @@
 "use client";
-import { useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import { useCapacidad, useImpresionDirecta } from "@/components/navigation/capacidades-provider";
 
 import { useState } from "react";
 import { EtiquetaOrdenDialog } from "@/components/impresion/etiqueta-orden-dialog";
@@ -24,6 +24,7 @@ export function OrdenFinalizadaDialog({
   onClose: () => void;
 }) {
   const impresionDirecta = useImpresionDirecta();
+  const conDescarga = useCapacidad("etiquetas_pdf");
   const [imprimir, setImprimir] = useState(false);
   if (imprimir)
     return (
@@ -89,10 +90,10 @@ export function OrdenFinalizadaDialog({
           )}
         </div>
         <div className={s.footer}>
-          <ActionButton variant="outline" onPress={() => setImprimir(true)}>
+          {(impresionDirecta || conDescarga) && <ActionButton variant="outline" onPress={() => setImprimir(true)}>
             <Printer aria-hidden="true" />
             {impresionDirecta ? "Imprimir etiqueta" : "Descargar etiqueta"}
-          </ActionButton>
+          </ActionButton>}
           {puedeVerOrden && (
             <ActionLink
               variant="outline"

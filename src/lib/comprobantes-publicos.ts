@@ -20,6 +20,7 @@ export type ComprobanteItem = {
 };
 
 export type ComprobantePublico = {
+  pdfDisponible?: boolean;
   emisor: {
     razonSocial: string;
     domicilioFiscal: string | null;

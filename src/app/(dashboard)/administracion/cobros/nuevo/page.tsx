@@ -1,3 +1,4 @@
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -15,6 +16,8 @@ import {
 } from "@/lib/administracion-api";
 import { getOrdenTrabajo } from "@/lib/ordenes-trabajo-api";
 import { ApiError } from "@/lib/api";
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { getClienteById } from "@/lib/clientes-api";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +27,16 @@ export default async function RegistrarCobroPage({
   searchParams: Promise<{ ordenId?: string; clienteId?: string }>;
 }) {
   const { ordenId, clienteId } = await searchParams;
+  const conCobros = await tieneCapacidad("cobros");
+  if (!conCobros && !ordenId) return <FuncionNoIncluida />;
 
+  let cobroNoDisponible = false;
   let contexto: OrdenContexto | ClienteCobroContexto | null = null;
+  let metodos: MetodoPago[] = [];
+  let cuentas: CuentaFondosResumen[] = [];
 
   try {
-    const [metodos, cuentas] = await Promise.all([
+    [metodos, cuentas] = await Promise.all([
       getMetodosPago(),
       getCuentasFondos(),
     ]);
@@ -37,6 +45,13 @@ export default async function RegistrarCobroPage({
         getOrdenTrabajo(ordenId),
         getCobros({ ordenId }),
       ]);
+      if (
+        !conCobros &&
+        (detalle.cobrosHabilitadosEmision === false ||
+          detalle.total <= (detalle.cobradoTotal ?? 0) ||
+          ["borrador", "cancelada"].includes(detalle.estado))
+      )
+        cobroNoDisponible = true;
       contexto = {
         tipo: "orden",
         id: detalle.id,
@@ -48,26 +63,40 @@ export default async function RegistrarCobroPage({
         cobradoBruto: cobros.reduce((s, c) => s + c.montoBruto, 0),
       };
     } else if (clienteId) {
-      const cc = await getCuentaCorriente(clienteId);
-      contexto = {
-        tipo: "cliente",
-        id: cc.cliente.id,
-        nombre: cc.cliente.nombre,
-        saldo: cc.saldo,
-      };
-    }
-    if (contexto) {
-      return (
-        <RegistrarCobroView
-          contexto={contexto}
-          metodos={metodos}
-          cuentas={cuentas}
-        />
-      );
+      if (await tieneCapacidad("cuentas_cobrar")) {
+        const cc = await getCuentaCorriente(clienteId);
+        contexto = {
+          tipo: "cliente",
+          id: cc.cliente.id,
+          nombre: cc.cliente.nombre,
+          saldo: cc.saldo,
+        };
+      } else {
+        const cliente = await getClienteById(clienteId);
+        if (!cliente) notFound();
+        contexto = {
+          tipo: "cliente",
+          id: cliente.id,
+          nombre: cliente.nombre,
+          saldo: null,
+        };
+      }
     }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
+  }
+
+  if (cobroNoDisponible) return <FuncionNoIncluida />;
+
+  if (contexto) {
+    return (
+      <RegistrarCobroView
+        contexto={contexto}
+        metodos={metodos}
+        cuentas={cuentas}
+      />
+    );
   }
 
   return (

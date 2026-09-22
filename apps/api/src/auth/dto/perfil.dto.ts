@@ -1,12 +1,20 @@
 import { Transform } from 'class-transformer';
 import {
   IsString,
+  IsBoolean,
+  IsOptional,
+  IsInt,
+  Min,
   IsUUID,
   Length,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
+
+export class ConfirmarRecuperacionDto {
+  @IsInt() @Min(1) version: number;
+}
 
 export class EditarPerfilDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -47,6 +55,10 @@ export class GestionMfaDto extends ClavePerfilDto {
 }
 
 export class VerificarMfaDto {
+  @IsOptional()
+  @IsBoolean()
+  recordarDispositivo?: boolean;
+
   @IsString()
   @Matches(/^[a-f0-9]{64}$/)
   challengeToken: string;

@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import type { Paddle } from "@paddle/paddle-js";
 import checkoutStyles from "./suscripcion-checkout.module.css";
+import { ContratacionDialog } from "./contratacion-dialog";
+import { DesignSystemProvider } from "@/components/design-system/appearance";
 
 import {
   abrirPortalSuscripcion,
@@ -29,6 +31,9 @@ import {
   actualizarEstadoSuscripcion,
   type EstadoSuscripcion,
   type PlanContratable,
+  contratacionPendiente,
+  consultarContratacion,
+  type VistaContratacion,
 } from "@/lib/suscripcion-api";
 
 /**
@@ -121,10 +126,7 @@ function LogoTarjeta({ marca }: { marca: string }) {
         {fondo}
         <circle cx="16" cy="13" r="7" fill="#EB001B" />
         <circle cx="24" cy="13" r="7" fill="#F79E1B" opacity="0.9" />
-        <path
-          d="M20 7.9a7 7 0 000 10.2 7 7 0 000-10.2z"
-          fill="#FF5F00"
-        />
+        <path d="M20 7.9a7 7 0 000 10.2 7 7 0 000-10.2z" fill="#FF5F00" />
       </svg>
     );
   }
@@ -198,7 +200,13 @@ function detallesDe(features: Record<string, unknown>): string[] {
 }
 
 const Tick = () => (
-  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" aria-hidden="true">
+  <svg
+    viewBox="0 0 24 24"
+    width="12"
+    height="12"
+    fill="none"
+    aria-hidden="true"
+  >
     <path
       d="M5 12l4 4 10-10"
       stroke="currentColor"
@@ -240,6 +248,7 @@ type CheckoutInline = {
   plan: PlanContratable;
   ciclo: "mensual" | "anual";
   priceId: string;
+  contratacion?: VistaContratacion;
 };
 
 export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
@@ -248,6 +257,12 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   const fechaLarga = (iso: string | null) => (iso ? fechaCorta(iso) : "—");
   const [datos, setDatos] = React.useState(inicial);
   const [paddle, setPaddle] = React.useState<Paddle | null>(null);
+  const [planComercial, setPlanComercial] =
+    React.useState<PlanContratable | null>(null);
+  const [intentoComercial, setIntentoComercial] =
+    React.useState<VistaContratacion | null>(null);
+  const [revisionAbierta, setRevisionAbierta] = React.useState(false);
+  const contratacionRef = React.useRef<string | null>(null);
   const paddleRef = React.useRef<Paddle | null>(null);
   const [confirmando, setConfirmando] = React.useState(false);
   const [abriendo, setAbriendo] = React.useState<string | null>(null);
@@ -278,6 +293,69 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     process.env.NEXT_PUBLIC_PADDLE_ENV === "production"
       ? "production"
       : "sandbox";
+
+  React.useEffect(() => {
+    let vivo = true;
+    void contratacionPendiente()
+      .then((r) => {
+        if (vivo) setIntentoComercial(r);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const refrescarContrato = async () => {
+    try {
+      const fresco = await getSuscripcion();
+      setDatos(fresco);
+      if (fresco.actual) setElegido(fresco.actual.planCodigo);
+      router.refresh();
+    } catch {
+      toast.info(
+        "El cambio fue confirmado. Recargá la página para actualizar el resumen.",
+      );
+    }
+  };
+  const abrirPagoComercial = (r: VistaContratacion) => {
+    if (!paddle || !r.transaccionId) {
+      toast.error(
+        "El formulario de pago todavía se está cargando. Podés retomarlo en un momento.",
+      );
+      return;
+    }
+    const plan = datos.planes.find((p) => p.ofertaId === r.ofertaId) ?? {
+      codigo: r.ofertaId,
+      nombre: r.revision.destino.nombre,
+      descripcion: null,
+      precioMensual: r.revision.precioBase,
+      moneda: "USD",
+      priceId: "",
+      anual: null,
+      esActual: false,
+      features: {
+        usuariosMax: r.revision.destino.totalUsuarios,
+        storageGb: r.revision.destino.gb,
+      },
+    };
+    contratacionRef.current = r.id;
+    setIntentoComercial(r);
+    setRevisionAbierta(false);
+    setCheckoutError(null);
+    setCheckoutCargando(true);
+    setCheckoutInline({
+      plan: {
+        ...plan,
+        features: {
+          ...plan.features,
+          usuariosMax: r.revision.destino.totalUsuarios,
+        },
+      },
+      ciclo: r.revision.ciclo,
+      priceId: "",
+      contratacion: r,
+    });
+  };
 
   /**
    * Refresca mientras haya facturas en estado provisorio.
@@ -314,42 +392,56 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
    * transacción en Paddle y aplicamos el resultado. El webhook sigue existiendo
    * como respaldo —es idempotente— para lo que pasa sin nadie mirando.
    */
-  const traerResultado = React.useCallback(async (transaccionId?: string) => {
-    setConfirmando(true);
-    try {
-      if (!transaccionId) {
-        throw new Error(
-          "Paddle no informó el identificador de la transacción.",
+  const traerResultado = React.useCallback(
+    async (transaccionId?: string) => {
+      setConfirmando(true);
+      try {
+        if (!transaccionId) {
+          throw new Error(
+            "Paddle no informó el identificador de la transacción.",
+          );
+        }
+        const id = contratacionRef.current;
+        if (id) {
+          const resultado = await consultarContratacion(id);
+          setIntentoComercial(resultado);
+          if (resultado.estado !== "aplicada") {
+            setRevisionAbierta(true);
+            return;
+          }
+        }
+        const fresco = id
+          ? await getSuscripcion()
+          : await sincronizarSuscripcion(transaccionId);
+        if (
+          fresco.actual?.proveedor !== "paddle" ||
+          !fresco.puedeCambiarSinPago
+        ) {
+          throw new Error(
+            "La suscripción todavía no quedó vinculada con Paddle.",
+          );
+        }
+        setDatos(fresco);
+        if (fresco.actual) setElegido(fresco.actual.planCodigo);
+        router.refresh();
+        toast.success(`Tu plan ${fresco.actual.planNombre} está activo.`);
+        if (fresco.facturas.some((f) => PROVISORIOS.has(f.estado))) {
+          seguirFacturasProvisorias();
+        }
+      } catch (error) {
+        // El pago puede estar bien aunque la lectura inmediata falle. No lo
+        // llamamos "activo" hasta comprobar la vinculación real con Paddle.
+        toast.info(
+          error instanceof Error
+            ? `${error.message} El pago no se perdió; esperá unos segundos y recargá la página.`
+            : "Paddle está terminando de confirmar la suscripción. Esperá unos segundos y recargá la página.",
         );
+      } finally {
+        setConfirmando(false);
       }
-      const fresco = await sincronizarSuscripcion(transaccionId);
-      if (
-        fresco.actual?.proveedor !== "paddle" ||
-        !fresco.puedeCambiarSinPago
-      ) {
-        throw new Error(
-          "La suscripción todavía no quedó vinculada con Paddle.",
-        );
-      }
-      setDatos(fresco);
-      if (fresco.actual) setElegido(fresco.actual.planCodigo);
-      router.refresh();
-      toast.success(`Tu plan ${fresco.actual.planNombre} está activo.`);
-      if (fresco.facturas.some((f) => PROVISORIOS.has(f.estado))) {
-        seguirFacturasProvisorias();
-      }
-    } catch (error) {
-      // El pago puede estar bien aunque la lectura inmediata falle. No lo
-      // llamamos "activo" hasta comprobar la vinculación real con Paddle.
-      toast.info(
-        error instanceof Error
-          ? `${error.message} El pago no se perdió; esperá unos segundos y recargá la página.`
-          : "Paddle está terminando de confirmar la suscripción. Esperá unos segundos y recargá la página.",
-      );
-    } finally {
-      setConfirmando(false);
-    }
-  }, [router, seguirFacturasProvisorias]);
+    },
+    [router, seguirFacturasProvisorias],
+  );
 
   React.useEffect(() => {
     if (!token) return;
@@ -381,8 +473,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
             if (evento.name === "checkout.completed") {
               // El id de la transacción viene en el evento: con eso resolvemos
               // la suscripción en Paddle sin depender del webhook.
-              const tx = (evento.data as { transaction_id?: string } | undefined)
-                ?.transaction_id;
+              const tx = (
+                evento.data as { transaction_id?: string } | undefined
+              )?.transaction_id;
               setCheckoutCargando(false);
               setCheckoutInline(null);
               paddleRef.current?.Checkout.close();
@@ -419,6 +512,22 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
    * SEGUNDA suscripción y le cobrarían las dos.
    */
   const elegirPlan = (plan: PlanContratable) => {
+    if (plan.ofertaId) {
+      if (
+        intentoComercial &&
+        ["enviando", "checkout", "verificar"].includes(intentoComercial.estado)
+      ) {
+        setPlanComercial(
+          datos.planes.find((p) => p.ofertaId === intentoComercial.ofertaId) ??
+            null,
+        );
+      } else {
+        setPlanComercial(plan);
+        setIntentoComercial(null);
+      }
+      setRevisionAbierta(true);
+      return;
+    }
     if (datos.puedeCambiarSinPago) {
       setConfirmarCambio(plan);
       setPrevio(null);
@@ -456,11 +565,16 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
   };
 
   const contratar = (plan: PlanContratable) => {
+    if (plan.ofertaId) {
+      elegirPlan(plan);
+      return;
+    }
     if (!paddle) {
       toast.error("El checkout todavía se está cargando. Probá en un momento.");
       return;
     }
     setAbriendo(plan.codigo);
+    contratacionRef.current = null;
     // El ciclo define QUÉ precio de Paddle se cobra: son dos precios distintos
     // del mismo plan, no un descuento aplicado sobre el mensual.
     const priceId =
@@ -493,10 +607,14 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
     const frame = window.requestAnimationFrame(() => {
       try {
         paddle.Checkout.open({
-          items: [{ priceId: checkoutInline.priceId, quantity: 1 }],
-          // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
-          // webhook usa para saber a qué imprenta corresponde el pago.
-          customData: { tenantId: datos.checkout.tenantId },
+          ...(checkoutInline.contratacion?.transaccionId
+            ? { transactionId: checkoutInline.contratacion.transaccionId }
+            : {
+                items: [{ priceId: checkoutInline.priceId, quantity: 1 }],
+                // El tenantId sale de la SESIÓN (lo puso el backend): es lo que el
+                // webhook usa para saber a qué imprenta corresponde el pago.
+                customData: { tenantId: datos.checkout.tenantId },
+              }),
           customer: { email: datos.checkout.email },
           settings: {
             displayMode: "inline",
@@ -532,9 +650,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       setDatos(await reactivarSuscripcion());
       toast.success("Tu suscripción sigue activa. No se va a cancelar.");
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "No se pudo reactivar.",
-      );
+      toast.error(err instanceof Error ? err.message : "No se pudo reactivar.");
     } finally {
       setReactivando(false);
     }
@@ -691,9 +807,25 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
         <div className="sub-trial">
           <div className="sub-trial-info">
             <div className="sub-trial-badge">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
-                <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-                <path d="M12 3v18M4 7.5l8 4.5 8-4.5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 3v18M4 7.5l8 4.5 8-4.5"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
             <div>
@@ -720,7 +852,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               Activar suscripción
             </button>
             <span className="sub-trial-note">
-              Sin cargo hasta el {fechaLarga(datos.prueba.hasta)}
+              {planElegido?.ofertaId
+                ? "Revisá las condiciones antes de pagar"
+                : `Sin cargo hasta el ${fechaLarga(datos.prueba.hasta)}`}
             </span>
           </div>
         </div>
@@ -743,7 +877,8 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   {actual.proximoCobro
                     ? fechaLarga(actual.proximoCobro)
                     : "finalizar la prueba"}
-                </strong>.
+                </strong>
+                .
               </div>
             </div>
           </div>
@@ -772,6 +907,49 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           Confirmando el pago con Paddle… no cierres esta página.
         </div>
       ) : null}
+
+      {intentoComercial &&
+        ["enviando", "checkout", "verificar"].includes(
+          intentoComercial.estado,
+        ) && (
+          <div className="sub-alert info">
+            <div>
+              <b>Tenés una contratación pendiente</b>
+              <p>
+                {intentoComercial.revision.destino.nombre} ·{" "}
+                {intentoComercial.revision.destino.totalUsuarios} usuarios.
+                Retomá el pago o consultá su estado.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPlanComercial(
+                  datos.planes.find(
+                    (p) => p.ofertaId === intentoComercial.ofertaId,
+                  ) ?? null,
+                );
+                setRevisionAbierta(true);
+              }}
+            >
+              Revisar contratación
+            </Button>
+          </div>
+        )}
+      {revisionAbierta && (
+        <DesignSystemProvider theme="brand">
+          <ContratacionDialog
+            plan={planComercial}
+            inicial={intentoComercial}
+            cicloInicial={ciclo}
+            adicionalesIniciales={datos.actual?.usuariosAdicionales ?? 0}
+            cerrar={() => setRevisionAbierta(false)}
+            onEstado={setIntentoComercial}
+            abrirPago={abrirPagoComercial}
+            completada={() => void refrescarContrato()}
+          />{" "}
+        </DesignSystemProvider>
+      )}
 
       {confirmarCambio ? (
         <ConfirmacionDestructiva
@@ -866,7 +1044,9 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               <div className={checkoutStyles.layout}>
                 <aside className={checkoutStyles.summary}>
                   <div>
-                    <span className={checkoutStyles.kicker}>Tu suscripción</span>
+                    <span className={checkoutStyles.kicker}>
+                      Tu suscripción
+                    </span>
                     <h3>Plan {checkoutInline.plan.nombre}</h3>
                     <p>
                       Todo listo para que tu equipo siga trabajando sin
@@ -877,10 +1057,12 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   <div className={checkoutStyles.price}>
                     <strong>
                       {precio(
-                        checkoutInline.ciclo === "anual" &&
-                          checkoutInline.plan.anual
-                          ? checkoutInline.plan.anual.precio
-                          : checkoutInline.plan.precioMensual,
+                        checkoutInline.contratacion
+                          ? checkoutInline.contratacion.revision.totalPeriodo
+                          : checkoutInline.ciclo === "anual" &&
+                              checkoutInline.plan.anual
+                            ? checkoutInline.plan.anual.precio
+                            : checkoutInline.plan.precioMensual,
                         checkoutInline.plan.moneda,
                       )}
                     </strong>
@@ -889,14 +1071,45 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                     </span>
                   </div>
 
+                  {checkoutInline.contratacion?.revision.implementacion !=
+                    null && (
+                    <div>
+                      <p>
+                        Implementación · pago único:{" "}
+                        {precio(
+                          checkoutInline.contratacion.revision.implementacion,
+                          checkoutInline.plan.moneda,
+                        )}
+                      </p>
+                      <p>
+                        <strong>
+                          Primer pago:{" "}
+                          {precio(
+                            checkoutInline.contratacion.revision.totalInicial ??
+                              checkoutInline.contratacion.revision.totalPeriodo,
+                            checkoutInline.plan.moneda,
+                          )}
+                        </strong>
+                      </p>
+                      <small>
+                        Antes de impuestos. No se repite en las renovaciones.
+                      </small>
+                    </div>
+                  )}
                   <div className={checkoutStyles.trialNote}>
                     <span className={checkoutStyles.trialIcon}>
                       <CheckIcon aria-hidden="true" />
                     </span>
                     <div>
-                      <strong>14 días sin cargo</strong>
+                      <strong>
+                        {checkoutInline.contratacion
+                          ? `${checkoutInline.contratacion.revision.destino.totalUsuarios} usuarios en total`
+                          : "14 días sin cargo"}
+                      </strong>
                       <span>
-                        Paddle te mostrará la fecha exacta del primer cobro.
+                        {checkoutInline.contratacion
+                          ? "El total incluye el plan y los usuarios adicionales elegidos. Los impuestos se calculan en el pago."
+                          : "Paddle te mostrará la fecha exacta del primer cobro."}
                       </span>
                     </div>
                   </div>
@@ -925,14 +1138,20 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                     <DialogTitle>Activá tu suscripción</DialogTitle>
                     <DialogDescription>
                       Completá los datos de facturación y elegí tu medio de
-                      pago. No se realizará ningún cargo hoy.
+                      pago.{" "}
+                      {checkoutInline.contratacion
+                        ? "Revisá el importe final antes de autorizar el cobro."
+                        : "No se realizará ningún cargo hoy."}
                     </DialogDescription>
                   </DialogHeader>
 
                   <div className={checkoutStyles.frameShell}>
                     {checkoutCargando ? (
                       <div className={checkoutStyles.loading} role="status">
-                        <span className={checkoutStyles.loader} aria-hidden="true">
+                        <span
+                          className={checkoutStyles.loader}
+                          aria-hidden="true"
+                        >
                           <i />
                           <i />
                           <i />
@@ -1008,7 +1227,8 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
             <div className="sub-plans">
               {datos.planes.map((p, i) => {
                 const activo = elegido === p.codigo;
-                const destacado = i === datos.planes.length - 1;
+                const destacado =
+                  p.recomendado ?? i === datos.planes.length - 1;
                 return (
                   <div
                     key={p.codigo}
@@ -1054,6 +1274,13 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                         mes
                       </div>
                     ) : null}
+                    {p.implementacion != null && (
+                      <div className="sub-plan-billed">
+                        {p.implementacion > 0
+                          ? `Implementación: ${precio(p.implementacion, p.moneda)} · una sola vez`
+                          : "Sin cargo de implementación"}
+                      </div>
+                    )}
                     {p.descripcion ? (
                       <p className="sub-plan-tagline">{p.descripcion}</p>
                     ) : null}
@@ -1068,7 +1295,12 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                       ))}
                     </ul>
                     <div className="sub-plan-cta">
-                      {p.esActual && !(datos.prueba.enPrueba && datos.actual?.proveedor === "manual") ? (
+                      {p.esActual &&
+                      !p.ofertaId &&
+                      !(
+                        datos.prueba.enPrueba &&
+                        datos.actual?.proveedor === "manual"
+                      ) ? (
                         <span className="sub-current-lbl">Plan actual</span>
                       ) : (
                         <button
@@ -1082,9 +1314,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                         >
                           {abriendo === p.codigo
                             ? "Abriendo…"
-                            : p.esActual
-                              ? `Contratar ${p.nombre}`
-                              : `Elegir ${p.nombre}`}
+                            : p.ofertaId && p.esActual && activadaEnPaddle
+                              ? "Administrar plan y usuarios"
+                              : p.esActual
+                                ? `Contratar ${p.nombre}`
+                                : `Elegir ${p.nombre}`}
                         </button>
                       )}
                     </div>
@@ -1178,39 +1412,59 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               </div>
               <div className="sub-sum-row">
                 <span>Ciclo</span>
-                <strong>{anualActivo ? "Anual" : "Mensual"}</strong>
+                <strong>
+                  {(actual?.cicloFacturacion ??
+                    (anualActivo ? "anual" : "mensual")) === "anual"
+                    ? "Anual"
+                    : "Mensual"}
+                </strong>
               </div>
               <div className="sub-sum-row">
                 <span>Precio</span>
                 <strong>
                   {actual
-                    ? precio(actual.precioMensual, actual.moneda)
+                    ? precio(
+                        actual.totalPeriodo ?? actual.precioMensual,
+                        actual.moneda,
+                      )
                     : planElegido
                       ? precio(planElegido.precioMensual, planElegido.moneda)
                       : "—"}
-                  <em>/mes</em>
+                  <em>
+                    /{actual?.cicloFacturacion === "anual" ? "año" : "mes"}
+                  </em>
                 </strong>
               </div>
               <div className="sub-sum-div" />
               <div className="sub-sum-row big">
                 <span>
-                  {cancelaEl
-                    ? "Termina el"
-                    : actual
-                      ? "Próximo cobro"
-                      : "Primer cobro"}
+                  {actual?.estado === "baja"
+                    ? "Estado"
+                    : cancelaEl
+                      ? "Termina el"
+                      : actual
+                        ? "Renovación · precio base"
+                        : "Primer pago · precio base"}
                 </span>
                 <strong>
-                  {cancelaEl
-                    ? fechaLarga(cancelaEl)
-                    : actual
-                      ? precio(actual.precioMensual, actual.moneda)
-                      : planElegido
-                        ? precio(planElegido.precioMensual, planElegido.moneda)
-                        : "—"}
+                  {actual?.estado === "baja"
+                    ? "Sin renovación"
+                    : cancelaEl
+                      ? fechaLarga(cancelaEl)
+                      : actual
+                        ? precio(
+                            actual.totalPeriodo ?? actual.precioMensual,
+                            actual.moneda,
+                          )
+                        : planElegido
+                          ? precio(
+                              planElegido.precioMensual,
+                              planElegido.moneda,
+                            )
+                          : "—"}
                 </strong>
               </div>
-              {cancelaEl ? (
+              {actual?.estado === "baja" ? null : cancelaEl ? (
                 <div className="sub-sum-row muted">
                   <span>Después de esa fecha</span>
                   <span>no se te cobra más</span>
@@ -1225,6 +1479,12 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                   </span>
                 </div>
               )}
+              {!cancelaEl && actual?.estado !== "baja" && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Paddle aplica los impuestos, descuentos y saldos a favor al
+                  calcular el cobro final.
+                </p>
+              )}
             </div>
             {!actual && planElegido ? (
               <button
@@ -1237,7 +1497,11 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               </button>
             ) : null}
             <div className="sub-card-foot">
-              Se cobra automáticamente cada mes. Cancelás cuando quieras.
+              {actual?.estado === "baja"
+                ? "La suscripción finalizó. Podés contratar nuevamente desde esta página."
+                : cancelaEl
+                  ? "La renovación está cancelada. Conservás el acceso hasta la fecha indicada."
+                  : "Se renueva automáticamente según el ciclo contratado. Cancelás cuando quieras."}
             </div>
           </div>
 
@@ -1300,7 +1564,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
               >
                 Ver facturas y datos de facturación
               </button>
-              {cancelaEl ? null : (
+              {cancelaEl || actual?.estado === "baja" ? null : (
                 <button
                   type="button"
                   className="sub-manage danger"
@@ -1332,7 +1596,8 @@ function Cabecera({ actual }: { actual: EstadoSuscripcion["actual"] }) {
           ? "Dada de baja"
           : "Sin plan";
   const tono =
-    actual?.cambioProgramado === "cancel" || actual?.estadoProveedor === "past_due"
+    actual?.cambioProgramado === "cancel" ||
+    actual?.estadoProveedor === "past_due"
       ? "warn"
       : actual?.estado === "activa"
         ? "ok"

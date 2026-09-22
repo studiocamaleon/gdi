@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/permisos-server", () => ({ tienePermiso: vi.fn() }));
+vi.mock("@/lib/capacidades", () => ({ consultarCapacidades: vi.fn() }));
 vi.mock("@/lib/tablero-produccion-server", () => ({
   cargarDatosTableroProduccion: vi.fn(),
 }));
@@ -15,6 +16,7 @@ vi.mock("@/components/navigation/sin-permiso", () => ({
 }));
 import Page from "./page";
 import { tienePermiso } from "@/lib/permisos-server";
+import { consultarCapacidades } from "@/lib/capacidades";
 import { cargarDatosTableroProduccion } from "@/lib/tablero-produccion-server";
 import { getFamiliasPasos, getRecursosEstaciones } from "@/lib/estaciones-api";
 import { EstacionesView } from "@/components/produccion/estaciones-view";
@@ -22,6 +24,9 @@ import { SinPermiso } from "@/components/navigation/sin-permiso";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(consultarCapacidades).mockResolvedValue({
+    funciones: { estaciones: true },
+  } as Awaited<ReturnType<typeof consultarCapacidades>>);
   vi.mocked(cargarDatosTableroProduccion).mockResolvedValue({
     initialItems: [],
     estaciones: [],
@@ -40,7 +45,9 @@ describe("acceso a Estaciones", () => {
     );
     const page = (await Page()).props.children;
     expect(page.type).toBe(EstacionesView);
-    expect(cargarDatosTableroProduccion).toHaveBeenCalledWith({ soloPendientes: true });
+    expect(cargarDatosTableroProduccion).toHaveBeenCalledWith({
+      soloPendientes: true,
+    });
     expect(page.props.configuracionDisponible).toBe(false);
     expect(getRecursosEstaciones).not.toHaveBeenCalled();
     expect(getFamiliasPasos).not.toHaveBeenCalled();
@@ -50,6 +57,17 @@ describe("acceso a Estaciones", () => {
     const page = (await Page()).props.children;
     expect(page.props.configuracionDisponible).toBe(true);
     expect(getRecursosEstaciones).toHaveBeenCalledOnce();
+  });
+  it("conserva la operación pero no solicita configuración si el plan no incluye estaciones", async () => {
+    vi.mocked(tienePermiso).mockResolvedValue(true);
+    vi.mocked(consultarCapacidades).mockResolvedValue({
+      funciones: { estaciones: false },
+    } as Awaited<ReturnType<typeof consultarCapacidades>>);
+    const page = (await Page()).props.children;
+    expect(page.type).toBe(EstacionesView);
+    expect(page.props.configuracionDisponible).toBe(false);
+    expect(getRecursosEstaciones).not.toHaveBeenCalled();
+    expect(getFamiliasPasos).not.toHaveBeenCalled();
   });
   it("conserva la vista operativa pero bloquea editar si faltan recursos", async () => {
     vi.mocked(tienePermiso).mockResolvedValue(true);

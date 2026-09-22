@@ -1,9 +1,9 @@
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import { notFound } from "next/navigation";
 
 import { RutaFormView } from "@/components/productos-servicios/ruta-form-view";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { ApiError } from "@/lib/api";
-import { tienePermiso } from "@/lib/permisos-server";
 import {
   getCatalogoFamilias,
   getRutaById,
@@ -46,7 +46,7 @@ export default async function RutaDetallePage({
   params: Promise<{ rutaId: string }>;
 }) {
   const { rutaId } = await params;
-  if (!(await tienePermiso("costos.gestionar"))) {
+  if (!(await puedeConfigurar("procesos", "costos.gestionar"))) {
     return <SinPermiso modulo="Flujos de producción" />;
   }
   let ruta: RutaConPasos;

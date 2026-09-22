@@ -15,9 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 @Injectable()
 export class SuscripcionReconciliacionScheduler {
-  private readonly logger = new Logger(
-    SuscripcionReconciliacionScheduler.name,
-  );
+  private readonly logger = new Logger(SuscripcionReconciliacionScheduler.name);
   private corriendo = false;
 
   constructor(
@@ -79,12 +77,14 @@ export class SuscripcionReconciliacionScheduler {
   }
 
   async sincronizarReferencia(referencia: string, ahora = new Date()) {
+    const consultadaDesde = new Date();
     const remota = await this.paddle.obtenerSuscripcion(referencia);
     const externa = remota ? this.sync.extraer(remota) : null;
-    if (!externa) return false;
+    if (!externa || externa.referencia !== referencia) return false;
     const resultado = await this.sync.aplicar(externa, {
       origen: 'reconciliacion',
       ahora,
+      consultadaDesde,
     });
     return resultado.aplicado;
   }

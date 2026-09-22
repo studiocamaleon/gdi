@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ControlTrabajosGeometriaService } from '../control-trabajos-geometria.service';
 import { GeometriaJobsController } from './geometria-jobs.controller';
@@ -6,7 +7,11 @@ import { NestingsGuardadosModule } from './nestings-guardados.service';
 import { CapacidadGeometriaModule } from './capacidad-geometria.service';
 
 @Module({
-  imports: [NestingsGuardadosModule, CapacidadGeometriaModule],
+  imports: [
+    CapacidadesEmpresaModule,
+    NestingsGuardadosModule,
+    CapacidadGeometriaModule,
+  ],
   controllers: [GeometriaJobsController],
   providers: [GeometriaJobsService, ControlTrabajosGeometriaService],
   exports: [GeometriaJobsService],

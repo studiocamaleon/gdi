@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -17,6 +18,7 @@ import { SimulacionNestingColaService } from './simulacion-nesting.service';
 import { SimularNestingColaDto } from './simular-nesting.dto';
 
 @Permiso('produccion.ver')
+@RequiereCapacidad('colas_produccion')
 @Controller('produccion/colas')
 export class ColasProduccionController {
   constructor(

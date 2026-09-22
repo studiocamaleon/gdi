@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo/ordenes-trabajo.service';
+import { DesarrolloDocumentalService } from '../desarrollo-documental/desarrollo-documental.service';
 import { crearFixtureLotesF6 } from '../../test/soporte-lotes-f6';
 import {
   huellaContextoPlan,
@@ -79,7 +80,7 @@ async function fixture(tx: Prisma.TransactionClient, cambiaEntrega = false) {
     {} as never,
     {} as never,
     {} as never,
-    {} as never,
+    new DesarrolloDocumentalService(db, {} as never, {} as never),
   );
   const resultado = f.rev.resultadoJson as unknown as ResultadoPlanGuardado;
   const a = resultado.resultado.alternativas[0];

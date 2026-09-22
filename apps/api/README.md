@@ -40,9 +40,25 @@ $ npm run start
 # watch mode
 $ npm run start:dev
 
-# production mode
+# compilar el paquete de la API
+$ npm run build
+
+# ejecutar el paquete compilado
 $ npm run start:prod
 ```
+
+La compilación incluye `src` y sus recursos (fuentes, Python y Lua), y genera
+`dist/src/main.js`. Los scripts de mantenimiento se ejecutan por separado con
+sus instrucciones; no forman parte del paquete de la API. No se generan
+declaraciones `.d.ts`, ya que esta aplicación privada no publica una biblioteca.
+
+El build permite hasta 4 GB de heap de Node para el chequeo de tipos del modelo
+de datos. El proceso termina al completar la compilación; el seguimiento de
+recursos queda habilitado explícitamente en `start:dev`, `start:debug` y
+`worker:dev`. El entorno de despliegue debe proporcionar sus variables y secretos
+propios. Compilar no activa Paddle live ni la facturación fiscal de producción.
+El arranque compilado precarga `.env` antes de importar los módulos que validan
+secretos; las variables proporcionadas por el entorno conservan prioridad.
 
 ## Run tests
 

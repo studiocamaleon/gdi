@@ -59,11 +59,21 @@ const SIN_TENANT_ID_JUSTIFICADOS = new Set([
   'User',
   'AuthSession',
   'UserMfa',
+  // El navegador recordado pertenece a la identidad, no a una empresa.
+  'MfaDispositivo',
   'MfaChallenge',
+  'InvitacionPlataforma',
   // Catálogo compartido: mismos datos para todos los tenants.
   'MaterialPreset',
   'Plan',
   'PlanPrecioLegacy',
+  'PlanBorrador',
+  'PlanPaddleRecurso',
+  // Versiones inmutables del catálogo comercial de Plataforma.
+  'PlanVersion',
+  // Oferta global y precios asociados a versiones inmutables.
+  'PlanOferta',
+  'PlanOfertaPrecio',
   // Solicitud de alta pública: todavía no existe tenant al que pertenecer.
   'RegistroTenant',
   'MaterialPresetVariante',
@@ -104,6 +114,10 @@ const ARCHIVOS_AUTORIZADOS = new Set([
   // transacción que crea su tenant y siempre con ese tenantId explícito.
   'registro/registro.service.ts',
   'usuarios/usuarios.service.ts',
+  // Cuenta accesos e invitaciones con tenantId explícito en ambas consultas.
+  'suscripciones/cupos-usuarios.ts',
+  // Contratación: revalida al administrador con tenantId, userId y membershipId.
+  'suscripciones/contratacion.service.ts',
 ]);
 
 /** Copiado del guard: los que quedan fuera de la inyección automática. */
@@ -114,11 +128,19 @@ const MODELOS_EXENTOS = new Set([
   'EventoCobro',
   'Plan',
   'PlanPrecioLegacy',
+  'PlanBorrador',
+  'PlanPaddleRecurso',
+  'PlanVersion',
+  // Oferta global y precios asociados a versiones inmutables.
+  'PlanOferta',
+  'PlanOfertaPrecio',
   'RegistroTenant',
   'User',
   'AuthSession',
   'UserMfa',
+  'MfaDispositivo',
   'MfaChallenge',
+  'InvitacionPlataforma',
   'Membership',
   'Invitation',
   'MaterialPreset',

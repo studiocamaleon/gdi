@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -45,6 +46,7 @@ export class IntegracionesController {
   }
 
   /** Sólo lectura: qué plantillas hay hoy en la cuenta de Wati del tenant. */
+  @RequiereCapacidad('whatsapp_automatico')
   @Get('wati/plantillas')
   plantillasWati() {
     return this.service.plantillasWati();
@@ -52,6 +54,7 @@ export class IntegracionesController {
 
   /** Somete una plantilla del catálogo de Grafo a Meta. */
   @Permiso('configuracion.gestionar')
+  @RequiereCapacidad('whatsapp_automatico')
   @Post('wati/plantillas/:codigo/someter')
   @Roles(RolSistema.ADMINISTRADOR)
   someterPlantillaWati(@Param('codigo') codigo: string) {
@@ -60,6 +63,7 @@ export class IntegracionesController {
 
   /** Envío de prueba a un número propio, antes de encender la integración. */
   @Permiso('configuracion.gestionar')
+  @RequiereCapacidad('whatsapp_automatico')
   @Post('wati/probar-envio')
   @Roles(RolSistema.ADMINISTRADOR)
   probarEnvioWati(@Body() dto: ProbarEnvioWatiDto) {
@@ -76,6 +80,7 @@ export class IntegracionesController {
 
   @ProhibidoImpersonando()
   @Permiso('configuracion.gestionar')
+  @RequiereCapacidad('whatsapp_automatico')
   @Put('wati')
   @Roles(RolSistema.ADMINISTRADOR)
   conectarWati(

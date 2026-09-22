@@ -1,4 +1,8 @@
 "use client";
+import { CuentaDialog } from "./cuenta-fondos-dialog";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { crearCuentaFondos, getCuentasFondos } from "@/lib/administracion-api";
 import {
   ConfiguracionPage,
   ConfiguracionHeader,
@@ -240,6 +244,7 @@ function SheetMetodo({
   onClose: () => void;
   onSave: (draft: SheetDraft) => void;
 }) {
+  const conValores = useCapacidad("valores");
   const fmt = useFmt();
   const [form, setForm] = React.useState<SheetDraft>(draft);
   const sim = simularMetodo(form, BASE_SIMULACION);
@@ -302,7 +307,9 @@ function SheetMetodo({
             value={form.tipo}
             onChange={(e) => seleccionarTipo(e.target.value as MetodoPagoTipo)}
           >
-            {METODO_PAGO_TIPOS.map((tipo) => (
+            {METODO_PAGO_TIPOS.filter(
+              (tipo) => conValores || tipo !== "cheque_echeq",
+            ).map((tipo) => (
               <option key={tipo} value={tipo}>
                 {METODO_PAGO_TIPO_LABELS[tipo]}
               </option>
@@ -448,7 +455,12 @@ export function MetodosPagoView({
   initialCuentas: CuentaFondosResumen[];
 }) {
   const [metodos, setMetodos] = React.useState(initialMetodos);
-  const [cuentas] = React.useState(initialCuentas);
+  const [cuentas, setCuentas] = React.useState(initialCuentas);
+  const conValores = useCapacidad("valores");
+  const puedeCrearCuenta = usePuede("administracion.gestionar");
+  const { moneda } = useConfigRegional();
+  const [nuevaCuenta, setNuevaCuenta] = React.useState(false);
+  const [guardandoCuenta, setGuardandoCuenta] = React.useState(false);
   const [busqueda, setBusqueda] = React.useState("");
   const [tab, setTab] = React.useState<"todos" | "activos" | "inactivos">(
     "todos",
@@ -461,6 +473,7 @@ export function MetodosPagoView({
   const lista = React.useMemo(
     () =>
       metodos.filter((metodo) => {
+        if (!conValores && metodo.tipo === "cheque_echeq") return false;
         if (tab === "activos" && !metodo.activo) return false;
         if (tab === "inactivos" && metodo.activo) return false;
         if (busqueda) {
@@ -470,7 +483,7 @@ export function MetodosPagoView({
         }
         return true;
       }),
-    [metodos, tab, busqueda],
+    [metodos, tab, busqueda, conValores],
   );
 
   const guardar = async (draft: SheetDraft) => {
@@ -550,6 +563,49 @@ export function MetodosPagoView({
           }
         />
 
+        {puedeCrearCuenta && (
+          <div className="apm-concept">
+            <div className="c">
+              <strong>Cuentas de cobro</strong>
+              <p>
+                {cuentas.length
+                  ? cuentas.map((c) => c.nombre).join(" · ")
+                  : "Agregá una caja, banco o billetera para recibir los cobros."}
+              </p>
+            </div>
+            <ActionButton
+              variant="outline"
+              onPress={() => setNuevaCuenta(true)}
+            >
+              <PlusIcon /> Agregar cuenta
+            </ActionButton>
+          </div>
+        )}
+        {nuevaCuenta && (
+          <CuentaDialog
+            open
+            monedaLocal={moneda.codigo}
+            ocupado={guardandoCuenta}
+            onOpenChange={(open) => !guardandoCuenta && setNuevaCuenta(open)}
+            onGuardar={async (payload) => {
+              setGuardandoCuenta(true);
+              try {
+                await crearCuentaFondos(payload);
+                setNuevaCuenta(false);
+                setCuentas(await getCuentasFondos());
+                toast.success("Cuenta de cobro creada.");
+              } catch (error) {
+                toast.error(
+                  error instanceof Error
+                    ? error.message
+                    : "No se pudo guardar la cuenta.",
+                );
+              } finally {
+                setGuardandoCuenta(false);
+              }
+            }}
+          />
+        )}
         <div className="apm-concept">
           <div className="c">
             <div className="n">

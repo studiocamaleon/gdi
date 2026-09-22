@@ -4,6 +4,7 @@ import {
   ConfiguracionHeader,
 } from "@/components/configuracion/configuracion-workspace";
 
+import { CupoEquipo } from "./cupo-equipo";
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -185,7 +186,7 @@ export function UsuariosView({
               disabled={invitando || sinCupo}
               title={
                 sinCupo
-                  ? `Tu plan incluye ${datos.limite} usuarios y ya los estás usando.`
+                  ? `Los ${datos.limite} lugares están ocupados por accesos o invitaciones.`
                   : undefined
               }
             >
@@ -205,17 +206,7 @@ export function UsuariosView({
         </TabsList>
 
         <TabsContent value="usuarios" className="pt-4">
-          {datos.limite !== null && (
-            <div className="usr-cupo">
-              <strong>
-                {datos.enUso} de {datos.limite}
-              </strong>{" "}
-              usuarios con acceso en tu plan.
-              {sinCupo
-                ? " Para sumar otro, desactivá uno o pasá a un plan mayor."
-                : ""}
-            </div>
-          )}
+          <CupoEquipo datos={datos} recargar={recargar} />
 
           {provisoria && (
             <div className="usr-form">

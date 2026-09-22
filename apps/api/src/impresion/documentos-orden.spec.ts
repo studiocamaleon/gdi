@@ -199,6 +199,22 @@ describe('envíos de documentos de una OT', () => {
       perfiles: jest.fn().mockResolvedValue([structuredClone(perfilPrueba)]),
     };
     const tx = {
+      tenant: {
+        findUnique: () =>
+          Promise.resolve({
+            activo: true,
+            suscripcion: {
+              estado: 'activa',
+              plan: { featuresJson: { impresionDirecta: true } },
+            },
+          }),
+      },
+      planContratacion: { findFirst: jest.fn().mockResolvedValue(null) },
+      suscripcion: {
+        findUnique: jest.fn().mockResolvedValue({
+          plan: { featuresJson: { impresionDirecta: true } },
+        }),
+      },
       maquina: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -279,6 +295,47 @@ describe('envíos de documentos de una OT', () => {
     await expect(f.preparar()).rejects.toThrow('bloqueado');
     expect(f.crear).not.toHaveBeenCalled();
   });
+  it.each(['enviando', 'checkout', 'verificar'])(
+    'un cambio %s que retira impresión impide firmar y encolar, pero conserva la confirmación histórica',
+    async (estado) => {
+      const f = await fixture();
+      f.tx.planContratacion.findFirst.mockResolvedValue({
+        id: 'contratacion',
+        estado,
+        venceEl: new Date('2000-01-01'),
+        oferta: {
+          version: {
+            id: 'version',
+            numero: 1,
+            catalogoVersion: 1,
+            contenido: {
+              nombre: 'Esencial',
+              usuariosIncluidos: 3,
+              almacenamientoModo: 'cupo',
+              almacenamientoGb: 250,
+              funciones: { impresion_directa: false, colas_impresion: false },
+            },
+          },
+        },
+      });
+      await expect(f.preparar()).rejects.toMatchObject({
+        status: 409,
+        response: { code: 'CAMBIO_PLAN_PENDIENTE' },
+      });
+      await expect(f.servicio.solicitar(auth, 'orden')).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(f.firmar).not.toHaveBeenCalled();
+      expect(f.crear).not.toHaveBeenCalled();
+      f.buscarEvento.mockResolvedValue({
+        id: 'envio',
+        datosJson: { itemId: 'item', estado: 'ENVIADO' },
+      });
+      await expect(
+        f.servicio.confirmar(auth, 'orden', ['envio']),
+      ).resolves.toEqual({ ok: true });
+    },
+  );
   it('revalida la preparación bajo bloqueo antes de reservar el envío', async () => {
     const f = await fixture();
     f.perfiles.perfiles

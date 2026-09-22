@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useCallback, useMemo, useState } from "react";
 import { CalendarDays, Factory, Plus, RefreshCw } from "lucide-react";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
@@ -56,7 +57,8 @@ export type EstacionesViewProps = DatosProduccionOperativa & {
 export function EstacionesView(props: EstacionesViewProps) {
   const scope = useDesignScope();
   const themeClass = useDesignTheme();
-  const puedeConfigurar = usePuede("produccion.configurar");
+  const conEstaciones = useCapacidad("estaciones");
+  const puedeConfigurar = usePuede("produccion.configurar") && conEstaciones;
   const operacion = useProduccionOperativa({ ...props, soloPendientes: true });
   const { zonaHoraria } = useConfigRegional();
   const [estaciones, setEstaciones] = useState(props.estaciones);

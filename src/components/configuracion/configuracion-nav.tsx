@@ -1,5 +1,8 @@
 "use client";
-import { useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import {
+  useImpresionDirecta,
+  useCapacidad,
+} from "@/components/navigation/capacidades-provider";
 
 /**
  * La columna de secciones de Configuración: el menú del módulo, que reemplazó
@@ -49,12 +52,19 @@ const ICONOS: Record<string, IconCmp> = {
 
 export function ConfiguracionNav() {
   const impresionDirecta = useImpresionDirecta();
+  const centroCopiado = useCapacidad("centro_copiado");
   const pathname = usePathname();
   const puede = usePuedeFn();
   const { paisCodigo } = useConfigRegional();
   const visibles = React.useMemo(
-    () => seccionesConfigVisibles(puede, paisCodigo, impresionDirecta),
-    [puede, paisCodigo, impresionDirecta],
+    () =>
+      seccionesConfigVisibles(
+        puede,
+        paisCodigo,
+        impresionDirecta,
+        centroCopiado,
+      ),
+    [puede, paisCodigo, impresionDirecta, centroCopiado],
   );
 
   const grupos = [

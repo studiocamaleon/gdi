@@ -1,8 +1,24 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
-import type { Request } from 'express';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  Res,
+  Header,
+  HttpCode,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { MFA_HEADERS, MFA_RECORDADO_HEADER } from './mfa-dispositivo-cookie';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentSession } from './current-auth.decorator';
 import { AuthService } from './auth.service';
+import { PermitirEnrolamientoPlataforma } from './enrolamiento-plataforma';
+import {
+  AceptarInvitacionPlataformaDto,
+  TokenInvitacionPlataformaDto,
+} from './dto/invitacion-plataforma.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import { CambiarPasswordDto } from './dto/cambiar-password.dto';
 import { ipDeRequest } from './ip';
@@ -34,22 +50,41 @@ export class AuthController {
     // La IP sale de Express, que ya resolvió el X-Forwarded-For según el
     // `trust proxy` de main.ts. Leer el header a mano acá sería confiar en un
     // dato que cualquiera puede escribir.
-    return this.authService.login(payload, ipDeRequest(req));
+    return this.authService.login(
+      payload,
+      ipDeRequest(req),
+      req.get(MFA_HEADERS.tenant),
+    );
   }
 
   /** Login del backoffice: staff de plataforma, sin exigir empresa. */
   @Public()
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('login-plataforma')
-  loginPlataforma(@Body() payload: LoginDto) {
-    return this.authService.loginPlataforma(payload);
+  loginPlataforma(@Body() payload: LoginDto, @Req() req: Request) {
+    return this.authService.loginPlataforma(
+      payload,
+      req.get(MFA_HEADERS.plataforma),
+    );
   }
 
   @Public()
   @Throttle({ default: { ttl: 60000, limit: 10 } })
   @Post('mfa/verificar')
-  verificarMfa(@Body() payload: VerificarMfaDto, @Req() req: Request) {
-    return this.authService.verificarMfa(payload, ipDeRequest(req));
+  async verificarMfa(
+    @Body() payload: VerificarMfaDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { dispositivoRecordado, ...respuesta } =
+      await this.authService.verificarMfa(payload, ipDeRequest(req), {
+        tenant: req.get(MFA_HEADERS.tenant),
+        plataforma: req.get(MFA_HEADERS.plataforma),
+      });
+    res.setHeader('Cache-Control', 'no-store');
+    if (dispositivoRecordado)
+      res.setHeader(MFA_RECORDADO_HEADER, JSON.stringify(dispositivoRecordado));
+    return respuesta;
   }
 
   // @SinTenant: el logout no necesita contexto de tenant (revoca la AuthSession
@@ -57,9 +92,27 @@ export class AuthController {
   // tienen permitidas las rutas @SinTenant. Sin esto, el staff del backoffice no
   // podía cerrar sesión.
   @SinTenant()
+  @PermitirEnrolamientoPlataforma()
   @Post('logout')
+  @HttpCode(204)
   logout(@CurrentSession() auth: CurrentAuth) {
     return this.authService.logout(auth);
+  }
+
+  @Public()
+  @Post('invitacion-plataforma/consultar')
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  consultarEquipo(@Body() dto: TokenInvitacionPlataformaDto) {
+    return this.authService.consultarInvitacionPlataforma(dto.token);
+  }
+
+  @Public()
+  @Post('invitacion-plataforma/aceptar')
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  aceptarEquipo(@Body() dto: AceptarInvitacionPlataformaDto) {
+    return this.authService.aceptarInvitacionPlataforma(dto);
   }
 
   @Public()

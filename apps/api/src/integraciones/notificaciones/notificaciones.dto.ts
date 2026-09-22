@@ -1,11 +1,13 @@
 import {
   IsBoolean,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   Matches,
   Max,
   Min,
+  Length,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -62,4 +64,12 @@ export class CambiarConfigDto {
 export class CambiarEventoDto {
   @IsBoolean()
   activo!: boolean;
+}
+
+export class ResolverAvisoDto {
+  @IsIn(['descartar', 'confirmar_enviada']) accion!:
+    | 'descartar'
+    | 'confirmar_enviada';
+  @IsString() @Length(1, 32) estadoEsperado!: string;
+  @IsString() @Length(5, 500) motivo!: string;
 }

@@ -1,4 +1,10 @@
-import { incluyeImpresionDirecta } from './capacidades-plan';
+import type { ContenidoPlan } from '../plataforma/planes/catalogo-planes';
+import {
+  contratoSuscripcion,
+  funcionHistoricaEnContrato,
+} from './contrato-suscripcion';
+import { type ClaveFuncionPlan } from './capacidades-plan';
+import { resolverAccesoEmpresa } from './acceso-empresa';
 import {
   BadRequestException,
   Injectable,
@@ -9,12 +15,16 @@ import { PaddleService } from '../cobro/paddle.service';
 import { SuscripcionSyncService } from '../cobro/suscripcion-sync.service';
 import { estadoDePrueba, type EstadoPrueba } from './trial';
 import { SuscripcionReconciliacionScheduler } from './suscripcion-reconciliacion.scheduler';
+import {
+  incluirOferta,
+  presentarOferta,
+} from '../plataforma/planes/ofertas-planes';
 
 const DIA_MS = 86_400_000;
 
 /**
  * Lecturas de la suscripción de un tenant — el ÚNICO lugar que interpreta
- * `Plan.featuresJson`. Los services de negocio preguntan `feature(tenantId,
+ * capacidades del plan. Los services de negocio preguntan `feature(tenantId,
  * 'afip')` y nunca leen el JSON directo: un solo lugar decide qué incluye un
  * plan (docs/control-plane-diseno.md).
  *
@@ -23,15 +33,11 @@ const DIA_MS = 86_400_000;
  * control plane le asigna un plan; así la llegada de los planes no apaga
  * nada que hoy funciona.
  *
- * Las escrituras NO viven acá: cambiar el plan de un tenant es un acto del
- * control plane, auditado en PlataformaEvento (plataforma.service).
+ * La autogestión comercial usa Paddle. Plataforma sólo asigna localmente los
+ * contratos manuales. Ambos conservan el bloqueo administrativo independiente.
  */
 
-export type FeaturePlan =
-  | 'afip'
-  | 'whatsapp'
-  | 'centroCopiado'
-  | 'impresionDirecta';
+export type FeaturePlan = ClaveFuncionPlan;
 
 export type LimitesPlan = {
   /** Nombre del plan que fija estos topes. `null` = sin suscripción (legacy). */
@@ -39,20 +45,6 @@ export type LimitesPlan = {
   usuariosMax: number | null;
   ordenesMesMax: number | null;
   storageGb: number | null;
-};
-
-type Features = {
-  /** Acceso general. Los pilotos con habilitación explícita quedan excluidos. */
-  todo?: boolean;
-  afip?: boolean;
-  whatsapp?: boolean;
-  /** Módulo Centro de copiado (TPV de impresión por hoja). Actualmente
-   * incluido en Diamante; tenants legacy sin suscripción conservan acceso. */
-  centroCopiado?: boolean;
-  impresionDirecta?: boolean;
-  usuariosMax?: number;
-  ordenesMesMax?: number;
-  storageGb?: number;
 };
 
 export type SuscripcionDe = {
@@ -64,6 +56,12 @@ export type SuscripcionDe = {
 } | null;
 
 export type PlanContratable = {
+  implementacion?: number;
+  ofertaId?: string;
+  versionId?: string;
+  recomendado?: boolean;
+  usuarioMensual?: { importe: number; cantidadMaxima: number } | null;
+  usuarioAnual?: { importe: number; cantidadMaxima: number } | null;
   codigo: string;
   nombre: string;
   descripcion: string | null;
@@ -89,6 +87,10 @@ export type PlanContratable = {
 
 export type EstadoSuscripcion = {
   actual: {
+    ofertaId?: string | null;
+    cicloFacturacion?: string | null;
+    usuariosAdicionales?: number;
+    totalPeriodo?: number | null;
     planCodigo: string;
     planNombre: string;
     precioMensual: number;
@@ -151,7 +153,7 @@ export class SuscripcionesService {
   async sincronizarEstadoActual(tenantId: string, email = '') {
     const suscripcion = await this.prisma.suscripcion.findFirst({
       where: { tenantId },
-      select: { referenciaExterna: true, proveedor: true },
+      select: { referenciaExterna: true, proveedor: true, planVersionId: true },
     });
     if (suscripcion?.proveedor === 'paddle' && suscripcion.referenciaExterna) {
       await this.reconciliacion.sincronizarReferencia(
@@ -165,13 +167,15 @@ export class SuscripcionesService {
   async de(tenantId: string): Promise<SuscripcionDe> {
     const s = await this.prisma.suscripcion.findFirst({
       where: { tenantId },
-      include: { plan: true },
+      include: { plan: true, planVersion: true },
     });
     if (!s) return null;
     return {
       planCodigo: s.plan.codigo,
-      planNombre: s.plan.nombre,
-      precioMensual: Number(s.plan.precioMensual),
+      planNombre: contratoSuscripcion(s).nombre,
+      precioMensual:
+        (s.planVersion?.contenido as unknown as ContenidoPlan | undefined)
+          ?.precios?.mensual ?? Number(s.plan.precioMensual),
       estado: s.estado,
       desde: s.desde.toISOString(),
     };
@@ -179,35 +183,51 @@ export class SuscripcionesService {
 
   /**
    * ¿El plan del tenant incluye este feature? Sin suscripción → true
-   * (grandfathered); con suscripción suspendida → false (no se paga, no hay
-   * feature); con plan → lo que diga el plan.
+   * (grandfathered, excepto pilotos); acceso restringido → false;
+   * con plan → el catálogo compartido de capacidades.
    */
   async feature(tenantId: string, clave: FeaturePlan): Promise<boolean> {
-    const s = await this.prisma.suscripcion.findFirst({
-      where: { tenantId },
-      include: { plan: { select: { featuresJson: true } } },
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        activo: true,
+        suscripcion: {
+          select: {
+            estado: true,
+            planVersion: true,
+            proveedor: true,
+            estadoProveedor: true,
+            trialHasta: true,
+            graciaHasta: true,
+            plan: { select: { featuresJson: true } },
+          },
+        },
+      },
     });
-    if (clave === 'impresionDirecta')
-      return incluyeImpresionDirecta(s?.estado, s?.plan.featuresJson);
-    if (!s) return true;
-    if (s.estado !== 'activa') return false;
-    const features = (s.plan.featuresJson ?? {}) as Features;
-    return features.todo === true || features[clave] === true;
+    if (
+      !tenant ||
+      resolverAccesoEmpresa(tenant.activo, tenant.suscripcion).modo !==
+        'operativo'
+    )
+      return false;
+    return funcionHistoricaEnContrato(
+      contratoSuscripcion(tenant.suscripcion),
+      clave,
+    );
   }
 
   /** Los topes del plan, o todos null (legacy / sin límite). */
   async limites(tenantId: string): Promise<LimitesPlan> {
     const s = await this.prisma.suscripcion.findFirst({
       where: { tenantId },
-      include: { plan: { select: { nombre: true, featuresJson: true } } },
+      include: { plan: true, planVersion: true },
     });
-    const f = (s?.plan.featuresJson ?? {}) as Features;
-    const sinLimites = f.todo === true;
+    const c = contratoSuscripcion(s);
     return {
-      planNombre: s?.plan.nombre ?? null,
-      usuariosMax: sinLimites ? null : (f.usuariosMax ?? null),
-      ordenesMesMax: sinLimites ? null : (f.ordenesMesMax ?? null),
-      storageGb: sinLimites ? null : (f.storageGb ?? null),
+      planNombre: s ? c.nombre : null,
+      usuariosMax: c.limites.usuariosMax,
+      ordenesMesMax: c.limites.ordenesMesMax,
+      storageGb: c.limites.almacenamiento.gb,
     };
   }
 
@@ -227,7 +247,11 @@ export class SuscripcionesService {
     const [suscripcion, planes] = await Promise.all([
       this.prisma.suscripcion.findFirst({
         where: { tenantId },
-        include: { plan: true },
+        include: {
+          plan: true,
+          planVersion: true,
+          oferta: { include: incluirOferta },
+        },
       }),
       this.prisma.plan.findMany({
         // Un plan interno sólo se devuelve a quien ya lo tiene asignado. De
@@ -237,11 +261,18 @@ export class SuscripcionesService {
           OR: [{ publico: true }, { suscripciones: { some: { tenantId } } }],
         },
         orderBy: { orden: 'asc' },
+        include: { ofertaActual: { include: incluirOferta } },
       }),
     ]);
 
-    const contratables = planes.filter(
-      (p) => p.paddlePriceId !== null && !p.precioAConsultar,
+    const contratables = planes.filter((p) =>
+      p.comercialVersionado
+        ? (p.publico || p.id === suscripcion?.planId) &&
+          p.ofertaActual?.entorno ===
+            (process.env.PADDLE_ENV === 'production' ? 'production' : 'sandbox')
+        : !suscripcion?.planVersionId &&
+          p.paddlePriceId !== null &&
+          !p.precioAConsultar,
     );
 
     // Las facturas se piden sólo si el tenant ya es cliente en la pasarela.
@@ -258,9 +289,31 @@ export class SuscripcionesService {
     return {
       actual: suscripcion
         ? {
+            ofertaId: suscripcion.ofertaId,
+            cicloFacturacion: suscripcion.cicloFacturacion,
+            usuariosAdicionales: suscripcion.usuariosAdicionales,
+            totalPeriodo:
+              suscripcion.oferta && suscripcion.cicloFacturacion
+                ? suscripcion.oferta.precios
+                    .filter((p) => p.ciclo === suscripcion.cicloFacturacion)
+                    .reduce(
+                      (total, p) =>
+                        total +
+                        Number(p.importe) *
+                          (p.tipo === 'usuario'
+                            ? suscripcion.usuariosAdicionales
+                            : 1),
+                      0,
+                    )
+                : null,
             planCodigo: suscripcion.plan.codigo,
-            planNombre: suscripcion.plan.nombre,
-            precioMensual: Number(suscripcion.plan.precioMensual),
+            planNombre: contratoSuscripcion(suscripcion).nombre,
+            precioMensual:
+              (
+                suscripcion.planVersion?.contenido as unknown as
+                  | ContenidoPlan
+                  | undefined
+              )?.precios?.mensual ?? Number(suscripcion.plan.precioMensual),
             moneda: suscripcion.plan.moneda,
             estado: suscripcion.estado,
             estadoProveedor: suscripcion.estadoProveedor,
@@ -280,12 +333,41 @@ export class SuscripcionesService {
                   ),
                 )
               : null,
-            soloLectura: suscripcion.estado !== 'activa',
+            soloLectura:
+              resolverAccesoEmpresa(true, suscripcion).modo !== 'operativo',
             ultimaSyncProveedorEl:
               suscripcion.ultimaSyncProveedorEl?.toISOString() ?? null,
           }
         : null,
       planes: contratables.map((p) => {
+        if (p.comercialVersionado && p.ofertaActual) {
+          const o = presentarOferta(p.ofertaActual);
+          return {
+            ofertaId: o.ofertaId,
+            versionId: o.versionId,
+            recomendado: o.recomendado,
+            codigo: o.codigo,
+            nombre: o.nombre,
+            descripcion: o.descripcion,
+            precioMensual: o.precioMensual,
+            moneda: o.moneda,
+            features: o.features,
+            priceId: o.mensual.priceId,
+            esActual: o.ofertaId === suscripcion?.ofertaId,
+            anual: o.anual
+              ? this.compararAnual(
+                  o.precioMensual,
+                  o.anual.importe,
+                  o.anual.priceId,
+                )
+              : null,
+            implementacion: suscripcion?.implementacionResueltaEl
+              ? 0
+              : (o.implementacion?.importe ?? 0),
+            usuarioMensual: o.usuarioMensual,
+            usuarioAnual: o.usuarioAnual,
+          };
+        }
         const mensual = Number(p.precioMensual);
         const anual =
           p.paddlePriceIdAnual && p.precioAnual !== null
@@ -361,7 +443,11 @@ export class SuscripcionesService {
     const [suscripcion, plan] = await Promise.all([
       this.prisma.suscripcion.findFirst({
         where: { tenantId },
-        select: { referenciaExterna: true, proveedor: true },
+        select: {
+          referenciaExterna: true,
+          proveedor: true,
+          planVersionId: true,
+        },
       }),
       this.prisma.plan.findFirst({
         // Los planes internos se asignan exclusivamente desde Plataforma. No
@@ -370,6 +456,10 @@ export class SuscripcionesService {
       }),
     ]);
     if (!plan) throw new NotFoundException('El plan no existe.');
+    if (plan.comercialVersionado || suscripcion?.planVersionId)
+      throw new BadRequestException(
+        'El cambio de una versión publicada requiere revisar sus funciones, cupos y condiciones comerciales antes de cobrar.',
+      );
     if (!suscripcion?.referenciaExterna || suscripcion.proveedor !== 'paddle') {
       throw new BadRequestException(
         'Todavía no hay una suscripción activa en la pasarela: contratá un plan primero.',
@@ -406,7 +496,7 @@ export class SuscripcionesService {
     const [s, plan] = await Promise.all([
       this.prisma.suscripcion.findFirst({
         where: { tenantId },
-        select: { referenciaExterna: true },
+        select: { referenciaExterna: true, planVersionId: true },
       }),
       this.prisma.plan.findFirst({
         // La previsualización comparte la misma frontera que el cambio: un
@@ -414,6 +504,7 @@ export class SuscripcionesService {
         where: { codigo: planCodigo, activo: true, publico: true },
       }),
     ]);
+    if (plan?.comercialVersionado || s?.planVersionId) return null;
     const priceId =
       ciclo === 'anual' ? plan?.paddlePriceIdAnual : plan?.paddlePriceId;
     if (!s?.referenciaExterna || !priceId) return null;

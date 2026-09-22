@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
   Logger,
@@ -51,12 +52,26 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
   constructor(
     private readonly jobs: GeometriaJobsService,
     private readonly cache: GeometriaVectorialCacheService,
+    private readonly capacidadesPlan: CapacidadesEmpresaService,
   ) {}
 
   async iniciar(input: {
     tenantId: string;
     dto: AnalizarSvgFabricacionDto;
   }): Promise<VistaAnalisisVectorial> {
+    await this.capacidadesPlan.exigirTodas(input.tenantId, [
+      'analisis_vectorial',
+      'aprovechamiento_cotizacion',
+      'nesting_irregular',
+    ]);
+    return this.calcular(input, false);
+  }
+
+  private async calcular(
+    input: { tenantId: string; dto: AnalizarSvgFabricacionDto },
+    calculoCotizacion: boolean,
+  ): Promise<VistaAnalisisVectorial> {
+    await this.capacidadesPlan.exigir(input.tenantId, 'nesting_irregular');
     const parametros = parametrosDesdeDto(input.dto);
     const sourceHash = this.cache.crearSourceHash(input.dto.svg);
     const cacheKey = this.cache.calcularCacheKey({
@@ -91,7 +106,11 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     if (!preparacion.trabajo)
       throw new Error('No se generó el trabajo de nesting vectorial.');
 
-    const trabajo = await this.jobs.crear({
+    const trabajo = await (
+      calculoCotizacion
+        ? this.jobs.crearParaCotizacion.bind(this.jobs)
+        : this.jobs.crear.bind(this.jobs)
+    )({
       tenantId: input.tenantId,
       dto: {
         motor: preparacion.trabajo.motor,
@@ -160,7 +179,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     tenantId: string;
     dto: AnalizarSvgFabricacionDto;
   }): Promise<SolucionNesting> {
-    let vista = await this.iniciar(input);
+    let vista = await this.calcular(input, true);
     const limite = Date.now() + timeoutEsperaCotizacionMs();
     while (vista.estado === 'pendiente' || vista.estado === 'procesando') {
       if (Date.now() >= limite) {
@@ -191,6 +210,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     problema: ProblemaNesting;
     claveSolicitud?: string;
   }): Promise<SolucionNesting> {
+    await this.capacidadesPlan.exigir(input.tenantId, 'nesting_irregular');
     const problemaHash = createHash('sha256')
       .update(JSON.stringify(input.problema))
       .digest('hex');
@@ -204,7 +224,7 @@ export class AnalisisVectorialAsyncService implements OnApplicationShutdown {
     if (!preparacion.trabajo) {
       throw errorCalculoNesting({ estado: 'fallido' });
     }
-    let vista = await this.jobs.crear({
+    let vista = await this.jobs.crearParaCotizacion({
       tenantId: input.tenantId,
       dto: {
         motor: preparacion.trabajo.motor,

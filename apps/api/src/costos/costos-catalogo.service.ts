@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Planta } from '@prisma/client';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
@@ -15,6 +16,9 @@ export class CostosCatalogoService {
     private readonly prisma: PrismaService,
     private readonly mapper: CostosMapper,
     private readonly validaciones: CostosValidacionesService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async findPlantas(auth: CurrentAuth) {
@@ -27,6 +31,7 @@ export class CostosCatalogoService {
   }
 
   async createPlanta(auth: CurrentAuth, payload: UpsertPlantaDto) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     let planta: Planta;
 
     try {
@@ -46,6 +51,7 @@ export class CostosCatalogoService {
   }
 
   async updatePlanta(auth: CurrentAuth, id: string, payload: UpsertPlantaDto) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     await this.validaciones.findPlantaOrThrow(auth, id);
 
     let planta: Planta;
@@ -67,6 +73,7 @@ export class CostosCatalogoService {
   }
 
   async togglePlanta(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const planta = await this.validaciones.findPlantaOrThrow(auth, id);
 
     return this.prisma.planta.update({
@@ -119,6 +126,7 @@ export class CostosCatalogoService {
   }
 
   async createCentro(auth: CurrentAuth, payload: UpsertCentroCostoDto) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const plantaId =
       payload.plantaId ?? (await this.resolverPlantaPorDefecto(auth));
     await this.validaciones.validateCentroReferences(auth, {
@@ -149,6 +157,7 @@ export class CostosCatalogoService {
     id: string,
     payload: UpsertCentroCostoDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     await this.validaciones.findCentroOrThrow(auth, id);
     await this.validaciones.validateCentroReferences(auth, payload);
 
@@ -172,6 +181,7 @@ export class CostosCatalogoService {
   }
 
   async toggleCentro(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const centro = await this.validaciones.findCentroOrThrow(auth, id);
 
     return this.prisma.centroCosto.update({
@@ -181,6 +191,7 @@ export class CostosCatalogoService {
   }
 
   async eliminarCentro(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const centro = await this.validaciones.findCentroOrThrow(auth, id);
 
     // Bloqueamos el borrado si el centro está en uso: máquinas o pasos lo

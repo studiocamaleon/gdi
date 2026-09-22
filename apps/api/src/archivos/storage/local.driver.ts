@@ -73,13 +73,18 @@ export class LocalDriver implements StorageDriver {
 
   // ── Multipart (simulado: cada parte es un archivo suelto) ───────────
 
-  iniciarMultipart(
+  async iniciarMultipart(
     key: string,
-    opciones: { contentType: string; bytes: number },
+    opciones: {
+      contentType: string;
+      bytes: number;
+      alCrear?: (uploadId: string) => Promise<void>;
+    },
   ): Promise<MultipartIniciado> {
     // El uploadId es determinístico a partir de la clave: no hay servidor de
     // objetos que lleve estado, y la clave ya es única por archivo.
     const uploadId = createHash('sha1').update(key).digest('hex').slice(0, 16);
+    await opciones.alCrear?.(uploadId);
     const tamanioParte = calcularTamanioParte(opciones.bytes);
     const cantidad = Math.max(1, Math.ceil(opciones.bytes / tamanioParte));
     const partes = Array.from({ length: cantidad }, (_, i) => ({

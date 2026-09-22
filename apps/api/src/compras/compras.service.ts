@@ -1,3 +1,6 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { nombreMaterialCompra } from './nombre-material-compra';
 import { leerMaterialesOrden } from '../ordenes-trabajo/materiales-orden.consulta';
 import {
@@ -72,6 +75,9 @@ export class ComprasService {
     private readonly prisma: PrismaService,
     private readonly inventario: InventarioService,
     private readonly reservas: ReservasMaterialService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
   private precios(auth: CurrentAuth) {
     if (
@@ -91,7 +97,8 @@ export class ComprasService {
     );
   }
   private async bloqueo(tx: Prisma.TransactionClient, tenantId: string) {
-    // Compras → OTs ordenadas → política → variantes ordenadas. Ningún escritor de OT toma este lock.
+    // Tenant → Compras → OTs ordenadas → política → variantes ordenadas.
+    // Ningún escritor de OT toma el lock de Compras.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`compras:${tenantId}`},0))::text`;
   }
   private async operacion(
@@ -109,6 +116,7 @@ export class ComprasService {
       .digest('hex');
     return this.prisma.$transaction(
       async (tx) => {
+        await bloquearCupoUsuarios(tx, auth.tenantId);
         await this.bloqueo(tx, auth.tenantId);
         const previa = await tx.operacionCompra.findUnique({
           where: { tenantId_clave: { tenantId: auth.tenantId, clave } },
@@ -120,6 +128,16 @@ export class ComprasService {
             );
           return previa.resultado;
         }
+        await this.capacidades.exigirTodas(
+          auth.tenantId,
+          accion === 'recibir' ? ['compras', 'recepciones'] : ['compras'],
+          tx,
+        );
+        if (accion === 'crear' || accion === 'emitir')
+          await exigirContinuidadCompromiso(tx, auth.tenantId, [
+            'compras',
+            'recepciones',
+          ]);
         const resultado = await run(tx);
         await tx.operacionCompra.create({
           data: {
@@ -193,6 +211,7 @@ export class ComprasService {
       await this.reservas.sincronizarOrdenTx(tx, tenantId, id);
   }
   async catalogo(auth: CurrentAuth) {
+    await this.capacidades.exigirIncluida(auth.tenantId, 'compras');
     this.precios(auth);
     const tenantId = auth.tenantId;
     const [proveedores, variantes, ubicaciones, empresa] = await Promise.all([
@@ -261,9 +280,17 @@ export class ComprasService {
     };
   }
   async guardarOferta(auth: CurrentAuth, data: OfertaCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
+    await this.capacidades.exigir(auth.tenantId, 'proveedores');
     this.precios(auth);
     return this.prisma.$transaction(async (tx) => {
       const tenantId = auth.tenantId;
+      await bloquearCupoUsuarios(tx, tenantId);
+      await this.capacidades.exigirTodas(
+        tenantId,
+        ['compras', 'proveedores'],
+        tx,
+      );
       await this.bloqueo(tx, tenantId);
       await bloquearVariantesStock(tx, tenantId, [data.varianteId]);
       const proveedor = await tx.proveedor.findFirst({
@@ -288,7 +315,8 @@ export class ComprasService {
         },
       };
       const actual = await tx.ofertaCompra.findUnique({ where });
-      if ((actual?.version ?? 0) !== data.version)
+      const { version, ...resto } = data;
+      if ((actual?.version ?? 0) !== version)
         throw new ConflictException(
           'La oferta cambió. Actualizá antes de guardar.',
         );
@@ -297,7 +325,6 @@ export class ComprasService {
       this.validarFactor(data.unidadCompra, unidadStock, data.factorStock);
       if (!/^[A-Z]{3}$/.test(data.moneda))
         throw new BadRequestException('Moneda no válida.');
-      const { version, ...resto } = data;
       const values = {
         ...resto,
         tenantId,
@@ -335,6 +362,7 @@ export class ComprasService {
       );
   }
   async necesidades(auth: CurrentAuth, page = 1) {
+    await this.capacidades.exigirIncluida(auth.tenantId, 'compras');
     return this.prisma.$transaction(
       async (tx) => {
         const tenantId = auth.tenantId;
@@ -456,6 +484,7 @@ export class ComprasService {
     });
   }
   async crear(auth: CurrentAuth, data: CrearCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
     return this.operacion(auth, data.clave, 'crear', data, async (tx) => {
       const tenantId = auth.tenantId;
       const proveedor = await tx.proveedor.findFirst({
@@ -670,6 +699,7 @@ export class ComprasService {
     });
   }
   async actuar(auth: CurrentAuth, id: string, data: AccionCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
     return this.operacion(
       auth,
       data.clave,
@@ -814,6 +844,8 @@ export class ComprasService {
     );
   }
   async recibir(auth: CurrentAuth, id: string, data: RecibirCompraDto) {
+    await this.capacidades.exigir(auth.tenantId, 'compras');
+    await this.capacidades.exigir(auth.tenantId, 'recepciones');
     return this.operacion(
       auth,
       data.clave,

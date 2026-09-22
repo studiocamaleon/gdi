@@ -72,6 +72,12 @@ describe('Impersonación', () => {
         email: `imp-staff-${randomUUID()}@test.local`,
         nombreCompleto: 'Valentina Sosa',
         rolPlataforma: 'ADMIN',
+        mfa: {
+          create: {
+            activatedAt: new Date(0),
+            recuperacionConfirmadaEl: new Date(1),
+          },
+        },
       },
       select: { id: true },
     });
@@ -138,6 +144,26 @@ describe('Impersonación', () => {
     await expect(resolver(token)).rejects.toThrow(UnauthorizedException);
     const activas2 = await impersonacion.activas();
     expect(activas2.find((s) => s.id === mia.id)).toBeUndefined();
+  });
+
+  it('perder administración invalida incluso una impersonación todavía abierta', async () => {
+    const { token } = await impersonacion.iniciar(
+      staffId,
+      tenantId,
+      'Verificar revocación de permisos',
+    );
+    await prisma.user.update({
+      where: { id: staffId },
+      data: { rolPlataforma: 'SOPORTE' },
+    });
+    try {
+      await expect(resolver(token)).rejects.toThrow(UnauthorizedException);
+    } finally {
+      await prisma.user.update({
+        where: { id: staffId },
+        data: { rolPlataforma: 'ADMIN' },
+      });
+    }
   });
 
   it('una sesión vencida no vale, aunque nadie la haya cerrado', async () => {

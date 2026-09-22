@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -38,7 +39,12 @@ export function hashDatosPdf(datos: PresupuestoPdfDatos): string {
 /** La fila es simultáneamente snapshot inmutable y bandeja durable de salida. */
 @Injectable()
 export class DocumentosPdfService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   preparar(
     tenantId: string,
@@ -66,6 +72,7 @@ export class DocumentosPdfService {
     tx: Prisma.TransactionClient,
     entrada: ReturnType<DocumentosPdfService['preparar']>,
   ) {
+    await this.capacidades.exigir(entrada.tenantId, 'documentos_pdf', tx);
     // Nunca sobrescribe datos al reenviar o ante una carrera. El trigger de BD
     // también impide modificar una entrada que ya se congeló.
     // INSERT ON CONFLICT DO NOTHING: upsert con update vacío puede convertirse
@@ -91,6 +98,7 @@ export class DocumentosPdfService {
     const doc = await this.buscar(tenantId, cotizacionId, revision);
     if (!doc) throw new NotFoundException('No se encontró el documento.');
     if (doc.estado !== 'FALLIDO') return doc;
+    await this.capacidades.exigir(tenantId, 'documentos_pdf');
     await this.prisma.documentoPdf.updateMany({
       where: { id: doc.id, tenantId, estado: 'FALLIDO', ronda: doc.ronda },
       data: {

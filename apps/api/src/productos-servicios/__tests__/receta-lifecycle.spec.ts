@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { BadRequestException } from '@nestjs/common';
 import { EstadoProductoRecetaRevision } from '@prisma/client';
 import { RecetasProductoService } from '../recetas-producto.service';
@@ -16,6 +17,7 @@ function fixture(estado = EstadoProductoRecetaRevision.PUBLICADA) {
     numero: 2,
     estado,
     cambios: 'V2',
+    _count: { componentes: 1 },
     updatedAt: new Date('2026-08-30T02:00:00.000Z'),
     receta: {
       revisionPublicadaId: 'revision-1',
@@ -35,6 +37,7 @@ function fixture(estado = EstadoProductoRecetaRevision.PUBLICADA) {
     },
   };
   const prisma = {
+    producto: { findFirst: jest.fn().mockResolvedValue({ estructuraProducto: 'COMPUESTO' }) },
     productoRecetaRevision: {
       findFirst: jest.fn().mockResolvedValue(revision),
       findFirstOrThrow: jest
@@ -60,6 +63,8 @@ function fixture(estado = EstadoProductoRecetaRevision.PUBLICADA) {
       {} as never,
       {} as never,
       eventos as never,
+      undefined,
+      capacidadesDePrueba(),
     ),
     prisma,
     tx,

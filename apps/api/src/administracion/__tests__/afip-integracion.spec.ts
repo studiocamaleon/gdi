@@ -3,7 +3,9 @@ import { AfipIntegracionService } from '../afip-integracion.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { ConfiguracionFiscalService } from '../configuracion-fiscal.service';
 import type { AfipSdkProvider } from '../invoicing/afip-sdk.provider';
-import type { SuscripcionesService } from '../../suscripciones/suscripciones.service';
+import { ForbiddenException } from '@nestjs/common';
+import type { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { contratoCompatible } from '../../suscripciones/evaluador-capacidades';
 import type { CurrentAuth } from '../../auth/auth.types';
 
 /**
@@ -36,16 +38,23 @@ function armar(opts: {
   const upsert = jest.fn<Promise<unknown>, [UpsertArg]>().mockResolvedValue({});
   const update = jest.fn().mockResolvedValue({});
   const prisma = {
+    datosEmpresa: { findUnique: jest.fn().mockResolvedValue(null) },
     integracionTenant: {
       findFirst: jest
         .fn()
         .mockResolvedValue(
-          opts.filaEstado ? { id: 'i1', estado: opts.filaEstado } : null,
+          opts.filaEstado
+            ? { id: 'i1', estado: opts.filaEstado, updatedAt: new Date(0) }
+            : null,
         ),
       upsert,
-      update,
+      updateMany: update,
     },
   } as unknown as PrismaService;
+
+  prisma.$transaction = jest.fn(
+    async (fn: (tx: PrismaService) => Promise<unknown>) => fn(prisma),
+  ) as never;
 
   const configFiscal = {
     obtener: jest.fn().mockResolvedValue(
@@ -74,15 +83,30 @@ function armar(opts: {
     verificarDelegacion,
   } as unknown as AfipSdkProvider;
 
-  const suscripciones = {
-    feature: jest.fn().mockResolvedValue(opts.planAfip ?? true),
-  } as unknown as SuscripcionesService;
+  const capacidades = {
+    actual: jest.fn().mockResolvedValue({
+      contrato: contratoCompatible({
+        featuresJson: { afip: opts.planAfip ?? true },
+      }),
+      acceso: {
+        modo: 'operativo',
+        codigo: 'habilitado',
+        descripcion: 'Operativo',
+      },
+    }),
+    puedeOperar: jest.fn().mockResolvedValue(opts.planAfip ?? true),
+    exigirOperacionTx: jest.fn(() => {
+      if (opts.planAfip === false)
+        return Promise.reject(new ForbiddenException('Función no incluida'));
+      return Promise.resolve();
+    }),
+  } as unknown as CapacidadesEmpresaService;
 
   const svc = new AfipIntegracionService(
     prisma,
     configFiscal,
     afip,
-    suscripciones,
+    capacidades,
   );
   return { svc, upsert, update, verificarDelegacion };
 }
@@ -183,13 +207,19 @@ describe('AfipIntegracionService.activar', () => {
 describe('AfipIntegracionService.facturacionHabilitada', () => {
   it('es true sólo con la integración CONECTADA', async () => {
     const conectada = armar({ filaEstado: EstadoIntegracion.CONECTADA });
-    await expect(conectada.svc.facturacionHabilitada()).resolves.toBe(true);
+    await expect(
+      conectada.svc.facturacionHabilitada(AUTH.tenantId),
+    ).resolves.toBe(true);
 
     const error = armar({ filaEstado: EstadoIntegracion.ERROR });
-    await expect(error.svc.facturacionHabilitada()).resolves.toBe(false);
+    await expect(error.svc.facturacionHabilitada(AUTH.tenantId)).resolves.toBe(
+      false,
+    );
 
     const sinFila = armar({ filaEstado: null });
-    await expect(sinFila.svc.facturacionHabilitada()).resolves.toBe(false);
+    await expect(
+      sinFila.svc.facturacionHabilitada(AUTH.tenantId),
+    ).resolves.toBe(false);
   });
 
   it('un downgrade corta la facturación aunque la delegación siga verificada', async () => {
@@ -197,7 +227,7 @@ describe('AfipIntegracionService.facturacionHabilitada', () => {
       filaEstado: EstadoIntegracion.CONECTADA,
       planAfip: false,
     });
-    await expect(svc.facturacionHabilitada()).resolves.toBe(false);
+    await expect(svc.facturacionHabilitada(AUTH.tenantId)).resolves.toBe(false);
   });
 });
 
@@ -208,7 +238,7 @@ describe('AfipIntegracionService — gate por plan (etapa B)', () => {
       puntosVenta: PV_OK,
       planAfip: false,
     });
-    await svc.activar(AUTH);
+    await expect(svc.activar(AUTH)).rejects.toBeInstanceOf(ForbiddenException);
     // No se verificó delegación: el motivo es comercial, no técnico.
     expect(verificarDelegacion).not.toHaveBeenCalled();
     const estados = upsert.mock.calls

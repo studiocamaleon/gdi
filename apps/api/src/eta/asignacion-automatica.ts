@@ -12,6 +12,8 @@ import {
 import { simularFlujo, type PasoProgramado } from './motor/flujo-produccion';
 import { resolverEstacionDePaso } from './motor/tablero-tipos';
 import { leerAsignacionManual } from '../produccion/asignacion-manual';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 
 type Entrada = Parameters<typeof simularFlujo>[0];
 type Persona = { id: string; nombreCompleto: string; userId: string | null };
@@ -86,11 +88,18 @@ export async function sincronizarAsignaciones(
   prisma: PrismaService,
   tenantId: string,
   leerEntrada: (db: Prisma.TransactionClient) => Promise<Entrada>,
+  capacidades = new CapacidadesEmpresaService(prisma),
 ) {
   for (let intento = 0; ; intento++) {
     try {
       const resultado = await prisma.$transaction(
         async (tx) => {
+          await capacidades.exigirOperacionTx(
+            tx,
+            tenantId,
+            ['asignacion_automatica'],
+            ['asignacion_automatica'],
+          );
           // La transacción serializable impide publicar un reparto calculado con
           // personal, estaciones o pasos que hayan cambiado durante la corrida.
           const entrada = await leerEntrada(tx);
@@ -132,13 +141,11 @@ export async function sincronizarAsignaciones(
                 ),
                 medianas: [...entrada.medianas],
                 noLaborables: [...(entrada.noLaborables ?? [])],
-                pasos: pasos.map(
-                  ({
-                    asignacionPersonalJson: _,
-                    planReferenciaJson: _referencia,
-                    ...p
-                  }) => p,
-                ),
+                pasos: pasos.map((p) => ({
+                  ...p,
+                  asignacionPersonalJson: undefined,
+                  planReferenciaJson: undefined,
+                })),
                 empleados,
               }),
             )
@@ -220,9 +227,28 @@ export async function sincronizarAsignaciones(
       contextos.set(tenantId, resultado.firma);
       return resultado.cambios;
     } catch (error) {
+      // Una retirada o un checkout que la prepara pausa el automatismo. No es
+      // un fallo del taller ni debe ensuciar el log del cron cada 30 segundos.
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof ConflictException
+      ) {
+        const respuesta = error.getResponse();
+        if (
+          typeof respuesta === 'object' &&
+          respuesta &&
+          'code' in respuesta &&
+          ['CAPACIDAD_NO_DISPONIBLE', 'CAMBIO_PLAN_PENDIENTE'].includes(
+            String(respuesta.code),
+          )
+        )
+          return 0;
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034' &&
+        (error.code === 'P2034' ||
+          (error.code === 'P2010' &&
+            ['40001', '40P01'].includes(String(error.meta?.code)))) &&
         intento < 2
       )
         continue;

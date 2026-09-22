@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -49,6 +50,7 @@ export class PlanificacionEntregasController {
     return this.planes.consultar(auth.tenantId, itemId);
   }
   @Post()
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('comercial.gestionar')
   solicitar(
     @CurrentSession() auth: CurrentAuth,
@@ -58,12 +60,17 @@ export class PlanificacionEntregasController {
     return this.planes.solicitar(auth, itemId, dto);
   }
   @Post('reprogramar')
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('produccion.supervisar')
-  reprogramar(@CurrentSession() auth: CurrentAuth,
-    @Param('itemId', ParseUUIDPipe) itemId: string, @Body() dto: ReprogramarEntregasDto) {
+  reprogramar(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ReprogramarEntregasDto,
+  ) {
     return this.planes.reprogramar(auth, itemId, dto, false);
   }
   @Post('elegir')
+  @RequiereCapacidad('planificacion_avanzada')
   @Permiso('comercial.gestionar')
   elegir(
     @CurrentSession() auth: CurrentAuth,

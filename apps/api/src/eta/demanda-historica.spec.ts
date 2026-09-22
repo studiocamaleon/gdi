@@ -122,6 +122,14 @@ it('acota lecturas y escrituras al tenant y actualiza sólo datos todavía ausen
     [{ id: 'step', demandaHumanaJson: res.get('step') }],
   );
   expect(updateMany).toHaveBeenCalledTimes(1);
+  const lectura = await recuperarDemandasHistoricas(
+    db as unknown as Prisma.TransactionClient,
+    'tenant',
+    [{ id: 'step', demandaHumanaJson: null }],
+    false,
+  );
+  expect(lectura).toEqual(res);
+  expect(updateMany).toHaveBeenCalledTimes(1);
 });
 it('no devuelve una recuperación antigua si otro proceso ya modificó el paso', async () => {
   const db = {
@@ -149,19 +157,56 @@ it('no devuelve una recuperación antigua si otro proceso ya modificó el paso',
 });
 
 it('revisa una guillotina pendiente ya recuperada sin verificar, una sola vez y con compare-and-set', async () => {
-  const anterior = { version: 1, verificada: false, fases: [{ minutos: 80, personas: 1 }] };
+  const anterior = {
+    version: 1,
+    verificada: false,
+    fases: [{ minutos: 80, personas: 1 }],
+  };
   const updateMany = jest.fn().mockResolvedValue({ count: 1 });
   const db = {
     ordenTrabajoItemPaso: {
-      findMany: jest.fn().mockResolvedValue([{ ...paso, familiaCodigo: 'corte_guillotina', id: 'step', itemId: 'item', demandaHumanaJson: anterior }]),
+      findMany: jest.fn().mockResolvedValue([
+        {
+          ...paso,
+          familiaCodigo: 'corte_guillotina',
+          id: 'step',
+          itemId: 'item',
+          demandaHumanaJson: anterior,
+        },
+      ]),
       updateMany,
     },
-    ordenTrabajoItem: { findMany: jest.fn().mockResolvedValue([{ id: 'item', trazabilidadSnapshotJson: traza }]) },
+    ordenTrabajoItem: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: 'item', trazabilidadSnapshotJson: traza }]),
+    },
   };
-  const resultado = await recuperarDemandasHistoricas(db as unknown as Prisma.TransactionClient, 'tenant', [{ id: 'step', demandaHumanaJson: anterior }]);
-  expect(resultado.get('step')).toMatchObject({ revisionOperacion: 1, dotacionOperarios: 1 });
-  expect(aplicarOperacionMaquina(resultado.get('step')!, 'con_operario')?.verificada).toBe(true);
-  expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ tenantId: 'tenant', demandaHumanaJson: { equals: anterior }, estado: { not: 'hecho' } }) }));
-  await recuperarDemandasHistoricas(db as unknown as Prisma.TransactionClient, 'tenant', [{ id: 'step', demandaHumanaJson: resultado.get('step') }]);
+  const resultado = await recuperarDemandasHistoricas(
+    db as unknown as Prisma.TransactionClient,
+    'tenant',
+    [{ id: 'step', demandaHumanaJson: anterior }],
+  );
+  expect(resultado.get('step')).toMatchObject({
+    revisionOperacion: 1,
+    dotacionOperarios: 1,
+  });
+  expect(
+    aplicarOperacionMaquina(resultado.get('step')!, 'con_operario')?.verificada,
+  ).toBe(true);
+  expect(updateMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: expect.objectContaining({
+        tenantId: 'tenant',
+        demandaHumanaJson: { equals: anterior },
+        estado: { not: 'hecho' },
+      }) as unknown,
+    }),
+  );
+  await recuperarDemandasHistoricas(
+    db as unknown as Prisma.TransactionClient,
+    'tenant',
+    [{ id: 'step', demandaHumanaJson: resultado.get('step') }],
+  );
   expect(updateMany).toHaveBeenCalledTimes(1);
 });

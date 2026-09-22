@@ -1,3 +1,4 @@
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
@@ -38,7 +39,7 @@ async function EmpleadoDetallePageContent({
   const { empleadoId } = await params;
   const [empleado, canManage, canViewCommissions] = await Promise.all([
     getEmpleadoById(empleadoId),
-    tienePermiso("registros.gestionar_empleados"),
+    puedeConfigurar("empleados", "registros.gestionar_empleados"),
     tienePermiso("registros.ver_comisiones"),
   ]);
 

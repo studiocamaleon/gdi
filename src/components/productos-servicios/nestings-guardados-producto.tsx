@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import { CheckIcon, LayersIcon, RefreshCwIcon, PlayIcon } from "lucide-react";
@@ -13,7 +14,16 @@ import styles from "./nestings-guardados.module.css";
 const pendiente = (fila: PreparacionNesting) => fila.estado === "PENDIENTE" || fila.estado === "PROCESANDO";
 const etiquetas = { PENDIENTE: "En cola", PROCESANDO: "Calculando", PREPARADO: "Preparado", FALLIDO: "Requiere atención" };
 
-export function NestingsGuardadosProducto({ productoId, rutaAlternativaId }: { productoId: string; rutaAlternativaId?: string }) {
+export function NestingsGuardadosProducto({
+  productoId,
+  rutaAlternativaId,
+}: {
+  productoId: string;
+  rutaAlternativaId?: string;
+}) {
+  const conAnalisis = useCapacidad("analisis_vectorial");
+  const conNesting = useCapacidad("nesting_irregular");
+  const habilitado = conAnalisis && conNesting;
   const [cantidades, setCantidades] = React.useState("10, 25, 50, 100");
   const [filas, setFilas] = React.useState<PreparacionNesting[]>([]);
   const [cargando, setCargando] = React.useState(true);
@@ -49,6 +59,7 @@ export function NestingsGuardadosProducto({ productoId, rutaAlternativaId }: { p
   }, [productoId, rutaAlternativaId, actualizar]);
 
   const preparar = async (seleccion?: number[]) => {
+    if (!habilitado) return;
     try {
       const valores = seleccion ?? leerCantidadesNesting(cantidades);
       setError(null);
@@ -71,14 +82,45 @@ export function NestingsGuardadosProducto({ productoId, rutaAlternativaId }: { p
           <p>Prepará las cantidades habituales para cotizar sin repetir la búsqueda.</p></div>
       </header>
       <div className={styles.contenido}>
+        {!habilitado && (
+          <p className="text-sm text-muted-foreground">
+            Preparar nuevos nestings no está incluido en tu plan. Las
+            preparaciones guardadas se conservan.
+          </p>
+        )}
         <FieldGroup>
           <Field data-invalid={!!error}>
-            <FieldLabel htmlFor={`${id}-cantidades`}>Cantidades de producto</FieldLabel>
+            <FieldLabel htmlFor={`${id}-cantidades`}>
+              Cantidades de producto
+            </FieldLabel>
             <div className={styles.acciones}>
-              <Input id={`${id}-cantidades`} value={cantidades} disabled={cargando || enviando} onChange={e => setCantidades(e.target.value)} placeholder="10, 25, 50, 100" aria-invalid={!!error} />
-              <Button type="button" disabled={cargando || enviando} onClick={() => void preparar()}>{enviando ? <Spinner data-icon="inline-start" /> : <PlayIcon data-icon="inline-start" />}Preparar nestings</Button>
+              <Input
+                id={`${id}-cantidades`}
+                value={cantidades}
+                disabled={!habilitado || cargando || enviando}
+                onChange={(e) => setCantidades(e.target.value)}
+                placeholder="10, 25, 50, 100"
+                aria-invalid={!!error}
+              />
+              <Button
+                type="button"
+                disabled={!habilitado || cargando || enviando}
+                onClick={() => void preparar()}
+              >
+                {enviando ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <PlayIcon data-icon="inline-start" />
+                )}
+                Preparar nestings
+              </Button>
             </div>
-            <FieldDescription>Busca hasta 5 minutos por nesting y conserva el mejor resultado. Usa las piezas y la configuración guardadas; continúa aunque cierres esta pantalla. Si hay varias cantidades o procesos, la preparación puede tardar más.</FieldDescription>
+            <FieldDescription>
+              Busca hasta 5 minutos por nesting y conserva el mejor resultado.
+              Usa las piezas y la configuración guardadas; continúa aunque
+              cierres esta pantalla. Si hay varias cantidades o procesos, la
+              preparación puede tardar más.
+            </FieldDescription>
             {error && <FieldError>{error}</FieldError>}
           </Field>
         </FieldGroup>
@@ -92,9 +134,35 @@ export function NestingsGuardadosProducto({ productoId, rutaAlternativaId }: { p
                     {pendiente(fila) ? <Spinner data-icon="inline-start" /> : fila.estado === "PREPARADO" ? <CheckIcon data-icon="inline-start" /> : null}
                     {etiquetas[fila.estado]}
                   </Badge>
-                  {fila.error ? <p>{fila.error}</p> : fila.estado === "PREPARADO" ? <small>Calculado el {new Date(fila.updatedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</small> : <small>{fila.estado === "PROCESANDO" ? "Buscando el mejor acomodo de las piezas." : "Esperando un turno de cálculo."}</small>}
+                  {fila.error ? (
+                    <p>{fila.error}</p>
+                  ) : fila.estado === "PREPARADO" ? (
+                    <small>
+                      Calculado el{" "}
+                      {new Date(fila.updatedAt).toLocaleString("es-AR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </small>
+                  ) : (
+                    <small>
+                      {fila.estado === "PROCESANDO"
+                        ? "Buscando el mejor acomodo de las piezas."
+                        : "Esperando un turno de cálculo."}
+                    </small>
+                  )}
                 </div>
-                <Button type="button" variant="ghost" size="sm" disabled={enviando || pendiente(fila)} onClick={() => void preparar([fila.cantidad])} aria-label={`Actualizar nesting de ${fila.cantidad} ${fila.cantidad === 1 ? "producto" : "productos"}`}><RefreshCwIcon data-icon="inline-start" />Actualizar</Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={!habilitado || enviando || pendiente(fila)}
+                  onClick={() => void preparar([fila.cantidad])}
+                  aria-label={`Actualizar nesting de ${fila.cantidad} ${fila.cantidad === 1 ? "producto" : "productos"}`}
+                >
+                  <RefreshCwIcon data-icon="inline-start" />
+                  Actualizar
+                </Button>
               </div>
             ))}
           </div>

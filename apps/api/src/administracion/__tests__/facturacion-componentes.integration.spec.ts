@@ -38,7 +38,13 @@ describe('facturación de raíces comerciales de F4 (PostgreSQL)', () => {
               nombre: 'Prueba',
             },
           });
-          const auth = { tenantId, permisos: new Set() } as CurrentAuth;
+          const auth = {
+            tenantId,
+            permisos: new Set([
+              'administracion.gestionar',
+              'administracion.anular',
+            ]),
+          } as CurrentAuth;
           const orden = await tx.ordenTrabajo.create({
             data: {
               tenantId,
@@ -100,7 +106,13 @@ describe('facturación de raíces comerciales de F4 (PostgreSQL)', () => {
           ) as ComprobantesService;
           const emitir = jest.fn();
           Object.assign(service, {
-            prisma: tx,
+            prisma: new Proxy(tx, {
+              get: (t, k) =>
+                k === '$transaction'
+                  ? async (fn: (tx: unknown) => unknown) => fn(tx)
+                  : Reflect.get(t, k),
+            }),
+            capacidades: { exigir: jest.fn(), exigirOperacionTx: jest.fn() },
             afipIntegracion: { facturacionHabilitada: async () => true },
             emitir,
           });

@@ -1,9 +1,18 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { contratoPropuesto } from '../../suscripciones/evaluador-capacidades';
+import {
+  PROPUESTA_PLANES,
+  VERSION_CATALOGO_PLANES,
+} from '../../plataforma/planes/catalogo-planes';
+import { PrevisionMaterialesService } from '../../inventario/prevision-materiales.service';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InventarioService } from '../../inventario/inventario.service';
 import { ReservasMaterialService } from '../../inventario/reservas-material.service';
 import { ComprasService } from '../../compras/compras.service';
 import { OrdenesTrabajoService } from '../ordenes-trabajo.service';
+import { FidelizacionService } from '../../fidelizacion/fidelizacion.service';
+import { DesarrolloDocumentalService } from '../../desarrollo-documental/desarrollo-documental.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 import type { CrearOrdenTrabajoDto } from '../dto/crear-orden-trabajo.dto';
 
@@ -12,7 +21,23 @@ import type { CrearOrdenTrabajoDto } from '../dto/crear-orden-trabajo.dto';
 describe('Emisión OT → reservas y necesidades de compras', () => {
   const db = new PrismaService();
   const inventario = new InventarioService(db);
-  const reservas = new ReservasMaterialService(db, inventario);
+  const capacidades = new CapacidadesEmpresaService(db);
+  const reservas = new ReservasMaterialService(db, inventario, capacidades);
+  const prevision = new PrevisionMaterialesService(db, capacidades);
+  const actualOriginal = capacidades.actual.bind(capacidades);
+  let contratoSimulado: ReturnType<typeof contratoPropuesto> | null = null;
+  jest.spyOn(capacidades, 'actual').mockImplementation(async (tenantId, tx) => {
+    const actual = await actualOriginal(tenantId, tx);
+    return tenantId === auth.tenantId && contratoSimulado
+      ? { ...actual, contrato: contratoSimulado }
+      : actual;
+  });
+  const simularPlan = (indice: number) => {
+    contratoSimulado = contratoPropuesto(
+      PROPUESTA_PLANES[indice].contenido,
+      VERSION_CATALOGO_PLANES,
+    );
+  };
   const compras = new ComprasService(db, inventario, reservas);
   const ordenes = new OrdenesTrabajoService(
     db,
@@ -24,17 +49,17 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     {} as never,
     {} as never,
     { asegurarParaItem: jest.fn() } as never,
-    {
-      simular: jest.fn().mockResolvedValue({
-        maximoCanjeable: 0,
-        canjeMonto: 0,
-        canjePuntos: 0,
-      }),
-      reconciliarOrden: jest.fn(),
-    } as never,
-    {} as never,
+    new FidelizacionService(db, capacidades),
+    new DesarrolloDocumentalService(
+      db,
+      {} as never,
+      {} as never,
+      undefined,
+      capacidades,
+    ),
     undefined,
     reservas,
+    capacidades,
   );
   let auth: CurrentAuth,
     categoriaId: string,
@@ -49,6 +74,7 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
   );
 
   beforeEach(async () => {
+    contratoSimulado = null;
     const tenantId = randomUUID(),
       userId = randomUUID();
     auth = {
@@ -271,5 +297,102 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
       materialesControlados: false,
     });
     expect((await compras.necesidades(auth)).total).toBe(0);
+  });
+
+  it.each(['directa', 'desde borrador'])(
+    'Esencial permite emitir %s con política activa sin comprometer materiales',
+    async (camino) => {
+      simularPlan(0);
+      const o = await ordenes.create(auth, {
+        ...payload,
+        estado: camino === 'directa' ? 'pendiente' : 'borrador',
+      });
+      if (camino !== 'directa')
+        await ordenes.cambiarEstado(auth, o.id, { estado: 'pendiente' });
+      const guardada = await db.ordenTrabajo.findUniqueOrThrow({
+        where: { id: o.id },
+      });
+      expect(guardada.estado).toBe('pendiente');
+      expect(guardada.materialesControlados).toBe(false);
+      expect(guardada.fechaEntrega?.toISOString().slice(0, 10)).toBe(
+        '2099-12-31',
+      );
+      for (const modelo of [
+        db.necesidadMaterialOt,
+        db.reservaMaterialOt,
+        db.operacionReservasMaterial,
+      ])
+        expect(
+          await (
+            modelo.count as (args: {
+              where: { tenantId: string };
+            }) => Promise<number>
+          )({ where: { tenantId: auth.tenantId } }),
+        ).toBe(0);
+      const saldo = await db.stockMateriaPrimaVariante.findFirstOrThrow({
+        where: { tenantId: auth.tenantId, varianteId },
+      });
+      expect(Number(saldo.cantidadDisponible)).toBe(10);
+      expect((await ordenes.create(auth, payload)).id).toBe(o.id);
+    },
+  );
+  it('Pro conserva la reserva automática y el faltante en compras', async () => {
+    simularPlan(1);
+    const o = await ordenes.create(auth, payload);
+    expect(
+      (await reservas.consultar(auth.tenantId, o.id)).control.materiales[0],
+    ).toMatchObject({ reservada: 10, faltante: 5 });
+  });
+  it('Esencial no consulta el faltante ni condiciona la fecha comercial y rechaza comandos de reserva', async () => {
+    simularPlan(0);
+    expect(
+      await prevision.consultar(auth.tenantId, {
+        materiales: [
+          { varianteId, cantidad: 15, unidad: 'hoja', consumible: false },
+        ],
+        pendientes: 0,
+      }),
+    ).toMatchObject({
+      estado: 'no_incluido',
+      materiales: [],
+      disponibleDesde: null,
+    });
+    const o = await ordenes.create(auth, payload);
+    await expect(
+      reservas.ejecutar(auth, o.id, {
+        accion: 'reservar',
+        clave: randomUUID(),
+        revision: 'x',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      reservas.guardarPolitica(auth.tenantId, { habilitada: true, version: 1 }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it('no corrompe reservas históricas al retirar la función y permite liberarlas al cancelar', async () => {
+    const o = await ordenes.create(auth, payload);
+    simularPlan(0);
+    await expect(
+      db.$transaction((tx) =>
+        reservas.sincronizarOrdenTx(tx, auth.tenantId, o.id),
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      (await reservas.consultar(auth.tenantId, o.id)).control.materiales[0]
+        .reservada,
+    ).toBe(10);
+    await db.$transaction((tx) =>
+      reservas.cancelarOrdenTx(tx, auth.tenantId, o.id, auth),
+    );
+    expect(
+      await db.reservaMaterialOt.count({
+        where: { tenantId: auth.tenantId, cantidad: { gt: 0 } },
+      }),
+    ).toBe(0);
+    expect(
+      await db.necesidadMaterialOt.count({
+        where: { tenantId: auth.tenantId, estado: 'CANCELADA' },
+      }),
+    ).toBe(1);
   });
 });

@@ -1,11 +1,6 @@
 import type { PlanRegistro } from "./registro-api";
 
-// Los nombres comerciales evolucionan; los códigos de suscripción se conservan.
-const NOMBRES: Record<string, string> = {
-  taller: "Print",
-  estudio: "Sign",
-  diamante: "Industrial",
-};
+// Conservamos enlaces antiguos; el nombre siempre procede del catálogo vigente.
 const ALIAS: Record<string, string> = {
   print: "taller",
   sign: "estudio",
@@ -15,7 +10,19 @@ const ALIAS: Record<string, string> = {
 export function nombrePlanRegistro(
   plan: Pick<PlanRegistro, "codigo" | "nombre">,
 ) {
-  return NOMBRES[plan.codigo] ?? plan.nombre;
+  return plan.nombre;
+}
+
+export function cambioOfertaRegistro(
+  planes: PlanRegistro[],
+  oferta: string | null,
+) {
+  return Boolean(
+    oferta &&
+    !planes.some(
+      (p) => p.ofertaId === oferta && p.registroPublico && !p.precioAConsultar,
+    ),
+  );
 }
 
 export function planInicialRegistro(

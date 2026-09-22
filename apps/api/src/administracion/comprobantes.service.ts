@@ -1,6 +1,9 @@
+import { EmisionFiscalService } from './emision-fiscal.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -27,7 +30,6 @@ import {
   FacturarOrdenDto,
   NotaCreditoOrdenDto,
   type ComprobanteOrdenVinculoDto,
-  type ComprobanteTipo,
 } from './dto/comprobante.dto';
 import { FacturacionOrdenesService } from './facturacion-ordenes.service';
 import { FacturaService } from './factura.service';
@@ -46,65 +48,19 @@ import { AfipIntegracionService } from './afip-integracion.service';
 import { texto } from './invoicing/codigos-arca';
 import { regionalDelTenant } from '../common/regional';
 import { claveFechaEnZona } from '../common/zona';
-import type {
-  ComprobanteItemProvider,
-  InvoicingProvider,
-  LetraProvider,
-} from './invoicing/invoicing-provider';
+import type { LetraProvider } from './invoicing/invoicing-provider';
 import {
   calcularTotales,
   type ItemCalculo,
 } from './invoicing/totales-comprobante';
-import { renglonesDetalladosOrden, itemsOrdenConDescuento } from './invoicing/items-orden-descuento';
+import {
+  renglonesDetalladosOrden,
+  itemsOrdenConDescuento,
+} from './invoicing/items-orden-descuento';
 
-/** Lo que guardamos en itemsJson: el ítem que calcula + su descripción. */
 type ItemPersistido = ItemCalculo & { descripcion: string };
 
-/**
- * itemsJson es Json para Prisma, pero siempre lo escribimos nosotros con
- * esta forma. Se relee acá en un solo lugar, tolerando basura.
- */
-function leerItems(json: Prisma.JsonValue): ItemPersistido[] {
-  if (!Array.isArray(json)) return [];
-  return json.flatMap((raw) => {
-    if (typeof raw !== 'object' || raw === null) return [];
-    const o = raw as Record<string, unknown>;
-    const cantidad = Number(o.cantidad);
-    const precio = Number(o.precioUnitarioSinIva);
-    if (!Number.isFinite(cantidad) || !Number.isFinite(precio)) return [];
-    const ali = o.alicuotaIva;
-    return [
-      {
-        descripcion: texto(o.descripcion),
-        cantidad,
-        precioUnitarioSinIva: precio,
-        alicuotaIva:
-          ali === 'exento' || ali === 'no_gravado' ? ali : Number(ali ?? 21),
-        ...(o.bonificacionPct !== undefined
-          ? { bonificacionPct: Number(o.bonificacionPct) }
-          : {}),
-      },
-    ];
-  });
-}
-
 const redondear2 = (n: number) => Math.round(n * 100) / 100;
-
-/** ivaPorAlicuota es Json para Prisma pero siempre lo escribimos nosotros. */
-function leerIvaPorAlicuota(
-  json: Prisma.JsonValue,
-): Array<{ alicuota: number; base: number; monto: number }> {
-  if (!Array.isArray(json)) return [];
-  return json.flatMap((raw) => {
-    if (typeof raw !== 'object' || raw === null) return [];
-    const o = raw as Record<string, unknown>;
-    const alicuota = Number(o.alicuota);
-    if (!Number.isFinite(alicuota)) return [];
-    return [
-      { alicuota, base: Number(o.base) || 0, monto: Number(o.monto) || 0 },
-    ];
-  });
-}
 
 const DIAS_POR_CONDICION: Record<string, number> = {
   contado: 0,
@@ -129,6 +85,16 @@ export class ComprobantesService {
     private readonly archivos: ArchivosService,
     private readonly enlaces: EnlacesPublicosService,
     private readonly avisos: NotificacionesComprobantesService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+    private readonly emisiones: EmisionFiscalService = new EmisionFiscalService(
+      prisma,
+      manualProvider,
+      afipSdkProvider,
+      facturacionOrdenes,
+      capacidades,
+    ),
   ) {}
 
   // ── PDF del comprobante ─────────────────────────────────────────────
@@ -143,6 +109,23 @@ export class ComprobantesService {
    * todas las facturas ya emitidas. Un comprobante autorizado por ARCA no
    * puede mutar.
    */
+  async pdfDisponible(tenantId: string, id: string): Promise<boolean> {
+    if (await this.capacidades.incluida(tenantId, 'documentos_pdf'))
+      return true;
+    return Boolean(
+      await this.prisma.archivo.findFirst({
+        where: {
+          tenantId,
+          comprobanteId: id,
+          scope: ArchivoScope.COMPROBANTE,
+          generado: true,
+          estado: 'LISTO',
+        },
+        select: { id: true },
+      }),
+    );
+  }
+
   async pdfDe(tenantId: string, id: string): Promise<Archivo> {
     const existente = await this.archivos.generadoDe(
       ArchivoScope.COMPROBANTE,
@@ -153,6 +136,7 @@ export class ComprobantesService {
   }
 
   async materializarPdf(tenantId: string, id: string): Promise<Archivo> {
+    await this.capacidades.exigir(tenantId, 'documentos_pdf');
     const [doc, logo] = await Promise.all([
       this.factura.documento(tenantId, id),
       this.archivos.logoDataUri(tenantId),
@@ -175,6 +159,8 @@ export class ComprobantesService {
    */
   private async congelarPdf(tenantId: string, id: string): Promise<void> {
     try {
+      if (!(await this.capacidades.puedeOperar(tenantId, 'documentos_pdf')))
+        return;
       await this.materializarPdf(tenantId, id);
     } catch (error) {
       this.logger.warn(
@@ -204,20 +190,13 @@ export class ComprobantesService {
     // `tieneLogo` sólo si HAY: la vista es un server component y no puede
     // reaccionar a una imagen rota, así que necesita saberlo antes de pintar
     // el <img>.
-    const publico = { ...doc, tieneLogo: logo !== null };
+    const publico = {
+      ...doc,
+      tieneLogo: logo !== null,
+      pdfDisponible: await this.pdfDisponible(tenantId, id),
+    };
     delete (publico as { estado?: string }).estado;
     return publico;
-  }
-
-  /**
-   * Qué provider usa el tenant. Si pide AFIP SDK pero falta el token, cae
-   * al manual en vez de romper: mejor emitir sin CAE que no emitir.
-   */
-  private resolverProvider(proveedor: string | undefined): InvoicingProvider {
-    if (proveedor === 'afipsdk' && this.afipSdkProvider.disponible) {
-      return this.afipSdkProvider;
-    }
-    return this.manualProvider;
   }
 
   async listar(
@@ -283,6 +262,19 @@ export class ComprobantesService {
     const c = await this.prisma.comprobante.findFirst({
       where: { id, tenantId: auth.tenantId },
       include: {
+        emisiones: {
+          orderBy: [{ creadaEl: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: {
+            id: true,
+            estado: true,
+            proveedor: true,
+            ambiente: true,
+            detalle: true,
+            creadaEl: true,
+            enviadaEl: true,
+          },
+        },
         puntoVenta: { select: { numero: true } },
         cliente: { select: { nombre: true, cuit: true } },
         orden: { select: { numero: true } },
@@ -312,6 +304,7 @@ export class ComprobantesService {
     if (!c) throw new NotFoundException(`No existe el comprobante ${id}`);
     return {
       ...this.toResponse(c),
+      emision: c.emisiones[0] ?? null,
       cobrosImputados: c.imputaciones.map((i) => ({
         id: i.id,
         cobroId: i.cobroId,
@@ -329,6 +322,17 @@ export class ComprobantesService {
    * condición fiscal, este comprobante no cambia.
    */
   async crear(auth: CurrentAuth, payload: CrearComprobanteDto) {
+    if (
+      !auth.permisos?.has(
+        payload.tipo === 'nota_credito'
+          ? 'administracion.anular'
+          : 'administracion.gestionar',
+      )
+    )
+      throw new ForbiddenException(
+        'No tenés permiso para crear este comprobante.',
+      );
+    await this.capacidades.exigir(auth.tenantId, 'fiscal_argentina');
     const config = await this.prisma.configuracionFiscal.findUnique({
       where: { tenantId: auth.tenantId },
       select: { condicionFiscal: true, leyendaFacturaA: true },
@@ -356,13 +360,44 @@ export class ComprobantesService {
 
     const receptorCondicion = (cliente?.condicionFiscal ??
       'consumidor_final') as CondicionFiscalReceptor;
-    const resultadoLetra = letraComprobante(
+    let resultadoLetra = letraComprobante(
       config.condicionFiscal as CondicionFiscalEmisor,
       receptorCondicion,
       config.leyendaFacturaA as LeyendaA | null,
     );
 
-    const bloqueo = bloqueoEmision(resultadoLetra.letra, cliente?.cuit ?? null);
+    const origen =
+      payload.tipo !== 'factura' && payload.comprobanteOrigenId
+        ? await this.prisma.comprobante.findFirst({
+            where: {
+              id: payload.comprobanteOrigenId,
+              tenantId: auth.tenantId,
+              tipo: 'factura',
+              estado: 'emitido',
+              anuladoEl: null,
+            },
+          })
+        : null;
+    if (payload.tipo !== 'factura') {
+      if (!origen || origen.clienteId !== (cliente?.id ?? null))
+        throw new BadRequestException(
+          'La nota debe identificar la factura y el cliente originales.',
+        );
+      resultadoLetra = {
+        ...resultadoLetra,
+        letra: origen.letra as LetraProvider,
+        leyenda: (origen.leyenda ?? undefined) as LeyendaA | undefined,
+      };
+    }
+    const receptorOriginal = origen?.receptorSnapshot as
+      | Record<string, unknown>
+      | undefined;
+    const bloqueo = bloqueoEmision(
+      resultadoLetra.letra,
+      (receptorOriginal?.cuit as string | null | undefined) ??
+        cliente?.cuit ??
+        null,
+    );
     if (bloqueo) throw new BadRequestException(bloqueo);
 
     if (items.length === 0) {
@@ -447,280 +482,92 @@ export class ComprobantesService {
     const vencimiento = new Date(fecha);
     vencimiento.setUTCDate(vencimiento.getUTCDate() + dias);
 
-    const comprobante = await this.prisma.comprobante.create({
-      data: {
-        tenantId: auth.tenantId,
-        tipo: payload.tipo,
-        letra: resultadoLetra.letra,
-        puntoVentaId: pv.id,
-        numero: null,
-        fecha,
-        clienteId: cliente?.id ?? null,
-        // ordenId (deprecado) ya no se escribe: el vínculo vive en
-        // ComprobanteOrden, con monto y soporte de varias órdenes.
-        ordenes: {
-          create: vinculosFinales.map((v) => ({
-            tenantId: auth.tenantId,
-            ordenId: v.ordenId,
-            monto: v.monto,
-          })),
+    const comprobante = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['fiscal_argentina'],
+        ['fiscal_argentina'],
+      );
+      return tx.comprobante.create({
+        data: {
+          tenantId: auth.tenantId,
+          tipo: payload.tipo,
+          letra: resultadoLetra.letra,
+          puntoVentaId: pv.id,
+          numero: null,
+          fecha,
+          clienteId: cliente?.id ?? null,
+          // ordenId (deprecado) ya no se escribe: el vínculo vive en
+          // ComprobanteOrden, con monto y soporte de varias órdenes.
+          ordenes: {
+            create: vinculosFinales.map((v) => ({
+              tenantId: auth.tenantId,
+              ordenId: v.ordenId,
+              monto: v.monto,
+            })),
+          },
+          receptorSnapshot: origen
+            ? (origen.receptorSnapshot as Prisma.InputJsonValue)
+            : {
+                nombre: cliente?.nombre ?? 'Consumidor Final',
+                razonSocial: cliente?.razonSocial ?? null,
+                cuit: cliente?.cuit ?? null,
+                condicionFiscal: receptorCondicion,
+              },
+          itemsJson: items as unknown as Prisma.InputJsonValue,
+          netoGravado: totales.netoGravado,
+          ivaPorAlicuota:
+            totales.ivaPorAlicuota as unknown as Prisma.InputJsonValue,
+          ivaTotal: totales.ivaTotal,
+          total: totales.total,
+          moneda: origen?.moneda ?? payload.moneda ?? 'ARS',
+          cotizacion: origen ? origen.cotizacion : (payload.cotizacion ?? null),
+          estado: 'borrador',
+          condicionVenta: payload.condicionVenta ?? 'contado',
+          vencimiento,
+          leyenda: resultadoLetra.leyenda ?? null,
+          // Clave anti-duplicado: se genera y persiste ANTES de hablar con
+          // cualquier provider.
+          idempotencyKey: randomUUID(),
+          // Una NC reduce el saldo de su comprobante origen; no constituye una
+          // cuenta por cobrar propia. Facturas y ND sí nacen pendientes.
+          saldoPendiente: payload.tipo === 'nota_credito' ? 0 : totales.total,
+          comprobanteOrigenId: payload.comprobanteOrigenId ?? null,
         },
-        receptorSnapshot: {
-          nombre: cliente?.nombre ?? 'Consumidor Final',
-          razonSocial: cliente?.razonSocial ?? null,
-          cuit: cliente?.cuit ?? null,
-          condicionFiscal: receptorCondicion,
-        },
-        itemsJson: items as unknown as Prisma.InputJsonValue,
-        netoGravado: totales.netoGravado,
-        ivaPorAlicuota:
-          totales.ivaPorAlicuota as unknown as Prisma.InputJsonValue,
-        ivaTotal: totales.ivaTotal,
-        total: totales.total,
-        moneda: payload.moneda ?? 'ARS',
-        cotizacion: payload.cotizacion ?? null,
-        estado: 'borrador',
-        condicionVenta: payload.condicionVenta ?? 'contado',
-        vencimiento,
-        leyenda: resultadoLetra.leyenda ?? null,
-        // Clave anti-duplicado: se genera y persiste ANTES de hablar con
-        // cualquier provider.
-        idempotencyKey: randomUUID(),
-        // Una NC reduce el saldo de su comprobante origen; no constituye una
-        // cuenta por cobrar propia. Facturas y ND sí nacen pendientes.
-        saldoPendiente:
-          payload.tipo === 'nota_credito' ? 0 : totales.total,
-        comprobanteOrigenId: payload.comprobanteOrigenId ?? null,
-      },
-      include: {
-        puntoVenta: { select: { numero: true } },
-        cliente: { select: { nombre: true, cuit: true } },
-        orden: { select: { numero: true } },
-        ordenes: {
-          select: {
-            ordenId: true,
-            monto: true,
-            orden: { select: { numero: true } },
+        include: {
+          puntoVenta: { select: { numero: true } },
+          cliente: { select: { nombre: true, cuit: true } },
+          orden: { select: { numero: true } },
+          ordenes: {
+            select: {
+              ordenId: true,
+              monto: true,
+              orden: { select: { numero: true } },
+            },
           },
         },
-      },
+      });
     });
     return this.toResponse(comprobante);
   }
 
-  /**
-   * Emite: resuelve el número y le pide el CAE al provider.
-   *
-   * Sobre el número: con provider manual manda nuestro contador atómico, y
-   * se toma DENTRO de una transacción para que dos emisiones simultáneas no
-   * lo compartan. Pero cuando hay integración **manda ARCA**: su contador es
-   * la fuente de verdad y el nuestro se sincroniza, porque ARCA rechaza
-   * cualquier número que no sea correlativo al último que autorizó.
-   */
   async emitir(auth: CurrentAuth, id: string) {
-    const comprobante = await this.prisma.comprobante.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      include: {
-        puntoVenta: true,
-        comprobanteOrigen: { include: { puntoVenta: true } },
-      },
-    });
-    if (!comprobante) {
-      throw new NotFoundException(`No existe el comprobante ${id}`);
+    const resultado = await this.emisiones.emitir(auth, id);
+    if (resultado.aplicada) {
+      await this.congelarPdf(auth.tenantId, id);
+      await this.publicar(auth.tenantId, id);
     }
-    if (comprobante.estado !== 'borrador') {
-      throw new ConflictException(
-        `El comprobante ya está ${comprobante.estado}: sólo se puede emitir un borrador.`,
-      );
+    return this.obtener(auth, id);
+  }
+
+  async consultarEmision(auth: CurrentAuth, id: string) {
+    const resultado = await this.emisiones.consultar(auth, id);
+    if (resultado.aplicada) {
+      await this.congelarPdf(auth.tenantId, id);
+      await this.publicar(auth.tenantId, id);
     }
-
-    // Tope AUTORITATIVO antes de pedir el CAE: acá rebota el segundo
-    // borrador del 100% (los borradores no reservan cupo).
-    if (comprobante.tipo === 'factura') {
-      await this.facturacionOrdenes.validarTope(
-        this.prisma,
-        auth.tenantId,
-        comprobante.id,
-      );
-    }
-
-    const config = await this.prisma.configuracionFiscal.findUnique({
-      where: { tenantId: auth.tenantId },
-      select: { cuit: true, proveedorFacturacion: true },
-    });
-    const provider = this.resolverProvider(config?.proveedorFacturacion);
-    const emisorCuit = config?.cuit ?? null;
-
-    // ¿Hasta dónde numeró ARCA? Si contesta, su número manda.
-    let ultimoArca: number | null = null;
-    if (provider.codigo !== 'manual' && emisorCuit) {
-      ultimoArca = await provider.ultimoNumero(
-        comprobante.puntoVenta.numero,
-        comprobante.tipo as ComprobanteTipo,
-        comprobante.letra as LetraProvider,
-        emisorCuit,
-      );
-    }
-
-    const numero = await this.prisma.$transaction(async (tx) => {
-      const clave = {
-        tenantId: auth.tenantId,
-        puntoVentaId: comprobante.puntoVentaId,
-        tipo: comprobante.tipo,
-        letra: comprobante.letra,
-      };
-      const contador = await tx.comprobanteContador.upsert({
-        where: { tenantId_puntoVentaId_tipo_letra: clave },
-        create: { ...clave, ultimo: 1 },
-        update: { ultimo: { increment: 1 } },
-      });
-      if (ultimoArca === null) return contador.ultimo;
-
-      // ARCA manda: sincronizamos nuestro contador con el suyo para no
-      // volver a pedirle un número que ya usó.
-      const siguienteArca = ultimoArca + 1;
-      if (siguienteArca !== contador.ultimo) {
-        await tx.comprobanteContador.update({
-          where: { tenantId_puntoVentaId_tipo_letra: clave },
-          data: { ultimo: siguienteArca },
-        });
-      }
-      return siguienteArca;
-    });
-
-    const resultado = await provider.emitir({
-      emisorCuit,
-      netoGravado: Number(comprobante.netoGravado),
-      ivaTotal: Number(comprobante.ivaTotal),
-      ivaPorAlicuota: leerIvaPorAlicuota(comprobante.ivaPorAlicuota),
-      idempotencyKey: comprobante.idempotencyKey,
-      tipo: comprobante.tipo as ComprobanteTipo,
-      letra: comprobante.letra as LetraProvider,
-      puntoVenta: comprobante.puntoVenta.numero,
-      numero,
-      fecha: comprobante.fecha.toISOString().slice(0, 10),
-      receptor: this.receptorDesdeSnapshot(comprobante.receptorSnapshot),
-      items: leerItems(
-        comprobante.itemsJson,
-      ) satisfies ComprobanteItemProvider[],
-      moneda: comprobante.moneda as 'ARS' | 'USD',
-      cotizacion: comprobante.cotizacion
-        ? Number(comprobante.cotizacion)
-        : undefined,
-      total: Number(comprobante.total),
-      condicionVenta: comprobante.condicionVenta ?? undefined,
-      vencimiento: comprobante.vencimiento
-        ? comprobante.vencimiento.toISOString().slice(0, 10)
-        : null,
-      leyenda: comprobante.leyenda,
-      asociados:
-        comprobante.comprobanteOrigen?.numero != null
-          ? [
-              {
-                tipo: comprobante.comprobanteOrigen.tipo,
-                puntoVenta: comprobante.comprobanteOrigen.puntoVenta.numero,
-                numero: comprobante.comprobanteOrigen.numero,
-                fecha: comprobante.comprobanteOrigen.fecha
-                  .toISOString()
-                  .slice(0, 10),
-                cuit: emisorCuit,
-              },
-            ]
-          : undefined,
-    });
-
-    if (resultado.estado === 'rechazado') {
-      const actualizado = await this.prisma.comprobante.update({
-        where: { id },
-        data: {
-          estado: 'rechazado',
-          rechazoJson: {
-            errores: resultado.errores,
-          } as unknown as Prisma.InputJsonValue,
-          providerRaw: resultado.raw as Prisma.InputJsonValue,
-        },
-        include: {
-          puntoVenta: { select: { numero: true } },
-          cliente: { select: { nombre: true, cuit: true } },
-          orden: { select: { numero: true } },
-          ordenes: {
-            select: {
-              ordenId: true,
-              monto: true,
-              orden: { select: { numero: true } },
-            },
-          },
-        },
-      });
-      return this.toResponse(actualizado);
-    }
-
-    if (resultado.estado === 'en_cola') {
-      const actualizado = await this.prisma.comprobante.update({
-        where: { id },
-        data: {
-          numero,
-          providerRaw: resultado.raw as Prisma.InputJsonValue,
-        },
-        include: {
-          puntoVenta: { select: { numero: true } },
-          cliente: { select: { nombre: true, cuit: true } },
-          orden: { select: { numero: true } },
-          ordenes: {
-            select: {
-              ordenId: true,
-              monto: true,
-              orden: { select: { numero: true } },
-            },
-          },
-        },
-      });
-      return this.toResponse(actualizado);
-    }
-
-    const actualizado = await this.prisma.comprobante.update({
-      where: { id },
-      data: {
-        estado: 'emitido',
-        numero: resultado.numero || numero,
-        // El manual emite sin CAE: se carga después.
-        cae: resultado.cae || null,
-        caeVencimiento: resultado.caeVencimiento
-          ? new Date(resultado.caeVencimiento)
-          : null,
-        providerRaw: resultado.raw as Prisma.InputJsonValue,
-      },
-      include: {
-        puntoVenta: { select: { numero: true } },
-        cliente: { select: { nombre: true, cuit: true } },
-        orden: { select: { numero: true } },
-        ordenes: {
-          select: {
-            ordenId: true,
-            monto: true,
-            orden: { select: { numero: true } },
-          },
-        },
-      },
-    });
-    // Recién emitido cuenta para el facturado de sus órdenes (una NC
-    // resta), y una factura absorbe los cobros libres de sus órdenes.
-    await this.facturacionOrdenes.alEmitirComprobante(auth.tenantId, id);
-    // El matching anterior puede haber reducido el saldo con cobros que ya
-    // existían. No devolver el objeto previo a ese matching: la respuesta de
-    // emisión tiene que reflejar el saldo realmente persistido.
-    const saldoActual = await this.prisma.comprobante.findUniqueOrThrow({
-      where: { id },
-      select: { saldoPendiente: true },
-    });
-    // El comprobante queda congelado con los datos del emisor de ESTE
-    // momento; si mañana cambia el domicilio fiscal, éste no muta.
-    await this.congelarPdf(auth.tenantId, id);
-    await this.publicar(auth.tenantId, id);
-    return {
-      ...this.toResponse(actualizado),
-      saldoPendiente: Number(saldoActual.saldoPendiente),
-    };
+    return { ...resultado, comprobante: await this.obtener(auth, id) };
   }
 
   /**
@@ -752,35 +599,57 @@ export class ComprobantesService {
 
   /** Carga a mano el CAE que devolvió el portal de ARCA (provider manual). */
   async cargarCae(auth: CurrentAuth, id: string, payload: CargarCaeDto) {
-    const comprobante = await this.prisma.comprobante.findFirst({
-      where: { id, tenantId: auth.tenantId },
-    });
-    if (!comprobante) {
-      throw new NotFoundException(`No existe el comprobante ${id}`);
-    }
-    if (comprobante.estado !== 'emitido') {
-      throw new ConflictException(
-        'Sólo se le puede cargar el CAE a un comprobante emitido.',
-      );
-    }
-    const actualizado = await this.prisma.comprobante.update({
-      where: { id },
-      data: {
-        cae: payload.cae.trim(),
-        caeVencimiento: new Date(payload.caeVencimiento),
-      },
-      include: {
-        puntoVenta: { select: { numero: true } },
-        cliente: { select: { nombre: true, cuit: true } },
-        orden: { select: { numero: true } },
-        ordenes: {
-          select: {
-            ordenId: true,
-            monto: true,
-            orden: { select: { numero: true } },
+    const actualizado = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      const comprobante = await tx.comprobante.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (!comprobante) {
+        throw new NotFoundException(`No existe el comprobante ${id}`);
+      }
+      if (comprobante.estado !== 'emitido') {
+        throw new ConflictException(
+          'Sólo se le puede cargar el CAE a un comprobante emitido.',
+        );
+      }
+      if (
+        !/^\d{14}$/.test(payload.cae.trim()) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(payload.caeVencimiento) ||
+        Number.isNaN(Date.parse(payload.caeVencimiento))
+      )
+        throw new BadRequestException(
+          'Revisá el CAE de 14 dígitos y su fecha de vencimiento.',
+        );
+      if (
+        comprobante.cae &&
+        (comprobante.cae !== payload.cae.trim() ||
+          comprobante.caeVencimiento?.toISOString().slice(0, 10) !==
+            payload.caeVencimiento)
+      )
+        throw new ConflictException(
+          'El comprobante ya tiene una autorización fiscal registrada. No se puede reemplazar.',
+        );
+      return tx.comprobante.update({
+        where: { id },
+        data: {
+          cae: payload.cae.trim(),
+          caeVencimiento: new Date(payload.caeVencimiento),
+        },
+        include: {
+          puntoVenta: { select: { numero: true } },
+          cliente: { select: { nombre: true, cuit: true } },
+          orden: { select: { numero: true } },
+          ordenes: {
+            select: {
+              ordenId: true,
+              monto: true,
+              orden: { select: { numero: true } },
+            },
           },
         },
-      },
+      });
     });
     // El PDF congelado al emitir salió sin CAE (el manual lo carga después):
     // se rehace para que el guardado tenga el número de autorización.
@@ -797,22 +666,30 @@ export class ComprobantesService {
    * estado interno de un borrador o de un rechazado.
    */
   async descartar(auth: CurrentAuth, id: string) {
-    const comprobante = await this.prisma.comprobante.findFirst({
-      where: { id, tenantId: auth.tenantId },
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      const comprobante = await tx.comprobante.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (!comprobante) {
+        throw new NotFoundException(`No existe el comprobante ${id}`);
+      }
+      if (
+        !['borrador', 'rechazado', 'anulado'].includes(comprobante.estado) ||
+        (comprobante.estado === 'borrador' && comprobante.numero !== null)
+      ) {
+        throw new ConflictException(
+          'Un comprobante emitido o con envío pendiente no se descarta. Revisá su resultado fiscal.',
+        );
+      }
+      await tx.comprobante.update({
+        where: { id },
+        data: { estado: 'anulado', anuladoEl: new Date() },
+      });
+      return { ok: true };
     });
-    if (!comprobante) {
-      throw new NotFoundException(`No existe el comprobante ${id}`);
-    }
-    if (comprobante.estado === 'emitido') {
-      throw new ConflictException(
-        'Un comprobante emitido no se descarta: emitile una nota de crédito.',
-      );
-    }
-    await this.prisma.comprobante.update({
-      where: { id },
-      data: { estado: 'anulado', anuladoEl: new Date() },
-    });
-    return { ok: true };
   }
 
   /**
@@ -874,7 +751,14 @@ export class ComprobantesService {
     }
     // La red del gate de UI: aunque el botón se filtre, sin la integración AFIP
     // activa no se emite. Ver docs/integracion-afip-delegacion-diseno.md
-    if (!(await this.afipIntegracion.facturacionHabilitada())) {
+    const configuracion = await this.prisma.configuracionFiscal.findUnique({
+      where: { tenantId: auth.tenantId },
+      select: { proveedorFacturacion: true },
+    });
+    if (
+      configuracion?.proveedorFacturacion !== 'manual' &&
+      !(await this.afipIntegracion.facturacionHabilitada(auth.tenantId))
+    ) {
       throw new BadRequestException(
         'La facturación electrónica no está activa. Verificá la delegación de AFIP en Configuración → Integraciones.',
       );
@@ -1014,7 +898,7 @@ export class ComprobantesService {
       );
     }
 
-    const letra = await this.letraParaCliente(auth, factura.clienteId);
+    const letra = factura.letra as LetraProvider;
     const item = this.renglonPorMonto(
       letra,
       monto,
@@ -1135,7 +1019,9 @@ export class ComprobantesService {
       ordenId: string;
       numero: string;
       ok: boolean;
-      comprobante: Awaited<ReturnType<typeof this.facturarOrden>> | null;
+      comprobante: Awaited<
+        ReturnType<ComprobantesService['facturarOrden']>
+      > | null;
       error: string | null;
     }> = [];
     for (const ordenId of payload.ordenIds) {
@@ -1237,13 +1123,15 @@ export class ComprobantesService {
       saldo,
       facturadoTotal: Number(orden.facturadoTotal),
       descuentoTotal: Number(orden.descuentoTotal ?? 0),
-      items: orden.items.filter(item => item.parentItemId == null).map((item) => ({
-        nombre: item.nombre,
-        cantidad: Number(item.cantidad),
-        subtotal: Number(item.subtotal),
-        total: Number(item.total),
-        descuentoMonto: Number(item.descuentoMonto ?? 0),
-      })),
+      items: orden.items
+        .filter((item) => item.parentItemId == null)
+        .map((item) => ({
+          nombre: item.nombre,
+          cantidad: Number(item.cantidad),
+          subtotal: Number(item.subtotal),
+          total: Number(item.total),
+          descuentoMonto: Number(item.descuentoMonto ?? 0),
+        })),
     });
     return detallados ?? [this.renglonPorMonto(letra, monto, concepto)];
   }
@@ -1319,14 +1207,16 @@ export class ComprobantesService {
         // El precio de entrada depende de la letra: neto en A, final en
         // B/C/E. Comparte la preparación de la facturación desde la orden.
         const letra = await this.letraParaCliente(auth, clienteId);
-        items = itemsOrdenConDescuento(letra, orden.items.map(it => ({
-          nombre: it.nombre,
-          cantidad: Number(it.cantidad),
-          subtotal: Number(it.subtotal),
-          total: Number(it.total),
-          descuentoMonto: Number(it.descuentoMonto ?? 0),
-        })));
-
+        items = itemsOrdenConDescuento(
+          letra,
+          orden.items.map((it) => ({
+            nombre: it.nombre,
+            cantidad: Number(it.cantidad),
+            subtotal: Number(it.subtotal),
+            total: Number(it.total),
+            descuentoMonto: Number(it.descuentoMonto ?? 0),
+          })),
+        );
       }
     }
 
@@ -1397,15 +1287,6 @@ export class ComprobantesService {
       );
     }
     return orden;
-  }
-
-  private receptorDesdeSnapshot(snapshot: Prisma.JsonValue) {
-    const s = (snapshot ?? {}) as Record<string, unknown>;
-    return {
-      razonSocial: texto(s.razonSocial, texto(s.nombre, 'Consumidor Final')),
-      cuit: (s.cuit as string | null) ?? null,
-      condicionFiscal: texto(s.condicionFiscal, 'consumidor_final'),
-    };
   }
 
   private toResponse(c: {

@@ -1,3 +1,4 @@
+vi.mock("@/lib/capacidades-server", () => ({ tieneCapacidad: vi.fn(async () => true) }));
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/auth-server", () => ({
   zonaHorariaDelTenant: vi.fn(async () => "America/Argentina/Buenos_Aires"),

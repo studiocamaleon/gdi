@@ -1,4 +1,6 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 
 import * as React from "react";
 import Link from "next/link";
@@ -32,12 +34,14 @@ export function PagosStagingTab({
   /** Orden sin comprobante fiscal: el total mostrado es neto (§6). */
   sinComprobante?: boolean;
 }) {
+  const conCobros = useCapacidad("cobros");
   const { moneda } = useConfigRegional();
   const [metodos, setMetodos] = React.useState<MetodoPago[] | null>(null);
   const [cuentas, setCuentas] = React.useState<CuentaFondosResumen[]>([]);
   const [showForm, setShowForm] = React.useState(false);
 
   React.useEffect(() => {
+    if (!conCobros) return;
     let activo = true;
     Promise.all([getMetodosPago(), getCuentasFondos()])
       .then(([m, c]) => {
@@ -51,7 +55,7 @@ export function PagosStagingTab({
     return () => {
       activo = false;
     };
-  }, []);
+  }, [conCobros]);
 
   const cobrado = cobros.reduce((s, c) => s + c.payload.montoBruto, 0);
   const saldo = Math.max(0, total - cobrado);
@@ -59,6 +63,8 @@ export function PagosStagingTab({
   const metodosActivos = (metodos ?? []).filter((m) => m.activo);
   const cargando = metodos === null;
   const sinConfig = !cargando && (metodosActivos.length === 0 || cuentas.length === 0);
+
+  if (!conCobros) return <FuncionNoIncluida />;
 
   return (
     <div className="pagos-tab arc-page">

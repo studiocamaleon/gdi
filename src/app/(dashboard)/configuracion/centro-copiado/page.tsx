@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { SinPermiso } from "@/components/navigation/sin-permiso";
 import { tienePermiso } from "@/lib/permisos-server";
 import { CentroCopiadoConfigView } from "@/components/comercial/centro-copiado-config-view";
@@ -10,6 +12,7 @@ export const dynamic = "force-dynamic";
  * costeo/máquinas/materiales.
  */
 export default async function CentroCopiadoConfigPage() {
+  if (!(await tieneCapacidad("centro_copiado"))) return <FuncionNoIncluida />;
   if (!(await tienePermiso("costos.gestionar"))) {
     return <SinPermiso modulo="Centro de copiado" />;
   }

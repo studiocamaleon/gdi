@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  ParseUUIDPipe,
   Post,
   Put,
   Req,
@@ -74,6 +75,12 @@ export class UsuariosController {
   @Get('historial')
   historial(@CurrentSession() auth: CurrentAuth) {
     return this.usuarios.historial(auth);
+  }
+
+  @Permiso('configuracion.gestionar')
+  @Delete('invitaciones/:id')
+  cancelarInvitacion(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
+    return this.usuarios.cancelarInvitacion(auth, id);
   }
 
   // ── Roles ───────────────────────────────────────────────────────────

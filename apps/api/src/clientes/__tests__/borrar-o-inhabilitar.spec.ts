@@ -73,7 +73,14 @@ function armar(rastro: {
     (callback: (tx: PrismaService) => Promise<unknown>) => callback(prisma),
   );
 
-  return { service: new ClientesService(prisma), del, update };
+  // La política comercial tiene su propia matriz; aquí se prueba la integridad
+  // de los antecedentes de un cliente con permiso de gestión vigente.
+  const capacidades = { exigir: jest.fn().mockResolvedValue(undefined) };
+  return {
+    service: new ClientesService(prisma, capacidades as never),
+    del,
+    update,
+  };
 }
 
 describe('borrar o inhabilitar un cliente', () => {

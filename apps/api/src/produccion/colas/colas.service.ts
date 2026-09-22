@@ -1,4 +1,7 @@
-import { leerAsignacionPersonal, proyectarAsignacionPersonal } from '../asignacion-personal';
+import {
+  leerAsignacionPersonal,
+  proyectarAsignacionPersonal,
+} from '../asignacion-personal';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { sumaTramosMin } from '../../ordenes-trabajo/tiempos-ejecucion';
@@ -15,6 +18,7 @@ import {
   configurarFilaCola,
 } from './configuracion-cola';
 import type { ConsultaColaDto } from './consulta-cola.dto';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 
 const activos = (tenantId: string): Prisma.OrdenTrabajoItemPasoWhereInput => ({
   tenantId,
@@ -152,7 +156,8 @@ export function disponibilidadCola(
   if (paso.estado === 'pausado')
     return { estadoCola: 'pausados' as const, motivos };
   if (paso.estado === 'bloqueado') {
-    if (!paso.motivoBloqueo) motivos.unshift('Trabajo bloqueado. Revisá su detalle.');
+    if (!paso.motivoBloqueo)
+      motivos.unshift('Trabajo bloqueado. Revisá su detalle.');
     return { estadoCola: 'bloqueados' as const, motivos };
   }
   return {
@@ -166,9 +171,15 @@ export function disponibilidadCola(
 
 @Injectable()
 export class ColasProduccionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async maquinas(tenantId: string) {
+    await this.capacidades.exigirIncluida(tenantId, 'colas_produccion');
     const [maquinas, cantidades] = await Promise.all([
       this.prisma.maquina.findMany({
         where: { tenantId },
@@ -224,6 +235,7 @@ export class ColasProduccionService {
     ids?: string[],
     auth?: CurrentAuth,
   ) {
+    await this.capacidades.exigirIncluida(tenantId, 'colas_produccion', db);
     const maquina = await db.maquina.findFirst({
       where: { id: maquinaId, tenantId },
       select: maquinaSelect,
@@ -272,10 +284,14 @@ export class ColasProduccionService {
         );
         const abierto = p.tramos.find((t) => !t.finEl);
         const asignacion = leerAsignacionPersonal(p.asignacionPersonalJson);
-        const asignado = !!empleado && !asignacion?.conflicto && asignacion?.personas.some(p => p.empleadoId === empleado.id);
+        const asignado =
+          !!empleado &&
+          !asignacion?.conflicto &&
+          asignacion?.personas.some((p) => p.empleadoId === empleado.id);
         const tieneMesa = Boolean(
           auth &&
-          (asignado || p.mesaUsuarioId === auth.userId ||
+          (asignado ||
+            p.mesaUsuarioId === auth.userId ||
             abierto?.usuarioId === auth.userId),
         );
         const requiereMesa = !supervisa && !tieneMesa;
@@ -303,12 +319,15 @@ export class ColasProduccionService {
             p.duracionEstimadaMin === null
               ? null
               : Number(p.duracionEstimadaMin),
-          asignacionPersonal: proyectarAsignacionPersonal(p.asignacionPersonalJson, auth?.userId ?? ""),
+          asignacionPersonal: proyectarAsignacionPersonal(
+            p.asignacionPersonalJson,
+            auth?.userId ?? '',
+          ),
           responsable:
             p.iniciadoPorNombre ??
             p.mesaUsuario?.nombreCompleto ??
             p.mesaUsuario?.email ??
-            (asignacion?.personas.map(p => p.nombre).join(" · ") || null),
+            (asignacion?.personas.map((p) => p.nombre).join(' · ') || null),
           archivosCount: p.item._count.archivos,
           ...disponibilidad,
           control: {
@@ -339,7 +358,11 @@ export class ColasProduccionService {
             canManage: gestiona && !requiereMesa,
             canSupervise: supervisa,
             puedeTomarMesa:
-              gestiona && requiereMesa && !p.mesaUsuarioId && !abierto && !asignacion?.personas.length,
+              gestiona &&
+              requiereMesa &&
+              !p.mesaUsuarioId &&
+              !abierto &&
+              !asignacion?.personas.length,
           },
         };
       })

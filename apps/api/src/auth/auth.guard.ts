@@ -1,7 +1,9 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -15,6 +17,10 @@ import { ipDeRequest, ipPermitida } from './ip';
 import { expandir, permisosDeRolBase } from './permisos';
 import { SessionCacheService } from './session-cache.service';
 import {
+  ENROLAMIENTO_PLATAFORMA,
+  mfaPlataformaCompleta,
+} from './enrolamiento-plataforma';
+import {
   PREFIJO_TOKEN_MCP,
   hashTokenMcp,
   permisosEfectivosMcp,
@@ -27,6 +33,9 @@ export class AuthGuard implements CanActivate {
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly sessionCache: SessionCacheService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -90,7 +99,16 @@ export class AuthGuard implements CanActivate {
           expiresAt: true,
           createdAt: true,
           userId: true,
-          user: { select: { activo: true, rolPlataforma: true } },
+          mfaVerificadoEl: true,
+          user: {
+            select: {
+              activo: true,
+              rolPlataforma: true,
+              mfa: {
+                select: { activatedAt: true, recuperacionConfirmadaEl: true },
+              },
+            },
+          },
         },
       });
       if (
@@ -104,6 +122,21 @@ export class AuthGuard implements CanActivate {
         throw new UnauthorizedException('Sesion expirada o revocada.');
       }
       void this.renovar({ ...session, id: payload.sessionId });
+      const plataformaMfaPendiente = !mfaPlataformaCompleta(
+        session.user.mfa,
+        session.mfaVerificadoEl,
+      );
+      if (
+        plataformaMfaPendiente &&
+        !this.reflector.getAllAndOverride<boolean>(ENROLAMIENTO_PLATAFORMA, [
+          context.getHandler(),
+          context.getClass(),
+        ])
+      ) {
+        throw new ForbiddenException(
+          'Completá MFA y guardá tus códigos de recuperación en Seguridad del backoffice para continuar.',
+        );
+      }
       request.auth = {
         userId: payload.sub,
         sessionId: payload.sessionId,
@@ -112,6 +145,7 @@ export class AuthGuard implements CanActivate {
         role: payload.role,
         email: payload.email,
         esPlataforma: true,
+        plataformaMfaPendiente,
       };
       return true;
     }
@@ -147,7 +181,13 @@ export class AuthGuard implements CanActivate {
     const session = await this.prisma.authSession.findUnique({
       where: { id: payload.sessionId },
       include: {
-        user: true,
+        user: {
+          include: {
+            mfa: {
+              select: { activatedAt: true, recuperacionConfirmadaEl: true },
+            },
+          },
+        },
         currentTenant: true,
         // El rol viene con la membership: los permisos se resuelven acá y no en
         // un query aparte por request.
@@ -181,6 +221,8 @@ export class AuthGuard implements CanActivate {
       const imp = session.impersonacion;
       if (
         !imp ||
+        session.user.rolPlataforma !== 'ADMIN' ||
+        !mfaPlataformaCompleta(session.user.mfa, session.mfaVerificadoEl) ||
         imp.id !== payload.imp.sesionId ||
         imp.cerradaEl ||
         imp.expiraEl <= new Date() ||
@@ -311,6 +353,7 @@ export class AuthGuard implements CanActivate {
           'Tu cuenta sólo puede usarse desde la red autorizada de tu empresa.',
         );
       }
+      await this.capacidades.exigir(cached.tenantId, 'mcp');
       request.auth = cached;
       return true;
     }
@@ -342,6 +385,7 @@ export class AuthGuard implements CanActivate {
       throw rechazo;
     }
 
+    await this.capacidades.exigir(credencial.tenantId, 'mcp');
     const membership = credencial.membership;
     if (!ipPermitida(ipDeRequest(request), membership.ipsPermitidas)) {
       throw new UnauthorizedException(

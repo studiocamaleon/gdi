@@ -1,3 +1,4 @@
+import { capacidadDeRuta } from "./capacidades";
 import type * as React from "react";
 import {
   ActivityIcon,
@@ -13,7 +14,12 @@ import {
 
 import type { PermisoClave } from "@/lib/permisos";
 
-export type ReporteCategoria = "Ejecutivo" | "Comercial" | "Operaciones" | "Finanzas" | "Producto";
+export type ReporteCategoria =
+  | "Ejecutivo"
+  | "Comercial"
+  | "Operaciones"
+  | "Finanzas"
+  | "Producto";
 
 export type Reporte = {
   href: string;
@@ -66,7 +72,8 @@ export const REPORTES: Reporte[] = [
   {
     href: "/reportes/produccion",
     label: "Producción",
-    descripcion: "Entregas, tiempos, utilización y estado operativo del taller.",
+    descripcion:
+      "Entregas, tiempos, utilización y estado operativo del taller.",
     categoria: "Operaciones",
     Icon: FactoryIcon,
   },
@@ -103,6 +110,14 @@ export const REPORTES: Reporte[] = [
 
 export function reportesVisibles(
   puede: (permiso: PermisoClave) => boolean,
+  funciones?: Record<string, boolean>,
 ): Reporte[] {
-  return REPORTES.filter((reporte) => !reporte.permiso || puede(reporte.permiso));
+  if (!puede("reportes.ver")) return [];
+  return REPORTES.filter((reporte) => {
+    const clave = capacidadDeRuta(reporte.href);
+    return (
+      (!reporte.permiso || puede(reporte.permiso)) &&
+      (!funciones || !clave || funciones[clave] === true)
+    );
+  });
 }

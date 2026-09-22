@@ -21,6 +21,7 @@ import {
   type Comprobante,
 } from "@/lib/administracion";
 import { formatearMoneda, formatearMonedaDoc, monedaDe } from "@/lib/moneda";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import { ActionLink } from "@/components/design-system/action-link";
 import { ActionButton } from "@/components/design-system/action-button";
@@ -58,6 +59,8 @@ import s from "./comprobantes.module.css";
 const ESTADOS = [
   ["todos", "Todos los estados"],
   ["borrador", "Borrador"],
+  ["en_proceso", "Enviando"],
+  ["por_verificar", "Por verificar"],
   ["emitido", "Sin CAE"],
   ["cae", "Con CAE"],
   ["rechazado", "Rechazado"],
@@ -94,7 +97,9 @@ export function ComprobantesView({
 }) {
   const scope = useDesignScope();
   const theme = useDesignTheme();
-  const puedeGestionar = usePuede("administracion.gestionar");
+  const permisoGestionar = usePuede("administracion.gestionar");
+  const fiscalDisponible = useCapacidad("fiscal_argentina");
+  const puedeGestionar = permisoGestionar && fiscalDisponible;
   const [q, setQ] = React.useState("");
   const [est, setEst] = React.useState("todos");
   const [tip, setTip] = React.useState("todos");

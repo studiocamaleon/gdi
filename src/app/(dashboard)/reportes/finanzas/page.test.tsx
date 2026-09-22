@@ -1,3 +1,4 @@
+vi.mock("@/lib/capacidades-server", () => ({ tieneCapacidad: vi.fn(async () => true) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/permisos-server", () => ({ tienePermiso: vi.fn() }));
 vi.mock("@/lib/auth-server", () => ({

@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -100,8 +101,12 @@ export class AdministracionController {
 
   /** El comprobante impreso: todo lo que la ley exige que figure. */
   @Get('comprobantes/:id/factura')
-  factura(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
-    return this.facturaService.documento(auth.tenantId, id);
+  async factura(@CurrentSession() auth: CurrentAuth, @Param('id') id: string) {
+    const [doc, pdfDisponible] = await Promise.all([
+      this.facturaService.documento(auth.tenantId, id),
+      this.comprobantesService.pdfDisponible(auth.tenantId, id),
+    ]);
+    return { ...doc, pdfDisponible };
   }
 
   // ── Cuenta corriente ─────────────────────────────────────────────────
@@ -124,6 +129,7 @@ export class AdministracionController {
    * server (mismo patrón que el PDF del comprobante).
    */
   @Get('clientes/:clienteId/cuenta-corriente/pdf')
+  @RequiereCapacidad('documentos_pdf')
   async cuentaCorrientePdf(
     @CurrentSession() auth: CurrentAuth,
     @Param('clienteId') clienteId: string,
@@ -220,8 +226,12 @@ export class AdministracionController {
 
   /** El gate del botón Facturar. Liviano: sólo el booleano. */
   @Get('facturacion/estado')
-  async estadoFacturacion() {
-    return { habilitada: await this.afipIntegracion.facturacionHabilitada() };
+  async estadoFacturacion(@CurrentSession() auth: CurrentAuth) {
+    return {
+      habilitada: await this.afipIntegracion.facturacionHabilitada(
+        auth.tenantId,
+      ),
+    };
   }
 
   /** Órdenes finalizadas con saldo sin facturar (vista Facturación). */
@@ -274,7 +284,7 @@ export class AdministracionController {
     return this.comprobantesService.obtener(auth, id);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso('administracion.gestionar', 'administracion.anular')
   @Post('comprobantes')
   crearComprobante(
     @CurrentSession() auth: CurrentAuth,
@@ -283,13 +293,22 @@ export class AdministracionController {
     return this.comprobantesService.crear(auth, body);
   }
 
-  @Permiso('administracion.gestionar')
+  @Permiso('administracion.gestionar', 'administracion.anular')
   @Post('comprobantes/:id/emitir')
   emitirComprobante(
     @CurrentSession() auth: CurrentAuth,
     @Param('id') id: string,
   ) {
     return this.comprobantesService.emitir(auth, id);
+  }
+
+  @Permiso('administracion.gestionar', 'administracion.anular')
+  @Post('comprobantes/:id/consultar-emision')
+  consultarEmision(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.comprobantesService.consultarEmision(auth, id);
   }
 
   @Permiso('administracion.gestionar')
@@ -430,6 +449,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Post('cuentas/transferencias')
   transferir(
     @CurrentSession() auth: CurrentAuth,
@@ -439,6 +459,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Post('cuentas/:id/arqueo')
   arqueo(
     @CurrentSession() auth: CurrentAuth,
@@ -449,6 +470,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Post('cuentas/:id/ajustes')
   ajustarFondos(
     @CurrentSession() auth: CurrentAuth,
@@ -459,6 +481,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('tesoreria')
   @Patch('cuentas/:cuentaId/movimientos/:movimientoId/conciliacion')
   conciliarMovimiento(
     @CurrentSession() auth: CurrentAuth,
@@ -480,6 +503,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/depositar')
   depositarValor(
     @CurrentSession() auth: CurrentAuth,
@@ -490,6 +514,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.gestionar')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/acreditar')
   acreditarValor(
     @CurrentSession() auth: CurrentAuth,
@@ -500,6 +525,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/revertir-deposito')
   revertirDepositoValor(
     @CurrentSession() auth: CurrentAuth,
@@ -510,6 +536,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/revertir-acreditacion')
   revertirAcreditacionValor(
     @CurrentSession() auth: CurrentAuth,
@@ -520,6 +547,7 @@ export class AdministracionController {
   }
 
   @Permiso('administracion.anular')
+  @RequiereCapacidad('valores')
   @Post('valores/:id/rechazar')
   rechazarValor(
     @CurrentSession() auth: CurrentAuth,

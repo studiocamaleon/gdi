@@ -1,9 +1,12 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   ConflictException,
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import type { Prisma } from '@prisma/client';
+import { bloquearCupoUsuarios } from '../../suscripciones/cupos-usuarios';
 import { PrismaService } from '../../prisma/prisma.service';
 import { regionalDelTenant } from '../../common/regional';
 import { proximaVentana } from '../notificaciones/despacho.service';
@@ -18,7 +21,12 @@ import type {
 
 @Injectable()
 export class AutomaticosWebService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
   private validarTenant(tenantId: string, dto: DispositivoWebDto) {
     if (tenantId !== dto.tenantId)
       throw new ForbiddenException(
@@ -56,6 +64,14 @@ export class AutomaticosWebService {
   async configurar(tenantId: string, dto: ConfigurarWebDto) {
     this.validarTenant(tenantId, dto);
     await this.prisma.$transaction(async (tx) => {
+      const capacidad =
+        dto.modo === 'WHATSAPP_WEB' ? 'whatsapp_web' : 'whatsapp_automatico';
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        tenantId,
+        dto.modo === 'PAUSADO' ? ['identidad'] : [capacidad],
+        dto.modo === 'PAUSADO' ? [] : [capacidad],
+      );
       // Bloquea la misma fila que iniciar(): una pausa no puede adelantarse
       // silenciosamente a un envío ya autorizado. Los envíos en curso terminan.
       await tx.configuracionNotificaciones.upsert({
@@ -85,9 +101,13 @@ export class AutomaticosWebService {
     });
     return this.estado(tenantId);
   }
-  private async configActiva(tenantId: string, dto: DispositivoWebDto) {
+  private async configActiva(
+    tenantId: string,
+    dto: DispositivoWebDto,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
     this.validarTenant(tenantId, dto);
-    const c = await this.prisma.configuracionNotificaciones.findFirst({
+    const c = await db.configuracionNotificaciones.findFirst({
       where: { tenantId },
     });
     if (
@@ -101,100 +121,121 @@ export class AutomaticosWebService {
     return c;
   }
   async prueba(tenantId: string, dto: DispositivoWebDto) {
-    if (!(await this.configActiva(tenantId, dto)))
-      throw new ConflictException(
-        'Activá los avisos en este equipo antes de probar.',
-      );
-    await this.prisma.notificacionWhatsapp.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
         tenantId,
-        evento: 'prueba_extension',
-        canal: CANAL_WEB,
-        claveUnica: `prueba_extension:${randomUUID()}`,
-        telefono: dto.numero,
-        plantilla: 'prueba_extension',
-        parametros: [],
-        textoWeb:
-          'Prueba de Grafo. Este mensaje salió automáticamente desde la extensión de Chrome, sin WATI.',
-      },
+        ['whatsapp_web'],
+        ['whatsapp_web'],
+      );
+      if (!(await this.configActiva(tenantId, dto, tx)))
+        throw new ConflictException(
+          'Activá los avisos en este equipo antes de probar.',
+        );
+      await tx.notificacionWhatsapp.create({
+        data: {
+          tenantId,
+          evento: 'prueba_extension',
+          canal: CANAL_WEB,
+          claveUnica: `prueba_extension:${randomUUID()}`,
+          telefono: dto.numero,
+          plantilla: 'prueba_extension',
+          parametros: [],
+          textoWeb:
+            'Prueba de Grafo. Este mensaje salió automáticamente desde la extensión de Chrome, sin WATI.',
+        },
+      });
+      return { ok: true };
     });
-    return { ok: true };
   }
 
   async reservar(tenantId: string, dto: DispositivoWebDto) {
-    const config = await this.configActiva(tenantId, dto);
-    if (!config) return { trabajo: null };
-    const ahora = new Date();
-    // Una reserva que nunca llegó a iniciar se puede recuperar. Una iniciada
-    // se considera incierta: reenviarla tras un corte podría duplicarla.
-    await this.prisma.notificacionWhatsapp.updateMany({
-      where: {
-        tenantId,
-        canal: CANAL_WEB,
-        estado: 'web_reservada',
-        reservadaEl: { lt: new Date(+ahora - 120_000) },
-      },
-      data: { estado: 'pendiente', reservaToken: null, reservadaEl: null },
-    });
-    await this.prisma.notificacionWhatsapp.updateMany({
-      where: {
-        tenantId,
-        canal: CANAL_WEB,
-        estado: 'web_enviando',
-        reservadaEl: { lt: new Date(+ahora - 600_000) },
-      },
-      data: {
-        estado: 'web_incierta',
-        motivo:
-          'Se interrumpió la confirmación. No se reenvía automáticamente para evitar duplicados.',
-      },
-    });
-    const filas = await this.prisma.notificacionWhatsapp.findMany({
-      where: {
-        tenantId,
-        canal: CANAL_WEB,
-        estado: 'pendiente',
-        OR: [{ programadaPara: null }, { programadaPara: { lte: ahora } }],
-      },
-      orderBy: { createdAt: 'asc' },
-      take: 10,
-    });
-    const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
-    for (const fila of filas) {
-      const plantilla = POR_EVENTO.get(fila.evento as never);
-      const prueba =
-        fila.evento === 'prueba_extension' && fila.telefono === dto.numero;
-      if ((!plantilla && !prueba) || !fila.textoWeb) continue;
-      const proxima = prueba
-        ? null
-        : proximaVentana(ahora, {
-            ...config,
-            requiereLocalAbierto: plantilla?.requiereLocalAbierto ?? false,
-            zona: zonaHoraria,
-          });
-      if (proxima) {
-        await this.prisma.notificacionWhatsapp.updateMany({
-          where: { id: fila.id, tenantId, estado: 'pendiente' },
-          data: { programadaPara: proxima },
-        });
-        continue;
-      }
-      const token = randomUUID();
-      const tomada = await this.prisma.notificacionWhatsapp.updateMany({
-        where: { id: fila.id, tenantId, canal: CANAL_WEB, estado: 'pendiente' },
-        data: {
+    this.validarTenant(tenantId, dto);
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, tenantId);
+      if (!(await this.capacidades.puedeOperar(tenantId, 'whatsapp_web', tx)))
+        return { trabajo: null };
+      const config = await this.configActiva(tenantId, dto, tx);
+      if (!config) return { trabajo: null };
+      const ahora = new Date();
+      // Una reserva que nunca llegó a iniciar se puede recuperar. Una iniciada
+      // se considera incierta: reenviarla tras un corte podría duplicarla.
+      await tx.notificacionWhatsapp.updateMany({
+        where: {
+          tenantId,
+          canal: CANAL_WEB,
           estado: 'web_reservada',
-          reservadaEl: ahora,
-          reservaToken: token,
+          reservadaEl: { lt: new Date(+ahora - 120_000) },
+        },
+        data: { estado: 'pendiente', reservaToken: null, reservadaEl: null },
+      });
+      await tx.notificacionWhatsapp.updateMany({
+        where: {
+          tenantId,
+          canal: CANAL_WEB,
+          estado: 'web_enviando',
+          reservadaEl: { lt: new Date(+ahora - 600_000) },
+        },
+        data: {
+          estado: 'web_incierta',
+          motivo:
+            'Se interrumpió la confirmación. No se reenvía automáticamente para evitar duplicados.',
         },
       });
-      if (tomada.count === 1) return { trabajo: { id: fila.id, token } };
-    }
-    return { trabajo: null };
+      const filas = await tx.notificacionWhatsapp.findMany({
+        where: {
+          tenantId,
+          canal: CANAL_WEB,
+          estado: 'pendiente',
+          OR: [{ programadaPara: null }, { programadaPara: { lte: ahora } }],
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 10,
+      });
+      const { zonaHoraria } = await regionalDelTenant(tx, tenantId);
+      for (const fila of filas) {
+        const plantilla = POR_EVENTO.get(fila.evento as never);
+        const prueba =
+          fila.evento === 'prueba_extension' && fila.telefono === dto.numero;
+        if ((!plantilla && !prueba) || !fila.textoWeb) continue;
+        const proxima = prueba
+          ? null
+          : proximaVentana(ahora, {
+              ...config,
+              requiereLocalAbierto: plantilla?.requiereLocalAbierto ?? false,
+              zona: zonaHoraria,
+            });
+        if (proxima) {
+          await tx.notificacionWhatsapp.updateMany({
+            where: { id: fila.id, tenantId, estado: 'pendiente' },
+            data: { programadaPara: proxima },
+          });
+          continue;
+        }
+        const token = randomUUID();
+        const tomada = await tx.notificacionWhatsapp.updateMany({
+          where: {
+            id: fila.id,
+            tenantId,
+            canal: CANAL_WEB,
+            estado: 'pendiente',
+          },
+          data: {
+            estado: 'web_reservada',
+            reservadaEl: ahora,
+            reservaToken: token,
+          },
+        });
+        if (tomada.count === 1) return { trabajo: { id: fila.id, token } };
+      }
+      return { trabajo: null };
+    });
   }
   async iniciar(tenantId: string, id: string, dto: ReservaWebDto) {
     this.validarTenant(tenantId, dto);
     return this.prisma.$transaction(async (tx) => {
+      // Es un aviso previo: iniciar su envío cierra un compromiso existente.
+      await this.capacidades.exigirOperacionTx(tx, tenantId, ['whatsapp_web']);
       await tx.$queryRaw`SELECT "id" FROM "ConfiguracionNotificaciones" WHERE "tenantId" = ${tenantId}::uuid FOR UPDATE`;
       const c = await tx.configuracionNotificaciones.findFirst({
         where: { tenantId },
@@ -254,7 +295,7 @@ export class AutomaticosWebService {
         });
         return { trabajo: null };
       }
-      const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
+      const { zonaHoraria } = await regionalDelTenant(tx, tenantId);
       const proxima = prueba
         ? null
         : proximaVentana(new Date(), {
@@ -315,32 +356,40 @@ export class AutomaticosWebService {
           : 'enviada';
     if (dto.estado === 'enviada' && !dto.mensajeId)
       throw new ConflictException('Falta la confirmación de WhatsApp.');
-    const res = await this.prisma.notificacionWhatsapp.updateMany({
-      where: {
-        id,
-        tenantId,
-        canal: CANAL_WEB,
-        reservaToken: dto.token,
-        estado: { in: ['web_enviando', 'web_incierta'] },
-      },
-      data: {
-        estado,
-        mensajeWebId: dto.mensajeId ?? null,
-        motivo: dto.motivo ?? null,
-        enviadaEl: estado === 'enviada' ? new Date() : null,
-        ...(estado === 'pendiente'
-          ? { reservadaEl: null, programadaPara: new Date(Date.now() + 60_000) }
-          : {}),
-      },
-    });
-    // Es idempotente: se puede confirmar otra vez si se perdió la respuesta HTTP.
-    if (!res.count) {
-      const actual = await this.prisma.notificacionWhatsapp.findFirst({
-        where: { id, tenantId, canal: CANAL_WEB, reservaToken: dto.token },
+    return this.prisma.$transaction(async (tx) => {
+      // La confirmación de un envío autorizado debe persistir incluso si después
+      // se retiró el canal o la empresa quedó en sólo lectura.
+      await bloquearCupoUsuarios(tx, tenantId);
+      const res = await tx.notificacionWhatsapp.updateMany({
+        where: {
+          id,
+          tenantId,
+          canal: CANAL_WEB,
+          reservaToken: dto.token,
+          estado: { in: ['web_enviando', 'web_incierta'] },
+        },
+        data: {
+          estado,
+          mensajeWebId: dto.mensajeId ?? null,
+          motivo: dto.motivo ?? null,
+          enviadaEl: estado === 'enviada' ? new Date() : null,
+          ...(estado === 'pendiente'
+            ? {
+                reservadaEl: null,
+                programadaPara: new Date(Date.now() + 60_000),
+              }
+            : {}),
+        },
       });
-      if (actual?.estado !== estado)
-        throw new ConflictException('No se pudo confirmar ese intento.');
-    }
-    return { ok: true };
+      // Es idempotente: se puede confirmar otra vez si se perdió la respuesta HTTP.
+      if (!res.count) {
+        const actual = await tx.notificacionWhatsapp.findFirst({
+          where: { id, tenantId, canal: CANAL_WEB, reservaToken: dto.token },
+        });
+        if (actual?.estado !== estado)
+          throw new ConflictException('No se pudo confirmar ese intento.');
+      }
+      return { ok: true };
+    });
   }
 }

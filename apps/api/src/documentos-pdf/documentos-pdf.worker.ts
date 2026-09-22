@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   ForbiddenException,
   Injectable,
@@ -49,6 +50,9 @@ export class DocumentosPdfWorker
     private readonly renderer: PresupuestoRenderService,
     private readonly archivos: ArchivosService,
     private readonly tenants: TenantConcurrencyService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   onApplicationBootstrap() {
@@ -282,6 +286,7 @@ export class DocumentosPdfWorker
             );
         }, LEASE_MS / 3);
         renovar.unref();
+        await this.capacidades.exigir(tenantId, 'documentos_pdf');
         const datos = doc.datosJson as unknown as PresupuestoPdfDatos;
         if (doc.plantillaVersion !== VERSION_PRESUPUESTO_HTML)
           throw new Error('PDF_VERSION_NO_SOPORTADA');
@@ -318,7 +323,14 @@ export class DocumentosPdfWorker
               error.message,
             ));
         const agotado = intentoAnterior + 1 >= MAX_INTENTOS_PDF;
-        const cuota = error instanceof ForbiddenException;
+        const respuesta =
+          error instanceof ForbiddenException ? error.getResponse() : null;
+        const sinCapacidad =
+          typeof respuesta === 'object' &&
+          respuesta !== null &&
+          'code' in respuesta &&
+          respuesta.code === 'CAPACIDAD_NO_DISPONIBLE';
+        const cuota = error instanceof ForbiddenException && !sinCapacidad;
         await this.prisma.documentoPdf.updateMany({
           where: {
             id: documentoId,
@@ -334,14 +346,18 @@ export class DocumentosPdfWorker
             encoladoEl: null,
             leaseToken: null,
             leaseHasta: null,
-            errorCodigo: cuota
-              ? 'SIN_ESPACIO'
-              : permanente
-                ? 'VERSION_INVALIDA'
-                : 'GENERACION_FALLIDA',
-            errorMensaje: cuota
-              ? 'No hay espacio disponible. Liberá espacio o ampliá el plan y reintentá.'
-              : 'No se pudo generar el PDF. Podés reintentar en unos instantes.',
+            errorCodigo: sinCapacidad
+              ? 'CAPACIDAD_NO_DISPONIBLE'
+              : cuota
+                ? 'SIN_ESPACIO'
+                : permanente
+                  ? 'VERSION_INVALIDA'
+                  : 'GENERACION_FALLIDA',
+            errorMensaje: sinCapacidad
+              ? 'La generación de PDF no está disponible en el plan actual. Reintentá cuando se habilite.'
+              : cuota
+                ? 'No hay espacio disponible. Liberá espacio o ampliá el plan y reintentá.'
+                : 'No se pudo generar el PDF. Podés reintentar en unos instantes.',
           },
         });
       }

@@ -23,6 +23,15 @@ import {
 export class PreparacionesRecorridoController {
   constructor(private readonly preparations: PreparacionesRecorridoService) {}
 
+  @Get('items/:itemId/corte')
+  guardados(
+    @CurrentSession() auth: CurrentAuth,
+    @Param('itemId') itemId: string,
+    @Query() query: Record<string, string | undefined>,
+  ) {
+    return this.preparations.consultarGuardados(auth, itemId, seleccionRecorrido(query));
+  }
+
   @Post('items/:itemId/corte/preparar')
   list(
     @CurrentSession() auth: CurrentAuth,

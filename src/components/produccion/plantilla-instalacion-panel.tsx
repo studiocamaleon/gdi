@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
@@ -53,7 +54,26 @@ const DEFAULT_CONFIG: ConfiguracionPlantillaInstalacion = {
   solapeMm: 20,
 };
 
-export function PlantillaInstalacionPanel({ itemId, seleccion }: { itemId: string; seleccion?: SeleccionRecorrido }) {
+export function PlantillaInstalacionPanel(props: {
+  itemId: string;
+  seleccion?: SeleccionRecorrido;
+}) {
+  const incluida = useCapacidad("recorridos_fabricacion");
+  if (!incluida)
+    return (
+      <p className="text-sm text-muted-foreground">
+        Generar plantillas de instalación no está incluido en tu plan.
+      </p>
+    );
+  return <PlantillaInstalacionContenido {...props} />;
+}
+function PlantillaInstalacionContenido({
+  itemId,
+  seleccion,
+}: {
+  itemId: string;
+  seleccion?: SeleccionRecorrido;
+}) {
   const [draft, setDraft] = React.useState(() => ({
     bordeMm: "50",
     anchoPanelMm: "1200",

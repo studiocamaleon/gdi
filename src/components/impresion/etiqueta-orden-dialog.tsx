@@ -14,7 +14,7 @@ import {
 } from "@/lib/impresion-api";
 import { leerImpresora, type ImpresoraPuesto } from "@/lib/impresora-puesto";
 import dynamic from "next/dynamic";
-import { useImpresionDirecta } from "@/components/navigation/capacidades-provider";
+import { useCapacidad, useImpresionDirecta } from "@/components/navigation/capacidades-provider";
 import { descargarEtiquetaPdf } from "@/lib/etiqueta-pdf";
 const ImpresoraPuestoForm = dynamic(() =>
   import("./impresora-puesto-form").then((m) => m.ImpresoraPuestoForm),
@@ -29,6 +29,8 @@ export function EtiquetaOrdenDialog({
   onClose: () => void;
 }) {
   const impresionDirecta = useImpresionDirecta();
+  const conDescarga = useCapacidad("etiquetas_pdf");
+  const disponible = conDescarga || impresionDirecta;
   const [vista, setVista] = useState<VistaEtiqueta | null>(null);
   const [identidad, setIdentidad] = useState<ConfiguracionImpresion | null>(
     null,
@@ -43,6 +45,11 @@ export function EtiquetaOrdenDialog({
   const enviando = useRef(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    if (!disponible) {
+      setVista(null);
+      setError("Las etiquetas no están incluidas en el plan actual.");
+      return;
+    }
     let cancelado = false;
     Promise.all([
       getVistaEtiqueta(ordenId),
@@ -72,7 +79,7 @@ export function EtiquetaOrdenDialog({
     return () => {
       cancelado = true;
     };
-  }, [ordenId, revision, impresionDirecta]);
+  }, [ordenId, revision, impresionDirecta, disponible]);
   const cantidad = Number(copias);
   const cantidadValida =
     Number.isInteger(cantidad) && cantidad >= 1 && cantidad <= 20;
@@ -238,7 +245,7 @@ export function EtiquetaOrdenDialog({
           >
             Cerrar
           </ActionButton>
-          {!vista && error && (
+          {disponible && !vista && error && (
             <ActionButton
               variant="outline"
               onPress={() => {
@@ -250,13 +257,13 @@ export function EtiquetaOrdenDialog({
               Reintentar carga
             </ActionButton>
           )}
-          {vista && (
+          {vista && conDescarga && (
             <ActionButton
               variant="outline"
               isDisabled={imprimiendo}
               onPress={async () => {
                 try {
-                  await descargarEtiquetaPdf(vista);
+                  await descargarEtiquetaPdf(vista, ordenId);
                 } catch {
                   setError(
                     "No se pudo descargar la etiqueta. Intentá nuevamente.",

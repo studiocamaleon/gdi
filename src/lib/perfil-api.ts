@@ -1,10 +1,13 @@
 import { apiRequest } from "./api";
 
 export type EstadoMfa = {
+  dispositivosRecordados: number;
   activo: boolean;
   activadoEl: string | null;
   codigosRestantes: number;
   disponible: boolean;
+  requiereMfa: boolean;
+  recuperacionConfirmada: boolean;
 };
 export type AltaMfa = {
   setupId: string;
@@ -27,16 +30,24 @@ export const quitarFotoPerfil = () =>
     method: "DELETE",
   });
 export const estadoMfa = () => apiRequest<EstadoMfa>("/auth/perfil/mfa");
+export const olvidarDispositivosMfa = () =>
+  apiRequest<{ ok: boolean; requiereLogin: boolean }>(
+    "/auth/perfil/mfa/dispositivos",
+    { method: "DELETE" },
+  );
 export const iniciarMfa = (password: string) =>
   apiRequest<AltaMfa>("/auth/perfil/mfa/iniciar", {
     method: "POST",
     body: JSON.stringify({ password }),
   });
 export const confirmarMfa = (setupId: string, codigo: string) =>
-  apiRequest<{ codigosRecuperacion: string[] }>("/auth/perfil/mfa/confirmar", {
-    method: "POST",
-    body: JSON.stringify({ setupId, codigo }),
-  });
+  apiRequest<{ codigosRecuperacion: string[]; versionRecuperacion: number }>(
+    "/auth/perfil/mfa/confirmar",
+    {
+      method: "POST",
+      body: JSON.stringify({ setupId, codigo }),
+    },
+  );
 export const cancelarMfa = () =>
   apiRequest("/auth/perfil/mfa/pendiente", { method: "DELETE" });
 export const gestionarMfa = (
@@ -44,7 +55,21 @@ export const gestionarMfa = (
   password: string,
   codigo: string,
 ) =>
-  apiRequest<{ codigosRecuperacion: string[] }>(`/auth/perfil/mfa/${accion}`, {
+  apiRequest<{ codigosRecuperacion: string[]; versionRecuperacion: number }>(
+    `/auth/perfil/mfa/${accion}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ password, codigo }),
+    },
+  );
+
+export const confirmarRecuperacionMfa = (version: number) =>
+  apiRequest<{ ok: boolean }>("/auth/perfil/mfa/recuperacion/confirmar", {
+    method: "POST",
+    body: JSON.stringify({ version }),
+  });
+export const reemplazarMfa = (password: string, codigo: string) =>
+  apiRequest<AltaMfa>("/auth/perfil/mfa/reemplazar", {
     method: "POST",
     body: JSON.stringify({ password, codigo }),
   });

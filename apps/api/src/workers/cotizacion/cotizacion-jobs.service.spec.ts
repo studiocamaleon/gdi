@@ -82,7 +82,7 @@ describe('cotizaciones con nesting reutilizable', () => {
   it.each(['completed', 'failed'])(
     'refresca el trabajo que pasa a %s entre las dos lecturas',
     async (estado) => {
-      const servicio = new CotizacionJobsService();
+      const servicio = new CotizacionJobsService({ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never);
       const id = idTrabajoCotizacion(input.tenantId, 'carrera', input);
       const viejo = {
         id,
@@ -112,7 +112,7 @@ describe('cotizaciones con nesting reutilizable', () => {
     },
   );
   it('no informa completado si un trabajo terminal carece de resultado incluso al releer', async () => {
-    const servicio = new CotizacionJobsService();
+    const servicio = new CotizacionJobsService({ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never);
     const id = idTrabajoCotizacion(input.tenantId, 'sin-resultado', input);
     const job = {
       id,
@@ -127,7 +127,7 @@ describe('cotizaciones con nesting reutilizable', () => {
     );
   });
   it('no reutiliza precios de una cotización terminada aunque sus inputs coincidan', async () => {
-    const servicio = new CotizacionJobsService();
+    const servicio = new CotizacionJobsService({ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never);
     const cotizacion = {
       tenantId: 'empresa-prueba',
       productoId: 'producto-prueba',

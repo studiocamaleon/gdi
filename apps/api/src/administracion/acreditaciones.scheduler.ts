@@ -7,10 +7,8 @@ import { CobrosService } from './cobros.service';
 /**
  * Barrido nocturno de acreditaciones vencidas.
  *
- * Tesorería también barre al leer el resumen (ver TesoreriaService), así
- * que el cron no es la única red: sirve para que los saldos queden bien
- * aunque nadie entre al módulo. Ambos caminos van al mismo método
- * idempotente.
+ * Se ejecuta aunque nadie entre al módulo. Las consultas de Tesorería y
+ * pendientes no acreditan cobros: sólo muestran el estado registrado.
  *
  * Dos guardas, y cada una tapa algo distinto: `corriendo` evita superponer
  * corridas dentro de este proceso, y el lease evita que dos instancias del

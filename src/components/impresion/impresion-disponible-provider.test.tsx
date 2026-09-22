@@ -51,3 +51,35 @@ it("mantiene la aplicación sin montar impresión cuando falta la capacidad y la
     await act(async () => root.unmount());
   }
 });
+
+it("el contrato de funciones prevalece sobre el indicador anterior y la conexión no obliga a montar colas", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const el = document.createElement("div"),
+    root = createRoot(el);
+  try {
+    for (const [directa, colas, visible] of [
+      [false, true, false],
+      [true, false, false],
+      [true, true, true],
+    ]) {
+      await act(async () =>
+        root.render(
+          <CapacidadesProvider
+            capacidades={{
+              impresionDirecta: true,
+              funciones: { impresion_directa: directa, colas_impresion: colas },
+            }}
+          >
+            <ImpresionDisponibleProvider tenantId="tenant">
+              <p>Cotizar y emitir OT</p>
+            </ImpresionDisponibleProvider>
+          </CapacidadesProvider>,
+        ),
+      );
+      expect(Boolean(el.querySelector("[data-cola]"))).toBe(visible);
+      expect(el.textContent).toBe("Cotizar y emitir OT");
+    }
+  } finally {
+    await act(async () => root.unmount());
+  }
+});

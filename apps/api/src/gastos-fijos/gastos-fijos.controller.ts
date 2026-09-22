@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -32,6 +33,7 @@ import { Permiso } from '../auth/permiso.decorator';
   poder hacerlo. Antes no podía: no tenía `costos.ver`.
 */
 @Permiso('administracion.configurar')
+@RequiereCapacidad('gastos_fijos')
 @Controller('gastos-fijos')
 @Roles(RolSistema.ADMINISTRADOR, RolSistema.SUPERVISOR)
 export class GastosFijosController {

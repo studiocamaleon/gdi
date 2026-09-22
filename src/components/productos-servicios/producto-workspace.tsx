@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import {
   ProductoVisualProvider,
@@ -531,6 +532,14 @@ export function ProductoWorkspace({
   estadoPublicacion,
   canManage,
 }: Props) {
+  const conProductos = useCapacidad("productos");
+  const conProcesos = useCapacidad("procesos");
+  const conCompuestos = useCapacidad("productos_compuestos");
+  const conPrecios = useCapacidad("reglas_precio");
+  const puedeEditar = canManage && conProductos &&
+    (activeTab !== "produccion" || (conProcesos && (producto.estructuraProducto !== "COMPUESTO" || conCompuestos))) &&
+    (!["pricing", "cargos"].includes(activeTab) || conPrecios) &&
+    (activeTab !== "pricing" || producto.estructuraProducto !== "COMPUESTO" || conCompuestos);
   const router = useRouter();
   const validaciones = React.useMemo(
     () => tabValidaciones(producto, recetas, estadoPublicacion),
@@ -609,13 +618,12 @@ export function ProductoWorkspace({
               variante="compacta"
             />
           </header>
-          {!canManage ? (
+          {!puedeEditar ? (
             <Alert className="mb-4">
               <CircleAlertIcon />
               <AlertTitle>Modo de solo lectura</AlertTitle>
               <AlertDescription>
-                Podés consultar toda la configuración, pero necesitás el permiso
-                de gestión de costos para modificarla.
+                Podés consultar la configuración guardada. Para modificar esta sección se necesitan la función incluida en el plan y el permiso de gestión.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -651,7 +659,7 @@ export function ProductoWorkspace({
               </HeroTabs.List>
 
               <HeroTabs.Panel id={activeTab} className={styles.tabContent}>
-                <ProductoEdicion disabled={!canManage}>
+                <ProductoEdicion disabled={!puedeEditar}>
                   {activeTab === "identidad" && (
                     <IdentidadTab producto={producto} seccion="identidad" />
                   )}
@@ -676,7 +684,7 @@ export function ProductoWorkspace({
                       catalogoFamilias={catalogoFamilias}
                       recetas={recetas}
                       estadoPublicacion={estadoPublicacion}
-                      canManage={canManage}
+                      canManage={puedeEditar}
                     />
                   )}
                   {activeTab === "cargos" && (
@@ -688,10 +696,10 @@ export function ProductoWorkspace({
                   {activeTab === "herramientas" && (
                     <HerramientasTab producto={producto} />
                   )}
-                  {activeTab === "pricing" && (
-                    <PricingTab producto={producto} recetas={recetas} />
-                  )}
                 </ProductoEdicion>
+                {activeTab === "pricing" && (
+                  <PricingTab producto={producto} recetas={recetas} reglaGeneralEditable={puedeEditar} />
+                )}
               </HeroTabs.Panel>
             </HeroTabs>
           </RouterProvider>
@@ -739,6 +747,7 @@ function IdentidadTab({
   const [descripcion, setDescripcion] = React.useState(
     producto.descripcion ?? "",
   );
+  const conCompuestos = useCapacidad("productos_compuestos");
   const [estructuraProducto, setEstructuraProducto] =
     React.useState<EstructuraProducto>(
       producto.estructuraProducto ??
@@ -1079,6 +1088,7 @@ function IdentidadTab({
                 <NativeButton
                   type="button"
                   role="radio"
+                  disabled={!conCompuestos}
                   aria-checked={estructuraProducto === "SIMPLE"}
                   data-active={estructuraProducto === "SIMPLE"}
                   onClick={() => setEstructuraProducto("SIMPLE")}
@@ -1097,6 +1107,7 @@ function IdentidadTab({
                 <NativeButton
                   type="button"
                   role="radio"
+                  disabled={!conCompuestos}
                   aria-checked={estructuraProducto === "COMPUESTO"}
                   data-active={estructuraProducto === "COMPUESTO"}
                   onClick={() => setEstructuraProducto("COMPUESTO")}
@@ -2850,9 +2861,11 @@ function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
 function PricingTab({
   producto,
   recetas,
+  reglaGeneralEditable,
 }: {
   producto: ProductoDetalle;
   recetas: ProductoReceta[];
+  reglaGeneralEditable: boolean;
 }) {
   const router = useRouter();
   const [precioPersistido, setPrecioPersistido] =
@@ -2949,6 +2962,7 @@ function PricingTab({
   return (
     <div>
       <TabPrecioCompleto
+        reglaGeneralEditable={reglaGeneralEditable}
         productoId={producto.id}
         precioConfig={precioConfig}
         onChangePrecioConfig={setPrecioConfig}

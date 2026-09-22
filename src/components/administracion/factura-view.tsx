@@ -80,7 +80,7 @@ export function FacturaView({
           </Link>
           {/* El PDF lo genera el server: es el mismo archivo que después
               va a salir por mail, no una impresión del navegador. */}
-          <ActionLink
+          {d.pdfDisponible !== false && <ActionLink
             prefetch={false}
             href={`/api/backend/administracion/comprobantes/${id}/pdf`}
             target="_blank"
@@ -88,7 +88,7 @@ export function FacturaView({
           >
             <DownloadIcon />
             Descargar PDF
-          </ActionLink>
+          </ActionLink>}
           <ActionButton variant="outline" onPress={() => window.print()}>
             <PrinterIcon />
             Imprimir

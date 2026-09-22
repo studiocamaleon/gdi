@@ -1,3 +1,5 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { contratoCompatible } from '../../suscripciones/evaluador-capacidades';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { InventarioService } from '../inventario.service';
@@ -8,7 +10,12 @@ import type { ComandoReservasDto } from '../dto/comando-reservas.dto';
 describe('Reservas OT: saldos, concurrencia y ciclo de vida (DB de test)', () => {
   const prisma = new PrismaClient();
   const inventario = new InventarioService(prisma as never);
-  const service = new ReservasMaterialService(prisma as never, inventario);
+  const capacidades = new CapacidadesEmpresaService(prisma as never);
+  const service = new ReservasMaterialService(
+    prisma as never,
+    inventario,
+    capacidades,
+  );
   let tenantId: string,
     varianteId: string,
     ubicacionId: string,
@@ -165,6 +172,58 @@ describe('Reservas OT: saldos, concurrencia y ciclo de vida (DB de test)', () =>
     await prisma.tenant.delete({ where: { id: tenantId } });
   });
   afterAll(() => prisma.$disconnect());
+
+  it('sin stock ni reservas nuevas permite cerrar lo comprometido, sin incorporar otras OTs al control', async () => {
+    const previa = await orden();
+    await cmd(previa.id);
+    const nueva = await orden();
+    const contrato = contratoCompatible(null);
+    contrato.funciones.reservas = false;
+    contrato.funciones.existencias = false;
+    const actual = capacidades.actual.bind(capacidades);
+    const spy = jest
+      .spyOn(capacidades, 'actual')
+      .mockImplementation(async (...args) => ({
+        ...(await actual(...args)),
+        contrato,
+      }));
+    try {
+      await expect(cmd(previa.id)).rejects.toMatchObject({ status: 403 });
+      await cmd(previa.id, {
+        accion: 'consumir',
+        varianteId,
+        ubicacionId,
+        cantidad: 3,
+      });
+      expect(await fila(previa.id)).toMatchObject({
+        consumida: 3,
+        reservada: 5,
+        fisico: 7,
+      });
+      await cmd(previa.id, { accion: 'liberar' });
+      expect(await fila(previa.id)).toMatchObject({ reservada: 0, fisico: 7 });
+      await expect(cmd(nueva.id, { accion: 'liberar' })).rejects.toMatchObject({
+        status: 409,
+      });
+      await prisma.$transaction((tx) =>
+        service.sincronizarOrdenTx(tx, tenantId, nueva.id, { alEmitir: true }),
+      );
+      expect(
+        await prisma.necesidadMaterialOt.count({
+          where: { tenantId, ordenId: nueva.id },
+        }),
+      ).toBe(0);
+      expect(
+        (
+          await prisma.ordenTrabajo.findUniqueOrThrow({
+            where: { id: nueva.id },
+          })
+        ).materialesControlados,
+      ).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 
   it('dos OTs simultáneas nunca comprometen las mismas existencias; faltante parcial', async () => {
     const [a, b] = await Promise.all([orden(), orden()]);

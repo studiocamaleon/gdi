@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { regionalDelTenant } from '../common/regional';
 import { claveFechaEnZona } from '../common/zona';
 import { nombreMaterialCompra } from '../compras/nombre-material-compra';
@@ -39,7 +40,10 @@ export type MaterialPrevisto = {
 };
 @Injectable()
 export class PrevisionMaterialesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService,
+  ) {}
   /** Simulación comercial de cantidades: no crea demanda, reserva, OC ni consumo.
    * La emisión siempre vuelve a calcular desde su snapshot confiable. */
   async consultar(
@@ -49,9 +53,16 @@ export class PrevisionMaterialesService {
   ) {
     return this.prisma.$transaction(
       async (tx) => {
-        const politica = await tx.politicaReservasMaterial.findUnique({
-          where: { tenantId },
-        });
+        const incluida = await this.capacidades.incluida(
+          tenantId,
+          'prevision_materiales',
+          tx,
+        );
+        const politica = incluida
+          ? await tx.politicaReservasMaterial.findUnique({
+              where: { tenantId },
+            })
+          : null;
         const regional = await regionalDelTenant(tx, tenantId);
         const hoy = claveFechaEnZona(ahora, regional.zonaHoraria);
         const base = {
@@ -59,24 +70,29 @@ export class PrevisionMaterialesService {
           fechaPedidoSupuesto: hoy,
           zona: regional.zonaHoraria,
           modoReserva:
-            politica?.modo === 'MANUAL'
-              ? ('MANUAL' as const)
-              : ('AL_EMITIR' as const),
+            politica?.habilitada &&
+            (await this.capacidades.incluida(tenantId, 'reservas', tx))
+              ? politica.modo === 'MANUAL'
+                ? ('MANUAL' as const)
+                : ('AL_EMITIR' as const)
+              : null,
         };
-        if (!politica?.habilitada)
+        if (!incluida)
           return {
             ...base,
-            estado: 'sin_control' as const,
+            estado: 'no_incluido' as const,
             disponibleDesde: null,
             materiales: [] as MaterialPrevisto[],
             pendientes: 0,
           };
+        // Consultar existencias y reposición no requiere activar las reservas.
+        // La política sólo define cómo se compromete stock al emitir una OT.
         const agrupadas = new Map<
           string,
           { cantidad: Prisma.Decimal | null; unidad: string | null }
         >();
         for (const m of dto.materiales.filter(
-          (m) => !m.consumible || politica.incluirConsumibles,
+          (m) => !m.consumible || politica?.incluirConsumibles,
         )) {
           const prev = agrupadas.get(m.varianteId),
             unidad = m.unidad ? normalizeMaterialUnit(m.unidad) : null;

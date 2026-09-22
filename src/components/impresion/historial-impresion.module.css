@@ -1,0 +1,61 @@
+.dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 1080px;
+}
+.body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.body > * {
+  flex-shrink: 0;
+}
+.body th {
+  background: var(--surface-secondary);
+}
+.body tbody tr:hover {
+  background: var(--surface-secondary);
+}
+.body td {
+  white-space: normal;
+  vertical-align: top;
+}
+.body strong {
+  overflow-wrap: anywhere;
+}
+.nota,
+.detalle {
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+.detalle {
+  margin-top: 5px;
+}
+.detalle summary {
+  cursor: pointer;
+}
+.footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.footer > span {
+  margin-right: auto;
+}
+@media (max-width: 640px) {
+  .body,
+  .footer {
+    padding: 16px;
+  }
+}

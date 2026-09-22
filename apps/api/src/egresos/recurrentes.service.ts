@@ -1,3 +1,6 @@
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -90,7 +93,12 @@ export function periodosPendientes(
 export class RecurrentesService {
   private readonly log = new Logger(RecurrentesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   // ── ABM ────────────────────────────────────────────────────────────────
 
@@ -130,93 +138,104 @@ export class RecurrentesService {
   }
 
   async crear(auth: CurrentAuth, dto: CrearRecurrenteDto) {
-    const cat = await this.prisma.categoriaEgreso.findFirst({
-      where: { id: dto.categoriaEgresoId, tenantId: auth.tenantId },
-      select: { id: true },
-    });
-    if (!cat) throw new NotFoundException('Esa categoría no existe.');
-    if (dto.vigenteHasta && dto.vigenteHasta < dto.vigenteDesde) {
-      throw new BadRequestException(
-        'El período final no puede ser anterior al inicial.',
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['gastos_recurrentes'],
+        ['gastos_recurrentes', 'cuentas_pagar'],
       );
-    }
-    await exigirProveedorActivoDelTenant(
-      this.prisma,
-      auth.tenantId,
-      dto.proveedorId,
-    );
-    await this.validarGastoFijoDelTenant(
-      auth,
-      dto.gastoFijoEstructuraId,
-    );
-    return this.prisma.gastoRecurrente.create({
-      data: {
-        tenantId: auth.tenantId,
-        descripcion: dto.descripcion.trim(),
-        categoriaEgresoId: dto.categoriaEgresoId,
-        proveedorId: dto.proveedorId ?? null,
-        monto: r2(dto.monto),
-        moneda: dto.moneda ?? 'ARS',
-        metodoPagoId: dto.metodoPagoId ?? null,
-        frecuencia: dto.frecuencia ?? 'mensual',
-        diaVencimiento: dto.diaVencimiento ?? 10,
-        vigenteDesde: dto.vigenteDesde,
-        vigenteHasta: dto.vigenteHasta ?? null,
-        gastoFijoEstructuraId: dto.gastoFijoEstructuraId ?? null,
-      },
+      const cat = await tx.categoriaEgreso.findFirst({
+        where: { id: dto.categoriaEgresoId, tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!cat) throw new NotFoundException('Esa categoría no existe.');
+      if (dto.vigenteHasta && dto.vigenteHasta < dto.vigenteDesde) {
+        throw new BadRequestException(
+          'El período final no puede ser anterior al inicial.',
+        );
+      }
+      await exigirProveedorActivoDelTenant(tx, auth.tenantId, dto.proveedorId);
+      await this.validarGastoFijoDelTenant(auth, dto.gastoFijoEstructuraId, tx);
+      return tx.gastoRecurrente.create({
+        data: {
+          tenantId: auth.tenantId,
+          descripcion: dto.descripcion.trim(),
+          categoriaEgresoId: dto.categoriaEgresoId,
+          proveedorId: dto.proveedorId ?? null,
+          monto: r2(dto.monto),
+          moneda: dto.moneda ?? 'ARS',
+          metodoPagoId: dto.metodoPagoId ?? null,
+          frecuencia: dto.frecuencia ?? 'mensual',
+          diaVencimiento: dto.diaVencimiento ?? 10,
+          vigenteDesde: dto.vigenteDesde,
+          vigenteHasta: dto.vigenteHasta ?? null,
+          gastoFijoEstructuraId: dto.gastoFijoEstructuraId ?? null,
+        },
+      });
     });
   }
 
   async editar(auth: CurrentAuth, id: string, dto: EditarRecurrenteDto) {
-    const actual = await this.prisma.gastoRecurrente.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      select: { id: true, gastoFijoEstructuraId: true },
-    });
-    if (!actual) throw new NotFoundException('No encontramos esa plantilla.');
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'gastos_recurrentes',
+      ]);
+      if (dto.activo === true)
+        await exigirContinuidadCompromiso(tx, auth.tenantId, [
+          'gastos_recurrentes',
+          'cuentas_pagar',
+        ]);
 
-    await this.validarGastoFijoDelTenant(
-      auth,
-      dto.gastoFijoEstructuraId,
-    );
-
-    // Vincular la plantilla al presupuestado alcanza a los egresos YA
-    // emitidos: si no, quien descubre el reporte después de meses de uso lo
-    // ve vacío para toda su historia, que es justo cuando más sirve.
-    //
-    // Sólo los que no tienen imputación: uno que alguien apuntó a mano a otro
-    // gasto fijo se respeta.
-    if (
-      dto.gastoFijoEstructuraId !== undefined &&
-      dto.gastoFijoEstructuraId !== actual.gastoFijoEstructuraId
-    ) {
-      await this.prisma.egreso.updateMany({
-        where: {
-          tenantId: auth.tenantId,
-          gastoRecurrenteId: id,
-          gastoFijoEstructuraId: null,
-        },
-        data: { gastoFijoEstructuraId: dto.gastoFijoEstructuraId },
+      const actual = await tx.gastoRecurrente.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: { id: true, gastoFijoEstructuraId: true },
       });
-    }
+      if (!actual) throw new NotFoundException('No encontramos esa plantilla.');
 
-    return this.prisma.gastoRecurrente.update({
-      where: { id },
-      data: {
-        ...(dto.descripcion !== undefined
-          ? { descripcion: dto.descripcion.trim() }
-          : {}),
-        ...(dto.monto !== undefined ? { monto: r2(dto.monto) } : {}),
-        ...(dto.diaVencimiento !== undefined
-          ? { diaVencimiento: dto.diaVencimiento }
-          : {}),
-        ...(dto.vigenteHasta !== undefined
-          ? { vigenteHasta: dto.vigenteHasta }
-          : {}),
-        ...(dto.activo !== undefined ? { activo: dto.activo } : {}),
-        ...(dto.gastoFijoEstructuraId !== undefined
-          ? { gastoFijoEstructuraId: dto.gastoFijoEstructuraId }
-          : {}),
-      },
+      await this.validarGastoFijoDelTenant(auth, dto.gastoFijoEstructuraId, tx);
+
+      // Vincular la plantilla al presupuestado alcanza a los egresos YA
+      // emitidos: si no, quien descubre el reporte después de meses de uso lo
+      // ve vacío para toda su historia, que es justo cuando más sirve.
+      //
+      // Sólo los que no tienen imputación: uno que alguien apuntó a mano a otro
+      // gasto fijo se respeta.
+      if (
+        dto.gastoFijoEstructuraId !== undefined &&
+        dto.gastoFijoEstructuraId !== actual.gastoFijoEstructuraId
+      ) {
+        await tx.egreso.updateMany({
+          where: {
+            tenantId: auth.tenantId,
+            gastoRecurrenteId: id,
+            gastoFijoEstructuraId: null,
+          },
+          data: { gastoFijoEstructuraId: dto.gastoFijoEstructuraId },
+        });
+      }
+
+      return tx.gastoRecurrente.update({
+        where: { id },
+        data: {
+          ...(dto.descripcion !== undefined
+            ? { descripcion: dto.descripcion.trim() }
+            : {}),
+          ...(dto.monto !== undefined ? { monto: r2(dto.monto) } : {}),
+          ...(dto.diaVencimiento !== undefined
+            ? { diaVencimiento: dto.diaVencimiento }
+            : {}),
+          ...(dto.vigenteHasta !== undefined
+            ? { vigenteHasta: dto.vigenteHasta }
+            : {}),
+          ...(dto.activo !== undefined ? { activo: dto.activo } : {}),
+          ...(dto.gastoFijoEstructuraId !== undefined
+            ? { gastoFijoEstructuraId: dto.gastoFijoEstructuraId }
+            : {}),
+        },
+      });
     });
   }
 
@@ -228,9 +247,10 @@ export class RecurrentesService {
   private async validarGastoFijoDelTenant(
     auth: CurrentAuth,
     gastoFijoId: string | null | undefined,
+    db: Pick<Prisma.TransactionClient, 'gastoFijoEstructura'> = this.prisma,
   ): Promise<void> {
     if (gastoFijoId === undefined || gastoFijoId === null) return;
-    const gasto = await this.prisma.gastoFijoEstructura.findFirst({
+    const gasto = await db.gastoFijoEstructura.findFirst({
       where: { id: gastoFijoId, tenantId: auth.tenantId },
       select: { id: true },
     });
@@ -244,20 +264,26 @@ export class RecurrentesService {
    * real y quedarían sin explicación de dónde salieron.
    */
   async borrar(auth: CurrentAuth, id: string) {
-    const r = await this.prisma.gastoRecurrente.findFirst({
-      where: { id, tenantId: auth.tenantId },
-      select: { id: true, _count: { select: { egresos: true } } },
-    });
-    if (!r) throw new NotFoundException('No encontramos esa plantilla.');
-    if (r._count.egresos > 0) {
-      await this.prisma.gastoRecurrente.update({
-        where: { id },
-        data: { activo: false },
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'gastos_recurrentes',
+      ]);
+      const r = await tx.gastoRecurrente.findFirst({
+        where: { id, tenantId: auth.tenantId },
+        select: { id: true, _count: { select: { egresos: true } } },
       });
-      return { ok: true, desactivada: true };
-    }
-    await this.prisma.gastoRecurrente.delete({ where: { id } });
-    return { ok: true, desactivada: false };
+      if (!r) throw new NotFoundException('No encontramos esa plantilla.');
+      if (r._count.egresos > 0) {
+        await tx.gastoRecurrente.update({
+          where: { id },
+          data: { activo: false },
+        });
+        return { ok: true, desactivada: true };
+      }
+      await tx.gastoRecurrente.delete({ where: { id } });
+      return { ok: true, desactivada: false };
+    });
   }
 
   // ── Generación ─────────────────────────────────────────────────────────
@@ -269,6 +295,11 @@ export class RecurrentesService {
    * dos procesos corren a la vez.
    */
   async generarDeTenant(tenantId: string): Promise<number> {
+    if (
+      !(await this.capacidades.puedeOperar(tenantId, 'gastos_recurrentes')) ||
+      !(await this.capacidades.puedeOperar(tenantId, 'cuentas_pagar'))
+    )
+      return 0;
     const { zonaHoraria } = await regionalDelTenant(this.prisma, tenantId);
     const hoy = new Intl.DateTimeFormat('en-CA', {
       timeZone: zonaHoraria,
@@ -309,13 +340,35 @@ export class RecurrentesService {
     },
     periodo: string,
   ): Promise<boolean> {
-    const monto = dec(plantilla.monto);
-    const vencimiento = vencimientoDe(periodo, plantilla.diaVencimiento);
-    // La competencia es el PRIMERO del período, no el día del vencimiento: el
-    // alquiler de agosto es gasto de agosto aunque venza el 10.
+    // La competencia es el primer día del período, aunque venza después.
     const competencia = new Date(`${periodo}-01T00:00:00.000Z`);
     try {
-      await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async (tx) => {
+        await bloquearCupoUsuarios(tx, tenantId);
+        if (
+          !(await this.capacidades.puedeOperar(
+            tenantId,
+            'gastos_recurrentes',
+            tx,
+          )) ||
+          !(await this.capacidades.puedeOperar(tenantId, 'cuentas_pagar', tx))
+        )
+          return false;
+        const actual = await tx.gastoRecurrente.findFirst({
+          where: { id: plantilla.id, tenantId },
+          include: { proveedor: { select: { nombre: true } } },
+        });
+        if (
+          !actual?.activo ||
+          !periodosPendientes(actual, periodo).includes(periodo)
+        )
+          return false;
+        await exigirContinuidadCompromiso(tx, tenantId, [
+          'gastos_recurrentes',
+          'cuentas_pagar',
+        ]);
+        const monto = dec(actual.monto);
+        const vencimiento = vencimientoDe(periodo, actual.diaVencimiento);
         const anio = competencia.getUTCFullYear();
         const c = await tx.egresoContador.upsert({
           where: { tenantId_anio: { tenantId, anio } },
@@ -326,32 +379,31 @@ export class RecurrentesService {
           data: {
             tenantId,
             numero: `EGR-${anio}-${String(c.ultimo).padStart(4, '0')}`,
-            descripcion: `${plantilla.descripcion} ${periodo}`,
-            categoriaEgresoId: plantilla.categoriaEgresoId,
-            proveedorId: plantilla.proveedorId,
-            beneficiarioNombre:
-              plantilla.proveedor?.nombre ?? plantilla.descripcion,
+            descripcion: `${actual.descripcion} ${periodo}`,
+            categoriaEgresoId: actual.categoriaEgresoId,
+            proveedorId: actual.proveedorId,
+            beneficiarioNombre: actual.proveedor?.nombre ?? actual.descripcion,
             fechaCompetencia: competencia,
             fechaVencimiento: vencimiento,
-            moneda: plantilla.moneda,
+            moneda: actual.moneda,
             neto: monto,
             iva: 0,
             otrosImpuestos: 0,
             total: monto,
             estado: 'pendiente',
             origen: 'recurrente',
-            gastoFijoEstructuraId: plantilla.gastoFijoEstructuraId,
-            gastoRecurrenteId: plantilla.id,
+            gastoFijoEstructuraId: actual.gastoFijoEstructuraId,
+            gastoRecurrenteId: actual.id,
             periodoRecurrente: periodo,
             registradoPorNombre: 'Sistema (gasto recurrente)',
           },
         });
         await tx.gastoRecurrente.update({
-          where: { id: plantilla.id },
+          where: { id: actual.id },
           data: { ultimoPeriodoGenerado: periodo },
         });
+        return true;
       });
-      return true;
     } catch (e) {
       // El único es la red de seguridad: si otro proceso ya lo emitió, esto
       // no es un error, es la idempotencia funcionando.
@@ -359,10 +411,6 @@ export class RecurrentesService {
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2002'
       ) {
-        await this.prisma.gastoRecurrente.update({
-          where: { id: plantilla.id },
-          data: { ultimoPeriodoGenerado: periodo },
-        });
         return false;
       }
       throw e;
@@ -371,6 +419,7 @@ export class RecurrentesService {
 
   /** Generación a mano desde la UI, para no esperar al cron. */
   async generarAhora(auth: CurrentAuth) {
+    await this.capacidades.exigir(auth.tenantId, 'gastos_recurrentes');
     const emitidos = await this.generarDeTenant(auth.tenantId);
     return { emitidos };
   }
@@ -411,7 +460,12 @@ export class RecurrentesService {
           vigenteDesde: { lte: per },
           OR: [{ vigenteHasta: null }, { vigenteHasta: { gte: per } }],
         },
-        select: { id: true, nombre: true, categoria: true, importeMensual: true },
+        select: {
+          id: true,
+          nombre: true,
+          categoria: true,
+          importeMensual: true,
+        },
       }),
       this.prisma.egreso.findMany({
         where: {

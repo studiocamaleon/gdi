@@ -277,6 +277,7 @@ export class FacturacionOrdenesService {
       where: { tenantId, comprobanteId },
       select: {
         monto: true,
+        ordenId: true,
         orden: {
           select: { numero: true, total: true, facturadoTotal: true },
         },
@@ -284,7 +285,27 @@ export class FacturacionOrdenesService {
     });
     for (const v of vinculos) {
       const total = Number(v.orden.total ?? 0);
-      const saldoSinFacturar = r2(total - Number(v.orden.facturadoTotal));
+      const pendientes = await tx.comprobanteOrden.aggregate({
+        where: {
+          tenantId,
+          ordenId: v.ordenId,
+          comprobanteId: { not: comprobanteId },
+          comprobante: {
+            tipo: 'factura',
+            OR: [
+              { estado: { in: ['en_proceso', 'por_verificar'] } },
+              { estado: 'borrador', numero: { not: null } },
+            ],
+            anuladoEl: null,
+          },
+        },
+        _sum: { monto: true },
+      });
+      const saldoSinFacturar = r2(
+        total -
+          Number(v.orden.facturadoTotal) -
+          Number(pendientes._sum.monto ?? 0),
+      );
       if (Number(v.monto) > saldoSinFacturar + EPS) {
         throw new BadRequestException(
           `La orden ${v.orden.numero} tiene $${saldoSinFacturar.toLocaleString('es-AR')} sin facturar y esta factura le aplica $${Number(v.monto).toLocaleString('es-AR')}: no se puede facturar más que el total de la orden.`,
@@ -546,31 +567,39 @@ export class FacturacionOrdenesService {
 
   /** Post-emisión (fuera del circuito ARCA): denormalizados + matching. */
   async alEmitirComprobante(tenantId: string, comprobanteId: string) {
-    await this.prisma.$transaction(async (tx) => {
-      const emitido = await tx.comprobante.findFirst({
-        where: { id: comprobanteId, tenantId },
-        select: { tipo: true, comprobanteOrigenId: true },
-      });
+    return this.prisma.$transaction((tx) =>
+      this.alEmitirComprobanteTx(tx, tenantId, comprobanteId),
+    );
+  }
 
-      const vinculos = await tx.comprobanteOrden.findMany({
-        where: { comprobanteId, tenantId },
-        select: { ordenId: true },
-      });
-      for (const v of vinculos) {
-        await this.recalcularFacturado(tx, tenantId, v.ordenId);
-      }
-
-      // Una NC no cobra nada: DESHACE. Hasta acá emitirla sólo restaba del
-      // facturado y dejaba la factura corregida con su saldo y sus cobros
-      // imputados como si nada hubiera pasado — o sea, plata pegada a un
-      // comprobante que ya no debería estar vivo.
-      if (emitido?.tipo === 'nota_credito' && emitido.comprobanteOrigenId) {
-        await this.revertirFactura(tx, tenantId, emitido.comprobanteOrigenId);
-        return;
-      }
-
-      await this.matchearFactura(tx, tenantId, comprobanteId);
+  async alEmitirComprobanteTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    comprobanteId: string,
+  ) {
+    const emitido = await tx.comprobante.findFirst({
+      where: { id: comprobanteId, tenantId },
+      select: { tipo: true, comprobanteOrigenId: true },
     });
+
+    const vinculos = await tx.comprobanteOrden.findMany({
+      where: { comprobanteId, tenantId },
+      select: { ordenId: true },
+    });
+    for (const v of vinculos) {
+      await this.recalcularFacturado(tx, tenantId, v.ordenId);
+    }
+
+    // Una NC no cobra nada: DESHACE. Hasta acá emitirla sólo restaba del
+    // facturado y dejaba la factura corregida con su saldo y sus cobros
+    // imputados como si nada hubiera pasado — o sea, plata pegada a un
+    // comprobante que ya no debería estar vivo.
+    if (emitido?.tipo === 'nota_credito' && emitido.comprobanteOrigenId) {
+      await this.revertirFactura(tx, tenantId, emitido.comprobanteOrigenId);
+      return;
+    }
+
+    await this.matchearFactura(tx, tenantId, comprobanteId);
   }
 
   /**

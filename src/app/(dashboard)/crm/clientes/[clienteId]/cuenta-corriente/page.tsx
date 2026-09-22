@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { CuentaCorrienteView } from "@/components/administracion/cuenta-corriente-view";
 import { getCuentaCorriente } from "@/lib/administracion-api";
 import { ApiError } from "@/lib/api";
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 export const dynamic = "force-dynamic";
 export default async function Page({
   params,
@@ -10,6 +12,7 @@ export default async function Page({
   params: Promise<{ clienteId: string }>;
 }) {
   const { clienteId } = await params;
+  if (!(await tieneCapacidad("cuentas_cobrar"))) return <FuncionNoIncluida />;
   let cuenta;
   try {
     cuenta = await getCuentaCorriente(clienteId);

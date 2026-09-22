@@ -414,6 +414,7 @@ enum ArchivoEstado {
   PENDIENTE
   LISTO
   ELIMINADO
+  PURGANDO
 }
 
 enum PropositoArchivoMaestro {
@@ -625,11 +626,13 @@ model NotificacionWhatsapp {
   id       String @id @default(uuid()) @db.Uuid
   tenantId String @db.Uuid
   evento   String
-  /// 'pendiente' | 'enviando' | 'enviada' | 'fallida' | 'descartada'
+  /// pendiente | wati_reservada | enviando | wati_incierta | enviada | fallida | descartada.
+  /// WhatsApp Web usa web_reservada, web_enviando y web_incierta.
   ///
-  /// `enviando` es la RESERVA: el despachador pasa la fila a ese estado en un
-  /// update condicional antes de llamar a Wati, y por eso dos procesos que
-  /// compiten por la misma fila no la mandan dos veces.
+  /// La reserva de preparación se puede recuperar antes del POST. `enviando`
+  /// significa que el envío fue autorizado: si no se confirma, queda incierto
+  /// y requiere revisión, sin reenviarse automáticamente. El token distingue
+  /// los intentos para que un proceso anterior no sobrescriba otro resultado.
   /// Ver docs/notificaciones-whatsapp-catalogo.md
   estado   String @default("pendiente")
 
@@ -700,6 +703,10 @@ model Tenant {
   nombre                                           String
   slug                                             String                                            @unique
   activo                                           Boolean                                           @default(true)
+  /// Bloqueo administrativo de acceso, independiente del estado de cobro.
+  /// Null en bloqueos anteriores: su motivo histórico no se infiere.
+  bloqueoAccesoMotivo                               String?
+  bloqueoAccesoEl                                   DateTime?
   /// De dónde nació la empresa: 'plataforma' (alta asistida) o
   /// 'registro_publico'. Sirve para medir adquisición sin inferirla de otras
   /// tablas y para que el onboarding sólo aparezca a quien corresponde.
@@ -855,6 +862,7 @@ model Tenant {
   datosEmpresa                                     DatosEmpresa?
   puntosVenta                                      PuntoVenta[]
   comprobantes                                     Comprobante[]
+  emisionesFiscales                                 ComprobanteEmision[]
   comprobanteContadores                            ComprobanteContador[]
   cobroImputaciones                                CobroImputacion[]
   cobroOrdenes                                     CobroOrden[]
@@ -1027,6 +1035,8 @@ model User {
   fotoPerfilVersion        String?                               @db.Uuid
   mfa                      UserMfa?
   mfaChallenges            MfaChallenge[]
+  mfaDispositivos          MfaDispositivo[]
+  invitacionesPlataforma   InvitacionPlataforma[] @relation("InvitadorPlataforma")
   activo                   Boolean                               @default(true)
   /// Rol en el control plane. Null = usuario común (la enorme mayoría).
   /// Se otorga por script/consola y todo cambio queda en PlataformaEvento.
@@ -1036,6 +1046,7 @@ model User {
   memberships              Membership[]
   authSessions             AuthSession[]
   plataformaEventos        PlataformaEvento[]                    @relation("EventosDeStaff")
+  sincronizacionesPaddle   SincronizacionPaddle[]
   invitations              Invitation[]
   empleados                Empleado[]
   ordenTrabajoEventos      OrdenTrabajoEvento[]
@@ -1062,6 +1073,8 @@ model UserMfa {
   userId           String   @id @db.Uuid
   secret           Json?
   activatedAt      DateTime?
+  recuperacionConfirmadaEl DateTime?
+  recoveryPendingSessionId String? @db.Uuid
   pendingSecret    Json?
   pendingId        String?  @db.Uuid
   pendingSessionId String?  @db.Uuid
@@ -1074,12 +1087,33 @@ model UserMfa {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/// Credencial de navegador para recordar el segundo factor; no sustituye la contraseña.
+model MfaDispositivo {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  tokenHash String @unique
+  alcance String
+  passwordStamp String
+  mfaVersion Int
+  verificadoEl DateTime @default(now())
+  venceEl DateTime
+  ultimoUsoEl DateTime @default(now())
+  revocadoEl DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sesiones AuthSession[]
+
+  @@index([userId, venceEl])
+  @@index([venceEl])
+}
+
 /// Primer factor verificado; no autoriza llamadas al API ni crea una sesión.
 model MfaChallenge {
   tokenHash      String   @id
   userId         String   @db.Uuid
   destination    String
   membershipId   String?  @db.Uuid
+  invitacionPlataformaId String? @db.Uuid
+  invitacionPlataforma InvitacionPlataforma? @relation(fields: [invitacionPlataformaId], references: [id], onDelete: Cascade)
   passwordStamp  String
   mfaVersion     Int
   expiresAt      DateTime
@@ -1250,6 +1284,9 @@ model AuthSession {
   impersonacionId     String?              @unique @db.Uuid
   expiresAt           DateTime
   revokedAt           DateTime?
+  mfaVerificadoEl     DateTime?
+  mfaDispositivoId    String? @db.Uuid
+  mfaDispositivo      MfaDispositivo? @relation(fields: [mfaDispositivoId], references: [id], onDelete: SetNull)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1259,6 +1296,25 @@ model AuthSession {
 
   @@index([userId])
   @@index([currentTenantId])
+}
+
+/// Invitaciones del equipo del SaaS, independientes de las membresías de empresas.
+model InvitacionPlataforma {
+  id String @id @default(uuid()) @db.Uuid
+  email String
+  rol RolPlataforma
+  tokenHash String @unique
+  invitadorId String @db.Uuid
+  invitador User @relation("InvitadorPlataforma", fields: [invitadorId], references: [id], onDelete: Restrict)
+  creadaEl DateTime @default(now())
+  venceEl DateTime
+  revocadaEl DateTime?
+  aceptadaEl DateTime?
+  aceptadaPorId String? @db.Uuid
+  desafios MfaChallenge[]
+
+  @@index([email, creadaEl])
+  @@index([invitadorId])
 }
 
 model Invitation {
@@ -3814,6 +3870,10 @@ model CotizacionItem {
 // Ver docs/ordenes-trabajo-persistencia-diseno.md
 
 model OrdenTrabajo {
+  /// Modo operativo elegido al emitir. Las órdenes históricas conservan producción.
+  produccionControlada Boolean @default(true)
+  /// Permite terminar de cobrar una OT emitida con F01 aunque luego se retire el plan.
+  cobrosHabilitadosEmision Boolean @default(true)
   materialesControlados Boolean @default(false)
   materialesRevision String? @db.VarChar(64)
   necesidadesMaterialOt NecesidadMaterialOt[]
@@ -3941,6 +4001,7 @@ model OrdenTrabajo {
   cuponRedenciones            CuponRedencion[]
   movimientosFidelizacion     FidelizacionMovimiento[]
   reservasFidelizacion        FidelizacionReserva[]
+  documentosControlados       ArchivoMaestro[]
   gatesDocumento              GateProduccionDocumento[]
 
   @@unique([tenantId, numero])
@@ -4977,7 +5038,7 @@ model Comprobante {
   total               Decimal   @db.Decimal(14, 2)
   moneda              String    @default("ARS")
   cotizacion          Decimal?  @db.Decimal(14, 4)
-  /// 'borrador' | 'emitido' | 'rechazado' | 'anulado'
+  /// borrador | en_proceso | por_verificar | emitido | rechazado | anulado
   estado              String    @default("borrador")
   cae                 String?
   caeVencimiento      DateTime?
@@ -4991,8 +5052,10 @@ model Comprobante {
   rechazoJson         Json?
   /// Respuesta cruda del provider (auditoría).
   providerRaw         Json?
+  /// Identidad fiscal del emisor al admitir el envío, antes de hablar con ARCA.
+  emisorSnapshot      Json?
   /// Clave anti-duplicado: se persiste ANTES de llamar al provider. Ante
-  /// un timeout se consulta por ella, nunca se reintenta a ciegas —
+  /// un timeout se consulta por su número fiscal, nunca se reintenta a ciegas —
   /// ningún provider garantiza idempotencia.
   idempotencyKey      String    @unique
   /// Saldo pendiente de cobro (total − imputaciones). Denormalizado, se
@@ -5014,11 +5077,44 @@ model Comprobante {
   ordenes           ComprobanteOrden[]
   archivos          Archivo[]
 
+  emisiones         ComprobanteEmision[]
+
   @@unique([tenantId, puntoVentaId, tipo, letra, numero])
   @@index([tenantId, estado])
   @@index([tenantId, clienteId])
   @@index([tenantId, ordenId])
   @@index([tenantId, vencimiento])
+}
+
+/// Un intento admitido antes del envío. Una serie sólo tiene un intento incierto.
+model ComprobanteEmision {
+  id                  String @id @default(uuid()) @db.Uuid
+  tenantId            String @db.Uuid
+  comprobanteId       String @db.Uuid
+  proveedor           String
+  ambiente            String
+  cuitOperativo       String
+  serie               String
+  serieActiva         String? @unique
+  /// preparando | enviando | verificar | emitido | rechazado | sin_envio
+  estado              String
+  solicitudJson       Json
+  respuestaJson       Json?
+  emisorJson          Json
+  numero              Int?
+  detalle             String?
+  solicitadaPorId     String @db.Uuid
+  consultadaPorId String? @db.Uuid
+  consultadaEl DateTime?
+  creadaEl            DateTime @default(now())
+  enviadaEl           DateTime?
+  finalizadaEl        DateTime?
+  updatedAt           DateTime @updatedAt
+  comprobante         Comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  tenant              Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, comprobanteId, creadaEl])
+  @@index([tenantId, estado])
 }
 
 /// Numeración atómica por (punto de venta, tipo, letra) — mismo patrón que
@@ -5396,6 +5492,9 @@ model Archivo {
   /// MIME verificado contra el objeto real en el confirmar, no el declarado.
   mimeType          String
   bytes             BigInt        @default(0)
+  /// Espacio comprometido mientras se sube, antes de confirmar el tamaño real.
+  bytesReservados   BigInt        @default(0)
+  reservaHasta      DateTime?
   /// sha256 en hex del contenido, si el cliente lo aportó. Dedupe futuro.
   hash              String?
   /// Subida en partes en curso. Se guarda para poder abortarla desde el
@@ -5450,6 +5549,7 @@ model Archivo {
   revisionDocumental   ArchivoRevision?                      @relation("ArchivoDeRevision")
   evidenciasAprobacion DecisionAprobacionDocumentoRegistro[] @relation("EvidenciaDecisionAprobacion")
 
+  @@index([tenantId, estado, reservaHasta])
   @@index([tenantId, scope, estado])
   @@index([tenantId, scope, generado])
   @@index([tenantId, ordenItemId])
@@ -5466,7 +5566,8 @@ model Archivo {
 model ArchivoMaestro {
   id                 String                   @id @default(uuid()) @db.Uuid
   tenantId           String                   @db.Uuid
-  proyectoCampanaId  String                   @db.Uuid
+  proyectoCampanaId  String?                  @db.Uuid
+  ordenId           String?                  @db.Uuid
   nombre             String                   @db.VarChar(180)
   proposito          PropositoArchivoMaestro
   etapa              EtapaDesarrolloDocumento
@@ -5481,7 +5582,8 @@ model ArchivoMaestro {
   updatedAt          DateTime                 @updatedAt
 
   tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  proyectoCampana  ProyectoCampana           @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  proyectoCampana  ProyectoCampana?          @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  orden            OrdenTrabajo?             @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   creadoPor        User?                     @relation("ArchivoMaestroCreador", fields: [creadoPorId], references: [id], onDelete: SetNull)
   revisiones       ArchivoRevision[]         @relation("RevisionesArchivoMaestro")
   revisionAprobada ArchivoRevision?          @relation("RevisionAprobadaMaestro", fields: [revisionAprobadaId], references: [id], onDelete: SetNull)
@@ -5490,6 +5592,8 @@ model ArchivoMaestro {
 
   @@unique([tenantId, proyectoCampanaId, nombre])
   @@index([tenantId, proyectoCampanaId, etapa])
+  @@unique([tenantId, ordenId, nombre])
+  @@index([tenantId, ordenId, etapa])
 }
 
 model ArchivoRevision {
@@ -5575,7 +5679,7 @@ model DecisionAprobacionDocumentoRegistro {
 model GateProduccionDocumento {
   id                String                     @id @default(uuid()) @db.Uuid
   tenantId          String                     @db.Uuid
-  proyectoCampanaId String                     @db.Uuid
+  proyectoCampanaId String?                    @db.Uuid
   ordenId           String                     @db.Uuid
   ordenItemId       String?                    @db.Uuid
   pasoId            String?                    @db.Uuid
@@ -5589,7 +5693,7 @@ model GateProduccionDocumento {
   updatedAt         DateTime                   @updatedAt
 
   tenant                   Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  proyectoCampana          ProyectoCampana          @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
+  proyectoCampana          ProyectoCampana?         @relation(fields: [proyectoCampanaId], references: [id], onDelete: Cascade)
   orden                    OrdenTrabajo             @relation(fields: [ordenId], references: [id], onDelete: Cascade)
   ordenItem                OrdenTrabajoItem?        @relation(fields: [ordenItemId], references: [id], onDelete: Cascade)
   paso                     OrdenTrabajoItemPaso?    @relation(fields: [pasoId], references: [id], onDelete: Cascade)
@@ -5931,9 +6035,45 @@ model PlataformaEvento {
   @@index([tenantAfectadoId])
 }
 
-/// Catálogo de planes del SaaS. Nivel plataforma (sin tenantId), como
-/// MaterialPreset: los mismos planes para todos los tenants.
-/// Ver docs/control-plane-diseno.md
+/// Propuesta comercial editable de Plataforma, separada de los contratos vigentes.
+/// Ver docs/planes-editor-borradores-2026-09-20.md
+model PlanBorrador {
+  id              String   @id @default(uuid()) @db.Uuid
+  codigo          String   @unique
+  orden           Int
+  revision        Int      @default(1)
+  catalogoVersion Int      @default(2)
+  contenido       Json
+  creadoEl        DateTime @default(now())
+  actualizadoEl   DateTime @default(now()) @updatedAt
+  versiones       PlanVersion[]
+}
+
+/// Snapshot interno e inmutable. Publicar no modifica el catálogo comercial ni las suscripciones.
+model PlanVersion {
+  recursosPaddle PlanPaddleRecurso[]
+  id                 String   @id @default(uuid()) @db.Uuid
+  borradorId         String   @db.Uuid
+  codigo             String
+  numero             Int
+  revisionBorrador    Int
+  catalogoVersion    Int
+  contenido          Json
+  catalogoSnapshot   Json
+  publicadoEl        DateTime @default(now())
+  publicadoPorId     String   @db.Uuid
+  publicadoPorNombre String
+  motivo             String
+  borrador           PlanBorrador @relation(fields: [borradorId], references: [id], onDelete: Restrict)
+  suscripciones      Suscripcion[]
+  ofertas            PlanOferta[]
+
+  @@unique([borradorId, numero])
+  @@unique([borradorId, revisionBorrador])
+}
+
+/// Catálogo vigente de planes del SaaS, compartido y sin tenantId.
+/// Los borradores comerciales no alteran estas suscripciones.
 model Plan {
   id                 String             @id @default(uuid()) @db.Uuid
   /// "trial" | "taller" | "estudio" | "diamante" | "founder" — estable.
@@ -5983,6 +6123,101 @@ model Plan {
   suscripciones      Suscripcion[]
   registrosTenant    RegistroTenant[]
   preciosLegacy      PlanPrecioLegacy[]
+  /// Una vez migrado al catálogo versionado, retirar la oferta no revive la anterior.
+  comercialVersionado Boolean @default(false)
+  revisionOferta      Int @default(0)
+  ofertaActualId     String? @unique @db.Uuid
+  ofertaActual       PlanOferta? @relation("OfertaActual", fields: [ofertaActualId], references: [id], onDelete: Restrict)
+  ofertas            PlanOferta[] @relation("OfertasPlan")
+}
+
+/// Condiciones comerciales activadas por Plataforma. Inmutables: una nueva
+/// versión requiere nuevos precios; las contrataciones anteriores mantienen la suya.
+model PlanOferta {
+  id              String @id @default(uuid()) @db.Uuid
+  planId          String @db.Uuid
+  versionId       String @db.Uuid
+  entorno         String
+  trialDias       Int?
+  registroPublico Boolean
+  recomendado     Boolean
+  creadaEl        DateTime @default(now())
+  creadaPorId     String @db.Uuid
+  motivo          String
+  plan            Plan @relation("OfertasPlan", fields: [planId], references: [id], onDelete: Restrict)
+  actualDe        Plan? @relation("OfertaActual")
+  version         PlanVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  precios         PlanOfertaPrecio[]
+  registros       RegistroTenant[]
+  suscripciones   Suscripcion[]
+  contrataciones  PlanContratacion[]
+
+  @@unique([versionId, entorno])
+  @@index([planId])
+}
+
+/// El price_id identifica para siempre la versión, el ciclo y si compra
+/// un plan base o usuarios adicionales. No se reutiliza en otra oferta.
+model PlanOfertaPrecio {
+  id             String @id @default(uuid()) @db.Uuid
+  ofertaId       String @db.Uuid
+  entorno        String
+  priceId        String
+  productId      String
+  tipo           String
+  ciclo          String
+  importe        Decimal @db.Decimal(14, 2)
+  moneda         String
+  cantidadMaxima Int
+  oferta         PlanOferta @relation(fields: [ofertaId], references: [id], onDelete: Restrict)
+
+  @@unique([entorno, priceId])
+  @@unique([ofertaId, tipo, ciclo])
+}
+
+/// Registro durable de creación de catálogo remoto. Un envío incierto sólo
+/// se recupera por consulta; nunca se repite automáticamente el POST.
+model PlanPaddleRecurso {
+  version PlanVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  id          String @id @default(uuid()) @db.Uuid
+  versionId   String @db.Uuid
+  entorno     String
+  clave       String
+  estado      String @default("pendiente")
+  referencia  String?
+  creadoEl    DateTime @default(now())
+  actualizadoEl DateTime @updatedAt
+
+  @@unique([versionId, entorno, clave])
+}
+
+/// Intento de contratación revisado por el administrador de la empresa.
+/// Una confirmación repetida consulta el mismo resultado, nunca repite el cobro.
+model PlanContratacion {
+  id              String @id @default(uuid()) @db.Uuid
+  tenantId        String @db.Uuid
+  userId          String @db.Uuid
+  ofertaId        String @db.Uuid
+  ciclo           String
+  adicionales     Int
+  tipo            String
+  estado          String @default("preparada")
+  huella          String
+  revisionContrato Int
+  referencia      String?
+  transaccionId   String? @unique
+  revisionRemota  String?
+  revisionJson    Json
+  cobroJson       Json
+  detalle         String?
+  creadaEl        DateTime @default(now())
+  expiraEl        DateTime
+  enviadaEl       DateTime?
+  finalizadaEl    DateTime?
+  oferta          PlanOferta @relation(fields: [ofertaId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, creadaEl])
+  @@index([estado, enviadaEl])
 }
 
 /// Precio histórico: reconoce webhooks de suscripciones anteriores sin volver
@@ -6008,6 +6243,7 @@ model RegistroTenant {
   empresaNombre       String
   passwordHash        String?
   planId              String    @db.Uuid
+  ofertaId            String?   @db.Uuid
   paisCodigo          String    @db.VarChar(2)
   zonaHoraria         String
   tokenHash           String?   @unique
@@ -6028,6 +6264,7 @@ model RegistroTenant {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   plan                Plan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  oferta              PlanOferta? @relation(fields: [ofertaId], references: [id], onDelete: Restrict)
   tenantCreado        Tenant?   @relation(fields: [tenantCreadoId], references: [id], onDelete: SetNull)
 
   @@index([planId, createdAt])
@@ -6044,6 +6281,17 @@ model Suscripcion {
   id                      String    @id @default(uuid()) @db.Uuid
   tenantId                String    @unique @db.Uuid
   planId                  String    @db.Uuid
+  /// Versión operativa publicada. Null conserva las condiciones anteriores.
+  planVersionId           String?   @db.Uuid
+  ofertaId                String?   @db.Uuid
+  cicloFacturacion        String?
+  /// Primer alta paga o exención: no se vuelve a cobrar al cambiar o reactivar.
+  implementacionResueltaEl DateTime?
+  implementacionImporte   Decimal? @db.Decimal(14, 2)
+  revisionContrato        Int       @default(0)
+  /// Plazas extra acordadas para esta empresa. No cambia el plan compartido
+  /// ni genera cargos; su cobro automático requiere integración comercial.
+  usuariosAdicionales     Int       @default(0)
   /// 'activa' | 'suspendida' | 'baja' — estado NORMALIZADO nuestro, el que
   /// mira el gate por plan. No es el de Paddle: ver estadoProveedor.
   estado                  String    @default("activa")
@@ -6072,6 +6320,8 @@ model Suscripcion {
   /// occurred_at del último webhook aplicado. Evita que un evento demorado
   /// pise un estado más nuevo.
   ultimoEventoProveedorEl DateTime?
+  /// updated_at del estado remoto aplicado, para ordenar API y webhooks.
+  actualizadoProveedorEl  DateTime?
   /// Próximo cobro informado por el proveedor (para la vista del tenant).
   proximoCobro            DateTime?
   /// Inicio del período de facturación en curso (current_billing_period de
@@ -6098,8 +6348,11 @@ model Suscripcion {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   plan   Plan   @relation(fields: [planId], references: [id])
+  planVersion PlanVersion? @relation(fields: [planVersionId], references: [id], onDelete: Restrict)
+  oferta PlanOferta? @relation(fields: [ofertaId], references: [id], onDelete: Restrict)
 
   @@index([planId])
+  @@index([planVersionId])
   /// El cron que vence las pruebas barre por esta fecha todas las noches.
   @@index([trialHasta])
   /// El reconciliador cierra las gracias vencidas aun si Paddle no envía otro
@@ -6150,6 +6403,9 @@ model EventoCobro {
   eventoId    String    @unique
   /// p. ej. 'subscription.updated', 'transaction.completed'
   tipo        String
+  referenciaSuscripcion String?
+  /// aplicado | ignorado | sin_aplicar | fallido. Null en registros históricos.
+  resultado   String?
   payloadJson Json
   /// Null mientras no se procesó; con fecha una vez aplicado.
   procesadoEl DateTime?
@@ -6162,6 +6418,28 @@ model EventoCobro {
 
   @@index([proveedor, tipo])
   @@index([recibidoEl])
+  @@index([referenciaSuscripcion, recibidoEl])
+}
+
+/// Consultas solicitadas por staff. Se conserva el resultado incluso si el
+/// navegador se cierra o pierde la respuesta. No contiene payloads de Paddle.
+model SincronizacionPaddle {
+  id              String    @id @db.Uuid
+  tenantId        String    @db.Uuid
+  suscripcionId   String    @db.Uuid
+  referencia      String
+  staffUserId     String    @db.Uuid
+  motivo          String
+  estado          String    @default("en_curso")
+  detalle         String?
+  antesJson       Json?
+  despuesJson     Json?
+  creadaEl        DateTime  @default(now())
+  finalizadaEl    DateTime?
+  staff           User      @relation(fields: [staffUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, creadaEl])
+  @@index([estado, creadaEl])
 }
 
 /// Una entrada de staff a un tenant (etapa C). Nivel plataforma: junta al

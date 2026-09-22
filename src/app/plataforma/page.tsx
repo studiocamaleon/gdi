@@ -6,8 +6,8 @@ import { redirect } from "next/navigation";
 
 import { ApiError } from "@/lib/api";
 import {
-  getConsolaPlataforma,
-  type ConsolaPlataforma,
+  getContextoPlataforma,
+  type StaffPlataforma,
 } from "@/lib/plataforma-api";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +22,10 @@ export const dynamic = "force-dynamic";
 export default async function PlataformaPage() {
   // El catch envuelve SÓLO el fetch (regla del linter): 401 y 403 son estados
   // esperados de esta página — sin sesión y sin rol — y cualquier otro sube.
-  let datos: ConsolaPlataforma | null = null;
+  let datos: StaffPlataforma | null = null;
   let sinSesion = false;
   try {
-    datos = await getConsolaPlataforma();
+    datos = await getContextoPlataforma();
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       sinSesion = true;
@@ -34,12 +34,15 @@ export default async function PlataformaPage() {
     }
   }
 
-  if (sinSesion) redirect("/login");
+  if (sinSesion) redirect("/backoffice");
   if (!datos) return <PlataformaSinAcceso />;
+  if (datos.requiereSeguridad) redirect(datos.esSesionPlataforma ? '/backoffice/seguridad' : '/backoffice');
   return (
     <ConsolaPlataformaView
-      datos={datos}
-      ambiente={process.env.NODE_ENV === "production" ? "produccion" : "desarrollo"}
+      staff={datos}
+      ambiente={
+        process.env.NODE_ENV === "production" ? "produccion" : "desarrollo"
+      }
     />
   );
 }

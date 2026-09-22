@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { EnlacesPublicosModule } from '../enlaces-publicos/enlaces-publicos.module';
@@ -5,7 +6,7 @@ import { DesarrolloDocumentalController } from './desarrollo-documental.controll
 import { DesarrolloDocumentalService } from './desarrollo-documental.service';
 
 @Module({
-  imports: [ArchivosModule, EnlacesPublicosModule],
+  imports: [CapacidadesEmpresaModule,ArchivosModule, EnlacesPublicosModule],
   controllers: [DesarrolloDocumentalController],
   providers: [DesarrolloDocumentalService],
   exports: [DesarrolloDocumentalService],

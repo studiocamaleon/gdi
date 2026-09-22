@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { Suspense } from "react";
 
 import { SinPermiso } from "@/components/navigation/sin-permiso";
@@ -17,6 +19,7 @@ export const dynamic = "force-dynamic";
  * explica mejor que un error de fetch.
  */
 export default async function GastosFijosPage() {
+  if (!(await tieneCapacidad("gastos_fijos"))) return <FuncionNoIncluida />;
   if (!(await tienePermiso("administracion.configurar"))) {
     return <SinPermiso modulo="Gastos fijos" />;
   }

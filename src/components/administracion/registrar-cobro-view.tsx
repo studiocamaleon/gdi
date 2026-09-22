@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import Link from "next/link";
@@ -30,7 +31,7 @@ export type ClienteCobroContexto = {
   tipo: "cliente";
   id: string;
   nombre: string;
-  saldo: number;
+  saldo: number | null;
 };
 
 export function RegistrarCobroView({
@@ -43,12 +44,19 @@ export function RegistrarCobroView({
   cuentas: CuentaFondosResumen[];
 }) {
   const router = useRouter();
+  const conCuentasCobrar = useCapacidad("cuentas_cobrar");
   const { moneda } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
   const esOrden = contexto.tipo === "orden";
+  const volverHref = esOrden
+    ? `/produccion/ordenes/${contexto.id}`
+    : conCuentasCobrar
+      ? `/crm/clientes/${contexto.id}/cuenta-corriente`
+      : `/crm/clientes/${contexto.id}`;
+  const saldoConocido = esOrden || contexto.saldo !== null;
   const saldo = Math.max(
     0,
-    esOrden ? contexto.total - contexto.cobradoBruto : contexto.saldo,
+    esOrden ? contexto.total - contexto.cobradoBruto : (contexto.saldo ?? 0),
   );
   const [guardando, setGuardando] = React.useState(false);
 
@@ -65,11 +73,7 @@ export function RegistrarCobroView({
           ? "Valor en cartera registrado."
           : `Cobro de ${fmt(draft.payload.montoBruto)} registrado.`,
       );
-      router.push(
-        esOrden
-          ? `/produccion/ordenes/${contexto.id}`
-          : `/clientes/${contexto.id}/cuenta-corriente`,
-      );
+      router.push(volverHref);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -93,16 +97,12 @@ export function RegistrarCobroView({
       <div className="arc-wrap">
         <Link
           className="arc-crumb"
-          href={
-            esOrden
-              ? `/produccion/ordenes/${contexto.id}`
-              : `/clientes/${contexto.id}/cuenta-corriente`
-          }
+          href={volverHref}
         >
           <ArrowLeftIcon />
           {esOrden
             ? `Volver a ${contexto.numero}`
-            : "Volver a cuenta corriente"}
+            : conCuentasCobrar ? "Volver a cuenta corriente" : "Volver al cliente"}
         </Link>
         <div className="arc-head">
           <h1>Registrar cobro</h1>
@@ -125,16 +125,16 @@ export function RegistrarCobroView({
             <span className="cli">
               {esOrden
                 ? `${contexto.clienteNombre}${contexto.resumen ? ` · ${contexto.resumen}` : ""}`
-                : "Cobro general de cuenta corriente"}
+                : conCuentasCobrar ? "Cobro general de cuenta corriente" : "Pago del cliente"}
             </span>
           </div>
           <div className="spacer" />
-          <div className="blk">
+          {saldoConocido && <div className="blk">
             <span className="l">
               {esOrden ? "Saldo pendiente" : "Saldo deudor"}
             </span>
             <span className="v warn">{fmt(saldo)}</span>
-          </div>
+          </div>}
         </div>
 
         <CobroFormulario
@@ -143,11 +143,7 @@ export function RegistrarCobroView({
           cuentas={cuentas}
           guardando={guardando}
           onSubmit={(draft) => void submit(draft)}
-          cancelHref={
-            esOrden
-              ? `/produccion/ordenes/${contexto.id}`
-              : `/clientes/${contexto.id}/cuenta-corriente`
-          }
+          cancelHref={volverHref}
         />
       </div>
     </div>

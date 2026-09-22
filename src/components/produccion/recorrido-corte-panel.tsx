@@ -13,10 +13,12 @@ import {
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { usePuede } from "@/components/navigation/permisos-provider";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import {
   cambiarEstadoPreparacionCorte,
   descargaPreparacionHref,
   getPreparacionesRecorridoCorte,
+  getRecorridosGuardados,
   regenerarPreparacionesRecorridoCorte,
   type PreparacionRecorridoCorte,
   type SeleccionRecorrido,
@@ -33,12 +35,16 @@ export function RecorridoCortePanel({ itemId, seleccion }: { itemId: string; sel
   const [error, setError] = React.useState("");
   const [regenerating, setRegenerating] = React.useState(false);
   const canSupervise = usePuede("produccion.supervisar");
+  const conRecorridos = useCapacidad("recorridos_fabricacion");
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      setItems(await getPreparacionesRecorridoCorte(itemId, seleccion));
+      const consultar = conRecorridos
+        ? getPreparacionesRecorridoCorte
+        : getRecorridosGuardados;
+      setItems(await consultar(itemId, seleccion));
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -48,14 +54,16 @@ export function RecorridoCortePanel({ itemId, seleccion }: { itemId: string; sel
     } finally {
       setLoading(false);
     }
-  }, [itemId, seleccion]);
+  }, [itemId, seleccion, conRecorridos]);
 
   React.useEffect(() => void load(), [load]);
 
   if (loading) {
     return (
       <div className="mt-4 rounded-xl border bg-card p-5 text-sm text-muted-foreground">
-        Preparando recorridos y archivos TAP…
+        {conRecorridos
+          ? "Preparando recorridos y archivos TAP…"
+          : "Consultando recorridos guardados…"}
       </div>
     );
   }
@@ -72,10 +80,17 @@ export function RecorridoCortePanel({ itemId, seleccion }: { itemId: string; sel
       </div>
     );
   }
-  if (items.length === 0) return null;
+  if (items.length === 0)
+    return conRecorridos ? null : (
+      <p className="mt-4 text-sm text-muted-foreground">
+        La preparación de nuevos recorridos no está incluida en tu plan. No hay
+        recorridos guardados para este trabajo.
+      </p>
+    );
 
   const current = items[Math.min(active, items.length - 1)];
   const regenerate = async () => {
+    if (!conRecorridos) return;
     setRegenerating(true);
     setError("");
     try {
@@ -119,7 +134,7 @@ export function RecorridoCortePanel({ itemId, seleccion }: { itemId: string; sel
             Recorrido continuo, simulación y archivo TAP por placa.
           </p>
         </div>
-        {canSupervise ? (
+        {canSupervise && conRecorridos ? (
           <Button
             variant="outline"
             size="sm"

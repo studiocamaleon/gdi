@@ -1,4 +1,6 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 import type { MaterialEquivalence } from "@/lib/material-units";
 
@@ -670,6 +672,9 @@ export function MateriaPrimaFicha({
   proveedores,
   maquinas,
 }: MateriaPrimaFichaProps) {
+  const conMateriales = useCapacidad("materiales");
+  const permisoGestionar = usePuede("inventario.gestionar");
+  const puedeGestionar = conMateriales && permisoGestionar;
   const { moneda } = useConfigRegional();
   const themeClass = useDesignTheme();
   const scope = useDesignScope();
@@ -974,6 +979,7 @@ export function MateriaPrimaFicha({
   };
 
   const save = async () => {
+    if (!puedeGestionar) return;
     if (!hasChanges) {
       return;
     }
@@ -1023,6 +1029,7 @@ export function MateriaPrimaFicha({
             <Switch
               size="sm"
               aria-label="Material activo"
+              isDisabled={!puedeGestionar}
               isSelected={form.activo}
               onChange={(checked) =>
                 setForm((prev) => ({ ...prev, activo: checked }))
@@ -1038,7 +1045,7 @@ export function MateriaPrimaFicha({
           <ActionButton
             onPress={save}
             isPending={isSaving}
-            isDisabled={!hasChanges || isSaving}
+            isDisabled={!puedeGestionar || !hasChanges || isSaving}
             aria-label={isSaving ? "Guardando cambios" : hasChanges
               ? `Guardar cambios, ${pendingChanges} ${pendingChanges === 1 ? "cambio pendiente" : "cambios pendientes"}`
               : "Guardar cambios"}
@@ -1101,6 +1108,8 @@ export function MateriaPrimaFicha({
         </div>
 
         <Tabs.Panel id="datos-base" className={styles.generalPanel}>
+          <fieldset disabled={!puedeGestionar} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+
           <div className={styles.generalSections}>
             <section className={styles.formSection}>
               <div className={styles.sectionHeading}>
@@ -1315,9 +1324,12 @@ export function MateriaPrimaFicha({
               </FieldGroup>
             </section>
           </div>
+        </fieldset>
         </Tabs.Panel>
 
         <Tabs.Panel id="opciones-variantes" className={styles.tabPanel}>
+          <fieldset disabled={!puedeGestionar} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+
           <div className="flex flex-col gap-4">
             <div className={styles.sectionHeading}>
               <span className={styles.sectionSymbol}><LayersIcon size={20} aria-hidden /></span>
@@ -1720,9 +1732,12 @@ export function MateriaPrimaFicha({
               </ActionButton>
             </div>
           </div>
+        </fieldset>
         </Tabs.Panel>
 
         <Tabs.Panel id="precios" className={styles.tabPanel}>
+          <fieldset disabled={!puedeGestionar} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+
           <div className="flex flex-col gap-3">
             <div className={styles.sectionHeading}>
               <span className={styles.sectionSymbol}><DollarSignIcon size={20} aria-hidden /></span>
@@ -1914,6 +1929,7 @@ export function MateriaPrimaFicha({
               </Table>
             </div>
           </div>
+        </fieldset>
         </Tabs.Panel>
 
         <Tabs.Panel id="inventario" className={styles.tabPanel}>

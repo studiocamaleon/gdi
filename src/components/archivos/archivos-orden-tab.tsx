@@ -5,6 +5,8 @@ import { toast } from "sonner";
 
 import { RotateCcwIcon, Trash2Icon } from "lucide-react";
 
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { DesarrolloDocumentalOrden } from "@/components/comercial/desarrollo-documental-orden";
 import { ArchivosProduccionPanel } from "./archivos-produccion-panel";
 import type { EstadoDocumentalOrden } from "@/lib/desarrollo-documental-api";
 import { contarArchivosDeOrden } from "@/lib/archivos-presentacion";
@@ -136,7 +138,10 @@ export function ArchivosOrdenTab({
   /** Para que la pestaña muestre el contador real. */
   onTotalCambio?: (total: number) => void;
 }) {
+  const conArte = useCapacidad("aprobacion_arte");
   const [data, setData] = React.useState<ArchivosDeOrden | null>(null);
+  const [documentalActual, setDocumentalActual] = React.useState(estadoDocumental);
+  React.useEffect(() => setDocumentalActual(estadoDocumental), [estadoDocumental]);
   const [cargando, setCargando] = React.useState(true);
   const [token, setToken] = React.useState(0);
   const recargar = React.useCallback(() => setToken((n) => n + 1), []);
@@ -166,8 +171,8 @@ export function ArchivosOrdenTab({
   }, [ordenId, token]);
 
   const total = React.useMemo(
-    () => (data ? contarArchivosDeOrden(data, estadoDocumental) : 0),
-    [data, estadoDocumental],
+    () => (data ? contarArchivosDeOrden(data, documentalActual) : 0),
+    [data, documentalActual],
   );
 
   React.useEffect(() => {
@@ -191,8 +196,8 @@ export function ArchivosOrdenTab({
 
   return (
     <>
-      {estadoDocumental !== undefined ? (
-        <ArchivosProduccionPanel data={estadoDocumental} />
+      {documentalActual !== undefined ? (
+        <ArchivosProduccionPanel data={documentalActual} />
       ) : null}
       {cargando ? (
         <div className="otd-noprod">Cargando archivos…</div>
@@ -200,6 +205,7 @@ export function ArchivosOrdenTab({
         <div className="otd-noprod">No se pudieron cargar los archivos.</div>
       ) : (
         <div className="arch-tab">
+          <DesarrolloDocumentalOrden ordenId={ordenId} archivos={[...data.documento, ...data.items.flatMap(item => item.archivos)]} soloLectura={soloLectura} onCambioDocumental={setDocumentalActual} />
           <div className="arch-bloque">
             <div className="arch-bloque-head">
               <span className="t">Archivos de la orden</span>
@@ -218,6 +224,7 @@ export function ArchivosOrdenTab({
               onCambio={setDocumento}
               soloLectura={soloLectura}
               permitirPublico
+              calcularHash={conArte}
               titulo="Arrastrá archivos de la orden"
               vacio="Todavía no hay archivos generales de esta orden."
             />
@@ -245,6 +252,7 @@ export function ArchivosOrdenTab({
                 onCambio={(a) => setItem(item.itemId, a)}
                 soloLectura={soloLectura}
                 permitirPublico
+              calcularHash={conArte}
                 titulo="Arrastrá el arte de este producto"
                 vacio="Sin arte cargado. Producción va a llegar a este paso sin el archivo."
               />

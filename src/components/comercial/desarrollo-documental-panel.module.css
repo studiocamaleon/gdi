@@ -347,12 +347,19 @@
 
 .masterFooter {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
   background: var(--background);
+}
+.footerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
 }
 .gateSummary {
   display: flex;

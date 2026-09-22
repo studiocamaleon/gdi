@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import * as React from "react";
 import { Input, TextArea } from "@heroui/react";
 import {
@@ -497,6 +498,7 @@ export function StationForm({
   onCancel: () => void;
   onDelete?: (estacion: Estacion) => void;
 }) {
+  const conEquipos = useCapacidad("equipos_produccion");
   const [draft, setDraft] = React.useState<EstacionPayload>(() =>
     initial
       ? {
@@ -505,7 +507,7 @@ export function StationForm({
           activo: initial.activo,
           etapa: initial.etapa,
           icono: initial.icono ?? "Tool",
-          planificacionPorEmpleados: true,
+          planificacionPorEmpleados: conEquipos || initial.planificacionPorEmpleados,
           tiempoPreparacionMin: initial.tiempoPreparacionMin,
           calendario: initial.calendario,
           familias:
@@ -524,6 +526,7 @@ export function StationForm({
         }
       : {
           ...createEmptyEstacion(),
+          planificacionPorEmpleados: conEquipos,
           ...(etapaInicial ? { etapa: etapaInicial } : {}),
         },
   );
@@ -533,6 +536,7 @@ export function StationForm({
     key: "familias" | "empleadoIds" | "maquinaIds",
     val: string,
   ) => {
+    if (key === "empleadoIds" && !conEquipos) return;
     setDraft((current) => {
       const next = new Set(current[key]);
       if (next.has(val)) next.delete(val);
@@ -551,10 +555,11 @@ export function StationForm({
     empleados.find((e) => e.id === id)?.calendario ??
     initial?.empleados.find((e) => e.id === id)?.calendario ??
     null;
-  const faltaHorario = draft.empleadoIds.some(
+  const faltaHorario = conEquipos && draft.empleadoIds.some(
     (id) => !horarioDe(id) || diasInvalidos(horarioDe(id)).length > 0,
   );
   const migrandoSinPersonas =
+    conEquipos &&
     !!initial?.equipoProduccion &&
     !initial.planificacionPorEmpleados &&
     draft.empleadoIds.length === 0;
@@ -647,8 +652,8 @@ export function StationForm({
             onPress={() =>
               onSave({
                 ...draft,
-                planificacionPorEmpleados: true,
-                horariosEmpleados: Object.entries(horarios)
+                planificacionPorEmpleados: conEquipos || (initial?.planificacionPorEmpleados ?? false),
+                horariosEmpleados: Object.entries(conEquipos ? horarios : {})
                   .filter(([id]) => draft.empleadoIds.includes(id))
                   .map(([empleadoId, calendario]) => ({
                     empleadoId,
@@ -907,7 +912,7 @@ export function StationForm({
                 <ActionButton
                   variant="outline"
                   isIconOnly
-                  isDisabled={saving}
+                  isDisabled={saving || !conEquipos}
                   aria-label={`Horario de ${nombreEmpleado(id)}`}
                   onPress={() => setEditandoHorario(id)}
                 >
@@ -915,10 +920,10 @@ export function StationForm({
                 </ActionButton>
               )}
               onQuitar={(id) => toggleLista("empleadoIds", id)}
-              disabled={saving}
+              disabled={saving || !conEquipos}
             >
               <EstacionAsignacionSelect
-                isDisabled={saving}
+                isDisabled={saving || !conEquipos}
                 value=""
                 onChange={(valor) => valor && toggleLista("empleadoIds", valor)}
                 opciones={opcionesEmpleado}
@@ -937,7 +942,12 @@ export function StationForm({
                 Completá el horario de cada persona antes de guardar.
               </p>
             )}
-            {initial?.equipoProduccion &&
+            {!conEquipos && (
+              <p className={cx("help")}>
+                El plan no incluye la configuración de equipos. Se conserva el personal y los horarios existentes.
+              </p>
+            )}
+            {conEquipos && initial?.equipoProduccion &&
               !initial.planificacionPorEmpleados && (
                 <p className={cx("help")}>
                   Hasta guardar el personal y sus horarios, esta estación conserva la

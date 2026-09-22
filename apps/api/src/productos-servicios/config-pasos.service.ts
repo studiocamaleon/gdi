@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -38,6 +39,9 @@ export class ConfigPasosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly familias: FamiliasPasosService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /** Valida la configuración reutilizable de un PasoTenant contra la misma
@@ -153,6 +157,7 @@ export class ConfigPasosService {
     rutaAltId: string,
     dto: UpsertProductoConfigPasoDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const rutaAlt = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
     });

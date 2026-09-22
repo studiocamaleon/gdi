@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { useEffect, useRef, useState } from "react";
 import { Chip, Input, TextArea } from "@heroui/react";
 import Link from "next/link";
@@ -40,23 +41,27 @@ const fecha = (s: string | null) =>
 export function CompraDetalle({
   id,
   catalogo,
-  canManage,
+  canManage: permisoGestionar,
   onClose,
   onChanged,
 }: {
   id: string;
-  catalogo: CatalogoCompras;
+  catalogo: CatalogoCompras | null;
   canManage: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
+  const conCompras = useCapacidad("compras");
+  const conRecepciones = useCapacidad("recepciones");
+  const canManage = permisoGestionar && conCompras && Boolean(catalogo);
   const [compra, setCompra] = useState<Compra | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
-  const [modo, setModo] = useState<
+  const [modoElegido, setModo] = useState<
     "ver" | "recibir" | "cancelar" | "cerrar" | "emitir" | "fecha"
   >("ver");
+  const modo = canManage ? modoElegido : "ver";
   const [ubicacion, setUbicacion] = useState("");
   const [referencia, setReferencia] = useState("");
   const [notas, setNotas] = useState("");
@@ -84,7 +89,7 @@ export function CompraDetalle({
     return () => abort.abort();
   }, [id, reload]);
   function abrirRecepcion() {
-    if (!compra) return;
+    if (!compra || !canManage) return;
     setModo("recibir");
     setError("");
     setCantidades(
@@ -95,7 +100,7 @@ export function CompraDetalle({
   }
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
-    if (!compra) return;
+    if (!compra || !canManage) return;
     setError("");
     const payload =
       modo === "recibir"
@@ -171,7 +176,11 @@ export function CompraDetalle({
           ? `${numeroCompra(compra.numero)} · ${compra.proveedorNombre}`
           : "Consultando compra…"
       }
-      description="Pedido, llegada y recepción de materiales."
+      description={
+        conCompras
+          ? "Pedido, llegada y recepción de materiales."
+          : "Consulta histórica del pedido y sus recepciones."
+      }
       className={styles.dialogWide}
     >
       <form onSubmit={enviar}>
@@ -386,7 +395,7 @@ export function CompraDetalle({
                       <SelectField
                         aria-label="Ubicación de recepción"
                         value={ubicacion}
-                        options={catalogo.ubicaciones.map((u) => ({
+                        options={(catalogo?.ubicaciones ?? []).map((u) => ({
                           value: u.id,
                           label: `${u.almacen.nombre} · ${u.nombre}`,
                         }))}
@@ -514,11 +523,12 @@ export function CompraDetalle({
                       Registrar pedido
                     </ActionButton>
                   )}
-                  {["EMITIDA", "PARCIAL"].includes(compra.estado) && (
-                    <ActionButton onPress={abrirRecepcion}>
-                      Recibir materiales
-                    </ActionButton>
-                  )}
+                  {conRecepciones &&
+                    ["EMITIDA", "PARCIAL"].includes(compra.estado) && (
+                      <ActionButton onPress={abrirRecepcion}>
+                        Recibir materiales
+                      </ActionButton>
+                    )}
                   {["BORRADOR", "EMITIDA"].includes(compra.estado) && (
                     <ActionButton
                       variant="outline"

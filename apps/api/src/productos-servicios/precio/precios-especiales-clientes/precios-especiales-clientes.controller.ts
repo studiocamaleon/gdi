@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../../../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -53,6 +54,7 @@ export class PreciosEspecialesClientesController {
   }
 
   @Permiso('costos.gestionar')
+  @RequiereCapacidad('precios_especiales')
   @Post('productos-servicios/productos/:productoId/precios-especiales')
   async crear(
     @Req() req: RequestWithAuth,
@@ -63,6 +65,7 @@ export class PreciosEspecialesClientesController {
   }
 
   @Permiso('costos.gestionar')
+  @RequiereCapacidad('precios_especiales')
   @Patch('productos-servicios/precios-especiales/:id')
   async actualizar(
     @Req() req: RequestWithAuth,
@@ -73,6 +76,7 @@ export class PreciosEspecialesClientesController {
   }
 
   @Permiso('costos.gestionar')
+  @RequiereCapacidad('precios_especiales')
   @Delete('productos-servicios/precios-especiales/:id')
   @HttpCode(200)
   async eliminar(@Req() req: RequestWithAuth, @Param('id') id: string) {

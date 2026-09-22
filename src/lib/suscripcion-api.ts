@@ -7,6 +7,12 @@ import { apiRequest } from "@/lib/api";
  */
 
 export type PlanContratable = {
+  implementacion?: number;
+  ofertaId?: string;
+  versionId?: string;
+  recomendado?: boolean;
+  usuarioMensual?: { importe: number; cantidadMaxima: number } | null;
+  usuarioAnual?: { importe: number; cantidadMaxima: number } | null;
   codigo: string;
   nombre: string;
   descripcion: string | null;
@@ -28,6 +34,10 @@ export type PlanContratable = {
 
 export type EstadoSuscripcion = {
   actual: {
+    ofertaId?: string | null;
+    cicloFacturacion?: string | null;
+    usuariosAdicionales?: number;
+    totalPeriodo?: number | null;
     planCodigo: string;
     planNombre: string;
     precioMensual: number;
@@ -126,3 +136,35 @@ export async function reactivarSuscripcion(): Promise<EstadoSuscripcion> {
 export async function abrirPortalSuscripcion(): Promise<{ url: string }> {
   return apiRequest("/suscripcion/portal", { method: "POST" });
 }
+
+import type {
+  SeleccionContratacion,
+  VistaContratacion,
+} from "../../apps/api/src/suscripciones/contratacion-tipos";
+export type { VistaContratacion } from "../../apps/api/src/suscripciones/contratacion-tipos";
+export const revisarContratacion = (seleccion: SeleccionContratacion) =>
+  apiRequest<VistaContratacion>("/suscripcion/contrataciones/revisar", {
+    method: "POST",
+    body: JSON.stringify(seleccion),
+  });
+export const confirmarContratacion = (
+  id: string,
+  revisionesAceptadas: string[],
+) =>
+  apiRequest<VistaContratacion>(`/suscripcion/contrataciones/${id}/confirmar`, {
+    method: "POST",
+    body: JSON.stringify({ revisionesAceptadas }),
+  });
+export const consultarContratacion = (id: string) =>
+  apiRequest<VistaContratacion>(`/suscripcion/contrataciones/${id}`, {
+    cache: "no-store",
+  });
+export const contratacionPendiente = () =>
+  apiRequest<VistaContratacion | null>(
+    "/suscripcion/contrataciones/pendiente",
+    { cache: "no-store" },
+  );
+export const descartarContratacion = (id: string) =>
+  apiRequest<VistaContratacion>(`/suscripcion/contrataciones/${id}/descartar`, {
+    method: "POST",
+  });

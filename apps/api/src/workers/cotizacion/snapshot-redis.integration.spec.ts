@@ -38,10 +38,10 @@ probar(
     const queue = new Queue(COLA_COTIZACIONES, { connection });
     const events = new QueueEvents(COLA_COTIZACIONES, { connection });
     const concurrencia = new TenantConcurrencyService();
-    const jobs = new CotizacionJobsService();
+    const jobs = new CotizacionJobsService({ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never);
     const worker = new CotizacionWorker(
       { cotizar: async () => captura.result } as never,
-      concurrencia,
+      concurrencia,{ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never
     );
     try {
       await events.waitUntilReady();

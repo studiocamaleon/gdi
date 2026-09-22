@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   cantidadImpresionesCad,
   mapaCopiasCad,
@@ -36,9 +37,16 @@ export class CentroCopiadoCadService {
     private readonly prisma: PrismaService,
     private readonly catalogo: CatalogoCadService,
     private readonly motor: MotorUniversalService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async opciones(tenantId: string) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'centro_copiado',
+      'cotizacion_cad',
+    ]);
     return { perfiles: await this.catalogo.configuraciones(tenantId) };
   }
 
@@ -122,6 +130,10 @@ export class CentroCopiadoCadService {
     periodo: string | null,
     clienteId?: string,
   ): Promise<ItemConstruido> {
+    await this.capacidades.exigirTodas(tenantId, [
+      'centro_copiado',
+      'cotizacion_cad',
+    ]);
     const base = {
       documentoId: doc.id,
       grupoTomoId: null,

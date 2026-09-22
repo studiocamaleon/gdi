@@ -7,6 +7,53 @@ import {
 } from '../material-units';
 
 describe('Compra, uso y precio de materiales', () => {
+  const polyfan: MaterialUnitContext = {
+    unidadCompra: 'UNIDAD',
+    unidadStock: 'UNIDAD',
+    unidadUso: 'M2',
+    unidadPrecio: 'UNIDAD',
+    templateId: 'sustrato_rigido_v1',
+    atributos: { ancho: 1.2, alto: 0.6 },
+  };
+
+  it.each(['unidad', 'pieza'])(
+    'convierte un rígido llamado %s según el área de su placa',
+    (unidad) => {
+      expect(materialUnitConversion(polyfan, unidad, 'm2')).toMatchObject({
+        ok: true,
+        factor: 0.72,
+        origen: 'medidas',
+      });
+      expect(materialPriceInUseUnit(polyfan, 15000)).toEqual({
+        ok: true,
+        precio: 15000 / 0.72,
+      });
+    },
+  );
+
+  it('conserva una equivalencia explícita de unidad para el rígido', () => {
+    const contexto = {
+      ...polyfan,
+      equivalencias: [{ origen: 'unidad', destino: 'placa', factor: 2 }],
+    };
+    expect(validateMaterialUnits(contexto)).toBeNull();
+    expect(materialUnitConversion(contexto, 'unidad', 'm2')).toMatchObject({
+      ok: true,
+      factor: 1.44,
+      origen: 'manual',
+    });
+  });
+
+  it('no interpreta como placa una unidad de otro tipo de material', () => {
+    expect(
+      materialUnitConversion({ ...polyfan, templateId: null }, 'unidad', 'm2')
+        .ok,
+    ).toBe(false);
+    expect(
+      materialUnitConversion({ ...polyfan, atributos: {} }, 'unidad', 'm2').ok,
+    ).toBe(false);
+  });
+
   const roll: MaterialUnitContext = {
     unidadCompra: 'ROLLO',
     unidadStock: 'M2',

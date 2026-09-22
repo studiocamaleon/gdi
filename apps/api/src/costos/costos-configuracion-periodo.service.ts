@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -30,6 +31,9 @@ export class CostosConfiguracionPeriodoService {
     private readonly reparto: CostosRepartoService,
     private readonly tarifas: CostosTarifasService,
     private readonly catalogo: CostosCatalogoService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async getCentroConfiguracion(auth: CurrentAuth, id: string, periodo: string) {
@@ -173,6 +177,7 @@ export class CostosConfiguracionPeriodoService {
     auth: CurrentAuth,
     payload: GuardarCentroPlanillaDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const periodo = this.validaciones.normalizePeriodo(payload.periodo);
     this.validaciones.validateLineas(payload.lineas);
 
@@ -314,6 +319,7 @@ export class CostosConfiguracionPeriodoService {
   }
 
   async toggleCentro(auth: CurrentAuth, id: string, periodo: string) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     return this.prisma.$transaction(
       async (tx) => {
@@ -353,6 +359,7 @@ export class CostosConfiguracionPeriodoService {
     periodo: string,
     payload: ReplaceCentroLineasDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     await this.validaciones.findCentroOrThrow(auth, id);
     this.validaciones.validateLineas(payload.lineas);
@@ -395,6 +402,7 @@ export class CostosConfiguracionPeriodoService {
     periodo: string,
     payload: UpsertCentroCapacidadDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'centros_costo');
     const normalizedPeriodo = this.validaciones.normalizePeriodo(periodo);
     await this.validaciones.findCentroOrThrow(auth, id);
     const horasProductivas = new Prisma.Decimal(payload.horasProductivas ?? 0);

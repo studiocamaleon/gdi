@@ -63,8 +63,7 @@ export class EtaSnapshotScheduler {
           let ok = 0;
           for (const tenantId of tenants) {
             try {
-              await this.eta.snapshotDiario(tenantId);
-              ok += 1;
+              if (await this.eta.snapshotDiario(tenantId)) ok += 1;
             } catch (error) {
               // Un tenant que falla no debe frenar al resto.
               this.logger.error(

@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import { toast } from "sonner";
@@ -32,9 +33,10 @@ export function McpCard({
   activas: number;
   onAbrir: () => void;
 }) {
+  const incluida = useCapacidad("mcp");
   return (
     <div
-      className={`int-card ${activas ? "status-connected" : "status-available"}`}
+      className={`int-card ${activas && incluida ? "status-connected" : "status-available"}`}
       role="button"
       tabIndex={0}
       onClick={onAbrir}
@@ -56,7 +58,7 @@ export function McpCard({
           <div className="nm">Conectá tu IA (MCP)</div>
           <div className="cat">Cotización conversando</div>
         </div>
-        {activas > 0 && (
+        {activas > 0 && incluida && (
           <span className="int-status ok">
             <span className="dot" />
             {activas === 1 ? "1 activa" : `${activas} activas`}
@@ -70,10 +72,14 @@ export function McpCard({
       </div>
       <div className="int-card-foot">
         <span className="installs">
-          {activas ? "Conectada" : "Creá un token para conectar"}
+          {!incluida
+            ? "No incluida en tu plan"
+            : activas
+              ? "Conectada"
+              : "Creá un token para conectar"}
         </span>
         <span className="cta">
-          {activas ? "Administrar" : "Conectar"}
+          {activas || !incluida ? "Administrar" : "Conectar"}
           <Flecha />
         </span>
       </div>
@@ -92,6 +98,7 @@ export function McpDetalle({
   onVolver: () => void;
   onCambio: () => Promise<void>;
 }) {
+  const incluida = useCapacidad("mcp");
   const { fechaHora } = useFecha();
   const [nombre, setNombre] = React.useState("");
   const [creando, setCreando] = React.useState(false);
@@ -105,6 +112,7 @@ export function McpDetalle({
   const revocadas = credenciales.filter((c) => c.revocadoEl);
 
   const crear = async () => {
+    if (!incluida) return;
     const limpio = nombre.trim();
     if (limpio.length < 3) {
       toast.error("Poné un nombre de al menos 3 letras (ej: “Claude de Lucas”).");
@@ -184,7 +192,13 @@ export function McpDetalle({
         </div>
 
         <div className={s.panel}>
-          <div className={s.formCrear}>
+          {!incluida && (
+            <p className="text-sm text-muted-foreground">
+              MCP no está incluido en tu plan. Podés consultar y revocar las
+              credenciales existentes.
+            </p>
+          )}
+          <fieldset disabled={!incluida} className={s.formCrear}>
             <input
               className={`field ${s.inputNombre}`}
               placeholder="Nombre de la credencial (ej: Claude de Lucas)"
@@ -196,7 +210,7 @@ export function McpDetalle({
             <button className="btn btn-primary" onClick={crear} disabled={creando}>
               {creando ? "Creando…" : "Crear token"}
             </button>
-          </div>
+          </fieldset>
 
           {tokenNuevo ? (
             <div className={s.tokenBox}>

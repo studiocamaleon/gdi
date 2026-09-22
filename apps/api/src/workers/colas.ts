@@ -94,6 +94,8 @@ export type ResultadoCommonLineTrabajo = {
 };
 
 export type NestingIrregularOpenNestData = {
+  /** Marcador escrito sólo por el motor, nunca copiado del DTO HTTP. */
+  calculoCotizacion?: boolean;
   schemaVersion: 1;
   tenantId: string;
   correlationId: string;

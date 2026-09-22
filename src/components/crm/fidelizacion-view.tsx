@@ -73,9 +73,11 @@ const etiquetaMovimiento = (tipo: string) =>
 export function FidelizacionView({
   initial,
   puedeConfigurar,
+  conFidelizacion = true,
 }: {
   initial: FidelizacionResumen;
   puedeConfigurar: boolean;
+  conFidelizacion?: boolean;
 }) {
   const [config, setConfig] = React.useState(initial.config);
   const [saving, startSaving] = React.useTransition();
@@ -101,6 +103,7 @@ export function FidelizacionView({
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const m = initial.metricas;
+  const acumulando = conFidelizacion && config.acumulacionActiva;
   return (
     <section
       {...scope}
@@ -117,23 +120,22 @@ export function FidelizacionView({
               </h1>
               <Chip
                 size="sm"
-                variant={config.acumulacionActiva ? "soft" : "secondary"}
-                color={config.acumulacionActiva ? "success" : "default"}
+                variant={acumulando ? "soft" : "secondary"}
+                color={acumulando ? "success" : "default"}
                 className={styles.estadoPrograma}
               >
-                {config.acumulacionActiva ? (
+                {acumulando ? (
                   <CircleCheckIcon aria-hidden />
                 ) : (
                   <PauseCircleIcon aria-hidden />
                 )}
-                {config.acumulacionActiva
+                {!conFidelizacion ? "Sólo consulta" : acumulando
                   ? "Acumulando"
                   : "Acumulación pausada"}
               </Chip>
             </div>
             <p className={listPage.subtitle}>
-              Convertí una parte del margen real en puntos auditables para tus
-              clientes.
+              {conFidelizacion ? "Convertí una parte del margen real en puntos auditables para tus clientes." : "Los saldos y movimientos se conservan. Tu plan no permite nuevos canjes, ganancias ni ajustes de puntos."}
             </p>
           </div>
           {puedeConfigurar ? (

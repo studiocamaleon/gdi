@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { AsignacionPersonalController } from './asignacion-personal.controller';
 import { AsignacionPersonalService } from './asignacion-personal.service';
 import { ReservasMaterialModule } from '../inventario/reservas-material.module';
@@ -16,7 +17,7 @@ import { RecorridosVectorialesModule } from '../recorridos-vectoriales/recorrido
 import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-documental.module';
 
 @Module({
-  imports: [
+  imports: [CapacidadesEmpresaModule,
     ReservasMaterialModule,
     // "Acreditar y cancelar" en un paso necesita emitir la NC. Dependencia de
     // ida: Administración no importa este módulo.

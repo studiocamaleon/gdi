@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -12,6 +13,9 @@ export class PreparacionesNestingService {
   constructor(
     private readonly db: PrismaService,
     private readonly jobs: CotizacionJobsService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      db,
+    ),
   ) {}
 
   private async producto(tenantId: string, productoId: string) {
@@ -92,6 +96,11 @@ export class PreparacionesNestingService {
     cantidades: number[],
     rutaAlternativaId?: string,
   ) {
+    await this.capacidades.exigirTodas(tenantId, [
+      'analisis_vectorial',
+      'aprovechamiento_cotizacion',
+      'nesting_irregular',
+    ]);
     if (
       !Array.isArray(cantidades) ||
       !cantidades.length ||

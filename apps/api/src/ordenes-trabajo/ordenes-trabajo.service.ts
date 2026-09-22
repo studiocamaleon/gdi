@@ -1,12 +1,21 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { ReservasMaterialService } from '../inventario/reservas-material.service';
 import {
   cambioDelSnapshot,
   validarMonedaDocumento,
 } from '../cotizaciones/validar-moneda-documento';
 import { proyectarPlanReferencia } from '../produccion/plan-referencia-paso';
-import { leerAsignacionPersonal, proyectarAsignacionPersonal, personalFijoDelPaso } from '../produccion/asignacion-personal';
+import {
+  leerAsignacionPersonal,
+  proyectarAsignacionPersonal,
+  personalFijoDelPaso,
+} from '../produccion/asignacion-personal';
 import { leerAprobacionesPendientes } from '../produccion/aprobaciones-pendientes';
-import { itemTableroInclude, itemActivoTablero, itemTerminadoTablero } from './tablero-consultas';
+import {
+  itemTableroInclude,
+  itemActivoTablero,
+  itemTerminadoTablero,
+} from './tablero-consultas';
 import { TableroTerminadosQueryDto } from './dto/tablero-query.dto';
 import { exigirCanalVenta } from './canales-venta';
 import { sumaTramosMin } from './tiempos-ejecucion';
@@ -17,18 +26,37 @@ import {
   type AccionPasoEnGrupo,
 } from './ejecucion-pasos-atomica';
 import { nombreLoteProduccion } from '../planificacion-entregas/materializar-lotes-entrega';
-import { calcularProgreso, progresoDeOrden } from '../common/progreso-produccion';
+import {
+  calcularProgreso,
+  progresoDeOrden,
+} from '../common/progreso-produccion';
 import { pasosProgresoSelect } from './progreso-select';
 import { recuperarDemandasHistoricas } from '../eta/demanda-historica';
 import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
-import { demandaDesdeTiempo, combinarDemandas, leerDemandaHumana, aplicarOperacionMaquina, leerModoOperacionMaquina, type ModoOperacionMaquina } from '../eta/motor/demanda-humana';
-import { loteTableroSelect, dependenciaTableroSelect, contextoLoteTablero, esperasTablero, type DependenciaTablero } from './tablero-contexto-lote';
+import {
+  demandaDesdeTiempo,
+  combinarDemandas,
+  leerDemandaHumana,
+  aplicarOperacionMaquina,
+  leerModoOperacionMaquina,
+  type ModoOperacionMaquina,
+} from '../eta/motor/demanda-humana';
+import {
+  loteTableroSelect,
+  dependenciaTableroSelect,
+  contextoLoteTablero,
+  esperasTablero,
+  type DependenciaTablero,
+} from './tablero-contexto-lote';
 import { validarReprogramacionAlEmitir } from '../planificacion-entregas/reprogramacion-aplicar';
 import { bloquearColaEntrega } from '../planificacion-entregas/reprogramacion-bloqueo';
 import { fijarIniciosLotes } from '../planificacion-entregas/inicios-lotes-entrega';
 import { huellaContextoPlan } from '../planificacion-entregas/planificacion-contrato';
 import { materializarLotesEntrega } from '../planificacion-entregas/materializar-lotes-entrega';
-import { actualizarFechaFinalOrden, distribucionesDeItems } from '../planificacion-entregas/resumen-entregas';
+import {
+  actualizarFechaFinalOrden,
+  distribucionesDeItems,
+} from '../planificacion-entregas/resumen-entregas';
 import { conservarPlanCambioCliente } from '../planificacion-entregas/conservar-plan-cambio-cliente';
 import {
   prepararVinculosEntrega,
@@ -109,7 +137,10 @@ import {
 import { ControlConsolidacionProduccion } from './consolidacion-produccion';
 import { loteEnItem, trazabilidadDeComponente } from './snapshot-componente';
 import { resolverJobContextComponente } from '../productos-servicios/componentes-configuracion';
-import { motivoSinEstacion, resolverEstacionDePaso } from '../eta/motor/tablero-tipos';
+import {
+  motivoSinEstacion,
+  resolverEstacionDePaso,
+} from '../eta/motor/tablero-tipos';
 import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
 import type { LoteNestingCompuestoSnapshot } from '../motor-universal/tipos';
 
@@ -591,7 +622,6 @@ export function validarCancelacion(
   }
 }
 
-
 /**
  * Corte de jornada que aplica a un tramo abierto (D9): la hora `corte`
  * ("HH:mm") del día en que se abrió; si se abrió DESPUÉS del corte (turno
@@ -669,7 +699,11 @@ export function pasoReabrible(pasos: PasoSecuencia[], indice: number): boolean {
  * y tampoco se inventa precisión extrema para pasos sin estimación.
  */
 export function progresoPonderadoPasos(
-  entrada: Array<{ estado: string; duracionEstimadaMin: number | null; nestingLoteRol?: string | null }>,
+  entrada: Array<{
+    estado: string;
+    duracionEstimadaMin: number | null;
+    nestingLoteRol?: string | null;
+  }>,
 ): number {
   return calcularProgreso(entrada).porcentaje ?? 0;
 }
@@ -740,6 +774,9 @@ export class OrdenesTrabajoService {
     private readonly desarrolloDocumental: DesarrolloDocumentalService,
     @Optional() private readonly eventosSistema?: EventosSistemaService,
     @Optional() private readonly reservasMaterial?: ReservasMaterialService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /** Adopción transaccional compartida por la creación y la edición del plan. */
@@ -749,6 +786,12 @@ export class OrdenesTrabajoService {
     itemId: string,
     retirar = false,
   ) {
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      tenantId,
+      retirar ? ['identidad'] : ['planificacion_avanzada'],
+      retirar ? [] : ['planificacion_avanzada'],
+    );
     if (!retirar)
       await validarReprogramacionAlEmitir(tx, this.eta, tenantId, itemId);
     const trabajos = await materializarLotesEntrega(
@@ -774,8 +817,7 @@ export class OrdenesTrabajoService {
         retirar ? [raiz] : (trabajos ?? []),
       );
       if (!retirar) await fijarIniciosLotes(tx, tenantId, itemId);
-      if (raiz.orden.proyectoCampanaId)
-        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+      await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
           tenantId,
           ordenId: raiz.ordenId,
           proyectoCampanaId: raiz.orden.proyectoCampanaId,
@@ -789,6 +831,13 @@ export class OrdenesTrabajoService {
     auth: CurrentAuth,
     itemIds: string[],
   ): Promise<void> {
+    if (
+      !(await this.capacidades.incluida(
+        auth.tenantId,
+        'recorridos_fabricacion',
+      ))
+    )
+      return;
     const pendientes = [...itemIds];
     const visitados = new Set<string>();
     for (let indice = 0; indice < pendientes.length; indice++) {
@@ -935,8 +984,14 @@ export class OrdenesTrabajoService {
    * para que la promesa/cierre ya estén escritos cuando la acción responde.
    */
   private async actualizarAsignaciones(tenantId: string) {
-    try { await this.eta.sincronizarAsignaciones(tenantId); }
-    catch (error) { this.logger.error('No se pudo actualizar el reparto de producción; se reintentará automáticamente.', error); }
+    try {
+      await this.eta.sincronizarAsignaciones(tenantId);
+    } catch (error) {
+      this.logger.error(
+        'No se pudo actualizar el reparto de producción; se reintentará automáticamente.',
+        error,
+      );
+    }
   }
 
   private async capturarEtaEmision(auth: CurrentAuth, ordenId: string) {
@@ -1173,7 +1228,11 @@ export class OrdenesTrabajoService {
     // token no tienen uno; se genera la primera vez que se abre el detalle
     // para que "Compartir seguimiento" siempre tenga link.
     let publicToken = orden.publicToken;
-    if (!publicToken && orden.estado !== 'borrador') {
+    if (
+      !publicToken &&
+      !['borrador', 'cancelada'].includes(orden.estado) &&
+      (await this.capacidades.puedeOperar(auth.tenantId, 'seguimiento_qr'))
+    ) {
       publicToken = generarTokenPublico();
       await this.prisma.$transaction(async (tx) => {
         await tx.ordenTrabajo.update({
@@ -1206,6 +1265,16 @@ export class OrdenesTrabajoService {
       orden.items.map((i) => i.id),
     );
     const detalle = this.toDetalle({ ...orden, publicToken });
+    // Independiente de la capacidad actual y del límite de 200 eventos del
+    // timeline: el acceso a impresiones anteriores sobrevive a un cambio de plan.
+    const impresionRegistrada = await this.prisma.ordenTrabajoEvento.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        tipo: { in: ['impresion_documento', 'cola_impresion'] },
+      },
+      select: { id: true },
+    });
     const lotes = await this.prisma.loteProduccionEntrega.findMany({
       where: {
         tenantId: auth.tenantId,
@@ -1223,6 +1292,7 @@ export class OrdenesTrabajoService {
     });
     return {
       ...detalle,
+      tieneHistorialImpresion: Boolean(impresionRegistrada),
       progreso: progresoDeOrden(orden),
       progresoPct: progresoDeOrden(orden).porcentaje,
       progresoLotes: lotes.map((lote) => ({
@@ -1245,6 +1315,17 @@ export class OrdenesTrabajoService {
     };
   }
 
+  private async condicionesEmision(
+    tenantId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const actual = await this.capacidades.actual(tenantId, tx);
+    return {
+      produccionControlada: actual.contrato.funciones.tablero === true,
+      cobrosHabilitadosEmision: actual.contrato.funciones.cobros === true,
+    };
+  }
+
   // ── Crear ────────────────────────────────────────────────────────────
 
   async create(auth: CurrentAuth, payload: CrearOrdenTrabajoDto) {
@@ -1259,6 +1340,7 @@ export class OrdenesTrabajoService {
       if (existente) return this.findOne(auth, existente.id);
     }
 
+    await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const estadoInicial: OrdenTrabajoEstado = payload.estado ?? 'borrador';
     const emitida = estadoInicial === 'pendiente';
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
@@ -1368,6 +1450,7 @@ export class OrdenesTrabajoService {
     const proyectoCampanaId =
       payload.proyectoCampanaId ?? cotizacion?.proyectoCampanaId ?? null;
     if (proyectoCampanaId) {
+      await this.capacidades.exigir(auth.tenantId, 'proyectos');
       if (!payload.clienteId) {
         throw new BadRequestException(
           'Para asignar una campaña, la orden debe tener cliente.',
@@ -1598,12 +1681,37 @@ export class OrdenesTrabajoService {
     const ahora = new Date();
     // Emitida al taller → link público de seguimiento del cliente. Se acuña
     // acá para poder registrarlo en EnlacePublico dentro de la misma tx.
-    const tokenSeguimiento = emitida ? generarTokenPublico() : null;
+    const tokenSeguimiento =
+      emitida &&
+      (await this.capacidades.puedeOperar(auth.tenantId, 'seguimiento_qr'))
+        ? generarTokenPublico()
+        : null;
 
     const tienePlanEntrega = items.some((i) => i.planEntrega);
+    if (tienePlanEntrega)
+      await this.capacidades.exigir(auth.tenantId, 'planificacion_avanzada');
     let creada: { id: string };
     try {
       creada = await this.prisma.$transaction(async (tx) => {
+        await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+          'cotizacion',
+        ]);
+        await this.exigirCuponesEnEscritura(tx, auth, items);
+        await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, fidelizacion);
+        if (tienePlanEntrega)
+          await this.capacidades.exigirOperacionTx(
+            tx,
+            auth.tenantId,
+            ['planificacion_avanzada'],
+            ['planificacion_avanzada'],
+          );
+        if (proyectoCampanaId)
+          await this.capacidades.exigirOperacionTx(
+            tx,
+            auth.tenantId,
+            ['proyectos'],
+            ['proyectos'],
+          );
         if (tienePlanEntrega) await bloquearColaEntrega(tx, auth.tenantId);
         const contextoEntrega = tienePlanEntrega
           ? await this.eta.contextoSimulacion(auth.tenantId, tx)
@@ -1636,6 +1744,7 @@ export class OrdenesTrabajoService {
             proyectoCampanaId,
             estado: estadoInicial,
             fechaEmision: emitida ? ahora : null,
+            ...(await this.condicionesEmision(auth.tenantId, tx)),
             publicToken: tokenSeguimiento,
             fechaEntrega: payload.fechaEntrega
               ? new Date(payload.fechaEntrega)
@@ -1751,56 +1860,13 @@ export class OrdenesTrabajoService {
         }
 
         if (fidelizacion.canjePuntos > 0 && orden.clienteId) {
-          let reserva = payload.cotizacionId
-            ? await tx.fidelizacionReserva.findFirst({
-                where: {
-                  tenantId: auth.tenantId,
-                  cotizacionId: payload.cotizacionId,
-                  estado: 'RESERVADA',
-                  ordenId: null,
-                },
-              })
-            : null;
-          if (reserva) {
-            if (reserva.puntos > fidelizacion.canjePuntos) {
-              const montoSeleccionado = redondearDinero(
-                (Number(reserva.monto) * fidelizacion.canjePuntos) /
-                  reserva.puntos,
-                2,
-              );
-              await tx.fidelizacionReserva.update({
-                where: { id: reserva.id },
-                data: {
-                  puntos: { decrement: fidelizacion.canjePuntos },
-                  monto: { decrement: montoSeleccionado },
-                },
-              });
-              reserva = await tx.fidelizacionReserva.create({
-                data: {
-                  tenantId: reserva.tenantId,
-                  cuentaId: reserva.cuentaId,
-                  clienteId: reserva.clienteId,
-                  cotizacionId: reserva.cotizacionId,
-                  ordenId: orden.id,
-                  puntos: fidelizacion.canjePuntos,
-                  monto: montoSeleccionado,
-                  expiraEl: reserva.expiraEl,
-                },
-              });
-            } else {
-              reserva = await tx.fidelizacionReserva.update({
-                where: { id: reserva.id },
-                data: { ordenId: orden.id },
-              });
-            }
-          } else {
-            reserva = await this.fidelizacion.reservar(tx, {
-              tenantId: auth.tenantId,
-              clienteId: orden.clienteId,
-              ordenId: orden.id,
-              puntos: fidelizacion.canjePuntos,
-            });
-          }
+          const reserva = await this.fidelizacion.reservarParaOrden(tx, {
+            tenantId: auth.tenantId,
+            clienteId: orden.clienteId,
+            ordenId: orden.id,
+            cotizacionId: payload.cotizacionId,
+            puntos: fidelizacion.canjePuntos,
+          });
           if (emitida && reserva) {
             await this.fidelizacion.consumirReserva(
               tx,
@@ -1820,15 +1886,13 @@ export class OrdenesTrabajoService {
           await this.redimirCupones(tx, auth, orden.id, items);
         }
 
-        if (proyectoCampanaId) {
-          await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
-            tenantId: auth.tenantId,
-            ordenId: orden.id,
-            proyectoCampanaId,
-            actorUserId: auth.userId,
-            actorNombre: usuarioNombre,
-          });
-        }
+        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+          tenantId: auth.tenantId,
+          ordenId: orden.id,
+          proyectoCampanaId,
+          actorUserId: auth.userId,
+          actorNombre: usuarioNombre,
+        });
 
         // Timeline: se insertan en orden cronológico (productos → borrador →
         // número → emisión) con timestamps levemente separados para que el
@@ -2039,6 +2103,8 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
+    if (orden.estado === 'borrador' || payload.items !== undefined)
+      await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const versionEsperada = new Date(payload.expectedVersion);
     if (
       Number.isNaN(versionEsperada.getTime()) ||
@@ -2049,9 +2115,13 @@ export class OrdenesTrabajoService {
       );
     }
 
-    if (this.camposEditables(orden.estado as OrdenTrabajoEstado).has('canalVenta')) {
+    if (
+      this.camposEditables(orden.estado as OrdenTrabajoEstado).has('canalVenta')
+    ) {
       exigirCanalVenta(
-        payload.canalVenta === undefined ? orden.canalVenta : payload.canalVenta,
+        payload.canalVenta === undefined
+          ? orden.canalVenta
+          : payload.canalVenta,
         orden.canalVenta,
       );
     }
@@ -2287,6 +2357,10 @@ export class OrdenesTrabajoService {
 
     const ahora = new Date();
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      await this.exigirCuponesEnEscritura(tx, auth, itemsAutorizados ?? []);
       const reclamo = await tx.ordenTrabajo.updateMany({
         where: {
           id: orden.id,
@@ -2436,15 +2510,13 @@ export class OrdenesTrabajoService {
           orden.updatedAt,
         );
       }
-      if (orden.proyectoCampanaId) {
-        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
-          tenantId: auth.tenantId,
-          ordenId: orden.id,
-          proyectoCampanaId: orden.proyectoCampanaId,
-          actorUserId: auth.userId,
-          actorNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
-        });
-      }
+      await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        proyectoCampanaId: orden.proyectoCampanaId,
+        actorUserId: auth.userId,
+        actorNombre: firmaActor(auth, actor?.nombreCompleto ?? auth.email),
+      });
 
       if (itemsAutorizados)
         await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
@@ -2565,13 +2637,19 @@ export class OrdenesTrabajoService {
       throw new NotFoundException('No se encontró la orden de trabajo.');
     }
 
-    if (this.camposEditables(orden.estado as OrdenTrabajoEstado).has('canalVenta')) {
+    if (
+      this.camposEditables(orden.estado as OrdenTrabajoEstado).has('canalVenta')
+    ) {
       exigirCanalVenta(
-        payload.canalVenta === undefined ? orden.canalVenta : payload.canalVenta,
+        payload.canalVenta === undefined
+          ? orden.canalVenta
+          : payload.canalVenta,
         orden.canalVenta,
       );
     }
 
+    if (orden.estado === 'borrador')
+      await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const estado = orden.estado as OrdenTrabajoEstado;
     const editables = this.camposEditables(estado);
     const enviados = (
@@ -2866,6 +2944,9 @@ export class OrdenesTrabajoService {
       Number(orden.cargosDirectos ?? 0),
     );
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       const reclamo = await tx.ordenTrabajo.updateMany({
         where: {
           id,
@@ -3029,6 +3110,21 @@ export class OrdenesTrabajoService {
     };
   }
 
+  /** Incluye los borradores: el contrato se mantiene hasta guardar la OT. */
+  private async exigirCuponesEnEscritura(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    items: ReadonlyArray<{ descuentoCuponId?: string | null }>,
+  ) {
+    if (items.some((item) => item.descuentoCuponId))
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['cupones'],
+        ['cupones'],
+      );
+  }
+
   /** Revalida en backend todo cupón antes de tratarlo como autorización. */
   private async validarCupones(
     auth: CurrentAuth,
@@ -3045,6 +3141,7 @@ export class OrdenesTrabajoService {
       ),
     );
     if (idsCupon.length === 0) return items;
+    await this.capacidades.exigir(auth.tenantId, 'cupones', db);
 
     const [cupones, referencias, regional] = await Promise.all([
       db.cupon.findMany({
@@ -3095,7 +3192,7 @@ export class OrdenesTrabajoService {
             referencia?.producto.subcategoriaComercial.categoria.codigo ?? null,
           subcategoriaCodigo:
             referencia?.producto.subcategoriaComercial.codigo ?? null,
-          neto: item.subtotal + Number(item.descuentoMonto ?? 0),
+          neto: Number(item.subtotal) + Number(item.descuentoMonto ?? 0),
         };
       }),
     };
@@ -3409,6 +3506,7 @@ export class OrdenesTrabajoService {
     ordenId: string,
     payload: CrearOrdenTrabajoItemDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const { orden, usuarioNombre } = await this.cargarOrdenParaItems(
       auth,
       ordenId,
@@ -3455,6 +3553,10 @@ export class OrdenesTrabajoService {
     });
     let creadoId = '';
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      await this.exigirCuponesEnEscritura(tx, auth, [item]);
       const reclamo = await tx.ordenTrabajo.updateMany({
         where: {
           id: orden.id,
@@ -3492,15 +3594,13 @@ export class OrdenesTrabajoService {
         });
         await this.reconciliarCupones(tx, auth, orden.id, itemsCupon);
       }
-      if (orden.proyectoCampanaId) {
-        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
-          tenantId: auth.tenantId,
-          ordenId: orden.id,
-          proyectoCampanaId: orden.proyectoCampanaId,
-          actorUserId: auth.userId,
-          actorNombre: usuarioNombre,
-        });
-      }
+      await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        proyectoCampanaId: orden.proyectoCampanaId,
+        actorUserId: auth.userId,
+        actorNombre: usuarioNombre,
+      });
       await this.recalcularTotales(
         tx,
         orden.id,
@@ -3536,6 +3636,7 @@ export class OrdenesTrabajoService {
     itemId: string,
     payload: CrearOrdenTrabajoItemDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const { orden, usuarioNombre } = await this.cargarOrdenParaItems(
       auth,
       ordenId,
@@ -3615,6 +3716,10 @@ export class OrdenesTrabajoService {
     if (partes.length === 0) partes.push('especificaciones actualizadas');
 
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      await this.exigirCuponesEnEscritura(tx, auth, [item]);
       const reclamo = await tx.ordenTrabajo.updateMany({
         where: {
           id: orden.id,
@@ -3675,15 +3780,13 @@ export class OrdenesTrabajoService {
         });
         await this.reconciliarCupones(tx, auth, orden.id, itemsCupon);
       }
-      if (orden.proyectoCampanaId) {
-        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
-          tenantId: auth.tenantId,
-          ordenId: orden.id,
-          proyectoCampanaId: orden.proyectoCampanaId,
-          actorUserId: auth.userId,
-          actorNombre: usuarioNombre,
-        });
-      }
+      await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+        tenantId: auth.tenantId,
+        ordenId: orden.id,
+        proyectoCampanaId: orden.proyectoCampanaId,
+        actorUserId: auth.userId,
+        actorNombre: usuarioNombre,
+      });
       await this.recalcularTotales(
         tx,
         orden.id,
@@ -3723,6 +3826,7 @@ export class OrdenesTrabajoService {
   }
 
   async quitarItem(auth: CurrentAuth, ordenId: string, itemId: string) {
+    await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const { orden, usuarioNombre } = await this.cargarOrdenParaItems(
       auth,
       ordenId,
@@ -3740,6 +3844,9 @@ export class OrdenesTrabajoService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       const reclamo = await tx.ordenTrabajo.updateMany({
         where: {
           id: orden.id,
@@ -3815,9 +3922,8 @@ export class OrdenesTrabajoService {
     const desde = orden.estado as OrdenTrabajoEstado;
     const hacia = payload.estado as OrdenTrabajoEstado;
     this.validarTransicion(desde, hacia);
-    if (hacia === 'produccion') {
-      await this.desarrolloDocumental.exigirGatesCumplidos(orden.id);
-    }
+    if (desde === 'borrador' && hacia !== 'cancelada')
+      await this.capacidades.exigir(auth.tenantId, 'ordenes');
     // Salir de borrador (a cualquier estado) es emitir: exige cliente y
     // fecha de entrega vigente, igual que la emisión directa.
     if (desde === 'borrador') {
@@ -3857,9 +3963,28 @@ export class OrdenesTrabajoService {
 
     // Salir de borrador es emitir → link público de seguimiento.
     const tokenSeguimiento =
-      desde === 'borrador' && !orden.publicToken ? generarTokenPublico() : null;
+      desde === 'borrador' &&
+      hacia !== 'cancelada' &&
+      !orden.publicToken &&
+      (await this.capacidades.puedeOperar(auth.tenantId, 'seguimiento_qr'))
+        ? generarTokenPublico()
+        : null;
 
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      if (desde === 'borrador' && hacia !== 'cancelada')
+        await this.fidelizacion.exigirCompromisoTx(tx, auth.tenantId, {
+          puntosEstimados: orden.fidelizacionPuntosEstimados,
+          canjePuntos: orden.fidelizacionCanjePuntos,
+        });
+      if (desde === 'entregada' && !['entregada', 'cancelada'].includes(hacia))
+        await this.reservasMaterial?.exigirReaperturaTx(
+          tx,
+          auth.tenantId,
+          orden.id,
+        );
       const actualizado = await tx.ordenTrabajo.updateMany({
         where: {
           id: orden.id,
@@ -3868,6 +3993,9 @@ export class OrdenesTrabajoService {
           updatedAt: orden.updatedAt,
         },
         data: {
+          ...(desde === 'borrador' && hacia !== 'cancelada'
+            ? await this.condicionesEmision(auth.tenantId, tx)
+            : {}),
           estado: hacia,
           progresoPct,
           // Cualquier salida de borrador marca la emisión si faltaba.
@@ -3920,20 +4048,18 @@ export class OrdenesTrabajoService {
           },
         });
         await this.materializarPasosItems(tx, auth.tenantId, items);
-        if (orden.proyectoCampanaId) {
-          await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
-            tenantId: auth.tenantId,
-            ordenId: orden.id,
-            proyectoCampanaId: orden.proyectoCampanaId,
-            actorUserId: auth.userId,
-            actorNombre: firmaActor(
-              auth,
-              actor?.nombreCompleto ??
-                orden.vendedor?.nombreCompleto ??
-                auth.email,
-            ),
-          });
-        }
+        await this.desarrolloDocumental.materializarRequisitosReceta(tx, {
+          tenantId: auth.tenantId,
+          ordenId: orden.id,
+          proyectoCampanaId: orden.proyectoCampanaId,
+          actorUserId: auth.userId,
+          actorNombre: firmaActor(
+            auth,
+            actor?.nombreCompleto ??
+              orden.vendedor?.nombreCompleto ??
+              auth.email,
+          ),
+        });
         // Cupones aplicados en el borrador: se redimen recién acá, que es
         // cuando la orden se compromete (misma transacción, F4 descuentos).
         await this.redimirCupones(tx, auth, orden.id, items);
@@ -3961,6 +4087,8 @@ export class OrdenesTrabajoService {
           { alEmitir: true, auth },
         );
       }
+      if (hacia === 'produccion')
+        await this.desarrolloDocumental.exigirGatesCumplidos(orden.id, undefined, undefined, tx);
       await tx.ordenTrabajoEvento.create({
         data: {
           tenantId: auth.tenantId,
@@ -4089,6 +4217,9 @@ export class OrdenesTrabajoService {
     );
 
     await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
       // Reclama la versión observada antes de tocar pasos, enlaces o cupones.
       // Así dos acciones simultáneas no pueden cancelar y avanzar la misma OT.
       const cancelada = await tx.ordenTrabajo.updateMany({
@@ -4436,6 +4567,12 @@ export class OrdenesTrabajoService {
       );
     }
     if (montos.size === 0) return;
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      auth.tenantId,
+      ['cupones'],
+      ['cupones'],
+    );
 
     // Bloquea las reglas antes de revalidarlas dentro de ESTA transacción:
     // ningún supervisor puede cambiar alcance/valor/vigencia entre validar y
@@ -4464,11 +4601,27 @@ export class OrdenesTrabajoService {
     const reservasPorCupon = new Map(
       reservas.map((reserva) => [reserva.cuponId, reserva]),
     );
+    // Emitir un borrador puede recibir sólo los ids y montos de sus líneas.
+    // Las reglas siempre se evalúan sobre la OT persistida completa: también
+    // al agregar un cupón a una orden que ya tiene otros usos consumidos.
+    const [itemsPersistidos, usosOrden] = await Promise.all([
+      tx.ordenTrabajoItem.findMany({
+        where: { tenantId: auth.tenantId, ordenId },
+      }),
+      tx.cuponRedencion.findMany({
+        where: {
+          tenantId: auth.tenantId,
+          ordenId,
+          estado: { not: 'LIBERADA' },
+        },
+        select: { cuponId: true },
+      }),
+    ]);
     await this.validarCupones(
       auth,
       orden.clienteId,
-      items as CrearOrdenTrabajoItemDto[],
-      new Set(reservas.map((reserva) => reserva.cuponId)),
+      itemsPersistidos as unknown as CrearOrdenTrabajoItemDto[],
+      new Set([...reservas, ...usosOrden].map((reserva) => reserva.cuponId)),
       tx,
     );
 
@@ -4583,6 +4736,14 @@ export class OrdenesTrabajoService {
     const actualesPorCupon = new Map(
       actuales.map((redencion) => [redencion.cuponId, redencion]),
     );
+
+    if (deseadas.size)
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['cupones'],
+        ['cupones'],
+      );
 
     for (const redencion of actuales) {
       const monto = deseadas.get(redencion.cuponId);
@@ -4793,7 +4954,14 @@ export class OrdenesTrabajoService {
     opts?: { reemplazar?: boolean },
   ) {
     const actuales = await tx.ordenTrabajoItem.findMany({
-      where: { tenantId, id: { in: items.map((i) => i.id) } },
+      where: {
+        tenantId,
+        id: { in: items.map((i) => i.id) },
+        orden: {
+          produccionControlada: true,
+          estado: { notIn: ['borrador', 'cancelada'] },
+        },
+      },
       select: {
         id: true,
         ordenId: true,
@@ -5769,7 +5937,7 @@ export class OrdenesTrabajoService {
         cotizacionItemId: { not: null },
         contieneLotesEntrega: false,
         pasos: { none: {} },
-        orden: { estado: { in: ESTADOS_TABLERO } },
+        orden: { estado: { in: ESTADOS_TABLERO }, produccionControlada: true },
       },
       select: { id: true, ordenId: true, cotizacionItemId: true },
     });
@@ -5943,13 +6111,16 @@ export class OrdenesTrabajoService {
       where: {
         tenantId: auth.tenantId,
         estado: { in: ESTADOS_TABLERO },
+        produccionControlada: true,
         ...(soloPendientes ? { items: { some: itemActivoTablero } } : {}),
       },
       include: {
         cliente: { select: { nombre: true } },
         vendedor: { select: { nombreCompleto: true } },
         items: {
-          where: soloPendientes ? itemActivoTablero : { contieneLotesEntrega: false },
+          where: soloPendientes
+            ? itemActivoTablero
+            : { contieneLotesEntrega: false },
           orderBy: { ordenIndice: 'asc' as const },
           include: itemTableroInclude,
         },
@@ -5994,14 +6165,29 @@ export class OrdenesTrabajoService {
     );
     await this.proyectarAprobacionesTablero(auth.tenantId, items);
     if (soloPendientes) {
-      const idsPresentes = new Set(items.flatMap((i) => i.pasos.map((p) => p.id)));
-      const completadosExternos = new Set(ordenes.flatMap((o) => o.items.flatMap((i) =>
-        i.pasos.flatMap((p) => p.dependenciasEntrantes.filter((d) =>
-          d.predecesor.estado === 'hecho' && !idsPresentes.has(d.predecesorPasoId),
-        ).map((d) => d.predecesorPasoId)),
-      )));
-      for (const item of items) for (const paso of item.pasos)
-        paso.predecesorPasoIds = paso.predecesorPasoIds.filter((id) => !completadosExternos.has(id));
+      const idsPresentes = new Set(
+        items.flatMap((i) => i.pasos.map((p) => p.id)),
+      );
+      const completadosExternos = new Set(
+        ordenes.flatMap((o) =>
+          o.items.flatMap((i) =>
+            i.pasos.flatMap((p) =>
+              p.dependenciasEntrantes
+                .filter(
+                  (d) =>
+                    d.predecesor.estado === 'hecho' &&
+                    !idsPresentes.has(d.predecesorPasoId),
+                )
+                .map((d) => d.predecesorPasoId),
+            ),
+          ),
+        ),
+      );
+      for (const item of items)
+        for (const paso of item.pasos)
+          paso.predecesorPasoIds = paso.predecesorPasoIds.filter(
+            (id) => !completadosExternos.has(id),
+          );
     }
     return {
       items,
@@ -6015,54 +6201,103 @@ export class OrdenesTrabajoService {
   /** Historial bajo demanda: pagina ítems en la BD, sin cargar el resto de la OT. */
   async tableroTerminados(auth: CurrentAuth, query: TableroTerminadosQueryDto) {
     if (query.desde && query.hasta && query.desde > query.hasta)
-      throw new BadRequestException('La fecha desde debe ser anterior o igual a la fecha hasta.');
+      throw new BadRequestException(
+        'La fecha desde debe ser anterior o igual a la fecha hasta.',
+      );
     const filtros: Prisma.OrdenTrabajoItemWhereInput[] = [itemTerminadoTablero];
     const q = query.q?.trim();
-    if (q) filtros.push({ OR: [
-      { nombre: { contains: q, mode: 'insensitive' } },
-      { codigo: { contains: q, mode: 'insensitive' } },
-      { orden: { numero: { contains: q, mode: 'insensitive' } } },
-      { orden: { cliente: { nombre: { contains: q, mode: 'insensitive' } } } },
-      { cotizacionItem: { producto: { nombre: { contains: q, mode: 'insensitive' } } } },
-    ] });
+    if (q)
+      filtros.push({
+        OR: [
+          { nombre: { contains: q, mode: 'insensitive' } },
+          { codigo: { contains: q, mode: 'insensitive' } },
+          { orden: { numero: { contains: q, mode: 'insensitive' } } },
+          {
+            orden: {
+              cliente: { nombre: { contains: q, mode: 'insensitive' } },
+            },
+          },
+          {
+            cotizacionItem: {
+              producto: { nombre: { contains: q, mode: 'insensitive' } },
+            },
+          },
+        ],
+      });
     if (query.desde || query.hasta) {
       const fecha = {
-        ...(query.desde ? { gte: new Date(`${query.desde}T00:00:00.000Z`) } : {}),
-        ...(query.hasta ? { lte: new Date(`${query.hasta}T00:00:00.000Z`) } : {}),
+        ...(query.desde
+          ? { gte: new Date(`${query.desde}T00:00:00.000Z`) }
+          : {}),
+        ...(query.hasta
+          ? { lte: new Date(`${query.hasta}T00:00:00.000Z`) }
+          : {}),
       };
-      filtros.push({ OR: [
-        { fechaEntrega: fecha },
-        { fechaEntrega: null, orden: { fechaEntrega: fecha } },
-      ] });
+      filtros.push({
+        OR: [
+          { fechaEntrega: fecha },
+          { fechaEntrega: null, orden: { fechaEntrega: fecha } },
+        ],
+      });
     }
-    const page = query.page ?? 1, limit = query.limit ?? 25;
+    const page = query.page ?? 1,
+      limit = query.limit ?? 25;
     const filas = await this.prisma.ordenTrabajoItem.findMany({
       where: {
         tenantId: auth.tenantId,
-        orden: { estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] } },
+        orden: {
+          produccionControlada: true,
+          estado: {
+            in: ['pendiente', 'produccion', 'finalizada', 'entregada'],
+          },
+        },
         AND: filtros,
       },
-      orderBy: [{ orden: { createdAt: 'desc' } }, { ordenIndice: 'asc' }, { id: 'asc' }],
+      orderBy: [
+        { orden: { createdAt: 'desc' } },
+        { ordenIndice: 'asc' },
+        { id: 'asc' },
+      ],
       skip: (page - 1) * limit,
       take: limit + 1,
-      include: { ...itemTableroInclude, orden: { include: {
-        cliente: { select: { nombre: true } },
-        vendedor: { select: { nombreCompleto: true } },
-      } } },
+      include: {
+        ...itemTableroInclude,
+        orden: {
+          include: {
+            cliente: { select: { nombre: true } },
+            vendedor: { select: { nombreCompleto: true } },
+          },
+        },
+      },
     });
     const pagina = filas.slice(0, limit);
-    const tecnologias = await this.tecnologiaPorMaquinaDeItems(auth.tenantId, pagina);
+    const tecnologias = await this.tecnologiaPorMaquinaDeItems(
+      auth.tenantId,
+      pagina,
+    );
     return {
-      items: pagina.map((item) => this.toTableroItem(item.orden, item, auth.userId, tecnologias)),
-      page, limit, hasMore: filas.length > limit,
+      items: pagina.map((item) =>
+        this.toTableroItem(item.orden, item, auth.userId, tecnologias),
+      ),
+      page,
+      limit,
+      hasMore: filas.length > limit,
     };
   }
 
   /** Acceso explícito desde una fila o un enlace; nunca precarga el historial. */
   async consultarItemTablero(auth: CurrentAuth, itemId: string) {
     const existe = await this.prisma.ordenTrabajoItem.findFirst({
-      where: { id: itemId, tenantId: auth.tenantId, contieneLotesEntrega: false,
-        orden: { estado: { in: ['pendiente', 'produccion', 'finalizada', 'entregada'] } },
+      where: {
+        id: itemId,
+        tenantId: auth.tenantId,
+        contieneLotesEntrega: false,
+        orden: {
+          produccionControlada: true,
+          estado: {
+            in: ['pendiente', 'produccion', 'finalizada', 'entregada'],
+          },
+        },
       },
       select: { id: true },
     });
@@ -6301,12 +6536,26 @@ export class OrdenesTrabajoService {
       await this.validarEjecucionEnEstacion(auth, paso);
     }
     if (paso.asignacionManualJson)
-      throw new ConflictException('Este paso tiene una asignación del supervisor. Usá Reasignar personal para revisar el cambio.');
+      throw new ConflictException(
+        'Este paso tiene una asignación del supervisor. Consultá con quien supervisa el trabajo antes de cambiarlo.',
+      );
     const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
-    if (en && asignacion?.personas.length && !auth.permisos?.has('produccion.supervisar')) {
-      const empleado = await this.prisma.empleado.findFirst({ where: { tenantId: auth.tenantId, userId: auth.userId, activo: true }, select: { id: true } });
-      if (!empleado || !asignacion.personas.some(p => p.empleadoId === empleado.id))
-        throw new ConflictException('Este paso ya tiene personal asignado. Pedí al supervisor que revise la asignación.');
+    if (
+      en &&
+      asignacion?.personas.length &&
+      !auth.permisos?.has('produccion.supervisar')
+    ) {
+      const empleado = await this.prisma.empleado.findFirst({
+        where: { tenantId: auth.tenantId, userId: auth.userId, activo: true },
+        select: { id: true },
+      });
+      if (
+        !empleado ||
+        !asignacion.personas.some((p) => p.empleadoId === empleado.id)
+      )
+        throw new ConflictException(
+          'Este paso ya tiene personal asignado. Pedí al supervisor que revise la asignación.',
+        );
     }
     if (en && paso.estado === 'hecho') {
       throw new BadRequestException(
@@ -6357,7 +6606,7 @@ export class OrdenesTrabajoService {
       { ordenId, itemId, pasoId, payload, interno },
     ]);
     return {
-      ...await this.tableroItemActualizado(auth, itemId),
+      ...(await this.tableroItemActualizado(auth, itemId)),
       avisoFinalizacion: resultado.avisoFinalizacion,
     };
   }
@@ -6368,6 +6617,7 @@ export class OrdenesTrabajoService {
     pasoId: string,
     payload: AccionPasoOrdenTrabajoDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'colas_produccion');
     if (
       !auth.permisos?.has('produccion.ejecutar') &&
       !auth.permisos?.has('produccion.supervisar')
@@ -6406,6 +6656,7 @@ export class OrdenesTrabajoService {
       sinTiempoConfirmado?: boolean;
     }> = [],
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'colas_produccion');
     if (
       !auth.permisos?.has('produccion.ejecutar') &&
       !auth.permisos?.has('produccion.supervisar')
@@ -6462,7 +6713,11 @@ export class OrdenesTrabajoService {
    * No es un endpoint ni valida compatibilidad de tandas. El futuro comando
    * de tanda debe añadir membresía, revisión de impacto e idempotencia. */
   async accionesPasos(auth: CurrentAuth, acciones: AccionPasoEnGrupo[]) {
+    await this.capacidades.exigir(auth.tenantId, 'identidad');
     validarGrupoAcciones(acciones);
+    const desdeCola = acciones.some((accion) => accion.interno?.accionEnCola);
+    if (desdeCola)
+      await this.capacidades.exigir(auth.tenantId, 'colas_produccion');
     if (
       !auth.permisos?.has('produccion.ejecutar') &&
       !auth.permisos?.has('produccion.supervisar')
@@ -6474,6 +6729,12 @@ export class OrdenesTrabajoService {
     await this.reconciliarTramosVencidos(auth.tenantId);
     const resultados = await this.prisma.$transaction(
       async (tx) => {
+        // Primero el contrato y luego las OT: mismo orden de locks que una
+        // asignación de plan. El tablero conserva su continuidad independiente.
+        if (desdeCola)
+          await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+            'colas_produccion',
+          ]);
         await bloquearOrdenesEjecucion(tx, auth.tenantId, acciones);
         const cambios = [];
         for (const a of acciones) {
@@ -6564,6 +6825,7 @@ export class OrdenesTrabajoService {
           orden: {
             select: {
               estado: true,
+              produccionControlada: true,
               numero: true,
               progresoPct: true,
               proyectoCampanaId: true,
@@ -6601,6 +6863,10 @@ export class OrdenesTrabajoService {
       throw new ConflictException(
         `${paso.orden.numero} · ${paso.item.nombre}: el trabajo ya no pertenece a esta cola.`,
       );
+    if (paso.orden.produccionControlada === false)
+      throw new ForbiddenException(
+        'Esta orden se emitió con seguimiento manual, sin tareas de producción.',
+      );
     if (paso.nestingLoteRol === 'PARTICIPANTE') {
       throw new ConflictException(
         'Este paso forma parte de un nesting compartido y se ejecuta desde su operación principal.',
@@ -6608,7 +6874,10 @@ export class OrdenesTrabajoService {
     }
     const supervisa = auth.permisos?.has('produccion.supervisar') ?? false;
     const asignacion = leerAsignacionPersonal(paso.asignacionPersonalJson);
-    const asignado = !!actor && !asignacion?.conflicto && asignacion?.personas.some(p => p.empleadoId === actor.id);
+    const asignado =
+      !!actor &&
+      !asignacion?.conflicto &&
+      asignacion?.personas.some((p) => p.empleadoId === actor.id);
     if (
       (payload.accion === 'desbloquear' || payload.accion === 'reabrir') &&
       !supervisa
@@ -7126,9 +7395,10 @@ export class OrdenesTrabajoService {
       itemId,
       pasoId,
       ordenFinalizada: nuevoEstadoOrden === 'finalizada',
-      avisoFinalizacion: nuevoEstadoOrden === 'finalizada'
-        ? await this.resumenFinalizacion(tx, auth.tenantId, ordenId, ahora)
-        : null,
+      avisoFinalizacion:
+        nuevoEstadoOrden === 'finalizada'
+          ? await this.resumenFinalizacion(tx, auth.tenantId, ordenId, ahora)
+          : null,
     };
   }
 
@@ -7144,12 +7414,19 @@ export class OrdenesTrabajoService {
     const orden = await tx.ordenTrabajo.findFirstOrThrow({
       where: { id: ordenId, tenantId },
       select: {
-        id: true, numero: true, fechaEntrega: true,
+        id: true,
+        numero: true,
+        fechaEntrega: true,
         cliente: { select: { nombre: true } },
         items: {
           where: { tenantId, parentItemId: null },
           orderBy: [{ ordenIndice: 'asc' }, { id: 'asc' }],
-          select: { id: true, nombre: true, cantidad: true, cantidadUnidad: true },
+          select: {
+            id: true,
+            nombre: true,
+            cantidad: true,
+            cantidadUnidad: true,
+          },
         },
       },
     });
@@ -7160,8 +7437,10 @@ export class OrdenesTrabajoService {
       fechaEntrega: orden.fechaEntrega?.toISOString().slice(0, 10) ?? null,
       finalizadaEl: ahora.toISOString(),
       trabajos: orden.items.map((item) => ({
-        id: item.id, nombre: item.nombre,
-        cantidad: Number(item.cantidad), unidad: item.cantidadUnidad,
+        id: item.id,
+        nombre: item.nombre,
+        cantidad: Number(item.cantidad),
+        unidad: item.cantidadUnidad,
       })),
     };
   }
@@ -7269,6 +7548,7 @@ export class OrdenesTrabajoService {
       throw new BadRequestException('Estado de compra inválido.');
     }
     const resultado = await this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, ['identidad']);
       const referencia = await tx.ordenTrabajoItemPaso.findFirst({
         where: { id: pasoId, tenantId: auth.tenantId },
         select: { ordenId: true },
@@ -7349,6 +7629,7 @@ export class OrdenesTrabajoService {
           ordenId,
           paso.id,
           paso.itemId,
+          tx,
         );
       }
       await tx.ordenTrabajoItemPaso.update({
@@ -7559,12 +7840,24 @@ export class OrdenesTrabajoService {
     tenantId: string,
     items: Array<ReturnType<OrdenesTrabajoService['toTableroItem']>>,
   ) {
-    const referencias = items.flatMap((item) => item.pasos
-      .filter((paso) => paso.estado !== 'hecho')
-      .map((paso) => ({ id: paso.id, ordenId: item.ordenId, itemId: item.id, item })));
-    const aprobaciones = await leerAprobacionesPendientes(this.prisma, tenantId, referencias);
-    for (const item of items) for (const paso of item.pasos)
-      paso.aprobacionesPendientes = aprobaciones.get(paso.id) ?? [];
+    const referencias = items.flatMap((item) =>
+      item.pasos
+        .filter((paso) => paso.estado !== 'hecho')
+        .map((paso) => ({
+          id: paso.id,
+          ordenId: item.ordenId,
+          itemId: item.id,
+          item,
+        })),
+    );
+    const aprobaciones = await leerAprobacionesPendientes(
+      this.prisma,
+      tenantId,
+      referencias,
+    );
+    for (const item of items)
+      for (const paso of item.pasos)
+        paso.aprobacionesPendientes = aprobaciones.get(paso.id) ?? [];
   }
 
   private toTableroItem(
@@ -7843,8 +8136,20 @@ export class OrdenesTrabajoService {
                 paso.tramos[0].motivoDetalle,
               )
             : null,
-        personalFijo: personalFijoDelPaso({ ...paso, operadorActualUsuarioId: paso.tramos.find(t => !t.finEl)?.usuarioId }, (leerAsignacionPersonal(paso.asignacionPersonalJson)?.personas ?? []).map(p => ({ id: p.empleadoId, userId: p.usuarioId }))),
-        asignacionPersonal: proyectarAsignacionPersonal(paso.asignacionPersonalJson, viewerUserId),
+        personalFijo: personalFijoDelPaso(
+          {
+            ...paso,
+            operadorActualUsuarioId: paso.tramos.find((t) => !t.finEl)
+              ?.usuarioId,
+          },
+          (
+            leerAsignacionPersonal(paso.asignacionPersonalJson)?.personas ?? []
+          ).map((p) => ({ id: p.empleadoId, userId: p.usuarioId })),
+        ),
+        asignacionPersonal: proyectarAsignacionPersonal(
+          paso.asignacionPersonalJson,
+          viewerUserId,
+        ),
         mesaEsMia: paso.mesaUsuarioId === viewerUserId,
         mesaUsuarioNombre: paso.mesaUsuario
           ? paso.mesaUsuario.nombreCompleto || paso.mesaUsuario.email
@@ -7901,6 +8206,8 @@ export class OrdenesTrabajoService {
   ) {
     return {
       ...this.toListItem(orden),
+      produccionControlada: orden.produccionControlada !== false,
+      cobrosHabilitadosEmision: orden.cobrosHabilitadosEmision !== false,
       cotizacionId: orden.cotizacionId,
       observaciones: orden.observaciones,
       canalVenta: (orden as { canalVenta?: string | null }).canalVenta ?? null,

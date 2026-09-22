@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { PermisosProvider } from "@/components/navigation/permisos-provider";
+import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
+import { PROPUESTA_PLANES } from "../../../apps/api/src/plataforma/planes/catalogo-planes";
 import type { ResumenData } from "@/lib/panel-api";
 import { ResumenEjecutivo } from "./resumen-ejecutivo";
 
@@ -42,14 +44,24 @@ const datos: ResumenData = {
 const render = (
   d = datos,
   permisos = ["reportes.ver", "reportes.ver_resumen"],
+  funciones?: Record<string, boolean>,
 ) =>
   renderToStaticMarkup(
     <PermisosProvider permisos={permisos}>
-      <ResumenEjecutivo d={d} />
+      <CapacidadesProvider capacidades={{ funciones }}>
+        <ResumenEjecutivo d={d} />
+      </CapacidadesProvider>
     </PermisosProvider>,
   );
 
 describe("Resumen ejecutivo", () => {
+  it.each([0, 1, 2])("los enlaces a análisis detallado respetan el plan %s", indice => {
+    const html = render(datos, ["reportes.ver", "reportes.ver_resumen", "finanzas.ver_margenes"], PROPUESTA_PLANES[indice].contenido.funciones);
+    for (const texto of ["Analizar clientes", "Analizar productos", "Analizar finanzas"])
+      expect(html.includes(texto)).toBe(indice !== 0);
+    expect(html).toContain("Clientes principales");
+    expect(html).toContain("Productos con más ventas");
+  });
   it("expone la pérdida con precisión en los datos y mantiene los puntos de exportación", () => {
     const html = render();
     expect(html).toContain("-19,75");

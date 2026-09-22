@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -20,6 +21,9 @@ export class ProductoRutasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configPasos: ConfigPasosService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async crearProductoRutaAlternativa(
@@ -27,6 +31,7 @@ export class ProductoRutasService {
     productoId: string,
     dto: CrearProductoRutaAlternativaDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const [producto, ruta, rutaVersion] = await Promise.all([
       this.prisma.producto.findFirst({ where: { id: productoId, tenantId } }),
       this.prisma.ruta.findFirst({
@@ -148,6 +153,7 @@ export class ProductoRutasService {
     rutaAltId: string,
     dto: ActualizarProductoRutaAlternativaDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const existente = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
     });
@@ -191,6 +197,7 @@ export class ProductoRutasService {
     rutaAltId: string,
     dto: ReordenarPasosRutaAlternativaDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const alternativa = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
       include: {
@@ -273,6 +280,7 @@ export class ProductoRutasService {
     rutaAltId: string,
     dto: DuplicarProductoRutaAlternativaDto,
   ) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const origen = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
       include: {
@@ -457,6 +465,7 @@ export class ProductoRutasService {
   }
 
   async eliminarProductoRutaAlternativa(tenantId: string, rutaAltId: string) {
+    await this.capacidades.exigirTodas(tenantId, ['productos', 'procesos']);
     const existente = await this.prisma.productoRutaAlternativa.findFirst({
       where: { id: rutaAltId, tenantId },
     });

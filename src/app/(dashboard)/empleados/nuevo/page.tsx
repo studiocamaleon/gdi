@@ -1,3 +1,5 @@
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
+import { puedeConfigurar, tieneCapacidad } from "@/lib/capacidades-server";
 import dynamicImport from "next/dynamic";
 
 import { createEmptyEmpleado } from "@/lib/empleados";
@@ -16,8 +18,9 @@ const EmpleadoFicha = dynamicImport(
 );
 
 export default async function NuevoEmpleadoPage() {
+  if (!(await tieneCapacidad("empleados"))) return <FuncionNoIncluida />;
   const [canManage, canViewCommissions] = await Promise.all([
-    tienePermiso("registros.gestionar_empleados"),
+    puedeConfigurar("empleados", "registros.gestionar_empleados"),
     tienePermiso("registros.ver_comisiones"),
   ]);
   if (!canManage) return <SinPermiso modulo="Empleados" />;

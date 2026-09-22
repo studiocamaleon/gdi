@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../../suscripciones/capacidad.guard';
 import {
   Body,
   Controller,
@@ -38,10 +39,12 @@ export class AutomaticosWebController {
   ) {
     return this.service.configurar(auth.tenantId, dto);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Post('prueba')
   prueba(@CurrentSession() auth: CurrentAuth, @Body() dto: DispositivoWebDto) {
     return this.service.prueba(auth.tenantId, dto);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Post('reservar')
   reservar(
     @CurrentSession() auth: CurrentAuth,
@@ -49,6 +52,7 @@ export class AutomaticosWebController {
   ) {
     return this.service.reservar(auth.tenantId, dto);
   }
+  @RequiereCapacidad('whatsapp_web')
   @Post(':id/iniciar')
   iniciar(
     @CurrentSession() auth: CurrentAuth,

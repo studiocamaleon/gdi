@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   Injectable,
@@ -42,6 +43,9 @@ export class TipoCambioService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cotizaciones: CotizacionesService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async configuracion(tenantId: string): Promise<TipoCambioConfig> {
@@ -61,6 +65,7 @@ export class TipoCambioService {
   }
 
   async guardarConfiguracion(tenantId: string, input: SolicitudTipoCambio) {
+    await this.capacidades.exigir(tenantId, 'reglas_precio');
     const regional = await regionalDelTenant(this.prisma, tenantId);
     this.validarSolicitud(input);
     const config: TipoCambioConfig = {

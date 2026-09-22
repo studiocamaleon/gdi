@@ -1,4 +1,6 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 import * as React from "react";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
@@ -136,6 +138,9 @@ function normalizarBusqueda(value: string) {
 export function MateriasPrimasPanel({
   initialMateriasPrimas,
 }: MateriasPrimasPanelProps) {
+  const conMateriales = useCapacidad("materiales");
+  const permisoGestionar = usePuede("inventario.gestionar");
+  const puedeGestionar = conMateriales && permisoGestionar;
   const scope = useDesignScope();
   const themeClass = useDesignTheme();
   const router = useRouter();
@@ -180,6 +185,7 @@ export function MateriasPrimasPanel({
   }, [materiasPrimas, mostrarOcultas, busqueda]);
 
   const handleCreate = async () => {
+    if (!puedeGestionar) return;
     const nombre = nombreNuevo.trim();
     if (!nombre) {
       toast.error("Ingresa un nombre para la materia prima.");
@@ -230,6 +236,7 @@ export function MateriasPrimasPanel({
   };
 
   const toggle = async (item: MateriaPrima) => {
+    if (!puedeGestionar) return;
     try {
       const updated = await toggleMateriaPrima(item.id);
       setMateriasPrimas((prev) =>
@@ -260,7 +267,7 @@ export function MateriasPrimasPanel({
             Catálogo de materias primas, variantes y precios de referencia.
           </p>
         </div>
-        <div className={styles.headerActions}>
+        {puedeGestionar && <div className={styles.headerActions}>
           <ActionLink
             variant="outline"
             href="/inventario/materias-primas/biblioteca"
@@ -276,7 +283,7 @@ export function MateriasPrimasPanel({
           <ActionButton onPress={() => setIsCreateOpen(true)}>
             <CirclePlusIcon size={16} /> Nueva materia prima
           </ActionButton>
-        </div>
+        </div>}
       </header>
       <div className={styles.metrics}>
         <ListMetric
@@ -406,6 +413,7 @@ export function MateriasPrimasPanel({
                       <ActionButton
                         variant="outline"
                         onPress={() => toggle(item)}
+                        isDisabled={!puedeGestionar}
                       >
                         <ToggleLeftIcon size={15} />
                         {item.activo ? "Desactivar" : "Activar"}

@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { InventarioService } from '../../inventario/inventario.service';
@@ -15,7 +16,11 @@ import type {
 describe('Compras y recepciones: DB exclusiva de tests', () => {
   const prisma = new PrismaClient();
   const inventario = new InventarioService(prisma as never);
-  const reservas = new ReservasMaterialService(prisma as never, inventario);
+  const reservas = new ReservasMaterialService(
+    prisma as never,
+    inventario,
+    new CapacidadesEmpresaService(prisma as never),
+  );
   const service = new ComprasService(prisma as never, inventario, reservas);
   let tenantId: string,
     varianteId: string,
@@ -555,7 +560,7 @@ describe('Compras y recepciones: DB exclusiva de tests', () => {
     const otro = { ...auth, tenantId: randomUUID() };
     await expect(service.detalle(otro, o.id)).rejects.toThrow('no encontrada');
     await expect(service.crear(otro, payload())).rejects.toThrow(
-      'Proveedor no disponible',
+      'No se encontró la empresa.',
     );
     await expect(
       service.catalogo({ ...auth, permisos: new Set(['inventario.ver']) }),
@@ -749,7 +754,10 @@ describe('Compras y recepciones: DB exclusiva de tests', () => {
     expect(Number((await service.necesidades(auth)).data[0].porCubrir)).toBe(0);
   });
   describe('Previsión comercial antes de emitir (sólo lectura)', () => {
-    const prevision = new PrevisionMaterialesService(prisma as never);
+    const prevision = new PrevisionMaterialesService(
+      prisma as never,
+      new CapacidadesEmpresaService(prisma as never),
+    );
     const hoy = new Date('2026-09-18T15:00:00Z');
     const consultar = (cantidad = 20, consumible = false) =>
       prevision.consultar(
@@ -927,20 +935,17 @@ describe('Compras y recepciones: DB exclusiva de tests', () => {
         ).estado,
       ).toBe('por_confirmar');
     });
-    it('respeta consumibles excluidos y tenants sin control', async () => {
+    it('respeta consumibles excluidos y consulta faltantes aunque las reservas estén desactivadas', async () => {
       expect(await consultar(20, true)).toMatchObject({
         estado: 'disponible',
         materiales: [],
       });
+      const anterior = await consultar();
       await prisma.politicaReservasMaterial.update({
         where: { tenantId },
         data: { habilitada: false },
       });
-      expect(await consultar()).toMatchObject({
-        estado: 'sin_control',
-        materiales: [],
-        disponibleDesde: null,
-      });
+      expect(await consultar()).toEqual({ ...anterior, modoReserva: null });
     });
   });
 });

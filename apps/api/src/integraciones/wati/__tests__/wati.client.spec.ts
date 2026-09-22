@@ -176,6 +176,65 @@ describe('WatiClient', () => {
       });
       expect(cuerpoEnviado()).not.toHaveProperty('header');
     });
+
+    it.each([0, 200, 500, 502, 504])(
+      'una respuesta no confirmada (%s) no autoriza reintentar el mensaje',
+      async (status) => {
+        global.fetch =
+          status === 0
+            ? jest.fn().mockRejectedValue(new Error('timeout'))
+            : jest.fn().mockResolvedValue({
+                ok: status === 200,
+                status,
+                text: () => Promise.resolve(status === 200 ? '{}' : 'Error'),
+              });
+        expect(
+          await client.enviarPlantilla(cred, {
+            telefono: '5491150000000',
+            plantilla: 'prueba',
+            parametros: {},
+          }),
+        ).toMatchObject({ ok: false, incierto: true });
+      },
+    );
+
+    it.each([400, 401, 403, 404, 422, 429])(
+      'un rechazo HTTP %s es una respuesta negativa confirmada',
+      async (status) => {
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status,
+          text: () => Promise.resolve('Rejected'),
+        });
+        expect(
+          await client.enviarPlantilla(cred, {
+            telefono: '5491150000000',
+            plantilla: 'prueba',
+            parametros: {},
+          }),
+        ).toMatchObject({ ok: false, incierto: false });
+      },
+    );
+
+    it('conserva el rechazo explícito de Wati aunque el HTTP sea exitoso', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve('{"result":false,"info":"Plantilla rechazada"}'),
+      });
+      expect(
+        await client.enviarPlantilla(cred, {
+          telefono: '5491150000000',
+          plantilla: 'prueba',
+          parametros: {},
+        }),
+      ).toMatchObject({
+        ok: false,
+        incierto: false,
+        motivo: 'Plantilla rechazada',
+      });
+    });
   });
 });
 

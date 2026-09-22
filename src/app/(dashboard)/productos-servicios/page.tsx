@@ -1,3 +1,4 @@
+import { puedeConfigurar } from "@/lib/capacidades-server";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
 import { Suspense } from "react";
 
@@ -8,7 +9,6 @@ import {
   getProductos,
   listProductos,
 } from "@/lib/productos-servicios-api";
-import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ async function ProductosServiciosPageContent({
     }),
     getCatalogoComercial(),
     getProductos(),
-    tienePermiso("costos.gestionar"),
+    puedeConfigurar("productos", "costos.gestionar"),
   ]);
   return (
     <DesignSystemProvider theme="brand" appearance="light">

@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import Link from "next/link";
@@ -117,7 +118,10 @@ export function CobroFormulario({
 }) {
   const { moneda } = useConfigRegional();
   const fmt = (n: number) => formatearMoneda(n, moneda, { decimales: 0 });
-  const metodosActivos = metodos.filter((m) => m.activo);
+  const conValores = useCapacidad("valores");
+  const metodosActivos = metodos.filter(
+    (m) => m.activo && (conValores || m.tipo !== "cheque_echeq"),
+  );
   const cuentasCompatibles = cuentas.filter(
     (c) =>
       c.moneda === moneda.codigo &&

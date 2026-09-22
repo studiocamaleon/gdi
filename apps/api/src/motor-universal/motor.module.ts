@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MotorUniversalController } from './motor.controller';
@@ -18,6 +19,7 @@ import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
  */
 @Module({
   imports: [
+    CapacidadesEmpresaModule,
     PrismaModule,
     PrecioModule,
     RecorridosVectorialesModule,

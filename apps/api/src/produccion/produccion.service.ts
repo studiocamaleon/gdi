@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { admitePasoSinMaquina } from '../productos-servicios/pasos/ruteo-maquina';
 import { leerModoOperacionMaquina } from '../eta/motor/demanda-humana';
 import {
@@ -84,7 +85,12 @@ type EstacionConRelaciones = Prisma.EstacionGetPayload<{
 
 @Injectable()
 export class ProduccionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   // ── Estaciones ───────────────────────────────────────────────────────
   // La estación agrupa familias de pasos (ruteo del tablero), máquinas y
@@ -311,6 +317,7 @@ export class ProduccionService {
     auth: CurrentAuth,
     payload: ActualizarConfiguracionProduccionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
     const row = await this.prisma.configuracionProduccion.upsert({
       where: { tenantId: auth.tenantId },
       create: {
@@ -353,6 +360,7 @@ export class ProduccionService {
     auth: CurrentAuth,
     payload: CrearDiaNoLaborableDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
     // El DTO valida el formato; acá el calendario real (30/02 → inválida).
     const fecha = new Date(`${payload.fecha}T00:00:00.000Z`);
     if (
@@ -381,6 +389,7 @@ export class ProduccionService {
   }
 
   async eliminarDiaNoLaborable(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
     const existing = await this.prisma.diaNoLaborable.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: { id: true },
@@ -668,6 +677,14 @@ export class ProduccionService {
   }
 
   async createEstacion(auth: CurrentAuth, payload: UpsertEstacionDto) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
+    if (
+      payload.equipoProduccionId ||
+      payload.planificacionPorEmpleados ||
+      payload.empleadoIds?.length ||
+      payload.horariosEmpleados?.length
+    )
+      await this.capacidades.exigir(auth.tenantId, 'equipos_produccion');
     const listas = await this.validarReferencias(auth, payload);
     try {
       const creada = await this.prisma.$transaction(async (tx) => {
@@ -710,11 +727,37 @@ export class ProduccionService {
     id: string,
     payload: UpsertEstacionDto,
   ) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
     const existing = await this.prisma.estacion.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
     if (!existing) {
       throw new NotFoundException('Estación no encontrada.');
+    }
+    if (
+      !(await this.capacidades.incluida(auth.tenantId, 'equipos_produccion'))
+    ) {
+      const miembros = await this.prisma.estacionEmpleado.findMany({
+        where: { estacionId: id, tenantId: auth.tenantId },
+        select: { empleadoId: true },
+      });
+      const cambiaMiembros =
+        payload.empleadoIds !== undefined &&
+        JSON.stringify([...new Set(payload.empleadoIds)].sort()) !==
+          JSON.stringify(miembros.map((m) => m.empleadoId).sort());
+      if (
+        cambiaMiembros ||
+        payload.horariosEmpleados?.length ||
+        (payload.equipoProduccionId !== undefined &&
+          payload.equipoProduccionId !== existing.equipoProduccionId) ||
+        (payload.planificacionPorEmpleados !== undefined &&
+          payload.planificacionPorEmpleados !==
+            existing.planificacionPorEmpleados)
+      )
+        await this.capacidades.exigir(auth.tenantId, 'equipos_produccion');
+      // La API acepta listas omitidas. No deben borrar el equipo al editar
+      // únicamente el nombre de una estación con el complemento retirado.
+      payload = { ...payload, empleadoIds: miembros.map((m) => m.empleadoId) };
     }
     const listas = await this.validarReferencias(auth, payload, id);
 
@@ -764,6 +807,7 @@ export class ProduccionService {
   }
 
   async toggleEstacion(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
     const existing = await this.prisma.estacion.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
@@ -782,6 +826,7 @@ export class ProduccionService {
    * máquinas (SetNull). El trabajo vivo del tablero cae a "Sin estación".
    */
   async deleteEstacion(auth: CurrentAuth, id: string) {
+    await this.capacidades.exigir(auth.tenantId, 'estaciones');
     const existing = await this.prisma.estacion.findFirst({
       where: { id, tenantId: auth.tenantId },
       select: { id: true, nombre: true },

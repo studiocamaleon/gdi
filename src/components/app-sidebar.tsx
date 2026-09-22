@@ -1,5 +1,6 @@
 "use client";
 
+import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -347,6 +348,7 @@ function filtrarNav(nav: NavItem[], q: string): NavItem[] {
 }
 
 export function AppSidebar({ currentUser }: AppSidebarProps) {
+  const funciones = useFuncionesPlan();
   const pathname = usePathname();
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
   // resto: qué grupos hay, cuál está activo y qué encuentra el buscador.
@@ -355,8 +357,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
       navPara(
         permisosDe(currentUser),
         currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
+        funciones,
       ),
-    [currentUser],
+    [currentUser, funciones],
   );
   // El ancla del pie. Se muestra si le queda alguna sección: el Administrativo
   // entra por Datos fiscales y Métodos de pago sin tener `configuracion.ver`.

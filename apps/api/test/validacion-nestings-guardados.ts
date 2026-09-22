@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../src/suscripciones/capacidades-empresa.service';
 import { restaurarJson } from '../src/common/json-compartido';
 import { PrismaService } from '../src/prisma/prisma.service';
 /** Validación local: cotiza el exhibidor sin crear cotizaciones ni órdenes. */
@@ -23,8 +24,10 @@ function nestings(value: unknown, ruta = ''): unknown[] {
 
 async function main() {
   const db = new PrismaService();
-  const trabajos = new CotizacionJobsService();
-  const queue = new Queue(COLA_COTIZACIONES, { connection: conexionRedisApi() });
+  const trabajos = new CotizacionJobsService(new CapacidadesEmpresaService(db));
+  const queue = new Queue(COLA_COTIZACIONES, {
+    connection: conexionRedisApi(),
+  });
   try {
     const producto = await db.producto.findFirstOrThrow({ where: { nombre: 'Exhibidor · prueba de archivos y patrones' } });
     const preparado = await db.preparacionNestingProducto.findFirstOrThrow({ where: { tenantId: producto.tenantId, productoId: producto.id, cantidad: 50, estado: 'PREPARADO' } });

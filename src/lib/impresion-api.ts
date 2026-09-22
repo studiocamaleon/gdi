@@ -164,6 +164,18 @@ export type VistaDocumentos = {
 };
 export const getDocumentosOrden = (id: string) =>
   apiRequest<VistaDocumentos>(`/impresion/ordenes/${id}/documentos`);
+export type HistorialImpresion = {
+  ordenId: string;
+  numero: string;
+  estado: string;
+  total: number;
+  siguiente: number | null;
+  pendientesSinEnvio: number;
+  puedeConfirmar: boolean;
+  envios: Array<EnvioDocumento & { vigente: boolean }>;
+};
+export const getHistorialImpresion = (ordenId: string, desde = 0) =>
+  apiRequest<HistorialImpresion>(`/impresion/ordenes/${encodeURIComponent(ordenId)}/historial-documentos?desde=${desde}`);
 export const confirmarDocumentosImpresos = (
   ordenId: string,
   envioIds: string[],

@@ -1,4 +1,5 @@
 "use client";
+import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import Link from "next/link";
@@ -49,7 +50,11 @@ export function ReportesShell({ children }: { children: React.ReactNode }) {
     searchParams.get("hasta") ?? undefined,
   );
   const puede = usePuedeFn();
-  const visibles = React.useMemo(() => reportesVisibles(puede), [puede]);
+  const funciones = useFuncionesPlan();
+  const visibles = React.useMemo(
+    () => reportesVisibles(puede, funciones),
+    [puede, funciones],
+  );
   const esIndice = pathname === "/reportes";
   const activo = visibles.find((r) => pathname === r.href);
   const scope = useDesignScope();

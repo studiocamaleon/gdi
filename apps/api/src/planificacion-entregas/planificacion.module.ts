@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { PlanificacionCotizacionController } from './planificacion-cotizacion.controller';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -8,7 +9,7 @@ import { PlanificacionEntregasController } from './planificacion.controller';
 import { PlanificacionEntregasDispatcher } from './planificacion-dispatcher';
 
 @Module({
-  imports: [PrismaModule, EtaCalculoModule, OrdenesTrabajoModule],
+  imports: [CapacidadesEmpresaModule,PrismaModule, EtaCalculoModule, OrdenesTrabajoModule],
   controllers: [
     PlanificacionEntregasController,
     PlanificacionCotizacionController,

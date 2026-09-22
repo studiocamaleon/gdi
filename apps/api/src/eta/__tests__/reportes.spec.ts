@@ -1,5 +1,6 @@
 import { EtaService } from '../eta.service';
 import { parseRango, finExclusivo } from '../../reportes/periodo';
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 
 describe('EtaService en Reportes', () => {
   const rango = parseRango('2026-07-01', '2026-07-31');
@@ -9,7 +10,11 @@ describe('EtaService en Reportes', () => {
     etaPromesa: { findMany },
     $queryRaw: queryRaw,
   };
-  const service = new EtaService(prisma as never, {} as never);
+  const service = new EtaService(
+    prisma as never,
+    {} as never,
+    capacidadesDePrueba(),
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();

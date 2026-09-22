@@ -27,7 +27,7 @@ import { ProductosService } from '../../productos-servicios/productos.service';
 import { ProductoValidacionService } from '../../productos-servicios/producto-validacion.service';
 import { RecetasProductoService } from '../../productos-servicios/recetas-producto.service';
 import { OrdenesTrabajoService } from '../../ordenes-trabajo/ordenes-trabajo.service';
-import { emitirCotizacionF4, ejecutarOrdenF4 } from '../../../test/soporte-recorridos-f4';
+import { emitirCotizacionF4, ejecutarOrdenF4, serviciosRecorridoF4 } from '../../../test/soporte-recorridos-f4';
 
 const prisma = new PrismaClient();
 
@@ -4330,6 +4330,25 @@ describe('MotorUniversalService — smoke tests', () => {
         // El material de este fixture usa fórmula independiente: el motor
         // rechaza su ahorro y la OT debe conservar todas las operaciones.
         expect(items.some((item) => item.pasos.some((paso) => paso.nestingLoteRol === 'OPERATIVO'))).toBe(false);
+        // La receta exige arte incluso sin campaña. Completar su circuito real
+        // antes de ejecutar producción, sin omitir ni desactivar el control.
+        const { documentos } = serviciosRecorridoF4(tx);
+        const arte = await documentos.listarOrden(actor, orden.id);
+        expect(arte.maestros.length).toBeGreaterThan(0);
+        for (const maestro of arte.maestros) {
+          const archivo = await tx.archivo.create({ data: {
+            tenantId: actor.tenantId, ordenId: orden.id, scope: 'ORDEN', estado: 'LISTO',
+            key: `qa-arte-${maestro.id}`, nombreOriginal: 'arte-aprobado.pdf', mimeType: 'application/pdf', hash: 'a'.repeat(64),
+          } });
+          const revision = await documentos.crearRevision(actor, maestro.id, { archivoId: archivo.id });
+          const revisionId = revision.maestros.find(m => m.id === maestro.id)!.revisiones[0].id;
+          for (const tipo of new Set(maestro.gates.map(g => g.tipoAprobacion))) {
+            const solicitada = await documentos.solicitar(actor, revisionId, { tipo, permiteDecisionExterna: true });
+            const solicitud = solicitada.maestros.find(m => m.id === maestro.id)!.revisiones[0].solicitudes.find(s => s.tipo === tipo && s.estado === 'PENDIENTE')!;
+            await documentos.decidir({ ...actor, role: 'ADMINISTRADOR' }, solicitud.id, { decision: 'APROBAR' });
+          }
+          await documentos.liberar(actor, revisionId);
+        }
         const { orden: terminada } = await ejecutarOrdenF4(tx, ordenes, actor, orden.id);
         expect(Number(terminada.total)).toBe(guardada.result.cotizacion!.precio!.precioTotal);
         const tracking = await ordenes.trackingPublico(terminada.publicToken!);

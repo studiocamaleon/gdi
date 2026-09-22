@@ -37,7 +37,7 @@ async function hijo(folder) {
     process.send({ tipo: 'fin', id: data.correlationId, pid: process.pid, tiempo: Date.now() });
     return result;
   };
-  const engine = new GeometriaWorker({ resolver }, { leerCancelacion: async () => false }, tenant, capacity);
+  const engine = new GeometriaWorker({ resolver }, { leerCancelacion: async () => false }, tenant, capacity, { exigirTodas: async () => {} });
   if (process.env.GRAFONEST_BENCH_NO_WAKE === '1') engine.despertarSiguiente = async () => {};
   await capacity.estado();
   const workers = [COLA_GEOMETRIA, COLA_GEOMETRIA_INTENSIVA].map(name => {

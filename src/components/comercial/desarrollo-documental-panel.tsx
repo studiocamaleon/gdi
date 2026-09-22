@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { Card, Input, TextArea, Modal, Checkbox, Label } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
@@ -27,6 +28,7 @@ import type { Archivo } from "@/lib/archivos";
 import { formatBytes, urlDeArchivo } from "@/lib/archivos";
 import {
   crearArchivoMaestro,
+  desactivarGateDocumento,
   crearGateDocumento,
   crearRevisionArchivo,
   decidirAprobacionDocumento,
@@ -70,14 +72,16 @@ type Orden = { id: string; numero: string; estado: string };
 
 export function DesarrolloDocumentalPanel({
   campanaId,
+  ordenId,
   initial,
   archivos,
   ordenes,
-  canManage,
+  canManage: permisoGestion,
   onCambio,
   onEdicionChange,
 }: {
-  campanaId: string;
+  campanaId?: string;
+  ordenId?: string;
   initial: DesarrolloDocumental;
   archivos: Archivo[];
   ordenes: Orden[];
@@ -85,6 +89,8 @@ export function DesarrolloDocumentalPanel({
   onCambio: (next: DesarrolloDocumental) => void;
   onEdicionChange: (editing: boolean) => void;
 }) {
+  const conArte = useCapacidad("aprobacion_arte");
+  const canManage = permisoGestion && conArte;
   const data = initial;
   const [maestroOpen, setMaestroOpen] = React.useState(false);
   const [revisionDe, setRevisionDe] = React.useState<ArchivoMaestro | null>(
@@ -99,6 +105,7 @@ export function DesarrolloDocumentalPanel({
     decision: DecisionAprobacionDocumento;
   } | null>(null);
   const [gateOpen, setGateOpen] = React.useState(false);
+  const [gateDesactivar, setGateDesactivar] = React.useState<{ id: string; nombre: string } | null>(null);
   const [working, setWorking] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -109,7 +116,7 @@ export function DesarrolloDocumentalPanel({
         revisionDe ||
         solicitudDe ||
         decisionDe ||
-        gateOpen,
+        gateOpen || gateDesactivar,
       ),
     );
     return () => onEdicionChange(false);
@@ -121,6 +128,7 @@ export function DesarrolloDocumentalPanel({
     solicitudDe,
     decisionDe,
     gateOpen,
+    gateDesactivar,
   ]);
 
   async function ejecutar(
@@ -152,7 +160,7 @@ export function DesarrolloDocumentalPanel({
       "maestro",
       () =>
         crearArchivoMaestro({
-          proyectoCampanaId: campanaId,
+          ...(campanaId ? { proyectoCampanaId: campanaId } : { ordenId }),
           nombre: String(form.get("nombre")),
           proposito: String(form.get("proposito")) as PropositoArchivoMaestro,
           etapa: String(form.get("etapa")) as EtapaDesarrolloDocumento,
@@ -211,7 +219,7 @@ export function DesarrolloDocumentalPanel({
           decision: decisionDe.decision,
           comentario: String(form.get("comentario") || "") || undefined,
         }),
-      decisionDe.decision === "APROBAR"
+      decisionDe.decision === "CANCELAR" ? "Solicitud cancelada." : decisionDe.decision === "APROBAR"
         ? "Revisión aprobada."
         : "Observación registrada.",
     );
@@ -274,11 +282,10 @@ export function DesarrolloDocumentalPanel({
     <section className={styles.developmentPanel}>
       <div className={styles.developmentHeader}>
         <div>
-          <p className={styles.technicalEyebrow}>ARTE DE CAMPAÑA</p>
+          <p className={styles.technicalEyebrow}>{campanaId ? "ARTE DE CAMPAÑA" : "ARTE DE LA ORDEN"}</p>
           <h2>Versiones y aprobaciones</h2>
           <p>
-            Agrupá las versiones de cada arte, revisá aprobaciones y elegí cuál
-            liberar para producción.
+            {conArte ? "Agrupá las versiones de cada arte, revisá aprobaciones y elegí cuál liberar para producción." : "Historial conservado. Tu plan no permite nuevas revisiones, solicitudes ni liberaciones."}
           </p>
         </div>
         {canManage ? (
@@ -445,8 +452,9 @@ export function DesarrolloDocumentalPanel({
                                   </span>
                                 </div>
                                 {solicitud.estado === "PENDIENTE" &&
-                                canManage ? (
+                                permisoGestion ? (
                                   <div className={styles.inlineActions}>
+                                    <ActionButton variant="ghost" size="sm" onPress={() => setDecisionDe({ solicitudId: solicitud.id, revision: `V${revision.numero}`, decision: "CANCELAR" })}>Cancelar solicitud</ActionButton>
                                     {solicitud.permiteDecisionExterna ? (
                                       <>
                                         <ActionButton
@@ -455,6 +463,7 @@ export function DesarrolloDocumentalPanel({
                                           isPending={
                                             working === `link-${solicitud.id}`
                                           }
+                                          isDisabled={!canManage}
                                           onPress={() =>
                                             void compartir(solicitud.id)
                                           }
@@ -488,6 +497,7 @@ export function DesarrolloDocumentalPanel({
                                     <ActionButton
                                       variant="outline"
                                       size="sm"
+                                      isDisabled={!canManage}
                                       onPress={() =>
                                         setDecisionDe({
                                           solicitudId: solicitud.id,
@@ -501,6 +511,7 @@ export function DesarrolloDocumentalPanel({
                                     <ActionButton
                                       variant="outline"
                                       size="sm"
+                                      isDisabled={!canManage}
                                       onPress={() =>
                                         setDecisionDe({
                                           solicitudId: solicitud.id,
@@ -513,6 +524,7 @@ export function DesarrolloDocumentalPanel({
                                     </ActionButton>
                                     <ActionButton
                                       size="sm"
+                                      isDisabled={!canManage}
                                       onPress={() =>
                                         setDecisionDe({
                                           solicitudId: solicitud.id,
@@ -577,8 +589,8 @@ export function DesarrolloDocumentalPanel({
               <footer className={styles.masterFooter}>
                 <div className={styles.gateSummary}>
                   <LockKeyholeIcon />
-                  {maestro.gates.length
-                    ? maestro.gates
+                  {maestro.gates.some(g => g.activo)
+                    ? maestro.gates.filter(g => g.activo)
                         .map(
                           (g) =>
                             `${g.orden.numero}${g.paso ? ` / ${g.paso.nombre}` : ""}`,
@@ -586,14 +598,31 @@ export function DesarrolloDocumentalPanel({
                         .join(" · ")
                     : "Sin controles productivos configurados"}
                 </div>
-                {canManage ? (
-                  <ActionButton
-                    variant="ghost"
-                    size="sm"
-                    onPress={() => setRevisionDe(maestro)}
-                  >
-                    <FilePlus2Icon data-icon="inline-start" /> Agregar revisión
-                  </ActionButton>
+                {permisoGestion ? (
+                  <div className={styles.footerActions}>
+                    {maestro.gates.filter((g) => g.activo).map((g) => (
+                      <ActionButton
+                        key={g.id}
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => setGateDesactivar({
+                          id: g.id,
+                          nombre: `${g.nombre} · ${g.orden.numero}`,
+                        })}
+                      >
+                        Retirar control de {g.orden.numero}
+                      </ActionButton>
+                    ))}
+                    {canManage ? (
+                      <ActionButton
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => setRevisionDe(maestro)}
+                      >
+                        <FilePlus2Icon data-icon="inline-start" /> Agregar revisión
+                      </ActionButton>
+                    ) : null}
+                  </div>
                 ) : null}
               </footer>
             </Card>
@@ -685,13 +714,13 @@ export function DesarrolloDocumentalPanel({
           <div className={form.body}>
             <div className={form.grid}>
               <label className={form.span2}>
-                <span className={form.label}>Archivo de campaña</span>
+                <span className={form.label}>{campanaId ? "Archivo de campaña" : "Archivo de la OT"}</span>
                 <SelectField
                   className={form.select}
                   name="archivoId"
                   required
                   defaultValue=""
-                  aria-label="Archivo de campaña"
+                  aria-label={campanaId ? "Archivo de campaña" : "Archivo de la OT"}
                   options={[
                     {
                       value: "",
@@ -833,7 +862,7 @@ export function DesarrolloDocumentalPanel({
         onOpenChange={(open) => !open && setDecisionDe(null)}
         title={
           <>
-            {decisionDe?.decision === "APROBAR"
+            {decisionDe?.decision === "CANCELAR" ? "Cancelar solicitud" : decisionDe?.decision === "APROBAR"
               ? "Aprobar"
               : decisionDe?.decision === "RECHAZAR"
                 ? "Rechazar"
@@ -885,7 +914,7 @@ export function DesarrolloDocumentalPanel({
               ) : (
                 <MessageSquareWarningIcon data-icon="inline-start" />
               )}
-              {decisionDe?.decision === "APROBAR"
+              {decisionDe?.decision === "CANCELAR" ? "Cancelar solicitud" : decisionDe?.decision === "APROBAR"
                 ? "Aprobar revisión"
                 : decisionDe?.decision === "RECHAZAR"
                   ? "Confirmar rechazo"
@@ -893,6 +922,17 @@ export function DesarrolloDocumentalPanel({
             </ActionButton>
           </Modal.Footer>
         </form>
+      </CampanaDialog>
+
+      <CampanaDialog isOpen={Boolean(gateDesactivar)} onOpenChange={open => { if (!open) setGateDesactivar(null); }}
+        title="Retirar control productivo" description="La OT podrá continuar sin exigir esta aprobación. El cambio y su responsable quedarán registrados; el arte no se marcará como aprobado.">
+        <div className={form.body}>{gateDesactivar?.nombre}</div>
+        <Modal.Footer className={form.footer}>
+          <ActionButton variant="outline" onPress={() => setGateDesactivar(null)}>Volver</ActionButton>
+          <ActionButton variant="danger" isPending={working === "retirar-control"} onPress={async () => {
+            if (gateDesactivar && await ejecutar("retirar-control", () => desactivarGateDocumento(gateDesactivar.id), "Control retirado y registrado.")) setGateDesactivar(null);
+          }}>Retirar control</ActionButton>
+        </Modal.Footer>
       </CampanaDialog>
 
       <CampanaDialog

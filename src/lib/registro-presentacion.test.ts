@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { PlanRegistro } from "./registro-api";
 import {
   errorCampoRegistro,
+  cambioOfertaRegistro,
   nombrePlanRegistro,
   planInicialRegistro,
 } from "./registro-presentacion";
@@ -29,11 +30,11 @@ const planes = [
 ];
 
 describe("Registro: compatibilidad entre nombres comerciales y contrato existente", () => {
-  it("muestra los nuevos nombres sin cambiar los códigos enviados al API", () => {
+  it("muestra los nombres del catálogo sin cambiar los códigos enviados al API", () => {
     expect(planes.map(nombrePlanRegistro)).toEqual([
-      "Print",
-      "Sign",
-      "Industrial",
+      "taller",
+      "estudio",
+      "diamante",
     ]);
     expect(planInicialRegistro(planes, "print")).toBe("taller");
     expect(planInicialRegistro(planes, "sign")).toBe("estudio");
@@ -87,5 +88,21 @@ describe("Validación del formulario según el DTO de registro", () => {
     expect(
       errorCampoRegistro("email", `${"a".repeat(170)}@example.com`),
     ).toBeTruthy();
+  });
+});
+
+describe("Oferta elegida en la web", () => {
+  it("requiere revisar una oferta reemplazada, retirada o que ya no admite registro", () => {
+    const actual = [plan("esencial", { ofertaId: "oferta-2" })];
+    expect(cambioOfertaRegistro(actual, "oferta-1")).toBe(true);
+    expect(cambioOfertaRegistro(actual, "oferta-2")).toBe(false);
+    expect(cambioOfertaRegistro([], "oferta-2")).toBe(true);
+    expect(
+      cambioOfertaRegistro(
+        [plan("esencial", { ofertaId: "oferta-2", registroPublico: false })],
+        "oferta-2",
+      ),
+    ).toBe(true);
+    expect(cambioOfertaRegistro(actual, null)).toBe(false);
   });
 });

@@ -120,12 +120,14 @@ export function seccionesConfigVisibles(
   puede: (permiso: PermisoClave) => boolean,
   pais: string,
   impresionDirecta = false,
+  centroCopiado = true,
 ): SeccionConfig[] {
   return SECCIONES_CONFIG.filter(
     (s) =>
       puede(s.permiso) &&
       (!s.soloPais || s.soloPais === pais) &&
-      (!s.requiereImpresionDirecta || impresionDirecta),
+      (!s.requiereImpresionDirecta || impresionDirecta) &&
+      (s.key !== "centro-copiado" || centroCopiado),
   );
 }
 

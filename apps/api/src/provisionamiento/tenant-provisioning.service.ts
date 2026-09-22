@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma, RolSistema } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { ROLES_PREDEFINIDOS } from '../auth/permisos';
@@ -28,7 +28,12 @@ const MONEDA_POR_PAIS: Record<string, string> = {
 
 export type ProvisionarTenantArgs = {
   nombre: string;
-  plan: { id: string; trialDias: number | null };
+  plan: {
+    id: string;
+    trialDias: number | null;
+    versionId?: string;
+    ofertaId?: string | null;
+  };
   origen: 'plataforma' | 'registro_publico';
   paisCodigo?: string;
   zonaHoraria?: string;
@@ -54,6 +59,33 @@ export class TenantProvisioningService {
     tx: Prisma.TransactionClient,
     args: ProvisionarTenantArgs,
   ): Promise<TenantProvisionado> {
+    const plan = await tx.plan.findUniqueOrThrow({
+      where: { id: args.plan.id },
+    });
+    if (plan.comercialVersionado && !args.plan.ofertaId && !plan.ofertaActualId)
+      throw new BadRequestException(
+        'El alta necesita una oferta publicada del plan elegido.',
+      );
+    const oferta = plan.comercialVersionado
+      ? await tx.planOferta.findFirst({
+          where: {
+            id: (args.plan.ofertaId ?? plan.ofertaActualId)!,
+            planId: plan.id,
+            entorno:
+              process.env.PADDLE_ENV === 'production'
+                ? 'production'
+                : 'sandbox',
+          },
+        })
+      : null;
+    if (
+      plan.comercialVersionado &&
+      (!oferta ||
+        (args.plan.versionId && args.plan.versionId !== oferta.versionId))
+    )
+      throw new BadRequestException(
+        'El alta necesita una oferta publicada del plan elegido.',
+      );
     const pais = (args.paisCodigo ?? 'AR').trim().toUpperCase();
     const slug = args.slug?.trim().toLowerCase() || slugUnico(args.nombre);
     const tenant = await tx.tenant.create({
@@ -97,10 +129,15 @@ export class TenantProvisioningService {
       data: {
         tenantId: tenant.id,
         planId: args.plan.id,
+        planVersionId: oferta?.versionId ?? args.plan.versionId,
+        ofertaId: oferta?.id ?? args.plan.ofertaId,
+        revisionContrato: oferta || args.plan.versionId ? 1 : 0,
         estado: 'activa',
         proveedor: 'manual',
         trialHasta:
-          args.iniciaTrial === false ? null : finDePrueba(args.plan.trialDias),
+          args.iniciaTrial === false
+            ? null
+            : finDePrueba(oferta ? oferta.trialDias : args.plan.trialDias),
       },
     });
 

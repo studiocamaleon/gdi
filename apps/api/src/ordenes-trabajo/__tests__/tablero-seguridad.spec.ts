@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 
 import type { CurrentAuth } from '../../auth/auth.types';
@@ -20,6 +21,7 @@ const authCon = (permisos: string[]): CurrentAuth =>
 
 function servicioVacio() {
   return Object.assign(Object.create(OrdenesTrabajoService.prototype) as OrdenesTrabajoService, {
+    capacidades: capacidadesDePrueba(),
     eta: { sincronizarAsignaciones: jest.fn().mockResolvedValue(0) },
   });
 }

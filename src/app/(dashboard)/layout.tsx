@@ -14,6 +14,8 @@ import { SuscripcionGlobalBanner } from "@/components/suscripcion/suscripcion-gl
 import { NotificacionesProvider } from "@/components/notificaciones/notificaciones-provider";
 import { ImpresionDisponibleProvider } from "@/components/impresion/impresion-disponible-provider";
 import { CapacidadesProvider } from "@/components/navigation/capacidades-provider";
+import { consultarCapacidadesCached } from "@/lib/capacidades-server";
+import { AccesoPorPlan } from "@/components/navigation/acceso-por-plan";
 import { SidebarInset } from "@/components/ui/sidebar";
 import {
   DashboardFrame,
@@ -54,6 +56,7 @@ export default async function DashboardLayout({
   if (currentUser.debeCambiarPassword) {
     redirect("/cambiar-clave");
   }
+  const capacidades = await consultarCapacidadesCached();
 
   return (
     <PermisosProvider permisos={currentUser.tenantActual?.permisos}>
@@ -61,7 +64,10 @@ export default async function DashboardLayout({
         <NavigationFeedbackProvider>
           <NotificacionesProvider>
             <CapacidadesProvider
-              capacidades={currentUser.tenantActual?.suscripcion?.capacidades}
+              capacidades={{
+                ...currentUser.tenantActual?.suscripcion?.capacidades,
+                ...capacidades,
+              }}
             >
               <ImpresionDisponibleProvider
                 key={currentUser.tenantActual?.id}
@@ -79,7 +85,7 @@ export default async function DashboardLayout({
                       className="gp-main flex flex-1"
                       style={{ minHeight: 0, overflowY: "auto" }}
                     >
-                      {children}
+                      <AccesoPorPlan>{children}</AccesoPorPlan>
                     </main>
                   </SidebarInset>
                   <PasosEnCursoWidget />

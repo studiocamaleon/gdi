@@ -50,4 +50,12 @@ describe('SuscripcionAccesoGuard', () => {
     await expect(guard.canActivate(contexto('POST', true))).resolves.toBe(true);
     expect(findFirst).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { estado: 'activa', proveedor: 'manual', trialHasta: new Date('2020-01-01') },
+    { estado: 'activa', proveedor: 'paddle', estadoProveedor: 'past_due', graciaHasta: new Date('2020-01-01') },
+  ])('restringe escrituras tras vencer una fecha aunque el cron esté pendiente: %j', async suscripcion => {
+    findFirst.mockResolvedValue(suscripcion);
+    await expect(guard.canActivate(contexto('POST'))).rejects.toMatchObject({ status: 402 });
+  });
 });

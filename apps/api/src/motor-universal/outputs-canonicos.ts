@@ -136,7 +136,10 @@ function computeOutput(
 
   // El nesting cuenta placas para consumir material; el paso siguiente
   // recibe las piezas cortadas, incluidas todas las copias sobre cada placa.
-  if (key === 'piezas_cortadas' && (nestingDispatch?.piezasAcomodadas ?? 0) > 0) {
+  if (
+    (key === 'piezas_cortadas' || key === 'piezas_troqueladas') &&
+    (nestingDispatch?.piezasAcomodadas ?? 0) > 0
+  ) {
     return nestingDispatch!.piezasAcomodadas;
   }
 

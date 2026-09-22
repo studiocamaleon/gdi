@@ -6,6 +6,7 @@ import type { CurrentAuth } from '../../auth/auth.types';
 describe('Compras tercerizadas dentro del DAG (PostgreSQL)', () => {
   const db = new PrismaClient();
   const tenantId = randomUUID();
+  const otroTenantId = randomUUID();
   let auth: CurrentAuth;
   const { ordenes } = serviciosRecorridoF4(db);
   beforeAll(async () => {
@@ -14,6 +15,13 @@ describe('Compras tercerizadas dentro del DAG (PostgreSQL)', () => {
         id: tenantId,
         slug: `f4-compras-${tenantId}`,
         nombre: 'Aceptación F4 · compras',
+      },
+    });
+    await db.tenant.create({
+      data: {
+        id: otroTenantId,
+        slug: `f4-compras-${otroTenantId}`,
+        nombre: 'Otra empresa QA',
       },
     });
     const usuario = await db.user.findFirstOrThrow();
@@ -25,7 +33,9 @@ describe('Compras tercerizadas dentro del DAG (PostgreSQL)', () => {
     } as CurrentAuth;
   });
   afterAll(async () => {
-    await db.tenant.deleteMany({ where: { id: tenantId } });
+    await db.tenant.deleteMany({
+      where: { id: { in: [tenantId, otroTenantId] } },
+    });
     expect(await db.ordenTrabajo.count({ where: { tenantId } })).toBe(0);
     await db.$disconnect();
   });
@@ -150,7 +160,7 @@ describe('Compras tercerizadas dentro del DAG (PostgreSQL)', () => {
     ).toMatchObject({ progresoPct: 50 });
     await expect(
       ordenes.avanzarCompra(
-        { ...auth, tenantId: randomUUID() },
+        { ...auth, tenantId: otroTenantId },
         compra.id,
         'pendiente',
       ),

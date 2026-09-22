@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   BadRequestException,
   ConflictException,
@@ -49,7 +50,12 @@ export function calcularPuntosFidelizacion(args: {
 
 @Injectable()
 export class FidelizacionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   async configuracion(tenantId: string) {
     const config = await this.prisma.configuracionFidelizacion.findUnique({
@@ -71,42 +77,66 @@ export class FidelizacionService {
     auth: CurrentAuth,
     dto: ActualizarFidelizacionDto,
   ) {
-    const actual = await this.prisma.configuracionFidelizacion.findUnique({
-      where: { tenantId: auth.tenantId },
-    });
-    const cambiaConversion =
-      (dto.montoBase !== undefined &&
-        dto.montoBase !== Number(actual?.montoBase ?? 1000)) ||
-      (dto.puntosBase !== undefined &&
-        dto.puntosBase !== (actual?.puntosBase ?? 100));
-    if (cambiaConversion) {
-      const movimientos = await this.prisma.fidelizacionMovimiento.count({
+    await this.capacidades.exigir(auth.tenantId, 'fidelizacion');
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['fidelizacion'],
+        ['fidelizacion'],
+      );
+      const actual = await tx.configuracionFidelizacion.findUnique({
         where: { tenantId: auth.tenantId },
       });
-      if (movimientos > 0)
-        throw new ConflictException(
-          'La equivalencia está bloqueada porque ya existen movimientos de puntos.',
-        );
-    }
-    const ahora = new Date();
-    const config = await this.prisma.configuracionFidelizacion.upsert({
-      where: { tenantId: auth.tenantId },
-      create: {
-        tenantId: auth.tenantId,
-        acumulacionActiva: dto.acumulacionActiva ?? false,
-        porcentajeMargen: dto.porcentajeMargen ?? 1,
-        montoBase: dto.montoBase ?? 1000,
-        puntosBase: dto.puntosBase ?? 100,
-        activadaEl: dto.acumulacionActiva ? ahora : null,
-      },
-      update: {
-        ...dto,
-        ...(dto.acumulacionActiva && !actual?.activadaEl
-          ? { activadaEl: ahora }
-          : {}),
-      },
+      const cambiaConversion =
+        (dto.montoBase !== undefined &&
+          dto.montoBase !== Number(actual?.montoBase ?? 1000)) ||
+        (dto.puntosBase !== undefined &&
+          dto.puntosBase !== (actual?.puntosBase ?? 100));
+      if (cambiaConversion) {
+        const movimientos = await tx.fidelizacionMovimiento.count({
+          where: { tenantId: auth.tenantId },
+        });
+        if (movimientos > 0)
+          throw new ConflictException(
+            'La equivalencia está bloqueada porque ya existen movimientos de puntos.',
+          );
+      }
+      const ahora = new Date();
+      const config = await tx.configuracionFidelizacion.upsert({
+        where: { tenantId: auth.tenantId },
+        create: {
+          tenantId: auth.tenantId,
+          acumulacionActiva: dto.acumulacionActiva ?? false,
+          porcentajeMargen: dto.porcentajeMargen ?? 1,
+          montoBase: dto.montoBase ?? 1000,
+          puntosBase: dto.puntosBase ?? 100,
+          activadaEl: dto.acumulacionActiva ? ahora : null,
+        },
+        update: {
+          ...dto,
+          ...(dto.acumulacionActiva && !actual?.activadaEl
+            ? { activadaEl: ahora }
+            : {}),
+        },
+      });
+      return this.configResponse(config);
     });
-    return this.configResponse(config);
+  }
+
+  /** Validar al guardar, aunque la simulación se haya hecho con otro contrato. */
+  async exigirCompromisoTx(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    puntos: { puntosEstimados?: number | null; canjePuntos?: number | null },
+  ) {
+    if ((puntos.puntosEstimados ?? 0) > 0 || (puntos.canjePuntos ?? 0) > 0)
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        tenantId,
+        ['fidelizacion'],
+        ['fidelizacion'],
+      );
   }
 
   async cuenta(auth: CurrentAuth, clienteId: string) {
@@ -140,7 +170,14 @@ export class FidelizacionService {
   }
 
   async ajustar(auth: CurrentAuth, clienteId: string, dto: AjustarPuntosDto) {
+    await this.capacidades.exigir(auth.tenantId, 'fidelizacion');
     return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        ['fidelizacion'],
+        ['fidelizacion'],
+      );
       const cuenta = await this.bloquearCuenta(tx, auth.tenantId, clienteId);
       const delta = dto.tipo === 'CREDITO' ? dto.puntos : -dto.puntos;
       if (
@@ -186,7 +223,31 @@ export class FidelizacionService {
     canjePuntos = 0,
     puntosReservadosAplicables = 0,
   ) {
-    const config = await this.configTx(this.prisma, tenantId);
+    if (!(await this.capacidades.incluida(tenantId, 'fidelizacion'))) {
+      if (canjePuntos > 0)
+        await this.capacidades.exigir(tenantId, 'fidelizacion');
+      return {
+        acumulacionActiva: false,
+        saldoDisponible: 0,
+        saldoDisponibleMonto: 0,
+        puntosEstimados: 0,
+        puntosEstimadosMonto: 0,
+        maximoCanjeable: 0,
+        canjePuntos: 0,
+        canjeMonto: 0,
+        snapshot: { porcentajeMargen: 0, montoBase: 0, puntosBase: 1 },
+      };
+    }
+    if (
+      clienteId &&
+      !(await this.prisma.cliente.findFirst({
+        where: { id: clienteId, tenantId },
+        select: { id: true },
+      }))
+    )
+      throw new NotFoundException('No se encontró el cliente.');
+    // Simular es sólo lectura: no crea configuración ni cuenta de puntos.
+    const config = await this.configuracion(tenantId);
     const cuenta = clienteId
       ? await this.prisma.fidelizacionCuenta.findUnique({
           where: { clienteId },
@@ -207,7 +268,7 @@ export class FidelizacionService {
       porcentajeMargen: Number(config.porcentajeMargen),
       montoBase: Number(config.montoBase),
       puntosBase: config.puntosBase,
-      acumulacionActiva: config.acumulacionActiva,
+      acumulacionActiva: config.acumulacionActiva && !!clienteId,
       tieneCanje: canje > 0,
     });
     return {
@@ -368,6 +429,12 @@ export class FidelizacionService {
     },
   ) {
     if (args.puntos <= 0) return null;
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      args.tenantId,
+      ['fidelizacion'],
+      ['fidelizacion'],
+    );
     const cuenta = await this.bloquearCuenta(tx, args.tenantId, args.clienteId);
     if (cuenta.saldoPuntos - cuenta.reservadosPuntos < args.puntos)
       throw new ConflictException(
@@ -389,6 +456,70 @@ export class FidelizacionService {
     return reserva;
   }
 
+  /** Conserva el apartado del presupuesto al convertir sólo parte de sus ítems. */
+  async reservarParaOrden(
+    tx: Prisma.TransactionClient,
+    args: {
+      tenantId: string;
+      clienteId: string;
+      ordenId: string;
+      cotizacionId?: string | null;
+      puntos: number;
+    },
+  ) {
+    if (args.puntos <= 0) return null;
+    await this.exigirCompromisoTx(tx, args.tenantId, {
+      canjePuntos: args.puntos,
+    });
+    await this.bloquearCuenta(tx, args.tenantId, args.clienteId);
+    // La cuenta serializa transferencia, consumo y liberación. Releer después
+    // del bloqueo evita asignar una reserva que otro operador acaba de liberar.
+    const reserva = args.cotizacionId
+      ? await tx.fidelizacionReserva.findFirst({
+          where: {
+            tenantId: args.tenantId,
+            clienteId: args.clienteId,
+            cotizacionId: args.cotizacionId,
+            ordenId: null,
+            estado: 'RESERVADA',
+          },
+        })
+      : null;
+    if (!reserva)
+      return this.reservar(tx, {
+        tenantId: args.tenantId,
+        clienteId: args.clienteId,
+        ordenId: args.ordenId,
+        puntos: args.puntos,
+      });
+    if (reserva.puntos < args.puntos)
+      throw new ConflictException(
+        'La reserva de puntos cambió. Revisá el canje antes de emitir la orden.',
+      );
+    if (reserva.puntos === args.puntos)
+      return tx.fidelizacionReserva.update({
+        where: { id: reserva.id },
+        data: { ordenId: args.ordenId },
+      });
+    const monto = r2((Number(reserva.monto) * args.puntos) / reserva.puntos);
+    await tx.fidelizacionReserva.update({
+      where: { id: reserva.id },
+      data: { puntos: { decrement: args.puntos }, monto: { decrement: monto } },
+    });
+    return tx.fidelizacionReserva.create({
+      data: {
+        tenantId: args.tenantId,
+        cuentaId: reserva.cuentaId,
+        clienteId: args.clienteId,
+        cotizacionId: reserva.cotizacionId,
+        ordenId: args.ordenId,
+        puntos: args.puntos,
+        monto,
+        expiraEl: reserva.expiraEl,
+      },
+    });
+  }
+
   async liberarReservas(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -396,20 +527,39 @@ export class FidelizacionService {
     motivo: string,
   ) {
     const reservas = await tx.fidelizacionReserva.findMany({
-      where: { tenantId, estado: 'RESERVADA', ...where },
+      where: {
+        tenantId,
+        estado: 'RESERVADA',
+        ...where,
+        ...(where.cotizacionId && !where.ordenId ? { ordenId: null } : {}),
+      },
     });
     for (const r of reservas) {
-      await tx.fidelizacionReserva.update({
-        where: { id: r.id },
+      // Mismo orden de bloqueo que el canje: cuenta y luego reserva.
+      await this.bloquearCuenta(tx, tenantId, r.clienteId);
+      // Puede haberse dividido o transferido a una OT mientras esperábamos.
+      const vigente = await tx.fidelizacionReserva.findFirst({
+        where: {
+          id: r.id,
+          tenantId,
+          estado: 'RESERVADA',
+          ...where,
+          ...(where.cotizacionId && !where.ordenId ? { ordenId: null } : {}),
+        },
+      });
+      if (!vigente) continue;
+      const liberada = await tx.fidelizacionReserva.updateMany({
+        where: { id: r.id, tenantId, estado: 'RESERVADA' },
         data: {
           estado: 'LIBERADA',
           liberadaEl: new Date(),
           liberadaMotivo: motivo,
         },
       });
+      if (liberada.count !== 1) continue;
       await tx.fidelizacionCuenta.update({
         where: { id: r.cuentaId },
-        data: { reservadosPuntos: { decrement: r.puntos } },
+        data: { reservadosPuntos: { decrement: vigente.puntos } },
       });
     }
   }
@@ -420,6 +570,12 @@ export class FidelizacionService {
     ordenId: string,
     reservaId: string,
   ) {
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      auth.tenantId,
+      ['fidelizacion'],
+      ['fidelizacion'],
+    );
     const reserva = await tx.fidelizacionReserva.findFirst({
       where: { id: reservaId, tenantId: auth.tenantId, estado: 'RESERVADA' },
     });
@@ -432,6 +588,26 @@ export class FidelizacionService {
       auth.tenantId,
       reserva.clienteId,
     );
+    const orden = await tx.ordenTrabajo.findFirst({
+      where: {
+        id: ordenId,
+        tenantId: auth.tenantId,
+        clienteId: reserva.clienteId,
+      },
+      select: { id: true },
+    });
+    if (!orden || (reserva.ordenId && reserva.ordenId !== ordenId))
+      throw new ConflictException(
+        'La reserva de puntos no corresponde a esta orden.',
+      );
+    const consumida = await tx.fidelizacionReserva.updateMany({
+      where: { id: reserva.id, tenantId: auth.tenantId, estado: 'RESERVADA' },
+      data: { estado: 'CONSUMIDA', consumidaEl: new Date(), ordenId },
+    });
+    if (consumida.count !== 1)
+      throw new ConflictException(
+        'La reserva de puntos ya no está disponible.',
+      );
     const config = await this.configTx(tx, auth.tenantId);
     const mov = await tx.fidelizacionMovimiento.create({
       data: {
@@ -456,10 +632,6 @@ export class FidelizacionService {
         reservadosPuntos: { decrement: reserva.puntos },
       },
     });
-    await tx.fidelizacionReserva.update({
-      where: { id: reserva.id },
-      data: { estado: 'CONSUMIDA', consumidaEl: new Date(), ordenId },
-    });
     await this.bloquearConversion(tx, config.id);
     return mov;
   }
@@ -469,6 +641,21 @@ export class FidelizacionService {
     tenantId: string,
     ordenId: string,
   ) {
+    const incluida = await this.capacidades.incluida(
+      tenantId,
+      'fidelizacion',
+      tx,
+    );
+    // Sin programa, sólo reconciliar si existe una ganancia anterior que pueda
+    // necesitar reversión o restauración. Una OT sin ganancia previa no inicia puntos.
+    if (
+      !incluida &&
+      !(await tx.fidelizacionMovimiento.findFirst({
+        where: { tenantId, ordenId, tipo: 'GANANCIA' },
+        select: { id: true },
+      }))
+    )
+      return;
     const orden = await tx.ordenTrabajo.findFirst({
       where: { id: ordenId, tenantId },
       select: {
@@ -496,13 +683,23 @@ export class FidelizacionService {
       Number(acreditado._sum.monto ?? 0) + 0.01 >= Number(orden.total ?? 0) &&
       orden.fidelizacionCanjePuntos === 0 &&
       (orden.fidelizacionPuntosEstimados ?? 0) > 0;
-    const ganancia = await tx.fidelizacionMovimiento.findFirst({
+    let ganancia = await tx.fidelizacionMovimiento.findFirst({
       where: { tenantId, ordenId, tipo: 'GANANCIA' },
       include: { reversiones: true },
       orderBy: { createdAt: 'desc' },
     });
-    if (elegible && (!ganancia || ganancia.reversiones.length > 0)) {
-      const cuenta = await this.bloquearCuenta(tx, tenantId, orden.clienteId);
+    if (!elegible && !ganancia) return;
+    const cuenta = await this.bloquearCuenta(tx, tenantId, orden.clienteId);
+    ganancia = await tx.fidelizacionMovimiento.findFirst({
+      where: { tenantId, ordenId, tipo: 'GANANCIA' },
+      include: { reversiones: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (
+      (incluida || ganancia) &&
+      elegible &&
+      (!ganancia || ganancia.reversiones.length > 0)
+    ) {
       const config = await this.configTx(tx, tenantId);
       const puntos = orden.fidelizacionPuntosEstimados!;
       const snapshot =
@@ -525,7 +722,7 @@ export class FidelizacionService {
           puntosBaseSnapshot: puntosBase,
           ordenId,
           actorNombre: 'Sistema',
-          idempotencyKey: `ganancia:${ordenId}:${ganancia ? ganancia.reversiones.length + 1 : 1}`,
+          idempotencyKey: `ganancia:${ordenId}:${ganancia?.id ?? 'inicial'}`,
         },
       });
       await tx.fidelizacionCuenta.update({
@@ -563,8 +760,14 @@ export class FidelizacionService {
     ordenId: string,
     motivo: string,
   ) {
-    const canje = await tx.fidelizacionMovimiento.findFirst({
+    let canje = await tx.fidelizacionMovimiento.findFirst({
       where: { tenantId, ordenId, tipo: 'CANJE' },
+      include: { reversiones: true },
+    });
+    if (!canje || canje.reversiones.length > 0) return;
+    await this.bloquearCuenta(tx, tenantId, canje.clienteId);
+    canje = await tx.fidelizacionMovimiento.findFirst({
+      where: { id: canje.id, tenantId },
       include: { reversiones: true },
     });
     if (!canje || canje.reversiones.length > 0) return;
@@ -601,10 +804,9 @@ export class FidelizacionService {
       select: { id: true },
     });
     if (!cliente) throw new NotFoundException('No se encontró el cliente.');
-    await tx.fidelizacionCuenta.upsert({
-      where: { clienteId },
-      create: { tenantId, clienteId },
-      update: {},
+    await tx.fidelizacionCuenta.createMany({
+      data: [{ tenantId, clienteId }],
+      skipDuplicates: true,
     });
     const rows = await tx.$queryRaw<
       Array<{ id: string; saldoPuntos: number; reservadosPuntos: number }>
@@ -620,12 +822,19 @@ export class FidelizacionService {
     db: Prisma.TransactionClient | PrismaService,
     tenantId: string,
   ) {
-    const existente = await db.configuracionFidelizacion.findUnique({ where: { tenantId } });
+    const existente = await db.configuracionFidelizacion.findUnique({
+      where: { tenantId },
+    });
     if (existente) return existente;
     // Dos primeras órdenes pueden pedir la configuración a la vez. El
     // upsert con update vacío hacía SELECT + INSERT y perdía esa carrera.
-    await db.configuracionFidelizacion.createMany({ data: [{ tenantId }], skipDuplicates: true });
-    return db.configuracionFidelizacion.findUniqueOrThrow({ where: { tenantId } });
+    await db.configuracionFidelizacion.createMany({
+      data: [{ tenantId }],
+      skipDuplicates: true,
+    });
+    return db.configuracionFidelizacion.findUniqueOrThrow({
+      where: { tenantId },
+    });
   }
   private bloquearConversion(tx: Prisma.TransactionClient, id: string) {
     return tx.configuracionFidelizacion.update({

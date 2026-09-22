@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import {
   EstadoConfiguracionMaquina,
   EstadoMaquina,
@@ -41,7 +42,7 @@ function buildService(maquina: Record<string, unknown>) {
     (callback: (tx: typeof prisma) => unknown) =>
       Promise.resolve(callback(prisma)),
   );
-  const service = new MaquinariaService(prisma as never);
+  const service = new MaquinariaService(prisma as never, capacidadesDePrueba());
   // Estos tests verifican la transición; el mapper se cubre por separado.
   (
     service as unknown as { toMaquinaResponse: (value: unknown) => unknown }

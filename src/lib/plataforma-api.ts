@@ -1,5 +1,128 @@
 import { apiRequest } from "@/lib/api";
 
+export type AccesoEmpresa = {
+  modo: "operativo" | "solo_lectura" | "bloqueado";
+  codigo: string;
+  descripcion: string;
+};
+export type EmpresaFila = {
+  id: string;
+  nombre: string;
+  slug: string;
+  activo: boolean;
+  creadoEl: string;
+  usuariosHabilitados: number;
+  acceso: AccesoEmpresa;
+  plan: string | null;
+  proveedor: string | null;
+  estadoSuscripcion: string | null;
+  estadoProveedor: string | null;
+};
+export type EmpresaPlataforma = {
+  id: string;
+  nombre: string;
+  slug: string;
+  activo: boolean;
+  creadoEl: string;
+  origenAlta: string;
+  bloqueo: { motivo: string | null; desde: string | null };
+  acceso: AccesoEmpresa;
+  usuariosHabilitados: number;
+  invitacionesPendientes: number;
+  storageBytes: number;
+  storageCuotaBytes: number | null;
+  puedeAsignarPlanManual: boolean;
+  suscripcion: null | {
+    id: string;
+    planId: string;
+    planNombre: string;
+    versionId?: string | null;
+    versionNumero?: number | null;
+    planComercialNombre?: string;
+    planCodigo: string;
+    proveedor: string;
+    estado: string;
+    estadoProveedor: string | null;
+    referenciaExterna: string | null;
+    desde: string;
+    hasta: string | null;
+    trialHasta: string | null;
+    moraDesde: string | null;
+    graciaHasta: string | null;
+    proximoCobro: string | null;
+    cambioProgramado: string | null;
+    cambioProgramadoEl: string | null;
+    ultimaSyncProveedorEl: string | null;
+    ultimoEventoProveedorEl: string | null;
+  };
+  funciones: Array<{
+    clave: string;
+    nombre: string;
+    incluida: boolean;
+    habilitada: boolean;
+    motivo: string;
+  }>;
+  limites: {
+    usuariosMax: number | null;
+    ordenesMesMax: number | null;
+    storageGb: number | null;
+  };
+};
+export type PaginaEmpresas = {
+  empresas: EmpresaFila[];
+  total: number;
+  pagina: number;
+  limite: number;
+};
+export type HistorialEmpresa = {
+  total: number;
+  pagina: number;
+  limite: number;
+  eventos: Array<{
+    id: string;
+    tipo: string;
+    descripcion: string;
+    creadoEl: string;
+    staffNombre: string | null;
+    staffEmail: string;
+  }>;
+};
+export type UsuariosEmpresa = {
+  total: number;
+  pagina: number;
+  limite: number;
+  usuarios: Array<{
+    id: string;
+    nombre: string | null;
+    email: string;
+    rol: string;
+    habilitado: boolean;
+  }>;
+};
+export type StaffPlataforma = NonNullable<ConsolaPlataforma["staff"]> & {
+  requiereSeguridad: boolean;
+};
+export const getContextoPlataforma = () =>
+  apiRequest<StaffPlataforma>("/plataforma/contexto", { cache: "no-store" });
+export const getEmpresasPlataforma = (query: URLSearchParams) =>
+  apiRequest<PaginaEmpresas>(`/plataforma/empresas?${query}`, {
+    cache: "no-store",
+  });
+export const getEmpresaPlataforma = (id: string) =>
+  apiRequest<EmpresaPlataforma>(`/plataforma/empresas/${id}`, {
+    cache: "no-store",
+  });
+export const getHistorialEmpresa = (id: string, pagina: number) =>
+  apiRequest<HistorialEmpresa>(
+    `/plataforma/empresas/${id}/historial?pagina=${pagina}`,
+    { cache: "no-store" },
+  );
+export const getUsuariosEmpresa = (id: string, pagina: number) =>
+  apiRequest<UsuariosEmpresa>(
+    `/plataforma/empresas/${id}/usuarios?pagina=${pagina}`,
+    { cache: "no-store" },
+  );
+
 /**
  * Consola del control plane — espejo de `GET /plataforma/consola`
  * (apps/api/src/plataforma/plataforma.service.ts).
@@ -41,6 +164,9 @@ export type TenantConsola = {
 };
 
 export type PlanCatalogo = {
+  comercialVersionado?: boolean;
+  revisionOferta?: number;
+  ofertaActualId?: string | null;
   id: string;
   codigo: string;
   nombre: string;
@@ -206,6 +332,20 @@ export async function getPlanesPlataforma(): Promise<PlanCatalogo[]> {
   return apiRequest("/plataforma/planes", { cache: "no-store" });
 }
 
+export function retirarPlanAnterior(
+  planId: string,
+  revision: number,
+  motivo: string,
+) {
+  return apiRequest<{ ok: true }>(
+    "/plataforma/planes-ofertas/retirar-anterior",
+    {
+      method: "POST",
+      body: JSON.stringify({ planId, revision, motivo }),
+    },
+  );
+}
+
 /** Edita la bajada comercial del plan (la que ve el tenant). */
 export async function describirPlan(
   planId: string,
@@ -237,17 +377,18 @@ export async function vincularPlanPaddle(
 export async function cambiarPlanTenant(
   tenantId: string,
   planId: string,
-): Promise<ConsolaPlataforma> {
+  motivo: string,
+): Promise<EmpresaPlataforma> {
   return apiRequest(`/plataforma/tenants/${tenantId}/plan`, {
     method: "PUT",
-    body: JSON.stringify({ planId }),
+    body: JSON.stringify({ planId, motivo }),
   });
 }
 
 export async function suspenderTenant(
   tenantId: string,
   motivo: string,
-): Promise<ConsolaPlataforma> {
+): Promise<EmpresaPlataforma> {
   return apiRequest(`/plataforma/tenants/${tenantId}/suspender`, {
     method: "POST",
     body: JSON.stringify({ motivo }),
@@ -256,9 +397,11 @@ export async function suspenderTenant(
 
 export async function reactivarTenant(
   tenantId: string,
-): Promise<ConsolaPlataforma> {
+  motivo: string,
+): Promise<EmpresaPlataforma> {
   return apiRequest(`/plataforma/tenants/${tenantId}/reactivar`, {
     method: "POST",
+    body: JSON.stringify({ motivo }),
   });
 }
 
@@ -274,9 +417,6 @@ export async function crearTenantPlataforma(dto: {
   });
 }
 
-
-
-
 export type SesionImpersonacion = {
   id: string;
   tenantId: string;
@@ -289,7 +429,9 @@ export type SesionImpersonacion = {
   expiraEnSeg: number;
 };
 
-export async function getSesionesImpersonacion(): Promise<SesionImpersonacion[]> {
+export async function getSesionesImpersonacion(): Promise<
+  SesionImpersonacion[]
+> {
   return apiRequest("/plataforma/impersonacion", { cache: "no-store" });
 }
 

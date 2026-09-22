@@ -1,3 +1,4 @@
+import { consultarCapacidadesCached } from "@/lib/capacidades-server";
 import { redirect } from "next/navigation";
 
 import { seccionesConfigVisibles } from "@/components/configuracion/configuracion-secciones";
@@ -16,11 +17,12 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { currentUser } = await getCurrentUserCached();
   const permisos = permisosDe(currentUser);
+  const { funciones } = await consultarCapacidadesCached();
   const visibles = seccionesConfigVisibles(
     (p) => permisos === null || permisos.has(p),
     currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
-    currentUser.tenantActual?.suscripcion?.capacidades?.impresionDirecta ===
-      true,
+    funciones.impresion_directa === true,
+    funciones.centro_copiado === true,
   );
   // El layout ya frenó a quien no tiene ninguna de las dos llaves; esto cubre
   // el caso raro de un rol con la llave del módulo y ninguna sección.

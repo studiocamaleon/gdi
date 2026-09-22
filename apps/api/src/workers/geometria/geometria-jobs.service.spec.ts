@@ -70,7 +70,7 @@ describe('planificador de trabajos de geometría', () => {
     const service = new GeometriaJobsService(
       {} as ControlTrabajosGeometriaService,
       capacidad(),
-      { obtener } as unknown as NestingsGuardadosService,
+      { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, { obtener } as unknown as NestingsGuardadosService,
     );
     const vista = await service.crear({
       tenantId: data.tenantId,
@@ -97,7 +97,7 @@ describe('planificador de trabajos de geometría', () => {
         activarScope,
       } as unknown as ControlTrabajosGeometriaService,
       capacidad(),
-      { obtener } as unknown as NestingsGuardadosService,
+      { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, { obtener } as unknown as NestingsGuardadosService,
     );
     const job = {
       id: 'nest-test',
@@ -142,7 +142,7 @@ it('permite reintentar desde el sheet un trabajo que había fallado, compartiend
       leerCancelacion: jest.fn().mockResolvedValue(null),
     } as unknown as ControlTrabajosGeometriaService,
     capacidad(),
-    {
+    { exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never, {
       obtener: jest.fn().mockResolvedValue(null),
     } as unknown as NestingsGuardadosService,
   );

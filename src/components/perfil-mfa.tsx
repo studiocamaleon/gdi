@@ -4,18 +4,23 @@ import { Check, Copy, Download, ShieldCheck, ShieldOff } from "lucide-react";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
   estadoMfa,
+  olvidarDispositivosMfa,
   iniciarMfa,
+  reemplazarMfa,
   confirmarMfa,
   gestionarMfa,
   cancelarMfa,
+  confirmarRecuperacionMfa,
   type EstadoMfa,
   type AltaMfa,
 } from "@/lib/perfil-api";
 import s from "./perfil-usuario-modal.module.css";
+import { clearSessionToken } from "@/lib/session";
 
 type Paso =
   | "estado"
   | "activar"
+  | "reemplazar"
   | "verificar"
   | "codigos"
   | "desactivar"
@@ -31,6 +36,7 @@ export function PerfilMfa({
   const [password, setPassword] = useState("");
   const [codigo, setCodigo] = useState("");
   const [codigos, setCodigos] = useState<string[]>([]);
+  const [versionRecuperacion, setVersionRecuperacion] = useState(0);
   const [guardados, setGuardados] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +69,14 @@ export function PerfilMfa({
     setBusy(true);
     setError(null);
     try {
-      if (paso === "activar") {
-        setAlta(await iniciarMfa(password));
+      if (paso === "activar" || paso === "reemplazar") {
+        setAlta(
+          paso === "reemplazar"
+            ? await reemplazarMfa(password, codigo.trim())
+            : await iniciarMfa(password),
+        );
         setPassword("");
+        setCodigo("");
         setPaso("verificar");
       } else {
         const r =
@@ -81,6 +92,7 @@ export function PerfilMfa({
         setAlta(null);
         if (r.codigosRecuperacion.length) {
           setCodigos(r.codigosRecuperacion);
+          setVersionRecuperacion(r.versionRecuperacion);
           setGuardados(false);
           setPaso("codigos");
         } else {
@@ -146,6 +158,14 @@ export function PerfilMfa({
               ? `Tu cuenta está protegida. Tenés ${estado.codigosRestantes} códigos de recuperación disponibles.`
               : "Usá Google Authenticator, Microsoft Authenticator, 1Password u otra app compatible."}
           </p>
+          {estado.requiereMfa && (
+            <p className={s.note}>
+              MFA es obligatoria para acceder a Plataforma.{" "}
+              {estado.activo && !estado.recuperacionConfirmada
+                ? "Renová tus códigos y confirmá que los guardaste para completar la protección."
+                : ""}
+            </p>
+          )}
           {estado.activo ? (
             <div className={s.actions}>
               <ActionButton
@@ -154,11 +174,19 @@ export function PerfilMfa({
               >
                 Renovar códigos
               </ActionButton>
+              {!estado.requiereMfa && (
+                <ActionButton
+                  variant="ghost"
+                  onPress={() => elegir("desactivar")}
+                >
+                  Desactivar MFA
+                </ActionButton>
+              )}
               <ActionButton
-                variant="ghost"
-                onPress={() => elegir("desactivar")}
+                variant="outline"
+                onPress={() => elegir("reemplazar")}
               >
-                Desactivar MFA
+                Reemplazar autenticador
               </ActionButton>
             </div>
           ) : (
@@ -171,6 +199,52 @@ export function PerfilMfa({
               Activar MFA
             </ActionButton>
           )}
+          {estado.activo && estado.dispositivosRecordados > 0 && (
+            <div className={s.mfaForm}>
+              <p className={s.note}>
+                {estado.dispositivosRecordados}{" "}
+                {estado.dispositivosRecordados === 1
+                  ? "acceso recordado"
+                  : "accesos recordados"}
+                . Podés olvidarlos para volver a pedir el código en todos tus
+                dispositivos. También se cerrarán las sesiones que ingresaron
+                usando ese recuerdo.
+              </p>
+              <ActionButton
+                variant="outline"
+                isDisabled={busy}
+                onPress={async () => {
+                  if (enviando.current) return;
+                  enviando.current = true;
+                  setBusy(true);
+                  setError(null);
+                  try {
+                    const resultado = await olvidarDispositivosMfa();
+                    if (resultado.requiereLogin) {
+                      await clearSessionToken();
+                      window.location.assign(
+                        window.location.pathname.startsWith("/plataforma") ||
+                          window.location.pathname.startsWith("/backoffice")
+                          ? "/backoffice"
+                          : "/login",
+                      );
+                    } else await cargar();
+                  } catch (e) {
+                    setError(
+                      e instanceof Error
+                        ? e.message
+                        : "No se pudieron olvidar los dispositivos.",
+                    );
+                  } finally {
+                    enviando.current = false;
+                    setBusy(false);
+                  }
+                }}
+              >
+                Olvidar dispositivos recordados
+              </ActionButton>
+            </div>
+          )}
           {!estado.disponible && (
             <p className={s.note}>
               La activación no está disponible en este entorno.
@@ -178,10 +252,21 @@ export function PerfilMfa({
           )}
         </>
       )}
-      {["activar", "verificar", "desactivar", "recuperacion"].includes(
-        paso,
-      ) && (
+      {[
+        "activar",
+        "reemplazar",
+        "verificar",
+        "desactivar",
+        "recuperacion",
+      ].includes(paso) && (
         <form className={s.mfaForm} onSubmit={enviar}>
+          {paso === "reemplazar" && (
+            <p className={s.note}>
+              Confirmá tu contraseña y un código nuevo de la app o de
+              recuperación. El autenticador actual sigue funcionando hasta que
+              verifiques el nuevo.
+            </p>
+          )}
           {paso === "activar" && (
             <p className={s.note}>
               Confirmá tu contraseña para vincular una app autenticadora.
@@ -281,7 +366,7 @@ export function PerfilMfa({
             >
               {busy
                 ? "Verificando…"
-                : paso === "activar"
+                : paso === "activar" || paso === "reemplazar"
                   ? "Continuar"
                   : paso === "verificar"
                     ? "Confirmar y activar"
@@ -338,16 +423,34 @@ export function PerfilMfa({
             <input
               type="checkbox"
               checked={guardados}
+              disabled={busy}
               onChange={(e) => setGuardados(e.target.checked)}
             />
             Ya guardé mis códigos
           </label>
           <ActionButton
             variant="primary"
-            isDisabled={!guardados}
-            onPress={() => {
-              setCodigos([]);
-              setPaso("estado");
+            isDisabled={!guardados || busy}
+            onPress={async () => {
+              if (enviando.current) return;
+              enviando.current = true;
+              setBusy(true);
+              setError(null);
+              try {
+                await confirmarRecuperacionMfa(versionRecuperacion);
+                setCodigos([]);
+                setPaso("estado");
+                await cargar();
+              } catch (err) {
+                setError(
+                  err instanceof Error
+                    ? err.message
+                    : "No se pudo confirmar el guardado.",
+                );
+              } finally {
+                enviando.current = false;
+                setBusy(false);
+              }
             }}
           >
             <Check size={15} />

@@ -1,6 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
 import { ProductoRutasService } from '../producto-rutas.service';
 
+const capacidades = { exigirTodas: jest.fn().mockResolvedValue(undefined) };
+
 function alternativaFixture(requiereRutaPasoIds: string[] = []) {
   return {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -51,7 +53,11 @@ describe('ProductoRutasService.reordenarPasosRutaAlternativa', () => {
         Promise.all(operaciones),
       ),
     };
-    const service = new ProductoRutasService(prisma as never, null as never);
+    const service = new ProductoRutasService(
+      prisma as never,
+      null as never,
+      capacidades as never,
+    );
     const pasoIds = [
       '11111111-1111-4111-8111-111111111111',
       '33333333-3333-4333-8333-333333333333',
@@ -82,7 +88,11 @@ describe('ProductoRutasService.reordenarPasosRutaAlternativa', () => {
         findFirst: jest.fn().mockResolvedValue(alternativaFixture([requerido])),
       },
     };
-    const service = new ProductoRutasService(prisma as never, null as never);
+    const service = new ProductoRutasService(
+      prisma as never,
+      null as never,
+      capacidades as never,
+    );
 
     await expect(
       service.reordenarPasosRutaAlternativa('tenant', 'ruta', {

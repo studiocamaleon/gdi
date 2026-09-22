@@ -88,7 +88,7 @@ describe("Entrega prevista durante la cotización", () => {
     ).toBe("Sin conexión");
   });
   it("stock suficiente o control desactivado conserva la estimación de producción", () => {
-    for (const estado of ["disponible", "sin_control"] as const)
+    for (const estado of ["disponible", "sin_control", "no_incluido"] as const)
       expect(condicionarPorMateriales(nuevo, data({ estado }))).toBe(nuevo);
   });
   it("envía sólo cantidades físicas agregadas, sin la traza ni los precios", () => {

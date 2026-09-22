@@ -1,3 +1,9 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import {
+  capacidadesJobCopiado,
+  capacidadesProductoCopiado,
+} from '../suscripciones/capacidades-copiado';
+import { capacidadesJobGeometria } from '../suscripciones/capacidades-geometria';
 import { TipoCambioService } from '../cotizaciones/tipo-cambio.service';
 import {
   monedaCotizacionContext,
@@ -17,6 +23,7 @@ import { adjuntarOperacionesGuardadas, longitudOperacion } from './geometria-vec
 import { resolverFuentesProducto, atributosDeRevision } from '../productos-servicios/geometrias/resolver-fuentes';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -97,6 +104,8 @@ import { NestingIrregularError } from './geometria-vectorial/nesting-irregular';
 import { AnalisisVectorialAsyncService } from './geometria-vectorial/analisis-vectorial-async.service';
 import {
   debeEjecutarNestingVectorial,
+  debeEjecutarNestingRectangularCorte,
+  resolverEstrategiaCosteoPaso,
   resolveNestingConfig,
   type MaterialResueltoParaNestingConfig,
   type NestingConfigResolved,
@@ -593,10 +602,14 @@ export class MotorUniversalService {
     @Optional()
     private readonly analisisVectorialAsync?: AnalisisVectorialAsyncService,
     @Optional() private readonly tipoCambio?: TipoCambioService,
+    private readonly capacidadesPlan: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   private opcionesNesting(tenantId: string): NestingDispatchOpts {
     return {
+      exigirNestingIrregular: () => this.capacidadesPlan.exigir(tenantId, 'nesting_irregular'),
       loadPrintSheetMaterial: (varianteId) =>
         this.cargarPrintSheetMaterial(tenantId, varianteId),
       ...(this.analisisVectorialAsync
@@ -774,6 +787,8 @@ export class MotorUniversalService {
   async cotizar(
     input: CotizarInput,
     opciones?: {
+      /** Sólo llamadas internas del motor; no forma parte del DTO público. */
+      calculoInterno?: boolean;
       omitirPrecioReferenciaMinimo?: boolean;
       componentesCamino?: string[];
       recetaPrecargada?: Awaited<
@@ -787,6 +802,13 @@ export class MotorUniversalService {
       productoPrecargado?: ProductoCargado;
     },
   ): Promise<CotizarOutput> {
+    await this.capacidadesPlan.exigirTodas(input.tenantId, [
+      'cotizacion',
+      ...capacidadesJobCopiado(input.jobContext),
+      ...(opciones?.calculoInterno
+        ? []
+        : capacidadesJobGeometria(input.jobContext)),
+    ]);
     if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
       const cambio = input.tipoCambioId
         ? await this.tipoCambio.obtenerParaCotizar(
@@ -874,8 +896,10 @@ export class MotorUniversalService {
           input.tenantId,
           input.productoId,
           input.rutaAlternativaId ?? null,
+          input.jobContext,
         ));
     } catch (err) {
+      if (err instanceof ForbiddenException) throw err;
       if (!(err instanceof MotorCotizacionError)) {
         this.logger.error(
           `Fallo inesperado cargando el producto ${input.productoId} para cotizar`,
@@ -1572,6 +1596,7 @@ export class MotorUniversalService {
                 periodo,
               },
               {
+                calculoInterno: true,
                 omitirPrecioReferenciaMinimo: true,
                 componentesCamino: [
                   ...camino,
@@ -2403,6 +2428,11 @@ export class MotorUniversalService {
     cotizacionId?: string;
     cotizacionItemId?: string;
   }> {
+    await this.capacidadesPlan.exigirTodas(input.tenantId, [
+      'cotizacion',
+      ...capacidadesJobCopiado(input.jobContext),
+      ...capacidadesJobGeometria(input.jobContext),
+    ]);
     if (this.tipoCambio && !monedaCotizacionContext.getStore()) {
       let id = input.tipoCambioId;
       if (input.cotizacionId) {
@@ -2435,6 +2465,7 @@ export class MotorUniversalService {
         input.tenantId,
         input.productoId,
         input.rutaAlternativaId ?? null,
+        input.jobContext,
       );
     } catch {
       producto = null;
@@ -2475,6 +2506,13 @@ export class MotorUniversalService {
       this.prisma.prepararSnapshot?.('CotizacionItem', datosCrudos) ?? datosCrudos;
     const { cotizacionId, itemId } = await this.prisma.$transaction(
       async (tx) => {
+        await this.exigirGuardadoCotizacion(
+          tx,
+          input.tenantId,
+          input.productoId,
+          input.jobContext,
+          Boolean(result.cotizacion?.desglosePrecio?.precioEspecialCliente),
+        );
         let cid = input.cotizacionId;
         if (cid) {
           // La cotización debe pertenecer al tenant y estar en borrador
@@ -2569,6 +2607,7 @@ export class MotorUniversalService {
     cotizacionId?: string;
     cotizacionItemId?: string;
   }> {
+    await this.capacidadesPlan.exigir(input.tenantId, 'cotizacion');
     const item = await this.prisma.cotizacionItem.findFirst({
       where: { id: input.cotizacionItemId, tenantId: input.tenantId },
       include: {
@@ -2649,20 +2688,27 @@ export class MotorUniversalService {
       productoId: item.productoId,
       jobContext: solicitud.jobContext,
       producto,
-      cotizacion: result.cotizacion!,
+      cotizacion: result.cotizacion,
       descuento: input.descuento ?? null,
       inputHash: hashCotizacionInput({
         ...solicitud,
         productoId: item.productoId,
-        rutaAlternativaId: result.cotizacion!.rutaAlternativaId,
+        rutaAlternativaId: result.cotizacion.rutaAlternativaId,
       }),
-      periodo: result.cotizacion!.periodoTarifario,
+      periodo: result.cotizacion.periodoTarifario,
       receta,
     });
     const datosItem =
       this.prisma.prepararSnapshot?.('CotizacionItem', datosCrudos) ?? datosCrudos;
 
     await this.prisma.$transaction(async (tx) => {
+      await this.exigirGuardadoCotizacion(
+        tx,
+        input.tenantId,
+        item.productoId,
+        solicitud.jobContext,
+        Boolean(result.cotizacion?.desglosePrecio?.precioEspecialCliente),
+      );
       const lock = await tx.cotizacion.updateMany({
         where: {
           id: item.cotizacionId,
@@ -2699,6 +2745,37 @@ export class MotorUniversalService {
       cotizacionId: item.cotizacionId,
       cotizacionItemId: item.id,
     };
+  }
+
+  /** Calcular puede llevar tiempo: el contrato se revalida bajo el mismo lock
+   * que usa su asignación, antes de escribir el borrador o su snapshot. */
+  private async exigirGuardadoCotizacion(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    productoId: string,
+    jobContext: JobContext,
+    conPrecioEspecial: boolean,
+  ) {
+    await this.capacidadesPlan.exigirOperacionTx(tx, tenantId, [
+      'cotizacion',
+      ...capacidadesJobCopiado(jobContext),
+      ...capacidadesJobGeometria(jobContext),
+    ]);
+    if (conPrecioEspecial) {
+      await this.capacidadesPlan.exigirOperacionTx(
+        tx, tenantId, ['precios_especiales'], ['precios_especiales'],
+      );
+    }
+    const producto = await tx.producto.findFirst({
+      where: { id: productoId, tenantId },
+      select: { codigo: true, sistemaCodigo: true },
+    });
+    if (!producto) throw new NotFoundException('No se encontró el producto.');
+    await this.capacidadesPlan.exigirTodas(
+      tenantId,
+      capacidadesProductoCopiado(producto, jobContext),
+      tx,
+    );
   }
 
   private buildCotizacionItemData(args: {
@@ -3345,7 +3422,7 @@ export class MotorUniversalService {
         ...args.input,
         jobContext: jobContextReferencia,
       },
-      { omitirPrecioReferenciaMinimo: true },
+      { omitirPrecioReferenciaMinimo: true, calculoInterno: true },
     );
 
     if (!resultado.exitoso || !resultado.cotizacion) return null;
@@ -4319,6 +4396,7 @@ export class MotorUniversalService {
     const debeCalcularNestingProductivo =
       paso.mecanismoCantidad === 'CALCULADO_POR_PASO' ||
       debeEjecutarNestingVectorial(paso, jobContext) ||
+      debeEjecutarNestingRectangularCorte(paso, jobContext) ||
       this.debeAutocalcularNestingSiNoHayOutput(paso, jobContext) ||
       this.debeCalcularNestingLaminado(paso);
     if (debeCalcularNestingProductivo) {
@@ -6598,6 +6676,25 @@ export class MotorUniversalService {
         jobContext,
       );
 
+      // Sin acomodo, la cantidad directa cuenta piezas terminadas, no m² ni
+      // placas compradas. Los sustratos planos se consumen por su geometría;
+      // las reglas explícitas (base × factor) y el nesting conservan su base.
+      const sustratoPorAreaSinNesting =
+        !nestingDispatch &&
+        (paso.mecanismoCantidad ?? 'DIRECT_FROM_JOBCONTEXT') ===
+          'DIRECT_FROM_JOBCONTEXT' &&
+        slot.formula === 'por_unidad_productiva' &&
+        !slot.cantidadBase &&
+        Boolean(familia?.nestingConfig) &&
+        familia?.slotsRequeridos.some(
+          (declaracion) =>
+            declaracion.codigo === slot.slotCodigo &&
+            declaracion.tipo === 'SUSTRATO' &&
+            !declaracion.magnitudDerivada &&
+            declaracion.cantidadFija === undefined,
+        );
+      const formulaConsumo = sustratoPorAreaSinNesting ? 'por_m2' : slot.formula;
+
       // Cantidad: depende de la fórmula. Si hay nesting, ajustamos a la
       // cantidad real con desperdicio.
       let cantidad = 0;
@@ -6618,7 +6715,7 @@ export class MotorUniversalService {
         cantidad = cantidadPrimitiva;
       } else if (cantidadPorBase !== null) {
         cantidad = cantidadPorBase;
-      } else if (slot.formula === 'por_unidad_productiva') {
+      } else if (formulaConsumo === 'por_unidad_productiva') {
         // G-M9 fix (validación end-to-end 2026-04-25): la cantidad de
         // material por_unidad_productiva debe respetar el mecanismo del paso:
         //   - CALCULADO_POR_PASO con nesting → cantidadCalculada (pliegos).
@@ -6659,11 +6756,11 @@ export class MotorUniversalService {
           nestingDispatch,
           materialResuelto,
         );
-      } else if (slot.formula === 'por_pieza') {
+      } else if (formulaConsumo === 'por_pieza') {
         cantidad = Number(jobContext.cantidad ?? 0);
-      } else if (slot.formula === 'fijo') {
+      } else if (formulaConsumo === 'fijo') {
         cantidad = 1;
-      } else if (slot.formula === 'por_m2') {
+      } else if (formulaConsumo === 'por_m2') {
         const areaPersonalizacion = this.areaPersonalizacionM2(
           paso,
           jobContext,
@@ -6692,7 +6789,7 @@ export class MotorUniversalService {
             cantidad = this.calcularM2DesdePiezas(jobContext);
           }
         }
-      } else if (slot.formula === 'por_metro_lineal') {
+      } else if (formulaConsumo === 'por_metro_lineal') {
         if (
           (nestingDispatch?.algorithm === 'shelf-rollo' ||
             nestingDispatch?.algorithm === 'maxrects-rollo' ||
@@ -6713,6 +6810,19 @@ export class MotorUniversalService {
             cantidad = this.calcularMetrosLinealesDesdePiezas(jobContext);
           }
         }
+      }
+
+      if (sustratoPorAreaSinNesting && !(cantidad > 0)) {
+        errores.push({
+          codigo: 'medidas_material_requeridas',
+          severidad: 'ERROR',
+          rutaPasoId: paso.rutaPasoId,
+          rutaPasoOrden: paso.rutaPasoOrden,
+          familiaCodigo: paso.familiaCodigo,
+          mensaje: `Faltan medidas válidas para calcular el consumo de ${materialResuelto.sku}.`,
+          sugerencia: 'Completá el ancho, alto y cantidad de las piezas a fabricar.',
+        });
+        continue;
       }
 
       const ignoraCaras = this.ignoraCarasEnMaterial(paso, slot.slotCodigo);
@@ -6755,7 +6865,7 @@ export class MotorUniversalService {
       );
 
       const unidadConsumo = unidadEfectivaDeFormula(
-        slot.formula,
+        formulaConsumo,
         materialResuelto.unidadStock,
       );
       const precioReferencia = Number(materialResuelto.precioReferencia);
@@ -6808,15 +6918,21 @@ export class MotorUniversalService {
         });
         continue;
       }
-      const costeoNesting = this.calcularCosteoNestingMaterial(
-        this.resolverEstrategiaCosteoNesting(paso),
-        precioReferencia,
-        jobContext,
-        nestingDispatch,
-        paso,
-        materialResuelto.unidadStock,
-        materialResuelto.contextoUnidades,
-      );
+      const conservarReglaExplicitaCorte =
+        debeEjecutarNestingRectangularCorte(paso, jobContext) &&
+        (Boolean(slot.cantidadBase) ||
+          !['por_unidad_productiva', 'por_m2'].includes(formulaConsumo));
+      const costeoNesting = conservarReglaExplicitaCorte
+        ? null
+        : this.calcularCosteoNestingMaterial(
+            resolverEstrategiaCosteoPaso(paso, jobContext),
+            precioReferencia,
+            jobContext,
+            nestingDispatch,
+            paso,
+            materialResuelto.unidadStock,
+            materialResuelto.contextoUnidades,
+          );
       let costoTotal: number;
       if (costeoNesting && precioUnitario > 0) {
         // El precio de catálogo está expresado en la unidad de stock. El
@@ -6828,7 +6944,11 @@ export class MotorUniversalService {
         cantidadTrabajoAntesDeMerma =
           costeoNesting.strategy === 'simple'
             ? costeoNesting.breakdown.fullUnits
-            : costeoNesting.totalCost / precioUnitario;
+            : costeoNesting.strategy === 'm2-exact' && nestingDispatch &&
+                debeEjecutarNestingRectangularCorte(paso, jobContext)
+              // El redondeo monetario no debe modificar la superficie física.
+              ? nestingDispatch.metricasRaw.areaUtilMm2 / 1_000_000
+              : costeoNesting.totalCost / precioUnitario;
         const desgloseNestingConMerma = desglosarMermaOperativa(
           cantidadTrabajoAntesDeMerma,
           porcentajeMermaAdicional,
@@ -6922,7 +7042,10 @@ export class MotorUniversalService {
               }
             : undefined,
         estrategiaCosto:
-          costeoNesting?.strategy ?? this.resolverEstrategiaCosteoNesting(paso),
+          costeoNesting?.strategy ??
+          (sustratoPorAreaSinNesting
+            ? 'm2-exact'
+            : resolverEstrategiaCosteoPaso(paso, jobContext)),
         detalleCosteoNesting: costeoNesting
           ? {
               strategy: costeoNesting.strategy,
@@ -7295,8 +7418,10 @@ export class MotorUniversalService {
       unitPrice: precioPlaca,
       totalPieces,
       unitsNeeded,
-      pieceWidthMm: jobContext.medidaCustomMm?.anchoMm,
-      pieceHeightMm: jobContext.medidaCustomMm?.altoMm,
+      pieceWidthMm: jobContext.piezas?.length
+        ? undefined : jobContext.medidaCustomMm?.anchoMm,
+      pieceHeightMm: jobContext.piezas?.length
+        ? undefined : jobContext.medidaCustomMm?.altoMm,
       segmentSteps,
     });
     return {
@@ -7307,32 +7432,6 @@ export class MotorUniversalService {
           ? precioPlaca / areaSustratoM2
           : precioPlaca,
     };
-  }
-
-  /**
-   * La estrategia de costeo del sustrato la POSEE el nesting (una corrida por
-   * paso), no el material: las estrategias que cobran desperdicio son función
-   * del resultado geométrico. Fuente única = `nestingConfig.costing.strategy`.
-   * El viejo `slot.estrategiaCosto` era un espejo redundante que este resolver
-   * pisaba; se retiró como fuente. Ver docs/nesting-abstraccion-diseno.md §3.3
-   * y docs/editor-pasos-preguntas-orden.md §10.5.
-   */
-  private resolverEstrategiaCosteoNesting(paso: PasoCargado): string {
-    const params = (paso.paramsPasoJson ?? {}) as Record<string, unknown>;
-    const nestingConfig =
-      typeof params.nestingConfig === 'object' &&
-      params.nestingConfig !== null &&
-      !Array.isArray(params.nestingConfig)
-        ? (params.nestingConfig as Record<string, unknown>)
-        : {};
-    const costingConfig =
-      typeof nestingConfig.costing === 'object' &&
-      nestingConfig.costing !== null &&
-      !Array.isArray(nestingConfig.costing)
-        ? (nestingConfig.costing as Record<string, unknown>)
-        : {};
-    const strategy = costingConfig.strategy;
-    return typeof strategy === 'string' ? strategy : 'simple';
   }
 
   private resolverSegmentosCosteoNesting(
@@ -10329,6 +10428,7 @@ export class MotorUniversalService {
     tenantId: string,
     productoId: string,
     rutaAlternativaIdInput: string | null,
+    jobCopiado?: Record<string, unknown>,
   ): Promise<ProductoCargado> {
     const producto = await this.prisma.producto.findFirst({
       where: { id: productoId, tenantId, activo: true },
@@ -10540,6 +10640,10 @@ export class MotorUniversalService {
         'Verificar que el producto existe, está activo y pertenece al tenant.',
       );
     }
+    await this.capacidadesPlan.exigirTodas(
+      tenantId,
+      capacidadesProductoCopiado(producto, jobCopiado),
+    );
     if (rutaAlternativaIdInput && producto.rutasAlternativas.length === 0) {
       throw new MotorCotizacionError(
         'ruta_alternativa_no_encontrada',

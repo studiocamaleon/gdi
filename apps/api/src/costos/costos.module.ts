@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { EmpleadosModule } from '../empleados/empleados.module';
 import { CostosController } from './costos.controller';
 import { CostosService } from './costos.service';
@@ -12,7 +13,7 @@ import { CostosValidacionesService } from './costos-validaciones.service';
 @Module({
   // Los componentes de sueldo se derivan del legajo. La dependencia va en un
   // solo sentido —Costos → Empleados— para no armar un ciclo.
-  imports: [EmpleadosModule],
+  imports: [EmpleadosModule, CapacidadesEmpresaModule],
   controllers: [CostosController],
   providers: [
     CostosService,

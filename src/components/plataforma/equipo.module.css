@@ -1,0 +1,72 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 20px;
+}
+.personal,
+.personalInfo,
+.pagination,
+.actions,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.personal,
+.pagination {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.personal {
+  padding: 20px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  border-color: var(--brand-graphite-line);
+}
+.personalInfo h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.personalInfo p {
+  color: var(--brand-muted-on-graphite);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.personalInfo > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.modalBody {
+  padding: 24px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.modalFooter {
+  flex-shrink: 0;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.actions {
+  flex-wrap: wrap;
+}
+.personal :global(button) {
+  --border: var(--brand-graphite-line);
+  --foreground: var(--brand-on-graphite);
+  --default: var(--brand-graphite-line);
+}
+.event {
+  white-space: normal;
+  min-width: 260px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .personalInfo {
+    align-items: flex-start;
+  }
+  .modalBody {
+    padding: 18px;
+  }
+}

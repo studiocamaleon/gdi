@@ -1,4 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { getCurrentTenantId } from '../../common/tenant-context';
@@ -11,6 +18,8 @@ import {
 import { aE164 } from '../telefono';
 import { DespachoService } from './despacho.service';
 import { ESTADOS } from './estados';
+import type { CurrentAuth } from '../../auth/auth.types';
+import type { ResolverAvisoDto } from './notificaciones.dto';
 import { CANAL_WEB, esOrdenWeb, textoWhatsappWeb } from './whatsapp-web-texto';
 
 /**
@@ -52,6 +61,9 @@ export class NotificacionesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly despacho: DespachoService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   /**
@@ -74,8 +86,24 @@ export class NotificacionesService {
    */
   async encolar(ctx: ContextoNotificacion): Promise<ResultadoEncolar> {
     try {
-      return await this.intentarEncolar(ctx);
+      const resultado = await this.prisma.$transaction((tx) =>
+        this.intentarEncolar(ctx, tx),
+      );
+      // El envío sólo puede comenzar después de confirmar la fila de la cola.
+      if (resultado.encolada)
+        void this.despacho.despachar(resultado.id).catch(() => undefined);
+      return resultado;
     } catch (error) {
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof ConflictException
+      )
+        return { encolada: false, motivo: error.message };
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        return { encolada: false, motivo: 'Ya se había notificado.' };
       // Última red de D4: ni siquiera un error inesperado acá puede tumbar la
       // transición de estado que disparó la notificación.
       this.logger.error(
@@ -88,7 +116,10 @@ export class NotificacionesService {
 
   private async intentarEncolar(
     ctx: ContextoNotificacion,
+    tx: Prisma.TransactionClient,
   ): Promise<ResultadoEncolar> {
+    const tenantId = this.tenantId();
+    await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
     const plantilla = POR_EVENTO.get(ctx.evento);
     if (!plantilla) {
       return { encolada: false, motivo: `Evento desconocido: ${ctx.evento}.` };
@@ -98,12 +129,24 @@ export class NotificacionesService {
     // fila, y "sin configurar" tiene que significar apagado. Al revés,
     // conectar Wati empezaría a escribirle a todos los clientes sin que nadie
     // lo haya decidido.
-    const config = await this.prisma.configuracionNotificaciones.findFirst();
+    const config = await tx.configuracionNotificaciones.findFirst({
+      where: { tenantId },
+    });
+    const capacidad =
+      config?.canalOrdenes === CANAL_WEB && esOrdenWeb(ctx.evento)
+        ? 'whatsapp_web'
+        : 'whatsapp_automatico';
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      tenantId,
+      [capacidad],
+      [capacidad],
+    );
     if (config?.pausado ?? true) {
       return { encolada: false, motivo: 'Los avisos están pausados.' };
     }
 
-    if (!(await this.eventoActivo(ctx.evento))) {
+    if (!(await this.eventoActivo(ctx.evento, tx))) {
       return { encolada: false, motivo: 'El evento está apagado.' };
     }
 
@@ -117,7 +160,7 @@ export class NotificacionesService {
     }
 
     const cliente = ctx.clienteId
-      ? await this.prisma.cliente.findFirst({ where: { id: ctx.clienteId } })
+      ? await tx.cliente.findFirst({ where: { id: ctx.clienteId, tenantId } })
       : null;
     if (!cliente) {
       return { encolada: false, motivo: 'La operación no tiene cliente.' };
@@ -154,46 +197,27 @@ export class NotificacionesService {
     if (!tel.ok) return { encolada: false, motivo: tel.motivo };
 
     const claveUnica = `${ctx.evento}:${ctx.entidadId}`;
-    try {
-      const fila = await this.prisma.notificacionWhatsapp.create({
-        data: {
-          tenantId: this.tenantId(),
-          evento: ctx.evento,
-          estado: ESTADOS.pendiente,
-          clienteId: cliente.id,
-          ordenId: ctx.ordenId ?? null,
-          cotizacionId: ctx.cotizacionId ?? null,
-          claveUnica,
-          telefono: tel.e164,
-          plantilla: plantilla.codigo,
-          parametros: ctx.parametros,
-          ...(config?.canalOrdenes === CANAL_WEB && esOrdenWeb(ctx.evento)
-            ? {
-                canal: CANAL_WEB,
-                textoWeb: textoWhatsappWeb(ctx.evento, ctx.parametros),
-              }
-            : {}),
-        },
-      });
-      // Se intenta mandar YA, sin esperar al cron. No se hace `await` a
-      // propósito: quien cerró la orden no tiene por qué esperar a que Wati
-      // conteste, y si esto falla la fila queda pendiente y el cron la levanta
-      // dentro de cinco minutos.
-      void this.despacho.despachar(fila.id).catch(() => undefined);
-      return { encolada: true, id: fila.id };
-    } catch (error) {
-      // P2002 = ya existe una notificación para (evento, entidad). NO es un
-      // error: es la idempotencia haciendo su trabajo. Reabrir un paso devuelve
-      // una OT finalizada a producción, y sin esto "tu orden está lista" saldría
-      // cada vez que alguien corrige algo.
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        return { encolada: false, motivo: 'Ya se había notificado.' };
-      }
-      throw error;
-    }
+    const fila = await tx.notificacionWhatsapp.create({
+      data: {
+        tenantId,
+        evento: ctx.evento,
+        estado: ESTADOS.pendiente,
+        clienteId: cliente.id,
+        ordenId: ctx.ordenId ?? null,
+        cotizacionId: ctx.cotizacionId ?? null,
+        claveUnica,
+        telefono: tel.e164,
+        plantilla: plantilla.codigo,
+        parametros: ctx.parametros,
+        ...(config?.canalOrdenes === CANAL_WEB && esOrdenWeb(ctx.evento)
+          ? {
+              canal: CANAL_WEB,
+              textoWeb: textoWhatsappWeb(ctx.evento, ctx.parametros),
+            }
+          : {}),
+      },
+    });
+    return { encolada: true, id: fila.id };
   }
 
   /**
@@ -203,22 +227,34 @@ export class NotificacionesService {
    * un evento al catálogo, se enciende según lo que decidimos nosotros sin
    * backfillear una fila por tenant.
    */
-  private async eventoActivo(evento: EventoNotificacion): Promise<boolean> {
-    const fila = await this.prisma.notificacionEvento.findFirst({
-      where: { evento },
+  private async eventoActivo(
+    evento: EventoNotificacion,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const fila = await tx.notificacionEvento.findFirst({
+      where: { tenantId: this.tenantId(), evento },
     });
     return fila?.activo ?? POR_EVENTO.get(evento)?.activoPorDefecto ?? false;
   }
 
   // ── Configuración ────────────────────────────────────────────────────
 
-  /** La config del tenant, creándola con los defaults si es la primera vez. */
+  /** Consultar no crea configuración ni reactiva una empresa en sólo lectura. */
   async configuracion() {
-    const existente = await this.prisma.configuracionNotificaciones.findFirst();
-    if (existente) return existente;
-    return this.prisma.configuracionNotificaciones.create({
-      data: { tenantId: this.tenantId() },
-    });
+    const tenantId = this.tenantId();
+    return (
+      (await this.prisma.configuracionNotificaciones.findFirst({
+        where: { tenantId },
+      })) ?? {
+        tenantId,
+        pausado: true,
+        horaDesde: '09:00',
+        horaHasta: '20:00',
+        diasAtencion: '1,2,3,4,5',
+        resenaDiasDespues: 3,
+        canalOrdenes: 'WATI',
+      }
+    );
   }
 
   /**
@@ -245,17 +281,29 @@ export class NotificacionesService {
   async cambiarEvento(evento: EventoNotificacion, activo: boolean) {
     const plantilla = POR_EVENTO.get(evento);
     if (!plantilla) throw new Error(`Evento desconocido: ${evento}`);
-    const existente = await this.prisma.notificacionEvento.findFirst({
-      where: { evento },
-    });
-    if (existente) {
-      return this.prisma.notificacionEvento.update({
-        where: { id: existente.id },
-        data: { activo },
+    const tenantId = this.tenantId();
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
+      if (activo) {
+        const config = await tx.configuracionNotificaciones.findFirst({
+          where: { tenantId },
+        });
+        const capacidad =
+          config?.canalOrdenes === CANAL_WEB && esOrdenWeb(evento)
+            ? 'whatsapp_web'
+            : 'whatsapp_automatico';
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          tenantId,
+          [capacidad],
+          [capacidad],
+        );
+      }
+      return tx.notificacionEvento.upsert({
+        where: { tenantId_evento: { tenantId, evento } },
+        create: { tenantId, evento, activo },
+        update: { activo },
       });
-    }
-    return this.prisma.notificacionEvento.create({
-      data: { tenantId: this.tenantId(), evento, activo },
     });
   }
 
@@ -266,10 +314,29 @@ export class NotificacionesService {
     diasAtencion?: string;
     resenaDiasDespues?: number;
   }) {
-    const config = await this.configuracion();
-    return this.prisma.configuracionNotificaciones.update({
-      where: { id: config.id },
-      data: datos,
+    const tenantId = this.tenantId();
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
+      const config = await tx.configuracionNotificaciones.findFirst({
+        where: { tenantId },
+      });
+      if (datos.pausado !== true) {
+        const capacidad =
+          config?.canalOrdenes === CANAL_WEB
+            ? 'whatsapp_web'
+            : 'whatsapp_automatico';
+        await this.capacidades.exigirOperacionTx(
+          tx,
+          tenantId,
+          [capacidad],
+          datos.pausado === false ? [capacidad] : [],
+        );
+      }
+      return tx.configuracionNotificaciones.upsert({
+        where: { tenantId },
+        create: { tenantId, ...datos },
+        update: datos,
+      });
     });
   }
 
@@ -298,6 +365,7 @@ export class NotificacionesService {
 
     return filas.map((f) => ({
       id: f.id,
+      canal: f.canal,
       evento: f.evento,
       titulo: POR_EVENTO.get(f.evento as never)?.titulo ?? f.evento,
       estado: f.estado,
@@ -309,6 +377,83 @@ export class NotificacionesService {
       enviadaEl: f.enviadaEl,
       createdAt: f.createdAt,
     }));
+  }
+
+  async resolver(auth: CurrentAuth, id: string, dto: ResolverAvisoDto) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, auth.tenantId, [
+        'identidad',
+      ]);
+      const n = await tx.notificacionWhatsapp.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (!n) throw new NotFoundException('No se encontró el aviso.');
+      const incierta = ['wati_incierta', 'web_incierta'].includes(n.estado);
+      const cerrable =
+        ['pendiente', 'wati_reservada', 'web_reservada', 'fallida'].includes(
+          n.estado,
+        ) || incierta;
+      if (
+        n.estado !== dto.estadoEsperado ||
+        !cerrable ||
+        (dto.accion === 'confirmar_enviada' && !incierta)
+      )
+        throw new ConflictException(
+          'El aviso cambió o tiene un envío en curso. Actualizá su estado antes de resolverlo.',
+        );
+      const motivo = dto.motivo.trim();
+      if (motivo.length < 5)
+        throw new ConflictException('Indicá el motivo de la resolución.');
+      const estado =
+        dto.accion === 'confirmar_enviada' ? 'enviada' : 'descartada';
+      const actorUserId = auth.impersonacion?.actorUserId ?? auth.userId;
+      const actor = await tx.user.findUnique({
+        where: { id: actorUserId },
+        select: { nombreCompleto: true, email: true },
+      });
+      const actorNombre =
+        auth.impersonacion?.actorNombre ??
+        actor?.nombreCompleto ??
+        actor?.email ??
+        auth.email;
+      const cambio = await tx.notificacionWhatsapp.updateMany({
+        where: {
+          id,
+          tenantId: auth.tenantId,
+          estado: dto.estadoEsperado,
+          reservaToken: n.reservaToken,
+        },
+        data: {
+          estado,
+          reservaToken: null,
+          reservadaEl: null,
+          programadaPara: null,
+          enviadaEl: estado === 'enviada' ? new Date() : n.enviadaEl,
+          motivo: `${estado === 'enviada' ? 'Confirmado' : 'Descartado'} por ${actorNombre}: ${motivo}${n.motivo ? ` · Antecedente: ${n.motivo}` : ''}`,
+        },
+      });
+      if (!cambio.count)
+        throw new ConflictException(
+          'El aviso cambió mientras lo resolvías. Actualizá el historial.',
+        );
+      await tx.eventoSistema.create({
+        data: {
+          tenantId: auth.tenantId,
+          tipo: 'aviso.resuelto',
+          entidadTipo: 'notificacion_whatsapp',
+          entidadId: id,
+          actorUserId,
+          actorNombre: actorNombre.slice(0, 200),
+          titulo:
+            estado === 'enviada'
+              ? 'Aviso confirmado manualmente'
+              : 'Aviso descartado',
+          mensaje: `${n.estado} → ${estado}: ${motivo}`.slice(0, 600),
+          topicos: [],
+        },
+      });
+      return { ok: true };
+    });
   }
 
   /**

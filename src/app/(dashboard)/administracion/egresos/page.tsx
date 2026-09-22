@@ -1,3 +1,4 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
 import { EgresosView } from "@/components/administracion/egresos-view";
 import { getCuentasFondos, getMetodosPago } from "@/lib/administracion-api";
 import {
@@ -22,9 +23,10 @@ export default async function EgresosPage({
 }: {
   searchParams: Promise<{ accion?: string }>;
 }) {
+  const conEgresos = await tieneCapacidad("cuentas_pagar");
   const params = await searchParams;
-  // Todo en paralelo y tolerante: una lista vacía muestra el estado vacío, que
-  // es mejor que una pantalla de error por un catálogo sin cargar.
+  const conGastosFijos = await tieneCapacidad("gastos_fijos");
+  // El historial no depende de catálogos opcionales para nuevas operaciones.
   const [
     egresos,
     resumen,
@@ -33,16 +35,15 @@ export default async function EgresosPage({
     metodosPago,
     cuentas,
     gastosFijos,
-  ] =
-    await Promise.all([
-      getEgresos({}).then((r) => r.egresos),
-      getResumenEgresos(),
-      getCategoriasEgreso(),
-      getProveedores(),
-      getMetodosPago(),
-      getCuentasFondos(),
-      getGastosFijos(),
-    ]);
+  ] = await Promise.all([
+    getEgresos({}).then((r) => r.egresos),
+    getResumenEgresos(),
+    getCategoriasEgreso(),
+    conEgresos ? getProveedores() : Promise.resolve([]),
+    conEgresos ? getMetodosPago() : Promise.resolve([]),
+    conEgresos ? getCuentasFondos() : Promise.resolve([]),
+    conEgresos && conGastosFijos ? getGastosFijos() : Promise.resolve([]),
+  ]);
 
   return (
     <EgresosView
@@ -53,7 +54,7 @@ export default async function EgresosPage({
       metodosPago={metodosPago.filter((m) => m.activo)}
       cuentas={cuentas}
       gastosFijos={gastosFijos}
-      altaInicial={params.accion === "nuevo"}
+      altaInicial={conEgresos && params.accion === "nuevo"}
     />
   );
 }

@@ -6,6 +6,9 @@ import {
 } from "@/components/configuracion/configuracion-workspace";
 
 import * as React from "react";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useRouter } from "next/navigation";
 import {
   BuildingIcon,
@@ -72,6 +75,9 @@ export function ConfiguracionFiscalView({
   initialConfig: ConfiguracionFiscal | null;
 }) {
   const router = useRouter();
+  const fiscalIncluida = useCapacidad("fiscal_argentina");
+  const puedeGestionar = usePuede("administracion.gestionar");
+  const puedeGestionarFiscal = fiscalIncluida && puedeGestionar;
   const [form, setForm] = React.useState<FormState>(() =>
     estadoInicial(initialConfig),
   );
@@ -128,7 +134,7 @@ export function ConfiguracionFiscalView({
   };
 
   const agregarPv = async () => {
-    if (!pvNuevo) return;
+    if (!pvNuevo || !puedeGestionarFiscal) return;
     const numero = Number(pvNuevo.numero);
     if (!numero || numero < 1) {
       toast.error("El número de punto de venta tiene que ser mayor a 0.");
@@ -188,6 +194,16 @@ export function ConfiguracionFiscalView({
             />
           }
         />
+
+        {!fiscalIncluida && (
+          <Alert>
+            <AlertDescription>
+              Tu plan no incluye facturación electrónica. Podés mantener los
+              datos del emisor para tus recibos y consultar los puntos de venta
+              existentes.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {!configurado ? (
           <div className="arc-page">
@@ -363,6 +379,16 @@ export function ConfiguracionFiscalView({
                 </span>
               </h2>
 
+              {!fiscalIncluida && (
+                <Alert>
+                  <AlertDescription>
+                    Tu plan no incluye facturación electrónica. Podés mantener
+                    los datos del emisor para tus recibos y consultar los puntos
+                    de venta existentes.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {!configurado ? (
                 <div className="arc-auto-note" style={{ marginBottom: 0 }}>
                   <InfoIcon />
@@ -490,6 +516,7 @@ export function ConfiguracionFiscalView({
                     <button
                       type="button"
                       className="arc-ret-add"
+                      disabled={!puedeGestionarFiscal}
                       onClick={() =>
                         setPvNuevo({
                           numero: "",
@@ -518,6 +545,7 @@ export function ConfiguracionFiscalView({
               <div className="arc-field" style={{ marginBottom: 12 }}>
                 <select
                   aria-label="Proveedor de facturación"
+                  disabled={!puedeGestionarFiscal}
                   value={form.proveedorFacturacion}
                   onChange={(e) =>
                     set(

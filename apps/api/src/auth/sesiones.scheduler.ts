@@ -45,6 +45,12 @@ export class SesionesScheduler {
 
   /** Expuesto para poder correrlo a mano y para los tests. */
   async purgar(ahora = new Date()): Promise<number> {
+    await this.prisma.mfaDispositivo.deleteMany({
+      where: {
+        venceEl: { lt: ahora },
+        sesiones: { none: { revokedAt: null, expiresAt: { gt: ahora } } },
+      },
+    });
     await this.prisma.mfaChallenge.deleteMany({
       where: { expiresAt: { lt: ahora } },
     });

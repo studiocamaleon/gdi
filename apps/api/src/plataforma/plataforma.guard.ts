@@ -6,6 +6,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import type { RolPlataforma } from '@prisma/client';
+import { Reflector } from '@nestjs/core';
+import { ENROLAMIENTO_PLATAFORMA } from '../auth/enrolamiento-plataforma';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 
@@ -24,7 +26,10 @@ import type { CurrentAuth } from '../auth/auth.types';
  */
 @Injectable()
 export class PlataformaGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reflector: Reflector = new Reflector(),
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
@@ -36,6 +41,10 @@ export class PlataformaGuard implements CanActivate {
       // El AuthGuard global corre antes; si no pobló auth, algo está mal
       // cableado y la respuesta segura es rebotar.
       throw new UnauthorizedException('Debes iniciar sesion.');
+    }
+
+    if (request.auth.impersonacion || request.auth.mcp) {
+      throw new ForbiddenException('Plataforma requiere tu sesión personal.');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -50,6 +59,19 @@ export class PlataformaGuard implements CanActivate {
     }
 
     request.rolPlataforma = user.rolPlataforma;
+    const permiteEnrolar = this.reflector.getAllAndOverride<boolean>(
+      ENROLAMIENTO_PLATAFORMA,
+      [context.getHandler(), context.getClass()],
+    );
+    if (
+      !permiteEnrolar &&
+      (!request.auth.esPlataforma ||
+        request.auth.plataformaMfaPendiente !== false)
+    ) {
+      throw new ForbiddenException(
+        'Ingresá por el backoffice y completá MFA para acceder a Plataforma.',
+      );
+    }
     return true;
   }
 }

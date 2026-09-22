@@ -27,12 +27,17 @@ import {
   type ComprobanteDetalle,
   type CondicionVenta,
 } from "@/lib/administracion";
-import { cargarCae, emitirComprobante } from "@/lib/administracion-api";
+import {
+  cargarCae,
+  emitirComprobante,
+  consultarEmisionComprobante,
+} from "@/lib/administracion-api";
 import { formatearMonedaDoc, monedaDe } from "@/lib/moneda";
 import {
   fechaComprobante,
   etiquetaSaldoComprobante,
 } from "@/lib/comprobantes-presentacion";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { usePuede } from "@/components/navigation/permisos-provider";
 import {
   useDesignScope,
@@ -78,6 +83,11 @@ export function ComprobanteDetalleView({
     vto: string;
   } | null>(null);
 
+  const fiscalDisponible = useCapacidad("fiscal_argentina");
+  const puedeAnular = usePuede("administracion.anular");
+  const envioAnteriorSinRegistro =
+    c.estado === "borrador" && c.numero !== null && !c.emision;
+  const pendiente = c.estado === "en_proceso" || c.estado === "por_verificar";
   const rechazado = c.estado === "rechazado";
   const emitido = c.estado === "emitido";
   const cobrado = c.cobrosImputados.reduce((s, i) => s + i.monto, 0);
@@ -86,15 +96,37 @@ export function ComprobanteDetalleView({
     setTrabajando(true);
     try {
       const r = await emitirComprobante(c.id);
-      toast.success(
-        r.estado === "emitido"
-          ? `Comprobante ${r.numeroCompleto} emitido. Cargale el CAE que te dé ARCA.`
-          : "El comprobante quedó en cola.",
-      );
+      if (r.estado === "emitido")
+        toast.success(
+          `Comprobante ${r.numeroCompleto} registrado.${r.cae ? "" : " Falta cargar el CAE del portal de ARCA."}`,
+        );
+      else if (r.estado === "rechazado")
+        toast.error("ARCA rechazó el comprobante. Revisá el detalle.");
+      else
+        toast.info(
+          "El envío está pendiente de verificación. Consultá su resultado desde este detalle.",
+        );
       router.refresh();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "No se pudo emitir.",
+      );
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
+  const consultar = async () => {
+    setTrabajando(true);
+    try {
+      const resultado = await consultarEmisionComprobante(c.id);
+      if (resultado.aplicada)
+        toast.success("Resultado recuperado. El comprobante quedó registrado.");
+      else toast.info(resultado.detalle ?? "Consulta terminada.");
+      router.refresh();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "No se pudo consultar.",
       );
     } finally {
       setTrabajando(false);
@@ -185,27 +217,79 @@ export function ComprobanteDetalleView({
               Ver factura / PDF
             </ActionLink>
           )}
-          {emitido && puedeGestionar && (
-            <ActionLink
-              variant="outline"
-              href={`/administracion/comprobantes/nuevo?origen=${c.id}`}
-            >
-              <FileMinus2Icon aria-hidden />
-              Nota de crédito
-            </ActionLink>
-          )}
-          {c.estado === "borrador" && puedeGestionar && (
-            <ActionButton
-              onPress={() => void emitir()}
-              isPending={trabajando}
-              isDisabled={trabajando}
-            >
-              <ShieldCheckIcon aria-hidden />
-              {trabajando ? "Emitiendo…" : "Emitir comprobante"}
-            </ActionButton>
-          )}
+          {emitido &&
+            c.tipo === "factura" &&
+            puedeAnular &&
+            fiscalDisponible && (
+              <ActionLink
+                variant="outline"
+                href={`/administracion/comprobantes/nuevo?origen=${c.id}`}
+              >
+                <FileMinus2Icon aria-hidden />
+                Nota de crédito
+              </ActionLink>
+            )}
+          {c.estado === "borrador" &&
+            c.numero === null &&
+            fiscalDisponible &&
+            (c.tipo === "nota_credito" ? puedeAnular : puedeGestionar) && (
+              <ActionButton
+                onPress={() => void emitir()}
+                isPending={trabajando}
+                isDisabled={trabajando}
+              >
+                <ShieldCheckIcon aria-hidden />
+                {trabajando ? "Emitiendo…" : "Emitir comprobante"}
+              </ActionButton>
+            )}
         </div>
       </header>
+      {envioAnteriorSinRegistro && (
+        <Alert className={s.notice}>
+          <InfoIcon />
+          <AlertTitle>Envío anterior por revisar</AlertTitle>
+          <AlertDescription>
+            Este borrador ya tiene un número fiscal, pero no tiene registro de
+            envío. Verificá su situación en ARCA antes de volver a facturar.
+          </AlertDescription>
+        </Alert>
+      )}
+      {pendiente && (
+        <Alert className={s.notice}>
+          <InfoIcon />
+          <AlertTitle>
+            {c.estado === "en_proceso"
+              ? "Envío en curso"
+              : "Resultado por verificar"}
+          </AlertTitle>
+          <AlertDescription>
+            <p>
+              {c.emision?.detalle ??
+                "El comprobante tiene un envío pendiente. Consultá su resultado antes de volver a facturar."}
+            </p>
+            {(c.tipo === "nota_credito" ? puedeAnular : puedeGestionar) && (
+              <ActionButton
+                variant="outline"
+                onPress={() => void consultar()}
+                isPending={trabajando}
+                isDisabled={trabajando}
+              >
+                Consultar resultado
+              </ActionButton>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {!fiscalDisponible && (
+        <Alert className={s.notice}>
+          <InfoIcon />
+          <AlertTitle>Historial de comprobantes</AlertTitle>
+          <AlertDescription>
+            El plan actual no permite nuevas emisiones. Podés revisar los
+            documentos existentes y consultar los envíos pendientes.
+          </AlertDescription>
+        </Alert>
+      )}
       <div className={s.grid}>
         <div className={s.main}>
           {rechazado && c.rechazo?.errores?.length ? (

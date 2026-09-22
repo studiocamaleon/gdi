@@ -60,6 +60,7 @@ export type CurrentAuth = {
    * contexto, leería todos). undefined = sesión de tenant.
    */
   esPlataforma?: boolean;
+  plataformaMfaPendiente?: boolean;
   /**
    * Credencial MCP: la IA del tenant operando vía token opaco `grafo_mcp_...`.
    * No hay AuthSession detrás (`sessionId` es `mcp:<credencialId>`, sólo para

@@ -4,8 +4,13 @@ import type { PropuestaItem } from "./propuestas";
 import type { ItemHipotetico } from "./flujo-produccion";
 import { instanteDe, sumarDiasAClave } from "./zona";
 export type PrevisionMateriales = {
-  estado: "sin_control" | "disponible" | "requiere_compra" | "por_confirmar";
-  modoReserva: "MANUAL" | "AL_EMITIR";
+  estado:
+    | "no_incluido"
+    | "sin_control"
+    | "disponible"
+    | "requiere_compra"
+    | "por_confirmar";
+  modoReserva: "MANUAL" | "AL_EMITIR" | null;
   calculadoEl: string;
   fechaPedidoSupuesto: string;
   zona: string;

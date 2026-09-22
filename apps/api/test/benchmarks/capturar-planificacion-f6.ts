@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../src/suscripciones/capacidades-empresa.service';
 /** Captura reproducible del servidor. Crea sólo trabajos de cálculo; jamás
  * llama a cotizarYGuardar ni emite una OT. Exige tenant/producto/ruta explícitos.
  * Ejecutar desde apps/api con --env-file=.env y ts-node/register.
@@ -24,7 +25,7 @@ if (
     'Indicá tenantId, productoId, rutaAlternativaId y carpeta de salida.',
   );
 const db = new PrismaService(),
-  jobs = new CotizacionJobsService();
+  jobs = new CotizacionJobsService(new CapacidadesEmpresaService(db));
 async function main() {
   await db.producto.findFirstOrThrow({ where: { id: productoId, tenantId } });
   await db.productoRutaAlternativa.findFirstOrThrow({

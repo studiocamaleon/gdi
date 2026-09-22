@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Post,
   Put,
@@ -17,7 +16,7 @@ import {
 import { ActualizarCentroCopiadoConfigDto } from './dto/centro-copiado-config.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
-import { SuscripcionesService } from '../suscripciones/suscripciones.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { CentroCopiadoSaludService } from './centro-copiado-salud.service';
 import { CentroCopiadoAuditoriaService } from './centro-copiado-auditoria.service';
 
@@ -31,7 +30,7 @@ interface RequestWithAuth extends Request {
 export class CentroCopiadoController {
   constructor(
     private readonly centroCopiado: CentroCopiadoService,
-    private readonly suscripciones: SuscripcionesService,
+    private readonly capacidades: CapacidadesEmpresaService,
     private readonly saludCentroCopiado: CentroCopiadoSaludService,
     private readonly auditoriaCentroCopiado: CentroCopiadoAuditoriaService,
   ) {}
@@ -43,11 +42,7 @@ export class CentroCopiadoController {
         'Falta tenant en el contexto de autenticación',
       );
     }
-    if (!(await this.suscripciones.feature(tenantId, 'centroCopiado'))) {
-      throw new ForbiddenException(
-        'El plan actual no incluye el Centro de Copiado.',
-      );
-    }
+    await this.capacidades.exigirIncluida(tenantId, 'centro_copiado');
     return tenantId;
   }
 

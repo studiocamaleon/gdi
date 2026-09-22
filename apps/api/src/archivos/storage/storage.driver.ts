@@ -83,7 +83,11 @@ export interface StorageDriver {
    */
   iniciarMultipart(
     key: string,
-    opciones: { contentType: string; bytes: number },
+    opciones: {
+      contentType: string;
+      bytes: number;
+      alCrear?: (uploadId: string) => Promise<void>;
+    },
   ): Promise<MultipartIniciado>;
 
   /** Cierra la subida en partes y deja el objeto final armado. */

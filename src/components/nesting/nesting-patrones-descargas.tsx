@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import * as React from "react";
 import { DownloadIcon } from "lucide-react";
@@ -25,6 +26,7 @@ export function NestingPatronesDescargas({
   nombreBase: string;
   permitirDxf: boolean;
 }) {
+  const incluida = useCapacidad("exportacion_fabricacion");
   const { result, ...estadoCapas } = useCapasFabricacion(original);
   const patrones = React.useMemo(
     () => agruparPatronesNesting(result),
@@ -56,7 +58,7 @@ export function NestingPatronesDescargas({
       setDescargando(false);
     }
   };
-  if (!patrones.length) return null;
+  if (!incluida || !patrones.length) return null;
   return (
     <section className={styles.downloads} aria-label="Archivos por layout">
       <EstadoCapasFabricacion {...estadoCapas} />

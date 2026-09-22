@@ -1,4 +1,6 @@
 "use client";
+import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
+import { reportesVisibles } from "@/lib/reportes-config";
 
 import { useSearchParams } from "next/navigation";
 import {
@@ -34,6 +36,8 @@ const porcentaje = (valor: number | null | undefined) =>
 export function ResumenEjecutivo({ d }: { d: ResumenData }) {
   const { moneda } = useConfigRegional();
   const puede = usePuedeFn();
+  const funciones = useFuncionesPlan();
+  const destinos = new Set(reportesVisibles(puede, funciones).map(r => r.href));
   const search = useSearchParams();
   const custom = leerRangoPersonalizado(
     search.get("desde") ?? undefined,
@@ -301,7 +305,7 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
               }
             />
           )}
-          {puede("finanzas.ver_margenes") ? (
+          {destinos.has("/reportes/finanzas") ? (
             <div className={styles.cardAction}>
               <ActionLink variant="outline" href={href("/reportes/finanzas")}>
                 Analizar finanzas <ArrowUpRightIcon data-icon="inline-end" />
@@ -369,11 +373,13 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
               description="Este período todavía no tiene ventas registradas para armar el ranking."
             />
           )}
-          <div className={styles.cardAction}>
-            <ActionLink variant="outline" href={href("/reportes/clientes")}>
-              Analizar clientes <ArrowUpRightIcon data-icon="inline-end" />
-            </ActionLink>
-          </div>
+          {destinos.has("/reportes/clientes") ? (
+            <div className={styles.cardAction}>
+              <ActionLink variant="outline" href={href("/reportes/clientes")}>
+                Analizar clientes <ArrowUpRightIcon data-icon="inline-end" />
+              </ActionLink>
+            </div>
+          ) : null}
         </ReportCard>
         <ReportCard
           title="Productos con más ventas"
@@ -417,11 +423,13 @@ export function ResumenEjecutivo({ d }: { d: ResumenData }) {
               description="Los productos aparecen cuando tienen ventas en el período seleccionado."
             />
           )}
-          <div className={styles.cardAction}>
-            <ActionLink variant="outline" href={href("/reportes/producto")}>
-              Analizar productos <ArrowUpRightIcon data-icon="inline-end" />
-            </ActionLink>
-          </div>
+          {destinos.has("/reportes/producto") ? (
+            <div className={styles.cardAction}>
+              <ActionLink variant="outline" href={href("/reportes/producto")}>
+                Analizar productos <ArrowUpRightIcon data-icon="inline-end" />
+              </ActionLink>
+            </div>
+          ) : null}
         </ReportCard>
       </div>
       <ReportCard

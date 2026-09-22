@@ -1,4 +1,6 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useState } from "react";
 import {
   useDesignScope,
@@ -68,13 +70,22 @@ async function cargarPanel(
     page,
     estado,
     costos,
-  }: { tab: string; page: number; estado: string; costos: boolean },
+    conCompras,
+  }: {
+    tab: string;
+    page: number;
+    estado: string;
+    costos: boolean;
+    conCompras: boolean;
+  },
   signal?: AbortSignal,
 ) {
   const [catalogo, necesidades, compras] = await Promise.all([
-    costos ? getCatalogoCompras(signal) : null,
-    tab === "necesidades" ? getNecesidadesCompra(page, signal) : null,
-    tab === "compras" ? getCompras(page, estado, signal) : null,
+    costos && conCompras ? getCatalogoCompras(signal) : null,
+    conCompras && tab === "necesidades"
+      ? getNecesidadesCompra(page, signal)
+      : null,
+    costos && tab === "compras" ? getCompras(page, estado, signal) : null,
   ]);
   return { catalogo, necesidades, compras };
 }
@@ -82,11 +93,19 @@ export function ComprasPanel() {
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const costos = usePuede("finanzas.ver_margenes");
-  const canManage = usePuede("inventario.gestionar") && costos;
-  const [tab, setTab] = useState("necesidades");
+  const conCompras = useCapacidad("compras");
+  const canManage = usePuede("inventario.gestionar") && costos && conCompras;
+  const [tabElegida, setTab] = useState("necesidades");
+  const tab = conCompras ? tabElegida : "compras";
   const [page, setPage] = useState(1);
   const [estado, setEstado] = useState("");
-  const consulta = useInventoryPage(cargarPanel, { tab, page, estado, costos });
+  const consulta = useInventoryPage(cargarPanel, {
+    tab,
+    page,
+    estado,
+    costos,
+    conCompras,
+  });
   const catalogo = consulta.result?.catalogo ?? null;
   const necesidades = consulta.result?.necesidades ?? null;
   const compras = consulta.result?.compras ?? null;
@@ -123,10 +142,13 @@ export function ComprasPanel() {
       <header className={layout.header}>
         <div>
           <h1>
-            Compras y abastecimiento<span aria-hidden="true">.</span>
+            {conCompras ? "Compras y abastecimiento" : "Historial de compras"}
+            <span aria-hidden="true">.</span>
           </h1>
           <p className={layout.subtitle}>
-            De los materiales pendientes a su llegada al depósito.
+            {conCompras
+              ? "De los materiales pendientes a su llegada al depósito."
+              : "Consultá los pedidos y las recepciones que ya registraste."}
           </p>
         </div>
         <div className={styles.actions}>
@@ -143,44 +165,55 @@ export function ComprasPanel() {
         </div>
       </header>
       <div className={styles.pageBody}>
-        <Tabs
-          selectedKey={tab}
-          onSelectionChange={(key) => {
-            setTab(String(key));
-            setPage(1);
-            setSelected(new Set());
-          }}
-        >
-          <NavigationTabList
-            label="Vistas de abastecimiento"
-            variant="detailed"
-            tone="graphite"
-            items={[
-              {
-                id: "necesidades",
-                label: "Necesidades",
-                description: "Materiales de las OTs",
-                icon: <Boxes />,
-              },
-              ...(costos
-                ? [
-                    {
-                      id: "compras",
-                      label: "Órdenes de compra",
-                      description: "Pedidos y recepciones",
-                      icon: <ClipboardList />,
-                    },
-                    {
-                      id: "ofertas",
-                      label: "Proveedores y ofertas",
-                      description: "Precios, presentaciones y plazos",
-                      icon: <Users />,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </Tabs>
+        {!conCompras && (
+          <Alert role="status">
+            <AlertTitle>Historial disponible</AlertTitle>
+            <AlertDescription>
+              Tu plan actual no incluye Compras. Conservás la consulta de tus
+              pedidos y recepciones.
+            </AlertDescription>
+          </Alert>
+        )}
+        {conCompras && (
+          <Tabs
+            selectedKey={tab}
+            onSelectionChange={(key) => {
+              setTab(String(key));
+              setPage(1);
+              setSelected(new Set());
+            }}
+          >
+            <NavigationTabList
+              label="Vistas de abastecimiento"
+              variant="detailed"
+              tone="graphite"
+              items={[
+                {
+                  id: "necesidades",
+                  label: "Necesidades",
+                  description: "Materiales de las OTs",
+                  icon: <Boxes />,
+                },
+                ...(costos
+                  ? [
+                      {
+                        id: "compras",
+                        label: "Órdenes de compra",
+                        description: "Pedidos y recepciones",
+                        icon: <ClipboardList />,
+                      },
+                      {
+                        id: "ofertas",
+                        label: "Proveedores y ofertas",
+                        description: "Precios, presentaciones y plazos",
+                        icon: <Users />,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </Tabs>
+        )}
         {error && (
           <p role="alert" className={styles.warning}>
             {error}
@@ -209,7 +242,9 @@ export function ComprasPanel() {
                 {tab === "necesidades"
                   ? "Seleccioná los faltantes que querés comprar. Podés reunir necesidades de varias OT en un pedido."
                   : tab === "compras"
-                    ? "Recibir suma stock. La factura y el pago se registran por separado."
+                    ? conCompras
+                      ? "Recibir suma stock. La factura y el pago se registran por separado."
+                      : "Pedidos, materiales, importes y recepciones en modo de consulta."
                     : "El plazo de cada material hereda el del proveedor cuando no tiene uno específico."}
               </span>
             </div>
@@ -375,7 +410,12 @@ export function ComprasPanel() {
               </Table>
             ))}
           {tab === "compras" &&
-            (!compras ? (
+            (!costos ? (
+              <Vacio
+                title="Permiso de costos requerido"
+                description="Tu rol necesita permiso para ver costos y precios de compra."
+              />
+            ) : !compras ? (
               !error && (
                 <p role="status" className={styles.body}>
                   Consultando compras…
@@ -384,7 +424,11 @@ export function ComprasPanel() {
             ) : !compras.data.length ? (
               <Vacio
                 title="Sin compras en esta vista"
-                description="Prepará una compra para reponer stock o seleccioná necesidades de varias OTs."
+                description={
+                  conCompras
+                    ? "Prepará una compra para reponer stock o seleccioná necesidades de varias OTs."
+                    : "Los pedidos que hayas registrado aparecerán aquí. Probá otro filtro si buscás una compra."
+                }
               />
             ) : (
               <Table className={styles.table}>
@@ -585,7 +629,7 @@ export function ComprasPanel() {
           )}
         </section>
       </div>
-      {nueva && catalogo && (
+      {canManage && nueva && catalogo && (
         <CompraForm
           catalogo={catalogo}
           necesidades={nueva}
@@ -598,7 +642,7 @@ export function ComprasPanel() {
           }}
         />
       )}
-      {oferta !== undefined && catalogo && (
+      {canManage && oferta !== undefined && catalogo && (
         <OfertaForm
           catalogo={catalogo}
           oferta={oferta ?? undefined}
@@ -609,7 +653,7 @@ export function ComprasPanel() {
           }}
         />
       )}
-      {detalle && catalogo && (
+      {costos && detalle && (
         <CompraDetalle
           key={detalle}
           id={detalle}

@@ -95,5 +95,10 @@ export async function apiRequest<T>(
     return undefined as T;
   }
 
-  return restaurarJson<T>(await response.json());
+  // Algunas acciones exitosas no devuelven cuerpo, incluso con 200/201.
+  // Sólo se omite el parseo si está vacío: un JSON truncado sigue siendo error.
+  const body = await response.text();
+  if (!body.trim()) return undefined as T;
+
+  return restaurarJson<T>(JSON.parse(body));
 }

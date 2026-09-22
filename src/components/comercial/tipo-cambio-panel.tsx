@@ -6,6 +6,8 @@ import { DesignSystemProvider } from "@/components/design-system/appearance";
 import designTheme from "@/components/design-system/brand-workspace-theme.module.css";
 import { ActionButton } from "@/components/design-system/action-button";
 import { SelectField } from "@/components/design-system/select-field";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
 import { Input } from "@heroui/react";
 import {
@@ -169,6 +171,8 @@ export function TipoCambioPanel({
 }
 
 export function TipoCambioEmpresa() {
+  const conPrecios = useCapacidad("reglas_precio");
+  const puedeGestionar = usePuede("costos.gestionar") && conPrecios;
   const { moneda } = useConfigRegional();
   const [config, setConfig] = React.useState<Awaited<
     ReturnType<typeof getTipoCambioConfig>
@@ -205,7 +209,16 @@ export function TipoCambioEmpresa() {
           tipo de cambio.
         </p>
         {error && <p role="alert">{error}</p>}
-        {config && (
+        {config && !puedeGestionar && (
+          <p className={s.detail}>
+            Tipo de cambio{" "}
+            {config.modo === "automatico"
+              ? "automático"
+              : `manual: ${config.tasaManual}`}
+            . Sólo consulta.
+          </p>
+        )}
+        {config && puedeGestionar && (
           <EditorCambio
             key={`${config.modo}-${config.tasaManual}-${config.monedaDestino}`}
             destino={moneda.codigo}

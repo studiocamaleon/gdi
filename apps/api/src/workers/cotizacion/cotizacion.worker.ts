@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
   Logger,
@@ -36,6 +37,7 @@ export class CotizacionWorker
   constructor(
     private readonly motor: MotorUniversalService,
     private readonly tenantConcurrency: TenantConcurrencyService,
+    private readonly capacidadesPlan: CapacidadesEmpresaService,
     @Optional() private readonly preparaciones?: PreparacionesNestingService,
   ) {}
 
@@ -131,6 +133,12 @@ export class CotizacionWorker
           )
         : undefined;
     try {
+      if (job.data.preparacionNestingId)
+        await this.capacidadesPlan.exigirTodas(job.data.input.tenantId, [
+          'analisis_vectorial',
+          'aprovechamiento_cotizacion',
+      'nesting_irregular',
+        ]);
       await actualizarPreparacion('PROCESANDO');
       await job.updateProgress({ porcentaje: 10, etapa: 'cotizando' });
       const cotizar = () => this.motor.cotizar(job.data.input);

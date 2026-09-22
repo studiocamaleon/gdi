@@ -48,6 +48,7 @@ import s from "./tablero-lista.module.css";
 import { revisionCeldasEnVivo, type CampoLista, type CambiosCeldas } from "@/lib/tablero-lista-en-vivo";
 import { AsignacionPersonalSheet } from "./asignacion-personal-sheet";
 import { useTransicionLista } from "./use-transicion-lista";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 type AsignacionManual = {
   puedeReasignar: boolean;
@@ -603,7 +604,7 @@ export function TableroLista({
   terminados = false,
   seccionInicial,
   contextoFiltros = "",
-  asignacionManual,
+  asignacionManual: solicitudAsignacion,
 }: {
   items: ItemView[];
   trabajosContexto?: ItemView[];
@@ -616,6 +617,11 @@ export function TableroLista({
   contextoFiltros?: string;
   asignacionManual?: AsignacionManual;
 }) {
+  const conAsignacionPersonal = useCapacidad("asignacion_automatica");
+  const asignacionManual = useMemo(() => solicitudAsignacion ? {
+    ...solicitudAsignacion,
+    puedeReasignar: solicitudAsignacion.puedeReasignar && conAsignacionPersonal,
+  } : undefined, [solicitudAsignacion, conAsignacionPersonal]);
   const scope = useDesignScope();
   const designTheme = useDesignTheme();
   const [pasoAsignacion, setPasoAsignacion] = useState<string | null>(null);

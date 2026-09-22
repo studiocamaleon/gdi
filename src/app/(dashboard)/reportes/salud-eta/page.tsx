@@ -1,3 +1,5 @@
+import { tieneCapacidad } from "@/lib/capacidades-server";
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
 import { ReporteSaludEta } from "@/components/panel/reporte-salud-eta";
 import { zonaHorariaDelTenant } from "@/lib/auth-server";
 import { getPanelSaludEta } from "@/lib/panel-api";
@@ -16,6 +18,8 @@ export default async function SaludEtaReportePage({
 }: {
   searchParams: Promise<ParametrosPeriodo>;
 }) {
+  if (!(await tieneCapacidad("reportes_produccion")))
+    return <FuncionNoIncluida />;
   const parametros = await searchParams;
   const rango = rangoDeParametros(parametros, await zonaHorariaDelTenant());
   const data = await getPanelSaludEta(rango);

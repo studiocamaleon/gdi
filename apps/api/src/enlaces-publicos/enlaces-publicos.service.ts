@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { Prisma, TipoEnlacePublico } from '@prisma/client';
@@ -44,7 +45,12 @@ export type EnlaceResuelto = {
 export class EnlacesPublicosService {
   private readonly logger = new Logger(EnlacesPublicosService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
 
   /**
    * Crea (o re-emite) el link de una entidad. Idempotente por [tipo, entidad]:
@@ -61,6 +67,10 @@ export class EnlacesPublicosService {
     },
   ): Promise<string> {
     const { tenantId, tipo, entidadId, token, expiraEl = null } = params;
+    if (tipo === TipoEnlacePublico.PRESUPUESTO)
+      await this.capacidades.exigir(tenantId, 'aprobacion_presupuestos', db);
+    if (tipo === TipoEnlacePublico.SEGUIMIENTO_OT)
+      await this.capacidades.exigir(tenantId, 'seguimiento_qr', db);
     await db.enlacePublico.upsert({
       where: { tipo_entidadId: { tipo, entidadId } },
       create: { tenantId, tipo, entidadId, token, expiraEl },

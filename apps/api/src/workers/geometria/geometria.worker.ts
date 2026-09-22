@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import {
   Injectable,
   Logger,
@@ -44,6 +45,7 @@ export class GeometriaWorker
     private readonly control: ControlTrabajosGeometriaService,
     private readonly tenantConcurrency: TenantConcurrencyService,
     private readonly capacidad: CapacidadGeometriaService,
+    private readonly capacidadesPlan: CapacidadesEmpresaService,
   ) {}
 
   private workers: Array<
@@ -236,6 +238,16 @@ export class GeometriaWorker
     if (await this.control.leerCancelacion(jobId)) {
       await this.capacidad.cancelar(jobId);
       throw new Error('El cálculo de geometría fue cancelado.');
+    }
+    try {
+      await this.capacidadesPlan.exigirTodas(job.data.tenantId,
+        job.data.calculoCotizacion
+          ? ['nesting_irregular']
+          : ['analisis_vectorial', 'aprovechamiento_cotizacion', 'nesting_irregular'],
+      );
+    } catch (error) {
+      await this.capacidad.cancelar(jobId);
+      throw error;
     }
     let lease: LeaseTenant | null;
     try {

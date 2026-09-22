@@ -1,3 +1,4 @@
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { DatosEmpresaModule } from '../tenants/datos-empresa.module';
@@ -12,6 +13,7 @@ import { AcreditacionesScheduler } from './acreditaciones.scheduler';
 import { TesoreriaService } from './tesoreria.service';
 import { ConfiguracionFiscalService } from './configuracion-fiscal.service';
 import { AfipIntegracionService } from './afip-integracion.service';
+import { EmisionFiscalService } from './emision-fiscal.service';
 import { ComprobantesService } from './comprobantes.service';
 import { ImputacionesService } from './imputaciones.service';
 import { CuentaCorrienteService } from './cuenta-corriente.service';
@@ -26,6 +28,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
 
 @Module({
   imports: [
+    CapacidadesEmpresaModule,
     ArchivosModule,
     EnlacesPublicosModule,
     SuscripcionesModule,
@@ -46,6 +49,7 @@ import { AfipSdkProvider } from './invoicing/afip-sdk.provider';
     ConfiguracionFiscalService,
     AfipIntegracionService,
     ComprobantesService,
+    EmisionFiscalService,
     ImputacionesService,
     CuentaCorrienteService,
     FacturaService,

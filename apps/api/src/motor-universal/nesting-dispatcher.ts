@@ -68,6 +68,7 @@ import type {
 } from '../productos-servicios/nesting/types';
 import {
   debeEjecutarNestingVectorial,
+  debeEjecutarNestingRectangularCorte,
   resolveNestingConfig,
   type NestingConfigResolved,
   type PrintSheetCandidateConfig,
@@ -334,6 +335,8 @@ export function hayPliegosImpresosHeredados(jobContext: JobContext): boolean {
 
 /** Hooks async que el motor puede inyectar al dispatcher. */
 export interface NestingDispatchOpts {
+  /** Autorización del contrato, incluso cuando se reutiliza una solución. */
+  exigirNestingIrregular?: () => Promise<void>;
   /**
    * Carga la MP propia de un candidato de pliego (modo 'por_candidato').
    * Sin este hook los candidatos con MP declarada no se enriquecen y el
@@ -443,7 +446,7 @@ function adjuntarDemandaRectangular(
       ? {
           ...result,
           demandaRectangular: piezas,
-          ...(jobContext.geometriaVectorial
+          ...(jobContext.geometriaVectorial && jobContext.modoCotizacionVectorial !== 'medidas'
             ? { layoutVinculadoGeometriaVectorial: true }
             : {}),
         }
@@ -481,7 +484,7 @@ function adjuntarDemandaRectangular(
     ? {
         ...result,
         demandaRectangular: [...agrupadas.values()],
-        ...(jobContext.geometriaVectorial
+        ...(jobContext.geometriaVectorial && jobContext.modoCotizacionVectorial !== 'medidas'
           ? { layoutVinculadoGeometriaVectorial: true }
           : {}),
       }
@@ -638,6 +641,7 @@ async function despacharNesting(
   // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
   // grid-2d-single (poses + imposición completa) dentro del multi.
   if (jobContext.disenosVectoriales?.length && paso.familiaCodigo === 'impresion_por_area') {
+    await opts?.exigirNestingIrregular?.();
     if (config.pieceBleedMm !== 0) throw new NestingIrregularError('La colección de piezas requiere impresión sin sangrado para conservar el registro del corte.');
     const resultado = await runIrregularPlaca(jobContext, materialResuelto, {...config, permitirSegmentacionVectorial:false, preservarComposicionOriginalSiEntra:false}, opts?.resolveIrregularNesting);
     return resultado ? {...resultado, layoutVinculadoGeometriaVectorial:true} : null;
@@ -661,15 +665,19 @@ type EstrategiaNestingFn = (
  */
 const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
   /** Contornos SVG normalizados por el servidor sobre una placa finita. */
-  irregular_placa: (paso, jobContext, materialResuelto, config, opts) =>
-    debeEjecutarNestingVectorial(paso, jobContext)
-      ? runIrregularPlaca(
+  irregular_placa: async (paso, jobContext, materialResuelto, config, opts) => {
+    if (debeEjecutarNestingRectangularCorte(paso, jobContext))
+      return runRectangularCorte(paso, jobContext, materialResuelto, config);
+    if (!debeEjecutarNestingVectorial(paso, jobContext)) return null;
+    const manual = Number(jobContext.placasVectorialesManuales) > 0 && Number(jobContext.metrosCortePorPlacaVectorial) > 0;
+    if (!manual) await opts?.exigirNestingIrregular?.();
+    return runIrregularPlaca(
           jobContext,
           materialResuelto,
           config,
           opts?.resolveIrregularNesting,
-        )
-      : null,
+        );
+  },
 
   /** Corte sobre rollo: shelf sin panelizado. Si el material cargado es hoja/
    *  placa (no rollo) no acomoda en rollo — el formato lo dice el material. */
@@ -1132,6 +1140,196 @@ function resolverSuperficieTrabajoPlaca(
         heightMm: workHeightMm,
       },
       mensaje,
+    },
+  };
+}
+
+/** Acomodo por medidas con las mismas restricciones físicas que el corte
+ * vectorial. La zona alcanzable nunca reemplaza la medida de la placa comprada. */
+function runRectangularCorte(
+  paso: PasoCargado,
+  jobContext: JobContext,
+  material: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult | null {
+  if (!material || !config.sheetWidthMm || !config.sheetHeightMm) return null;
+  const piezas = getPiezasParaNesting(jobContext);
+  if (!piezas.length) return null;
+  const superficie = resolverSuperficieTrabajoPlaca(config);
+  const configTrabajo = {
+    ...config,
+    pieceBleedMm: 0,
+    sheetWidthMm: superficie.workWidthMm,
+    sheetHeightMm: superficie.workHeightMm,
+  };
+  const contextoRectangular = { ...jobContext, geometriaVectorial: undefined };
+  const layout = leerLayoutProduccionCompartido(jobContext);
+  let result: NestingDispatchResult | null;
+  if (layout) {
+    if (
+      (layout.materialVarianteId &&
+        layout.materialVarianteId !== material.id) ||
+      layout.substrates.some(
+        (s) =>
+          s.kind !== 'sheet' ||
+          !casiIgual(s.widthMm, superficie.stockWidthMm) ||
+          !casiIgual(s.heightMm, superficie.stockHeightMm),
+      )
+    )
+      throw new NestingIrregularError(
+        'El corte debe conservar el material y las medidas de la placa utilizada para imprimir.',
+      );
+    const normalizarDemanda = (
+      demanda: Array<{ ancho: number; alto: number; cantidad: number }>,
+    ) => {
+      const conteos = new Map<string, number>();
+      for (const p of demanda) {
+        const key = `${Math.min(p.ancho, p.alto)}x${Math.max(p.ancho, p.alto)}`;
+        conteos.set(key, (conteos.get(key) ?? 0) + p.cantidad);
+      }
+      return JSON.stringify([...conteos].sort());
+    };
+    if (
+      normalizarDemanda(
+        piezas.map((p) => ({
+          ancho: p.anchoMm,
+          alto: p.altoMm,
+          cantidad: p.cantidad,
+        })),
+      ) !==
+      normalizarDemanda(
+        layout.placements.map((p) => ({
+          ancho: p.widthMm,
+          alto: p.heightMm,
+          cantidad: 1,
+        })),
+      )
+    ) {
+      throw new NestingIrregularError(
+        'Las medidas o cantidades del corte no coinciden con las piezas del layout impreso.',
+      );
+    }
+    // La impresión ya fijó las posiciones. No se pueden reacomodar al cortar.
+    if (
+      layout.placements.some(
+        (p) =>
+          p.xMm < config.margins.leftMm - 0.01 ||
+          p.yMm < config.margins.topMm - 0.01 ||
+          p.xMm + p.widthMm >
+            superficie.workWidthMm - config.margins.rightMm + 0.01 ||
+          p.yMm + p.heightMm >
+            superficie.workHeightMm - config.margins.bottomMm + 0.01,
+      )
+    )
+      throw new NestingIrregularError(
+        'El layout impreso deja piezas fuera del área de corte; revisá el acomodo de impresión y los márgenes de la cortadora.',
+      );
+    for (let i = 0; i < layout.placements.length; i++) {
+      const a = layout.placements[i];
+      for (let j = i + 1; j < layout.placements.length; j++) {
+        const b = layout.placements[j];
+        if (a.substrateIndex !== b.substrateIndex) continue;
+        const separados =
+          a.xMm + a.widthMm + config.separationHMm <= b.xMm + 0.01 ||
+          b.xMm + b.widthMm + config.separationHMm <= a.xMm + 0.01 ||
+          a.yMm + a.heightMm + config.separationVMm <= b.yMm + 0.01 ||
+          b.yMm + b.heightMm + config.separationVMm <= a.yMm + 0.01;
+        if (!separados)
+          throw new NestingIrregularError(
+            'El layout impreso no respeta la separación necesaria para el corte.',
+          );
+      }
+    }
+    result = {
+      algorithm: 'grid-2d-multi',
+      unidad: 'pliegos',
+      cantidadCalculada: layout.substrates.length,
+      aprovechamientoPct: 0,
+      substrates: layout.substrates,
+      placements: layout.placements,
+      piezasAcomodadas: layout.placements.length,
+      metricasRaw: { areaUtilMm2: 0, areaTotalMm2: 0, aprovechamientoPct: 0 },
+      visualConfig: layout.visualConfig,
+    };
+  } else {
+    result = runGrid2DMultiForArea(
+      paso,
+      contextoRectangular,
+      configTrabajo,
+      resolvePlateAxes({
+        widthMm: superficie.stockWidthMm,
+        heightMm: superficie.stockHeightMm,
+      }).longAxis,
+    );
+    if (!result) {
+      throw new NestingIrregularError(
+        `Las piezas no entran en la zona de corte de ${superficie.workWidthMm} × ${superficie.workHeightMm} mm con los márgenes y la rotación configurados.`,
+      );
+    }
+  }
+  const substrates = result.substrates.map((s) => ({
+    ...s,
+    widthMm: superficie.stockWidthMm,
+    heightMm: superficie.stockHeightMm,
+  }));
+  const perSubstrate = substrates.map((_, index) => {
+    const placements = result!.placements.filter(
+      (p) => p.substrateIndex === index,
+    );
+    return {
+      areaUtilMm2: placements.reduce(
+        (sum, p) => sum + p.widthMm * p.heightMm,
+        0,
+      ),
+      consumedLengthMm: consumedLengthFromPlacements(placements, {
+        widthMm: superficie.stockWidthMm,
+        heightMm: superficie.stockHeightMm,
+        trailingMarginMm:
+          superficie.stockWidthMm > superficie.stockHeightMm
+            ? config.margins.rightMm
+            : config.margins.bottomMm,
+        advanceAlongLongSide: true,
+      }),
+    };
+  });
+  const areaUtilMm2 = perSubstrate.reduce((sum, s) => sum + s.areaUtilMm2, 0);
+  const areaTotalMm2 =
+    superficie.stockWidthMm *
+    superficie.stockHeightMm *
+    result.cantidadCalculada;
+  const aprovechamientoPct = (areaUtilMm2 / areaTotalMm2) * 100;
+  // El recorrido rectangular usa todas las piezas, no el número de placas ni
+  // un perímetro vectorial que haya quedado de otra modalidad del cotizador.
+  jobContext.piezaPerimetroTotalM = piezas.reduce(
+    (sum, p) => sum + (2 * (p.anchoMm + p.altoMm) * p.cantidad) / 1_000,
+    0,
+  );
+  return {
+    ...result,
+    substrates,
+    aprovechamientoPct,
+    metricasRaw: {
+      ...result.metricasRaw,
+      areaUtilMm2,
+      areaTotalMm2,
+      aprovechamientoPct,
+      perSubstrate,
+    },
+    visualConfig: {
+      ...buildVisualConfig({
+        kind: 'sheet',
+        widthMm: superficie.workWidthMm,
+        heightMm: superficie.workHeightMm,
+        margins: config.margins,
+        pieceBleedMm: 0,
+        separationHMm: config.separationHMm,
+        separationVMm: config.separationVMm,
+        allowRotation: config.allowRotation,
+        substrateLabel: 'Placa',
+      }),
+      ...(superficie.manejoPlaca
+        ? { manejoPlaca: superficie.manejoPlaca }
+        : {}),
     },
   };
 }
@@ -2237,6 +2435,7 @@ function runGrid2DMultiForArea(
   paso: PasoCargado,
   jobContext: JobContext,
   config: NestingConfigResolved,
+  advanceAxis?: 'x' | 'y',
 ): NestingDispatchResult | null {
   const piezas = getPiezasParaNesting(jobContext);
   if (piezas.length === 0) return null;
@@ -2261,7 +2460,7 @@ function runGrid2DMultiForArea(
     !contienePaneles &&
     !contieneIdentidadesVectoriales
   ) {
-    return runGrid2DSingleForArea(jobContext, config);
+    return runGrid2DSingleForArea(jobContext, config, 'Placa', true, advanceAxis);
   }
 
   const rectangular = nestGrid2DMulti(
@@ -2411,6 +2610,7 @@ function runGrid2DSingleForArea(
   config: NestingConfigResolved,
   substrateLabel = 'Placa',
   advanceAlongLongSide = true,
+  advanceAxis?: 'x' | 'y',
 ): NestingDispatchResult | null {
   const piezas = getPiezasParaNesting(jobContext);
   const pieza = piezas[0];
@@ -2480,6 +2680,7 @@ function runGrid2DSingleForArea(
       separationVMm: config.separationVMm,
       allowRotation: config.allowRotation,
       advanceAlongLongSide,
+      advanceAxis,
     });
     const placementsPlaca =
       mixedLayout?.placements ?? result.placements.slice(0, piezasEnEstaPlaca);
@@ -2605,10 +2806,12 @@ function buildSingleSizeMixedLayout(input: {
   separationVMm: number;
   allowRotation: boolean;
   advanceAlongLongSide?: boolean;
+  advanceAxis?: 'x' | 'y';
 }): { placements: Placement[]; consumedLengthMm: number } | null {
   if (
-    input.advanceAlongLongSide &&
-    input.substrateWidthMm > input.substrateHeightMm
+    input.advanceAxis === 'x' ||
+    (!input.advanceAxis && input.advanceAlongLongSide &&
+      input.substrateWidthMm > input.substrateHeightMm)
   ) {
     const transposed = buildSingleSizeMixedLayout({
       ...input,
@@ -2625,6 +2828,7 @@ function buildSingleSizeMixedLayout(input: {
       separationHMm: input.separationVMm,
       separationVMm: input.separationHMm,
       advanceAlongLongSide: false,
+      advanceAxis: 'y',
     });
     return transposed
       ? {

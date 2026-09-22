@@ -2,6 +2,8 @@ import { PERMISO_KEY } from '../../auth/permiso.decorator';
 import type { CurrentAuth } from '../../auth/auth.types';
 import { PanelGeneralController } from '../panel-general.controller';
 import { PanelGeneralService } from '../panel-general.service';
+import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
+import { PROPUESTA_PLANES } from '../../plataforma/planes/catalogo-planes';
 
 const authCon = (permisos: string[]): CurrentAuth =>
   ({
@@ -16,6 +18,15 @@ const authCon = (permisos: string[]): CurrentAuth =>
 
 function dependencias() {
   const prisma = {
+    tenant: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'tenant-a',
+        nombre: 'Prueba',
+        activo: true,
+        suscripcion: null,
+        cuotaBytesArchivos: null,
+      }),
+    },
     datosEmpresa: {
       findUnique: jest.fn().mockResolvedValue({
         monedaCodigo: 'ARS',
@@ -48,6 +59,7 @@ function dependencias() {
     prisma as never,
     ordenes as never,
     admin as never,
+    new CapacidadesEmpresaService(prisma as never),
   );
   return { prisma, ordenes, servicio, admin };
 }
@@ -380,4 +392,75 @@ describe('Panel General', () => {
       'info',
     ]);
   });
+});
+
+it.each([
+  ['Esencial', 0, false],
+  ['Pro', 1, true],
+] as const)(
+  'las acciones rápidas de %s respetan las funciones de su versión',
+  async (_nombre, indice, puedeEgreso) => {
+    const { servicio, prisma } = dependencias();
+    prisma.tenant.findUnique.mockResolvedValue({
+      id: 'tenant-a',
+      nombre: 'Prueba',
+      activo: true,
+      cuotaBytesArchivos: null,
+      suscripcion: {
+        estado: 'activa',
+        proveedor: 'manual',
+        trialHasta: null,
+        graciaHasta: null,
+        plan: { nombre: 'Plan', featuresJson: {} },
+        planVersion: {
+          id: 'version-asignada',
+          numero: 2,
+          catalogoVersion: 1,
+          contenido: {
+            ...PROPUESTA_PLANES[indice].contenido,
+            almacenamientoModo: 'limitado',
+            almacenamientoGb: 250,
+          },
+        },
+      },
+    });
+    const r = await servicio.obtener(
+      authCon([
+        'comercial.ver',
+        'comercial.gestionar',
+        'produccion.ver',
+        'produccion.gestionar',
+        'administracion.gestionar',
+      ]),
+    );
+    const ids = r.accionesRapidas.map((a) => a.id);
+    expect(ids).toContain('crear-orden');
+    expect(ids.includes('egreso')).toBe(puedeEgreso);
+  },
+);
+
+it('el panel en sólo lectura conserva consulta y no ofrece crear órdenes ni egresos', async () => {
+  const { servicio, prisma } = dependencias();
+  prisma.tenant.findUnique.mockResolvedValue({
+    id: 'tenant-a',
+    nombre: 'Prueba',
+    activo: true,
+    cuotaBytesArchivos: null,
+    suscripcion: {
+      estado: 'baja',
+      proveedor: 'paddle',
+      estadoProveedor: 'canceled',
+      plan: { featuresJson: { todo: true } },
+    },
+  });
+  const r = await servicio.obtener(
+    authCon([
+      'comercial.ver',
+      'comercial.gestionar',
+      'produccion.ver',
+      'produccion.gestionar',
+      'administracion.gestionar',
+    ]),
+  );
+  expect(r.accionesRapidas.map((a) => a.id)).toEqual(['tablero']);
 });

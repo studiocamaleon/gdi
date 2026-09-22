@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import { Controller, Get, Header, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -5,6 +6,7 @@ import { Permiso, SoloAutenticado } from '../auth/permiso.decorator';
 import { WhatsappContextoDto } from './dto/whatsapp-contexto.dto';
 import { WhatsappContextoService } from './whatsapp-contexto.service';
 
+@RequiereCapacidad('whatsapp_web')
 @Controller('chrome-whatsapp')
 export class WhatsappContextoController {
   constructor(private readonly servicio: WhatsappContextoService) {}

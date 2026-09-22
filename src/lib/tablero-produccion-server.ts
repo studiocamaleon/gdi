@@ -1,3 +1,4 @@
+import { consultarCapacidadesCached } from "@/lib/capacidades-server";
 import { getTableroProduccion } from "@/lib/ordenes-trabajo-api";
 import {
   getConfiguracionProduccion,
@@ -36,10 +37,12 @@ export async function cargarDatosTableroProduccion({ soloPendientes = false }: {
   let errorInicial: string | null = null;
   let avisoParcial: string | null = null;
 
+  const { funciones } = await consultarCapacidadesCached();
+  const conEta = funciones.eta_capacidad === true;
   const [tablero, ests, durs, dias, config] = await Promise.allSettled([
     getTableroProduccion({ soloPendientes }),
     getEstaciones(),
-    getDuracionesFamilias(),
+    conEta ? getDuracionesFamilias() : Promise.resolve([]),
     getDiasNoLaborables(),
     getConfiguracionProduccion(),
   ]);

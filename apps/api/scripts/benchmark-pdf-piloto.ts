@@ -173,7 +173,9 @@ async function main() {
     await medir('HTML 24 productos', 5, 1, () => piloto.generar(largo)),
   );
   process.env.PRESUPUESTO_PDF_PILOTO = 'true';
-  const cache = new PresupuestoPilotoService(piloto);
+  const cache = new PresupuestoPilotoService(piloto, {
+    exigir: async () => undefined, // Fixture: mide render/caché sin una empresa real.
+  } as never);
   await cache.generar('tenant-benchmark', 'presupuesto-benchmark', datos);
   escenarios.push(
     await medir('HTML caché caliente', 20, 4, () =>

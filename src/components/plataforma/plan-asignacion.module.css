@@ -1,0 +1,126 @@
+.dialog {
+  max-width: 860px;
+}
+.body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.body p,
+.body li {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.body ul {
+  padding-left: 18px;
+  list-style: disc;
+}
+.search {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.search > :first-child {
+  flex: 1;
+}
+.results {
+  max-height: 240px;
+  overflow: auto;
+}
+.company {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.company strong {
+  font-size: 14px;
+}
+.company small {
+  display: block;
+  color: var(--muted-text);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.transition {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.transition small {
+  display: block;
+  font-family: var(--brand-mono);
+  font-size: 10px;
+  color: var(--brand-muted-on-graphite);
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+.transition strong {
+  font-size: 16px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.metrics dt {
+  font-size: 11px;
+  color: var(--muted-text);
+}
+.metrics dd {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+.body summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+.tableScroll {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.body th {
+  background: var(--surface-secondary);
+  text-align: left;
+}
+.body td,
+.body th {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+  .transition {
+    flex-wrap: wrap;
+  }
+}

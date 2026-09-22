@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { montoCobroEnOrden } from "@/lib/cobro-aplicado";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -59,6 +60,8 @@ const ESTADO_COBRANZA_LABEL: Record<string, string> = {
 
 const COMPROBANTE_ESTADO_LABEL: Record<string, string> = {
   borrador: "Borrador",
+  en_proceso: "Enviando",
+  por_verificar: "Por verificar",
   emitido: "Emitida",
   rechazado: "Rechazada",
   anulado: "Anulada",
@@ -326,6 +329,7 @@ export function ComprobantesOrdenTab({
     null,
   );
   // Anular es otro permiso que facturar: emitir y deshacer no son lo mismo.
+  const fiscalDisponible = useCapacidad("fiscal_argentina");
   const puedeAnular = usePuede("administracion.anular");
   // El botón Facturar sólo aparece con la integración AFIP activa. null =
   // todavía no sabemos, así que no se muestra ni el botón ni el aviso.
@@ -393,7 +397,10 @@ export function ComprobantesOrdenTab({
           <span className="ttl">
             Comprobantes fiscales <span className="ct">{listaComp.length}</span>
           </span>
-          {!soloLectura && puedeFacturar && facturacionActiva && saldoSinFacturar > 0.01 ? (
+          {!soloLectura &&
+          puedeFacturar &&
+          facturacionActiva &&
+          saldoSinFacturar > 0.01 ? (
             <button
               type="button"
               className="btn btn-primary sm"
@@ -402,7 +409,8 @@ export function ComprobantesOrdenTab({
               <ReceiptTextIcon />
               Facturar
             </button>
-          ) : !soloLectura && puedeFacturar &&
+          ) : !soloLectura &&
+            puedeFacturar &&
             facturacionActiva === false &&
             saldoSinFacturar > 0.01 ? (
             // No se esconde sin explicar: se dice por qué y adónde ir.
@@ -416,9 +424,11 @@ export function ComprobantesOrdenTab({
         ) : listaComp.length === 0 ? (
           <div className="mov-empty">
             Esta orden no tiene comprobantes fiscales.
-            {soloLectura ? " Activá Editar orden para gestionar comprobantes." : puedeFacturar
-              ? " Facturala entera o parcial cuando lo necesites — la deuda del cliente corre igual, esté facturada o no."
-              : " Emití la orden para poder facturarla."}
+            {soloLectura
+              ? " Activá Editar orden para gestionar comprobantes."
+              : puedeFacturar
+                ? " Facturala entera o parcial cuando lo necesites — la deuda del cliente corre igual, esté facturada o no."
+                : " Emití la orden para poder facturarla."}
           </div>
         ) : (
           <div className="mov-table fo-comps">
@@ -479,7 +489,9 @@ export function ComprobantesOrdenTab({
                 <span className="fo-comp-acc">
                   {c.tipo === "factura" &&
                   c.estado === "emitido" &&
-                  !soloLectura && puedeAnular ? (
+                  !soloLectura &&
+                  puedeAnular &&
+                  fiscalDisponible ? (
                     <button
                       type="button"
                       className="fo-nc-btn"
@@ -517,7 +529,9 @@ export function ComprobantesOrdenTab({
         {errorCobros ? (
           <Alert variant="destructive">
             <AlertTitle>No se pudieron consultar los cobros</AlertTitle>
-            <AlertDescription>Volvé a abrir la pestaña para reintentar.</AlertDescription>
+            <AlertDescription>
+              Volvé a abrir la pestaña para reintentar.
+            </AlertDescription>
           </Alert>
         ) : cobros === null ? (
           <div className="mov-empty">Cargando cobros…</div>
@@ -545,7 +559,9 @@ export function ComprobantesOrdenTab({
                 <span className="mov-fecha">{formatFechaOrden(c.fecha)}</span>
                 <span className="mov-metodo">
                   {c.metodoNombre}
-                  {c.origenAplicacion === "cuenta_corriente" ? <span className="mov-who"> · Cuenta corriente</span> : null}
+                  {c.origenAplicacion === "cuenta_corriente" ? (
+                    <span className="mov-who"> · Cuenta corriente</span>
+                  ) : null}
                 </span>
                 <span className="mov-comp">
                   {c.numeroRecibo ? (

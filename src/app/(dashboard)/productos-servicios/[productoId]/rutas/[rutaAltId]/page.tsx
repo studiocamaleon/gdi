@@ -1,3 +1,4 @@
+import { puedeConfigurar, tieneCapacidad } from "@/lib/capacidades-server";
 import { notFound, redirect } from "next/navigation";
 
 import { ModeloProductivoEditorView } from "@/components/productos-servicios/modelo-productivo-editor-view";
@@ -8,7 +9,6 @@ import {
   getProductoById,
   getRecetasProducto,
 } from "@/lib/productos-servicios-api";
-import { tienePermiso } from "@/lib/permisos-server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ export default async function ConfigPasosFocusedPage({
     typeof query.nodo === "string" && query.nodo.trim()
       ? query.nodo
       : undefined;
-  if (!(await tienePermiso("costos.gestionar"))) {
+  if (!(await puedeConfigurar(["productos", "procesos"], "costos.gestionar"))) {
     redirect(
       `/productos-servicios/${productoId}?tab=produccion&vista=operaciones&rutaAltId=${rutaAltId}`,
     );
@@ -38,6 +38,12 @@ export default async function ConfigPasosFocusedPage({
       getCargosDirectosCatalogo(true),
       getRecetasProducto(productoId),
     ]);
+  if (
+    producto.estructuraProducto === "COMPUESTO" &&
+    !(await tieneCapacidad("productos_compuestos"))
+  ) {
+    redirect(`/productos-servicios/${productoId}?tab=produccion`);
+  }
   const rutaAlternativa = producto.rutasAlternativas.find(
     (ruta) => ruta.id === rutaAltId,
   );

@@ -5,7 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MotorUniversalModule } from '../motor-universal/motor.module';
 import { CentroCopiadoController } from './centro-copiado.controller';
 import { CentroCopiadoService } from './centro-copiado.service';
-import { SuscripcionesModule } from '../suscripciones/suscripciones.module';
+import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { CentroCopiadoSaludService } from './centro-copiado-salud.service';
 import { CentroCopiadoAuditoriaService } from './centro-copiado-auditoria.service';
 import { CentroCopiadoIdempotenciaService } from './centro-copiado-idempotencia.service';
@@ -19,7 +19,7 @@ import { CentroCopiadoIdempotenciaService } from './centro-copiado-idempotencia.
   imports: [
     PrismaModule,
     MotorUniversalModule,
-    SuscripcionesModule,
+    CapacidadesEmpresaModule,
     CatalogoCadModule,
   ],
   controllers: [CentroCopiadoController],

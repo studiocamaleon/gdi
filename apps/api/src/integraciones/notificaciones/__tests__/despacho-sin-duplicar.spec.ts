@@ -184,4 +184,41 @@ describe('DespachoService — un hecho, un mensaje', () => {
     expect(fila?.intentos).toBe(0);
     expect(fila?.reservadaEl).toBeNull();
   });
+
+  it('no reenvía un resultado incierto aunque se solicite despachar otra vez', async () => {
+    enviarPlantilla.mockResolvedValue({
+      ok: false,
+      incierto: true,
+      motivo: 'Respuesta interrumpida',
+    });
+    const id = await encolar();
+    expect((await despachar(id, DENTRO_DE_VENTANA)).estado).toBe('incierta');
+    expect((await despachar(id, DENTRO_DE_VENTANA)).estado).toBe('nada');
+    expect(enviarPlantilla).toHaveBeenCalledTimes(1);
+    expect(
+      (await prisma.notificacionWhatsapp.findUniqueOrThrow({ where: { id } }))
+        .estado,
+    ).toBe(ESTADOS.incierta);
+  });
+  it('si la base no permite leer ni guardar, informa incertidumbre sin lanzar ni enviar', async () => {
+    const dbCaida = {
+      notificacionWhatsapp: {
+        findFirst: jest
+          .fn()
+          .mockRejectedValue(new Error('Base temporalmente caída')),
+        updateMany: jest
+          .fn()
+          .mockRejectedValue(new Error('Base temporalmente caída')),
+      },
+    } as unknown as PrismaService;
+    const averiado = new DespachoService(
+      dbCaida,
+      {} as IntegracionesService,
+      { enviarPlantilla } as unknown as WatiClient,
+    );
+    await expect(averiado.despachar(randomUUID())).resolves.toMatchObject({
+      estado: 'incierta',
+    });
+    expect(enviarPlantilla).not.toHaveBeenCalled();
+  });
 });

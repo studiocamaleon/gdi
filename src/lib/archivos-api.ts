@@ -38,6 +38,10 @@ export type ArchivoEnPapelera = Archivo & {
 
 export type UsoAlmacenamiento = {
   bytes: number;
+  bytesReservados: number;
+  cargasPendientes: number;
+  bytesComprometidos: number;
+  excedidoBytes: number;
   /** La cuota que rige: el ajuste de la cuenta si lo hay, si no la del plan. */
   cuotaBytes: number | null;
   cuotaOrigen: "plan" | "ajuste" | "sin_limite";
@@ -116,6 +120,7 @@ export async function subirArchivo(
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<Archivo> {
+  signal?.throwIfAborted();
   const hash = destino.calcularHash ? await sha256Archivo(file) : undefined;
   const inicio = await apiRequest<IniciarRespuesta>("/archivos/iniciar", {
     method: "POST",
@@ -132,19 +137,34 @@ export async function subirArchivo(
     }),
   });
 
-  // El backend decide el camino según el tamaño: un solo PUT, o partes.
-  const partes = inicio.multipart
-    ? await subirEnPartes(inicio.multipart, file, onProgress, signal)
-    : (await subirAlStorage(inicio.subida!, file, onProgress, signal), []);
-
-  return apiRequest<Archivo>(`/archivos/${inicio.archivoId}/confirmar`, {
-    method: "POST",
-    body: JSON.stringify(partes.length > 0 ? { partes } : {}),
-  });
+  try {
+    signal?.throwIfAborted();
+    const partes = inicio.multipart
+      ? await subirEnPartes(inicio.multipart, file, onProgress, signal)
+      : (await subirAlStorage(inicio.subida!, file, onProgress, signal), []);
+    signal?.throwIfAborted();
+    return await apiRequest<Archivo>(
+      `/archivos/${inicio.archivoId}/confirmar`,
+      {
+        method: "POST",
+        body: JSON.stringify(partes.length > 0 ? { partes } : {}),
+      },
+    );
+  } catch (error) {
+    // No usa la señal cancelada. Si el confirmar ya tuvo éxito pero se perdió
+    // su respuesta, este endpoint preserva el archivo que quedó LISTO.
+    await apiRequest(`/archivos/${inicio.archivoId}/cancelar-subida`, {
+      method: "POST",
+    }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function sha256Archivo(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    await file.arrayBuffer(),
+  );
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
@@ -164,6 +184,10 @@ async function subirEnPartes(
   onProgress?: (pct: number) => void,
   signal?: AbortSignal,
 ): Promise<Array<{ numero: number; etag: string }>> {
+  const control = new AbortController();
+  const cancelar = () => control.abort();
+  signal?.addEventListener("abort", cancelar, { once: true });
+  if (signal?.aborted) control.abort();
   const subidoPorParte = new Map<number, number>();
   const avisar = () => {
     if (!onProgress) return;
@@ -177,23 +201,42 @@ async function subirEnPartes(
 
   const trabajador = async () => {
     for (;;) {
+      control.signal.throwIfAborted();
       const parte = cola.shift();
       if (!parte) return;
       const desde = (parte.numero - 1) * multipart.tamanioParte;
       const trozo = file.slice(desde, desde + multipart.tamanioParte);
-      const etag = await putConEtag(parte.url, trozo, signal, (bytes) => {
-        subidoPorParte.set(parte.numero, bytes);
-        avisar();
-      });
+      const etag = await putConEtag(
+        parte.url,
+        trozo,
+        control.signal,
+        (bytes) => {
+          subidoPorParte.set(parte.numero, bytes);
+          avisar();
+        },
+      );
       resultados.push({ numero: parte.numero, etag });
     }
   };
 
-  await Promise.all(
-    Array.from({ length: Math.min(PARTES_EN_PARALELO, cola.length) }, trabajador),
-  );
-  onProgress?.(100);
-  return resultados;
+  try {
+    const tareas = Array.from(
+      { length: Math.min(PARTES_EN_PARALELO, cola.length) },
+      () =>
+        trabajador().catch((error: unknown) => {
+          control.abort();
+          throw error;
+        }),
+    );
+    // Se detienen TODOS los PUT antes de liberar la reserva.
+    const resultadosTareas = await Promise.allSettled(tareas);
+    const fallo = resultadosTareas.find((r) => r.status === "rejected");
+    if (fallo?.status === "rejected") throw fallo.reason;
+    onProgress?.(100);
+    return resultados;
+  } finally {
+    signal?.removeEventListener("abort", cancelar);
+  }
 }
 
 function putConEtag(
@@ -203,12 +246,18 @@ function putConEtag(
   onBytes: (bytes: number) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Cancelado", "AbortError"));
+      return;
+    }
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url, true);
     xhr.upload.onprogress = (e) => onBytes(e.loaded);
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        reject(new Error(`El almacenamiento rechazó una parte (${xhr.status}).`));
+        reject(
+          new Error(`El almacenamiento rechazó una parte (${xhr.status}).`),
+        );
         return;
       }
       const etag = xhr.getResponseHeader("ETag");
@@ -226,7 +275,9 @@ function putConEtag(
     xhr.onerror = () =>
       reject(new Error("Se cortó la conexión subiendo una parte."));
     xhr.onabort = () => reject(new DOMException("Cancelado", "AbortError"));
-    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    const cancelar = () => xhr.abort();
+    signal?.addEventListener("abort", cancelar, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener("abort", cancelar);
     xhr.send(trozo);
   });
 }
@@ -238,6 +289,10 @@ function subirAlStorage(
   signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Cancelado", "AbortError"));
+      return;
+    }
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", subida.url, true);
     for (const [k, v] of Object.entries(subida.headers)) {
@@ -265,7 +320,9 @@ function subirAlStorage(
       reject(new Error("Se cortó la conexión con el almacenamiento."));
     xhr.onabort = () => reject(new DOMException("Cancelado", "AbortError"));
 
-    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    const cancelar = () => xhr.abort();
+    signal?.addEventListener("abort", cancelar, { once: true });
+    xhr.onloadend = () => signal?.removeEventListener("abort", cancelar);
     xhr.send(file);
   });
 }

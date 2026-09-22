@@ -20,8 +20,12 @@ import {
 } from '@prisma/client';
 
 export class CrearArchivoMaestroDto {
+  @IsOptional()
   @IsUUID()
-  proyectoCampanaId!: string;
+  ordenId?: string;
+  @IsOptional()
+  @IsUUID()
+  proyectoCampanaId?: string;
 
   @IsString()
   @MaxLength(180)
@@ -108,8 +112,9 @@ export class DecisionPublicaDocumentoDto {
 }
 
 export class CrearGateDocumentoDto {
+  @IsOptional()
   @IsUUID()
-  proyectoCampanaId!: string;
+  proyectoCampanaId?: string;
 
   @IsUUID()
   ordenId!: string;

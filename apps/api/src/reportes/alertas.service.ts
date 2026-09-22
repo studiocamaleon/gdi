@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   RentabilidadService,
@@ -59,10 +61,16 @@ export class AlertasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rentabilidad: RentabilidadService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
-  async getUmbrales(tenantId: string): Promise<Umbrales> {
-    const row = await this.prisma.configuracionInsights.findUnique({
+  async getUmbrales(
+    tenantId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Umbrales> {
+    const row = await db.configuracionInsights.findUnique({
       where: { tenantId },
     });
     if (!row) return { ...DEFAULTS };
@@ -81,14 +89,19 @@ export class AlertasService {
     tenantId: string,
     dto: ActualizarUmbralesDto,
   ): Promise<Umbrales> {
-    const actual = await this.getUmbrales(tenantId);
-    const merged = { ...actual, ...limpiar(dto) };
-    await this.prisma.configuracionInsights.upsert({
-      where: { tenantId },
-      create: { tenantId, ...merged },
-      update: merged,
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(tx, tenantId, [
+        'reportes_produccion',
+      ]);
+      const actual = await this.getUmbrales(tenantId, tx);
+      const merged = { ...actual, ...limpiar(dto) };
+      await tx.configuracionInsights.upsert({
+        where: { tenantId },
+        create: { tenantId, ...merged },
+        update: merged,
+      });
+      return merged;
     });
-    return merged;
   }
 
   /** "$ 12.345" en la moneda del tenant, para los detalles de las alertas. */
@@ -103,13 +116,18 @@ export class AlertasService {
     rango: Rango,
     hoy: Date = new Date(),
     rentabilidadCalculada?: RentabilidadPeriodo | Promise<RentabilidadPeriodo>,
+    incluirRentabilidad = true,
   ): Promise<Alerta[]> {
     const umbrales = await this.getUmbrales(tenantId);
     const grupos = await Promise.all([
       this.deudaVencida(tenantId, rango, umbrales),
       this.clientesDormidos(tenantId, umbrales, hoy),
       this.concentracion(tenantId, rango, umbrales),
-      this.puntoEquilibrio(tenantId, rango, hoy, rentabilidadCalculada),
+      // La poda por nombre de campo no puede eliminar importes interpolados
+      // en texto. No calcular ni devolver esta alerta sin acceso a márgenes.
+      incluirRentabilidad
+        ? this.puntoEquilibrio(tenantId, rango, hoy, rentabilidadCalculada)
+        : Promise.resolve([]),
       this.tarifasViejas(tenantId, umbrales, hoy),
     ]);
     return grupos

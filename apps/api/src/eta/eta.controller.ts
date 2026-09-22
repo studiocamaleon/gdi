@@ -1,3 +1,4 @@
+import { RequiereCapacidad } from '../suscripciones/capacidad.guard';
 import { Controller, Get, Post, Query } from '@nestjs/common';
 import { CurrentSession } from '../auth/current-auth.decorator';
 import type { CurrentAuth } from '../auth/auth.types';
@@ -5,6 +6,7 @@ import { EtaService } from './eta.service';
 import { Permiso } from '../auth/permiso.decorator';
 
 @Permiso('produccion.ver')
+@RequiereCapacidad('eta_capacidad')
 @Controller('eta')
 export class EtaController {
   constructor(private readonly eta: EtaService) {}
@@ -50,8 +52,9 @@ export class EtaController {
 
   /** Dispara la foto del día para este tenant (backfill / "actualizar ahora"). */
   @Post('snapshot')
+  @Permiso('produccion.supervisar')
   async snapshot(@CurrentSession() auth: CurrentAuth) {
-    await this.eta.snapshotDiario(auth.tenantId);
-    return { ok: true };
+    const ok = await this.eta.snapshotDiario(auth.tenantId);
+    return { ok };
   }
 }

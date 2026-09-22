@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -12,7 +11,11 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { CurrentAuth } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
-import { SuscripcionesService } from '../suscripciones/suscripciones.service';
+import {
+  bloquearAlmacenamiento,
+  cupoAlmacenamiento,
+  exigirEspacio,
+} from './cupo-almacenamiento';
 import {
   STORAGE_DRIVER,
   type MultipartIniciado,
@@ -86,6 +89,10 @@ export type IniciarSubidaResultado =
 export type UsoAlmacenamiento = {
   /** Contador denormalizado del tenant: el que consulta la cuota. */
   bytes: number;
+  bytesReservados: number;
+  cargasPendientes: number;
+  bytesComprometidos: number;
+  excedidoBytes: number;
   /** La que rige: el ajuste del tenant si lo hay, si no la del plan. */
   cuotaBytes: number | null;
   /** De dónde sale `cuotaBytes`, para poder decirlo en pantalla. */
@@ -127,49 +134,8 @@ export class ArchivosService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(STORAGE_DRIVER) private readonly storage: StorageDriver,
-    private readonly suscripciones: SuscripcionesService,
     private readonly eventos: EventosSistemaService,
   ) {}
-
-  /**
-   * La cuota que rige de verdad, y de dónde sale.
-   *
-   * `Tenant.cuotaBytesArchivos` es un AJUSTE que pone el control plane para un
-   * tenant puntual (una migración grande, una cortesía); si no está, manda el
-   * `storageGb` del plan. Hasta que esto existió, el plan no lo aplicaba nadie:
-   * el guard salía temprano cuando el ajuste era null, así que un tenant sin
-   * ajuste no tenía tope aunque su plan dijera 5 GB, y la pantalla mostraba
-   * "sin límite configurado" mientras la suscripción vendía un número.
-   */
-  private async cuotaEfectiva(tenantId: string): Promise<{
-    bytes: number | null;
-    origen: 'plan' | 'ajuste' | 'sin_limite';
-    plan: { nombre: string; storageGb: number | null } | null;
-  }> {
-    const [tenant, limites] = await Promise.all([
-      this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { cuotaBytesArchivos: true },
-      }),
-      this.suscripciones.limites(tenantId),
-    ]);
-
-    const plan = limites.planNombre
-      ? { nombre: limites.planNombre, storageGb: limites.storageGb }
-      : null;
-
-    if (tenant?.cuotaBytesArchivos) {
-      return {
-        bytes: Number(tenant.cuotaBytesArchivos),
-        origen: 'ajuste',
-        plan,
-      };
-    }
-    if (limites.storageGb) {
-      return { bytes: limites.storageGb * 1024 ** 3, origen: 'plan', plan };
-    }
-    return { bytes: null, origen: 'sin_limite', plan };
-  }
 
   // ── Subida ───────────────────────────────────────────────────────────
 
@@ -207,10 +173,6 @@ export class ArchivosService {
     }
 
     await this.verificarEntidad(dto.scope, dto.entidadId ?? null);
-    // La cuota se chequea ACÁ y no al confirmar: rechazar después de que el
-    // usuario esperó a que suba 80 MB es hostil.
-    await this.verificarCuota(auth.tenantId, dto.bytes);
-
     const archivoId = randomUUID();
     const key = construirKey({
       tenantId: auth.tenantId,
@@ -221,45 +183,58 @@ export class ArchivosService {
     });
     const campo = CAMPO_POR_SCOPE[dto.scope];
 
-    // Por encima del umbral la subida va en partes: un solo PUT de 800 MB no
-    // sobrevive a una conexión de imprenta, y no hay forma de reintentar el
-    // pedazo que falló sin volver a mandar todo.
-    const enPartes = dto.bytes > UMBRAL_MULTIPART;
-    const multipart = enPartes
-      ? await this.storage.iniciarMultipart(key, {
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, auth.tenantId);
+      await exigirEspacio(tx, auth.tenantId, BigInt(dto.bytes));
+      await tx.archivo.create({
+        data: {
+          id: archivoId,
+          tenantId: auth.tenantId,
+          scope: dto.scope,
+          key,
+          nombreOriginal: dto.nombre,
+          mimeType: dto.mimeType,
+          bytes: 0n,
+          bytesReservados: BigInt(dto.bytes),
+          reservaHasta: this.vencimientoSubida(),
+          estado: ArchivoEstado.PENDIENTE,
+          publico: dto.publico ?? false,
+          descripcion: dto.descripcion ?? null,
+          autogeneradoPor: dto.autogeneradoPor ?? null,
+          hash: dto.hash?.toLowerCase() ?? null,
+          // Se guarda igual quién tenía la sesión: el arte lo produjo el sistema,
+          // pero fue porque esta persona guardó la orden.
+          subidoPorId: auth.userId,
+          ...(campo && dto.entidadId ? { [campo]: dto.entidadId } : {}),
+        },
+      });
+    });
+    try {
+      if (dto.bytes > UMBRAL_MULTIPART) {
+        const multipart = await this.storage.iniciarMultipart(key, {
           contentType: dto.mimeType,
           bytes: dto.bytes,
-        })
-      : null;
-
-    await this.prisma.archivo.create({
-      data: {
-        id: archivoId,
-        tenantId: auth.tenantId,
-        scope: dto.scope,
-        key,
-        nombreOriginal: dto.nombre,
-        mimeType: dto.mimeType,
-        bytes: BigInt(0),
-        estado: ArchivoEstado.PENDIENTE,
-        publico: dto.publico ?? false,
-        descripcion: dto.descripcion ?? null,
-        autogeneradoPor: dto.autogeneradoPor ?? null,
-        hash: dto.hash?.toLowerCase() ?? null,
-        // Se guarda igual quién tenía la sesión: el arte lo produjo el sistema,
-        // pero fue porque esta persona guardó la orden.
-        subidoPorId: auth.userId,
-        multipartUploadId: multipart?.uploadId ?? null,
-        ...(campo && dto.entidadId ? { [campo]: dto.entidadId } : {}),
-      },
-    });
-
-    if (multipart) return { archivoId, multipart };
-
-    const subida = await this.storage.firmarSubida(key, {
-      contentType: dto.mimeType,
-    });
-    return { archivoId, subida };
+          // Guardar el uploadId ANTES de firmar las partes: si falla una firma
+          // o el aborto remoto, el cron conserva lo necesario para reintentarlo.
+          alCrear: async (uploadId) => {
+            await this.prisma.archivo.update({
+              where: { id: archivoId, tenantId: auth.tenantId },
+              data: { multipartUploadId: uploadId },
+            });
+          },
+        });
+        return { archivoId, multipart };
+      }
+      const subida = await this.storage.firmarSubida(key, {
+        contentType: dto.mimeType,
+      });
+      return { archivoId, subida };
+    } catch (error) {
+      await this.cancelarPendiente(auth.tenantId, archivoId).catch(
+        () => undefined,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -272,10 +247,16 @@ export class ArchivosService {
     id: string,
     dto?: ConfirmarSubidaDto,
   ): Promise<ArchivoDto> {
-    const archivo = await this.buscarPropio(id);
+    const archivo = await this.buscarPropio(id, auth.tenantId);
     if (archivo.estado === ArchivoEstado.LISTO) return this.aDto(archivo);
-    if (archivo.estado === ArchivoEstado.ELIMINADO) {
-      throw new NotFoundException('El archivo fue eliminado.');
+    if (archivo.estado !== ArchivoEstado.PENDIENTE) {
+      throw new NotFoundException('La subida ya no está disponible.');
+    }
+    if (archivo.reservaHasta && archivo.reservaHasta <= new Date()) {
+      await this.cancelarPendiente(auth.tenantId, id);
+      throw new BadRequestException(
+        'La subida venció. Volvé a seleccionar el archivo.',
+      );
     }
 
     // Subida en partes: hay que cerrarla antes de que el objeto exista. Si
@@ -286,11 +267,17 @@ export class ArchivosService {
           'Falta el detalle de las partes para cerrar la subida.',
         );
       }
-      await this.storage.completarMultipart(
-        archivo.key,
-        archivo.multipartUploadId,
-        dto.partes.map((p) => ({ numero: p.numero, etag: p.etag })),
-      );
+      try {
+        await this.storage.completarMultipart(
+          archivo.key,
+          archivo.multipartUploadId,
+          dto.partes.map((p) => ({ numero: p.numero, etag: p.etag })),
+        );
+      } catch (error) {
+        // Otro confirmar pudo completar el mismo multipart. Sólo continuar si
+        // ya existe el objeto final; el estado se decide bajo lock más abajo.
+        if (!(await this.storage.cabecera(archivo.key))) throw error;
+      }
       await this.prisma.archivo.update({
         where: { id },
         data: { multipartUploadId: null },
@@ -306,15 +293,13 @@ export class ArchivosService {
 
     const ext = extensionDe(archivo.nombreOriginal);
     if (meta.bytes > this.maxBytes) {
-      await this.storage.borrar(archivo.key);
-      await this.prisma.archivo.delete({ where: { id: archivo.id } });
+      await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
         `El archivo subido supera el máximo de ${Math.round(this.maxBytes / 1024 / 1024)} MB.`,
       );
     }
     if (meta.contentType && !mimeCoherente(ext, meta.contentType)) {
-      await this.storage.borrar(archivo.key);
-      await this.prisma.archivo.delete({ where: { id: archivo.id } });
+      await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
         `El contenido subido (${meta.contentType}) no coincide con la extensión .${ext}.`,
       );
@@ -328,8 +313,7 @@ export class ArchivosService {
       BYTES_DE_FIRMA,
     );
     if (cabecera && contenidoCoincide(ext, cabecera) === false) {
-      await this.storage.borrar(archivo.key);
-      await this.prisma.archivo.delete({ where: { id: archivo.id } });
+      await this.cancelarPendiente(auth.tenantId, archivo.id);
       throw new BadRequestException(
         `El archivo no es un .${ext} de verdad: su contenido no corresponde a ese formato.`,
       );
@@ -337,38 +321,89 @@ export class ArchivosService {
 
     const bytes = BigInt(meta.bytes);
     const actualizado = await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, auth.tenantId);
+      const actual = await tx.archivo.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (
+        !actual ||
+        (actual.estado !== ArchivoEstado.PENDIENTE &&
+          actual.estado !== ArchivoEstado.LISTO)
+      ) {
+        throw new NotFoundException('La subida ya no está disponible.');
+      }
+      if (actual.estado === ArchivoEstado.LISTO) return actual;
+      if (actual.reservaHasta && actual.reservaHasta <= new Date())
+        throw new BadRequestException(
+          'La subida venció. Volvé a seleccionar el archivo.',
+        );
+      await exigirEspacio(tx, auth.tenantId, bytes, id);
       // Sólo quien confirma PENDIENTE → LISTO contabiliza y publica. Reintentar
       // una confirmación no duplica bytes ni actividad, incluso concurrentemente.
       const cambio = await tx.archivo.updateMany({
-        where: { id: archivo.id, tenantId: auth.tenantId, estado: ArchivoEstado.PENDIENTE },
-        data: { estado: ArchivoEstado.LISTO, bytes },
+        where: {
+          id: archivo.id,
+          tenantId: auth.tenantId,
+          estado: ArchivoEstado.PENDIENTE,
+        },
+        data: {
+          estado: ArchivoEstado.LISTO,
+          bytes,
+          bytesReservados: 0n,
+          reservaHasta: null,
+        },
       });
       const listo = await tx.archivo.findFirstOrThrow({
         where: { id: archivo.id, tenantId: auth.tenantId },
-        include: { subidoPor: { select: { nombreCompleto: true, email: true } } },
+        include: {
+          subidoPor: { select: { nombreCompleto: true, email: true } },
+        },
       });
       if (!cambio.count) {
-        if (listo.estado !== ArchivoEstado.LISTO) throw new NotFoundException('El archivo fue eliminado.');
+        if (listo.estado !== ArchivoEstado.LISTO)
+          throw new NotFoundException('El archivo fue eliminado.');
         return listo;
       }
       await tx.tenant.update({
         where: { id: auth.tenantId },
         data: { bytesArchivos: { increment: bytes } },
       });
-      const item = archivo.ordenItemId ? await tx.ordenTrabajoItem.findFirst({
-        where: { id: archivo.ordenItemId, tenantId: auth.tenantId }, select: { ordenId: true },
-      }) : null;
-      const ordenId = archivo.ordenId ?? item?.ordenId;
-      const entidad = ordenId ? { tipo: 'orden', id: ordenId, ruta: '/produccion/ordenes/' }
-        : archivo.clienteId ? { tipo: 'cliente', id: archivo.clienteId, ruta: '/comercial/clientes/' }
-        : archivo.proyectoCampanaId ? { tipo: 'campana', id: archivo.proyectoCampanaId, ruta: '/comercial/campanas/' }
+      const item = archivo.ordenItemId
+        ? await tx.ordenTrabajoItem.findFirst({
+            where: { id: archivo.ordenItemId, tenantId: auth.tenantId },
+            select: { ordenId: true },
+          })
         : null;
+      const ordenId = archivo.ordenId ?? item?.ordenId;
+      const entidad = ordenId
+        ? { tipo: 'orden', id: ordenId, ruta: '/produccion/ordenes/' }
+        : archivo.clienteId
+          ? {
+              tipo: 'cliente',
+              id: archivo.clienteId,
+              ruta: '/comercial/clientes/',
+            }
+          : archivo.proyectoCampanaId
+            ? {
+                tipo: 'campana',
+                id: archivo.proyectoCampanaId,
+                ruta: '/comercial/campanas/',
+              }
+            : null;
       if (entidad) {
-        await this.eventos.publicarDesdeAuth(auth, {
-          tipo: `archivo.${entidad.tipo}_confirmado`, entidadTipo: 'archivo', entidadId: archivo.id,
-          titulo: 'Archivo subido', mensaje: archivo.nombreOriginal,
-          href: `${entidad.ruta}${entidad.id}`, topicos: ['archivos', 'panel-general'],
-        }, tx);
+        await this.eventos.publicarDesdeAuth(
+          auth,
+          {
+            tipo: `archivo.${entidad.tipo}_confirmado`,
+            entidadTipo: 'archivo',
+            entidadId: archivo.id,
+            titulo: 'Archivo subido',
+            mensaje: archivo.nombreOriginal,
+            href: `${entidad.ruta}${entidad.id}`,
+            topicos: ['archivos', 'panel-general'],
+          },
+          tx,
+        );
       }
       return listo;
     });
@@ -385,9 +420,8 @@ export class ArchivosService {
    * en memoria. Reemplaza al generado anterior de la misma entidad —
    * "el PDF del presupuesto X" es uno solo, no una colección.
    *
-   * El objeto se sube ANTES de tocar la base: si la subida falla, la fila
-   * vieja sigue siendo válida y el endpoint la sigue sirviendo. Al revés
-   * dejaríamos apuntando a un objeto que no existe.
+   * Primero reserva espacio y registra la clave; sólo publica después del PUT.
+   * La versión anterior sigue disponible si falla la subida.
    */
   async materializar(params: {
     tenantId: string;
@@ -412,10 +446,6 @@ export class ArchivosService {
       archivoId,
       ext: extensionDe(params.nombre),
     });
-    await this.storage.subir(key, params.contenido, params.mimeType);
-
-    // Los generadores históricos sólo reemplazan sus propios archivos; nunca
-    // una versión inmutable publicada por el worker de documentos.
     const archivoHistorico = {
       tenantId: params.tenantId,
       scope: params.scope,
@@ -424,67 +454,69 @@ export class ArchivosService {
       estado: ArchivoEstado.LISTO,
       documentoPdfId: null,
     };
-    const anterior = await this.prisma.archivo.findFirst({
-      where: archivoHistorico,
-      orderBy: { createdAt: 'desc' },
-    });
     const bytes = BigInt(params.contenido.length);
-
-    let fila: Archivo;
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, params.tenantId);
+      const anterior = await tx.archivo.findFirst({ where: archivoHistorico });
+      const delta = bytes - (anterior?.bytes ?? 0n);
+      await exigirEspacio(tx, params.tenantId, delta);
+      await tx.archivo.create({
+        data: {
+          id: archivoId,
+          tenantId: params.tenantId,
+          scope: params.scope,
+          key,
+          nombreOriginal: params.nombre,
+          mimeType: params.mimeType,
+          bytes,
+          bytesReservados: delta > 0n ? delta : 0n,
+          reservaHasta: this.vencimientoSubida(),
+          estado: ArchivoEstado.PENDIENTE,
+          generado: true,
+          [campo]: params.entidadId,
+        },
+      });
+    });
     try {
-      [fila] = await this.prisma.$transaction([
-        this.prisma.archivo.create({
-          data: {
-            id: archivoId,
-            tenantId: params.tenantId,
-            scope: params.scope,
-            key,
-            nombreOriginal: params.nombre,
-            mimeType: params.mimeType,
-            bytes,
-            estado: ArchivoEstado.LISTO,
-            generado: true,
-            [campo]: params.entidadId,
-          },
-        }),
-        this.prisma.tenant.update({
-          where: { id: params.tenantId },
-          data: { bytesArchivos: { increment: bytes } },
-        }),
-      ]);
-    } catch (error) {
-      // El índice parcial `Archivo_generado_vigente_unico` dice que hay a lo
-      // sumo un documento generado vigente por entidad. Si dos pedidos
-      // simultáneos generaron el mismo PDF, el que llega segundo choca acá:
-      // tira su objeto y devuelve el que ganó. Antes los dos quedaban
-      // vigentes y el perdedor se filtraba en el bucket para siempre.
-      if (esConflictoDeUnicidad(error)) {
-        await this.storage.borrar(key).catch(() => undefined);
-        const ganador = await this.prisma.archivo.findFirst({
+      await this.storage.subir(key, params.contenido, params.mimeType);
+      return await this.prisma.$transaction(async (tx) => {
+        await bloquearAlmacenamiento(tx, params.tenantId);
+        await this.exigirPendiente(tx, params.tenantId, archivoId);
+        const anterior = await tx.archivo.findFirst({
           where: archivoHistorico,
-          orderBy: { createdAt: 'desc' },
         });
-        if (ganador) return ganador;
-      }
+        const delta = bytes - (anterior?.bytes ?? 0n);
+        await exigirEspacio(tx, params.tenantId, delta, archivoId);
+        // Viejo y nuevo cambian juntos: preserva el índice único y el PDF
+        // anterior sigue disponible si falla la subida o esta transacción.
+        if (anterior)
+          await tx.archivo.update({
+            where: { id: anterior.id },
+            data: {
+              estado: ArchivoEstado.ELIMINADO,
+              eliminadoEl: new Date(),
+            },
+          });
+        const fila = await tx.archivo.update({
+          where: { id: archivoId },
+          data: {
+            estado: ArchivoEstado.LISTO,
+            bytesReservados: 0n,
+            reservaHasta: null,
+          },
+        });
+        await tx.tenant.update({
+          where: { id: params.tenantId },
+          data: { bytesArchivos: { increment: delta } },
+        });
+        return fila;
+      });
+    } catch (error) {
+      await this.cancelarPendiente(params.tenantId, archivoId).catch(
+        () => undefined,
+      );
       throw error;
     }
-
-    // El viejo se va a la papelera con el camino normal (el cron purga el
-    // objeto), así que un fallo acá no deja el nuevo sin registrar.
-    if (anterior) {
-      await this.prisma.$transaction([
-        this.prisma.archivo.update({
-          where: { id: anterior.id },
-          data: { estado: ArchivoEstado.ELIMINADO, eliminadoEl: new Date() },
-        }),
-        this.prisma.tenant.update({
-          where: { id: params.tenantId },
-          data: { bytesArchivos: { decrement: anterior.bytes } },
-        }),
-      ]);
-    }
-
-    return fila;
   }
 
   /** El documento vigente que el sistema generó para esa entidad, si existe. */
@@ -533,68 +565,76 @@ export class ArchivosService {
       ext: 'pdf',
     });
     const bytes = BigInt(params.contenido.length);
-    const cuota = await this.cuotaEfectiva(params.tenantId);
     // Se registra antes del PUT. Si el proceso muere, el barrido de pendientes
     // conoce la clave y limpia el objeto; nunca queda una subida sin rastro.
-    await this.prisma.archivo.create({
-      data: {
-        id: archivoId,
-        tenantId: params.tenantId,
-        scope: ArchivoScope.COTIZACION,
-        cotizacionId: doc.cotizacionId,
-        key,
-        nombreOriginal: nombre,
-        mimeType: 'application/pdf',
-        bytes,
-        estado: ArchivoEstado.PENDIENTE,
-        generado: true,
-        autogeneradoPor: `pdf:${doc.id}`,
-      },
-    });
-    await this.storage.subir(key, params.contenido, 'application/pdf');
-    return this.prisma.$transaction(async (tx) => {
-      const publicado = await tx.documentoPdf.updateMany({
-        where: {
-          id: doc.id,
-          tenantId: params.tenantId,
-          estado: 'PROCESANDO',
-          leaseToken: params.leaseToken,
-          leaseHasta: { gt: new Date() },
-        },
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, params.tenantId);
+      await exigirEspacio(tx, params.tenantId, bytes);
+      await tx.archivo.create({
         data: {
-          estado: 'LISTO',
-          generadoEl: new Date(),
-          contenidoHash: createHash('sha256')
-            .update(params.contenido)
-            .digest('hex'),
-          leaseToken: null,
-          leaseHasta: null,
-          errorCodigo: null,
-          errorMensaje: null,
+          id: archivoId,
+          tenantId: params.tenantId,
+          scope: ArchivoScope.COTIZACION,
+          cotizacionId: doc.cotizacionId,
+          key,
+          nombreOriginal: nombre,
+          mimeType: 'application/pdf',
+          bytes,
+          bytesReservados: bytes,
+          reservaHasta: this.vencimientoSubida(),
+          estado: ArchivoEstado.PENDIENTE,
+          generado: true,
+          autogeneradoPor: `pdf:${doc.id}`,
         },
-      });
-      if (publicado.count !== 1) throw new Error('PDF_LEASE_PERDIDO');
-      // El UPDATE condicionado hace atómica la cuota entre múltiples workers.
-      const contado = await tx.tenant.updateMany({
-        where: {
-          id: params.tenantId,
-          ...(cuota.bytes !== null
-            ? {
-                bytesArchivos: { lte: BigInt(Math.floor(cuota.bytes)) - bytes },
-              }
-            : {}),
-        },
-        data: { bytesArchivos: { increment: bytes } },
-      });
-      if (contado.count !== 1)
-        throw new ForbiddenException(
-          'No hay espacio disponible para guardar el PDF. Liberá espacio o ampliá el plan y reintentá.',
-        );
-      return tx.archivo.update({
-        where: { id: archivoId, tenantId: params.tenantId },
-        data: { estado: ArchivoEstado.LISTO, documentoPdfId: doc.id },
       });
     });
+    try {
+      await this.storage.subir(key, params.contenido, 'application/pdf');
+      return await this.prisma.$transaction(async (tx) => {
+        await bloquearAlmacenamiento(tx, params.tenantId);
+        await this.exigirPendiente(tx, params.tenantId, archivoId);
+        await exigirEspacio(tx, params.tenantId, bytes, archivoId);
+        const publicado = await tx.documentoPdf.updateMany({
+          where: {
+            id: doc.id,
+            tenantId: params.tenantId,
+            estado: 'PROCESANDO',
+            leaseToken: params.leaseToken,
+            leaseHasta: { gt: new Date() },
+          },
+          data: {
+            estado: 'LISTO',
+            generadoEl: new Date(),
+            contenidoHash: createHash('sha256')
+              .update(params.contenido)
+              .digest('hex'),
+            leaseToken: null,
+            leaseHasta: null,
+            errorCodigo: null,
+            errorMensaje: null,
+          },
+        });
+        if (publicado.count !== 1) throw new Error('PDF_LEASE_PERDIDO');
+        await tx.tenant.update({
+          where: { id: params.tenantId },
+          data: { bytesArchivos: { increment: bytes } },
+        });
+        return tx.archivo.update({
+          where: { id: archivoId, tenantId: params.tenantId },
+          data: {
+            estado: ArchivoEstado.LISTO,
+            documentoPdfId: doc.id,
+            bytesReservados: 0n,
+            reservaHasta: null,
+          },
+        });
+      });
+    } catch (error) {
+      await this.cancelarPendiente(params.tenantId, archivoId).catch(
+        () => undefined,
+      );
+      throw error;
+    }
   }
 
   // ── Lectura ──────────────────────────────────────────────────────────
@@ -837,41 +877,57 @@ export class ArchivosService {
    * en el acto: cobrarle al tenant por algo que ya no ve sería raro.
    */
   async eliminar(auth: CurrentAuth, id: string): Promise<void> {
-    const archivo = await this.buscarPropio(id);
-    if (archivo.estado === ArchivoEstado.ELIMINADO) return;
-    if (archivo.generado) {
-      // Borrarlo a mano dejaría al presupuesto o al comprobante sin su
-      // documento hasta que alguien lo vuelva a pedir. Si el contenido
-      // cambió, se re-materializa: no se borra.
-      throw new BadRequestException(
-        'Ese documento lo genera el sistema y no se borra a mano.',
-      );
-    }
-    const referenciasDocumentales = await this.prisma.archivoRevision.count({
-      where: { archivoId: archivo.id },
-    });
-    const geometriasProducto = await this.prisma.geometriaProducto.count({ where: { archivoId: archivo.id } });
-    if (referenciasDocumentales > 0 || geometriasProducto > 0) {
-      throw new BadRequestException(
-        'El archivo forma parte de una revisión controlada y debe conservarse en el historial.',
-      );
-    }
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, auth.tenantId);
+      const archivo = await tx.archivo.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (!archivo) throw new NotFoundException('Archivo no encontrado.');
+      if (
+        archivo.estado === ArchivoEstado.ELIMINADO ||
+        archivo.estado === ArchivoEstado.PURGANDO
+      )
+        return;
+      if (archivo.generado) {
+        // Borrarlo a mano dejaría al presupuesto o al comprobante sin su
+        // documento hasta que alguien lo vuelva a pedir. Si el contenido
+        // cambió, se re-materializa: no se borra.
+        throw new BadRequestException(
+          'Ese documento lo genera el sistema y no se borra a mano.',
+        );
+      }
+      const referenciasDocumentales = await tx.archivoRevision.count({
+        where: { archivoId: archivo.id },
+      });
+      const geometriasProducto = await tx.geometriaProducto.count({
+        where: { archivoId: archivo.id },
+      });
+      if (referenciasDocumentales > 0 || geometriasProducto > 0) {
+        throw new BadRequestException(
+          'El archivo forma parte de una revisión controlada y debe conservarse en el historial.',
+        );
+      }
 
-    const eraListo = archivo.estado === ArchivoEstado.LISTO;
-    await this.prisma.$transaction([
-      this.prisma.archivo.update({
+      if (archivo.estado === ArchivoEstado.PENDIENTE) {
+        await tx.archivo.update({
+          where: { id },
+          data: {
+            estado: ArchivoEstado.PURGANDO,
+            bytesReservados: 0n,
+            reservaHasta: this.vencimientoSubida(),
+          },
+        });
+        return;
+      }
+      await tx.archivo.update({
         where: { id },
         data: { estado: ArchivoEstado.ELIMINADO, eliminadoEl: new Date() },
-      }),
-      ...(eraListo
-        ? [
-            this.prisma.tenant.update({
-              where: { id: auth.tenantId },
-              data: { bytesArchivos: { decrement: archivo.bytes } },
-            }),
-          ]
-        : []),
-    ]);
+      });
+      await tx.tenant.update({
+        where: { id: auth.tenantId },
+        data: { bytesArchivos: { decrement: archivo.bytes } },
+      });
+    });
   }
 
   // ── Papelera ─────────────────────────────────────────────────────────
@@ -914,7 +970,7 @@ export class ArchivosService {
 
   /** Devuelve un archivo de la papelera a la vista. */
   async restaurar(auth: CurrentAuth, id: string): Promise<ArchivoDto> {
-    const archivo = await this.buscarPropio(id);
+    const archivo = await this.buscarPropio(id, auth.tenantId);
     if (archivo.estado === ArchivoEstado.LISTO) return this.aDto(archivo);
     if (archivo.estado !== ArchivoEstado.ELIMINADO || !archivo.eliminadoEl) {
       throw new BadRequestException('Ese archivo no está en la papelera.');
@@ -929,23 +985,38 @@ export class ArchivosService {
       );
     }
 
-    // Vuelve a ocupar cuota, así que vuelve a chequearse: si el tenant llenó
-    // el espacio mientras tanto, restaurar no puede pasarlo de largo.
-    await this.verificarCuota(auth.tenantId, Number(archivo.bytes));
-
-    const [actualizado] = await this.prisma.$transaction([
-      this.prisma.archivo.update({
+    const actualizado = await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, auth.tenantId);
+      const actual = await tx.archivo.findFirst({
+        where: { id, tenantId: auth.tenantId },
+      });
+      if (actual?.estado === ArchivoEstado.LISTO) return actual;
+      if (
+        actual?.estado !== ArchivoEstado.ELIMINADO ||
+        !actual.eliminadoEl ||
+        actual.eliminadoEl.getTime() <=
+          Date.now() - DIAS_DE_PAPELERA * 86400000 ||
+        actual.bytes <= 0n
+      ) {
+        throw new BadRequestException(
+          'El archivo ya no se puede recuperar de la papelera.',
+        );
+      }
+      const bytes = BigInt(meta.bytes);
+      await exigirEspacio(tx, auth.tenantId, bytes);
+      const fila = await tx.archivo.update({
         where: { id },
-        data: { estado: ArchivoEstado.LISTO, eliminadoEl: null },
+        data: { estado: ArchivoEstado.LISTO, eliminadoEl: null, bytes },
         include: {
           subidoPor: { select: { nombreCompleto: true, email: true } },
         },
-      }),
-      this.prisma.tenant.update({
+      });
+      await tx.tenant.update({
         where: { id: auth.tenantId },
-        data: { bytesArchivos: { increment: archivo.bytes } },
-      }),
-    ]);
+        data: { bytesArchivos: { increment: bytes } },
+      });
+      return fila;
+    });
     return this.aDto(actualizado);
   }
 
@@ -960,148 +1031,217 @@ export class ArchivosService {
    * desincronizan se ve acá, comparando `bytes` contra `bytesDetalle`.
    */
   async uso(tenantId: string): Promise<UsoAlmacenamiento> {
-    const [tenant, cuota, porScope, papelera] = await Promise.all([
-      this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { bytesArchivos: true },
-      }),
-      this.cuotaEfectiva(tenantId),
-      this.prisma.archivo.groupBy({
-        by: ['scope'],
-        where: { estado: ArchivoEstado.LISTO },
-        _sum: { bytes: true },
-        _count: { _all: true },
-      }),
-      this.prisma.archivo.aggregate({
-        where: { estado: ArchivoEstado.ELIMINADO },
-        _sum: { bytes: true },
-        _count: { _all: true },
-      }),
-    ]);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [cuota, porScope, papelera] = await Promise.all([
+          cupoAlmacenamiento(tx, tenantId),
+          tx.archivo.groupBy({
+            by: ['scope'],
+            where: { tenantId, estado: ArchivoEstado.LISTO },
+            _sum: { bytes: true },
+            _count: { _all: true },
+          }),
+          tx.archivo.aggregate({
+            where: { tenantId, estado: ArchivoEstado.ELIMINADO },
+            _sum: { bytes: true },
+            _count: { _all: true },
+          }),
+        ]);
 
-    const detalle = porScope
-      .map((s) => ({
-        scope: s.scope,
-        bytes: Number(s._sum.bytes ?? 0),
-        cantidad: s._count._all,
-      }))
-      .sort((a, b) => b.bytes - a.bytes);
+        const detalle = porScope
+          .map((s) => ({
+            scope: s.scope,
+            bytes: Number(s._sum.bytes ?? 0),
+            cantidad: s._count._all,
+          }))
+          .sort((a, b) => b.bytes - a.bytes);
 
-    const bytes = Number(tenant?.bytesArchivos ?? 0);
-    const tope = cuota.bytes;
+        const bytes = Number(cuota.bytes);
+        const tope =
+          cuota.cuotaBytes === null ? null : Number(cuota.cuotaBytes);
+        const bytesReservados = Number(cuota.bytesReservados);
+        const comprometidos = bytes + bytesReservados;
 
-    return {
-      bytes,
-      cuotaBytes: tope,
-      cuotaOrigen: cuota.origen,
-      // No baja de cero: pasarse de la cuota es posible (el ajuste puede
-      // bajarse después de subidas ya hechas) y "-1,2 GB restantes" no dice nada.
-      restanteBytes: tope === null ? null : Math.max(0, tope - bytes),
-      porcentaje: tope ? Math.min(100, Math.round((bytes / tope) * 100)) : null,
-      bytesDetalle: detalle.reduce((n, s) => n + s.bytes, 0),
-      porScope: detalle,
-      papelera: {
-        bytes: Number(papelera._sum.bytes ?? 0),
-        cantidad: papelera._count._all,
+        return {
+          bytes,
+          bytesReservados,
+          cargasPendientes: cuota.cargasPendientes,
+          bytesComprometidos: comprometidos,
+          excedidoBytes: tope === null ? 0 : Math.max(0, comprometidos - tope),
+          cuotaBytes: tope,
+          cuotaOrigen: cuota.origen,
+          // No baja de cero: pasarse de la cuota es posible (el ajuste puede
+          // bajarse después de subidas ya hechas) y "-1,2 GB restantes" no dice nada.
+          restanteBytes:
+            tope === null ? null : Math.max(0, tope - comprometidos),
+          porcentaje: tope
+            ? Math.min(100, Math.round((comprometidos / tope) * 100))
+            : null,
+          bytesDetalle: detalle.reduce((n, s) => n + s.bytes, 0),
+          porScope: detalle,
+          papelera: {
+            bytes: Number(papelera._sum.bytes ?? 0),
+            cantidad: papelera._count._all,
+          },
+          plan: cuota.plan,
+        };
       },
-      plan: cuota.plan,
-    };
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   // ── Mantenimiento (corre sin contexto de tenant: es cross-tenant) ─────
 
-  /** Filas PENDIENTE viejas: subidas que el usuario abandonó a mitad. */
+  /** Las reservas vencen aunque todavía no haya pasado el cron. */
   async barrerPendientes(): Promise<number> {
-    const corte = new Date(
-      Date.now() - HORAS_PARA_BARRER_PENDIENTES * 60 * 60 * 1000,
-    );
-    const huerfanos = await this.prisma.archivo.findMany({
-      where: { estado: ArchivoEstado.PENDIENTE, createdAt: { lt: corte } },
-      select: { id: true, key: true, multipartUploadId: true },
-      take: 500,
+    const ahora = new Date();
+    return this.purgar({
+      OR: [
+        { estado: ArchivoEstado.PENDIENTE, reservaHasta: { lte: ahora } },
+        {
+          estado: ArchivoEstado.PENDIENTE,
+          reservaHasta: null,
+          createdAt: {
+            lt: new Date(Date.now() - HORAS_PARA_BARRER_PENDIENTES * 3600000),
+          },
+        },
+        {
+          estado: ArchivoEstado.PURGANDO,
+          OR: [{ reservaHasta: null }, { reservaHasta: { lte: ahora } }],
+        },
+      ],
     });
-
-    // Las subidas en partes que nunca cerraron hay que ABORTARLAS: S3 y R2
-    // cobran el espacio de las partes ya subidas de un multipart abierto, y
-    // borrar la clave final no las toca porque ese objeto nunca existió.
-    for (const h of huerfanos) {
-      if (!h.multipartUploadId) continue;
-      await this.storage
-        .abortarMultipart(h.key, h.multipartUploadId)
-        .catch((error: unknown) => {
-          this.logger.warn(
-            `No pude abortar el multipart de ${h.key}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        });
-    }
-
-    return this.purgar(huerfanos);
   }
 
-  /**
-   * Recalcula `Tenant.bytesArchivos` desde la suma real de sus archivos.
-   *
-   * El contador se mantiene transaccionalmente en cada alta y baja, así que en
-   * régimen normal coincide. Pero es un denormalizado: cualquier escritura que
-   * no pase por el service (una corrección a mano en la base, una migración,
-   * un borrado en cascada de una entidad padre) lo deja corrido, y a partir de
-   * ahí la cuota mide mal para siempre sin que nada lo note. Corre de noche y
-   * sólo escribe los que difieren.
-   */
+  /** Lee la suma DESPUÉS de tomar el mismo lock que las cargas: nunca pisa
+   * el contador con un cálculo anterior a una confirmación concurrente. */
   async resincronizarContadores(): Promise<number> {
-    const sumas = await this.prisma.archivo.groupBy({
-      by: ['tenantId'],
-      where: { estado: ArchivoEstado.LISTO },
-      _sum: { bytes: true },
-    });
-    const reales = new Map(sumas.map((s) => [s.tenantId, s._sum.bytes ?? 0n]));
-
-    const tenants = await this.prisma.tenant.findMany({
-      select: { id: true, bytesArchivos: true },
-    });
-
+    const tenants = await this.prisma.tenant.findMany({ select: { id: true } });
     let corregidos = 0;
     for (const t of tenants) {
-      const real = reales.get(t.id) ?? 0n;
-      if (t.bytesArchivos === real) continue;
-      await this.prisma.tenant.update({
-        where: { id: t.id },
-        data: { bytesArchivos: real },
+      corregidos += await this.prisma.$transaction(async (tx) => {
+        await bloquearAlmacenamiento(tx, t.id);
+        const [tenant, suma] = await Promise.all([
+          tx.tenant.findUniqueOrThrow({
+            where: { id: t.id },
+            select: { bytesArchivos: true },
+          }),
+          tx.archivo.aggregate({
+            where: { tenantId: t.id, estado: ArchivoEstado.LISTO },
+            _sum: { bytes: true },
+          }),
+        ]);
+        const real = suma._sum.bytes ?? 0n;
+        if (real === tenant.bytesArchivos) return 0;
+        await tx.tenant.update({
+          where: { id: t.id },
+          data: { bytesArchivos: real },
+        });
+        this.logger.warn(
+          `Contador de archivos corregido en ${t.id}: ${tenant.bytesArchivos} → ${real}.`,
+        );
+        return 1;
       });
-      this.logger.warn(
-        `Contador de archivos corregido en ${t.id}: ${t.bytesArchivos} → ${real}.`,
-      );
-      corregidos += 1;
     }
     return corregidos;
   }
 
-  /** Papelera vencida: acá sí se borra el objeto y la fila. */
   async purgarPapelera(): Promise<number> {
-    const corte = new Date(Date.now() - DIAS_DE_PAPELERA * 24 * 60 * 60 * 1000);
-    const vencidos = await this.prisma.archivo.findMany({
-      where: { estado: ArchivoEstado.ELIMINADO, eliminadoEl: { lt: corte } },
-      select: { id: true, key: true },
-      take: 500,
+    return this.purgar({
+      estado: ArchivoEstado.ELIMINADO,
+      eliminadoEl: { lt: new Date(Date.now() - DIAS_DE_PAPELERA * 86400000) },
     });
-    return this.purgar(vencidos);
   }
 
   // ── Interno ──────────────────────────────────────────────────────────
 
-  private async purgar(filas: { id: string; key: string }[]): Promise<number> {
+  private vencimientoSubida() {
+    return new Date(Date.now() + HORAS_PARA_BARRER_PENDIENTES * 3600000);
+  }
+
+  private async exigirPendiente(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    id: string,
+  ) {
+    const fila = await tx.archivo.findFirst({
+      where: { id, tenantId, estado: ArchivoEstado.PENDIENTE },
+    });
+    if (!fila || (fila.reservaHasta && fila.reservaHasta <= new Date())) {
+      throw new BadRequestException(
+        'La subida venció o fue cancelada. Volvé a intentarlo.',
+      );
+    }
+  }
+
+  /** Cancela sólo cargas incompletas. Un confirmar cuya respuesta se perdió
+   * puede haber terminado: nunca se elimina un LISTO al limpiar un error. */
+  async cancelarSubida(auth: CurrentAuth, id: string): Promise<void> {
+    const archivo = await this.buscarPropio(id, auth.tenantId);
+    if (archivo.generado)
+      throw new BadRequestException('Esa carga la administra el sistema.');
+    await this.cancelarPendiente(auth.tenantId, id);
+  }
+
+  private async cancelarPendiente(tenantId: string, id: string) {
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearAlmacenamiento(tx, tenantId);
+      await tx.archivo.updateMany({
+        where: { id, tenantId, estado: ArchivoEstado.PENDIENTE },
+        data: {
+          estado: ArchivoEstado.PURGANDO,
+          bytesReservados: 0n,
+          // Conservamos la clave un día: una URL ya emitida o un PUT en curso
+          // puede terminar después de cancelar. El cron limpiará también ese objeto.
+          reservaHasta: this.vencimientoSubida(),
+        },
+      });
+    });
+  }
+
+  private async purgar(where: Prisma.ArchivoWhereInput): Promise<number> {
+    const candidatos = await this.prisma.archivo.findMany({
+      where,
+      select: { id: true, tenantId: true },
+      take: 500,
+    });
     let purgados = 0;
-    for (const fila of filas) {
+    for (const candidato of candidatos) {
       try {
-        // Primero el objeto: si falla, la fila queda y se reintenta mañana.
-        // Al revés perderíamos la única referencia al objeto y quedaría
-        // ocupando el bucket para siempre.
+        const fila = await this.prisma.$transaction(async (tx) => {
+          await bloquearAlmacenamiento(tx, candidato.tenantId);
+          const actual = await tx.archivo.findFirst({
+            where: {
+              AND: [where, { id: candidato.id, tenantId: candidato.tenantId }],
+            },
+          });
+          if (!actual) return null; // Se confirmó/restauró antes de obtener el lock.
+          return tx.archivo.update({
+            where: { id: actual.id },
+            data: {
+              estado: ArchivoEstado.PURGANDO,
+              bytesReservados: 0n,
+              reservaHasta: null,
+            },
+          });
+        });
+        if (!fila) continue;
+        // Ya no es restaurable/confirmable mientras hacemos I/O. Un fallo
+        // conserva la fila PURGANDO para reintentar sin perder la clave.
+        if (fila.multipartUploadId)
+          await this.storage.abortarMultipart(fila.key, fila.multipartUploadId);
         await this.storage.borrar(fila.key);
-        await this.prisma.archivo.delete({ where: { id: fila.id } });
-        purgados += 1;
+        const eliminado = await this.prisma.archivo.deleteMany({
+          where: {
+            id: fila.id,
+            tenantId: fila.tenantId,
+            estado: ArchivoEstado.PURGANDO,
+          },
+        });
+        purgados += eliminado.count;
       } catch (error) {
         this.logger.warn(
-          `No pude purgar ${fila.key}: ${error instanceof Error ? error.message : String(error)}`,
+          `No pude purgar ${candidato.id}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
@@ -1109,8 +1249,10 @@ export class ArchivosService {
   }
 
   /** El tenant-guard filtra por tenant; el 404 acá ya es "no es tuyo". */
-  private async buscarPropio(id: string): Promise<Archivo> {
-    const archivo = await this.prisma.archivo.findFirst({ where: { id } });
+  private async buscarPropio(id: string, tenantId?: string): Promise<Archivo> {
+    const archivo = await this.prisma.archivo.findFirst({
+      where: { id, ...(tenantId ? { tenantId } : {}) },
+    });
     if (!archivo) throw new NotFoundException('Archivo no encontrado.');
     return archivo;
   }
@@ -1184,29 +1326,6 @@ export class ArchivosService {
     }
   }
 
-  private async verificarCuota(tenantId: string, bytes: number): Promise<void> {
-    const [tenant, cuota] = await Promise.all([
-      this.prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { bytesArchivos: true },
-      }),
-      this.cuotaEfectiva(tenantId),
-    ]);
-    if (cuota.bytes === null) return;
-    if (Number(tenant?.bytesArchivos ?? 0) + bytes > cuota.bytes) {
-      const gb = cuota.bytes / 1024 ** 3;
-      // El mensaje cambia según de dónde salga el tope: "ampliá el plan" no
-      // sirve si el que frena es un ajuste puesto a mano para este tenant.
-      const salida =
-        cuota.origen === 'plan'
-          ? 'Borrá archivos o pasate a un plan con más espacio.'
-          : 'Borrá archivos o pedí que te amplíen el espacio.';
-      throw new ForbiddenException(
-        `Te quedaste sin espacio (cuota: ${gb.toFixed(1)} GB). ${salida}`,
-      );
-    }
-  }
-
   /**
    * `bytes` es BigInt en la base y `JSON.stringify` no sabe serializarlo
    * (tira TypeError). Se convierte acá, en el único lugar donde la fila sale
@@ -1232,12 +1351,4 @@ export class ArchivosService {
         archivo.subidoPor?.nombreCompleto ?? archivo.subidoPor?.email ?? null,
     };
   }
-}
-
-/** P2002: violación de índice único (incluye los parciales hechos a mano). */
-function esConflictoDeUnicidad(error: unknown): boolean {
-  return (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002'
-  );
 }

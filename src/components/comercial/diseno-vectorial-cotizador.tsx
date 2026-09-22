@@ -1,4 +1,5 @@
 "use client";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
 
 import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
@@ -68,7 +69,24 @@ type Props = {
   onCotizacionManualChange: (value: CotizacionVectorialManual) => void;
 };
 
-export function DisenoVectorialCotizador({
+export function DisenoVectorialCotizador(props: Props) {
+  const analisis = useCapacidad("analisis_vectorial");
+  const nesting = useCapacidad("nesting_irregular");
+  if (props.modoCotizacion !== "placas" && (!analisis || !nesting))
+    return (
+      <p className="text-sm text-muted-foreground">
+        La optimización de nesting irregular no está incluida en tu plan.
+        {props.value
+          ? ` Se conserva el archivo «${props.value.nombreArchivo}».`
+          : ""}{" "}
+        {props.value
+          ? "Para recalcular este archivo necesitás habilitar la función."
+          : "Podés cotizar por medidas o placas con un producto configurado para ese modo."}
+      </p>
+    );
+  return <DisenoVectorialContenido {...props} />;
+}
+function DisenoVectorialContenido({
   titulo,
   permitirReemplazo = true,
   predeterminada,
@@ -270,6 +288,7 @@ export function DisenoVectorialCotizador({
 
   React.useEffect(() => {
     if (
+      modoCotizacion !== "svg" ||
       cargandoConfiguracion ||
       !value ||
       !analisis ||
@@ -283,6 +302,7 @@ export function DisenoVectorialCotizador({
   }, [
     analisis,
     analisisActualizado,
+    modoCotizacion,
     cargandoConfiguracion,
     onChange,
     procesando,

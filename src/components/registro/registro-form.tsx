@@ -32,6 +32,7 @@ import {
 import { iniciarRegistro, type PlanRegistro } from "@/lib/registro-api";
 import {
   errorCampoRegistro,
+  cambioOfertaRegistro,
   LIMITES_REGISTRO,
   nombrePlanRegistro,
   planInicialRegistro,
@@ -50,11 +51,6 @@ const CAMPOS_INICIALES: CamposRegistro = {
   password: "",
 };
 const ICONOS = { taller: Printer, estudio: Layers3, diamante: Network };
-const DESCRIPCIONES: Record<string, string> = {
-  taller: "Impresión y gestión",
-  estudio: "Cartelería y fabricación",
-  diamante: "Toda tu operación",
-};
 
 function precio(plan: PlanRegistro) {
   return plan.precioAConsultar || plan.precioMensual == null
@@ -68,6 +64,7 @@ function capacidades(plan: PlanRegistro) {
   const resultado: string[] = [];
   const usuarios = plan.features.usuariosMax;
   const ordenes = plan.features.ordenesMesMax;
+  const storage = plan.features.storageGb;
   if (typeof usuarios === "number")
     resultado.push(
       usuarios > 0 ? `Hasta ${usuarios} usuarios` : "Usuarios ilimitados",
@@ -77,11 +74,20 @@ function capacidades(plan: PlanRegistro) {
       `${new Intl.NumberFormat("es-AR").format(ordenes)} órdenes/mes`,
     );
   if (plan.features.afip) resultado.push("Facturación fiscal");
+  if (typeof storage === "number")
+    resultado.push(`${new Intl.NumberFormat("es-AR").format(storage)} GB`);
+  if (plan.usuarioMensual)
+    resultado.push(
+      `Usuario adicional: ${plan.moneda} ${plan.usuarioMensual.importe}/mes`,
+    );
   return resultado;
 }
 
 export function RegistroForm({ planes }: { planes: PlanRegistro[] }) {
   const params = useSearchParams();
+  const [ofertaRevisada, setOfertaRevisada] = React.useState(false);
+  const revisarOferta =
+    cambioOfertaRegistro(planes, params.get("oferta")) && !ofertaRevisada;
   const [planCodigo, setPlanCodigo] = React.useState(() =>
     planInicialRegistro(planes, params.get("plan")),
   );
@@ -109,7 +115,8 @@ export function RegistroForm({ planes }: { planes: PlanRegistro[] }) {
       ([nombre, valor]) => !errorCampoRegistro(nombre, valor),
     ) &&
     terminos &&
-    Boolean(planElegido);
+    Boolean(planElegido) &&
+    !revisarOferta;
 
   React.useEffect(() => {
     if (enviado) successTitle.current?.focus();
@@ -140,6 +147,7 @@ export function RegistroForm({ planes }: { planes: PlanRegistro[] }) {
       const respuesta = await iniciarRegistro({
         ...campos,
         planCodigo: planElegido.codigo,
+        ...(planElegido.ofertaId ? { ofertaId: planElegido.ofertaId } : {}),
         paisCodigo: pais,
         zonaHoraria: zonaHorariaDe(pais),
         aceptaTerminos: terminos,
@@ -195,6 +203,18 @@ export function RegistroForm({ planes }: { planes: PlanRegistro[] }) {
 
   return (
     <form className={s.form} onSubmit={enviar} noValidate aria-busy={cargando}>
+      {revisarOferta && (
+        <div className={s.error} role="alert">
+          <strong>La oferta que viste cambió.</strong>
+          <p>
+            Revisá los planes, precios y cupos que aparecen abajo antes de
+            continuar con el registro.
+          </p>
+          <button type="button" onClick={() => setOfertaRevisada(true)}>
+            Revisé la oferta actual
+          </button>
+        </div>
+      )}
       <FieldSet className={s.planFieldset} disabled={cargando}>
         <FieldLegend className={s.sectionTitle}>
           <span>01</span> Elegí cómo empezar
@@ -211,9 +231,7 @@ export function RegistroForm({ planes }: { planes: PlanRegistro[] }) {
                   {elegido && <Check size={15} />}
                 </div>
                 <strong className={s.planName}>{nombre}</strong>
-                <span className={s.planDescription}>
-                  {DESCRIPCIONES[plan.codigo] ?? plan.descripcion}
-                </span>
+                <span className={s.planDescription}>{plan.descripcion}</span>
                 <span className={s.planPrice}>
                   {precio(plan) == null ? (
                     <strong>A medida</strong>
@@ -225,6 +243,13 @@ export function RegistroForm({ planes }: { planes: PlanRegistro[] }) {
                     </>
                   )}
                 </span>
+                {plan.implementacion && (
+                  <span className={s.planDescription}>
+                    Implementación: USD{" "}
+                    {plan.implementacion.importe.toLocaleString("es-AR")} · pago
+                    único al contratar.
+                  </span>
+                )}
                 <span className={s.planFoot}>
                   {plan.registroPublico && !plan.precioAConsultar ? (
                     plan.trialDias ? (

@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { RolSistema } from '@prisma/client';
+import {
+  bloquearCupoUsuarios,
+  exigirCupoUsuario,
+  resumenCupoUsuarios,
+  ocupacionUsuarios,
+} from '../suscripciones/cupos-usuarios';
+import { Prisma, RolSistema } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 
@@ -50,64 +56,76 @@ export class UsuariosService {
   // ── Usuarios ────────────────────────────────────────────────────────
 
   async listar(auth: CurrentAuth) {
-    const [memberships, limite] = await Promise.all([
-      this.prisma.membership.findMany({
-        where: { tenantId: auth.tenantId },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              nombreCompleto: true,
-              activo: true,
-              passwordHash: true,
-              debeCambiarPassword: true,
-              empleados: {
-                where: { tenantId: auth.tenantId },
-                select: { id: true, nombreCompleto: true },
-                take: 1,
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [memberships, cupo, ocupacion] = await Promise.all([
+          tx.membership.findMany({
+            where: { tenantId: auth.tenantId },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  nombreCompleto: true,
+                  activo: true,
+                  passwordHash: true,
+                  debeCambiarPassword: true,
+                  empleados: {
+                    where: { tenantId: auth.tenantId },
+                    select: { id: true, nombreCompleto: true },
+                    take: 1,
+                  },
+                },
               },
+              rolDelTenant: { select: { id: true, nombre: true } },
             },
-          },
-          rolDelTenant: { select: { id: true, nombre: true } },
-        },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.suscripciones.limites(auth.tenantId),
-    ]);
+            orderBy: { createdAt: 'asc' },
+          }),
+          resumenCupoUsuarios(tx, auth.tenantId),
+          ocupacionUsuarios(tx, auth.tenantId),
+        ]);
 
-    const usuarios = memberships.map((m) => {
-      return {
-        id: m.user.id,
-        membershipId: m.id,
-        email: m.user.email,
-        nombreCompleto: m.user.nombreCompleto,
-        rolId: m.rolId,
-        rolNombre: m.rolDelTenant?.nombre ?? this.nombreDelEnum(m.rol),
-        /** Vacío = entra desde cualquier lado. */
-        ipsPermitidas: m.ipsPermitidas,
-        activa: m.activa,
-        empleado: m.user.empleados[0] ?? null,
-        /**
-         * `pendiente` es "todavía no eligió SU clave": sigue con la provisoria
-         * que le dictaron. Mirar sólo `passwordHash` daría por activo a alguien
-         * cuya clave la sabe el administrador, que es medio activo nada más.
-         */
-        estado: !m.activa
-          ? ('desactivado' as const)
-          : m.user.passwordHash && !m.user.debeCambiarPassword
-            ? ('activo' as const)
-            : ('pendiente' as const),
-        esYo: m.userId === auth.userId,
-      };
-    });
+        const usuarios = memberships.map((m) => {
+          return {
+            id: m.user.id,
+            membershipId: m.id,
+            email: m.user.email,
+            nombreCompleto: m.user.nombreCompleto,
+            rolId: m.rolId,
+            rolNombre: m.rolDelTenant?.nombre ?? this.nombreDelEnum(m.rol),
+            /** Vacío = entra desde cualquier lado. */
+            ipsPermitidas: m.ipsPermitidas,
+            activa: m.activa,
+            empleado: m.user.empleados[0] ?? null,
+            /**
+             * `pendiente` es "todavía no eligió SU clave": sigue con la provisoria
+             * que le dictaron. Mirar sólo `passwordHash` daría por activo a alguien
+             * cuya clave la sabe el administrador, que es medio activo nada más.
+             */
+            estado: !m.activa
+              ? ('desactivado' as const)
+              : m.user.passwordHash && !m.user.debeCambiarPassword
+                ? ('activo' as const)
+                : ('pendiente' as const),
+            esYo: m.userId === auth.userId,
+          };
+        });
 
-    return {
-      usuarios,
-      limite: limite.usuariosMax,
-      /** Los que ocupan cupo: un desactivado no le cuesta al plan. */
-      enUso: usuarios.filter((u) => u.activa).length,
-    };
+        return {
+          usuarios,
+          limite: cupo.limite,
+          cupo,
+          invitaciones: ocupacion.pendientes.map((i) => ({
+            id: i.id,
+            email: i.email,
+            venceEl: i.expiresAt.toISOString(),
+          })),
+          /** Los que ocupan cupo: un desactivado no le cuesta al plan. */
+          enUso: cupo.ocupados,
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   /**
@@ -126,21 +144,22 @@ export class UsuariosService {
     // pero no lo mandaba nadie, así que el admin igual lo copiaba a mano.
     const provisoria = generarProvisoria();
 
-    const existente = await this.prisma.user.findUnique({
-      where: { email },
-      include: {
-        memberships: { where: { tenantId: auth.tenantId } },
-      },
-    });
-    if (existente?.memberships[0]?.activa) {
-      throw new ConflictException(
-        'Ese email ya tiene acceso a esta empresa. Cambiale el rol desde el listado.',
-      );
-    }
-
-    await this.verificarCupo(auth.tenantId);
-
-    await this.prisma.$transaction(async (tx) => {
+    const passwordHash = await bcrypt.hash(provisoria, 10);
+    const yaTeniaCuenta = await this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      const existente = await tx.user.findUnique({
+        where: { email },
+        include: { memberships: { where: { tenantId: auth.tenantId } } },
+      });
+      if (existente?.memberships[0]?.activa) {
+        throw new ConflictException(
+          'Ese email ya tiene acceso a esta empresa. Cambiale el rol desde el listado.',
+        );
+      }
+      await exigirCupoUsuario(tx, auth.tenantId, {
+        email,
+        userId: existente?.id,
+      });
       const user =
         existente ??
         (await tx.user.create({
@@ -156,7 +175,7 @@ export class UsuariosService {
       await tx.user.update({
         where: { id: user.id },
         data: {
-          passwordHash: await bcrypt.hash(provisoria, 10),
+          passwordHash,
           debeCambiarPassword: true,
         },
       });
@@ -185,12 +204,16 @@ export class UsuariosService {
       await tx.invitation.updateMany({
         where: {
           tenantId: auth.tenantId,
-          userId: user.id,
+          OR: [
+            { userId: user.id },
+            { email: { equals: email, mode: 'insensitive' } },
+          ],
           acceptedAt: null,
           revokedAt: null,
         },
         data: { revokedAt: new Date() },
       });
+      return Boolean(existente?.passwordHash);
     });
 
     await this.registrar(auth, {
@@ -202,52 +225,108 @@ export class UsuariosService {
 
     return {
       provisoria,
-      yaTeniaCuenta: Boolean(existente?.passwordHash),
+      yaTeniaCuenta,
     };
   }
 
+  async cancelarInvitacion(auth: CurrentAuth, id: string) {
+    await this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      const invitacion = await tx.invitation.findFirst({
+        where: {
+          id,
+          tenantId: auth.tenantId,
+          acceptedAt: null,
+          revokedAt: null,
+        },
+      });
+      if (!invitacion)
+        throw new NotFoundException('La invitación pendiente no existe.');
+      await tx.invitation.updateMany({
+        where: {
+          tenantId: auth.tenantId,
+          acceptedAt: null,
+          revokedAt: null,
+          OR: [
+            { email: { equals: invitacion.email, mode: 'insensitive' } },
+            ...(invitacion.userId ? [{ userId: invitacion.userId }] : []),
+          ],
+        },
+        data: { revokedAt: new Date() },
+      });
+      await tx.eventoAcceso.create({
+        data: {
+          tenantId: auth.tenantId,
+          actorUserId: auth.userId,
+          actorNombre: auth.email,
+          tipo: 'invitacion_cancelada',
+          descripcion: `Canceló la invitación de ${invitacion.email}`,
+        },
+      });
+    });
+    return { ok: true as const };
+  }
+
   async editar(auth: CurrentAuth, userId: string, dto: EditarUsuarioDto) {
-    const membership = await this.prisma.membership.findUnique({
-      where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
-      include: {
-        user: { select: { email: true, nombreCompleto: true } },
-        rolDelTenant: { select: { nombre: true } },
-      },
+    const { membership, rol } = await this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      const membership = await tx.membership.findUnique({
+        where: { userId_tenantId: { userId, tenantId: auth.tenantId } },
+        include: {
+          user: { select: { email: true, nombreCompleto: true } },
+          rolDelTenant: { select: { nombre: true } },
+        },
+      });
+      if (!membership)
+        throw new NotFoundException('Ese usuario no existe acá.');
+
+      // Nadie se saca a sí mismo del sistema: si el único administrador se
+      // desactiva o se pasa a operario, el tenant se queda sin quien lo arregle.
+      if (userId === auth.userId && (dto.activa === false || dto.rolId)) {
+        throw new BadRequestException(
+          'No podés cambiar tu propio acceso. Pedíselo a otro administrador.',
+        );
+      }
+
+      const rol = dto.rolId
+        ? await this.rolDelTenant(auth.tenantId, dto.rolId)
+        : null;
+
+      if (dto.activa === true && !membership.activa) {
+        await exigirCupoUsuario(tx, auth.tenantId, {
+          email: membership.user.email,
+          userId,
+        });
+      }
+
+      await tx.membership.update({
+        where: { id: membership.id },
+        data: {
+          ...(rol ? { rolId: rol.id, rol: rol.rolBase } : {}),
+          ...(dto.activa === undefined ? {} : { activa: dto.activa }),
+        },
+      });
+
+      if (dto.empleadoId !== undefined) {
+        await this.vincularEmpleado(tx, auth.tenantId, dto.empleadoId, userId);
+      }
+
+      if (dto.activa === false) {
+        await tx.invitation.updateMany({
+          where: {
+            tenantId: auth.tenantId,
+            acceptedAt: null,
+            revokedAt: null,
+            OR: [
+              { userId },
+              { email: { equals: membership.user.email, mode: 'insensitive' } },
+            ],
+          },
+          data: { revokedAt: new Date() },
+        });
+      }
+      return { membership, rol };
     });
-    if (!membership) throw new NotFoundException('Ese usuario no existe acá.');
-
-    // Nadie se saca a sí mismo del sistema: si el único administrador se
-    // desactiva o se pasa a operario, el tenant se queda sin quien lo arregle.
-    if (userId === auth.userId && (dto.activa === false || dto.rolId)) {
-      throw new BadRequestException(
-        'No podés cambiar tu propio acceso. Pedíselo a otro administrador.',
-      );
-    }
-
-    const rol = dto.rolId
-      ? await this.rolDelTenant(auth.tenantId, dto.rolId)
-      : null;
-
-    if (dto.activa === true && !membership.activa) {
-      await this.verificarCupo(auth.tenantId);
-    }
-
-    await this.prisma.membership.update({
-      where: { id: membership.id },
-      data: {
-        ...(rol ? { rolId: rol.id, rol: rol.rolBase } : {}),
-        ...(dto.activa === undefined ? {} : { activa: dto.activa }),
-      },
-    });
-
-    if (dto.empleadoId !== undefined) {
-      await this.vincularEmpleado(
-        this.prisma,
-        auth.tenantId,
-        dto.empleadoId,
-        userId,
-      );
-    }
 
     // Que el cambio se sienta YA: sin esto, quitarle acceso a alguien tardaba
     // hasta el TTL del cache de sesión, que es justo cuando el admin está
@@ -347,9 +426,9 @@ export class UsuariosService {
         /**
          * Fuera del plan se muestra atenuado, no se oculta ni se borra el
          * permiso guardado: si el tenant vuelve a subir de plan, sus roles
-         * siguen configurados. Hoy sólo Administración depende de un feature.
+         * siguen configurados. Cobros y saldos no dependen de la facturación electrónica.
          */
-        enElPlan: m.clave === 'administracion' ? afip : true,
+        enElPlan: true,
       })),
       transversales: PERMISOS_TRANSVERSALES.map((p) => ({ ...p })),
       /** Para el aviso del editor: qué features tiene el plan. */
@@ -809,20 +888,6 @@ export class UsuariosService {
     return predefinido?.nombre ?? 'Sin rol';
   }
 
-  /** El tope del plan. Cuenta memberships activas: un desactivado no ocupa. */
-  private async verificarCupo(tenantId: string) {
-    const { usuariosMax } = await this.suscripciones.limites(tenantId);
-    if (usuariosMax === null) return;
-    const activas = await this.prisma.membership.count({
-      where: { tenantId, activa: true },
-    });
-    if (activas >= usuariosMax) {
-      throw new BadRequestException(
-        `Tu plan incluye ${usuariosMax} usuarios y ya los estás usando. Podés desactivar uno o pasar a un plan mayor.`,
-      );
-    }
-  }
-
   /**
    * Un empleado tiene a lo sumo un usuario y un usuario a lo sumo un empleado
    * dentro del tenant: `Empleado.userId` es el único vínculo, así que vincular
@@ -849,7 +914,9 @@ export class UsuariosService {
       select: { id: true },
     });
     if (!empleado) {
-      throw new NotFoundException('Ese empleado no existe o está dado de baja.');
+      throw new NotFoundException(
+        'Ese empleado no existe o está dado de baja.',
+      );
     }
     await db.empleado.updateMany({
       where: { id: empleadoId, tenantId },

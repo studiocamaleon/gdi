@@ -33,8 +33,12 @@ it('separa las cantidades y comparte sólo la misma demanda, conservando el cort
     });
   });
   const servicio = new AnalisisVectorialAsyncService(
-    { crear } as unknown as GeometriaJobsService,
+    { crear, crearParaCotizacion: crear } as unknown as GeometriaJobsService,
     {} as GeometriaVectorialCacheService,
+    {
+      exigirTodas: jest.fn().mockResolvedValue(undefined),
+      exigir: jest.fn().mockResolvedValue(undefined),
+    } as never,
   );
   const problema: ProblemaNesting = {
     schemaVersion: 1,
@@ -106,13 +110,18 @@ it('materializa inmediatamente un SVG con el resultado persistido sin quedar ata
     }),
   );
   const service = new AnalisisVectorialAsyncService(
-    { crear } as unknown as GeometriaJobsService,
+    { crear, crearParaCotizacion: crear } as unknown as GeometriaJobsService,
     cache,
+    {
+      exigirTodas: jest.fn().mockResolvedValue(undefined),
+      exigir: jest.fn().mockResolvedValue(undefined),
+    } as never,
   );
   const vista = await conPreparacionNesting(() =>
     service.iniciar({
       tenantId: 'tenant',
       dto: {
+        nombreArchivo: 'prueba.svg',
         svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0H100V100H0Z"/></svg>',
         anchoFinalMm: 100,
         cantidad: 2,
@@ -145,10 +154,22 @@ it.each(['fallido', 'cancelado', 'timeout'])(
     const service = new AnalisisVectorialAsyncService(
       {
         crear: jest.fn().mockResolvedValue(vista),
+        crearParaCotizacion: jest.fn().mockResolvedValue(vista),
       } as unknown as GeometriaJobsService,
       {} as GeometriaVectorialCacheService,
+      {
+        exigirTodas: jest.fn().mockResolvedValue(undefined),
+        exigir: jest.fn().mockResolvedValue(undefined),
+      } as never,
     );
-    jest.spyOn(service, 'iniciar').mockResolvedValue(vista as never);
+    jest
+      .spyOn(
+        service as unknown as {
+          calcular(input: unknown, interno: boolean): Promise<unknown>;
+        },
+        'calcular',
+      )
+      .mockResolvedValue(vista);
     const problema: ProblemaNesting = {
       schemaVersion: 1,
       superficie: { tipo: 'PLACA', anchoMm: 500, altoMm: 500 },

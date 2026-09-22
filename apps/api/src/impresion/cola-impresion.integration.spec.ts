@@ -9,7 +9,10 @@ import type { ArchivosService } from '../archivos/archivos.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { revisionPerfil } from './perfiles-impresion.domain';
 import { objeto } from './documentos-orden.domain';
+import type { Prisma } from '@prisma/client';
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
 const db = new PrismaService();
+const planId = randomUUID();
 const tenantId = randomUUID(),
   otroTenant = randomUUID(),
   usuarioId = randomUUID();
@@ -18,17 +21,16 @@ const auth = {
   userId: usuarioId,
   email: 'operario@test.local',
 } as CurrentAuth;
-const firma = {
-  firmarDocumento: jest
-    .fn()
-    .mockReturnValue({ hash: 'h', firma: 'f', timestamp: 1 }),
-} as unknown as ImpresionService;
+const firmar = jest
+  .fn()
+  .mockReturnValue({ hash: 'h', firma: 'f', timestamp: 1 });
+const firma = { firmarDocumento: firmar } as unknown as ImpresionService;
 const perfiles = new PerfilesImpresionService(db, firma);
 const archivos = new Map<string, Buffer>();
 const service = new DocumentosOrdenService(
   db,
   {
-    leerContenido: async (key: string) => archivos.get(key),
+    leerContenido: (key: string) => Promise.resolve(archivos.get(key)),
   } as ArchivosService,
   firma,
   perfiles,
@@ -47,6 +49,17 @@ beforeAll(async () => {
       nombre: 'QA cola',
       slug: `cola-${id}`,
     })),
+  });
+  await db.plan.create({
+    data: {
+      id: planId,
+      codigo: `qa-cola-${planId}`,
+      nombre: 'QA impresión',
+      precioMensual: 0,
+      publico: false,
+      featuresJson: { impresionDirecta: true },
+      suscripciones: { create: [{ tenantId }, { tenantId: otroTenant }] },
+    },
   });
   await db.user.create({
     data: { id: usuarioId, email: `cola-${usuarioId}@test.local` },
@@ -149,6 +162,7 @@ afterEach(async () => {
 afterAll(async () => {
   await db.tenant.deleteMany({ where: { id: { in: [tenantId, otroTenant] } } });
   await db.user.delete({ where: { id: usuarioId } });
+  await db.plan.deleteMany({ where: { id: planId } });
   await db.$disconnect();
 });
 async function nueva(tipo = 'laser', dias = 20) {
@@ -395,3 +409,325 @@ it('libera papel para varias OT con una revisión común; cambiar la bandeja inv
       ).preparacion,
     ).toBeTruthy();
   }));
+
+it('retirar impresión conserva envíos existentes y su confirmación, pero no permite firmar ni encolar nuevos', () =>
+  run(async () => {
+    const orden = await nueva('cad');
+    await preparar(orden, 1);
+    const envio = await db.ordenTrabajoEvento.findFirstOrThrow({
+      where: { tenantId, ordenId: orden.ordenId, tipo: 'impresion_documento' },
+      orderBy: { fecha: 'desc' },
+    });
+    const antes = await db.ordenTrabajoEvento.count({
+      where: { tenantId, tipo: 'impresion_documento' },
+    });
+    await db.plan.update({
+      where: { id: planId },
+      data: { featuresJson: { impresionDirecta: false } },
+    });
+    try {
+      await expect(
+        service.solicitar(auth, envio.ordenId),
+      ).rejects.toMatchObject({ status: 403 });
+      await expect(
+        service.preparar(
+          auth,
+          envio.ordenId,
+          'item',
+          randomUUID(),
+          'HP',
+          'localhost',
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      await expect(
+        service.estado(
+          auth,
+          envio.ordenId,
+          envio.id,
+          'ENVIADO',
+          'Aceptado antes del cambio',
+        ),
+      ).resolves.toBeTruthy();
+      await expect(
+        service.confirmar(auth, envio.ordenId, [envio.id]),
+      ).resolves.toBeTruthy();
+      await expect(
+        runWithTenant(otroTenant, () =>
+          service.estado(
+            { ...auth, tenantId: otroTenant },
+            envio.ordenId,
+            envio.id,
+            'ENVIADO',
+            '',
+          ),
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(
+        await db.ordenTrabajoEvento.count({
+          where: { tenantId, tipo: 'impresion_documento' },
+        }),
+      ).toBe(antes);
+      const guardado = await db.ordenTrabajoEvento.findUniqueOrThrow({
+        where: { id: envio.id },
+      });
+      expect(objeto(guardado.datosJson).confirmacion).toBeTruthy();
+    } finally {
+      await db.plan.update({
+        where: { id: planId },
+        data: { featuresJson: { impresionDirecta: true } },
+      });
+    }
+  }));
+
+it('consulta intenciones sin enviar e historial aunque se retire impresión, sin resolver perfiles ni firmar', () =>
+  run(async () => {
+    const o = await nueva('cad');
+    await service.solicitar(auth, o.ordenId);
+    const envio = await preparar(o, 1);
+    await db.plan.update({ where: { id: planId }, data: { featuresJson: {} } });
+    const firmadas = firmar.mock.calls.length;
+    const resolver = jest.spyOn(perfiles, 'perfiles');
+    try {
+      const h = await service.historial(auth, o.ordenId);
+      expect(h).toMatchObject({
+        total: 1,
+        pendientesSinEnvio: 1,
+        puedeConfirmar: true,
+        siguiente: null,
+      });
+      expect(h.envios[0]).toMatchObject({
+        id: envio.intento.id,
+        vigente: true,
+      });
+      expect(resolver).not.toHaveBeenCalled();
+      expect(firmar.mock.calls).toHaveLength(firmadas);
+      await expect(
+        runWithTenant(otroTenant, () =>
+          service.historial({ ...auth, tenantId: otroTenant }, o.ordenId),
+        ),
+      ).rejects.toMatchObject({ status: 404 });
+      await service.confirmar(auth, o.ordenId, [envio.intento.id]);
+      expect(
+        (await service.historial(auth, o.ordenId)).envios[0],
+      ).toHaveProperty('confirmacion');
+    } finally {
+      resolver.mockRestore();
+      await db.plan.update({
+        where: { id: planId },
+        data: { featuresJson: { impresionDirecta: true } },
+      });
+    }
+  }));
+
+it('pagina el historial y reconoce el último envío aunque esté en otra página', () =>
+  run(async () => {
+    const o = await nueva('cad');
+    const envio = await preparar(o, 1);
+    const base = await db.ordenTrabajoEvento.findUniqueOrThrow({
+      where: { id: envio.intento.id },
+    });
+    // Reproducción de un historial largo, sin enviar físicamente 50 copias.
+    await db.ordenTrabajoEvento.createMany({
+      data: Array.from({ length: 50 }, (_, i) => ({
+        tenantId,
+        ordenId: o.ordenId,
+        tipo: base.tipo,
+        descripcion: base.descripcion,
+        usuarioNombre: auth.email,
+        datosJson: base.datosJson as Prisma.InputJsonValue,
+        fecha: new Date(base.fecha.getTime() + (i + 1) * 1000),
+      })),
+    });
+    const primera = await service.historial(auth, o.ordenId);
+    expect(primera).toMatchObject({ total: 51, siguiente: 50 });
+    expect(primera.envios).toHaveLength(50);
+    expect(primera.envios.filter((e) => e.vigente)).toHaveLength(1);
+    const segunda = await service.historial(auth, o.ordenId, 50);
+    expect(segunda.envios).toHaveLength(1);
+    expect(segunda.envios[0]).toMatchObject({
+      id: envio.intento.id,
+      vigente: false,
+    });
+    await expect(
+      service.confirmar(auth, o.ordenId, [envio.intento.id]),
+    ).rejects.toMatchObject({ status: 409 });
+    await service.confirmar(auth, o.ordenId, [primera.envios[0].id]);
+    expect((await service.historial(auth, o.ordenId)).envios[0]).toHaveProperty(
+      'confirmacion',
+    );
+  }));
+
+it('una suscripción de baja conserva consulta, pero no permite confirmar ni actualizar salidas', () =>
+  run(async () => {
+    const o = await nueva('cad');
+    const envio = await preparar(o, 1);
+    const antes = await db.ordenTrabajoEvento.findUniqueOrThrow({
+      where: { id: envio.intento.id },
+    });
+    const suscripcion = await db.suscripcion.findUniqueOrThrow({
+      where: { tenantId },
+    });
+    await db.suscripcion.update({
+      where: { tenantId },
+      data: { estado: 'baja' },
+    });
+    try {
+      expect(await service.historial(auth, o.ordenId)).toMatchObject({
+        total: 1,
+        puedeConfirmar: false,
+      });
+      await expect(
+        service.confirmar(auth, o.ordenId, [envio.intento.id]),
+      ).rejects.toMatchObject({ status: 403 });
+      await expect(
+        service.estado(
+          auth,
+          o.ordenId,
+          envio.intento.id,
+          'ENVIADO',
+          'ACK tardío',
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        (
+          await db.ordenTrabajoEvento.findUniqueOrThrow({
+            where: { id: envio.intento.id },
+          })
+        ).datosJson,
+      ).toEqual(antes.datosJson);
+    } finally {
+      await db.suscripcion.update({
+        where: { tenantId },
+        data: { estado: suscripcion.estado },
+      });
+    }
+  }));
+
+function senal<T = void>() {
+  let resolver!: (value: T) => void;
+  const promesa = new Promise<T>((resolve) => {
+    resolver = resolve;
+  });
+  return { promesa, resolver };
+}
+
+it.each(['preparar', 'solicitar'] as const)(
+  '%s espera al cambio de contrato y rechaza la operación sin firmar ni guardar',
+  (operacion) =>
+    run(async () => {
+      const o = await nueva('cad');
+      const p = (await service.vista(auth, o.ordenId)).documentos[0].ruta
+        .perfil!;
+      const sinImpresion = await db.plan.create({
+        data: {
+          codigo: `qa-sin-${randomUUID()}`,
+          nombre: 'Sin impresión',
+          precioMensual: 0,
+          publico: false,
+          featuresJson: {},
+        },
+      });
+      const escrita = senal<number>(),
+        abierta = senal<number>(),
+        liberar = senal();
+      const cambio = db.$transaction(
+        async (tx) => {
+          await bloquearCupoUsuarios(tx, tenantId);
+          await tx.suscripcion.update({
+            where: { tenantId },
+            data: { planId: sinImpresion.id },
+          });
+          const [conexion] = await tx.$queryRaw<
+            Array<{ pid: number }>
+          >`SELECT pg_backend_pid() AS pid`;
+          escrita.resolver(conexion.pid);
+          await liberar.promesa;
+        },
+        { timeout: 15000 },
+      );
+      // Conserva todos los SELECT y locks reales. Sólo registra el PID de la
+      // segunda conexión para comprobar que espera al contrato sin confirmar.
+      const cliente = new Proxy(db, {
+        get(target, prop) {
+          if (prop === '$transaction')
+            return (fn: (tx: Prisma.TransactionClient) => Promise<unknown>) =>
+              db.$transaction(
+                async (tx) => {
+                  const [conexion] = await tx.$queryRaw<
+                    Array<{ pid: number }>
+                  >`SELECT pg_backend_pid() AS pid`;
+                  abierta.resolver(conexion.pid);
+                  return fn(tx);
+                },
+                { timeout: 15000 },
+              );
+          return Reflect.get(target, prop) as unknown;
+        },
+      });
+      const paralelo = new DocumentosOrdenService(
+        cliente,
+        {
+          leerContenido: (key: string) => Promise.resolve(archivos.get(key)),
+        } as ArchivosService,
+        firma,
+        perfiles,
+      );
+      let resultado: Promise<PromiseSettledResult<unknown>> | undefined;
+      const firmadas = firmar.mock.calls.length;
+      try {
+        const bloqueador = await escrita.promesa;
+        const envio =
+          operacion === 'preparar'
+            ? paralelo.preparar(
+                auth,
+                o.ordenId,
+                o.itemId,
+                randomUUID(),
+                p.bandeja.destino.impresora,
+                p.bandeja.destino.host,
+                undefined,
+                p.id,
+                revisionPerfil(p),
+                1,
+              )
+            : paralelo.solicitar(auth, o.ordenId);
+        resultado = Promise.allSettled([envio]).then(([r]) => r);
+        const pid = await abierta.promesa;
+        const limite = Date.now() + 4000;
+        let bloqueada = false;
+        while (Date.now() < limite) {
+          const [fila] = await db.$queryRaw<
+            Array<{ pids: number[] }>
+          >`SELECT pg_blocking_pids(${pid}::int) AS pids`;
+          if (fila.pids.includes(bloqueador)) {
+            bloqueada = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        expect(bloqueada).toBe(true);
+        liberar.resolver();
+        await cambio;
+        expect(await resultado).toMatchObject({
+          status: 'rejected',
+          reason: { status: 403 },
+        });
+        expect(firmar.mock.calls).toHaveLength(firmadas);
+        expect(
+          await db.ordenTrabajoEvento.count({
+            where: {
+              tenantId,
+              ordenId: o.ordenId,
+              tipo: { in: ['impresion_documento', 'cola_impresion'] },
+            },
+          }),
+        ).toBe(0);
+      } finally {
+        liberar.resolver();
+        await cambio;
+        await resultado;
+        await db.suscripcion.update({ where: { tenantId }, data: { planId } });
+        await db.plan.delete({ where: { id: sinImpresion.id } });
+      }
+    }),
+);

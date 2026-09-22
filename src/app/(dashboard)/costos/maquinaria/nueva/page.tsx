@@ -1,10 +1,11 @@
+import { FuncionNoIncluida } from "@/components/navigation/funcion-no-incluida";
+import { puedeConfigurar, tieneCapacidad } from "@/lib/capacidades-server";
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 
 import { ModulePageSkeleton } from "@/components/dashboard/module-page-skeleton";
 import { getPlantas } from "@/lib/costos-api";
 import { getMaquinasPage } from "@/lib/maquinaria-api";
-import { tienePermiso } from "@/lib/permisos-server";
 
 const MaquinariaPanel = dynamicImport(
   () =>
@@ -27,10 +28,11 @@ export default function NuevaMaquinariaPage() {
 }
 
 async function NuevaMaquinariaContent() {
+  if (!(await tieneCapacidad("maquinaria"))) return <FuncionNoIncluida />;
   const [maquinasPage, plantas, puedeGestionar] = await Promise.all([
     getMaquinasPage({ limit: 50 }),
     getPlantas(),
-    tienePermiso("costos.gestionar"),
+    puedeConfigurar("maquinaria", "costos.gestionar"),
   ]);
 
   return (

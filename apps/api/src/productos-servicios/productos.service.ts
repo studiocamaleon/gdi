@@ -1,3 +1,5 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { isDeepStrictEqual } from 'node:util';
 import {
   BadRequestException,
   ConflictException,
@@ -45,7 +47,31 @@ type MedidaPredefinidaNormalizada = {
 
 @Injectable()
 export class ProductosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
+
+  private async exigirCambiosGeometria(
+    tenantId: string,
+    siguiente: unknown,
+    anterior?: unknown,
+  ) {
+    if (siguiente === undefined) return;
+    if (
+      !isDeepStrictEqual(
+        leerGeometriasComerciales(siguiente),
+        leerGeometriasComerciales(anterior),
+      )
+    ) {
+      await this.capacidades.exigirTodas(tenantId, [
+        'analisis_vectorial',
+        'geometrias',
+      ]);
+    }
+  }
 
   private async hidratarGeometrias(tenantId: string, atributos: unknown) {
     const fuentes = leerGeometriasComerciales(atributos).fuentes;
@@ -213,6 +239,12 @@ export class ProductosService {
   }
 
   async crearProducto(tenantId: string, dto: CrearProductoDto) {
+    await this.capacidades.exigir(tenantId, 'productos');
+    if (dto.estructuraProducto === EstructuraProductoDto.COMPUESTO)
+      await this.capacidades.exigir(tenantId, 'productos_compuestos');
+    if (dto.precioConfigJson && Object.keys(dto.precioConfigJson).length)
+      await this.capacidades.exigir(tenantId, 'reglas_precio');
+    await this.exigirCambiosGeometria(tenantId, dto.atributosComercialesJson);
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
     await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
@@ -321,13 +353,29 @@ export class ProductosService {
     id: string,
     dto: ActualizarProductoDto,
   ) {
+    await this.capacidades.exigir(tenantId, 'productos');
     validarConfiguracionPricingCompuesto(dto.precioConfigJson);
     validarGeometriasComerciales(dto.atributosComercialesJson);
-    await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
     });
     if (!existente) throw new NotFoundException(`Producto ${id} no encontrado`);
+    if (
+      dto.estructuraProducto !== undefined &&
+      String(dto.estructuraProducto) !== existente.estructuraProducto
+    )
+      await this.capacidades.exigir(tenantId, 'productos_compuestos');
+    if (
+      dto.precioConfigJson !== undefined &&
+      !isDeepStrictEqual(dto.precioConfigJson, existente.precioConfigJson)
+    )
+      await this.capacidades.exigir(tenantId, 'reglas_precio');
+    await this.exigirCambiosGeometria(
+      tenantId,
+      dto.atributosComercialesJson,
+      existente.atributosComercialesJson,
+    );
+    await this.hidratarGeometrias(tenantId, dto.atributosComercialesJson);
     if (existente.sistemaCodigo) {
       throw new BadRequestException(
         'Este producto lo gestiona un módulo del sistema y no se edita desde el catálogo.',
@@ -568,6 +616,7 @@ export class ProductosService {
   }
 
   async eliminarProducto(tenantId: string, id: string) {
+    await this.capacidades.exigir(tenantId, 'productos');
     const existente = await this.prisma.producto.findFirst({
       where: { id, tenantId },
       include: {
@@ -596,6 +645,7 @@ export class ProductosService {
     id: string,
     dto: DuplicarProductoDto = {},
   ) {
+    await this.capacidades.exigir(tenantId, 'productos');
     const origen = await this.prisma.producto.findFirst({
       where: { id, tenantId },
       include: {
@@ -628,6 +678,8 @@ export class ProductosService {
       },
     });
     if (!origen) throw new NotFoundException(`Producto ${id} no encontrado`);
+    if (origen.estructuraProducto === 'COMPUESTO')
+      await this.capacidades.exigir(tenantId, 'productos_compuestos');
 
     const nombre = dto.nombre?.trim() || `${origen.nombre} copia`;
     const baseCodigo = dto.codigo?.trim() || this.codigoFromNombre(nombre);

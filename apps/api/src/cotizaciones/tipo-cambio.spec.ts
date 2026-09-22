@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../test/fixture-capacidades';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TipoCambioService, factorCambioMaterial } from './tipo-cambio.service';
 import {
@@ -85,7 +86,7 @@ function setup(destino = 'ARS', config: unknown = null) {
     datos,
     prisma,
     proveedor,
-    service: new TipoCambioService(prisma as never, proveedor as never),
+    service: new TipoCambioService(prisma as never, proveedor as never, capacidadesDePrueba()),
   };
 }
 

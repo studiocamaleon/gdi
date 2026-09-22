@@ -1,3 +1,4 @@
+import { capacidadesDePrueba } from '../../../test/fixture-capacidades';
 import { randomUUID } from 'node:crypto';
 import { PrismaClient, RolSistema } from '@prisma/client';
 import { InventarioService } from '../inventario.service';
@@ -9,7 +10,7 @@ import type { CurrentAuth } from '../../auth/auth.types';
 // jest-setup-db fija la base dedicada de tests antes de crear Prisma.
 describe('Persistencia de compra y uso', () => {
   const prisma = new PrismaClient();
-  const service = new InventarioService(prisma as never);
+  const service = new InventarioService(prisma as never, undefined, capacidadesDePrueba());
   const tenantId = randomUUID();
   const auth = {
     tenantId,

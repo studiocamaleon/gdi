@@ -4,9 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { CurrentAuth } from '../auth/auth.types';
 import { cuitValido, normalizarCuit } from '../common/cuit';
 import { PrismaService } from '../prisma/prisma.service';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
+import type { ClaveCapacidad } from '../suscripciones/evaluador-capacidades';
 import {
   UpsertConfiguracionFiscalDto,
   UpsertPuntoVentaDto,
@@ -41,15 +45,42 @@ type ConfiguracionFiscalRow = {
 
 @Injectable()
 export class ConfiguracionFiscalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
+  ) {}
+
+  private escribir<T>(
+    auth: CurrentAuth,
+    fiscal: boolean,
+    ejecutar: (tx: Prisma.TransactionClient) => Promise<T>,
+  ) {
+    const funciones: ClaveCapacidad[] = fiscal
+      ? ['fiscal_argentina']
+      : ['identidad'];
+    return this.prisma.$transaction(async (tx) => {
+      await this.capacidades.exigirOperacionTx(
+        tx,
+        auth.tenantId,
+        funciones,
+        fiscal ? funciones : [],
+      );
+      return ejecutar(tx);
+    });
+  }
 
   /**
    * Config fiscal del tenant con sus puntos de venta. Devuelve null si
    * todavía no se configuró — la vista muestra el estado vacío y no un
    * error: emitir sin datos del emisor no tiene sentido.
    */
-  async obtener(auth: CurrentAuth) {
-    const config = await this.prisma.configuracionFiscal.findUnique({
+  async obtener(
+    auth: CurrentAuth,
+    db: Pick<Prisma.TransactionClient, 'configuracionFiscal'> = this.prisma,
+  ) {
+    const config = await db.configuracionFiscal.findUnique({
       where: { tenantId: auth.tenantId },
       include: { puntosVenta: { orderBy: { numero: 'asc' } } },
     });
@@ -57,71 +88,101 @@ export class ConfiguracionFiscalService {
   }
 
   async guardar(auth: CurrentAuth, payload: UpsertConfiguracionFiscalDto) {
-    const cuit = normalizarCuit(payload.cuit);
-    if (!cuitValido(cuit)) {
-      throw new BadRequestException(
-        'El CUIT del emisor no es válido (revisá los 11 dígitos y el verificador).',
-      );
-    }
+    return this.escribir(auth, false, async (tx) => {
+      const cuit = normalizarCuit(payload.cuit);
+      if (!cuitValido(cuit)) {
+        throw new BadRequestException(
+          'El CUIT del emisor no es válido (revisá los 11 dígitos y el verificador).',
+        );
+      }
 
-    const datos = {
-      razonSocial: payload.razonSocial.trim(),
-      cuit,
-      condicionFiscal: payload.condicionFiscal,
-      ingresosBrutos: payload.ingresosBrutos?.trim() || null,
-      domicilioFiscal: payload.domicilioFiscal?.trim() || null,
-      inicioActividades: payload.inicioActividades
-        ? new Date(payload.inicioActividades)
-        : null,
-      // La leyenda sólo aplica a las A, que sólo emite un RI.
-      leyendaFacturaA:
-        payload.condicionFiscal === 'RI'
-          ? (payload.leyendaFacturaA ?? null)
+      const datos = {
+        razonSocial: payload.razonSocial.trim(),
+        cuit,
+        condicionFiscal: payload.condicionFiscal,
+        ingresosBrutos: payload.ingresosBrutos?.trim() || null,
+        domicilioFiscal: payload.domicilioFiscal?.trim() || null,
+        inicioActividades: payload.inicioActividades
+          ? new Date(payload.inicioActividades)
           : null,
-      proveedorFacturacion: payload.proveedorFacturacion ?? 'manual',
-    };
+        // La leyenda sólo aplica a las A, que sólo emite un RI.
+        leyendaFacturaA:
+          payload.condicionFiscal === 'RI'
+            ? (payload.leyendaFacturaA ?? null)
+            : null,
+        proveedorFacturacion: payload.proveedorFacturacion ?? 'manual',
+      };
 
-    const config = await this.prisma.configuracionFiscal.upsert({
-      where: { tenantId: auth.tenantId },
-      create: { tenantId: auth.tenantId, ...datos },
-      update: datos,
-      include: { puntosVenta: { orderBy: { numero: 'asc' } } },
+      const previa = await tx.configuracionFiscal.findUnique({
+        where: { tenantId: auth.tenantId },
+      });
+      if (
+        datos.proveedorFacturacion === 'afipsdk' &&
+        previa?.proveedorFacturacion !== 'afipsdk'
+      ) {
+        await this.capacidades.exigirTodas(
+          auth.tenantId,
+          ['fiscal_argentina'],
+          tx,
+        );
+        await exigirContinuidadCompromiso(tx, auth.tenantId, [
+          'fiscal_argentina',
+        ]);
+      }
+      const config = await tx.configuracionFiscal.upsert({
+        where: { tenantId: auth.tenantId },
+        create: { tenantId: auth.tenantId, ...datos },
+        update: datos,
+        include: { puntosVenta: { orderBy: { numero: 'asc' } } },
+      });
+      if (
+        previa &&
+        (previa.cuit !== config.cuit ||
+          previa.proveedorFacturacion !== config.proveedorFacturacion)
+      ) {
+        await tx.integracionTenant.updateMany({
+          where: { tenantId: auth.tenantId, proveedor: 'AFIP' },
+          data: { estado: 'DESCONECTADA', conectadaEl: null },
+        });
+      }
+      return this.toResponse(config);
     });
-    return this.toResponse(config);
   }
 
   async crearPuntoVenta(auth: CurrentAuth, payload: UpsertPuntoVentaDto) {
-    const config = await this.prisma.configuracionFiscal.findUnique({
-      where: { tenantId: auth.tenantId },
-      select: { id: true },
-    });
-    if (!config) {
-      throw new BadRequestException(
-        'Configurá primero los datos fiscales del emisor.',
-      );
-    }
+    return this.escribir(auth, true, async (tx) => {
+      const config = await tx.configuracionFiscal.findUnique({
+        where: { tenantId: auth.tenantId },
+        select: { id: true },
+      });
+      if (!config) {
+        throw new BadRequestException(
+          'Configurá primero los datos fiscales del emisor.',
+        );
+      }
 
-    const existe = await this.prisma.puntoVenta.findFirst({
-      where: { tenantId: auth.tenantId, numero: payload.numero },
-      select: { id: true },
-    });
-    if (existe) {
-      throw new ConflictException(
-        `Ya existe el punto de venta ${String(payload.numero).padStart(4, '0')}.`,
-      );
-    }
+      const existe = await tx.puntoVenta.findFirst({
+        where: { tenantId: auth.tenantId, numero: payload.numero },
+        select: { id: true },
+      });
+      if (existe) {
+        throw new ConflictException(
+          `Ya existe el punto de venta ${String(payload.numero).padStart(4, '0')}.`,
+        );
+      }
 
-    const pv = await this.prisma.puntoVenta.create({
-      data: {
-        tenantId: auth.tenantId,
-        configuracionFiscalId: config.id,
-        numero: payload.numero,
-        nombre: payload.nombre.trim(),
-        modalidad: payload.modalidad ?? 'web_services',
-        activo: payload.activo ?? true,
-      },
+      const pv = await tx.puntoVenta.create({
+        data: {
+          tenantId: auth.tenantId,
+          configuracionFiscalId: config.id,
+          numero: payload.numero,
+          nombre: payload.nombre.trim(),
+          modalidad: payload.modalidad ?? 'web_services',
+          activo: payload.activo ?? true,
+        },
+      });
+      return this.puntoVentaResponse(pv);
     });
-    return this.puntoVentaResponse(pv);
   }
 
   async actualizarPuntoVenta(
@@ -129,39 +190,43 @@ export class ConfiguracionFiscalService {
     id: string,
     payload: UpsertPuntoVentaDto,
   ) {
-    await this.puntoVentaOrThrow(auth, id);
+    return this.escribir(auth, true, async (tx) => {
+      await this.puntoVentaOrThrow(auth, id, tx);
 
-    const duplicado = await this.prisma.puntoVenta.findFirst({
-      where: {
-        tenantId: auth.tenantId,
-        numero: payload.numero,
-        id: { not: id },
-      },
-      select: { id: true },
-    });
-    if (duplicado) {
-      throw new ConflictException(
-        `Ya existe el punto de venta ${String(payload.numero).padStart(4, '0')}.`,
-      );
-    }
+      const duplicado = await tx.puntoVenta.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          numero: payload.numero,
+          id: { not: id },
+        },
+        select: { id: true },
+      });
+      if (duplicado) {
+        throw new ConflictException(
+          `Ya existe el punto de venta ${String(payload.numero).padStart(4, '0')}.`,
+        );
+      }
 
-    const pv = await this.prisma.puntoVenta.update({
-      where: { id },
-      data: {
-        numero: payload.numero,
-        nombre: payload.nombre.trim(),
-        modalidad: payload.modalidad ?? 'web_services',
-        activo: payload.activo ?? true,
-      },
+      const pv = await tx.puntoVenta.update({
+        where: { id },
+        data: {
+          numero: payload.numero,
+          nombre: payload.nombre.trim(),
+          modalidad: payload.modalidad ?? 'web_services',
+          activo: payload.activo ?? true,
+        },
+      });
+      return this.puntoVentaResponse(pv);
     });
-    return this.puntoVentaResponse(pv);
   }
 
   async eliminarPuntoVenta(auth: CurrentAuth, id: string) {
-    await this.puntoVentaOrThrow(auth, id);
-    // TODO(etapa C2): impedir el borrado si ya tiene comprobantes emitidos.
-    await this.prisma.puntoVenta.delete({ where: { id } });
-    return { ok: true };
+    return this.escribir(auth, false, async (tx) => {
+      await this.puntoVentaOrThrow(auth, id, tx);
+      // TODO(etapa C2): impedir el borrado si ya tiene comprobantes emitidos.
+      await tx.puntoVenta.delete({ where: { id } });
+      return { ok: true };
+    });
   }
 
   /**
@@ -185,8 +250,12 @@ export class ConfiguracionFiscalService {
     );
   }
 
-  private async puntoVentaOrThrow(auth: CurrentAuth, id: string) {
-    const pv = await this.prisma.puntoVenta.findFirst({
+  private async puntoVentaOrThrow(
+    auth: CurrentAuth,
+    id: string,
+    db: Pick<Prisma.TransactionClient, 'puntoVenta'> = this.prisma,
+  ) {
+    const pv = await db.puntoVenta.findFirst({
       where: { id, tenantId: auth.tenantId },
     });
     if (!pv) {

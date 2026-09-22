@@ -54,7 +54,7 @@ describe('pérdida del permiso distribuido de geometría', () => {
           renovar: jest.fn().mockResolvedValue(caso !== 'capacidad-expirada'),
           liberar: jest.fn().mockResolvedValue(true),
           siguiente: jest.fn().mockResolvedValue(null),
-        } as never,
+        } as never,{ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never
       );
       const job = {
         id: 'job-largo',
@@ -117,7 +117,7 @@ describe('admisión y finalización de geometría', () => {
       { resolver } as never,
       control as never,
       tenant as never,
-      pool as never,
+      pool as never,{ exigirTodas: jest.fn().mockResolvedValue(undefined), exigir: jest.fn().mockResolvedValue(undefined) } as never
     );
     const job = {
       id: 'j',

@@ -1,3 +1,5 @@
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { randomUUID } from 'node:crypto';
 import { ControlTrabajosGeometriaService } from './control-trabajos-geometria.service';
 import type { CrearTrabajoNestingOpenNestDto } from './geometria/geometria-jobs.dto';
@@ -5,13 +7,18 @@ import { GeometriaJobsService } from './geometria/geometria-jobs.service';
 import { CapacidadGeometriaService } from './geometria/capacidad-geometria.service';
 
 async function main(): Promise<void> {
+  const db = new PrismaService();
   const control = new ControlTrabajosGeometriaService();
   const capacidad = new CapacidadGeometriaService();
-  const service = new GeometriaJobsService(control, capacidad);
+  const service = new GeometriaJobsService(
+    control,
+    capacidad,
+    new CapacidadesEmpresaService(db),
+  );
   const tenantId = `smoke-${randomUUID()}`;
   const dto = solicitud(`smoke-complete-${randomUUID()}`, 5);
   try {
-    const initial = await service.crear({ tenantId, dto });
+    const initial = await service.crearParaCotizacion({ tenantId, dto });
     const states = new Set([initial.estado]);
     let current = initial;
     const deadline = Date.now() + 15_000;
@@ -30,11 +37,11 @@ async function main(): Promise<void> {
       throw new Error(`Estado final inesperado: ${JSON.stringify(current)}`);
 
     const scope = `smoke-obsolete-${randomUUID()}`;
-    const first = await service.crear({
+    const first = await service.crearParaCotizacion({
       tenantId,
       dto: solicitud(scope, 150),
     });
-    const second = await service.crear({
+    const second = await service.crearParaCotizacion({
       tenantId,
       dto: solicitud(scope, 151),
     });
@@ -73,6 +80,7 @@ async function main(): Promise<void> {
     );
   } finally {
     await service.onApplicationShutdown();
+    await db.$disconnect();
     control.onApplicationShutdown();
     capacidad.onApplicationShutdown();
   }

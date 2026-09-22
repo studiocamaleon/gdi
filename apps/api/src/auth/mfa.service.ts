@@ -17,6 +17,10 @@ import {
 } from '../integraciones/cripto/secretos.service';
 import { SessionCacheService } from './session-cache.service';
 import type { CurrentAuth } from './auth.types';
+import {
+  MFA_DISPOSITIVO_MAX_AGE,
+  type AlcanceMfa,
+} from './mfa-dispositivo-cookie';
 
 const CINCO_MINUTOS = 5 * 60_000;
 const ERROR_CODIGO =
@@ -52,11 +56,28 @@ export class MfaService {
     const config = await this.prisma.userMfa.findUnique({
       where: { userId: auth.userId },
     });
+    const user = await this.prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { rolPlataforma: true, passwordHash: true },
+    });
     return {
+      dispositivosRecordados: config?.activatedAt
+        ? await this.prisma.mfaDispositivo.count({
+            where: {
+              userId: auth.userId,
+              revocadoEl: null,
+              venceEl: { gt: new Date() },
+              mfaVersion: config.version,
+              passwordStamp: huellaPassword(user?.passwordHash ?? null),
+            },
+          })
+        : 0,
       activo: !!config?.activatedAt,
       activadoEl: config?.activatedAt?.toISOString() ?? null,
       codigosRestantes: config?.recoveryHashes.length ?? 0,
       disponible: this.secretos.disponible,
+      requiereMfa: !!user?.rolPlataforma,
+      recuperacionConfirmada: !!config?.recuperacionConfirmadaEl,
     };
   }
 
@@ -101,30 +122,57 @@ export class MfaService {
       });
       if (actual?.activatedAt)
         throw new BadRequestException('La protección MFA ya está activa.');
-      const secret = new Secret({ size: 20 }).base32;
-      const setupId = randomUUID();
-      const expiresAt = new Date(Date.now() + 10 * 60_000);
-      const pending = {
-        pendingId: setupId,
-        pendingSecret: this.secretos.cifrar(secret),
-        pendingSessionId: auth.sessionId,
-        pendingExpiresAt: expiresAt,
-      };
-      await tx.userMfa.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id, ...pending },
-        update: pending,
-      });
-      return {
-        setupId,
-        secret,
-        expiresAt: expiresAt.toISOString(),
-        qrDataUrl: await QRCode.toDataURL(
-          this.totp(secret, user.email).toString(),
-          { width: 224, margin: 2 },
-        ),
-      };
+      return this.prepararAlta(tx, auth, user.email);
     });
+  }
+
+  private async prepararAlta(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    email: string,
+  ) {
+    const secret = new Secret({ size: 20 }).base32;
+    const setupId = randomUUID();
+    const expiresAt = new Date(Date.now() + 10 * 60_000);
+    const pending = {
+      pendingId: setupId,
+      pendingSecret: this.secretos.cifrar(secret),
+      pendingSessionId: auth.sessionId,
+      pendingExpiresAt: expiresAt,
+    };
+    await tx.userMfa.upsert({
+      where: { userId: auth.userId },
+      create: { userId: auth.userId, ...pending },
+      update: pending,
+    });
+    return {
+      setupId,
+      secret,
+      expiresAt: expiresAt.toISOString(),
+      qrDataUrl: await QRCode.toDataURL(this.totp(secret, email).toString(), {
+        width: 224,
+        margin: 2,
+      }),
+    };
+  }
+
+  async reemplazar(auth: CurrentAuth, password: string, codigo: string) {
+    this.propio(auth);
+    if (!this.secretos.disponible)
+      throw new ServiceUnavailableException(
+        'MFA no está disponible en este entorno.',
+      );
+    const alta = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, auth.userId);
+      const user = await this.exigirPassword(tx, auth.userId, password);
+      const config = await tx.userMfa.findUnique({
+        where: { userId: user.id },
+      });
+      if (!config || !(await this.consumir(tx, config, codigo))) return null;
+      return this.prepararAlta(tx, auth, user.email);
+    });
+    if (!alta) throw new BadRequestException(ERROR_CODIGO);
+    return alta;
   }
 
   private codigos() {
@@ -178,6 +226,40 @@ export class MfaService {
       data: { revokedAt: new Date() },
     });
     await tx.mfaChallenge.deleteMany({ where: { userId: auth.userId } });
+    await tx.mfaDispositivo.updateMany({
+      where: { userId: auth.userId, revocadoEl: null },
+      data: { revocadoEl: new Date() },
+    });
+  }
+
+  private async auditarStaff(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    accion:
+      | 'activada'
+      | 'desactivada'
+      | 'codigos_renovados'
+      | 'reemplazada'
+      | 'recuperacion_confirmada',
+  ) {
+    const usuario = await tx.user.findUnique({
+      where: { id: userId },
+      select: { rolPlataforma: true },
+    });
+    if (!usuario?.rolPlataforma) return;
+    const descripcion = {
+      activada: 'Activó MFA en su cuenta.',
+      desactivada:
+        'Desactivó MFA en su cuenta después de validar su identidad.',
+      codigos_renovados: 'Renovó sus códigos de recuperación MFA.',
+      reemplazada:
+        'Reemplazó su autenticador MFA después de validar su identidad.',
+      recuperacion_confirmada:
+        'Confirmó el guardado de sus códigos de recuperación MFA.',
+    }[accion];
+    await tx.plataformaEvento.create({
+      data: { staffUserId: userId, tipo: `mfa_${accion}`, descripcion },
+    });
   }
 
   async confirmar(auth: CurrentAuth, setupId: string, codigo: string) {
@@ -189,7 +271,6 @@ export class MfaService {
       });
       if (
         !config ||
-        config.activatedAt ||
         !config.pendingSecret ||
         config.pendingId !== setupId ||
         config.pendingSessionId !== auth.sessionId ||
@@ -214,6 +295,8 @@ export class MfaService {
           activatedAt: new Date(),
           lastUsedStep: step,
           recoveryHashes: recovery.hashes,
+          recuperacionConfirmadaEl: null,
+          recoveryPendingSessionId: auth.sessionId,
           pendingSecret: Prisma.DbNull,
           pendingId: null,
           pendingSessionId: null,
@@ -224,7 +307,19 @@ export class MfaService {
         },
       });
       await this.revocarOtras(tx, auth);
-      return { codigosRecuperacion: recovery.codigos };
+      await tx.authSession.update({
+        where: { id: auth.sessionId },
+        data: { mfaVerificadoEl: new Date() },
+      });
+      await this.auditarStaff(
+        tx,
+        auth.userId,
+        config.activatedAt ? 'reemplazada' : 'activada',
+      );
+      return {
+        codigosRecuperacion: recovery.codigos,
+        versionRecuperacion: config.version + 1,
+      };
     });
     // No lanzar dentro de la transacción por un código errado: desharía el contador.
     if (!resultado) throw new BadRequestException(ERROR_CODIGO);
@@ -237,7 +332,6 @@ export class MfaService {
     await this.prisma.userMfa.updateMany({
       where: {
         userId: auth.userId,
-        activatedAt: null,
         pendingSessionId: auth.sessionId,
       },
       data: {
@@ -293,7 +387,11 @@ export class MfaService {
     this.propio(auth);
     const result = await this.prisma.$transaction(async (tx) => {
       await bloquearIdentidad(tx, auth.userId);
-      await this.exigirPassword(tx, auth.userId, password);
+      const user = await this.exigirPassword(tx, auth.userId, password);
+      if (accion === 'desactivar' && user.rolPlataforma)
+        throw new ForbiddenException(
+          'MFA es obligatoria para el equipo de Plataforma. Podés renovar tus códigos de recuperación.',
+        );
       const config = await tx.userMfa.findUnique({
         where: { userId: auth.userId },
       });
@@ -307,16 +405,33 @@ export class MfaService {
                 secret: Prisma.DbNull,
                 activatedAt: null,
                 recoveryHashes: [],
+                recuperacionConfirmadaEl: null,
+                recoveryPendingSessionId: null,
                 lastUsedStep: null,
                 version: { increment: 1 },
                 failedAttempts: 0,
                 lockedUntil: null,
               }
-            : { recoveryHashes: recovery.hashes, version: { increment: 1 } },
+            : {
+                recoveryHashes: recovery.hashes,
+                version: { increment: 1 },
+                recuperacionConfirmadaEl: null,
+                recoveryPendingSessionId: auth.sessionId,
+              },
       });
       await this.revocarOtras(tx, auth);
+      await tx.authSession.update({
+        where: { id: auth.sessionId },
+        data: { mfaVerificadoEl: accion === 'regenerar' ? new Date() : null },
+      });
+      await this.auditarStaff(
+        tx,
+        auth.userId,
+        accion === 'desactivar' ? 'desactivada' : 'codigos_renovados',
+      );
       return {
         codigosRecuperacion: accion === 'regenerar' ? recovery.codigos : [],
+        versionRecuperacion: config.version + 1,
       };
     });
     if (!result) throw new BadRequestException(ERROR_CODIGO);
@@ -325,12 +440,139 @@ export class MfaService {
   }
 
   /** Invocar dentro de la transacción de login con la identidad bloqueada. */
+  async confirmarRecuperacion(auth: CurrentAuth, version: number) {
+    this.propio(auth);
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, auth.userId);
+      const config = await tx.userMfa.findUnique({
+        where: { userId: auth.userId },
+      });
+      if (
+        config?.activatedAt &&
+        config.version === version &&
+        config.recuperacionConfirmadaEl
+      )
+        return { ok: true };
+      if (
+        !config?.activatedAt ||
+        config.version !== version ||
+        config.recoveryPendingSessionId !== auth.sessionId
+      ) {
+        throw new BadRequestException(
+          'Estos códigos ya no corresponden a esta sesión. Generá nuevos códigos y guardalos.',
+        );
+      }
+      await tx.userMfa.update({
+        where: { userId: auth.userId },
+        data: {
+          recuperacionConfirmadaEl: new Date(),
+          recoveryPendingSessionId: null,
+        },
+      });
+      await this.auditarStaff(tx, auth.userId, 'recuperacion_confirmada');
+      return { ok: true };
+    });
+  }
+
+  /** Sólo se emite tras consumir un segundo factor y dentro de la misma transacción. */
+  async recordar(
+    tx: Prisma.TransactionClient,
+    challenge: MfaChallenge,
+    anterior?: string,
+  ) {
+    const alcance: AlcanceMfa =
+      challenge.destination === 'tenant' ? 'tenant' : 'plataforma';
+    if (anterior)
+      await tx.mfaDispositivo.updateMany({
+        where: {
+          userId: challenge.userId,
+          alcance,
+          tokenHash: hash(anterior),
+          revocadoEl: null,
+        },
+        data: { revocadoEl: new Date() },
+      });
+    const token = randomBytes(32).toString('hex');
+    await tx.mfaDispositivo.create({
+      data: {
+        userId: challenge.userId,
+        alcance,
+        tokenHash: hash(token),
+        passwordStamp: challenge.passwordStamp,
+        mfaVersion: challenge.mfaVersion,
+        venceEl: new Date(Date.now() + MFA_DISPOSITIVO_MAX_AGE * 1000),
+      },
+    });
+    return { token, alcance };
+  }
+
+  /** La contraseña, el usuario y el destino ya fueron validados. No renueva el plazo. */
+  async dispositivoValido(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    passwordHash: string | null,
+    alcance: AlcanceMfa,
+    token?: string,
+  ) {
+    if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
+    const config = await tx.userMfa.findUnique({ where: { userId } });
+    if (!config?.activatedAt || this.bloqueado(config)) return null;
+    if (alcance === 'plataforma' && !config.recuperacionConfirmadaEl)
+      return null;
+    const dispositivo = await tx.mfaDispositivo.findFirst({
+      where: {
+        tokenHash: hash(token),
+        userId,
+        alcance,
+        revocadoEl: null,
+        venceEl: { gt: new Date() },
+        mfaVersion: config.version,
+        passwordStamp: huellaPassword(passwordHash),
+      },
+    });
+    if (!dispositivo) return null;
+    await tx.mfaDispositivo.update({
+      where: { id: dispositivo.id },
+      data: { ultimoUsoEl: new Date() },
+    });
+    return dispositivo;
+  }
+
+  async olvidarDispositivos(auth: CurrentAuth) {
+    this.propio(auth);
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      await bloquearIdentidad(tx, auth.userId);
+      await tx.mfaDispositivo.updateMany({
+        where: { userId: auth.userId, revocadoEl: null },
+        data: { revocadoEl: new Date() },
+      });
+      // Una sesión obtenida gracias al recuerdo deja de autorizar al revocarlo.
+      const actual = await tx.authSession.findFirst({
+        where: { id: auth.sessionId, userId: auth.userId },
+        select: { mfaDispositivoId: true },
+      });
+      await tx.authSession.updateMany({
+        where: {
+          userId: auth.userId,
+          mfaDispositivoId: { not: null },
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+      return { ok: true, requiereLogin: !!actual?.mfaDispositivoId };
+    });
+    this.cache.invalidarUsuario(auth.userId);
+    return resultado;
+  }
+
+  /** Invocar dentro de la transacción de login con la identidad bloqueada. */
   async desafiar(
     tx: Prisma.TransactionClient,
     userId: string,
     passwordHash: string | null,
-    destination: 'tenant' | 'plataforma',
+    destination: 'tenant' | 'plataforma' | 'invitacion_plataforma',
     membershipId?: string,
+    invitacionPlataformaId?: string,
   ) {
     const config = await tx.userMfa.findUnique({ where: { userId } });
     if (!config?.activatedAt) return null;
@@ -345,6 +587,7 @@ export class MfaService {
         userId,
         destination,
         membershipId,
+        invitacionPlataformaId,
         passwordStamp: huellaPassword(passwordHash),
         mfaVersion: config.version,
         expiresAt: new Date(Date.now() + CINCO_MINUTOS),
