@@ -1,9 +1,9 @@
 # Publicar la web de Grafoprint antes que el sistema
 
 Estado al 24 de septiembre de 2026: web comercial publicada en
-<https://grafoprint-web.vercel.app>, proyecto `grafoprint-web` de Vercel Pro.
+<https://grafoprint.com.ar>, proyecto `grafoprint-web` de Vercel Pro.
 Commit `604bf17`, rama `meta-tech-provider`, todavía sin integrar en `main`.
-El dominio de Donweb y la infraestructura del SaaS siguen pendientes.
+El dominio de Donweb ya está conectado; la infraestructura del SaaS sigue pendiente.
 
 Orden completo, responsables y paso posterior al sistema:
 [despliegue-paso-a-paso.md](despliegue-paso-a-paso.md). Arquitectura confirmada:
@@ -30,12 +30,13 @@ Correo confirmado como operativo: **soporte@grafoprint.com.ar**. Razón social,
 CUIT y domicilio legal incorporados a los documentos. Falta completar la
 revisión operativa de los textos en
 [meta-tech-provider-paginas-legales.md](meta-tech-provider-paginas-legales.md).
-Al publicar, configurar la variante `www` para redirigir al dominio principal.
-Antes de editar DNS, revisar sus registros actuales y conservar los del correo.
-Se consultó DNS público: hay A y AAAA de la web, y MX/hosts de correo de Donweb.
-Se revisó la zona del panel y se conservó un inventario local de sus 27 registros,
-contrastado por consultas DNS. No se modificó Donweb. Antes del cambio, comparar
-el inventario con el estado vigente y conservar los registros de correo.
+La variante `www` ya redirige con HTTP 308 al dominio principal. Se conservó un
+inventario local de los 27 registros originales de Donweb, contrastado por DNS.
+Se cambió el A principal a `216.150.1.1`, se eliminó sólo el AAAA antiguo del
+dominio raíz y se cambió el CNAME de `www` a
+`5b3c32ff13cc88e1.vercel-dns-016.com.`. Los 26 registros restantes se compararon
+con el inventario: no hubo otros cambios. Nameservers y registros de correo
+permanecen intactos. La entrega real de correo no se probó mediante mensajes.
 La publicación de estas páginas ayuda a preparar Meta, pero no equivale a una
 aprobación de Tech Provider ni sustituye la integración y su revisión.
 
@@ -61,7 +62,7 @@ ambas aplicaciones hermanas:
 `next build` omite esa preparación. No usar `output: export`: la configuración
 actual utiliza rewrites y el catálogo de la futura versión live usa servidor.
 
-Para conectar el dominio definitivo, configurar y volver a desplegar:
+Variables aplicadas en Production, con el despliegue reconstruido:
 
 ```dotenv
 MARKETING_SITE_URL=https://grafoprint.com.ar
@@ -72,6 +73,7 @@ MARKETING_CONTACT_URL=mailto:soporte@grafoprint.com.ar
 No necesita API, PostgreSQL, Redis, R2 ni credenciales de WhatsApp. No copiar
 las variables privadas del monorepo a este proyecto. Separar Preview y
 Production; comprobar canónicas y protección del preview antes de indexarlo.
+Actualmente Preview conserva `MARKETING_SITE_URL=https://grafoprint-web.vercel.app`.
 Para recorrer los enlaces absolutos de un preview, usar en ese entorno su origen
 real como `MARKETING_SITE_URL` y reconstruir. Production conserva el dominio final.
 
@@ -138,15 +140,21 @@ El build de Grafo3D conserva avisos de tamaño de bundle y externalización de
 - Instalación independiente y build completos; se agregó Vitest como dependencia
   propia de marketing y el comando `typecheck` para los controles de Vercel.
 - Lint y TypeCheck aprobados, sin omitir requisitos de promoción.
-- Despliegue `dpl_2PazpEPg3Axeckis4egVkmxkJe8F` listo en el alias público temporal.
+- Despliegue `dpl_JDUH76bgAShoeCfmgmb2yvyMZyJH` Ready en Production con el
+  dominio definitivo, reconstruido desde el commit `604bf17`.
 - Portada, `/proximamente`, las tres páginas legales, `/3d`, robots y sitemap:
   HTTP 200 sin autenticación. Recurso inexistente de Grafo3D: HTTP 404.
-- URLs canónicas y enlaces apuntan al alias temporal; no hay enlaces a
+- URLs canónicas, enlaces, robots y sitemap usan `https://grafoprint.com.ar`;
+  no hay enlaces a
   localhost, login o registro del SaaS en las páginas revisadas.
 - Grafo3D generó tres componentes y descargó `Isologo Grafoprint-fabricacion.zip`.
   Integridad ZIP correcta, dos STL binarios con tamaños y triángulos coherentes,
-  contornos DXF/SVG y documentos JSON legibles.
+  contornos DXF/SVG y documentos JSON legibles. Esta prueba se realizó en el
+  alias de Vercel antes de conectar el dominio, con el mismo código publicado.
+- Vercel confirma **Valid Configuration** en ambos dominios. HTTPS funciona
+  sin omitir la validación del certificado y `www/privacidad` responde HTTP 308
+  hacia `https://grafoprint.com.ar/privacidad`.
 
-Las variables actuales usan `MARKETING_SITE_URL=https://grafoprint-web.vercel.app`.
-Quedan la revisión de contenido por Lucas, la conexión y validación de
-`grafoprint.com.ar` y `www`, y la dirección de facturación solicitada por Vercel.
+La web permanece en `prelaunch`. Las URL legales ya están disponibles para
+retomar la preparación de Meta. El siguiente despliegue del SaaS requiere su
+propia preparación y validación; no se crearon recursos Fly, Neon, R2 ni Redis.

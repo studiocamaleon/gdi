@@ -1,37 +1,47 @@
 # Grafoprint: publicación de la web y despliegue del sistema
 
 Plan revisado el **24/09/2026** con el repositorio y documentación oficial.
-Decisiones del titular incorporadas. La primera publicación de marketing ya
-está disponible en Vercel; las etapas del dominio y del SaaS siguen pendientes.
-No se modificó DNS.
+Decisiones del titular incorporadas. La web comercial ya está publicada en
+Vercel con el dominio definitivo y HTTPS. La infraestructura del SaaS sigue
+pendiente.
 
-## Avance de la primera publicación — 24/09/2026
+## Publicación y conexión del dominio — 24/09/2026
 
 - Lucas creó la cuenta de Vercel, conectó GitHub y activó Pro.
 - Proyecto `grafoprint-web`, equipo `camaleon`, raíz `apps/marketing`, Node 24.x.
-- Web temporal: <https://grafoprint-web.vercel.app>.
+- Web principal: <https://grafoprint.com.ar>. `www.grafoprint.com.ar` redirige
+  con HTTP 308 al dominio principal, conservando la ruta.
 - Commit publicado: `604bf177c615ca9b5fa10b78b50f99d838ceffd9`, de
   `meta-tech-provider`, promovido después de aprobar Lint y TypeCheck.
-- Despliegue: `dpl_2PazpEPg3Axeckis4egVkmxkJe8F`. En Vercel es Production;
-  su finalidad en esta etapa es revisar la web antes de conectar el dominio.
-- Variables de Production y Preview: `MARKETING_LAUNCH_MODE=prelaunch`,
-  `MARKETING_SITE_URL=https://grafoprint-web.vercel.app` y
+- Despliegue de Production: `dpl_JDUH76bgAShoeCfmgmb2yvyMZyJH`, Ready, con
+  Lint y TypeCheck aprobados. Se reconstruyó el mismo commit con la URL definitiva.
+- Production: `MARKETING_SITE_URL=https://grafoprint.com.ar`. Preview conserva
+  `MARKETING_SITE_URL=https://grafoprint-web.vercel.app`; ese alias también sirve
+  la publicación actual. Para un preview aislado, usar su propio origen estable.
+- Ambos entornos conservan `MARKETING_LAUNCH_MODE=prelaunch` y
   `MARKETING_CONTACT_URL=mailto:soporte@grafoprint.com.ar`.
 - [PR borrador #1](https://github.com/studiocamaleon/gdi/pull/1), sin integrar
   en `main`. Los envíos a la rama generan previews; la promoción de esta
   versión fue manual. No publicar otro estado de `main` antes de integrarla.
-- Se comprobaron las páginas públicas por HTTPS sin sesión, sus enlaces y
-  URLs canónicas. Grafo3D generó el ejemplo y descargó un paquete íntegro con
-  STL, DXF, SVG y JSON. La portada se revisó también en Chrome.
-- Se leyó la zona de Donweb y se guardó un inventario local de sus 27 registros,
-  contrastado por consultas DNS. No se alteraron dominio ni correo.
-- Vercel muestra un aviso de dirección de facturación pendiente. Lucas debe
-  completar los datos correspondientes a su medio de pago en la cuenta.
+- Portada, aviso, tres páginas legales, Grafo3D, robots y sitemap: HTTP 200 sin
+  sesión en el dominio final. Canónicas y enlaces correctos; recurso inexistente
+  de Grafo3D: 404. La portada se revisó también en Chrome.
+- En la primera publicación del mismo código, Grafo3D generó el ejemplo y
+  descargó un paquete íntegro con STL, DXF, SVG y JSON.
+- Vercel muestra **Valid Configuration** para el dominio principal y `www`.
+  HTTPS y la redirección de `www/privacidad` se comprobaron sin omitir la
+  validación del certificado.
+- Se conservó un inventario local de los 27 registros originales de Donweb.
+  Después de los tres cambios web indicados en la sección 6 quedan 26 registros.
+  La comparación completa del panel confirmó que los demás permanecen iguales.
+- Los DNS autoritativos y los resolutores de Google y Cloudflare respondieron
+  con la nueva IP. Se conservaron NS, MX, hosts de correo, SPF, DKIM y DMARC.
+  No se enviaron mensajes para probar la casilla; esa comprobación sigue a cargo
+  de Lucas.
 
-Siguiente paso: revisar la web temporal y conectar `grafoprint.com.ar` y `www`
-con los valores que indique Vercel, conservando el correo. Luego cambiar
-`MARKETING_SITE_URL` al dominio definitivo y reconstruir la web. La infraestructura
-Fly, Neon, R2 y Redis permanece pendiente.
+Siguiente paso: retomar la configuración de Meta con las URL legales públicas
+y preparar el código del SaaS para su entorno de pruebas. Fly, Neon, R2 y Redis
+permanecen pendientes. El registro, acceso y contratación siguen en prelanzamiento.
 
 ## 1. Arquitectura y alcance acordados
 
@@ -100,8 +110,8 @@ R2 distingue [ubicación y sugerencias de ubicación](https://developers.cloudfl
 
 Comprobaciones realizadas: build completo con Node 24, 18 pruebas de marketing,
 revisión de rutas, páginas legales, móvil y motor Grafo3D. La instalación en
-Vercel y la descarga real de una exportación también están verificadas. Queda
-conectar y validar el dominio propio. Ver [detalle de validación](despliegue-web-prelanzamiento.md).
+Vercel, la descarga real de una exportación y el dominio propio con HTTPS están
+verificados. Ver [detalle de validación](despliegue-web-prelanzamiento.md).
 
 **Resultado necesario:** una versión identificada y revisada, disponible para el
 proveedor de despliegue. Todavía no se cambia el dominio.
@@ -176,7 +186,7 @@ listo para asociar el dominio. Un build verde solo no completa esta etapa.
 completa, incluido TTL, registros de correo y verificaciones de otros servicios.
 La consulta pública siguiente no equivale a ese respaldo del panel.
 
-Lectura DNS del 24/09/2026, sin modificaciones:
+Lectura DNS del 24/09/2026, **antes de los cambios**:
 
 | Nombre y tipo | Valor observado |
 | --- | --- |
@@ -189,6 +199,19 @@ Lectura DNS del 24/09/2026, sin modificaciones:
 | `_dmarc.grafoprint.com.ar`, TXT | `v=DMARC1; p=none` |
 | `mail.grafoprint.com.ar`, A / AAAA | `200.58.111.128` / `2800:6c0:2::a:16f` |
 | `mx1.grafoprint.com.ar`, A | `200.58.122.206` |
+
+Cambios aplicados el 24/09/2026 con los valores indicados por este proyecto de
+Vercel, manteniendo TTL 14400 en los registros editados:
+
+| Registro | Resultado |
+| --- | --- |
+| `grafoprint.com.ar`, A | `216.150.1.1` |
+| `grafoprint.com.ar`, AAAA | Eliminado el valor antiguo de la web de Donweb |
+| `www.grafoprint.com.ar`, CNAME | `5b3c32ff13cc88e1.vercel-dns-016.com.` |
+
+No se modificaron los demás registros. La delegación sigue en
+`ns3.hostmar.com` y `ns4.hostmar.com`. Los pasos siguientes quedan como
+procedimiento de referencia; no hay que volver a aplicarlos ahora.
 
 1. En Vercel, agregar `grafoprint.com.ar` y `www.grafoprint.com.ar` al proyecto;
    definir el primero como principal y redirigir `www` hacia él.
