@@ -11,6 +11,7 @@ async function bootstrap() {
 
   // Logging estructurado (pino) con request-id.
   app.useLogger(app.get(Logger));
+  app.enableShutdownHooks();
 
   app.setGlobalPrefix('api');
 
@@ -99,6 +100,6 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(process.env.PORT ?? 3001, process.env.HOST ?? '::');
 }
 void bootstrap();
