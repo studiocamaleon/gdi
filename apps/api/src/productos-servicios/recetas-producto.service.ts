@@ -1,3 +1,4 @@
+import { ordenarPasosConExtras } from './orden-pasos-producto';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import { pasosEfectivos, proyectarBomEfectivo } from './bom-efectivo';
 import {
@@ -2213,6 +2214,9 @@ export class RecetasProductoService {
             heredaDeRutaPasoId: slot.heredaDeRutaPasoId,
             heredaDeSlotCodigo: slot.heredaDeSlotCodigo,
             criterioMotorAuto: slot.criterioMotorAuto,
+            ...(slot.politicaStock && slot.politicaStock !== 'TODAS'
+              ? { politicaStock: slot.politicaStock }
+              : {}),
             criterioInputCampo: slot.criterioInputCampo,
             criterioMaterialCampo: slot.criterioMaterialCampo,
             criterioFiltroCampo: slot.criterioFiltroCampo,
@@ -2317,6 +2321,30 @@ export class RecetasProductoService {
       select: { snapshotJson: true },
     });
     const workflow = leerWorkflowRuta(version?.snapshotJson, ruta.ruta.pasos);
+    // La plantilla reusable no incluye los pasos agregados a ESTE producto.
+    // Al crear su primera receta lineal, reconstruimos la secuencia completa
+    // con la misma regla que venía usando el motor antes de versionarla.
+    // Un DAG explícito o una receta existente conservan sus dependencias.
+    if (workflow.topologia === 'LINEAL' && workflow.nodos.every((n) => n.tipo !== 'COMPONENTE')) {
+      const pasos = ruta.configPasos.map((config, index) => ({
+        rutaPasoId: config.rutaPasoId,
+        rutaPasoOrden: config.rutaPaso?.orden ?? index,
+        clave: `ruta:${config.rutaPasoId}`,
+      })).sort((a, b) => a.rutaPasoOrden - b.rutaPasoOrden);
+      const extras = [...ruta.pasosExtras].sort((a, b) => a.ordenInterno - b.ordenInterno).map((extra) => ({
+        paso: { rutaPasoId: extra.id, rutaPasoOrden: 0, clave: `extra:${extra.id}` },
+        insertarDespuesDeRutaPasoId: extra.insertarDespuesDeRutaPasoId,
+        ordenInterno: extra.ordenInterno,
+        ordenFlujo: extra.ordenFlujo,
+      }));
+      const secuencia = ordenarPasosConExtras(pasos, extras, new Map(
+        ruta.configPasos.map((config) => [config.rutaPasoId, config.ordenFlujo]),
+      ));
+      return {
+        dependencias: compilarRutaLineal(secuencia.map((paso, indice) => ({ clave: paso.clave, indice }))).aristas,
+        componentes: [],
+      };
+    }
     const tipos = new Map(
       workflow.nodos.map((nodo) => [nodo.clave, nodo.tipo]),
     );
@@ -2760,6 +2788,7 @@ export class RecetasProductoService {
             heredaDeRutaPasoId: slot.heredaDeRutaPasoId ?? null,
             heredaDeSlotCodigo: slot.heredaDeSlotCodigo ?? null,
             criterioMotorAuto: slot.criterioMotorAuto ?? null,
+            politicaStock: slot.politicaStock ?? 'TODAS',
             criterioInputCampo: slot.criterioInputCampo ?? null,
             criterioMaterialCampo: slot.criterioMaterialCampo ?? null,
           }) as Prisma.InputJsonValue,

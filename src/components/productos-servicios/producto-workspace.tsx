@@ -40,7 +40,7 @@ import {
   RouteIcon,
   StarIcon,
   Trash2Icon,
-  WrenchIcon,
+  LayersIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -101,12 +101,6 @@ import {
 import { RecetaProductoTab } from "@/components/productos-servicios/receta-producto-tab";
 import { ModeloProductivoPreview } from "@/components/productos-servicios/modelo-productivo-preview";
 import {
-  getHerramientaMedidasArchivo,
-  setHerramientaMedidasArchivo,
-  getHerramientaEditorSello,
-  setHerramientaEditorSello,
-} from "@/lib/producto-herramientas";
-import {
   getGeometriasComerciales,
   nuevaFuenteGeometria,
   setGeometriasComerciales,
@@ -146,7 +140,7 @@ export type ProductoWorkspaceTab =
   | "comercial"
   | "produccion"
   | "cargos"
-  | "herramientas"
+  | "nesting"
   | "pricing";
 
 export type ProductoProduccionVista = "rutas" | "operaciones" | "bom";
@@ -423,7 +417,7 @@ const TABS: Array<{
   { id: "identidad", label: "Identidad", icon: IdCardIcon },
   { id: "comercial", label: "Comercial", icon: BriefcaseBusinessIcon },
   { id: "produccion", label: "Producción", icon: RouteIcon },
-  { id: "herramientas", label: "Herramientas", icon: WrenchIcon },
+  { id: "nesting", label: "Nesting", icon: LayersIcon },
   { id: "pricing", label: "Precio", icon: BanknoteIcon },
 ];
 
@@ -494,7 +488,7 @@ function tabValidaciones(
           ? { estado: "warning", label: "Pasos incompletos" }
           : validacionPublicacion,
     cargos: { estado: "ok", label: "Opcional" },
-    herramientas: { estado: "ok", label: "Opcional" },
+    nesting: { estado: "ok", label: "Preparación" },
     pricing: precioConfig?.metodoCalculo
       ? { estado: "ok", label: "Completo" }
       : { estado: "error", label: "Falta método" },
@@ -664,16 +658,7 @@ export function ProductoWorkspace({
                     <IdentidadTab producto={producto} seccion="identidad" />
                   )}
                   {activeTab === "comercial" && (
-                    <>
-                      <NestingsGuardadosProducto
-                        productoId={producto.id}
-                        rutaAlternativaId={
-                          producto.rutasAlternativas.find((r) => r.esPreferida)
-                            ?.id ?? producto.rutasAlternativas[0]?.id
-                        }
-                      />
-                      <IdentidadTab producto={producto} seccion="comercial" />
-                    </>
+                    <IdentidadTab producto={producto} seccion="comercial" />
                   )}
                   {activeTab === "produccion" && (
                     <ProduccionTab
@@ -693,8 +678,14 @@ export function ProductoWorkspace({
                       catalogoCargos={catalogoCargos}
                     />
                   )}
-                  {activeTab === "herramientas" && (
-                    <HerramientasTab producto={producto} />
+                  {activeTab === "nesting" && (
+                    <NestingsGuardadosProducto
+                      productoId={producto.id}
+                      rutaAlternativaId={
+                        producto.rutasAlternativas.find((r) => r.esPreferida)?.id ??
+                        producto.rutasAlternativas[0]?.id
+                      }
+                    />
                   )}
                 </ProductoEdicion>
                 {activeTab === "pricing" && (
@@ -1349,22 +1340,25 @@ function IdentidadTab({
                           }))
                         }
                       />
-                      <label className={styles.geometryRequired}>
-                        <Switch
-                          checked={
-                            geometriasComerciales.permitirCotizacionManual
-                          }
-                          onCheckedChange={(permitirCotizacionManual) =>
-                            setGeometriasComercialesEstado((actual) => ({
-                              ...actual,
-                              permitirCotizacionManual,
-                            }))
-                          }
-                        />
-                        Permitir estimación manual por placas
-                      </label>
                     </div>
                   ) : null}
+                  <label className={styles.geometryRequired}>
+                    <Switch
+                      checked={geometriasComerciales.permitirCotizacionManual}
+                      onCheckedChange={(permitirCotizacionManual) =>
+                        setGeometriasComercialesEstado((actual) => ({
+                          ...actual,
+                          permitirCotizacionManual,
+                        }))
+                      }
+                    />
+                    Permitir estimación manual por placas
+                  </label>
+                  <div className={styles.help}>
+                    En rutas con corte sobre placas, permite cotizar placas
+                    totales y metros de corte sin cargar un archivo. No calcula
+                    aprovechamiento.
+                  </div>
                 </div>
               )}
               {!sinMedida && (
@@ -2734,127 +2728,6 @@ function CargosTab({
         }}
       />
     </Card>
-  );
-}
-
-function HerramientaToggle({
-  titulo,
-  descripcion,
-  enabled,
-  onToggle,
-}: {
-  titulo: string;
-  descripcion: string;
-  enabled: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className={styles.toolRow}>
-      <div style={{ maxWidth: 620 }}>
-        <div style={{ fontWeight: 500, fontSize: 13 }}>{titulo}</div>
-        <div
-          style={{ fontSize: 11.5, color: "var(--muted-text)", marginTop: 2 }}
-        >
-          {descripcion}
-        </div>
-      </div>
-      <Switch
-        aria-label={titulo}
-        checked={enabled}
-        onCheckedChange={onToggle}
-      />
-    </div>
-  );
-}
-
-function HerramientasTab({ producto }: { producto: ProductoDetalle }) {
-  const router = useRouter();
-  const inicial = React.useMemo(
-    () => ({
-      medidasDesdeArchivo: getHerramientaMedidasArchivo(
-        producto.atributosComercialesJson,
-      ).enabled,
-      editorSello: getHerramientaEditorSello(producto.atributosComercialesJson)
-        .enabled,
-    }),
-    [producto],
-  );
-  const [medidasDesdeArchivo, setMedidasDesdeArchivo] = React.useState(
-    inicial.medidasDesdeArchivo,
-  );
-  const [editorSello, setEditorSello] = React.useState(inicial.editorSello);
-  const [persistido, setPersistido] = React.useState(inicial);
-  const [guardando, setGuardando] = React.useState(false);
-  const dirty =
-    medidasDesdeArchivo !== persistido.medidasDesdeArchivo ||
-    editorSello !== persistido.editorSello;
-
-  const guardar = async () => {
-    setGuardando(true);
-    try {
-      await actualizarProducto(producto.id, {
-        atributosComercialesJson: setHerramientaEditorSello(
-          setHerramientaMedidasArchivo(
-            producto.atributosComercialesJson as Record<string, unknown> | null,
-            medidasDesdeArchivo,
-          ),
-          editorSello,
-        ),
-      });
-      setPersistido({ medidasDesdeArchivo, editorSello });
-      toast.success("Herramientas guardadas");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error guardando");
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div className={[styles.formGrid].join(" ")}>
-      <Card className={[styles.section].join(" ")}>
-        <div className={[styles.sectionHead].join(" ")}>
-          <div className={[styles.sectionCopy].join(" ")}>
-            <h2>Herramientas del producto</h2>
-            <div className={[styles.help].join(" ")}>
-              Funciones opcionales que se habilitan al cotizar este producto.
-              Iremos sumando más con el tiempo.
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <HerramientaToggle
-            titulo="Leer medidas desde PDF"
-            descripcion="Al cotizar, permite adjuntar planos PDF y autocompletar las medidas de cada pieza leyendo el tamaño de cada página. Ideal para planos CAD."
-            enabled={medidasDesdeArchivo}
-            onToggle={() => setMedidasDesdeArchivo((current) => !current)}
-          />
-          <HerramientaToggle
-            titulo="Editor de sello"
-            descripcion="Al cotizar, habilita el botón “Diseñar sello”: el comercial carga el texto por línea según el cuerpo elegido, elige tipografía y genera los archivos de grabado (EPS positivo y negativo)."
-            enabled={editorSello}
-            onToggle={() => setEditorSello((current) => !current)}
-          />
-        </div>
-      </Card>
-      {(dirty || guardando) && (
-        <div className={[styles.saveFooter].join(" ")}>
-          <div className={[styles.saveCopy].join(" ")}>
-            Hay cambios sin guardar en herramientas.
-          </div>
-          <NativeButton
-            type="button"
-            className="btn btn-primary"
-            onClick={guardar}
-            disabled={guardando}
-          >
-            <ArrowUpRightIcon />
-            {guardando ? "Guardando..." : "Guardar cambios"}
-          </NativeButton>
-        </div>
-      )}
-    </div>
   );
 }
 

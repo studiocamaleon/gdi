@@ -66,6 +66,7 @@ export class NotificacionesPresupuestosService {
       where: {
         tenantId,
         estado: 'enviado',
+        notificarWhatsapp: true,
         clienteId: { not: null },
         publicToken: { not: null },
         fechaValidez: { gte: ahora, lte: hasta },
@@ -111,6 +112,7 @@ export class NotificacionesPresupuestosService {
       where: { id: cotizacionId },
       select: {
         tenantId: true,
+        notificarWhatsapp: true,
         id: true,
         numero: true,
         estado: true,
@@ -122,6 +124,7 @@ export class NotificacionesPresupuestosService {
       },
     });
     if (!p?.clienteId || !p.numero) return;
+    if (p.notificarWhatsapp === false) return;
 
     const evento = EVENTO_POR_ESTADO[p.estado];
     if (!evento) return;

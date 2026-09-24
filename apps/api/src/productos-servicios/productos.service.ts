@@ -793,6 +793,7 @@ export class ProductosService {
                     heredaDeRutaPasoId: slot.heredaDeRutaPasoId,
                     heredaDeSlotCodigo: slot.heredaDeSlotCodigo,
                     criterioMotorAuto: slot.criterioMotorAuto,
+                    politicaStock: slot.politicaStock ?? 'TODAS',
                     criterioInputCampo: slot.criterioInputCampo,
                     criterioMaterialCampo: slot.criterioMaterialCampo,
                     materialVarianteId: slot.materialVarianteId,
@@ -1751,6 +1752,7 @@ export class ProductosService {
       heredaDeRutaPasoId?: string | null;
       heredaDeSlotCodigo?: string | null;
       criterioMotorAuto?: string | null;
+      politicaStock?: string;
       formula?: string;
       cantidadFactor?: string | number | null;
       mermaAdicionalPct?: string | number | null;
@@ -1845,6 +1847,7 @@ export class ProductosService {
             heredaDeRutaPasoId: s.heredaDeRutaPasoId ?? null,
             heredaDeSlotCodigo: s.heredaDeSlotCodigo ?? null,
             criterioMotorAuto: s.criterioMotorAuto ?? null,
+            politicaStock: s.politicaStock ?? 'TODAS',
             formula: s.formula ?? '',
             cantidadFactor: s.cantidadFactor ?? null,
             mermaAdicionalPct: Number(s.mermaAdicionalPct ?? 0),

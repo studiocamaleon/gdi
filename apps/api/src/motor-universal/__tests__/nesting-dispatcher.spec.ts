@@ -14,6 +14,8 @@ import {
   interpretarVector,
 } from '../../productos-servicios/geometrias/interpretar-vector';
 import { analizarSvgFabricacion } from '../geometria-vectorial/svg-parser';
+import { calcularOutputsCanonicos } from '../outputs-canonicos';
+import type { LayoutProduccionCompartido } from '../tipos';
 
 describe('formato físico del material', () => {
   it('reconoce un rollo especial por metadata sin confundir su subfamilia ambigua', () => {
@@ -1178,6 +1180,40 @@ describe('runNestingForPaso centrado visual de placements', () => {
 });
 
 describe('runNestingForPaso plotter de corte', () => {
+  async function imprimirRollo() {
+    const paso = buildPasoAreaPlaca();
+    paso.maquina.parametrosTecnicosJson.geometria = 'ROLLO';
+    const material = { id: 'vinilo', subfamilia: 'SUSTRATO_ROLLO_FLEXIBLE', atributosVarianteJson: { anchoMm: 610 } };
+    const ctx = {cantidad: 10, piezas: [{anchoMm: 100, altoMm: 100, cantidad: 10}]};
+    const nesting = (await runNestingForPaso(paso as never, ctx, material))!;
+    expect(nesting).not.toBeNull();
+    const outputs = calcularOutputsCanonicos({ outputsCanonicos: ['layout_produccion'] } as never,
+      {paso: paso as never, jobContext: ctx, nestingDispatch: nesting, cantidadEfectiva: 10,
+        materiales: [{slotRol: 'SUSTRATO', materialVarianteId: material.id}] as never});
+    return {nesting, layout: outputs.layout_produccion as LayoutProduccionCompartido, ctx, material};
+  }
+  it.each(['sin_slot', 'heredado_directo', 'heredado_laminado', 'propio'])('rollo impreso: conserva el registro sólo cuando corresponde (%s)', async modo => {
+    const s = await imprimirRollo();
+    const paso = buildPasoPlotterCorte();
+    paso.maquina.parametrosTecnicosJson.margenesNoImprimiblesMm = {izq: 0, der: 0, sup: 0, inf: 0};
+    Object.assign(paso.maquina, {anchoUtil: 1600});
+    if (modo !== 'sin_slot') Object.assign(paso, {slots: [{slotCodigo: 'sustrato_corte', modoSeleccion: modo === 'propio' ? 'HARDCODED' : 'HEREDA_DE_PASO', heredaDeRutaPasoId: modo === 'heredado_directo' ? s.layout.sourceRutaPasoId : 'laminado'}]});
+    const r = (await runNestingForPaso(paso as never, {...s.ctx, layout_produccion: s.layout}, modo === 'sin_slot' ? null : s.material))!;
+    if (modo === 'propio') {
+      expect(r.placements).not.toEqual(s.nesting.placements);
+      return;
+    }
+    expect(r.placements).toEqual(s.nesting.placements);
+    expect(r.substrates).toEqual(s.nesting.substrates);
+    expect(r.cantidadCalculada).toBe(s.nesting.cantidadCalculada);
+  });
+  it.each(['ancho', 'margenes', 'material'] as const)('rechaza un rollo impreso incompatible por %s sin volver a acomodarlo', async causa => {
+    const s = await imprimirRollo();
+    const paso = buildPasoPlotterCorte();
+    paso.maquina.parametrosTecnicosJson.margenesNoImprimiblesMm = {izq: causa === 'margenes' ? 200 : 0, der: 0, sup: 0, inf: 0};
+    Object.assign(paso.maquina, {anchoUtil: causa === 'ancho' ? 500 : 1600});
+    await expect(runNestingForPaso(paso as never, {...s.ctx, layout_produccion: s.layout}, causa === 'material' ? {...s.material, id: 'otro'} : null)).rejects.toThrow();
+  });
   it('no genera nesting cuando el material cargado es hoja/placa', async () => {
     const result = await runNestingForPaso(
       buildPasoPlotterCorte() as never,

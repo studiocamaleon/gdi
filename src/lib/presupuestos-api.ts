@@ -192,6 +192,9 @@ export type PresupuestoPublico = {
 };
 
 export type ConfigPresupuestos = {
+  correoResponderA?: string | null;
+  correoAsunto?: string | null;
+  correoMensaje?: string | null;
   validezDiasDefault: number;
   senaSugeridaPctDefault: number;
   condicionesTexto: string | null;
@@ -228,6 +231,7 @@ export function getPresupuesto(id: string) {
 }
 
 export function emitirPresupuesto(payload: {
+  notificarWhatsapp?: boolean;
   cotizacionId: string;
   clienteId: string;
   proyectoCampanaId?: string;
@@ -246,6 +250,23 @@ export function emitirPresupuesto(payload: {
     body: JSON.stringify(payload),
   });
 }
+
+export type CorreoPresupuestoEntrada = { idempotencia: string; para: string; asunto: string; mensaje: string };
+export type CorreoPresupuestoPreparacion = {
+  empresa: string; numero: string; para: string; responderA: string; remitente: string;
+  asunto: string; mensaje: string; disponible: boolean;
+  contactos: Array<{ id: string; nombre: string; email: string }>;
+};
+export type CorreoPresupuestoEnvio = {
+  id: string; estado: "PENDIENTE" | "ENVIANDO" | "ENVIADO" | "FALLIDO";
+  para: string; responderA: string; asunto: string; mensaje: string;
+  createdAt: string; enviadoEl: string | null; error: string | null; puedeReintentar: boolean;
+};
+export const prepararCorreoPresupuesto = (id: string) => apiRequest<CorreoPresupuestoPreparacion>(`/presupuestos/${id}/correo/preparar`);
+export const previsualizarCorreoPresupuesto = (id: string, payload: CorreoPresupuestoEntrada) => apiRequest<{ html: string }>(`/presupuestos/${id}/correo/vista-previa`, { method: "POST", body: JSON.stringify(payload) });
+export const enviarCorreoPresupuesto = (id: string, payload: CorreoPresupuestoEntrada) => apiRequest<CorreoPresupuestoEnvio>(`/presupuestos/${id}/correo`, { method: "POST", body: JSON.stringify(payload) });
+export const historialCorreosPresupuesto = (id: string) => apiRequest<CorreoPresupuestoEnvio[]>(`/presupuestos/${id}/correos`);
+export const reintentarCorreoPresupuesto = (id: string, correoId: string) => apiRequest<{ ok: true }>(`/presupuestos/${id}/correos/${correoId}/reintentar`, { method: "POST" });
 
 export function enviarPresupuesto(id: string) {
   return apiRequest<PresupuestoDetalle>(`/presupuestos/${id}/enviar`, {
@@ -269,7 +290,7 @@ export function resolverPresupuesto(
 
 export function convertirPresupuesto(
   id: string,
-  payload?: { itemIds?: string[] },
+  payload?: { itemIds?: string[]; fechaEntrega?: string },
 ) {
   return apiRequest<{
     ordenId: string;

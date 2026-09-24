@@ -110,13 +110,12 @@ function computeOutput(
   // representa la posición física del arte sobre cada placa. Publicarlo como
   // output permite que el láser genere su recorrido con el mismo registro.
   if (key === 'layout_produccion') {
-    const todosSonPlacas =
+    const formatoCompartible =
       nestingDispatch != null &&
       nestingDispatch.substrates.length > 0 &&
-      nestingDispatch.substrates.every(
-        (substrate) => substrate.kind === 'sheet',
-      );
-    if (!nestingDispatch || !todosSonPlacas) return null;
+      (nestingDispatch.substrates.every((substrate) => substrate.kind === 'sheet') ||
+        (nestingDispatch.substrates.length === 1 && nestingDispatch.substrates[0].kind === 'roll'));
+    if (!nestingDispatch || !formatoCompartible) return null;
     return {
       schemaVersion: 1,
       sourceRutaPasoId: paso.rutaPasoId,

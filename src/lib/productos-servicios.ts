@@ -306,6 +306,7 @@ export interface SlotMaterialDetalle {
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto: string | null;
+  politicaStock?: string;
   formula: string;
   cantidadFactor: string | number | null;
   mermaAdicionalPct?: string | number | null;

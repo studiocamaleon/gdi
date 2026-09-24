@@ -147,3 +147,25 @@ describe('PresupuestosService.emitir', () => {
     );
   });
 });
+
+it('conserva la elección de sólo correo mientras espera aprobación interna', async () => {
+  const { service, prisma } = escenario();
+  jest.mocked(service.enviar).mockRestore();
+  const interno = service as unknown as {
+    exigir: () => Promise<unknown>;
+    evaluarReglas: () => Promise<unknown>;
+    evento: () => Promise<void>;
+  };
+  jest.spyOn(interno, 'exigir').mockResolvedValue({
+    id: 'cot-1', clienteId: 'cli-1', estado: 'borrador', total: 100,
+  });
+  jest.spyOn(interno, 'evaluarReglas').mockResolvedValue([{ detalle: 'Monto a revisar' }]);
+  jest.spyOn(interno, 'evento').mockResolvedValue(undefined);
+  jest.spyOn(service, 'detalle').mockResolvedValue({ estado: 'pendiente_aprobacion' } as never);
+  const update = jest.fn().mockResolvedValue({});
+  Object.assign(prisma.cotizacion, { update });
+  await service.enviar({ tenantId: 'tenant-1', userId: 'user-1', role: 'OPERADOR' } as never, 'cot-1', { notificarWhatsapp: false });
+  expect(update).toHaveBeenCalledWith(expect.objectContaining({
+    data: expect.objectContaining({ estado: 'pendiente_aprobacion', notificarWhatsapp: false }),
+  }));
+});

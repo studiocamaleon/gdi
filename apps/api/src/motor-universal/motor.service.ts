@@ -1,3 +1,5 @@
+import { insertarPasosExtrasEnSecuencia, ordenarPasosConExtras } from '../productos-servicios/orden-pasos-producto';
+import { contextoStockCotizacion, DisponibilidadCotizacion } from './disponibilidad-materiales';
 import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
 import {
   capacidadesJobCopiado,
@@ -289,6 +291,7 @@ interface PasoExtraSlotJson {
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
+  politicaStock?: string;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
   criterioFiltroCampo?: string | null;
@@ -614,18 +617,31 @@ export class MotorUniversalService {
         this.cargarPrintSheetMaterial(tenantId, varianteId),
       ...(this.analisisVectorialAsync
         ? {
-            resolveIrregularNesting: async ({ fuente, parametros, problema, coleccion }) =>
-              coleccion ? this.analisisVectorialAsync!.resolverProblemaParaCotizacion({ tenantId, problema }) : this.analisisVectorialAsync!.resolverParaCotizacion({
-                tenantId,
-                dto: {
-                  svg: fuente.svg,
-                  nombreArchivo: fuente.nombreArchivo,
-                  anchoFinalMm: fuente.anchoFinalMm,
-                  altoFinalMm: fuente.altoFinalMm,
-                  configuracionCapas: fuente.configuracionCapas,
-                  ...parametros,
-                },
-              }),
+            resolveIrregularNesting: async ({
+              fuente,
+              parametros,
+              problema,
+              coleccion,
+            }) =>
+              // Una interpretación guardada incluye hendido, medio corte y
+              // procedencia que no están en el SVG de la silueta. Enviamos el
+              // problema completo al worker para conservar esos recorridos.
+              coleccion || fuente.schemaVersion === 2
+                ? this.analisisVectorialAsync!.resolverProblemaParaCotizacion({
+                    tenantId,
+                    problema,
+                  })
+                : this.analisisVectorialAsync!.resolverParaCotizacion({
+                    tenantId,
+                    dto: {
+                      svg: fuente.svg,
+                      nombreArchivo: fuente.nombreArchivo,
+                      anchoFinalMm: fuente.anchoFinalMm,
+                      altoFinalMm: fuente.altoFinalMm,
+                      configuracionCapas: fuente.configuracionCapas,
+                      ...parametros,
+                    },
+                  }),
           }
         : {}),
     };
@@ -786,6 +802,48 @@ export class MotorUniversalService {
 
   async cotizar(
     input: CotizarInput,
+    opciones?: Parameters<MotorUniversalService['cotizarInterno']>[1],
+  ): Promise<CotizarOutput> {
+    const actual = contextoStockCotizacion.getStore();
+    if (
+      actual &&
+      opciones?.componentesCamino &&
+      actual.tenantId === input.tenantId
+    ) {
+      actual.componentes++;
+      try {
+        return await this.cotizarInterno(input, opciones);
+      } finally {
+        actual.componentes--;
+      }
+    }
+    const stock = new DisponibilidadCotizacion(
+      this.prisma,
+      input.tenantId,
+      input.contextoMateriales,
+      input.ordenTrabajoId,
+    );
+    return contextoStockCotizacion.run(stock, async () => {
+      const resultado = await this.cotizarInterno(input, opciones);
+      if (resultado.exitoso && resultado.cotizacion) {
+        const errores = await stock.validar(resultado.cotizacion);
+        resultado.errores = resultado.errores.filter(
+          (e) => e.codigo !== 'material_auto_requiere_reposicion',
+        );
+        resultado.errores.push(...errores);
+        if (errores.some((e) => e.severidad === 'ERROR'))
+          return {
+            exitoso: false,
+            errores: resultado.errores,
+            metadata: resultado.metadata,
+          };
+      }
+      return resultado;
+    });
+  }
+
+  private async cotizarInterno(
+    input: CotizarInput,
     opciones?: {
       /** Sólo llamadas internas del motor; no forma parte del DTO público. */
       calculoInterno?: boolean;
@@ -818,7 +876,7 @@ export class MotorUniversalService {
         : await this.tipoCambio.resolver(input.tenantId, input.usuarioId);
       return monedaCotizacionContext.run(
         { tenantId: input.tenantId, cambio, materiales: new Map() },
-        () => this.cotizar(input, opciones),
+        () => this.cotizarInterno(input, opciones),
       );
     }
     const contextoCambio = monedaCotizacionContext.getStore();
@@ -1585,8 +1643,8 @@ export class MotorUniversalService {
           }
         }
 
-        const resultadosNivel = await Promise.all(
-          tareasNivel.map(async (tarea) => ({
+        const resultadosNivel = [];
+        for (const tarea of tareasNivel) resultadosNivel.push({
             ...tarea,
             resultadoComponente: await this.cotizar(
               {
@@ -1604,8 +1662,7 @@ export class MotorUniversalService {
                 ],
               },
             ),
-          })),
-        );
+          });
 
         for (const {
           componente,
@@ -2595,6 +2652,8 @@ export class MotorUniversalService {
   async recotizarItem(input: {
     tenantId: string;
     cotizacionItemId: string;
+    contextoMateriales?: CotizarInput['contextoMateriales'];
+    ordenTrabajoId?: string;
     tipoCambioId?: string;
     usuarioId?: string;
     rutaAlternativaId?: string | null;
@@ -2665,6 +2724,8 @@ export class MotorUniversalService {
           )
         : null;
     const solicitud: CotizarInput = {
+        contextoMateriales: input.contextoMateriales,
+        ordenTrabajoId: input.ordenTrabajoId,
         tenantId: input.tenantId,
         productoId: item.productoId,
         rutaAlternativaId,
@@ -4131,6 +4192,223 @@ export class MotorUniversalService {
   }
 
   private async ejecutarPaso(
+    tenantId: string,
+    pasoBase: PasoCargado,
+    jobContext: JobContext,
+    errores: ErrorMotor[],
+    tarifasMap: Map<string, unknown>,
+    periodo: string,
+    outputsAcumulados: Set<string> = new Set(),
+  ): Promise<PasoEjecutado> {
+    const stock = contextoStockCotizacion.getStore();
+    let paso = pasoBase;
+    const decisiones = new Map<
+      string,
+      NonNullable<MaterialEjecutado['seleccionStock']>
+    >();
+    if (stock && this.evaluarActivacion(paso, jobContext).activado) {
+      for (const slot of pasoBase.slots) {
+        const politica = slot.politicaStock ?? 'TODAS';
+        if (
+          slot.modoSeleccion !== 'MOTOR_ELIGE_AUTO' ||
+          politica === 'TODAS' ||
+          this.getEleccionMaterialComercial(slot, jobContext, paso)
+        )
+          continue;
+        if (
+          !(await this.capacidadesPlan.puedeOperar(
+            tenantId,
+            'existencias',
+          ))
+        ) {
+          errores.push({
+            codigo: 'seleccion_stock_no_disponible',
+            severidad: 'ERROR',
+            mensaje:
+              'Este material está configurado para elegir según stock, pero la empresa no tiene existencias habilitadas.',
+            sugerencia:
+              'Habilitá existencias o configurá Considerar todas en el material del paso.',
+            rutaPasoId: paso.rutaPasoId,
+          });
+          return this.pasoAbortado(paso);
+        }
+        const evaluados: Array<{
+          id: string;
+          libre: number;
+          necesario: number | null;
+          unidad: string | null;
+          alcanza: boolean;
+        }> = [];
+        const erroresEvaluacion: ErrorMotor[] = [];
+        for (const id of this.getSlotCandidatoVarianteIds(slot)) {
+          const variante = await this.cargarVariantePorId(tenantId, id);
+          if (!variante) continue;
+          const filtro = slot.criterioFiltroCampo;
+          const valor = filtro
+            ? (jobContext as Record<string, unknown>)[filtro]
+            : undefined;
+          if (
+            filtro &&
+            valor != null &&
+            valor !== '' &&
+            textoPrimitivo(variante.atributosVarianteJson?.[filtro]) !==
+              textoPrimitivo(valor)
+          )
+            continue;
+          const prueba = {
+            ...paso,
+            slots: paso.slots.map((s) =>
+              s.slotCodigo !== slot.slotCodigo
+                ? s
+                : {
+                    ...s,
+                    candidatos: s.candidatos.map((c) => ({
+                      ...c,
+                      defaultVarianteId:
+                        c.defaultVarianteId === id ? id : null,
+                      variantes: c.variantes.filter(
+                        (v) => v.varianteId === id,
+                      ),
+                    })),
+                  },
+            ),
+          };
+          const issues: ErrorMotor[] = [];
+          const resultado = await this.ejecutarPasoBase(
+            tenantId,
+            prueba,
+            JSON.parse(JSON.stringify(jobContext)) as JobContext,
+            issues,
+            tarifasMap,
+            periodo,
+            new Set(outputsAcumulados),
+          );
+          if (
+            issues.some((e) => e.severidad === 'ERROR') ||
+            !resultado.activado
+          ) {
+            erroresEvaluacion.push(...issues);
+            continue;
+          }
+          evaluados.push({
+            id,
+            ...(await stock.evaluar([resultado], id)),
+          });
+        }
+        if (
+          !evaluados.length &&
+          erroresEvaluacion.some((e) => e.severidad === 'ERROR')
+        ) {
+          errores.push(...erroresEvaluacion);
+          return this.pasoAbortado(paso);
+        }
+        const disponibles = evaluados.filter((e) => e.alcanza);
+        if (
+          !disponibles.length &&
+          politica === 'SOLO_DISPONIBLES' &&
+          stock.componentes === 0
+        ) {
+          // La recomendación usa el mismo criterio de la elección automática,
+          // sólo entre alternativas que ya superaron la evaluación técnica.
+          const viables = new Set(evaluados.map((e) => e.id));
+          const slotRecomendacion = {
+            ...slot,
+            candidatos: slot.candidatos.map((c) => ({
+              ...c,
+              defaultVarianteId: c.defaultVarianteId && viables.has(c.defaultVarianteId)
+                ? c.defaultVarianteId : null,
+              variantes: c.variantes.filter((v) => viables.has(v.varianteId)),
+            })),
+          };
+          const recomendado = await this.resolverMaterialSlot(
+            tenantId, slotRecomendacion,
+            JSON.parse(JSON.stringify(jobContext)) as JobContext, paso,
+          );
+          errores.push({
+            codigo: 'material_auto_sin_stock_suficiente',
+            severidad: 'ERROR',
+            mensaje: `No hay stock libre suficiente para ${slot.slotNombre ?? slot.slotCodigo.replace(/_/g, ' ')}.`,
+            sugerencia:
+              'Elegí explícitamente un material para cotizar con reposición, o revisá la disponibilidad y la política del producto.',
+            rutaPasoId: paso.rutaPasoId,
+            contexto: {
+              configPasoId: paso.configPasoId,
+              slotCodigo: slot.slotCodigo,
+              recomendadoVarianteId: recomendado?.id ?? null,
+              alternativas: evaluados,
+            },
+          });
+          return this.pasoAbortado(paso);
+        }
+        if (disponibles.length) {
+          const ids = new Set(disponibles.map((e) => e.id));
+          paso = {
+            ...paso,
+            slots: paso.slots.map((s) =>
+              s.slotCodigo !== slot.slotCodigo
+                ? s
+                : {
+                    ...s,
+                    candidatos: s.candidatos.map((c) => ({
+                      ...c,
+                      defaultVarianteId:
+                        c.defaultVarianteId && ids.has(c.defaultVarianteId)
+                          ? c.defaultVarianteId
+                          : null,
+                      variantes: c.variantes.filter((v) =>
+                        ids.has(v.varianteId),
+                      ),
+                    })),
+                  },
+            ),
+          };
+        }
+        decisiones.set(slot.slotCodigo, {
+          politica,
+          estado: disponibles.length
+            ? 'disponible'
+            : 'requiere_reposicion',
+          alternativas: evaluados,
+        });
+      }
+    }
+    const resultado = await this.ejecutarPasoBase(
+      tenantId,
+      paso,
+      jobContext,
+      errores,
+      tarifasMap,
+      periodo,
+      outputsAcumulados,
+    );
+    for (const material of resultado.materiales ?? []) {
+      const decision = decisiones.get(material.slotCodigo);
+      if (!decision) continue;
+      material.seleccionStock = decision;
+      // La consolidación recibe sólo alternativas permitidas; se vuelve a verificar el consumo del lote.
+      if (
+        decision.estado === 'requiere_reposicion' &&
+        decision.politica !== 'SOLO_DISPONIBLES'
+      )
+        errores.push({
+          codigo: 'material_auto_requiere_reposicion',
+          severidad: 'WARNING',
+          mensaje: `${material.materialDisplayName}: ninguna alternativa tiene stock suficiente. La cotización requiere reposición.`,
+          rutaPasoId: paso.rutaPasoId,
+          contexto: {
+            configPasoId: paso.configPasoId,
+            slotCodigo: material.slotCodigo,
+            recomendadoVarianteId: material.materialVarianteId,
+            alternativas: decision.alternativas,
+          },
+        });
+    }
+    if (stock && !errores.some((e) => e.severidad === 'ERROR'))
+      stock.registrar([resultado]);
+    return resultado;
+  }
+
+  private async ejecutarPasoBase(
     tenantId: string,
     pasoBase: PasoCargado,
     jobContext: JobContext,
@@ -8778,6 +9056,13 @@ export class MotorUniversalService {
       if (v.tipo === 'REQUIRES_INPUT') {
         const valor = ctx[v.campo];
         cumple = valor !== undefined && valor !== null && valor !== '';
+        // Una estimación de placas declara el total a imprimir sin inventar
+        // piezas ni un layout. El dispatcher valida luego el formato finito.
+        if (v.campo === 'piezas' && paso.familiaCodigo === 'impresion_por_area' &&
+          jobContext.modoCotizacionVectorial === 'placas') {
+          const placas = Number(jobContext.placasVectorialesManuales);
+          cumple = Number.isSafeInteger(placas) && placas > 0;
+        }
         contextoError = { campo: v.campo, valor };
       } else if (v.tipo === 'COMPARE') {
         const a = Number(ctx[v.campoJobContext] ?? NaN);
@@ -10934,6 +11219,7 @@ export class MotorUniversalService {
           heredaDeRutaPasoId: s.heredaDeRutaPasoId,
           heredaDeSlotCodigo: s.heredaDeSlotCodigo,
           criterioMotorAuto: s.criterioMotorAuto,
+          politicaStock: s.politicaStock ?? 'TODAS',
           criterioInputCampo: s.criterioInputCampo,
           criterioMaterialCampo: s.criterioMaterialCampo,
           criterioFiltroCampo: s.criterioFiltroCampo,
@@ -12018,6 +12304,7 @@ export class MotorUniversalService {
           heredaDeRutaPasoId: s.heredaDeRutaPasoId ?? null,
           heredaDeSlotCodigo: s.heredaDeSlotCodigo ?? null,
           criterioMotorAuto: s.criterioMotorAuto ?? null,
+          politicaStock: s.politicaStock ?? 'TODAS',
           criterioInputCampo: s.criterioInputCampo ?? null,
           criterioMaterialCampo: s.criterioMaterialCampo ?? null,
           criterioFiltroCampo: s.criterioFiltroCampo ?? null,
@@ -12111,46 +12398,7 @@ export class MotorUniversalService {
       ordenInterno: number;
     }>,
   ): PasoCargado[] {
-    const porOrden = (
-      a: { ordenInterno: number },
-      b: { ordenInterno: number },
-    ) => a.ordenInterno - b.ordenInterno;
-
-    const alInicio = extras
-      .filter((e) => e.insertarDespuesDeRutaPasoId == null)
-      .sort(porOrden);
-    const despuesDe = new Map<string, Array<(typeof extras)[number]>>();
-    for (const e of extras) {
-      if (e.insertarDespuesDeRutaPasoId == null) continue;
-      const arr = despuesDe.get(e.insertarDespuesDeRutaPasoId) ?? [];
-      arr.push(e);
-      despuesDe.set(e.insertarDespuesDeRutaPasoId, arr);
-    }
-
-    const rutaPasoIdsPresentes = new Set(pasos.map((p) => p.rutaPasoId));
-    const resultado: PasoCargado[] = [];
-    resultado.push(...alInicio.map((e) => e.paso));
-    for (const paso of pasos) {
-      resultado.push(paso);
-      const extrasDelPaso = despuesDe.get(paso.rutaPasoId);
-      if (extrasDelPaso) {
-        resultado.push(...[...extrasDelPaso].sort(porOrden).map((e) => e.paso));
-      }
-    }
-    // Defensa: extras que apuntan a un RutaPaso que no está en esta ruta
-    // (no debería pasar con scope por ruta) se agregan al final.
-    for (const e of extras) {
-      const ref = e.insertarDespuesDeRutaPasoId;
-      if (ref != null && !rutaPasoIdsPresentes.has(ref)) {
-        resultado.push(e.paso);
-      }
-    }
-
-    // Renumerar orden de display 1..N.
-    resultado.forEach((paso, index) => {
-      paso.rutaPasoOrden = index + 1;
-    });
-    return resultado;
+    return insertarPasosExtrasEnSecuencia(pasos, extras);
   }
 
   private ordenarPasosProducto(
@@ -12163,30 +12411,6 @@ export class MotorUniversalService {
     }>,
     ordenBase: Map<string, number | null>,
   ): PasoCargado[] {
-    const usaOrdenUnificado =
-      [...ordenBase.values()].some((orden) => orden != null) ||
-      extras.some((extra) => extra.ordenFlujo != null);
-    if (!usaOrdenUnificado) return this.insertarPasosExtras(pasos, extras);
-
-    const ordenExtra = new Map(
-      extras.map((extra) => [extra.paso.rutaPasoId, extra.ordenFlujo]),
-    );
-    const resultado = [...pasos, ...extras.map((extra) => extra.paso)].sort(
-      (a, b) => {
-        const ordenA =
-          ordenBase.get(a.rutaPasoId) ?? ordenExtra.get(a.rutaPasoId) ?? null;
-        const ordenB =
-          ordenBase.get(b.rutaPasoId) ?? ordenExtra.get(b.rutaPasoId) ?? null;
-        if (ordenA == null && ordenB == null)
-          return a.rutaPasoOrden - b.rutaPasoOrden;
-        if (ordenA == null) return 1;
-        if (ordenB == null) return -1;
-        return ordenA - ordenB;
-      },
-    );
-    resultado.forEach((paso, index) => {
-      paso.rutaPasoOrden = index + 1;
-    });
-    return resultado;
+    return ordenarPasosConExtras(pasos, extras, ordenBase);
   }
 }

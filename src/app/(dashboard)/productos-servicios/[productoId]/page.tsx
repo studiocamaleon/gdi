@@ -137,12 +137,13 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 function normalizarTab(value: string | undefined): ProductoWorkspaceTab {
+  if (value === "herramientas") return "nesting";
   if (
     value === "identidad" ||
     value === "comercial" ||
     value === "produccion" ||
     value === "cargos" ||
-    value === "herramientas" ||
+    value === "nesting" ||
     value === "pricing"
   ) {
     return value;

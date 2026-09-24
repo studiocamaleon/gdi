@@ -297,7 +297,7 @@ tr[data-vencimiento="urgente"] .due {
   height: 52px;
 }
 
-/* Puente local para los formularios compartidos: no cambia Egresos. */
+/* Formularios compartidos por Cuentas por pagar y Registro de egresos. */
 .dialog.dialog {
   max-width: 760px;
 }

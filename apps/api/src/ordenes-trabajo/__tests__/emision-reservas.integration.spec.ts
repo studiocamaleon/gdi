@@ -1,3 +1,4 @@
+import { DisponibilidadCotizacion } from '../../motor-universal/disponibilidad-materiales';
 import { CapacidadesEmpresaService } from '../../suscripciones/capacidades-empresa.service';
 import { contratoPropuesto } from '../../suscripciones/evaluador-capacidades';
 import {
@@ -15,6 +16,8 @@ import { FidelizacionService } from '../../fidelizacion/fidelizacion.service';
 import { DesarrolloDocumentalService } from '../../desarrollo-documental/desarrollo-documental.service';
 import type { CurrentAuth } from '../../auth/auth.types';
 import type { CrearOrdenTrabajoDto } from '../dto/crear-orden-trabajo.dto';
+import { EtaService } from '../../eta/eta.service';
+import { calendarioDefault } from '../../eta/motor/estaciones-tipos';
 
 // Emisión real (create/cambiarEstado), stock y compras en la DB aislada.
 // Sólo se sustituyen servicios externos y el enriquecimiento de la respuesta.
@@ -39,9 +42,46 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
     );
   };
   const compras = new ComprasService(db, inventario, reservas);
+  const eta = new EtaService(
+    db,
+    {
+      findEstaciones: async () => [
+        {
+          id: 'estacion-test',
+          nombre: 'Estación',
+          activo: true,
+          capacidadConcurrente: 1,
+          tiempoPreparacionMin: 0,
+          calendario: calendarioDefault(),
+          familias: ['trabajo_manual'],
+          maquinas: [],
+        },
+      ],
+      findDuracionesFamilias: async () => [
+        { familiaCodigo: 'trabajo_manual', medianaMin: 540 },
+      ],
+      findDiasNoLaborables: async () => [{ fecha: '2099-09-23' }],
+      getConfiguracion: async () => ({
+        margenEtaDias: 1,
+        tiempoEntrePasosMin: 0,
+      }),
+    } as never,
+    capacidades,
+  );
+  const contextoOriginal = eta.contextoSimulacion.bind(eta);
+  jest.spyOn(eta, 'contextoSimulacion').mockImplementation(async (...args) => ({
+    ...(await contextoOriginal(...args)),
+    ahora: new Date('2099-09-21T12:00:00Z'),
+  }));
   const ordenes = new OrdenesTrabajoService(
     db,
-    { capturarEmision: jest.fn(), sincronizarAsignaciones: jest.fn() } as never,
+    {
+      capturarEmision: jest.fn(),
+      sincronizarAsignaciones: jest.fn(),
+      contextoSimulacion: (
+        ...args: Parameters<EtaService['contextoSimulacion']>
+      ) => eta.contextoSimulacion(...args),
+    } as never,
     {} as never,
     { sincronizar: jest.fn() } as never,
     { emitir: jest.fn() } as never,
@@ -239,6 +279,260 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
   });
   afterAll(() => db.$disconnect());
 
+  const prepararConversion = async (cantidad = 2) => {
+    simularPlan(2);
+    const item = await db.cotizacionItem.findUniqueOrThrow({
+      where: { id: payload.items[0].cotizacionItemId },
+    });
+    payload.cotizacionId = item.cotizacionId;
+    payload.fechaEntrega = '2001-01-01';
+    const traza = {
+      pasos: [
+        {
+          activado: true,
+          rutaPasoId: 'impresion',
+          nombre: 'Impresión',
+          familiaCodigo: 'trabajo_manual',
+          tiempo: { totalMin: 540 },
+          materiales: [],
+        },
+      ],
+    };
+    await db.cotizacionItem.update({
+      where: { id: item.id },
+      data: { trazabilidadJson: traza },
+    });
+    for (let i = 1; i < cantidad; i++) {
+      const otro = await db.cotizacionItem.create({
+        data: {
+          tenantId: auth.tenantId,
+          cotizacionId: item.cotizacionId,
+          productoId: item.productoId,
+          cantidad: 1,
+          jobContextJson: {},
+          snapshotJson: {},
+          precioNetoTotal: 100,
+          impuestosPorFueraTotal: 0,
+          precioTotal: 100,
+          trazabilidadJson: traza,
+        },
+      });
+      payload.items.push({
+        ...payload.items[0],
+        cotizacionItemId: otro.id,
+        nombre: `Documento ${i + 1}`,
+      });
+    }
+    await db.cotizacion.update({
+      where: { id: item.cotizacionId },
+      data: { estado: 'aprobado', numero: 'PRES-TEST', total: 100 * cantidad },
+    });
+    return {
+      conversionPresupuesto: {
+        itemIds: payload.items.map((i) => i.cotizacionItemId),
+      },
+    };
+  };
+
+  it('convierte y emite todos los ítems juntos, recalcula con cola actual y cierra el presupuesto atómicamente', async () => {
+    const opciones = await prepararConversion();
+    const orden = await ordenes.create(auth, payload, opciones);
+    expect(orden.estado).toBe('pendiente');
+    expect(orden.fechaEmision).toBeInstanceOf(Date);
+    const items = await db.ordenTrabajoItem.findMany({
+      where: { ordenId: orden.id },
+      orderBy: { ordenIndice: 'asc' },
+      include: { pasos: true },
+    });
+    expect(items).toHaveLength(2);
+    expect(items.every((i) => i.pasos.length > 0)).toBe(true);
+    expect(
+      items.every(
+        (i) => i.fechaEntrega && i.fechaEntrega > new Date('2099-09-20'),
+      ),
+    ).toBe(true);
+    expect(new Set(items.map((i) => i.fechaEntrega!.toISOString())).size).toBe(
+      2,
+    );
+    expect(orden.fechaEntrega).toEqual(
+      new Date(Math.max(...items.map((i) => i.fechaEntrega!.getTime()))),
+    );
+    expect(
+      (
+        await db.cotizacion.findUniqueOrThrow({
+          where: { id: payload.cotizacionId },
+        })
+      ).estado,
+    ).toBe('convertido');
+    expect(
+      await db.cotizacionEvento.count({
+        where: { cotizacionId: payload.cotizacionId, tipo: 'convertido' },
+      }),
+    ).toBe(1);
+    expect((await ordenes.create(auth, payload, opciones)).id).toBe(orden.id);
+  });
+
+  it('una conversión parcial posterior contempla la primera OT que ya ocupa el taller', async () => {
+    const opciones = await prepararConversion();
+    const primera = await ordenes.create(
+      auth,
+      { ...payload, items: [payload.items[0]] },
+      opciones,
+    );
+    expect(
+      (
+        await db.cotizacion.findUniqueOrThrow({
+          where: { id: payload.cotizacionId },
+        })
+      ).estado,
+    ).toBe('aprobado');
+    const segunda = await ordenes.create(
+      auth,
+      { ...payload, idempotencyKey: randomUUID(), items: [payload.items[1]] },
+      opciones,
+    );
+    expect(segunda.fechaEntrega!.getTime()).toBeGreaterThan(
+      primera.fechaEntrega!.getTime(),
+    );
+    expect(
+      (
+        await db.cotizacion.findUniqueOrThrow({
+          where: { id: payload.cotizacionId },
+        })
+      ).estado,
+    ).toBe('convertido');
+  });
+
+  it('no persiste OT, pasos ni cambio del presupuesto cuando la entrega no se puede estimar', async () => {
+    const opciones = await prepararConversion(1);
+    await db.cotizacionItem.update({
+      where: { id: payload.items[0].cotizacionItemId },
+      data: { trazabilidadJson: {} },
+    });
+    await expect(ordenes.create(auth, payload, opciones)).rejects.toThrow(
+      'No se emitió la OT',
+    );
+    expect(
+      await db.ordenTrabajo.count({ where: { tenantId: auth.tenantId } }),
+    ).toBe(0);
+    expect(
+      await db.ordenTrabajoContador.count({
+        where: { tenantId: auth.tenantId },
+      }),
+    ).toBe(0);
+    expect(
+      (
+        await db.cotizacion.findUniqueOrThrow({
+          where: { id: payload.cotizacionId },
+        })
+      ).estado,
+    ).toBe('aprobado');
+  });
+
+  it('un plan sin ETA puede convertir y emitir con la fecha comercial vigente', async () => {
+    const opciones = await prepararConversion(1);
+    simularPlan(0);
+    payload.fechaEntrega = '2099-12-31';
+    const orden = await ordenes.create(auth, payload, opciones);
+    expect(orden.estado).toBe('pendiente');
+    expect(orden.fechaEntrega).toEqual(new Date('2099-12-31T00:00:00Z'));
+  });
+
+  it.each([7, null])('con reposición de %s días emite y reserva; sin plazo deja entrega por confirmar', async (dias) => {
+    const opciones = await prepararConversion(1);
+    const proveedor = await db.proveedor.create({
+      data: {
+        tenantId: auth.tenantId,
+        nombre: 'Papelera QA',
+        emailPrincipal: '',
+        telefonoCodigo: '',
+        telefonoNumero: '',
+        paisCodigo: 'AR',
+        reposicionDias: dias,
+        reposicionTipo: 'CORRIDOS',
+      },
+    });
+    await db.materiaPrimaVariante.update({
+      where: { id: varianteId },
+      data: { proveedorReferenciaId: proveedor.id },
+    });
+    await db.cotizacionItem.update({
+      where: { id: payload.items[0].cotizacionItemId },
+      data: {
+        trazabilidadJson: {
+          pasos: [
+            {
+              activado: true,
+              rutaPasoId: 'impresion',
+              nombre: 'Trabajo',
+              familiaCodigo: 'trabajo_manual',
+              tiempo: { totalMin: 540 },
+              materiales: [
+                {
+                  materialVarianteId: varianteId,
+                  materialDisplayName: 'Papel A4',
+                  tipoLineaCosto: 'MATERIAL',
+                  cantidad: 15,
+                  unidad: 'hoja',
+                  contextoUnidadesSnapshot: {
+                    unidadStock: 'HOJA',
+                    unidadCompra: 'HOJA',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const orden = await ordenes.create(auth, payload, opciones);
+    expect(orden.fechaEntrega).toEqual(dias === null ? null : new Date('2099-09-30T00:00:00Z'));
+    const paso = await db.ordenTrabajoItemPaso.findFirstOrThrow({
+      where: { ordenId: orden.id },
+    });
+    expect(paso.planificadoDesde).toEqual(dias === null ? null : new Date('2099-09-29T03:00:00Z'));
+    expect(
+      (await reservas.consultar(auth.tenantId, orden.id)).control.materiales[0],
+    ).toMatchObject({ reservada: 10, faltante: 5 });
+  });
+
+  it.each(['AL_EMITIR', 'MANUAL'] as const)('revalida Sólo stock disponible antes de emitir con reservas %s', async (modo) => {
+    const id = payload.items[0].cotizacionItemId!;
+    const item = await db.cotizacionItem.findUniqueOrThrow({ where: { id } });
+    const traza = item.trazabilidadJson as any;
+    traza.pasos[0].materiales[0].seleccionStock = { politica: 'SOLO_DISPONIBLES', estado: 'disponible' };
+    await db.cotizacionItem.update({ where: { id }, data: { trazabilidadJson: traza } });
+    await reservas.guardarPolitica(auth.tenantId, { habilitada: true, incluirConsumibles: false, modo, version: 1 });
+    await expect(ordenes.create(auth, payload)).rejects.toThrow('Sólo stock disponible');
+    expect(await db.ordenTrabajo.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    expect(await db.reservaMaterialOt.count({ where: { tenantId: auth.tenantId } })).toBe(0);
+    expect((await db.cotizacionItem.findUniqueOrThrow({ where: { id } })).precioNetoTotal.toNumber()).toBe(100);
+    traza.pasos[0].materiales[0].seleccionStock.politica = 'PREFERIR_DISPONIBLES';
+    await db.cotizacionItem.update({ where: { id }, data: { trazabilidadJson: traza } });
+    expect((await ordenes.create(auth, payload)).estado).toBe('pendiente');
+  });
+
+  it('dos conversiones simultáneas no emiten el mismo producto dos veces', async () => {
+    const opciones = await prepararConversion(1);
+    const resultados = await Promise.allSettled([
+      ordenes.create(auth, payload, opciones),
+      ordenes.create(
+        auth,
+        { ...payload, idempotencyKey: randomUUID() },
+        opciones,
+      ),
+    ]);
+    expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(
+      await db.ordenTrabajo.count({ where: { tenantId: auth.tenantId } }),
+    ).toBe(1);
+    expect(
+      await db.cotizacionEvento.count({
+        where: { cotizacionId: payload.cotizacionId, tipo: 'convertido' },
+      }),
+    ).toBe(1);
+  });
+
   it('crear y emitir reserva sin comando manual y publica sólo 5 hojas pendientes en compras', async () => {
     const o = await ordenes.create(auth, payload);
     expect(o).toMatchObject({
@@ -261,6 +555,15 @@ describe('Emisión OT → reservas y necesidades de compras', () => {
       }),
     ).toBe(1);
   });
+  it('al editar una OT reconoce sus propias reservas sin liberar las de otras órdenes', async () => {
+    const orden = await ordenes.create(auth, payload);
+    const nueva = new DisponibilidadCotizacion(db, auth.tenantId);
+    const misma = new DisponibilidadCotizacion(db, auth.tenantId, [], orden.id);
+    expect(await nueva.evaluarCantidad(varianteId, 10, 'hoja')).toMatchObject({ libre: 0, alcanza: false });
+    expect(await misma.evaluarCantidad(varianteId, 10, 'hoja')).toMatchObject({ libre: 10, alcanza: true });
+    expect((await reservas.consultar(auth.tenantId, orden.id)).control.materiales[0].reservada).toBe(10);
+  });
+
   it('guardar borrador no compromete; emitirlo luego hace la misma reserva automática', async () => {
     const o = await ordenes.create(auth, { ...payload, estado: 'borrador' });
     expect(o.materialesControlados).toBe(false);

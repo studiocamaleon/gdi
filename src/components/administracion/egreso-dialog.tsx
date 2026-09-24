@@ -17,6 +17,7 @@ import focus from "@/components/design-system/field-focus.module.css";
 import styles from "./cuentas-pagar.module.css";
 
 export const EgresosBrand = React.createContext(false);
+export const EgresosArea = React.createContext("Cuentas por pagar");
 export const useEgresosBrand = () => React.useContext(EgresosBrand);
 
 /** Sólo cambia la presentación; los borradores y envíos pertenecen a EgresosView. */
@@ -38,6 +39,7 @@ export function EgresoDialog({
   legacySubtitle?: string;
 }) {
   const brand = useEgresosBrand();
+  const area = React.useContext(EgresosArea);
   if (!brand)
     return (
       <div className="mod-bg" role="dialog" aria-modal="true">
@@ -66,9 +68,7 @@ export function EgresoDialog({
       isDismissable={!bloqueado}
       title={
         <>
-          <span className={styles.eyebrow}>
-            Administración · Cuentas por pagar
-          </span>
+          <span className={styles.eyebrow}>Administración · {area}</span>
           {title}
           <span className={styles.dot}>.</span>
         </>

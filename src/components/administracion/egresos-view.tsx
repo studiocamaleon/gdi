@@ -17,22 +17,18 @@ import { useCapacidad } from "@/components/navigation/capacidades-provider";
  * Ver docs/egresos-y-cuentas-por-pagar-diseno.md
  */
 
-import egresosResumen from "./egresos-resumen.module.css";
+import { RegistroEgresosWorkspace } from "./registro-egresos-workspace";
+import { useAnalisisEgresos } from "./use-analisis-egresos";
 import { CuentasPagarWorkspace } from "./cuentas-pagar-workspace";
-import { EgresosBrand, useEgresosBrand, EgresoDialog, EgresoButton, EgresoSelect as SelectBuscable, EgresoConfirmacionSalida as ConfirmacionSalida } from "./egreso-dialog";
+import { EgresosArea, EgresosBrand, useEgresosBrand, EgresoDialog, EgresoButton, EgresoSelect as SelectBuscable, EgresoConfirmacionSalida as ConfirmacionSalida } from "./egreso-dialog";
 import { useDesignScope, useDesignTheme } from "@/components/design-system/appearance";
 import listPage from "@/components/design-system/list-page.module.css";
 import pagarStyles from "./cuentas-pagar.module.css";
 import * as React from "react";
+import Link from "next/link";
 import {
-  CalendarClockIcon,
-  CircleDollarSignIcon,
   FileIcon,
-  HandCoinsIcon,
-  PlusIcon,
-  SearchIcon,
   UploadCloudIcon,
-  WalletCardsIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,7 +47,6 @@ import {
 import { formatearMoneda, numeroMoneda, parsearMonto } from "@/lib/moneda";
 import { fechaConDia } from "@/lib/fecha";
 import {
-  EGRESO_ESTADO_LABELS,
   NATURALEZAS_EGRESO,
   NATURALEZA_LABELS,
   TIPO_COMPROBANTE_LABELS,
@@ -60,23 +55,16 @@ import {
   FRECUENCIAS_RECURRENTE,
   REGIMEN_RETENCION_LABELS,
   REGIMENES_RETENCION,
-  TRAMO_AGING_LABELS,
-  TRAMOS_AGING,
   ALICUOTAS_IVA,
   LARGO_NUMERO_COMPROBANTE,
   LARGO_PUNTO_VENTA,
   completarCeros,
   discriminaIva,
   ivaDeNeto,
-  diasHastaVencimiento,
-  etiquetaVencimiento,
-  tonoVencimiento,
   type CategoriaEgreso,
   type Egreso,
-  type ReporteEgresos,
   type ResumenEgresos,
   type GastoRecurrente,
-  type PresupuestadoVsReal,
   type SaldoProveedor,
 } from "@/lib/egresos";
 import {
@@ -86,15 +74,10 @@ import {
   editarEgreso,
   getEgresos,
   getPagosDeEgreso,
-  getReporteEgresos,
   getResumenEgresos,
-  getPresupuestadoVsReal,
-  getRecurrentes,
   getSaldosProveedores,
   getValoresEnCartera,
-  crearRecurrente,
   editarRecurrente,
-  generarRecurrentes,
   registrarPagoEgresos,
   type CrearEgresoBody,
   type ValorEnCartera,
@@ -106,7 +89,7 @@ import type { Archivo } from "@/lib/archivos";
 import { listarArchivos } from "@/lib/archivos-api";
 import type { GastoFijo } from "@/lib/gastos-fijos-api";
 
-type Tab = "por-pagar" | "todos" | "proveedores" | "recurrentes" | "analisis";
+type Tab = "por-pagar" | "todos" | "proveedores" | "analisis";
 
 /**
  * Las dos caras del módulo, que son dos preguntas distintas:
@@ -114,8 +97,8 @@ type Tab = "por-pagar" | "todos" | "proveedores" | "recurrentes" | "analisis";
  *   · `cuentas-por-pagar` — ¿a quién le debo y cuándo? Sólo lo que tiene
  *     vencimiento y sigue impago, por factura y por proveedor. Es el espejo
  *     exacto de Cuentas por cobrar.
- *   · `egresos` — ¿en qué se me va la plata? TODO lo que sale, deuda o
- *     contado, más el análisis y las plantillas que lo generan.
+ *   · `egresos` — ¿qué registré y cómo se clasifica? Historial de egresos
+ *     y análisis por competencia, tanto pagados como pendientes.
  *
  * Un gasto de contado no es una cuenta por pagar —nunca fue deuda ni un
  * segundo— y por eso no aparece del lado izquierdo. Es el mismo registro
@@ -125,31 +108,8 @@ export type ModoEgresos = "cuentas-por-pagar" | "egresos";
 
 export const TABS_POR_MODO: Record<ModoEgresos, Tab[]> = {
   "cuentas-por-pagar": ["por-pagar", "proveedores"],
-  egresos: ["todos", "analisis", "recurrentes"],
+  egresos: ["todos", "analisis"],
 };
-
-const TAB_LABELS: Record<Tab, string> = {
-  "por-pagar": "Por pagar",
-  todos: "Todos",
-  proveedores: "Proveedores",
-  recurrentes: "Recurrentes",
-  analisis: "Análisis",
-};
-
-const ENCABEZADO: Record<ModoEgresos, { titulo: string; sub: string }> = {
-  "cuentas-por-pagar": {
-    titulo: "Cuentas por pagar",
-    sub: "Lo que debés y todavía no pagaste, por vencimiento y por proveedor.",
-  },
-  egresos: {
-    titulo: "Egresos",
-    sub: "Todo lo que sale de la caja: pagado en el momento o a plazo.",
-  },
-};
-
-/** Un decimal, en formato local. */
-const pct1 = (v: number) =>
-  v.toLocaleString("es-AR", { maximumFractionDigits: 1 });
 
 /** Hoy en ISO local, para comparar vencimientos sin arrastrar zona horaria. */
 function hoyIso(): string {
@@ -441,7 +401,6 @@ export function EgresosView({
   proveedores,
   metodosPago,
   cuentas,
-  gastosFijos = [],
   modo = "egresos",
   valorEndosoInicialId,
   altaInicial = false,
@@ -452,7 +411,6 @@ export function EgresosView({
   proveedores: ProveedorOpcion[];
   metodosPago: MetodoPago[];
   cuentas: CuentaFondosResumen[];
-  gastosFijos?: GastoFijo[];
   /** Qué mitad del módulo se está mirando. Ver `ModoEgresos`. */
   modo?: ModoEgresos;
   /** Llega desde Cartera: mantiene el endoso dentro de una orden de pago. */
@@ -460,7 +418,7 @@ export function EgresosView({
   /** Permite abrir el alta desde una acción contextual, por ejemplo el Panel. */
   altaInicial?: boolean;
 }) {
-  const brand = modo === "cuentas-por-pagar";
+  const esCuentasPorPagar = modo === "cuentas-por-pagar";
   const scope = useDesignScope();
   const theme = useDesignTheme();
   const conEgresos = useCapacidad("cuentas_pagar");
@@ -479,8 +437,6 @@ export function EgresosView({
   const puedeGestionar = permisoGestionar && conEgresos;
   const permisoAnular = usePuede("administracion.anular");
   const puedeAnular = permisoAnular && conEgresos;
-  const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
   const hoy = React.useMemo(() => hoyIso(), []);
 
   const [tab, setTab] = React.useState<Tab>(tabsVisibles[0]);
@@ -494,25 +450,17 @@ export function EgresosView({
   const [seleccion, setSeleccion] = React.useState<Set<string>>(new Set());
   const [detalle, setDetalle] = React.useState<Egreso | null>(null);
   const [anulando, setAnulando] = React.useState<Egreso | null>(null);
-  const [reporte, setReporte] = React.useState<ReporteEgresos | null>(null);
   const [saldos, setSaldos] = React.useState<SaldoProveedor[] | null>(null);
-  const [recurrentes, setRecurrentes] = React.useState<
-    GastoRecurrente[] | null
-  >(null);
-  const [presu, setPresu] = React.useState<PresupuestadoVsReal | null>(null);
+  const analisis = useAnalisisEgresos(conRecurrentes);
 
   const recargar = React.useCallback(
-    async (t: Tab = tab) => {
+    async () => {
       setCargando(true);
       setError(null);
       try {
         const [lista, res] = await Promise.all([
-          getEgresos(
-            (t === "por-pagar" || brand)
-              ? { soloPendientes: true, texto: brand ? undefined : texto || undefined }
-              : { texto: texto || undefined },
-          ),
-          getResumenEgresos(),
+          getEgresos(esCuentasPorPagar ? { soloPendientes: true } : {}),
+          esCuentasPorPagar ? getResumenEgresos() : Promise.resolve(null),
         ]);
         setEgresos(lista.egresos);
         setResumen(res);
@@ -524,7 +472,7 @@ export function EgresosView({
         setCargando(false);
       }
     },
-    [tab, texto, brand],
+    [esCuentasPorPagar],
   );
 
   const cambiarTab = (t: Tab) => {
@@ -537,27 +485,11 @@ export function EgresosView({
         .catch((e) => { setError(e instanceof Error ? e.message : "No se pudieron cargar los saldos."); });
       return;
     }
-    if (t === "recurrentes") {
-      setRecurrentes(null);
-      getRecurrentes()
-        .then((r) => setRecurrentes(r.recurrentes))
-        .catch((e) => { setError(e instanceof Error ? e.message : "No se pudieron cargar los recurrentes."); setRecurrentes([]); });
-      return;
-    }
     if (t === "analisis") {
-      // El reporte se pide recién acá: es una agregación sobre todo el
-      // período y no hace falta pagarla si nadie abre el tab.
-      setReporte(null);
-      setPresu(null);
-      getReporteEgresos()
-        .then(setReporte)
-        .catch(() => setReporte(null));
-      if (conRecurrentes) getPresupuestadoVsReal()
-        .then(setPresu)
-        .catch(() => setPresu(null));
+      void analisis.consultar();
       return;
     }
-    void recargar(t);
+    void recargar();
   };
 
   const visibles = React.useMemo(() => {
@@ -581,14 +513,15 @@ export function EgresosView({
     seleccionados.length > 0 && proveedoresSeleccion.size === 1;
 
   return (
-    <EgresosBrand value={brand}>
-    <div {...(brand ? scope : {})} className={brand ? `${theme} ${listPage.page} ${pagarStyles.page}` : "egr-page"}>
-      <div className={brand ? undefined : "egr-wrap"}>
+    <EgresosArea value={esCuentasPorPagar ? "Cuentas por pagar" : "Registro de egresos"}>
+    <EgresosBrand value>
+    <div {...scope} className={`${theme} ${listPage.page} ${pagarStyles.page}`}>
+      <div>
         {!conEgresos ? <Alert>
           <AlertTitle>Historial de egresos</AlertTitle>
           <AlertDescription>Podés consultar los registros y sus pagos. El plan actual no incluye la gestión de egresos ni cuentas por pagar.</AlertDescription>
         </Alert> : null}
-        {brand ? <CuentasPagarWorkspace
+        {esCuentasPorPagar ? <CuentasPagarWorkspace
           resumen={resumen} tab={tab === "proveedores" ? "proveedores" : "por-pagar"} onTab={cambiarTab}
           egresos={visibles} saldos={saldos} texto={texto} onTexto={setTexto}
           seleccion={seleccion} onSeleccion={setSeleccion} seleccionados={seleccionados}
@@ -596,276 +529,14 @@ export function EgresosView({
           puedeGestionar={puedeGestionar} cargando={cargando} error={error}
           onReintentar={() => cambiarTab(tab)} hoy={hoy} endosar={!!valorEndosoInicialId && puedeGestionar && conValores}
           onAlta={() => setAltaAbierta(true)} onPago={() => setPagoAbierto(true)} onDetalle={setDetalle}
-        /> : <>
-        <div className="egr-head">
-          <div>
-            <span className={egresosResumen["egr-eyebrow"]}>Administración financiera</span>
-            <h1>{ENCABEZADO[modo].titulo}</h1>
-            <div className="sub">{ENCABEZADO[modo].sub}</div>
-          </div>
-          {puedeGestionar ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setAltaAbierta(true)}
-            >
-              <PlusIcon aria-hidden="true" />
-              Registrar egreso
-            </button>
-          ) : null}
-        </div>
-
-        {resumen ? (
-          <div className="egr-kpis">
-            <div className={`egr-kpi ${resumen.vencido > 0 ? "mal" : ""}`}>
-              <div className={egresosResumen["egr-kpi-top"]}>
-                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
-                  <CalendarClockIcon />
-                </span>
-                <span className="l">Vencido</span>
-              </div>
-              <span className="v">{fmt(resumen.vencido)}</span>
-              <span className="h">ya se pasó la fecha</span>
-            </div>
-            <div className="egr-kpi">
-              <div className={egresosResumen["egr-kpi-top"]}>
-                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
-                  <CalendarClockIcon />
-                </span>
-                <span className="l">Vence esta semana</span>
-              </div>
-              <span className="v">{fmt(resumen.estaSemana)}</span>
-              <span className="h">próximos 7 días</span>
-            </div>
-            <div className="egr-kpi">
-              <div className={egresosResumen["egr-kpi-top"]}>
-                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
-                  <CircleDollarSignIcon />
-                </span>
-                <span className="l">Total a pagar</span>
-              </div>
-              <span className="v">{fmt(resumen.aPagar)}</span>
-              <span className="h">
-                {resumen.egresosPendientes} egreso
-                {resumen.egresosPendientes === 1 ? "" : "s"} pendiente
-                {resumen.egresosPendientes === 1 ? "" : "s"}
-              </span>
-            </div>
-            {/* El contraste que importa: lo que hay que pagar contra lo que hay. */}
-            <div
-              className={`egr-kpi ${resumen.cuentas < resumen.aPagar ? "alerta" : "bien"}`}
-            >
-              <div className={egresosResumen["egr-kpi-top"]}>
-                <span className={egresosResumen["egr-kpi-icon"]} aria-hidden="true">
-                  <WalletCardsIcon />
-                </span>
-                <span className="l">En las cuentas</span>
-              </div>
-              <span className="v">{fmt(resumen.cuentas)}</span>
-              <span className="h">
-                {resumen.cuentas < resumen.aPagar
-                  ? `faltan ${fmt(resumen.aPagar - resumen.cuentas)}`
-                  : "alcanza para lo pendiente"}
-              </span>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="egr-toolbar">
-          {/* La tira sale de la lista del modo: así una entrada del sidebar
-              no puede mostrar un tab que no le corresponde. */}
-          <div className="egr-tabs" role="tablist">
-            {tabsVisibles.map((t) => (
-              <button
-                key={t}
-                type="button"
-                className={tab === t ? "on" : ""}
-                onClick={() => cambiarTab(t)}
-              >
-                {t === "recurrentes" && !conRecurrentes ? "Historial de recurrentes" : TAB_LABELS[t]}
-              </button>
-            ))}
-          </div>
-          <label className="egr-search">
-            <SearchIcon aria-hidden="true" />
-            <span className="sr-only">Buscar egresos</span>
-            <input
-              placeholder="Buscar por descripción, beneficiario o número…"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-            />
-          </label>
-          {seleccionados.length > 0 && puedeGestionar ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!seleccionPagable}
-              title={
-                seleccionPagable
-                  ? undefined
-                  : "Un pago es de un solo proveedor: una orden de pago se le manda a alguien."
-              }
-              onClick={() => setPagoAbierto(true)}
-            >
-              Pagar {seleccionados.length} · {fmt(totalSeleccion)}
-            </button>
-          ) : null}
-        </div>
-
-        {valorEndosoInicialId && puedeGestionar && conValores ? (
-          <Alert>
-            <HandCoinsIcon />
-            <AlertTitle>Endosar cheque desde cartera</AlertTitle>
-            <AlertDescription>
-              Seleccioná una o más facturas del mismo proveedor y pulsá Pagar.
-              El cheque ya quedará elegido y no se afectará ninguna cuenta
-              bancaria propia.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {error ? <div className="egr-error mod-suelto">{error}</div> : null}
-
-        {tab === "analisis" && conEgresos && conAnalisis ? (
-          <Analisis reporte={reporte} presu={presu} fmt={fmt} />
-        ) : tab === "recurrentes" ? (
-          <Recurrentes
-            recurrentes={recurrentes}
-            categorias={categorias}
-            proveedores={proveedores}
-            gastosFijos={gastosFijos}
-            hoy={hoy}
-            puedeGestionar={puedeGestionar && conRecurrentes}
-            fmt={fmt}
-            onCambio={() => cambiarTab("recurrentes")}
-          />
-        ) : tab === "proveedores" ? (
-          <SaldosProveedores saldos={saldos} fmt={fmt} />
-        ) : visibles.length === 0 ? (
-          <div className="egr-empty">
-            <div className="ttl">
-              {tab === "por-pagar"
-                ? "No hay nada por pagar"
-                : "Todavía no hay egresos"}
-            </div>
-            <div className="sub">
-              {tab === "por-pagar"
-                ? "Cuando cargues una factura con vencimiento, va a aparecer acá ordenada por fecha."
-                : "Registrá el primero: la nafta, el alquiler, una factura de proveedor."}
-            </div>
-          </div>
-        ) : (
-          <div className="egr-tabla-wrap">
-            <table className="egr-tabla">
-              <thead>
-                <tr>
-                  {tab === "por-pagar" && puedeGestionar ? <th /> : null}
-                  <th>{tab === "por-pagar" ? "Vence" : "Competencia"}</th>
-                  {/* En "Por pagar" el vencimiento YA es la primera columna;
-                      acá se agrega porque es el orden del listado. */}
-                  {tab !== "por-pagar" ? <th>Vencimiento</th> : null}
-                  <th>Descripción</th>
-                  <th>Beneficiario</th>
-                  <th>Categoría</th>
-                  <th className="num">Total</th>
-                  <th className="num">Saldo</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibles.map((e) => {
-                  const dias = e.fechaVencimiento
-                    ? diasHastaVencimiento(e.fechaVencimiento, hoy)
-                    : null;
-                  const tono = dias != null ? tonoVencimiento(dias) : "";
-                  return (
-                    <tr key={e.id} className={`egr-${tono}`}>
-                      {tab === "por-pagar" && puedeGestionar ? (
-                        <td className="egr-check">
-                          <input
-                            type="checkbox"
-                            checked={seleccion.has(e.id)}
-                            aria-label={`Seleccionar ${e.numero}`}
-                            onChange={(ev) =>
-                              setSeleccion((prev) => {
-                                const next = new Set(prev);
-                                if (ev.target.checked) next.add(e.id);
-                                else next.delete(e.id);
-                                return next;
-                              })
-                            }
-                          />
-                        </td>
-                      ) : null}
-                      {/* Sin `mono`: con "Vie 28 ago 2026" la monoespaciada
-                          separa las letras y se lee peor que alineado. */}
-                      <td>
-                        {tab === "por-pagar" && e.fechaVencimiento ? (
-                          <>
-                            {fechaConDia(e.fechaVencimiento)}
-                            {dias != null ? (
-                              <span className="egr-sub">
-                                {etiquetaVencimiento(dias)}
-                              </span>
-                            ) : null}
-                          </>
-                        ) : (
-                          /* "contado" ya lo dice la columna Vencimiento, que
-                             está al lado: repetirlo acá era decirlo dos veces
-                             en la misma fila. */
-                          fechaConDia(e.fechaCompetencia)
-                        )}
-                      </td>
-                      {tab !== "por-pagar" ? (
-                        <td>
-                          {e.fechaVencimiento ? (
-                            fechaConDia(e.fechaVencimiento)
-                          ) : (
-                            /* Sin vencimiento = se pagó en el momento. */
-                            <span className="egr-sub">contado</span>
-                          )}
-                        </td>
-                      ) : null}
-                      <td>
-                        <button
-                          type="button"
-                          className="egr-link"
-                          onClick={() => setDetalle(e)}
-                        >
-                          {e.descripcion}
-                        </button>
-                        <span className="egr-sub mono">{e.numero}</span>
-                      </td>
-                      <td>{e.beneficiarioNombre}</td>
-                      <td>
-                        {e.categoriaNombre}
-                        {e.naturaleza &&
-                        e.naturaleza !== "COSTO_PRODUCCION" &&
-                        e.naturaleza !== "GASTO_ESTRUCTURA" ? (
-                          <span className="egr-sub">
-                            {NATURALEZA_LABELS[e.naturaleza]}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="num mono">{fmt(e.total)}</td>
-                      <td className="num mono">
-                        {e.saldo > 0 ? fmt(e.saldo) : "—"}
-                      </td>
-                      <td>
-                        <span className={`egr-badge ${e.estado}`}>
-                          {EGRESO_ESTADO_LABELS[e.estado]}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {cargando ? <div className="egr-cargando">Actualizando…</div> : null}
-        </>}
+        /> : <RegistroEgresosWorkspace
+          tab={tab === "analisis" ? "analisis" : "todos"} onTab={cambiarTab}
+          conAnalisis={conEgresos && conAnalisis} egresos={visibles}
+          texto={texto} onTexto={setTexto} puedeGestionar={puedeGestionar}
+          cargando={cargando} error={error} analisis={analisis} conPresupuesto={conRecurrentes}
+          onReintentar={() => cambiarTab(tab)} onAlta={() => setAltaAbierta(true)}
+          onDetalle={setDetalle}
+        />}
 
         {altaAbierta && puedeGestionar ? (
           <AltaEgreso
@@ -929,7 +600,7 @@ export function EgresosView({
         ) : null}
 
         <ConfirmacionDestructiva
-          apariencia={brand ? "heroui" : undefined}
+          apariencia="heroui"
           open={anulando !== null && puedeAnular}
           onOpenChange={(v) => {
             if (!v) setAnulando(null);
@@ -953,6 +624,7 @@ export function EgresosView({
       </div>
     </div>
     </EgresosBrand>
+    </EgresosArea>
   );
 }
 
@@ -964,7 +636,7 @@ export function EgresosView({
  * paga lo corrige. Si el sistema tratara el monto como verdad, mentiría con
  * precisión.
  */
-function Recurrentes({
+export function ProgramacionesAnterioresLista({
   recurrentes,
   categorias,
   proveedores,
@@ -983,10 +655,7 @@ function Recurrentes({
   fmt: (v: number) => string;
   onCambio: () => void;
 }) {
-  const [alta, setAlta] = React.useState(false);
   const [editando, setEditando] = React.useState<GastoRecurrente | null>(null);
-  const [emitiendo, setEmitiendo] = React.useState(false);
-  const [aviso, setAviso] = React.useState<string | null>(null);
   const activas = categorias.filter((c) => c.activo);
   const opcionesCategoria = React.useMemo(
     () => opcionesDeCategorias(categorias),
@@ -1013,10 +682,9 @@ function Recurrentes({
     [gastosFijos, fmt],
   );
   const cerrarFormulario = React.useCallback(() => {
-    setAlta(false);
     setEditando(null);
   }, []);
-  useCerrarConEscape(cerrarFormulario, alta || editando !== null);
+  useCerrarConEscape(cerrarFormulario, editando !== null);
 
   const [descripcion, setDescripcion] = React.useState("");
   const [categoriaId, setCategoriaId] = React.useState(activas[0]?.id ?? "");
@@ -1028,22 +696,7 @@ function Recurrentes({
   const [hasta, setHasta] = React.useState("");
   const [gastoFijoId, setGastoFijoId] = React.useState("");
 
-  const abrirAlta = () => {
-    setEditando(null);
-    setDescripcion("");
-    setCategoriaId(activas[0]?.id ?? "");
-    setProveedorId("");
-    setMonto(0);
-    setFrecuencia("mensual");
-    setDia(10);
-    setDesde(hoy.slice(0, 7));
-    setHasta("");
-    setGastoFijoId("");
-    setAlta(true);
-  };
-
   const abrirEdicion = (r: GastoRecurrente) => {
-    setAlta(false);
     setEditando(r);
     setDescripcion(r.descripcion);
     setCategoriaId(r.categoriaEgresoId);
@@ -1056,24 +709,6 @@ function Recurrentes({
     setGastoFijoId(r.gastoFijoEstructuraId ?? "");
   };
 
-  const emitir = async () => {
-    setEmitiendo(true);
-    setAviso(null);
-    try {
-      const r = await generarRecurrentes();
-      setAviso(
-        r.emitidos === 0
-          ? "No había nada pendiente de emitir."
-          : `${r.emitidos} egreso${r.emitidos === 1 ? "" : "s"} emitido${r.emitidos === 1 ? "" : "s"}.`,
-      );
-      onCambio();
-    } catch (e) {
-      setAviso(e instanceof Error ? e.message : "No se pudo emitir.");
-    } finally {
-      setEmitiendo(false);
-    }
-  };
-
   const guardar = async () => {
     if (editando) {
       await editarRecurrente(editando.id, {
@@ -1082,18 +717,6 @@ function Recurrentes({
         diaVencimiento: dia,
         vigenteHasta: hasta || undefined,
         gastoFijoEstructuraId: gastoFijoId || null,
-      });
-    } else {
-      await crearRecurrente({
-        descripcion: descripcion.trim(),
-        categoriaEgresoId: categoriaId,
-        proveedorId: proveedorId || undefined,
-        monto,
-        frecuencia,
-        diaVencimiento: dia,
-        vigenteDesde: desde,
-        vigenteHasta: hasta || undefined,
-        gastoFijoEstructuraId: gastoFijoId || undefined,
       });
     }
     cerrarFormulario();
@@ -1108,31 +731,11 @@ function Recurrentes({
 
   return (
     <div className="egr-analisis">
-      <div className="egr-toolbar">
-        {puedeGestionar ? (
-          <>
-            <button type="button" className="btn" onClick={abrirAlta}>
-              Nueva plantilla
-            </button>
-            <button
-              type="button"
-              className="btn"
-              disabled={emitiendo}
-              onClick={() => void emitir()}
-            >
-              {emitiendo ? "Emitiendo…" : "Emitir pendientes"}
-            </button>
-          </>
-        ) : null}
-        {aviso ? <span className="egr-sub">{aviso}</span> : null}
-      </div>
-
       {recurrentes.length === 0 ? (
         <div className="egr-empty">
-          <div className="ttl">Sin gastos recurrentes</div>
+          <div className="ttl">Sin programaciones anteriores</div>
           <div className="sub">
-            El alquiler, la luz, el contador: cargalos una vez y aparecen solos
-            cada mes en Cuentas por pagar.
+            Las nuevas programaciones se configuran desde cada gasto en Gastos fijos.
           </div>
         </div>
       ) : (
@@ -1175,7 +778,9 @@ function Recurrentes({
                     </span>
                   </td>
                   <td>
-                    {puedeGestionar ? (
+                    {r.gastoFijoEstructuraId && recurrentes.filter((otro) => otro.gastoFijoEstructuraId === r.gastoFijoEstructuraId).length === 1 ? (
+                      <><span className={`egr-badge ${r.activo ? "" : "anulado"}`}>{r.activo ? "Activa" : "Inactiva"}</span><br /><Link className="egr-link" href="/administracion/gastos-fijos">Configurar en Gastos fijos</Link></>
+                    ) : puedeGestionar ? (
                       <div className="egr-acciones-inline">
                         <button
                           type="button"
@@ -1188,8 +793,12 @@ function Recurrentes({
                           type="button"
                           className="egr-link"
                           onClick={async () => {
-                            await editarRecurrente(r.id, { activo: !r.activo });
-                            onCambio();
+                            try {
+                              await editarRecurrente(r.id, { activo: !r.activo });
+                              onCambio();
+                            } catch (error) {
+                              toast.error(error instanceof Error ? error.message : "No se pudo cambiar la programación.");
+                            }
                           }}
                         >
                           {r.activo ? "Desactivar" : "Activar"}
@@ -1210,11 +819,11 @@ function Recurrentes({
         </div>
       )}
 
-      {puedeGestionar && (alta || editando) ? (
+      {puedeGestionar && editando ? (
         <div className="mod-bg" role="dialog" aria-modal="true">
           <div className="mod mod-sm">
             <div className="mod-head">
-              <h2>{editando ? "Editar plantilla" : "Nueva plantilla"}</h2>
+              <h2>Editar programación anterior</h2>
               <button
                 type="button"
                 className="mod-x"
@@ -1320,14 +929,13 @@ function Recurrentes({
                   <SelectBuscable
                     value={gastoFijoId}
                     onChange={setGastoFijoId}
-                    opciones={opcionesGastoFijo}
+                    opciones={opcionesGastoFijo.filter((opcion) => !opcion.value || opcion.value === editando?.gastoFijoEstructuraId)}
                     placeholder="Sin vincular"
                     placeholderBusqueda="Buscar gasto fijo…"
                     vacio="Ningún gasto fijo coincide."
                   />
                   <small className="egr-hint">
-                    Vincularlo habilita la comparación entre lo presupuestado y
-                    lo realmente registrado.
+                    Las nuevas vinculaciones se configuran desde Gastos fijos. Podés desvincular una programación anterior para resolver duplicados sin perder sus egresos.
                   </small>
                 </label>
               </div>
@@ -1342,283 +950,14 @@ function Recurrentes({
                 disabled={
                   descripcion.trim().length < 2 || !categoriaId || monto <= 0
                 }
-                onClick={() => void guardar()}
+                onClick={() => void guardar().catch((error) => toast.error(error instanceof Error ? error.message : "No se pudo guardar."))}
               >
-                {editando ? "Guardar cambios" : "Crear"}
+                Guardar cambios
               </button>
             </div>
           </div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-/**
- * Saldo por proveedor con antigüedad (journey E2) — el espejo de la matriz de
- * deudores, del otro lado del mostrador.
- */
-function SaldosProveedores({
-  saldos,
-  fmt,
-}: {
-  saldos: SaldoProveedor[] | null;
-  fmt: (v: number) => string;
-}) {
-  if (!saldos) return <div className="egr-cargando">Calculando saldos…</div>;
-  if (saldos.length === 0) {
-    return (
-      <div className="egr-empty">
-        <div className="ttl">No le debés nada a nadie</div>
-        <div className="sub">
-          Acá vas a ver la deuda de cada proveedor repartida por antigüedad.
-        </div>
-      </div>
-    );
-  }
-  const totales = TRAMOS_AGING.map((t) =>
-    saldos.reduce((acc, p) => acc + p.aging[t], 0),
-  );
-  const total = saldos.reduce((acc, p) => acc + p.total, 0);
-  return (
-    <div className="egr-tabla-wrap">
-      <table className="egr-tabla">
-        <thead>
-          <tr>
-            <th>Proveedor</th>
-            {TRAMOS_AGING.map((t) => (
-              <th key={t} className="num">
-                {TRAMO_AGING_LABELS[t]}
-              </th>
-            ))}
-            <th className="num">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {saldos.map((p) => (
-            <tr key={p.proveedorId ?? "sin"}>
-              <td>
-                {p.nombre}
-                <span className="egr-sub">
-                  {p.cuit ? `CUIT ${p.cuit} · ` : ""}
-                  {p.egresos} egreso{p.egresos === 1 ? "" : "s"}
-                </span>
-              </td>
-              {TRAMOS_AGING.map((t) => (
-                <td
-                  key={t}
-                  className={`num mono ${
-                    /* Lo vencido hace más de 60 días es el KPI de riesgo. */
-                    (t === "d61_90" || t === "d90_mas") && p.aging[t] > 0
-                      ? "egr-mal"
-                      : ""
-                  }`}
-                >
-                  {p.aging[t] > 0 ? fmt(p.aging[t]) : "—"}
-                </td>
-              ))}
-              <td className="num mono strong">{fmt(p.total)}</td>
-            </tr>
-          ))}
-          <tr className="egr-fila-total">
-            <td className="strong">Total</td>
-            {totales.map((v, i) => (
-              <td key={TRAMOS_AGING[i]} className="num mono">
-                {v > 0 ? fmt(v) : "—"}
-              </td>
-            ))}
-            <td className="num mono strong">{fmt(total)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * "¿En qué se me va la plata?" (journey E3).
- *
- * Separa lo que es GASTO del período de lo que sólo movió caja. Sin esa
- * separación, el mes en que se compra una guillotina parece catastrófico, un
- * retiro de socios se lee como gasto, y el adelanto de sueldo se cuenta dos
- * veces (el adelanto y después el sueldo).
- */
-function Analisis({
-  reporte,
-  presu,
-  fmt,
-}: {
-  reporte: ReporteEgresos | null;
-  presu: PresupuestadoVsReal | null;
-  fmt: (v: number) => string;
-}) {
-  if (!reporte) {
-    return <div className="egr-cargando">Calculando el período…</div>;
-  }
-  if (reporte.egresos === 0) {
-    return (
-      <div className="egr-empty">
-        <div className="ttl">Sin egresos en el período</div>
-        <div className="sub">
-          El análisis agrupa por fecha de competencia — el mes al que pertenece
-          el gasto, no el día en que se pagó.
-        </div>
-      </div>
-    );
-  }
-  const noEsGasto = reporte.totalSalida - reporte.totalResultado;
-  return (
-    <div className="egr-analisis">
-      <div className="egr-kpis">
-        <div className="egr-kpi">
-          <span className="l">Gasto del período</span>
-          <span className="v">{fmt(reporte.totalResultado)}</span>
-          <span className="h">costo de producción + estructura</span>
-        </div>
-        <div className="egr-kpi">
-          <span className="l">Total registrado</span>
-          <span className="v">{fmt(reporte.totalSalida)}</span>
-          <span className="h">
-            {reporte.egresos} egresos · incluye pagos y pendientes
-          </span>
-        </div>
-        <div className="egr-kpi">
-          <span className="l">No es gasto</span>
-          <span className="v">{fmt(noEsGasto)}</span>
-          <span className="h">inversión, retiros, adelantos</span>
-        </div>
-        <div className="egr-kpi">
-          <span className="l">Período</span>
-          <span className="v egr-periodo">{reporte.desde}</span>
-          <span className="h">al {reporte.hasta} · por competencia</span>
-        </div>
-      </div>
-
-      {presu && presu.lineas.length > 0 ? (
-        <section className="egr-panel">
-          <div className="egr-panel-t">
-            Presupuestado vs. real de la estructura · {presu.periodo}
-          </div>
-          <div className="egr-tabla-wrap">
-            <table className="egr-tabla">
-              <thead>
-                <tr>
-                  <th>Gasto fijo</th>
-                  <th className="num">Presupuestado</th>
-                  <th className="num">Real</th>
-                  <th className="num">Desvío</th>
-                </tr>
-              </thead>
-              <tbody>
-                {presu.lineas.map((l) => (
-                  <tr
-                    key={l.gastoFijoId}
-                    className={l.sinRegistrar ? "muted-row" : ""}
-                  >
-                    <td>
-                      {l.nombre}
-                      {l.sinRegistrar ? (
-                        <span className="egr-sub">sin egresos este mes</span>
-                      ) : null}
-                    </td>
-                    <td className="num mono">{fmt(l.presupuestado)}</td>
-                    <td className="num mono">
-                      {l.sinRegistrar ? "—" : fmt(l.real)}
-                    </td>
-                    <td
-                      className={`num mono ${
-                        l.sinRegistrar ? "" : l.desvio > 0 ? "egr-mal" : ""
-                      }`}
-                    >
-                      {l.sinRegistrar ? (
-                        "—"
-                      ) : (
-                        <>
-                          {l.desvio >= 0 ? "+" : "−"}
-                          {fmt(Math.abs(l.desvio))}
-                          {l.desvioPct != null ? (
-                            <span className="egr-sub">
-                              {l.desvioPct >= 0 ? "+" : "−"}
-                              {pct1(Math.abs(l.desvioPct))}%
-                            </span>
-                          ) : null}
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="egr-fila-total">
-                  <td className="strong">Total con registro</td>
-                  <td className="num mono strong">
-                    {fmt(presu.presupuestado)}
-                  </td>
-                  <td className="num mono strong">{fmt(presu.real)}</td>
-                  <td
-                    className={`num mono strong ${presu.desvio > 0 ? "egr-mal" : ""}`}
-                  >
-                    {presu.desvio >= 0 ? "+" : "−"}
-                    {fmt(Math.abs(presu.desvio))}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          {/* Comparar contra cero un gasto que nadie registró mostraría un
-              ahorro que no existe: se listan pero no suman. */}
-          {presu.sinRegistrar > 0 ? (
-            <div className="egr-nota-inline">
-              {presu.sinRegistrar} gasto
-              {presu.sinRegistrar === 1 ? "" : "s"} fijo
-              {presu.sinRegistrar === 1 ? "" : "s"} todavía sin egresos este
-              mes: se listan pero no entran en el total, porque compararlos
-              contra cero mostraría un ahorro que no existe.
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      <div className="egr-analisis-cols">
-        <section className="egr-panel">
-          <div className="egr-panel-t">Por naturaleza</div>
-          {reporte.naturalezas.map((n) => (
-            <div className="egr-linea" key={n.naturaleza}>
-              <span className="egr-linea-n">
-                {NATURALEZA_LABELS[n.naturaleza]}
-                {!n.incideEnResultado ? (
-                  <small>no es gasto del período</small>
-                ) : null}
-              </span>
-              <span className="egr-linea-b">
-                <span
-                  className={`egr-linea-f ${n.incideEnResultado ? "" : "off"}`}
-                  style={{ width: `${n.pct}%` }}
-                />
-              </span>
-              <span className="egr-linea-p mono">{n.pct}%</span>
-              <span className="egr-linea-m mono">{fmt(n.monto)}</span>
-            </div>
-          ))}
-        </section>
-
-        <section className="egr-panel">
-          <div className="egr-panel-t">Por categoría</div>
-          {reporte.categorias.map((c) => (
-            <div className="egr-linea" key={c.categoriaId}>
-              <span className="egr-linea-n">
-                {c.nombre}
-                <small>
-                  {c.egresos} egreso{c.egresos === 1 ? "" : "s"}
-                </small>
-              </span>
-              <span className="egr-linea-b">
-                <span className="egr-linea-f" style={{ width: `${c.pct}%` }} />
-              </span>
-              <span className="egr-linea-p mono">{c.pct}%</span>
-              <span className="egr-linea-m mono">{fmt(c.monto)}</span>
-            </div>
-          ))}
-        </section>
-      </div>
     </div>
   );
 }
@@ -1648,9 +987,8 @@ function AltaEgreso({
   /** Devuelve el id para que el listado pueda abrir el detalle recién creado. */
   onListo: (creadoId: string) => void;
 }) {
-  const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda);
   const activas = categorias.filter((c) => c.activo);
   const opcionesCategoria = React.useMemo(
     () => opcionesDeCategorias(categorias),
@@ -2206,9 +1544,8 @@ function RegistrarPago({
   onCerrar: () => void;
   onListo: () => void;
 }) {
-  const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda);
   const opcionesMetodo = React.useMemo(
     () => opcionesDeMetodos(metodosPago),
     [metodosPago],
@@ -2331,7 +1668,7 @@ function RegistrarPago({
         label: `${v.banco} ${v.numero}`,
         // Importe y de quién vino: es lo que decide cuál usar.
         detalle: [
-          formatearMoneda(v.importe, moneda, { decimales: 0 }),
+          formatearMoneda(v.importe, moneda),
           v.clienteNombre,
           v.fechaPago ? `al ${v.fechaPago}` : "al día",
         ]
@@ -2905,7 +2242,7 @@ function DetalleEgreso({
   const conPdf = useCapacidad("documentos_pdf");
   const brand = useEgresosBrand();
   const { moneda } = useConfigRegional();
-  const fmt = (v: number) => formatearMoneda(v, moneda, brand ? {} : { decimales: 0 });
+  const fmt = (v: number) => formatearMoneda(v, moneda);
   const [pagos, setPagos] = React.useState<PagoDeEgreso[] | null>(null);
   const [archivos, setArchivos] = React.useState<Archivo[]>([]);
   const [anulandoPago, setAnulandoPago] = React.useState<PagoDeEgreso | null>(
@@ -2969,7 +2306,16 @@ function DetalleEgreso({
   return (
     <>
       <EgresoDialog compact legacySubtitle={egreso.numero} title={egreso.descripcion} description={`${egreso.numero} · ${egreso.beneficiarioNombre}`} onCerrar={onCerrar} bloqueado={guardandoEdicion}>
-        {brand && <div className={pagarStyles.detailSummary}><div><span>Total</span><strong>{fmt(egreso.total)}</strong></div><div><span>Pagado</span><strong>{fmt(egreso.pagadoTotal)}</strong></div><div><span>Pendiente</span><strong>{fmt(egreso.saldo)}</strong></div></div>}
+        {brand && (
+          <div className={pagarStyles.detailSummary}>
+            <div><span>Total</span><strong>{fmt(egreso.total)}</strong></div>
+            <div><span>Pagado</span><strong>{fmt(egreso.pagadoTotal)}</strong></div>
+            <div>
+              <span>{egreso.estado === "anulado" ? "Estado" : "Pendiente"}</span>
+              <strong>{egreso.estado === "anulado" ? "Anulado" : fmt(egreso.saldo)}</strong>
+            </div>
+          </div>
+        )}
         <div className="mod-body">
           {editando && puedeGestionar ? (
             <div className="egr-grid">

@@ -37,7 +37,7 @@ describe("qué muestra el sidebar", () => {
 
     /**
      * Las dos caras del mismo mostrador van juntas y en ese orden: primero lo
-     * que te deben, después lo que debés. Que "Egresos" venga al final no es
+     * que te deben, después lo que debés. Que "Registro de egresos" venga al final no es
      * cosmético — es lo que evita que se lea como sinónimo de cuentas por
      * pagar, que fue el malentendido que motivó el corte.
      */
@@ -47,7 +47,7 @@ describe("qué muestra el sidebar", () => {
       const pagar = admin.indexOf("Cuentas por pagar");
       expect(cobrar).toBeGreaterThanOrEqual(0);
       expect(pagar).toBe(cobrar + 1);
-      expect(admin.indexOf("Egresos")).toBe(pagar + 1);
+      expect(admin.indexOf("Registro de egresos")).toBe(pagar + 1);
     });
 
     it("sin la llave del módulo, el grupo no aparece", () => {

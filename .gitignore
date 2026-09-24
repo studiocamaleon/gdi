@@ -26,6 +26,7 @@ node_modules/
 # NestJS API build artifacts (never commit compiled output)
 /apps/api/dist/
 /apps/forma-studio/dist/
+/apps/marketing/public/grafo3d/
 
 # Storage local de archivos (driver de dev, sin R2). Son archivos de los
 # tenants: nunca al repo.
@@ -61,6 +62,8 @@ dev.db
 .tmp/
 /tmp/
 /output/
+/outputs/
+/apps/forma-studio/output/
 /apps/forma-studio/tmp/
 .claude/
 apps/api/output.lp

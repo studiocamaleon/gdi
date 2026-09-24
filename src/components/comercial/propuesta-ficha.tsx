@@ -20,7 +20,8 @@ import {
 } from "@/lib/planificacion-entregas";
 
 import { usePrevisionMateriales } from "@/hooks/use-prevision-materiales";
-import { condicionarPorMateriales } from "@/lib/prevision-materiales";
+import { useMaterialesOrden } from "@/hooks/use-materiales-orden";
+import { condicionarPorMateriales, solicitudPrevisionMateriales } from "@/lib/prevision-materiales";
 import { PrevisionMaterialesPanel } from "./prevision-materiales-panel";
 import { getContextoPrevision } from "@/lib/eta-api";
 import { itemHipoteticoDesdeCotizacion } from "@/lib/eta-cotizacion";
@@ -50,6 +51,7 @@ import {
   getItemOrderVisibleAmounts,
 } from "@/lib/orden-productos-presentacion";
 import { OrdenSummaryDetails } from "./orden-summary-details";
+import { ElegirCanalPresupuesto, type CanalPresupuesto } from "./presupuesto-correo-dialog";
 import { OrdenProductosTable } from "./orden-productos-table";
 import {
   OrdenSegmented,
@@ -1833,6 +1835,9 @@ function MaterialesPasoTable({
               <tr key={key}>
                 <td>
                   <strong>{getMaterialCosteoLabel(material)}</strong>
+                  {material.seleccionStock ? <div className={itemCostStyles["cost-stock-note"]}>
+                    {material.seleccionStock.estado === "disponible" ? "Elegido con stock disponible al cotizar" : "Requiere reposición"}
+                  </div> : null}
                 </td>
                 <td>
                   <span className={cn(itemCostStyles["cost-chip"])}>
@@ -4223,7 +4228,11 @@ export function OrdenProductoDetalle({
       >
         <DialogContent
           {...legacyScope}
-          className={cn(legacyTheme ?? workspaceTheme.theme, itemStyles.dialog)}
+          className={cn(
+            legacyTheme ?? workspaceTheme.theme,
+            itemStyles.dialog,
+            "translate-none",
+          )}
         >
           <DialogHeader className={itemStyles.dialogHeader}>
             <DialogTitle>
@@ -5251,6 +5260,15 @@ function PropuestaFichaContenido({
   const conDemoraSistema = cotizando && conEta;
   const conPrevisionMateriales = cotizando && conPrevision;
   const previsionMateriales = usePrevisionMateriales(items, conPrevisionMateriales);
+  const materialesOrden = useMaterialesOrden(
+    orden && puedeVerMateriales ? orden.id : null,
+    orden ?? undefined,
+  );
+  const materialesFaltantesCount = conPrevisionMateriales && previsionMateriales.data
+    ? previsionMateriales.data.materiales.filter((m) => (m.faltante ?? 0) > 0).length
+    : materialesOrden.data?.control?.habilitado
+      ? materialesOrden.data.control.materiales.filter((m) => !m.excluida && (m.faltante ?? 0) > 0).length
+      : 0;
   const [colasTaller, setColasTaller] = React.useState<Awaited<
     ReturnType<typeof getContextoPrevision>
   > | null>(null);
@@ -5873,6 +5891,8 @@ function PropuestaFichaContenido({
       // Una edición prepara una revisión nueva; la OT sólo cambia al confirmar
       // el lote y la cotización anterior queda disponible para trazabilidad.
       const respuesta = await cotizarYGuardar({
+        ordenTrabajoId: orden?.id,
+        contextoMateriales: solicitudPrevisionMateriales(items.filter((i) => i.id !== item.id)).materiales,
         productoId: item.motorCodigo,
         ...request,
       });
@@ -5886,7 +5906,7 @@ function PropuestaFichaContenido({
       const payload = itemToOrdenItemPayload(item, cotizacionItemId);
       return { item, cotizacionItemId, payload };
     },
-    [orden, clienteId, cotizarYGuardar, guardarTomoCentroCopiado],
+    [orden, items, clienteId, cotizarYGuardar, guardarTomoCentroCopiado],
   );
 
   /** Baja en staging: sólo saca la fila local; el DELETE va en Guardar. */
@@ -6299,6 +6319,8 @@ function PropuestaFichaContenido({
         );
       }
       const response = await cotizarYGuardar({
+        ordenTrabajoId: orden?.id,
+        contextoMateriales: solicitudPrevisionMateriales(items.filter((i) => i.id !== item.id)).materiales,
         productoId: item.motorCodigo,
         rutaAlternativaId: item.rutaAlternativaId ?? null,
         jobContext: item.jobContext as never,
@@ -6348,7 +6370,8 @@ function PropuestaFichaContenido({
    * proyección de items para convertir después. No crea ninguna OT.
    */
   const [emitiendoPresupuesto, setEmitiendoPresupuesto] = React.useState(false);
-  const emitirPresupuestoCb = React.useCallback(async () => {
+  const [canalPresupuestoAbierto, setCanalPresupuestoAbierto] = React.useState(false);
+  const emitirPresupuestoCb = React.useCallback(async (canal: CanalPresupuesto = "whatsapp") => {
     if (!conPresupuestos || !conCotizacion) {
       toast.error("Esta operación no está incluida en el plan actual.");
       return;
@@ -6372,6 +6395,7 @@ function PropuestaFichaContenido({
         throw new Error("No se pudo persistir la cotización del presupuesto.");
       }
       const presupuesto = await emitirPresupuesto({
+        notificarWhatsapp: canal === "whatsapp",
         cotizacionId,
         clienteId,
         proyectoCampanaId: proyectoCampanaId || undefined,
@@ -6393,10 +6417,11 @@ function PropuestaFichaContenido({
         toast.success(
           presupuesto.estado === "pendiente_aprobacion"
             ? `Presupuesto ${presupuesto.numero}: espera la aprobación de un supervisor antes de salir.`
-            : `Presupuesto ${presupuesto.numero} emitido y enviado.`,
+            : canal === "whatsapp" ? `Presupuesto ${presupuesto.numero} emitido y enviado.` : `Presupuesto ${presupuesto.numero} emitido. Revisá el correo antes de enviarlo.`,
         );
       }
-      router.push("/comercial/presupuestos");
+      setCanalPresupuestoAbierto(false);
+      router.push(canal === "whatsapp" ? "/comercial/presupuestos" : `/comercial/presupuestos/${presupuesto.id}?correo=${canal}`);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -7392,6 +7417,11 @@ function PropuestaFichaContenido({
           orden && issued.page,
         )}
       >
+        {canalPresupuestoAbierto && <ElegirCanalPresupuesto
+          trabajando={emitiendoPresupuesto}
+          onCerrar={() => setCanalPresupuestoAbierto(false)}
+          onEmitir={(canal) => void emitirPresupuestoCb(canal)}
+        />}
         {initialLoadErrors.length > 0 ? (
           <div className="orden-load-warning" role="alert">
             No se pudieron cargar: {initialLoadErrors.join(", ")}. Reintentá
@@ -7414,7 +7444,8 @@ function PropuestaFichaContenido({
                 count={items.length}
                 historialCount={orden ? orden.eventosTotal : undefined}
                 comprobantesCount={orden ? 0 : undefined}
-                mostrarMateriales={Boolean(orden) && puedeVerMateriales}
+                mostrarMateriales={puedeVerMateriales && (Boolean(orden) || conPrevisionMateriales)}
+                materialesFaltantesCount={materialesFaltantesCount}
                 archivosCount={archivosCount}
                 archivosPendientesCount={
                   initialDocumentos?.gates.filter((gate) => !gate.cumplido).length
@@ -7579,7 +7610,7 @@ function PropuestaFichaContenido({
                           ? setConfirmarEmisionDocumentos("nueva")
                           : void emitirOrden()
                       }
-                      onEmitirPresupuesto={emitirPresupuestoCb}
+                      onEmitirPresupuesto={() => setCanalPresupuestoAbierto(true)}
                       emitiendo={emitiendo || emitiendoPresupuesto}
                       guardandoBorrador={guardandoBorrador}
                       onGuardarBorrador={() =>
@@ -8061,17 +8092,6 @@ function PropuestaFichaContenido({
               </>
             }
           >
-            {conPrevisionMateriales && items.length > 0 && (
-              <PrevisionMaterialesPanel
-                data={previsionMateriales.data}
-                error={previsionMateriales.error}
-                loading={previsionMateriales.loading}
-                onRefresh={previsionMateriales.actualizar}
-                entregasDistribuidas={items.some(
-                  (item) => !!entregasPrevias.fechaPara(item) || !!fechaFinalDistribucion(item.distribucionEntregas),
-                )}
-              />
-            )}
             {orden && <OrdenSectionHeading section={tab} />}
             {tab === "productos" ? (
               <OrdenProductosTable
@@ -8225,8 +8245,29 @@ function PropuestaFichaContenido({
                 />
               )
             ) : null}
-            {tab === "materiales" && orden && puedeVerMateriales ? (
-              <MaterialesOrdenTab ordenId={orden.id} versionOrden={orden} />
+            {tab === "materiales" && puedeVerMateriales ? (
+              <>
+                {conPrevisionMateriales && items.length > 0 && (
+                  <PrevisionMaterialesPanel
+                    data={previsionMateriales.data}
+                    error={previsionMateriales.error}
+                    loading={previsionMateriales.loading}
+                    onRefresh={previsionMateriales.actualizar}
+                    expandido={!orden}
+                    entregasDistribuidas={items.some(
+                      (item) => !!entregasPrevias.fechaPara(item) || !!fechaFinalDistribucion(item.distribucionEntregas),
+                    )}
+                  />
+                )}
+                {orden ? (
+                  <MaterialesOrdenTab ordenId={orden.id} versionOrden={orden} consulta={materialesOrden} />
+                ) : !items.length ? (
+                  <EmptyTab
+                    title="Materiales del trabajo"
+                    description="Agregá productos para consultar los materiales necesarios, el stock disponible y la reposición prevista antes de emitir la OT."
+                  />
+                ) : null}
+              </>
             ) : null}
             {tab === "pagos" ? (
               orden ? (
@@ -8465,6 +8506,8 @@ function PropuestaFichaContenido({
         />
 
         <AgregarProductoSheet
+          ordenTrabajoId={orden?.id}
+          contextoMateriales={solicitudPrevisionMateriales(items.filter((i) => i.id !== editingItem?.id)).materiales}
           open={addOpen && puedeModificarProductos}
           onOpenChange={(open) => {
             if (open && !permisoProductosRef.current) return;

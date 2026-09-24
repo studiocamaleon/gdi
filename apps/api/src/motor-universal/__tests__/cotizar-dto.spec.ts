@@ -12,6 +12,16 @@ import {
 } from '../../productos-servicios/geometrias/interpretar-vector';
 
 describe('CotizarDto', () => {
+  it('acepta entradas de corte opcionales y enteras al estimar placas', async () => {
+    const ctx = {cantidad: 50, modoCotizacionVectorial: 'placas', placasVectorialesManuales: 2, metrosCortePorPlacaVectorial: 15};
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    for (const entradas of [undefined, 0, 4]) {
+      const jobContext = {...ctx, ...(entradas !== undefined ? {entradasCortePorPlacaVectorial: entradas} : {})};
+      expect(jobContextCotizacionValido(jobContext)).toBe(true);
+      await expect(pipe.transform({productoId: '22222222-2222-4222-8222-222222222222', jobContext}, {type: 'body', metatype: CotizarDto})).resolves.toBeDefined();
+    }
+    for (const entradas of [-1, 0.5, Infinity, '4']) expect(jobContextCotizacionValido({...ctx, entradasCortePorPlacaVectorial: entradas})).toBe(false);
+  });
   it('valida cada colección heredable con las mismas restricciones de piezas', () => {
     const pieza = { id: 'letras', nombre: 'Letras', cantidadPorUnidad: 2, fuente: { schemaVersion: 1, nombreArchivo: 'letras.svg', svg: '<svg/>', anchoFinalMm: 100 } };
     expect(jobContextCotizacionValido({ cantidad: 10, coleccionesVectoriales: { principal: [pieza] } })).toBe(true);

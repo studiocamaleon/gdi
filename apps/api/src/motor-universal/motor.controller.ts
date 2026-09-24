@@ -320,6 +320,8 @@ export class MotorUniversalController {
     return this.motor.cotizar({
       tenantId,
       tipoCambioId: dto.tipoCambioId,
+      contextoMateriales: dto.contextoMateriales,
+      ordenTrabajoId: dto.ordenTrabajoId,
       usuarioId: req.auth?.userId,
       productoId: dto.productoId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
@@ -351,6 +353,8 @@ export class MotorUniversalController {
       cotizacion: {
         tenantId,
         tipoCambioId: dto.tipoCambioId,
+      contextoMateriales: dto.contextoMateriales,
+      ordenTrabajoId: dto.ordenTrabajoId,
         usuarioId: req.auth?.userId,
         productoId: dto.productoId,
         rutaAlternativaId: dto.rutaAlternativaId ?? null,
@@ -395,6 +399,8 @@ export class MotorUniversalController {
     return this.motor.cotizarYGuardar({
       tenantId,
       tipoCambioId: dto.tipoCambioId,
+      contextoMateriales: dto.contextoMateriales,
+      ordenTrabajoId: dto.ordenTrabajoId,
       usuarioId: req.auth?.userId,
       productoId: dto.productoId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
@@ -424,6 +430,8 @@ export class MotorUniversalController {
       tenantId,
       cotizacionItemId: id,
       tipoCambioId: dto.tipoCambioId,
+      contextoMateriales: dto.contextoMateriales,
+      ordenTrabajoId: dto.ordenTrabajoId,
       usuarioId: req.auth?.userId,
       rutaAlternativaId: dto.rutaAlternativaId ?? null,
       jobContext: dto.jobContext as never,

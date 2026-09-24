@@ -2,7 +2,12 @@ import { registrarCortesDelLote } from '../registrar-corte-lote';
 import { demandaDesdeTiempo } from '../../eta/motor/demanda-humana';
 import { consolidarCortesRegistrados } from '../consolidar-cortes-registrados';
 import { escenarioHerramientas } from './fixtures/operaciones-corte';
-import { recalcularOperacionesCongeladas } from '../procesamiento-corte';
+import {
+  recalcularOperacionesCongeladas,
+  prepararProcesamientoCorte,
+  calcularProcesamientoCorte,
+  type PlanOperacionesCorte,
+} from '../procesamiento-corte';
 import {
   aplicarRepartoCorte,
   planificarRepartoCorte,
@@ -10,11 +15,181 @@ import {
 import { MotorUniversalService } from '../motor.service';
 import type { ErrorMotor } from '../tipos';
 import {
+  runNestingForPaso,
+  type NestingDispatchOpts,
+} from '../nesting-dispatcher';
+import { resolverProblemaNestingIrregular } from '../geometria-vectorial/contrato-nesting';
+import {
   erroresConfiguracionCorte,
   erroresPerfilCorte,
 } from '../../maquinaria/procesamiento-corte';
 
 describe('cotización por recorridos, herramientas y material', () => {
+  it('conserva hendido y medio corte al enviar una interpretación individual al worker', async () => {
+    const s = escenarioHerramientas(2);
+    const pieza = s.ctx.geometriaVectorial!.piezas[0];
+    // El fixture de tiempos no necesita una matriz; el traslado real del
+    // nesting sí conserva las coordenadas de la interpretación original.
+    pieza.fabricacion!.transformacion = [1, 0, 0, 1, 0, 0];
+    const ctx = {
+      ...s.ctx,
+      modoCotizacionVectorial: 'svg' as const,
+      disenoVectorialFuente: {
+        schemaVersion: 2 as const,
+        nombreArchivo: 'troquel.dxf',
+        svg: '<svg viewBox="0 0 100 100"><path d="M0 0H100V100H0Z"/></svg>',
+        anchoFinalMm: 100,
+      },
+      geometriaVectorial: {
+        ...s.ctx.geometriaVectorial!,
+        hashFuente: 'troquel-interpretado',
+        piezas: [
+          {
+            ...pieza,
+            anchoMm: 100,
+            altoMm: 100,
+            areaMm2: 10000,
+            perimetroMm: 400,
+          },
+        ],
+      },
+    };
+    s.paso.paramsPasoJson = {
+      ...s.paso.paramsPasoJson,
+      usarDisenoVectorial: true,
+    };
+    s.paso.slots = [];
+    s.paso.maquina!.anchoUtil = 1000;
+    s.paso.maquina!.largoUtil = 1000;
+    const material = {
+      ...s.material,
+      subfamilia: 'SUSTRATO_RIGIDO',
+      precioReferencia: 100,
+      atributosVarianteJson: {
+        ...s.material.atributosVarianteJson,
+        anchoMm: 1000,
+        altoMm: 1000,
+      },
+    };
+    const worker = {
+      resolverProblemaParaCotizacion: jest.fn(async ({ problema }) =>
+        resolverProblemaNestingIrregular(problema),
+      ),
+      resolverParaCotizacion: jest.fn(async () => {
+        throw new Error('El SVG de la silueta perdió sus operaciones');
+      }),
+    };
+    const motor = Object.assign(
+      Object.create(MotorUniversalService.prototype),
+      {
+        analisisVectorialAsync: worker,
+        capacidadesPlan: { exigir: async () => undefined },
+      },
+    ) as { opcionesNesting: (tenantId: string) => NestingDispatchOpts };
+    const plan = await runNestingForPaso(
+      s.paso,
+      ctx,
+      material,
+      motor.opcionesNesting('tenant'),
+    );
+    const calculado = calcularProcesamientoCorte(
+      s.paso,
+      ctx,
+      prepararProcesamientoCorte(s.paso, ctx, material),
+      plan,
+    );
+    expect(calculado.operaciones.map((o) => [o.operacion, o.metros])).toEqual(
+      s.calcular().operaciones.map((o) => [o.operacion, o.metros]),
+    );
+    expect(worker.resolverProblemaParaCotizacion).toHaveBeenCalledTimes(1);
+    expect(worker.resolverParaCotizacion).not.toHaveBeenCalled();
+  });
+  it('estima placas totales, pasadas y entradas sin multiplicarlas por la cantidad comercial', () => {
+    const s = escenarioHerramientas();
+    s.perfiles[0].detalleJson = {
+      ...s.perfiles[0].detalleJson,
+      entradaSeg: 3,
+    } as (typeof s.perfiles)[0]['detalleJson'];
+    const ctx = {
+      cantidad: 50,
+      modoCotizacionVectorial: 'placas' as const,
+      placasVectorialesManuales: 2,
+      metrosCortePorPlacaVectorial: 15,
+      entradasCortePorPlacaVectorial: 4,
+    };
+    const plan: PlanOperacionesCorte = {
+      algorithm: 'manual-vector-estimate-v1',
+      placements: [],
+      substrates: [{ kind: 'sheet', widthMm: 1000, heightMm: 1000, count: 2 }],
+    };
+    const preparar = () => prepararProcesamientoCorte(s.paso, ctx, s.material);
+    const r = calcularProcesamientoCorte(s.paso, ctx, preparar(), plan);
+    expect(r.placas).toBe(2);
+    expect(r.operaciones[0]).toMatchObject({
+      metros: 30,
+      metrosProcesados: 60,
+      entradas: 8,
+    });
+    expect(r.recorridoMin).toBeCloseTo(30.8);
+    expect(() =>
+      prepararProcesamientoCorte(
+        s.paso,
+        { ...ctx, entradasCortePorPlacaVectorial: undefined },
+        s.material,
+      ),
+    ).toThrow(/entradas de corte/);
+    expect(() =>
+      calcularProcesamientoCorte(
+        s.paso,
+        { ...ctx, placasVectorialesManuales: 3 },
+        preparar(),
+        plan,
+      ),
+    ).toThrow(/placas declaradas/);
+  });
+  it('consolida corte rectangular con los perfiles congelados y rechaza la pérdida de piezas', () => {
+    const s = escenarioHerramientas(2);
+    const ctx = {
+      cantidad: 2,
+      modoCotizacionVectorial: 'medidas' as const,
+      piezas: [{ anchoMm: 100, altoMm: 100, cantidad: 2 }],
+    };
+    const plan: PlanOperacionesCorte = {
+      ...s.plan,
+      algorithm: 'grid-2d-single',
+      placements: s.plan.placements.map((p) => ({ ...p, meta: undefined })),
+    };
+    const original = calcularProcesamientoCorte(
+      s.paso,
+      ctx,
+      prepararProcesamientoCorte(s.paso, ctx, s.material),
+      plan,
+    );
+    expect(original.operaciones[0].metros).toBeCloseTo(0.8);
+    expect(
+      recalcularOperacionesCongeladas([original], plan).operaciones,
+    ).toEqual(original.operaciones);
+    expect(() =>
+      recalcularOperacionesCongeladas([original], {
+        ...plan,
+        placements: plan.placements.slice(0, 1),
+      }),
+    ).toThrow(/demanda/);
+  });
+  it('elegir archivo requiere geometría aunque queden medidas de una cotización anterior', () => {
+    const s = escenarioHerramientas();
+    expect(() =>
+      prepararProcesamientoCorte(
+        s.paso,
+        {
+          cantidad: 1,
+          modoCotizacionVectorial: 'svg',
+          piezas: [{ anchoMm: 100, altoMm: 100, cantidad: 1 }],
+        },
+        s.material,
+      ),
+    ).toThrow(/vectoriales/);
+  });
   it.each([1, 10, 50])(
     'mide cada entidad una vez para %i copias sin cobrar referencias ni depender del nombre de capa',
     (cantidad) => {

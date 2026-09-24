@@ -45,7 +45,7 @@ describe("herramientas avanzadas según el plan", () => {
         <DisenoVectorialCotizador {...props} modoCotizacion="placas" />
       </CapacidadesProvider>,
     );
-    expect(html).toContain("Placas necesarias");
+    expect(html).toContain("Placas totales del trabajo");
     expect(html).toContain("Corte por placa");
     expect(html).not.toContain("no está incluida");
   });

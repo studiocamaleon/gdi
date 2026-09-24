@@ -15,7 +15,13 @@ npm run build
 La web se abre en `http://localhost:3002`. `npm start` sirve la compilación de
 producción en ese mismo puerto.
 
+Grafo3D se abre en **`/3d`**, gratis y sin registro. `npm install` / `npm ci`
+instalan también las dependencias bloqueadas de `../forma-studio`; `npm run dev`
+y `npm run build` compilan el editor antes de arrancar Next. Requiere Node 22.13+
+o Node 24+ y las dependencias de desarrollo durante el build.
+
 Si el renderizador de PDF ocupa el puerto 3002, usar `npx next dev -p 3003`.
+Al arrancar directamente con `npx`, ejecutar primero `npm run grafo3d:build`.
 Pruebas del catálogo, desde la raíz del monorepo:
 `npx vitest run --config apps/marketing/vitest.config.ts`.
 
@@ -74,6 +80,66 @@ ser un correo o una URL comercial. Los enlaces de planes agregan su nombre al
 asunto solo cuando el destino es `mailto:`.
 
 Se conservan las rutas de sitemap/robots y las cabeceras existentes.
+
+### Grafo3D en el mismo dominio
+
+El editor conserva su aplicación Vite en `apps/forma-studio`. El script
+`scripts/build-grafo3d.mjs` genera sus recursos con base `/3d/` y copia el
+compilado a `public/grafo3d`, ignorado en Git. Next sirve `/3d` mediante una
+reescritura interna a ese HTML y `/3d/*` a sus archivos. No se utiliza iframe
+ni se incorpora el motor geométrico WASM al bundle de la portada.
+
+El despliegue debe incluir el repositorio completo, con ambas carpetas hermanas:
+
+- Directorio de la web: `apps/marketing`.
+- Instalación: `npm ci --include=dev` (su `postinstall` instala Grafo3D).
+- Compilación: `npm run build` (su `prebuild` prepara Grafo3D).
+- Servidor: `npm start`, o `npx next start -p "$PORT"` si el proveedor asigna puerto.
+- Sitio público: `MARKETING_SITE_URL=https://grafoprint.com.ar` para generar las
+  URLs canónicas y el sitemap. Configurar además los destinos reales del SaaS
+  y la API indicados arriba.
+
+En proveedores que limitan el acceso al directorio de la aplicación, habilitar
+la inclusión de archivos externos a `apps/marketing`: la carpeta
+`apps/forma-studio` es necesaria durante instalación y build. El resultado
+estático queda dentro de `public` y no necesita otro servidor en producción.
+El hosting debe conservar MIME `application/wasm` y permitir los workers del
+mismo origen. Las rutas inexistentes conservan el 404; no se responde HTML a
+peticiones de recursos que no existen.
+
+Para editar el editor con recarga instantánea, usar su servidor propio:
+`npm --prefix apps/forma-studio run dev` desde la raíz del repositorio. Para ver
+esos cambios bajo `/3d`, repetir `npm run grafo3d:build` en marketing y recargar
+la página. Los proyectos locales de distintos dominios/puertos no se comparten;
+se trasladan descargando y abriendo el JSON.
+
+La publicación de esta etapa no conecta el motor de costos de Grafo ni crea
+cuentas: geometría, proyectos y exportaciones se procesan en el navegador.
+El calculador local sigue siendo orientativo y permite modificar sus tarifas.
+
+### Isologo interactivo en la portada
+
+La sección Grafo3D muestra el isologo con cuerpo, acrílico y base. El visor
+Three.js se carga al entrar en pantalla, renderiza sólo cuando cambia la vista
+y usa geometría precalculada por el motor de Grafo3D. La barra muestra un despiece
+de presentación: acrílico hacia arriba, cuerpo fijo y base hacia abajo. El
+editor conserva las trayectorias de extracción de fabricación de cada encastre.
+La demostración inicial se reproduce una
+sola vez; respeta movimiento reducido y se interrumpe al usar la barra.
+
+El botón abre `/3d?ejemplo=grafoprint`, con el mismo SVG y parámetros. Ese
+ejemplo guarda su borrador en `forma.autosave.grafoprint`, separado del borrador
+habitual `forma.autosave`. Los proyectos guardados siguen en la biblioteca.
+
+Fuente del ejemplo: `apps/forma-studio/src/core/grafoprint-demo.ts`. Al cambiar
+sus parámetros, regenerar los recursos versionados de `public/demos`:
+
+```bash
+cd apps/forma-studio
+npx tsx scripts/export-grafoprint-demo.ts
+```
+
+Después recompilar Grafo3D como se indica arriba para actualizar también el editor.
 
 ## Recursos y atribución
 

@@ -138,6 +138,44 @@ async function escenario(
     );
 }
 
+it.each([false, true])('primera publicación conserva extras y no inventa paralelos (orden unificado: %s)', async (unificado) => {
+  await escenario(async (tx, recetas, crear, tenantId) => {
+    const producto = await crear('ruta-historica-con-extras');
+    const previo = await tx.productoPasoExtra.create({ data: {
+      tenantId, productoId: producto.id, rutaAlternativaId: producto.ruta,
+      familiaCodigo: 'trabajo_manual', nombreVisible: 'Preparar',
+      insertarDespuesDeRutaPasoId: null, ordenInterno: 0,
+      ordenFlujo: unificado ? 2 : null,
+      modoActivacion: 'OBLIGATORIO', modoTiempo: 'FIJO', tiempoFijoOverrideMin: 3,
+    } });
+    const posterior = await tx.productoPasoExtra.create({ data: {
+      tenantId, productoId: producto.id, rutaAlternativaId: producto.ruta,
+      familiaCodigo: 'trabajo_manual', nombreVisible: 'Terminar',
+      insertarDespuesDeRutaPasoId: producto.paso, ordenInterno: 1,
+      ordenFlujo: unificado ? 1 : null,
+      modoActivacion: 'OPCIONAL', modoTiempo: 'FIJO', tiempoFijoOverrideMin: 3,
+    } });
+    if (unificado) await tx.productoConfigPaso.update({ where: { id: producto.config }, data: { ordenFlujo: 0 } });
+    expect((await recetas.sincronizarPublicaciones({ tenantId }, [producto.id])).bloqueos).toEqual([]);
+    const leer = () => tx.productoReceta.findFirstOrThrow({ where: { tenantId, productoId: producto.id }, include: { revisionPublicada: true } });
+    const primera = (await leer()).revisionPublicada!;
+    const grafo = primera.grafoProduccionJson as { topologia: string; nodos: { clave: string }[]; raices: string[] };
+    expect(primera.numero).toBe(1);
+    expect(grafo.topologia).toBe('LINEAL');
+    expect(grafo.raices).toHaveLength(1);
+    expect(grafo.nodos.map((n) => n.clave)).toEqual(unificado
+      ? [`ruta:${producto.paso}`, `extra:${posterior.id}`, `extra:${previo.id}`]
+      : [`extra:${previo.id}`, `ruta:${producto.paso}`, `extra:${posterior.id}`]);
+    // Editar un costo o un tiempo después tampoco cambia esa secuencia.
+    await tx.productoConfigPaso.update({ where: { id: producto.config }, data: { tiempoFijoOverrideMin: 8 } });
+    expect((await recetas.sincronizarPublicaciones({ tenantId }, [producto.id])).bloqueos).toEqual([]);
+    const segunda = (await leer()).revisionPublicada!;
+    expect(segunda.numero).toBe(2);
+    expect(segunda.grafoProduccionJson).toEqual(primera.grafoProduccionJson);
+    expect((await tx.productoRecetaRevision.findUniqueOrThrow({ where: { id: primera.id } })).snapshotJson).toEqual(primera.snapshotJson);
+  });
+});
+
 it('propaga entre simples y compuestos de varios niveles, conserva snapshots y no duplica versiones', async () => {
   await escenario(async (tx, recetas, crear, tenantId) => {
     const hijo = await crear('hijo');

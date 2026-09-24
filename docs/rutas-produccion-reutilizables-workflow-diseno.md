@@ -97,3 +97,21 @@ el producto: sólo define el contrato estructural reutilizable.
 - Editar una ruta usada crea una nueva versión y no modifica las asociaciones
   existentes.
 - Una ruta histórica sin contrato Workflow sigue abriendo como lineal.
+
+### Primera versión de una ruta lineal con pasos propios del producto
+
+La primera publicación debe conservar la secuencia completa que cotizaba el
+motor: pasos base y extras, según `ordenFlujo` cuando existe, o según la
+inserción histórica (`insertarDespuesDeRutaPasoId` y `ordenInterno`). Ambas
+operaciones comparten el ordenador de `orden-pasos-producto.ts`.
+
+Corrección del 23/09/2026: copiar sólo las aristas de la plantilla base dejaba
+los extras sin predecesores, visibles como raíces en paralelo. La inicialización
+lineal ahora conecta todos los pasos. Las recetas existentes y los Workflow DAG
+explícitos conservan sus dependencias; no se infiere que todo paralelo sea un
+error. Las reparaciones de publicaciones afectadas generan una nueva revisión,
+sin reescribir snapshots históricos ni órdenes emitidas.
+
+Verificación: secuencias heredadas, extras al inicio/en medio/al final, orden
+unificado, paralelos explícitos y primera publicación con PostgreSQL aislado.
+Una segunda publicación por cambio de tiempo conserva exactamente el grafo.

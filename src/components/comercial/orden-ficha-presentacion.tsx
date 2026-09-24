@@ -68,6 +68,7 @@ export function OrdenTabs({
   archivosCount,
   archivosPendientesCount = 0,
   mostrarMateriales = false,
+  materialesFaltantesCount = 0,
 }: {
   count: number;
   clientePendiente: boolean;
@@ -80,6 +81,7 @@ export function OrdenTabs({
   archivosCount?: number | null;
   archivosPendientesCount?: number;
   mostrarMateriales?: boolean;
+  materialesFaltantesCount?: number;
 }) {
   const tabs: Array<{
     key: OrdenTab;
@@ -155,7 +157,9 @@ export function OrdenTabs({
             ? "Falta seleccionar un cliente"
             : key === "archivos" && archivosPendientesCount > 0
               ? `${archivosPendientesCount} controles de archivos pendientes`
-              : undefined,
+              : key === "materiales" && materialesFaltantesCount > 0
+                ? `${materialesFaltantesCount} ${materialesFaltantesCount === 1 ? "material con faltante" : "materiales con faltantes"}`
+                : undefined,
         description: {
           datos: "Cliente y entrega",
           productos: "Ítems y cantidades",

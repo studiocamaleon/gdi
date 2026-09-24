@@ -3,6 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MaterialesOrdenTab } from "./materiales-orden-tab";
+import { notifyInventoryChanged } from "@/lib/inventario-navigation";
 import {
   getMaterialesOrden,
   type MaterialesOrden,
@@ -142,5 +143,26 @@ describe("Materiales de la OT", () => {
     expect(container.textContent).not.toContain("Material de otra OT");
     await act(async () => container.querySelector("button")!.click());
     expect(getMaterialesOrden).toHaveBeenCalledTimes(3);
+  });
+
+  it("actualiza la disponibilidad cuando cambia el inventario", async () => {
+    vi.mocked(getMaterialesOrden).mockResolvedValue(response());
+    await act(async () => root.render(<MaterialesOrdenTab ordenId="ot-1" />));
+    await act(async () => notifyInventoryChanged());
+    expect(getMaterialesOrden).toHaveBeenCalledTimes(2);
+  });
+
+  it("usa la misma consulta de la ficha sin duplicarla al abrir Materiales", async () => {
+    const actualizar = vi.fn();
+    await act(async () => root.render(
+      <MaterialesOrdenTab
+        ordenId="ot-1"
+        consulta={{ data: response(), error: undefined, loading: false, actualizar }}
+      />,
+    ));
+    expect(container.textContent).toContain("PVC 3 mm");
+    expect(getMaterialesOrden).not.toHaveBeenCalled();
+    await act(async () => container.querySelector("button")!.click());
+    expect(actualizar).toHaveBeenCalledOnce();
   });
 });

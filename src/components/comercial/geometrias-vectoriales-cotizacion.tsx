@@ -42,11 +42,13 @@ export type FuenteVectorialCotizada = {
 
 export function MarcoGeometriaGrafoprint({
   titulo = "Geometría del producto",
+  etiqueta = "GrafoNest · Entrada vectorial",
   descripcion,
   formato = "SVG / DXF",
   children,
 }: {
   titulo?: string;
+  etiqueta?: string;
   descripcion: string;
   formato?: string | null;
   children: React.ReactNode;
@@ -58,7 +60,7 @@ export function MarcoGeometriaGrafoprint({
           <ShapesIcon />
         </span>
         <div className={styles.headerCopy}>
-          <span className={styles.eyebrow}>GrafoNest · Entrada vectorial</span>
+          <span className={styles.eyebrow}>{etiqueta}</span>
           <strong>{titulo}</strong>
           <span>{descripcion}</span>
         </div>

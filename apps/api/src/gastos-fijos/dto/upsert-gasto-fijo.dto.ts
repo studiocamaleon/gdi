@@ -2,6 +2,7 @@ import { FrecuenciaGastoFijo } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -9,14 +10,35 @@ import {
   Matches,
   Min,
   MinLength,
+  Max,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /** 'YYYY-MM' */
 const PERIODO_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+export class ProgramacionGastoFijoDto {
+  @IsBoolean()
+  activa: boolean;
+
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  diaVencimiento: number;
+
+  @Matches(PERIODO_RE)
+  desde: string;
+}
+
 /** Alta y edición de un gasto fijo de estructura comparten este DTO. */
 export class UpsertGastoFijoDto {
+  /** Opt-in: omitirlo conserva la programación existente; nunca crea una. */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ProgramacionGastoFijoDto)
+  programacion?: ProgramacionGastoFijoDto;
+
   @IsString()
   @MinLength(1)
   nombre: string;

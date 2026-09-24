@@ -54,13 +54,18 @@ export async function reservasPorSaldo(
   tx: Prisma.TransactionClient,
   tenantId: string,
   variantes: string[],
+  excluirOrdenId?: string,
 ) {
   if (!variantes.length) return new Map<string, Prisma.Decimal>();
   const reservas = await tx.reservaMaterialOt.findMany({
     where: {
       tenantId,
       cantidad: { gt: 0 },
-      necesidad: { tenantId, varianteId: { in: variantes } },
+      necesidad: {
+        tenantId,
+        varianteId: { in: variantes },
+        ...(excluirOrdenId ? { ordenId: { not: excluirOrdenId } } : {}),
+      },
     },
     select: {
       cantidad: true,

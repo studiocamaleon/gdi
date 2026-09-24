@@ -1,0 +1,3796 @@
+{
+  "fecha": "2026-09-22",
+  "fuente_indice": "https://www.imprentaonline.net/landings/productos/",
+  "apariciones_indice": 291,
+  "urls_distintas": 268,
+  "alcance": "Referencias del índice general; mezcla familias y fichas. No equivale al total de SKU del sitio.",
+  "referencias": [
+    {
+      "id": "REF-001",
+      "nombres_fuente": [
+        "Tarjetas de visita"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-de-visita",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-002",
+      "nombres_fuente": [
+        "Tarjetas de visita dobles"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-visita-dobles",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-003",
+      "nombres_fuente": [
+        "Tarjetas postales personalizadas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-postales",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-004",
+      "nombres_fuente": [
+        "Tarjetas para citas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-citas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-005",
+      "nombres_fuente": [
+        "Tarjetas troqueladas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-troqueladas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-006",
+      "nombres_fuente": [
+        "Tarjetas de PVC personalizadas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-plasticas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-007",
+      "nombres_fuente": [
+        "Tarjetas de proximidad RFID"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-proximidad-rfid",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-008",
+      "nombres_fuente": [
+        "Tarjetas de invitación"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-y-tarjetones-de-invitacion",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-009",
+      "nombres_fuente": [
+        "Portatarjetas de visita"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/portatarjetas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-010",
+      "nombres_fuente": [
+        "Carpetas para tarjetas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carpetas-para-tarjetas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-011",
+      "nombres_fuente": [
+        "Tarjetas rasca personalizadas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tarjetas-rasca",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-012",
+      "nombres_fuente": [
+        "Fundas de plástico para tarjetas"
+      ],
+      "categorias_fuente": [
+        "Tarjetas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/fundas-de-plastico-portadocumentos/portatarjetas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-013",
+      "nombres_fuente": [
+        "Acreditaciones"
+      ],
+      "categorias_fuente": [
+        "Tarjetas",
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/acreditaciones-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-014",
+      "nombres_fuente": [
+        "Flyers"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/flyers",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-015",
+      "nombres_fuente": [
+        "Dípticos"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/dipticos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-016",
+      "nombres_fuente": [
+        "Trípticos"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/tripticos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-017",
+      "nombres_fuente": [
+        "Cuadrípticos"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cuadripticos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-018",
+      "nombres_fuente": [
+        "Folletos plegados en cruz"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/folletos-plegados-en-cruz",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-019",
+      "nombres_fuente": [
+        "Folletos plegados con 5 cuerpos"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/folletos-5-cuerpos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-020",
+      "nombres_fuente": [
+        "Folletos plegados con 6 cuerpos"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/folletos-6-cuerpos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-021",
+      "nombres_fuente": [
+        "Mapas personalizados"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/mapas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-022",
+      "nombres_fuente": [
+        "Flyers Redondos / Ovalados"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/flyers-redondos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-023",
+      "nombres_fuente": [
+        "Stoppers personalizados"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/stoppers",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-024",
+      "nombres_fuente": [
+        "Abanicos de cartón"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos",
+        "Eventos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/abanicos-de-carton",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-025",
+      "nombres_fuente": [
+        "Flyers troquelados"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/flyers-troquelados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-026",
+      "nombres_fuente": [
+        "Marcapáginas"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos",
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/marcapaginas-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-027",
+      "nombres_fuente": [
+        "Expositores para folletos"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/imprimir-expositores-de-mesa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-028",
+      "nombres_fuente": [
+        "Portafolletos de metacrilato"
+      ],
+      "categorias_fuente": [
+        "Flyers y folletos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/portafolletos-de-metacrilato",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-029",
+      "nombres_fuente": [
+        "Sobres personalizados"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/sobres-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-030",
+      "nombres_fuente": [
+        "Papel para cartas"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/papel-para-cartas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-031",
+      "nombres_fuente": [
+        "Blocs y cuadernos personalizados",
+        "Blocs"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/blocs-cuadernos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-032",
+      "nombres_fuente": [
+        "Carpetas personalizadas"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carpetas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-033",
+      "nombres_fuente": [
+        "Carpetas con anillas"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/archivadores",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-034",
+      "nombres_fuente": [
+        "Talonarios autocopiativos"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/talonarios-copiativos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-035",
+      "nombres_fuente": [
+        "Juegos de papel autocopiativo"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/hojas-copiativas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-036",
+      "nombres_fuente": [
+        "Fundas portadocumentos"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/fundas-de-plastico-portadocumentos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-037",
+      "nombres_fuente": [
+        "Sellos personalizados"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/sellos-caucho-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-038",
+      "nombres_fuente": [
+        "cubos y tacos de notas",
+        "Tacos Notas"
+      ],
+      "categorias_fuente": [
+        "Papelería de empresa",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/cubos-tacos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-039",
+      "nombres_fuente": [
+        "Revistas grapadas"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/revistas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-040",
+      "nombres_fuente": [
+        "Catálogos encolados"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/impresion-catalogos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-041",
+      "nombres_fuente": [
+        "Manuales Wire-o"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/manuales",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-042",
+      "nombres_fuente": [
+        "Libros tapa dura y blanda"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/libros",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-043",
+      "nombres_fuente": [
+        "Cuadernos personalizados",
+        "Libretas"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/cuadernos-libretas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-044",
+      "nombres_fuente": [
+        "Periódicos"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/periodicos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-045",
+      "nombres_fuente": [
+        "Cuentos"
+      ],
+      "categorias_fuente": [
+        "Revistas, catálogos y libros"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cuentos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-046",
+      "nombres_fuente": [
+        "Pósters pequeñas cantidades"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carteles-publicidad",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-047",
+      "nombres_fuente": [
+        "Grandes tiradas de carteles"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carteles-online",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-048",
+      "nombres_fuente": [
+        "Carteles para mupis 120x175 cm"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/mupis-publicitarios",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-049",
+      "nombres_fuente": [
+        "Carteles papel flúor"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carteles-fluorescentes",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-050",
+      "nombres_fuente": [
+        "Lonas publicitarias PVC",
+        "Lonas publicitarias"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización",
+        "Gran formato"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/lonas-publicitarias",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-051",
+      "nombres_fuente": [
+        "Carteles adhesivos"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización",
+        "Pegatinas, etiquetas y vinilos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carteles-adhesivos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-052",
+      "nombres_fuente": [
+        "Carteles para inmobiliaria"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carteles-inmobiliaria",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-053",
+      "nombres_fuente": [
+        "Carteles cartón pluma rígidos"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carton-pluma-impreso",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-054",
+      "nombres_fuente": [
+        "Banderola luminosa fachada"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/banderola-luminosa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-055",
+      "nombres_fuente": [
+        "Carteles luminosos"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización",
+        "Gran formato"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carteles-luminosos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-056",
+      "nombres_fuente": [
+        "Banderola lona para fachada"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/banderola-publicitaria",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-057",
+      "nombres_fuente": [
+        "Soportes rígidos"
+      ],
+      "categorias_fuente": [
+        "Carteles y señalización",
+        "Gran formato"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/soportes-rigidos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-058",
+      "nombres_fuente": [
+        "Etiquetas en rollo"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos",
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/etiquetas-rollo",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-059",
+      "nombres_fuente": [
+        "Stickers personalizados"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/stickers",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-060",
+      "nombres_fuente": [
+        "Vinilos adhesivos"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos",
+        "Gran formato"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/vinilos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-061",
+      "nombres_fuente": [
+        "Gota de resina 3D"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/adhesivos-gota-resina",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-062",
+      "nombres_fuente": [
+        "Hojas de etiquetas"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/hojas-de-etiquetas-adhesivas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-063",
+      "nombres_fuente": [
+        "Imanes personalizados"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/imanes-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-064",
+      "nombres_fuente": [
+        "Notas adhesivas"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/post-it-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-065",
+      "nombres_fuente": [
+        "Precinto personalizado"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos",
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/precinto-personalizado",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-066",
+      "nombres_fuente": [
+        "Escudos bordados"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/escudos-y-parches-bordados-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-067",
+      "nombres_fuente": [
+        "Imanes para coches"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/imanes-para-coches",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-068",
+      "nombres_fuente": [
+        "Calcomanías temporales"
+      ],
+      "categorias_fuente": [
+        "Pegatinas, etiquetas y vinilos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calcomanias-tatuajes",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-069",
+      "nombres_fuente": [
+        "Telas personalizadas"
+      ],
+      "categorias_fuente": [
+        "Gran formato"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/telas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-070",
+      "nombres_fuente": [
+        "roll up 85x200 cm"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/roll-up",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-071",
+      "nombres_fuente": [
+        "Photocall de tela"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/photocall-tela",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-072",
+      "nombres_fuente": [
+        "Display de tela"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositor-textil",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-073",
+      "nombres_fuente": [
+        "Rollup a doble cara"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/roll-up-doble-cara",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-074",
+      "nombres_fuente": [
+        "Mochila Fly Banner"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/mochila-fly-banner",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-075",
+      "nombres_fuente": [
+        "Mochila X-banner"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/mochila-x-banner",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-076",
+      "nombres_fuente": [
+        "x-banner"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/x-banner",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-077",
+      "nombres_fuente": [
+        "Expositor extensible photocall"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositor-extensible",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-078",
+      "nombres_fuente": [
+        "Expositor con repisas"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositor-carton-repisas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-079",
+      "nombres_fuente": [
+        "Expositor compacto con estantes"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositor-productos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-080",
+      "nombres_fuente": [
+        "Expositor de productos"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositor-carton-productos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-081",
+      "nombres_fuente": [
+        "Expositor estantería"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositor-estanteria",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-082",
+      "nombres_fuente": [
+        "Golf banner"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/golf-banner",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-083",
+      "nombres_fuente": [
+        "pop up"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pop-up",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-084",
+      "nombres_fuente": [
+        "Displays"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/displays",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-085",
+      "nombres_fuente": [
+        "Photocall desmontable"
+      ],
+      "categorias_fuente": [
+        "Expositores y displays"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/photocall-desmontable",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-086",
+      "nombres_fuente": [
+        "Vasos personalizados",
+        "Vasos"
+      ],
+      "categorias_fuente": [
+        "Eventos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/vasos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-087",
+      "nombres_fuente": [
+        "Pulseras para eventos",
+        "Pulseras"
+      ],
+      "categorias_fuente": [
+        "Eventos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/pulseras-publicitarias",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-088",
+      "nombres_fuente": [
+        "Photocalls"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/photocall",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-089",
+      "nombres_fuente": [
+        "Banderas publicitarias"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/banderas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-090",
+      "nombres_fuente": [
+        "Entradas"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/entradas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-091",
+      "nombres_fuente": [
+        "Lanyards personalizados",
+        "Lanyards"
+      ],
+      "categorias_fuente": [
+        "Eventos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/lanyards",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-092",
+      "nombres_fuente": [
+        "Abanicos personalizados",
+        "Abanicos de tela"
+      ],
+      "categorias_fuente": [
+        "Eventos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/abanicos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-093",
+      "nombres_fuente": [
+        "Globos Personalizados",
+        "Globos"
+      ],
+      "categorias_fuente": [
+        "Eventos",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/globos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-094",
+      "nombres_fuente": [
+        "Regalos publicitarios"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/regalos-empresa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-095",
+      "nombres_fuente": [
+        "Expositores y displays"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/expositores-y-displays",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-096",
+      "nombres_fuente": [
+        "Gafas para eclipse"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/gafas-eclipses",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-097",
+      "nombres_fuente": [
+        "Vasos de plástico personalizados"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/vasos-plastico-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-098",
+      "nombres_fuente": [
+        "Vasos a color"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/vasos-plastico-color",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-099",
+      "nombres_fuente": [
+        "Varios colores de pulseras tyvek"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pulseras-tyvek",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-100",
+      "nombres_fuente": [
+        "pulseras vinilo"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pulseras-de-vinilo",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-101",
+      "nombres_fuente": [
+        "Pulseras de Silicona"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pulseras-de-silicona",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-102",
+      "nombres_fuente": [
+        "pulseras de tela"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pulseras-de-tela-grandes-cantidades",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-103",
+      "nombres_fuente": [
+        "Pulseras de tela sublimadas"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pulseras-de-tela-sublimadas-urgentes",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-104",
+      "nombres_fuente": [
+        "carta en tríptico"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cartas-triptico",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-105",
+      "nombres_fuente": [
+        "Cartas Restaurante - Díptico"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carta-menu-cafeteria",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-106",
+      "nombres_fuente": [
+        "Carta de bar"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/carta-bar",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-107",
+      "nombres_fuente": [
+        "pulseras de tela"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/pulseras-de-tela-bordadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-108",
+      "nombres_fuente": [
+        "Guirnaldas de banderas"
+      ],
+      "categorias_fuente": [
+        "Eventos"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/guirnaldas-banderas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-109",
+      "nombres_fuente": [
+        "Bolsas de papel"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/bolsas-papel",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-110",
+      "nombres_fuente": [
+        "Bolsas de plástico"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/bolsas-de-plastico",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-111",
+      "nombres_fuente": [
+        "Bolsas para envíos"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/bolsas-personalizadas-para-envios",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-112",
+      "nombres_fuente": [
+        "Bolsas para alimentación"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/bolsas-para-alimentacion",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-113",
+      "nombres_fuente": [
+        "Cajas para envíos personalizadas"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cajas-de-envios-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-114",
+      "nombres_fuente": [
+        "Packaging personalizado"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/packaging",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-115",
+      "nombres_fuente": [
+        "Cajas para botellas"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cajas-botellas-vino-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-116",
+      "nombres_fuente": [
+        "Cajas de presentación"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cajas-presentacion",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-117",
+      "nombres_fuente": [
+        "Etiquetas de cartón"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/etiquetas-de-carton",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-118",
+      "nombres_fuente": [
+        "Cinta de balizamiento"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cinta-balizamiento-personalizada",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-119",
+      "nombres_fuente": [
+        "Papel de regalo"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/papel-de-regalo",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-120",
+      "nombres_fuente": [
+        "Papel de seda"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/papel-seda",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-121",
+      "nombres_fuente": [
+        "Papel antigrasa"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/papel-antigrasa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-122",
+      "nombres_fuente": [
+        "Cinta de tela"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/cinta-tela",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-123",
+      "nombres_fuente": [
+        "Sobres acolchados papel"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/sobres-papel-acolchados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-124",
+      "nombres_fuente": [
+        "Sobres acolchados"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/sobres-acolchados-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-125",
+      "nombres_fuente": [
+        "Etiquetas para blister"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/etiquetas-carton-blister",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-126",
+      "nombres_fuente": [
+        "Sello gigante"
+      ],
+      "categorias_fuente": [
+        "Packaging y embalaje"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/sello-grande-bolsas-cajas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-127",
+      "nombres_fuente": [
+        "Calendarios de Pared"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios/pared",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-128",
+      "nombres_fuente": [
+        "Calendarios de sobremesa"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios/sobremesa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-129",
+      "nombres_fuente": [
+        "Calendarios con faldilla"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-pared-faldilla",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-130",
+      "nombres_fuente": [
+        "Calendarios de Bolsillo"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-de-bolsillo",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-131",
+      "nombres_fuente": [
+        "Agendas personalizadas 2027",
+        "Agendas"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas",
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/agendas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-132",
+      "nombres_fuente": [
+        "Calendario de mesa triangular"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-de-mesa-triangulares",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-133",
+      "nombres_fuente": [
+        "Calendario mesa espiral"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-de-mesa-con-muelle",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-134",
+      "nombres_fuente": [
+        "Calendario de pared grapado"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-pared-grapados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-135",
+      "nombres_fuente": [
+        "Calendario pared espiral"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-pared-muelle",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-136",
+      "nombres_fuente": [
+        "Calendario faldilla 2027"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-faldillas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-137",
+      "nombres_fuente": [
+        "Calendario para nevera"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendario-con-faldilla-para-nevera",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-138",
+      "nombres_fuente": [
+        "Calendario faldilla lechera"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendario-faldilla-lechera",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-139",
+      "nombres_fuente": [
+        "Calendario con faldilla múltiple"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-faldilla-multiple",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-140",
+      "nombres_fuente": [
+        "Calendario con colgador"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-de-pared-con-espiral-y-colgador",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-141",
+      "nombres_fuente": [
+        "Calendarios forma pirámide"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-de-mesa-piramidales",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-142",
+      "nombres_fuente": [
+        "Calendarios imán"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-iman",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-143",
+      "nombres_fuente": [
+        "Calendarios en catalán"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-faldilla-catalan",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-144",
+      "nombres_fuente": [
+        "Calendario portálapices"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendario-cubilete",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-145",
+      "nombres_fuente": [
+        "Calendario de mesa portabolis"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendario-de-mesa-portabolis",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-146",
+      "nombres_fuente": [
+        "Calendario de sobremesa"
+      ],
+      "categorias_fuente": [
+        "Calendarios y agendas"
+      ],
+      "grupos_fuente": [],
+      "url": "https://www.imprentaonline.net/calendarios-con-base-impresa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-147",
+      "nombres_fuente": [
+        "Bolígrafos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/boligrafos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-148",
+      "nombres_fuente": [
+        "Calendarios"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/calendarios",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-149",
+      "nombres_fuente": [
+        "Carpetas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/carpetas/serigrafiadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-150",
+      "nombres_fuente": [
+        "Ceras Colores"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/ceras-colores-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-151",
+      "nombres_fuente": [
+        "Marcadores"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/marcadores-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-152",
+      "nombres_fuente": [
+        "Portadocumentos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/portadocumentos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-153",
+      "nombres_fuente": [
+        "Reglas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/reglas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-154",
+      "nombres_fuente": [
+        "Tarjeteros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Escritura y oficina"
+      ],
+      "url": "https://www.imprentaonline.net/tarjeteros-publicitarios",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-155",
+      "nombres_fuente": [
+        "Bandanas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/bandanas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-156",
+      "nombres_fuente": [
+        "Bandoleras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/bandoleras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-157",
+      "nombres_fuente": [
+        "Bolsas Tela"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/bolsas-tela",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-158",
+      "nombres_fuente": [
+        "Bolsas Viaje"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/bolsas-bolsos-de-viaje-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-159",
+      "nombres_fuente": [
+        "Bragas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/bragas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-160",
+      "nombres_fuente": [
+        "Bufandas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/bufandas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-161",
+      "nombres_fuente": [
+        "Camisetas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/camisetas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-162",
+      "nombres_fuente": [
+        "Carteras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/carteras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-163",
+      "nombres_fuente": [
+        "Chanclas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/chanclas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-164",
+      "nombres_fuente": [
+        "Estuches"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/estuches-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-165",
+      "nombres_fuente": [
+        "Gorras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/gorras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-166",
+      "nombres_fuente": [
+        "Gorro Cocina"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/gorro-cocina-personalizado",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-167",
+      "nombres_fuente": [
+        "Gorros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/gorros-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-168",
+      "nombres_fuente": [
+        "Guantes"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/guantes-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-169",
+      "nombres_fuente": [
+        "Maletas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/maletas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-170",
+      "nombres_fuente": [
+        "Maletines"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/maletas-personalizadas/maletin",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-171",
+      "nombres_fuente": [
+        "Mochilas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/mochilas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-172",
+      "nombres_fuente": [
+        "Monederos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/monederos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-173",
+      "nombres_fuente": [
+        "Neceser"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/neceser-personalizado",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-174",
+      "nombres_fuente": [
+        "Paraguas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/paraguas-publicidad",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-175",
+      "nombres_fuente": [
+        "Petos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/petos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-176",
+      "nombres_fuente": [
+        "Riñoneras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/rinoneras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-177",
+      "nombres_fuente": [
+        "Ropa Personalizada"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/ropa-personalizada",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Destino revisado; puede ser familia o ficha"
+    },
+    {
+      "id": "REF-178",
+      "nombres_fuente": [
+        "Pañuelos Fiestas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/panuelos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-179",
+      "nombres_fuente": [
+        "Sombreros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/sombreros-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-180",
+      "nombres_fuente": [
+        "Toallas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/toallas-pareos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-181",
+      "nombres_fuente": [
+        "Viseras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/viseras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-182",
+      "nombres_fuente": [
+        "Zapatillas Hotel"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bolsas, textil y complementos"
+      ],
+      "url": "https://www.imprentaonline.net/zapatillas-hoteles",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-183",
+      "nombres_fuente": [
+        "Accesorios PC"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/accesorios-ordenador",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-184",
+      "nombres_fuente": [
+        "Accesorios Móvil"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/accesorios-movil",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-185",
+      "nombres_fuente": [
+        "Adaptadores"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/adaptadores-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-186",
+      "nombres_fuente": [
+        "Alfombrillas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/alfombrillas-raton-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-187",
+      "nombres_fuente": [
+        "Auriculares"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/auriculares-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-188",
+      "nombres_fuente": [
+        "Calculadoras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/calculadoras-publicitarias",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-189",
+      "nombres_fuente": [
+        "Cargadores"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/cargadores-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-190",
+      "nombres_fuente": [
+        "Powerbanks"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/baterias-externas-personalizadas-powerbanks",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-191",
+      "nombres_fuente": [
+        "Puertos USB"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/puertos-usb",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-192",
+      "nombres_fuente": [
+        "Ratones PC"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/ratones-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-193",
+      "nombres_fuente": [
+        "Tapas Webcam"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/tapas-webcam-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-194",
+      "nombres_fuente": [
+        "Webcams"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Tecnología y móvil"
+      ],
+      "url": "https://www.imprentaonline.net/webcams-camaras",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-195",
+      "nombres_fuente": [
+        "Abridores"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/abridores-sacacorchos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-196",
+      "nombres_fuente": [
+        "Azucarillos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/azucarillos-sobre-alargado",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-197",
+      "nombres_fuente": [
+        "Bar Runners"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/bar-runner-mats",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-198",
+      "nombres_fuente": [
+        "Caramelos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/caramelos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-199",
+      "nombres_fuente": [
+        "Chocolatinas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/chocolatinas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-200",
+      "nombres_fuente": [
+        "Cocteleras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/cocteleras",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-201",
+      "nombres_fuente": [
+        "Delantales"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/delantales-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-202",
+      "nombres_fuente": [
+        "Fiambreras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/fiambreras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-203",
+      "nombres_fuente": [
+        "Galletas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/galletas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-204",
+      "nombres_fuente": [
+        "Jarras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/jarras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-205",
+      "nombres_fuente": [
+        "Neveras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/neveras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-206",
+      "nombres_fuente": [
+        "Pajitas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/pajitas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-207",
+      "nombres_fuente": [
+        "Tazas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/tazas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-208",
+      "nombres_fuente": [
+        "Termos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Bebida, cocina y hostelería"
+      ],
+      "url": "https://www.imprentaonline.net/termos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-209",
+      "nombres_fuente": [
+        "Balones"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/balones-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-210",
+      "nombres_fuente": [
+        "Barajas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/barajas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-211",
+      "nombres_fuente": [
+        "Chapas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/chapas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-212",
+      "nombres_fuente": [
+        "Colchonetas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/colchonetas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-213",
+      "nombres_fuente": [
+        "Deporte"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/deporte-aventura",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-214",
+      "nombres_fuente": [
+        "Esterillas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/esterillas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-215",
+      "nombres_fuente": [
+        "Frisbees"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/frisbees-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-216",
+      "nombres_fuente": [
+        "Juegos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/juegos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-217",
+      "nombres_fuente": [
+        "Merchandising España"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/merchandising-espana",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-218",
+      "nombres_fuente": [
+        "Muñequeras"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/munequeras-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-219",
+      "nombres_fuente": [
+        "Antiestrés"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/antiestres",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-220",
+      "nombres_fuente": [
+        "Peluches"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/peluches-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-221",
+      "nombres_fuente": [
+        "Sillas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/sillas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-222",
+      "nombres_fuente": [
+        "Sombrillas Playa"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/sombrilla-playa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-223",
+      "nombres_fuente": [
+        "Palas de Playa"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/palas-playa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-224",
+      "nombres_fuente": [
+        "Trofeos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/trofeos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-225",
+      "nombres_fuente": [
+        "Yoyos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/yoyos-publicitarios-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-226",
+      "nombres_fuente": [
+        "Merchandising Arcoiris"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Eventos, ocio y deporte"
+      ],
+      "url": "https://www.imprentaonline.net/arcoiris-gay-lgtbi",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-227",
+      "nombres_fuente": [
+        "Ambientadores"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/ambientadores-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-228",
+      "nombres_fuente": [
+        "Bálsamo Labial"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/balsamo-labial",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-229",
+      "nombres_fuente": [
+        "Cepillos Dientes"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/cepillos-personalizados/dientes",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-230",
+      "nombres_fuente": [
+        "Cepillos Pelo"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/cepillos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-231",
+      "nombres_fuente": [
+        "Espejos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/espejos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-232",
+      "nombres_fuente": [
+        "Felpudos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/felpudos-personalizados-alfombras",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-233",
+      "nombres_fuente": [
+        "Hogar"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/utensilios-cocina",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-234",
+      "nombres_fuente": [
+        "Lámparas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/lamparas-flexos-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-235",
+      "nombres_fuente": [
+        "Macetas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/utensilios-cocina/macetas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-236",
+      "nombres_fuente": [
+        "Mantas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/mantas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-237",
+      "nombres_fuente": [
+        "Mascarillas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/mascarillas-personalizadas/homologadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-238",
+      "nombres_fuente": [
+        "Pastilleros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/pastilleros",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-239",
+      "nombres_fuente": [
+        "Sets Belleza"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/belleza-complementos/sets",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-240",
+      "nombres_fuente": [
+        "Salvamanteles"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/salvamanteles",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-241",
+      "nombres_fuente": [
+        "Velas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Hogar, bienestar y cuidado"
+      ],
+      "url": "https://www.imprentaonline.net/velas-publicitarias",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-242",
+      "nombres_fuente": [
+        "Básculas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/bascula-equipaje",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-243",
+      "nombres_fuente": [
+        "Cutters"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/cutter-personalizado",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-244",
+      "nombres_fuente": [
+        "Flexómetros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/metros-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-245",
+      "nombres_fuente": [
+        "Herramientas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/herramientas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-246",
+      "nombres_fuente": [
+        "Linternas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/linternas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-247",
+      "nombres_fuente": [
+        "Llaveros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/llaveros",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-248",
+      "nombres_fuente": [
+        "Mecheros"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/mecheros-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-249",
+      "nombres_fuente": [
+        "Navajas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/navajas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-250",
+      "nombres_fuente": [
+        "Parasoles"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/parasoles",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-251",
+      "nombres_fuente": [
+        "Placas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/placas-identificadoras",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-252",
+      "nombres_fuente": [
+        "Portamatrículas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Herramientas, automóvil y viaje"
+      ],
+      "url": "https://www.imprentaonline.net/portamatriculas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-253",
+      "nombres_fuente": [
+        "Altavoces"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/altavoces-publicitarios",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-254",
+      "nombres_fuente": [
+        "Bidones"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/bidones-botellas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-255",
+      "nombres_fuente": [
+        "Cuchillos"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/utensilios-cocina/cuchillos-cubiertos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-256",
+      "nombres_fuente": [
+        "Fundas PC"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/fundas-ordenador-portatil",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-257",
+      "nombres_fuente": [
+        "Fundas Impermeables"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/accesorios-movil/funda",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-258",
+      "nombres_fuente": [
+        "Gafas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/gafas-personalizadas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-259",
+      "nombres_fuente": [
+        "Lápices"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/lapices-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-260",
+      "nombres_fuente": [
+        "Memorias USB"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/memorias-usb",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-261",
+      "nombres_fuente": [
+        "Pegatinas"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/adhesivos-baratos",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-262",
+      "nombres_fuente": [
+        "Pelotas Playa"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/pelotas-playa",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-263",
+      "nombres_fuente": [
+        "Punteros Láser"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/punteros-laser-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-264",
+      "nombres_fuente": [
+        "Relojes"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/relojes-publicitarios",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-265",
+      "nombres_fuente": [
+        "Sets Escritura"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/sets-escritura-personalizados",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-266",
+      "nombres_fuente": [
+        "Sets Vino"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/vino",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-267",
+      "nombres_fuente": [
+        "Tablas Cocina"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/utensilios-cocina/tablas",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    },
+    {
+      "id": "REF-268",
+      "nombres_fuente": [
+        "Tarros Cristal"
+      ],
+      "categorias_fuente": [
+        "Regalos publicitarios"
+      ],
+      "grupos_fuente": [
+        "Más regalos personalizados"
+      ],
+      "url": "https://www.imprentaonline.net/utensilios-cocina/tarros",
+      "origen_listado": "https://www.imprentaonline.net/landings/productos/",
+      "nivel_revision": "Referencia en índice; ficha no revisada individualmente"
+    }
+  ]
+}

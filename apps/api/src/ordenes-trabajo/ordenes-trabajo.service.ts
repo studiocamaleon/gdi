@@ -26,6 +26,8 @@ import {
   type AccionPasoEnGrupo,
 } from './ejecucion-pasos-atomica';
 import { nombreLoteProduccion } from '../planificacion-entregas/materializar-lotes-entrega';
+import { PrevisionMaterialesService } from '../inventario/prevision-materiales.service';
+import { recalcularFechasConversion } from './fechas-entrega-conversion';
 import {
   calcularProgreso,
   progresoDeOrden,
@@ -777,6 +779,7 @@ export class OrdenesTrabajoService {
     private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
       prisma,
     ),
+    private readonly previsionMateriales: PrevisionMaterialesService = new PrevisionMaterialesService(prisma, capacidades),
   ) {}
 
   /** Adopción transaccional compartida por la creación y la edición del plan. */
@@ -1328,7 +1331,7 @@ export class OrdenesTrabajoService {
 
   // ── Crear ────────────────────────────────────────────────────────────
 
-  async create(auth: CurrentAuth, payload: CrearOrdenTrabajoDto) {
+  async create(auth: CurrentAuth, payload: CrearOrdenTrabajoDto, opciones: { conversionPresupuesto?: { itemIds: string[] } } = {}) {
     if (payload.idempotencyKey) {
       const existente = await this.prisma.ordenTrabajo.findFirst({
         where: {
@@ -1343,9 +1346,13 @@ export class OrdenesTrabajoService {
     await this.capacidades.exigir(auth.tenantId, 'ordenes');
     const estadoInicial: OrdenTrabajoEstado = payload.estado ?? 'borrador';
     const emitida = estadoInicial === 'pendiente';
+    const conversion = Boolean(opciones.conversionPresupuesto);
+    if (conversion && (!emitida || !payload.cotizacionId))
+      throw new BadRequestException('La conversión requiere un presupuesto y una OT emitida.');
+    const recalcularEntrega = conversion && await this.capacidades.puedeOperar(auth.tenantId, 'eta_capacidad');
     const regional = await regionalDelTenant(this.prisma, auth.tenantId);
     this.validarEmision(estadoInicial, payload.clienteId ?? null);
-    this.validarFechaEntregaEmision(
+    if (!recalcularEntrega) this.validarFechaEntregaEmision(
       estadoInicial,
       payload.fechaEntrega ?? null,
       regional.zonaHoraria,
@@ -1513,7 +1520,7 @@ export class OrdenesTrabajoService {
       new Set(reservasPresupuesto.map((reserva) => reserva.cuponId)),
     );
     this.validarMontosItems(items);
-    if (emitida) {
+    if (emitida && !conversion) {
       await this.exigirDescuentoEmitible(
         auth,
         items.filter((item) => !item.descuentoCuponId),
@@ -1712,7 +1719,18 @@ export class OrdenesTrabajoService {
             ['proyectos'],
             ['proyectos'],
           );
-        if (tienePlanEntrega) await bloquearColaEntrega(tx, auth.tenantId);
+        if (tienePlanEntrega || conversion) await bloquearColaEntrega(tx, auth.tenantId);
+        if (conversion) {
+          const presupuesto = await tx.cotizacion.findFirst({
+            where: { tenantId: auth.tenantId, id: payload.cotizacionId, estado: 'aprobado' },
+            select: { id: true },
+          });
+          const convertidos = await tx.ordenTrabajoItem.count({
+            where: { tenantId: auth.tenantId, cotizacionItemId: { in: idsSnapshot }, orden: { cotizacionId: payload.cotizacionId } },
+          });
+          if (!presupuesto || convertidos)
+            throw new ConflictException('El presupuesto cambió o alguno de sus productos ya fue convertido. Actualizá la ficha.');
+        }
         const contextoEntrega = tienePlanEntrega
           ? await this.eta.contextoSimulacion(auth.tenantId, tx)
           : null;
@@ -1746,7 +1764,7 @@ export class OrdenesTrabajoService {
             fechaEmision: emitida ? ahora : null,
             ...(await this.condicionesEmision(auth.tenantId, tx)),
             publicToken: tokenSeguimiento,
-            fechaEntrega: payload.fechaEntrega
+            fechaEntrega: !recalcularEntrega && payload.fechaEntrega
               ? new Date(payload.fechaEntrega)
               : null,
             canalVenta: payload.canalVenta ?? null,
@@ -1780,7 +1798,7 @@ export class OrdenesTrabajoService {
                 subcategoriaComercial: item.subcategoriaComercial ?? '',
                 cantidad: item.cantidad,
                 cantidadUnidad: item.cantidadUnidad,
-                fechaEntrega: item.fechaEntrega
+                fechaEntrega: recalcularEntrega ? null : item.fechaEntrega
                   ? new Date(`${item.fechaEntrega}T00:00:00Z`)
                   : payload.fechaEntrega
                     ? new Date(`${payload.fechaEntrega}T00:00:00Z`)
@@ -1946,7 +1964,17 @@ export class OrdenesTrabajoService {
           });
         }
 
-        await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
+        if (recalcularEntrega) {
+          const fecha = await recalcularFechasConversion(tx, auth.tenantId, orden.id, this.eta, this.previsionMateriales);
+          await tx.ordenTrabajoEvento.create({ data: {
+            tenantId: auth.tenantId, ordenId: orden.id, tipo: 'fecha_entrega',
+            descripcion: fecha
+              ? `Entrega recalculada al convertir el presupuesto: ${fecha}. Según la carga, calendario y materiales actuales.`
+              : 'OT emitida con entrega por confirmar. Falta confirmar la reposición o las cantidades de materiales.',
+            usuarioId: auth.userId, usuarioNombre,
+          } });
+        }
+        const fechaFinal = await actualizarFechaFinalOrden(tx, auth.tenantId, orden.id);
         await vincularEntregasAlCrear(
           tx,
           auth.tenantId,
@@ -1961,8 +1989,26 @@ export class OrdenesTrabajoService {
             { alEmitir: true, auth },
           );
         }
+        if (opciones.conversionPresupuesto) {
+          const todos = opciones.conversionPresupuesto.itemIds;
+          const convertidos = await tx.ordenTrabajoItem.findMany({
+            where: { tenantId: auth.tenantId, cotizacionItemId: { in: todos }, orden: { cotizacionId: payload.cotizacionId } },
+            select: { cotizacionItemId: true },
+          });
+          const pendientes = todos.length - new Set(convertidos.map((i) => i.cotizacionItemId)).size;
+          await tx.cotizacion.update({
+            where: { id: payload.cotizacionId!, tenantId: auth.tenantId },
+            data: { estado: pendientes === 0 ? 'convertido' : 'aprobado', convertidaOrdenId: orden.id },
+          });
+          await tx.cotizacionEvento.create({ data: {
+            tenantId: auth.tenantId, cotizacionId: payload.cotizacionId!, tipo: 'convertido',
+            descripcion: `Convertido en la orden ${numero}. OT emitida al taller. Entrega: ${fechaFinal ?? 'por confirmar'}. ${pendientes} productos pendientes de convertir.`,
+            usuarioId: auth.userId, usuarioNombre,
+            datosJson: { ordenId: orden.id, parcial: items.length < todos.length, completa: pendientes === 0, fechaEntrega: fechaFinal, entregaRecalculada: recalcularEntrega },
+          } });
+        }
         return orden;
-      });
+      }, conversion ? { timeout: 30_000 } : undefined);
     } catch (error) {
       // Dos requests con la misma llave pueden pasar el lookup inicial a la
       // vez. El índice único elige un ganador; el perdedor devuelve esa misma

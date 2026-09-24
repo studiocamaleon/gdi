@@ -1,3 +1,4 @@
+import { validarSeleccionStockAlEmitir } from './seleccion-stock-emision';
 import { exigirContinuidadCompromiso } from '../suscripciones/contratacion-pendiente';
 import { comprasPorNecesidad } from '../compras/cobertura-compra';
 import {
@@ -375,6 +376,10 @@ export class ReservasMaterialService {
   ) {
     // El llamador toma este mismo lock antes de cualquier escritura/lock de OT.
     await this.capacidades.exigirOperacionTx(tx, tenantId, ['identidad']);
+    if (opciones.alEmitir) {
+      await this.bloquearOrden(tx, tenantId, ordenId);
+      await validarSeleccionStockAlEmitir(tx, tenantId, ordenId);
+    }
     const control = await tx.ordenTrabajo.findFirst({
       where: { tenantId, id: ordenId },
       select: { materialesControlados: true },

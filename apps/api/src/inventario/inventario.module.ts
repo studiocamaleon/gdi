@@ -20,6 +20,6 @@ import { InventarioService } from './inventario.service';
     InventarioBibliotecaService,
     PrevisionMaterialesService,
   ],
-  exports: [InventarioService],
+  exports: [InventarioService, PrevisionMaterialesService],
 })
 export class InventarioModule {}

@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { AlertCircle, Boxes, RefreshCw } from "lucide-react";
 import {
-  getMaterialesOrden,
-  type MaterialesOrden,
   type NecesidadMaterialOrden,
 } from "@/lib/materiales-orden-api";
+import { useMaterialesOrden } from "@/hooks/use-materiales-orden";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
   Table,
@@ -57,44 +55,14 @@ function CantidadNecesaria({ material }: { material: NecesidadMaterialOrden }) {
 export function MaterialesOrdenTab({
   ordenId,
   versionOrden,
+  consulta,
 }: {
   ordenId: string;
   versionOrden?: object;
+  consulta?: ReturnType<typeof useMaterialesOrden>;
 }) {
-  const [revision, setRevision] = useState(0);
-  const key = `${ordenId}:${revision}`;
-  const [snapshot, setSnapshot] = useState<{
-    key: string;
-    data?: MaterialesOrden;
-    error?: string;
-    versionOrden?: object;
-  } | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    getMaterialesOrden(ordenId, controller.signal)
-      .then((data) => {
-        if (!controller.signal.aborted)
-          setSnapshot({ key, data, versionOrden });
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted)
-          setSnapshot({
-            key,
-            versionOrden,
-            error:
-              error instanceof Error
-                ? error.message
-                : "No se pudieron consultar los materiales.",
-          });
-      });
-    return () => controller.abort();
-  }, [ordenId, key, versionOrden]);
-  const current =
-    snapshot?.key === key && snapshot.versionOrden === versionOrden
-      ? snapshot
-      : null;
-  const data = current?.data;
-  const loading = !current;
+  const propia = useMaterialesOrden(consulta ? null : ordenId, versionOrden);
+  const { data, error, loading, actualizar } = consulta ?? propia;
   const calculadas = data?.control
     ? data.control.materiales.filter((m) => !m.excluida && !m.revisar).length
     : (data?.resumen.calculadas ?? 0);
@@ -120,7 +88,7 @@ export function MaterialesOrdenTab({
         <ActionButton
           variant="outline"
           isDisabled={loading}
-          onPress={() => setRevision((v) => v + 1)}
+          onPress={actualizar}
         >
           <RefreshCw data-icon="inline-start" /> Actualizar
         </ActionButton>
@@ -129,9 +97,9 @@ export function MaterialesOrdenTab({
         <p className={styles.message} role="status">
           Consultando materiales…
         </p>
-      ) : current.error ? (
+      ) : error ? (
         <p className={styles.message} role="alert">
-          {current.error}
+          {error}
         </p>
       ) : data ? (
         <>
@@ -169,7 +137,7 @@ export function MaterialesOrdenTab({
             <MaterialesOrdenControl
               key={`${ordenId}:${data.revision}`}
               data={data}
-              onChanged={() => setRevision((v) => v + 1)}
+              onChanged={actualizar}
             />
           )}
           <details className={styles.calculation} open={!data.control}>

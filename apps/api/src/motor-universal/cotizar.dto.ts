@@ -2,6 +2,7 @@ import { esColeccionVectorialValida } from '../productos-servicios/geometrias/co
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMaxSize,
   IsIn,
   IsInt,
   IsNumber,
@@ -248,6 +249,8 @@ export function jobContextCotizacionValido(value: unknown): boolean {
   ) {
     return false;
   }
+  if (ctx.entradasCortePorPlacaVectorial !== undefined &&
+    (!Number.isSafeInteger(ctx.entradasCortePorPlacaVectorial) || Number(ctx.entradasCortePorPlacaVectorial) < 0)) return false;
 
   const noNegativos = [
     'distanciaKm',
@@ -486,6 +489,11 @@ export class JobContextDto {
   metrosCortePorPlacaVectorial?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  entradasCortePorPlacaVectorial?: number;
+
+  @IsOptional()
   @IsNumber()
   anchoMaterialMm?: number;
 
@@ -494,7 +502,30 @@ export class JobContextDto {
   largoMaterialMm?: number;
 }
 
+export class DemandaMaterialContextoDto {
+  @IsUUID()
+  varianteId!: string;
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  cantidad!: number | null;
+  @IsOptional()
+  @IsString()
+  unidad!: string | null;
+}
+
 export class CotizarDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => DemandaMaterialContextoDto)
+  contextoMateriales?: DemandaMaterialContextoDto[];
+
+  @IsOptional()
+  @IsUUID()
+  ordenTrabajoId?: string;
+
   @IsOptional()
   @IsUUID()
   tipoCambioId?: string;
@@ -544,6 +575,17 @@ export class CotizarAsincronoDto extends CotizarDto {
 
 /** DTO concreto: los tipos utilitarios de TypeScript no existen en runtime. */
 export class RecotizarItemDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => DemandaMaterialContextoDto)
+  contextoMateriales?: DemandaMaterialContextoDto[];
+
+  @IsOptional()
+  @IsUUID()
+  ordenTrabajoId?: string;
+
   @IsOptional()
   @IsUUID()
   tipoCambioId?: string;

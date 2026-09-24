@@ -43,6 +43,7 @@ export type FuenteDisenoVectorial = {
 export type CotizacionVectorialManual = {
   placas: number;
   metrosCortePorPlaca: number;
+  entradasPorPlaca?: number;
 };
 
 type Props = {
@@ -373,10 +374,11 @@ function DisenoVectorialContenido({
 
   return (
     <MarcoGeometriaGrafoprint
+      etiqueta={modoCotizacion === "placas" ? "Grafo · Estimación manual" : undefined}
       titulo={
         modoCotizacion === "svg"
           ? (titulo ?? "Geometría del producto")
-          : "Cotización manual"
+          : "Estimación por placas"
       }
       descripcion={
         modoCotizacion === "svg"
@@ -390,7 +392,9 @@ function DisenoVectorialContenido({
           <>
             <div className={styles.manualGrid}>
               <label className={styles.field} htmlFor="vector-manual-plates">
-                <span className={styles.fieldLabel}>Placas necesarias</span>
+                <span className={styles.fieldLabel}>
+                  Placas totales del trabajo
+                </span>
                 <input
                   className={styles.nativeInput}
                   id="vector-manual-plates"
@@ -429,6 +433,35 @@ function DisenoVectorialContenido({
                   }
                 />
               </label>
+              <label className={styles.field} htmlFor="vector-manual-entries">
+                <span className={styles.fieldLabel}>
+                  Entradas de corte por placa
+                </span>
+                <input
+                  className={styles.nativeInput}
+                  id="vector-manual-entries"
+                  type="number"
+                  min={0}
+                  step={1}
+                  placeholder="Si el perfil calcula tiempo por entrada"
+                  value={cotizacionManual.entradasPorPlaca ?? ""}
+                  onChange={(event) =>
+                    onCotizacionManualChange({
+                      ...cotizacionManual,
+                      entradasPorPlaca:
+                        event.target.value === ""
+                          ? undefined
+                          : Math.max(
+                              0,
+                              Math.floor(Number(event.target.value) || 0),
+                            ),
+                    })
+                  }
+                />
+                <span className={styles.fieldLabel}>
+                  Cantidad de veces que la herramienta inicia un corte.
+                </span>
+              </label>
               <label className={styles.field}>
                 <span className={styles.fieldLabel}>Placa seleccionada</span>
                 <input
@@ -455,7 +488,21 @@ function DisenoVectorialContenido({
           </>
         ) : (
           <>
-            {value?.procedencia ? <p id="vector-guardado-detalle">Diseño guardado · Capa {value.procedencia.capa} · Exterior {value.procedencia.exteriorId}. Sus medidas de fabricación se conservan.</p> : predeterminada ? <button type="button" className={styles.secondaryButton} onClick={() => onChange(predeterminada, null)}>Usar diseño del producto</button> : null}
+            {value?.procedencia ? (
+              <p id="vector-guardado-detalle">
+                Diseño guardado · Capa {value.procedencia.capa} · Exterior{" "}
+                {value.procedencia.exteriorId}. Sus medidas de fabricación se
+                conservan.
+              </p>
+            ) : predeterminada ? (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                onClick={() => onChange(predeterminada, null)}
+              >
+                Usar diseño del producto
+              </button>
+            ) : null}
             <div className={styles.measureGrid}>
               <div className={styles.field}>
                 <span className={styles.fieldLabel}>
@@ -487,7 +534,9 @@ function DisenoVectorialContenido({
                   className={styles.nativeInput}
                   id="vector-final-size"
                   readOnly={!!value?.procedencia}
-                  aria-describedby={value?.procedencia ? "vector-guardado-detalle" : undefined}
+                  aria-describedby={
+                    value?.procedencia ? "vector-guardado-detalle" : undefined
+                  }
                   type="number"
                   min={1}
                   step={0.1}
@@ -523,11 +572,16 @@ function DisenoVectorialContenido({
               onSelect={cargarArchivo}
             />
 
-            {value ? <EscalaDxf value={value} onChange={(medidas) => {
-              setAnchoCm(medidas.anchoFinalMm / 10);
-              setAltoCm(medidas.altoFinalMm / 10);
-              onChange({ ...value, ...medidas }, null);
-            }} /> : null}
+            {value ? (
+              <EscalaDxf
+                value={value}
+                onChange={(medidas) => {
+                  setAnchoCm(medidas.anchoFinalMm / 10);
+                  setAltoCm(medidas.altoFinalMm / 10);
+                  onChange({ ...value, ...medidas }, null);
+                }}
+              />
+            ) : null}
 
             {value ? (
               <section className={styles.nestingPanel}>

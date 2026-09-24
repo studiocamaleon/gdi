@@ -18,6 +18,9 @@ export type FormularioGastoFijo = {
   fin: "nunca" | "en" | "despues";
   vigenteHasta: string;
   repeticiones: string;
+  generarObligaciones: boolean;
+  generarDesde: string;
+  diaVencimiento: string;
 };
 
 export const CUOTAS_POR_ANIO: Record<FrecuenciaGastoFijo, number> = {
@@ -47,6 +50,9 @@ export function formularioVacio(categoriaEgresoId = ""): FormularioGastoFijo {
     fin: "nunca",
     vigenteHasta: "",
     repeticiones: "",
+    generarObligaciones: false,
+    generarDesde: periodoActual(),
+    diaVencimiento: "10",
   };
 }
 
@@ -64,6 +70,11 @@ export function desdeGasto(g: GastoFijo, moneda: Moneda): FormularioGastoFijo {
     fin: g.vigenteHasta ? "en" : "nunca",
     vigenteHasta: g.vigenteHasta ?? "",
     repeticiones: "",
+    generarObligaciones: g.programacion?.activa ?? false,
+    generarDesde:
+      g.programacion?.desde ??
+      (g.vigenteDesde > periodoActual() ? g.vigenteDesde : periodoActual()),
+    diaVencimiento: String(g.programacion?.diaVencimiento ?? 10),
   };
 }
 
@@ -114,6 +125,24 @@ export function payloadGastoFijo(
     );
   if (hasta && hasta < f.vigenteDesde)
     throw new Error("La vigencia no puede terminar antes de empezar.");
+  if (f.generarObligaciones) {
+    if (valor <= 0)
+      throw new Error("La generación necesita un importe mayor que cero.");
+    if (
+      !/^\d{4}-(0[1-9]|1[0-2])$/.test(f.generarDesde) ||
+      f.generarDesde < f.vigenteDesde ||
+      (hasta && f.generarDesde > hasta)
+    )
+      throw new Error(
+        "Elegí un inicio de generación dentro de la vigencia del gasto.",
+      );
+    if (
+      !Number.isInteger(Number(f.diaVencimiento)) ||
+      Number(f.diaVencimiento) < 1 ||
+      Number(f.diaVencimiento) > 31
+    )
+      throw new Error("El día de vencimiento debe estar entre 1 y 31.");
+  }
   return {
     nombre: f.nombre.trim(),
     categoriaEgresoId: f.categoriaEgresoId,
@@ -126,5 +155,10 @@ export function payloadGastoFijo(
     vigenteHasta: hasta,
     notas: f.notas.trim() || null,
     activo,
+    programacion: {
+      activa: f.generarObligaciones,
+      desde: f.generarObligaciones ? f.generarDesde : f.vigenteDesde,
+      diaVencimiento: f.generarObligaciones ? Number(f.diaVencimiento) : 10,
+    },
   };
 }

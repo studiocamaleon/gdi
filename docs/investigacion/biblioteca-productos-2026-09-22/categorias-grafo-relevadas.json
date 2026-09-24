@@ -1,0 +1,1854 @@
+{
+  "fecha": "2026-09-22",
+  "origen": "Consulta de solo lectura al catálogo comercial de la base local; contrastado con seed-modulos/catalogo-comercial.js",
+  "categorias": [
+    {
+      "codigo": "impresion_hoja",
+      "nombre": "Impresión comercial en hoja",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "tarjetas",
+          "nombre": "Tarjetas",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "caras",
+              "tipo": "text",
+              "label": "Caras",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "impresion",
+              "tipo": "text",
+              "label": "Impresión/Color",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "volantes_folletos",
+          "nombre": "Volantes y folletos",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "caras",
+              "tipo": "text",
+              "label": "Caras",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "impresion",
+              "tipo": "text",
+              "label": "Impresión/Color",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "papeleria_comercial",
+          "nombre": "Papelería comercial",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "caras",
+              "tipo": "text",
+              "label": "Caras",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "impresion",
+              "tipo": "text",
+              "label": "Impresión/Color",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "stickers_hoja",
+          "nombre": "Stickers en hoja",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "caras",
+              "tipo": "text",
+              "label": "Caras",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "impresion",
+              "tipo": "text",
+              "label": "Impresión/Color",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "postales_invitaciones",
+          "nombre": "Postales e invitaciones",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "caras",
+              "tipo": "text",
+              "label": "Caras",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "impresion",
+              "tipo": "text",
+              "label": "Impresión/Color",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "editorial_encuadernacion",
+      "nombre": "Editorial, formularios y encuadernación",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "talonarios",
+          "nombre": "Talonarios",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tipo_copia",
+              "tipo": "text",
+              "label": "Tipo de copia",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "hojas_por_talonario",
+              "tipo": "text",
+              "label": "Hojas por talonario/block",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "numeracion",
+              "tipo": "text",
+              "label": "Numeración",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "encuadernacion_base",
+              "tipo": "text",
+              "label": "Encuadernación base",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "blocks_formularios",
+          "nombre": "Blocks y formularios",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tipo_copia",
+              "tipo": "text",
+              "label": "Tipo de copia",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "hojas_por_talonario",
+              "tipo": "text",
+              "label": "Hojas por talonario/block",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "numeracion",
+              "tipo": "text",
+              "label": "Numeración",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "encuadernacion_base",
+              "tipo": "text",
+              "label": "Encuadernación base",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "revistas_cuadernillos",
+          "nombre": "Revistas y cuadernillos",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tipo_copia",
+              "tipo": "text",
+              "label": "Tipo de copia",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "hojas_por_talonario",
+              "tipo": "text",
+              "label": "Hojas por talonario/block",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "numeracion",
+              "tipo": "text",
+              "label": "Numeración",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "encuadernacion_base",
+              "tipo": "text",
+              "label": "Encuadernación base",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "anillados_wire_o",
+          "nombre": "Anillados y wire-o",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tipo_copia",
+              "tipo": "text",
+              "label": "Tipo de copia",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "hojas_por_talonario",
+              "tipo": "text",
+              "label": "Hojas por talonario/block",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "numeracion",
+              "tipo": "text",
+              "label": "Numeración",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "encuadernacion_base",
+              "tipo": "text",
+              "label": "Encuadernación base",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "engrapados",
+          "nombre": "Engrapados",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tipo_copia",
+              "tipo": "text",
+              "label": "Tipo de copia",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "hojas_por_talonario",
+              "tipo": "text",
+              "label": "Hojas por talonario/block",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "numeracion",
+              "tipo": "text",
+              "label": "Numeración",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "encuadernacion_base",
+              "tipo": "text",
+              "label": "Encuadernación base",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "gran_formato_flexible",
+      "nombre": "Gran formato flexible",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "vinilos_impresos",
+          "nombre": "Vinilos impresos",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología",
+              "orden": 30,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "vinilos_corte",
+          "nombre": "Vinilos de corte",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología",
+              "orden": 30,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "lonas_banners",
+          "nombre": "Lonas y banners",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología",
+              "orden": 30,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "mesh_microperforado",
+          "nombre": "Mesh y microperforado",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología",
+              "orden": 30,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "rollups_displays",
+          "nombre": "Roll-ups y displays",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología",
+              "orden": 30,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "senalectica_rigidos",
+      "nombre": "Señalética, rígidos y corpóreos",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "rigidos_impresos",
+          "nombre": "Rígidos impresos",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "senaletica_placas",
+          "nombre": "Señalética y placas",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "letras_corporeas",
+          "nombre": "Letras corpóreas",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "cuadros_decorativos",
+          "nombre": "Cuadros decorativos",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "carteles_con_forma",
+          "nombre": "Carteles con forma",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "packaging_pop",
+      "nombre": "Packaging, troquelado y POP",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "cajas_packaging",
+          "nombre": "Cajas y packaging",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "sistema_estructural",
+              "tipo": "text",
+              "label": "Sistema estructural",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "troquelados_digitales",
+          "nombre": "Troquelados digitales",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "sistema_estructural",
+              "tipo": "text",
+              "label": "Sistema estructural",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "exhibidores_pop",
+          "nombre": "Exhibidores POP",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "sistema_estructural",
+              "tipo": "text",
+              "label": "Sistema estructural",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "etiquetas_packaging",
+          "nombre": "Etiquetas de packaging",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "sistema_estructural",
+              "tipo": "text",
+              "label": "Sistema estructural",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "textil_personalizacion",
+      "nombre": "Textil y personalización",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "remeras_indumentaria",
+          "nombre": "Remeras e indumentaria",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "prenda_base",
+              "tipo": "text",
+              "label": "Prenda/Base",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tecnica",
+              "tipo": "text",
+              "label": "Técnica",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "ubicacion",
+              "tipo": "text",
+              "label": "Ubicación",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "color_talle",
+              "tipo": "text",
+              "label": "Color/Talle",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "dtf_transfer",
+          "nombre": "DTF y transfer",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "prenda_base",
+              "tipo": "text",
+              "label": "Prenda/Base",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tecnica",
+              "tipo": "text",
+              "label": "Técnica",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "ubicacion",
+              "tipo": "text",
+              "label": "Ubicación",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "color_talle",
+              "tipo": "text",
+              "label": "Color/Talle",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "objetos_personalizados",
+          "nombre": "Objetos personalizados",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "objeto_base",
+              "tipo": "text",
+              "label": "Objeto/Base",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnica",
+              "tipo": "text",
+              "label": "Técnica",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "area_aplicacion",
+              "tipo": "text",
+              "label": "Área de aplicación",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "merchandising",
+          "nombre": "Merchandising",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "objeto_base",
+              "tipo": "text",
+              "label": "Objeto/Base",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "tecnica",
+              "tipo": "text",
+              "label": "Técnica",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "area_aplicacion",
+              "tipo": "text",
+              "label": "Área de aplicación",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "grabado_corte_decorativo",
+      "nombre": "Grabado, corte y decoración especial",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "grabado_laser",
+          "nombre": "Grabado láser",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_proceso",
+              "tipo": "text",
+              "label": "Servicio/Proceso",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "corte_laser",
+          "nombre": "Corte láser",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_proceso",
+              "tipo": "text",
+              "label": "Servicio/Proceso",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "corte_cnc",
+          "nombre": "Corte CNC",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_proceso",
+              "tipo": "text",
+              "label": "Servicio/Proceso",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "hotstamping_dorado_gofrado",
+          "nombre": "Hotstamping, dorado y gofrado",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_proceso",
+              "tipo": "text",
+              "label": "Servicio/Proceso",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Medidas/Formato",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "terminaciones_postproduccion",
+      "nombre": "Terminaciones y postproducción",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "laminados_plastificados",
+          "nombre": "Laminados y plastificados",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_vendido",
+              "tipo": "text",
+              "label": "Servicio vendido",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "detalle_tecnico",
+              "tipo": "text",
+              "label": "Detalle técnico",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "barnices",
+          "nombre": "Barnices",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_vendido",
+              "tipo": "text",
+              "label": "Servicio vendido",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "detalle_tecnico",
+              "tipo": "text",
+              "label": "Detalle técnico",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "plegados",
+          "nombre": "Plegados",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_vendido",
+              "tipo": "text",
+              "label": "Servicio vendido",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "detalle_tecnico",
+              "tipo": "text",
+              "label": "Detalle técnico",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "perforados_puntillados",
+          "nombre": "Perforados y puntillados",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_vendido",
+              "tipo": "text",
+              "label": "Servicio vendido",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "detalle_tecnico",
+              "tipo": "text",
+              "label": "Detalle técnico",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "numerado_redondeado_modificaciones",
+          "nombre": "Numerado, redondeado y modificaciones",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "servicio_vendido",
+              "tipo": "text",
+              "label": "Servicio vendido",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material_base",
+              "tipo": "text",
+              "label": "Material base",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "formato_medidas",
+              "tipo": "text",
+              "label": "Formato/Medidas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "detalle_tecnico",
+              "tipo": "text",
+              "label": "Detalle técnico",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "carteleria_montaje",
+      "nombre": "Cartelería estructural, luminosos e instalación",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "estructuras_metalicas",
+          "nombre": "Estructuras metálicas",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "luminosos_led",
+          "nombre": "Luminosos y LED",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "medidas",
+              "tipo": "text",
+              "label": "Medidas",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "material",
+              "tipo": "text",
+              "label": "Material",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "espesor",
+              "tipo": "text",
+              "label": "Espesor",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "tecnologia",
+              "tipo": "text",
+              "label": "Tecnología/Proceso",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_pieza",
+              "tipo": "text",
+              "label": "Tipo de pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "montaje_carteleria",
+          "nombre": "Montaje de cartelería",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "zona",
+              "tipo": "text",
+              "label": "Zona",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "superficie",
+              "tipo": "text",
+              "label": "Superficie",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "altura_dificultad",
+              "tipo": "text",
+              "label": "Altura/Dificultad",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "m2_medidas_instaladas",
+              "tipo": "text",
+              "label": "m² o medidas instaladas",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_soporte_pieza",
+              "tipo": "text",
+              "label": "Tipo de soporte/pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "instalacion_en_sitio",
+          "nombre": "Instalación en sitio",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "zona",
+              "tipo": "text",
+              "label": "Zona",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "superficie",
+              "tipo": "text",
+              "label": "Superficie",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "altura_dificultad",
+              "tipo": "text",
+              "label": "Altura/Dificultad",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "m2_medidas_instaladas",
+              "tipo": "text",
+              "label": "m² o medidas instaladas",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_soporte_pieza",
+              "tipo": "text",
+              "label": "Tipo de soporte/pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "servicios_logistica",
+      "nombre": "Servicios profesionales, logística y custom",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "diseno_grafico",
+          "nombre": "Diseño gráfico",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "tipo_servicio",
+              "tipo": "text",
+              "label": "Tipo de servicio",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "alcance",
+              "tipo": "text",
+              "label": "Alcance",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "horas_estimadas",
+              "tipo": "text",
+              "label": "Horas estimadas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "entregable",
+              "tipo": "text",
+              "label": "Entregable",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "proof_muestras",
+          "nombre": "Proof y muestras",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "tipo_servicio",
+              "tipo": "text",
+              "label": "Tipo de servicio",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "alcance",
+              "tipo": "text",
+              "label": "Alcance",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "horas_estimadas",
+              "tipo": "text",
+              "label": "Horas estimadas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "entregable",
+              "tipo": "text",
+              "label": "Entregable",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "toma_medidas",
+          "nombre": "Toma de medidas",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "zona",
+              "tipo": "text",
+              "label": "Zona",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "superficie",
+              "tipo": "text",
+              "label": "Superficie",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "altura_dificultad",
+              "tipo": "text",
+              "label": "Altura/Dificultad",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "m2_medidas_instaladas",
+              "tipo": "text",
+              "label": "m² o medidas instaladas",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_soporte_pieza",
+              "tipo": "text",
+              "label": "Tipo de soporte/pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "envio_despacho",
+          "nombre": "Envío y despacho",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "zona",
+              "tipo": "text",
+              "label": "Zona",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "superficie",
+              "tipo": "text",
+              "label": "Superficie",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "altura_dificultad",
+              "tipo": "text",
+              "label": "Altura/Dificultad",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "m2_medidas_instaladas",
+              "tipo": "text",
+              "label": "m² o medidas instaladas",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "tipo_soporte_pieza",
+              "tipo": "text",
+              "label": "Tipo de soporte/pieza",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "producto_a_medida",
+          "nombre": "Producto a medida",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "tipo_servicio",
+              "tipo": "text",
+              "label": "Tipo de servicio",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "alcance",
+              "tipo": "text",
+              "label": "Alcance",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "horas_estimadas",
+              "tipo": "text",
+              "label": "Horas estimadas",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "entregable",
+              "tipo": "text",
+              "label": "Entregable",
+              "orden": 40,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "codigo": "sellos",
+      "nombre": "Sellos",
+      "activo": true,
+      "subcategorias": [
+        {
+          "codigo": "sellos_automaticos",
+          "nombre": "Sellos automáticos",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "modelo_sello",
+              "tipo": "text",
+              "label": "Marca y modelo",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tamano_polimero",
+              "tipo": "text",
+              "label": "Tamaño de polímero",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "lineas_texto",
+              "tipo": "text",
+              "label": "Líneas de texto",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "color_tinta",
+              "tipo": "text",
+              "label": "Color de tinta",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "texto_grabado",
+              "tipo": "text",
+              "label": "Texto a grabar",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "codigo": "sellos_manuales",
+          "nombre": "Sellos manuales",
+          "activo": true,
+          "atributos": [
+            {
+              "key": "modelo_sello",
+              "tipo": "text",
+              "label": "Marca y modelo",
+              "orden": 10,
+              "visible": true
+            },
+            {
+              "key": "tamano_polimero",
+              "tipo": "text",
+              "label": "Tamaño de polímero",
+              "orden": 20,
+              "visible": true
+            },
+            {
+              "key": "lineas_texto",
+              "tipo": "text",
+              "label": "Líneas de texto",
+              "orden": 30,
+              "visible": true
+            },
+            {
+              "key": "color_tinta",
+              "tipo": "text",
+              "label": "Color de tinta",
+              "orden": 40,
+              "visible": true
+            },
+            {
+              "key": "texto_grabado",
+              "tipo": "text",
+              "label": "Texto a grabar",
+              "orden": 50,
+              "visible": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

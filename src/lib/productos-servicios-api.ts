@@ -1076,6 +1076,7 @@ export interface UpsertSlotMaterialPayload {
   heredaDeRutaPasoId?: string | null;
   heredaDeSlotCodigo?: string | null;
   criterioMotorAuto?: string | null;
+  politicaStock?: string;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
   materialVarianteId?: string | null;
@@ -2001,6 +2002,7 @@ export interface OperacionInternaCosteadaInput {
     materialNombre: string;
     materialSku: string;
     materialDisplayName: string;
+    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" };
     materiaPrimaNombre?: string | null;
     materiaPrimaTemplateId?: string | null;
     materiaPrimaTipoTecnico?: string | null;
@@ -2069,6 +2071,8 @@ export interface OperacionInternaCosteadaInput {
 }
 
 export interface CotizarRequest {
+  ordenTrabajoId?: string;
+  contextoMateriales?: Array<{ varianteId: string; cantidad: number | null; unidad: string | null }>;
   tipoCambioId?: string;
   productoId: string;
   rutaAlternativaId?: string | null;
@@ -2254,6 +2258,7 @@ export interface CotizarResponse {
           materialNombre: string;
           materialSku: string;
           materialDisplayName: string;
+    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" };
           cantidad: number;
           unidad: string;
           precioUnitario: number;
@@ -2442,6 +2447,7 @@ export interface CotizarResponse {
         materialNombre: string;
         materialSku: string;
         materialDisplayName: string;
+    seleccionStock?: { politica: string; estado: "disponible" | "requiere_reposicion" };
         materiaPrimaNombre?: string | null;
         materiaPrimaTemplateId?: string | null;
         materiaPrimaTipoTecnico?: string | null;

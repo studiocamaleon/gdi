@@ -15,12 +15,20 @@ function escenario(estado = 'enviado', fechaValidez = new Date('2099-09-30')) {
     numero: 'PRES-1',
     estado,
     fechaValidez,
+    cliente: { nombre: 'Cliente de prueba' },
     tenant: { nombre: 'Imprenta', logoArchivoId: 'logo-1' },
     primeraVistaEl: new Date(),
     emisionJson: { items: [] },
   };
   const tx = {
     cotizacion: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    cotizacionEvento: { create: jest.fn().mockResolvedValue({}) },
+    user: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([{ id: 'usuario-1' }, { id: 'usuario-2' }]),
+    },
+    eventoSistema: { create: jest.fn().mockResolvedValue({ id: 1n }) },
   };
   const prisma = {
     cotizacion: {
@@ -47,12 +55,10 @@ function escenario(estado = 'enviado', fechaValidez = new Date('2099-09-30')) {
   };
   const avisos = { sincronizar: jest.fn().mockResolvedValue(undefined) };
   const empresa = {
-    regional: jest
-      .fn()
-      .mockResolvedValue({
-        moneda: { codigo: 'ARS' },
-        zonaHoraria: 'America/Argentina/Buenos_Aires',
-      }),
+    regional: jest.fn().mockResolvedValue({
+      moneda: { codigo: 'ARS' },
+      zonaHoraria: 'America/Argentina/Buenos_Aires',
+    }),
   };
   const cupones = {
     liberarReservasPresupuesto: jest.fn().mockResolvedValue(undefined),
@@ -120,6 +126,122 @@ describe('logo público de presupuestos', () => {
     await expect(service.publico('token')).resolves.toMatchObject({
       tieneLogo: false,
     });
+  });
+});
+
+describe('decisión pública y buzón del equipo', () => {
+  it.each(['aprobado', 'rechazado'] as const)(
+    'guarda %s, su historial y el aviso para todos los usuarios activos en la misma transacción',
+    async (decision) => {
+      const { service, tx, prisma, avisos, cupones } = escenario();
+      await expect(
+        service.decisionPublica('token', {
+          decision,
+          comentario: 'Gracias por la propuesta',
+        }),
+      ).resolves.toEqual({ estado: decision });
+      expect(tx.cotizacion.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'pres-1',
+            tenantId: 'tenant-1',
+            estado: 'enviado',
+          }),
+        }),
+      );
+      expect(tx.cotizacionEvento.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          cotizacionId: 'pres-1',
+          tipo: decision,
+          origen: 'cliente',
+          datosJson: { comentario: 'Gracias por la propuesta' },
+        }),
+      });
+      expect(prisma.cotizacionEvento.create).not.toHaveBeenCalled();
+      expect(tx.user.findMany).toHaveBeenCalledWith({
+        where: {
+          activo: true,
+          memberships: { some: { tenantId: 'tenant-1', activa: true } },
+        },
+        select: { id: true },
+      });
+      expect(tx.eventoSistema.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          tipo: `presupuesto.${decision}_por_cliente`,
+          titulo: `Presupuesto PRES-1 ${decision}`,
+          mensaje: expect.stringContaining('Gracias por la propuesta'),
+          actorNombre: 'Cliente de prueba',
+          href: '/comercial/presupuestos/pres-1',
+          severidad: decision === 'aprobado' ? 'EXITO' : 'ADVERTENCIA',
+          notificaciones: {
+            create: [
+              { tenantId: 'tenant-1', userId: 'usuario-1' },
+              { tenantId: 'tenant-1', userId: 'usuario-2' },
+            ],
+          },
+        }),
+      });
+      expect(avisos.sincronizar).toHaveBeenCalledTimes(1);
+      expect(cupones.liberarReservasPresupuesto).toHaveBeenCalledTimes(
+        decision === 'rechazado' ? 1 : 0,
+      );
+    },
+  );
+
+  it('no duplica el aviso si otra petición resolvió el presupuesto primero', async () => {
+    const { service, tx, avisos } = escenario();
+    tx.cotizacion.updateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      service.decisionPublica('token', { decision: 'aprobado' }),
+    ).rejects.toThrow('ya fue resuelto');
+    expect(tx.cotizacionEvento.create).not.toHaveBeenCalled();
+    expect(tx.eventoSistema.create).not.toHaveBeenCalled();
+    expect(avisos.sincronizar).not.toHaveBeenCalled();
+  });
+
+  it.each(['aprobado', 'rechazado', 'borrador', 'vencido'])(
+    'no notifica una decisión inválida sobre un presupuesto %s',
+    async (estado) => {
+      const { service, tx } = escenario(estado);
+      await expect(
+        service.decisionPublica('token', { decision: 'aprobado' }),
+      ).rejects.toThrow();
+      expect(tx.eventoSistema.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('no acepta un presupuesto de otro tenant que el del enlace', async () => {
+    const { service, enlaces, tx } = escenario();
+    enlaces.resolver.mockResolvedValue({
+      entidadId: 'pres-1',
+      tenantId: 'otro-tenant',
+    });
+    await expect(
+      service.decisionPublica('token', { decision: 'aprobado' }),
+    ).rejects.toThrow('no encontrado');
+    expect(tx.cotizacion.updateMany).not.toHaveBeenCalled();
+    expect(tx.eventoSistema.create).not.toHaveBeenCalled();
+  });
+
+  it('conserva el comentario completo en el historial y respeta los límites del resumen', async () => {
+    const { service, cotizacion, tx } = escenario();
+    const comentario = 'a'.repeat(500);
+    cotizacion.cliente.nombre = 'b'.repeat(500);
+    await service.decisionPublica('token', {
+      decision: 'rechazado',
+      comentario,
+    });
+    expect(
+      tx.cotizacionEvento.create.mock.calls[0][0].data.datosJson.comentario,
+    ).toBe(comentario);
+    expect(
+      tx.cotizacion.updateMany.mock.calls[0][0].data.motivoPerdidaDetalle,
+    ).toHaveLength(300);
+    const evento = tx.eventoSistema.create.mock.calls[0][0].data;
+    expect(evento.actorNombre).toHaveLength(200);
+    expect(evento.mensaje).toHaveLength(600);
   });
 });
 

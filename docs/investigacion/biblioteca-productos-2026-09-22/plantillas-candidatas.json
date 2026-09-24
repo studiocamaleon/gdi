@@ -1,0 +1,2535 @@
+{
+  "fecha": "2026-09-22",
+  "estado": "Propuesta para revisión con Lucas; rutas sin definir",
+  "productos": [
+    {
+      "id": "BP-001",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas de presentación",
+      "opciones_a_definir": "Medidas, papel, gramaje, caras, laminado, esquinas",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-de-visita"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-002",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas plegadas",
+      "opciones_a_definir": "Formato abierto/cerrado, pliegue y caras",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-visita-dobles"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-003",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas con forma",
+      "opciones_a_definir": "Geometría de corte y material",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-troqueladas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-004",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Postales e invitaciones",
+      "opciones_a_definir": "Formato, papel y terminaciones",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Postales e invitaciones",
+      "codigo_subcategoria_actual": "postales_invitaciones",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-postales",
+        "https://www.imprentaonline.net/tarjetas-y-tarjetones-de-invitacion"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-005",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas para citas o fidelización",
+      "opciones_a_definir": "Zonas para escribir/sellar y formato",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-citas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-006",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas plásticas",
+      "opciones_a_definir": "Opacidad, espesor, datos variables",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": "Credenciales y tarjetas plásticas",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-plasticas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-007",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas RFID",
+      "opciones_a_definir": "Tipo de tarjeta y personalización; codificación por confirmar",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": "Credenciales y tarjetas plásticas",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-proximidad-rfid"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-008",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Tarjetas para raspar",
+      "opciones_a_definir": "Área rascable y datos variables",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tarjetas-rasca"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-009",
+      "familia_revision": "Tarjetas y credenciales",
+      "producto_base_propuesto": "Credenciales para eventos",
+      "opciones_a_definir": "Soporte, perforación y datos variables",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": "Credenciales y tarjetas plásticas",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué operaciones cambian por caras, papel, forma y terminación? ¿Qué opciones conviene separar?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/acreditaciones-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-010",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Volantes / flyers",
+      "opciones_a_definir": "Formato, papel, gramaje, caras y color",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/flyers"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-011",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Dípticos",
+      "opciones_a_definir": "Formato abierto/cerrado, material y pliegue",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/dipticos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-012",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Trípticos",
+      "opciones_a_definir": "Tipo de plegado, medidas y material",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/tripticos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-013",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Folletos de cuatro a seis cuerpos",
+      "opciones_a_definir": "Cantidad de cuerpos y esquema de plegado",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cuadripticos",
+        "https://www.imprentaonline.net/folletos-5-cuerpos",
+        "https://www.imprentaonline.net/folletos-6-cuerpos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-014",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Folletos plegados en cruz / mapas",
+      "opciones_a_definir": "Plegado y tamaño desplegado",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/folletos-plegados-en-cruz",
+        "https://www.imprentaonline.net/mapas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-015",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Volantes con forma",
+      "opciones_a_definir": "Círculo, óvalo o contorno personalizado",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/flyers-redondos",
+        "https://www.imprentaonline.net/flyers-troquelados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-016",
+      "familia_revision": "Volantes y folletos",
+      "producto_base_propuesto": "Señaladores de libros",
+      "opciones_a_definir": "Medidas, papel, caras y terminación",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Postales e invitaciones",
+      "codigo_subcategoria_actual": "postales_invitaciones",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Cuándo cambian impresión, hendido, plegado o corte? ¿Cómo definimos el formato abierto y cerrado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/marcapaginas-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-017",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Hojas membretadas",
+      "opciones_a_definir": "Formato, papel, color y caras",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/papel-para-cartas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-018",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Sobres impresos",
+      "opciones_a_definir": "Modelo, ventana, tamaño, color y área imprimible",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/sobres-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-019",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Carpetas de presentación",
+      "opciones_a_definir": "Solapas, uñero, lomo, papel y laminado",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carpetas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-020",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Carpetas para tarjetas o pasajes",
+      "opciones_a_definir": "Formato, bolsillos y cierre",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carpetas-para-tarjetas",
+        "https://www.imprentaonline.net/carpetas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-021",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Carpetas con anillos / biblioratos",
+      "opciones_a_definir": "Cubierta, lomo, herraje y capacidad",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": "Carpetas y archivadores",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/archivadores"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-022",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Carpetas con cierre",
+      "opciones_a_definir": "Elástico o velcro, lomo y soporte",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": "Carpetas y archivadores",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carpetas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-023",
+      "familia_revision": "Papelería y carpetas",
+      "producto_base_propuesto": "Portadocumentos y fundas",
+      "opciones_a_definir": "Soporte, formato, soldadura y marcaje",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": "Carpetas y archivadores",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se parte de un artículo comprado o se fabrica desde pliego? ¿Qué armado y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/fundas-de-plastico-portadocumentos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-024",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Blocks de notas",
+      "opciones_a_definir": "Formato, hojas por block, tapa y respaldo",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/blocs-cuadernos-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-025",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Tacos y cubos de notas",
+      "opciones_a_definir": "Medidas, hojas y pegado",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cubos-tacos-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-026",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Notas adhesivas",
+      "opciones_a_definir": "Medidas, hojas, adhesivo y cubierta",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/post-it-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-027",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Talonarios autocopiativos",
+      "opciones_a_definir": "Juegos, copias, colores, numeración y troquelado",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Talonarios",
+      "codigo_subcategoria_actual": "talonarios",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/talonarios-copiativos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-028",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Juegos autocopiativos sueltos",
+      "opciones_a_definir": "Original/copias, formato y unión",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/hojas-copiativas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-029",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Revistas y cuadernillos abrochados",
+      "opciones_a_definir": "Páginas interiores, tapa, formato y broches",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Revistas y cuadernillos",
+      "codigo_subcategoria_actual": "revistas_cuadernillos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/revistas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-030",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Catálogos y libros encolados",
+      "opciones_a_definir": "Interior, tapa, lomo y encuadernación",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Revistas y cuadernillos",
+      "codigo_subcategoria_actual": "revistas_cuadernillos",
+      "subcategoria_sugerida": "Libros y catálogos encuadernados",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/impresion-catalogos",
+        "https://www.imprentaonline.net/libros"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-031",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Libros de tapa dura",
+      "opciones_a_definir": "Interior, cartón, forro y encuadernación",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Revistas y cuadernillos",
+      "codigo_subcategoria_actual": "revistas_cuadernillos",
+      "subcategoria_sugerida": "Libros y catálogos encuadernados",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/libros"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-032",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Manuales anillados / Wire-O",
+      "opciones_a_definir": "Interior, tapa, anillo y orientación",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Anillados y wire-o",
+      "codigo_subcategoria_actual": "anillados_wire_o",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/manuales"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-033",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Cuadernos y libretas",
+      "opciones_a_definir": "Interior, tapa, cantidad de hojas y unión",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": "Cuadernos y agendas",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cuadernos-libretas-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-034",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Periódicos",
+      "opciones_a_definir": "Formato, páginas, papel y color",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Revistas y cuadernillos",
+      "codigo_subcategoria_actual": "revistas_cuadernillos",
+      "subcategoria_sugerida": "Periódicos",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/periodicos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-035",
+      "familia_revision": "Editorial, blocks y formularios",
+      "producto_base_propuesto": "Cuentos impresos",
+      "opciones_a_definir": "Formato, interior y encuadernación",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Revistas y cuadernillos",
+      "codigo_subcategoria_actual": "revistas_cuadernillos",
+      "subcategoria_sugerida": "Libros y catálogos encuadernados",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué piezas se calculan por separado: interior, tapa, respaldo? ¿Cómo cuentan páginas, juegos y ejemplares?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cuentos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-036",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios de bolsillo",
+      "opciones_a_definir": "Año, idioma, formato y soporte",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Tarjetas",
+      "codigo_subcategoria_actual": "tarjetas",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-de-bolsillo"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-037",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios de mesa plegados",
+      "opciones_a_definir": "Formato desplegado y estructura",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-de-mesa-triangulares",
+        "https://www.imprentaonline.net/calendarios-de-mesa-piramidales"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-038",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios de mesa anillados",
+      "opciones_a_definir": "Base, hojas y encuadernación",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Anillados y wire-o",
+      "codigo_subcategoria_actual": "anillados_wire_o",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-de-mesa-con-muelle",
+        "https://www.imprentaonline.net/calendarios-con-base-impresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-039",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios de pared abrochados",
+      "opciones_a_definir": "Formato, páginas y colgado",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Revistas y cuadernillos",
+      "codigo_subcategoria_actual": "revistas_cuadernillos",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-pared-grapados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-040",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios de pared anillados",
+      "opciones_a_definir": "Hojas, Wire-O y colgador",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Anillados y wire-o",
+      "codigo_subcategoria_actual": "anillados_wire_o",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-pared-muelle",
+        "https://www.imprentaonline.net/calendarios-de-pared-con-espiral-y-colgador"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-041",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios con taco mensual",
+      "opciones_a_definir": "Cabecera, taco, cantidad de meses e idioma",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-faldillas",
+        "https://www.imprentaonline.net/calendarios-faldilla-multiple"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-042",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios magnéticos",
+      "opciones_a_definir": "Imán y cabecera o calendario completo",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendarios-iman",
+        "https://www.imprentaonline.net/calendario-con-faldilla-para-nevera"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-043",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Agendas personalizadas",
+      "opciones_a_definir": "Año, interior, tapa y encuadernación",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Blocks y formularios",
+      "codigo_subcategoria_actual": "blocks_formularios",
+      "subcategoria_sugerida": "Cuadernos y agendas",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/agendas-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-044",
+      "familia_revision": "Calendarios y agendas",
+      "producto_base_propuesto": "Calendarios con portalápices",
+      "opciones_a_definir": "Desarrollo, armado y calendario",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Exhibidores POP",
+      "codigo_subcategoria_actual": "exhibidores_pop",
+      "subcategoria_sugerida": "Calendarios",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Qué se fabrica y qué se compra preimpreso? ¿Cómo se separan base, hojas y encuadernación?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calendario-cubilete",
+        "https://www.imprentaonline.net/calendario-de-mesa-portabolis"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-045",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Stickers individuales",
+      "opciones_a_definir": "Soporte, forma, tamaño, corte y laminado",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Stickers en hoja",
+      "codigo_subcategoria_actual": "stickers_hoja",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/stickers"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-046",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Planchas de stickers",
+      "opciones_a_definir": "Formato de plancha y distribución de etiquetas",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Stickers en hoja",
+      "codigo_subcategoria_actual": "stickers_hoja",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/hojas-de-etiquetas-adhesivas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-047",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Etiquetas en bobina",
+      "opciones_a_definir": "Material, forma, adhesivo, núcleo y sentido de salida",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Etiquetas de packaging",
+      "codigo_subcategoria_actual": "etiquetas_packaging",
+      "subcategoria_sugerida": "Etiquetas en bobina",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/etiquetas-rollo",
+        "https://www.imprentaonline.net/etiquetas-adhesivas-aplicacion-automatica"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-048",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Adhesivos con resina",
+      "opciones_a_definir": "Forma, material y volumen de resina",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Etiquetas de packaging",
+      "codigo_subcategoria_actual": "etiquetas_packaging",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/adhesivos-gota-resina"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-049",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Imanes promocionales",
+      "opciones_a_definir": "Forma, espesor y terminación",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/imanes-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-050",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Imanes vehiculares",
+      "opciones_a_definir": "Formato y soporte magnético",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos impresos",
+      "codigo_subcategoria_actual": "vinilos_impresos",
+      "subcategoria_sugerida": "Magnéticos impresos",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/imanes-para-coches"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-051",
+      "familia_revision": "Etiquetas y adhesivos",
+      "producto_base_propuesto": "Tatuajes temporales",
+      "opciones_a_definir": "Medidas, tintas y soporte específico",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Se entrega por unidad, plancha o bobina? ¿Se corta completo o a medio corte? ¿Qué cambia en cada opción?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/calcomanias-tatuajes"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-052",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Afiches / pósters en papel",
+      "opciones_a_definir": "Formato, papel, color y cantidad",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": "Afiches y carteles en papel",
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carteles"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-053",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Afiches de gran formato / MUPI",
+      "opciones_a_definir": "Medidas, soporte y colocación",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": "Afiches y carteles en papel",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/mupis-publicitarios",
+        "https://www.imprentaonline.net/carteles"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-054",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Lonas impresas",
+      "opciones_a_definir": "Soporte, caras, refuerzo, ojales y dobladillos",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Lonas y banners",
+      "codigo_subcategoria_actual": "lonas_banners",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/lonas-publicitarias"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-055",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Lonas mesh",
+      "opciones_a_definir": "Medidas, soporte y refuerzos",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Mesh y microperforado",
+      "codigo_subcategoria_actual": "mesh_microperforado",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/lonas-publicitarias"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-056",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo blanco impreso",
+      "opciones_a_definir": "Medidas, adhesivo, laminado y corte",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos impresos",
+      "codigo_subcategoria_actual": "vinilos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-057",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo transparente / para vidriera",
+      "opciones_a_definir": "Blanco, espejo, adhesión y sentido de lectura",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos impresos",
+      "codigo_subcategoria_actual": "vinilos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-058",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo esmerilado",
+      "opciones_a_definir": "Impresión o corte, forma y aplicación",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos de corte",
+      "codigo_subcategoria_actual": "vinilos_corte",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-059",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo de corte",
+      "opciones_a_definir": "Color, contorno y transportador",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos de corte",
+      "codigo_subcategoria_actual": "vinilos_corte",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-060",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo microperforado",
+      "opciones_a_definir": "Medidas y laminado compatible",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Mesh y microperforado",
+      "codigo_subcategoria_actual": "mesh_microperforado",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-061",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo para pisos",
+      "opciones_a_definir": "Soporte, laminado y aplicación",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos impresos",
+      "codigo_subcategoria_actual": "vinilos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-062",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo para vehículos",
+      "opciones_a_definir": "Material, laminado, piezas y colocación",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos impresos",
+      "codigo_subcategoria_actual": "vinilos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-063",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Vinilo translúcido / backlight",
+      "opciones_a_definir": "Soporte y densidad de impresión",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Vinilos impresos",
+      "codigo_subcategoria_actual": "vinilos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vinilos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-064",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Telas impresas",
+      "opciones_a_definir": "Tipo de tela, medidas y confección",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Lonas y banners",
+      "codigo_subcategoria_actual": "lonas_banners",
+      "subcategoria_sugerida": "Telas y banderas impresas",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/telas-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-065",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Lienzos y cuadros en canvas",
+      "opciones_a_definir": "Tela, bastidor y medidas",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Cuadros decorativos",
+      "codigo_subcategoria_actual": "cuadros_decorativos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/telas-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-066",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Manteles textiles",
+      "opciones_a_definir": "Tela, medidas y confección",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": "Telas y banderas impresas",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/telas-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-067",
+      "familia_revision": "Cartelería flexible y textil",
+      "producto_base_propuesto": "Banderas y tifo",
+      "opciones_a_definir": "Forma, medidas, confección y montaje",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Lonas y banners",
+      "codigo_subcategoria_actual": "lonas_banners",
+      "subcategoria_sugerida": "Telas y banderas impresas",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué opciones comparten receta y cuáles cambian tinta, soporte, terminaciones o instalación? ¿Cómo se cobra?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/banderas",
+        "https://www.imprentaonline.net/telas-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-068",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "PVC espumado impreso",
+      "opciones_a_definir": "Espesor, formato y terminación",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-069",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Acrílico impreso",
+      "opciones_a_definir": "Espesor, transparencia, blanco y corte",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-070",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Foamboard impreso",
+      "opciones_a_definir": "Espesor, medidas y soporte",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carton-pluma-impreso",
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-071",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Aluminio compuesto impreso",
+      "opciones_a_definir": "Espesor, corte y fijación",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-072",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Polipropileno corrugado impreso",
+      "opciones_a_definir": "Formato, espesor y terminación",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos",
+        "https://www.imprentaonline.net/carteles-inmobiliaria"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-073",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Cartón microcorrugado / nido de abeja impreso",
+      "opciones_a_definir": "Formato, espesor y corte",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-074",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Plástico Glasspack impreso",
+      "opciones_a_definir": "Transparencia, espesor y color",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Rígidos impresos",
+      "codigo_subcategoria_actual": "rigidos_impresos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-075",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Siluetas autoportantes",
+      "opciones_a_definir": "Contorno, material y pie de apoyo",
+      "categoria_grafo_actual": "Señalética, rígidos y corpóreos",
+      "subcategoria_grafo_actual": "Carteles con forma",
+      "codigo_subcategoria_actual": "carteles_con_forma",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/soportes-rigidos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-076",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Carteles luminosos",
+      "opciones_a_definir": "Estructura, frente, iluminación y montaje",
+      "categoria_grafo_actual": "Cartelería estructural, luminosos e instalación",
+      "subcategoria_grafo_actual": "Luminosos y LED",
+      "codigo_subcategoria_actual": "luminosos_led",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carteles-luminosos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-077",
+      "familia_revision": "Rígidos y señalética",
+      "producto_base_propuesto": "Banderolas de fachada",
+      "opciones_a_definir": "Material, caras, soporte e iluminación opcional",
+      "categoria_grafo_actual": "Cartelería estructural, luminosos e instalación",
+      "subcategoria_grafo_actual": "Luminosos y LED",
+      "codigo_subcategoria_actual": "luminosos_led",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Impresión directa o aplicación de vinilo? ¿Cómo se resuelven nesting, corte, perforado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/banderola-publicitaria",
+        "https://www.imprentaonline.net/banderola-luminosa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-078",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Roll-up",
+      "opciones_a_definir": "Estructura, medidas, caras y gráfica de repuesto",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/roll-up",
+        "https://www.imprentaonline.net/roll-up-doble-cara"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-079",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Portabanner X",
+      "opciones_a_definir": "Estructura, medidas y gráfica",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/x-banner"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-080",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Fondos para eventos / photocall",
+      "opciones_a_definir": "Estructura, tela o lona y tamaño",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/photocall",
+        "https://www.imprentaonline.net/photocall-tela",
+        "https://www.imprentaonline.net/photocall-desmontable"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-081",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Displays textiles",
+      "opciones_a_definir": "Estructura y funda impresa",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/expositor-textil"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-082",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Fly banners",
+      "opciones_a_definir": "Gota, vela o rectangular; mástil y base",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/banderas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-083",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Carpas impresas",
+      "opciones_a_definir": "Estructura, techo, laterales y medidas",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": "Carpas y estructuras promocionales",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/landings/carpas/"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-084",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Mochilas publicitarias",
+      "opciones_a_definir": "Bandera o banner y estructura",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/mochila-fly-banner",
+        "https://www.imprentaonline.net/mochila-x-banner"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-085",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Pop-up y golf banner",
+      "opciones_a_definir": "Modelo, estructura y gráfica",
+      "categoria_grafo_actual": "Gran formato flexible",
+      "subcategoria_grafo_actual": "Roll-ups y displays",
+      "codigo_subcategoria_actual": "rollups_displays",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/pop-up",
+        "https://www.imprentaonline.net/golf-banner"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-086",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Exhibidores de cartón",
+      "opciones_a_definir": "Desarrollo, repisas, carga y armado",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Exhibidores POP",
+      "codigo_subcategoria_actual": "exhibidores_pop",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/expositor-carton-repisas",
+        "https://www.imprentaonline.net/expositor-estanteria",
+        "https://www.imprentaonline.net/expositor-carton-productos"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-087",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Portafolletos y displays de mesa",
+      "opciones_a_definir": "Soporte, formato, capacidad y armado",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Exhibidores POP",
+      "codigo_subcategoria_actual": "exhibidores_pop",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/imprimir-expositores-de-mesa",
+        "https://www.imprentaonline.net/portafolletos-de-metacrilato",
+        "https://www.imprentaonline.net/portatarjetas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-088",
+      "familia_revision": "Exhibidores y POP",
+      "producto_base_propuesto": "Stoppers para góndola",
+      "opciones_a_definir": "Soporte, forma y fijación",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Exhibidores POP",
+      "codigo_subcategoria_actual": "exhibidores_pop",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Vendemos estructura completa, sólo gráfica o repuesto? ¿Qué componentes se compran y cuáles se fabrican?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/stoppers"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-089",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Cajas de presentación",
+      "opciones_a_definir": "Geometría, medidas, material y laminado",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/packaging",
+        "https://www.imprentaonline.net/cajas-presentacion"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-090",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Cajas para envíos",
+      "opciones_a_definir": "Medidas, microcorrugado y caras impresas",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cajas-de-envios-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-091",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Cajas para botellas",
+      "opciones_a_definir": "Cantidad de botellas, separadores y asa",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cajas-botellas-vino-personalizadas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-092",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Bolsas de papel",
+      "opciones_a_definir": "Tamaño, papel, asas y color",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": "Bolsas y envases flexibles",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/bolsas-papel"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-093",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Bolsas plásticas / para envíos",
+      "opciones_a_definir": "Material, cierre y área de impresión",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": "Bolsas y envases flexibles",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/bolsas-de-plastico",
+        "https://www.imprentaonline.net/bolsas-personalizadas-para-envios"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-094",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Envases flexibles para alimentos",
+      "opciones_a_definir": "Material, barrera y cierre",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": "Bolsas y envases flexibles",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/bolsas-para-alimentacion"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-095",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Etiquetas colgantes de cartón",
+      "opciones_a_definir": "Forma, soporte, perforación y cordón",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Etiquetas de packaging",
+      "codigo_subcategoria_actual": "etiquetas_packaging",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/etiquetas-de-carton"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-096",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Cabezales de cartón para bolsas",
+      "opciones_a_definir": "Desarrollo, pliegue y cierre",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Etiquetas de packaging",
+      "codigo_subcategoria_actual": "etiquetas_packaging",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/etiquetas-carton-blister"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-097",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Papel para envolver",
+      "opciones_a_definir": "Regalo, seda o antigrasa; hoja o rollo",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Cajas y packaging",
+      "codigo_subcategoria_actual": "cajas_packaging",
+      "subcategoria_sugerida": "Papeles y cintas de embalaje",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/papel-de-regalo",
+        "https://www.imprentaonline.net/papel-seda",
+        "https://www.imprentaonline.net/papel-antigrasa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-098",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Cinta adhesiva impresa",
+      "opciones_a_definir": "Soporte, ancho, longitud y tintas",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Etiquetas de packaging",
+      "codigo_subcategoria_actual": "etiquetas_packaging",
+      "subcategoria_sugerida": "Papeles y cintas de embalaje",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/precinto-personalizado"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-099",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Cintas textiles / de demarcación",
+      "opciones_a_definir": "Soporte, ancho y longitud",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Etiquetas de packaging",
+      "codigo_subcategoria_actual": "etiquetas_packaging",
+      "subcategoria_sugerida": "Papeles y cintas de embalaje",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/cinta-tela",
+        "https://www.imprentaonline.net/cinta-balizamiento-personalizada"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-100",
+      "familia_revision": "Packaging y embalaje",
+      "producto_base_propuesto": "Sobres acolchados",
+      "opciones_a_definir": "Formato, soporte y personalización",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": "Bolsas y envases flexibles",
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Fabricación desde material plano o personalización de envase comprado? ¿Cómo se define desarrollo y armado?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/sobres-acolchados-personalizados",
+        "https://www.imprentaonline.net/sobres-papel-acolchados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-101",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Entradas / tickets numerados",
+      "opciones_a_definir": "Formato, numeración, troquel y block",
+      "categoria_grafo_actual": "Editorial, formularios y encuadernación",
+      "subcategoria_grafo_actual": "Talonarios",
+      "codigo_subcategoria_actual": "talonarios",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/entradas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-102",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Pulseras de acceso",
+      "opciones_a_definir": "Tyvek, vinilo, tela o silicona; cierre y color",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/pulseras-publicitarias"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-103",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Cintas portacredencial / lanyards",
+      "opciones_a_definir": "Ancho, material, caras y accesorios",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/lanyards"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-104",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Cartas y menús",
+      "opciones_a_definir": "Hoja, díptico o tríptico; material y protección",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Volantes y folletos",
+      "codigo_subcategoria_actual": "volantes_folletos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/carta-bar",
+        "https://www.imprentaonline.net/carta-menu-cafeteria",
+        "https://www.imprentaonline.net/cartas-triptico"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-105",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Individuales de papel",
+      "opciones_a_definir": "Formato, papel y caras",
+      "categoria_grafo_actual": "Impresión comercial en hoja",
+      "subcategoria_grafo_actual": "Papelería comercial",
+      "codigo_subcategoria_actual": "papeleria_comercial",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/manteles-de-papel"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-106",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Posavasos",
+      "opciones_a_definir": "Forma, tamaño, material y caras",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/posavasos-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-107",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Vasos personalizados",
+      "opciones_a_definir": "Base, capacidad, tintas y área de impresión",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/vasos-personalizados",
+        "https://www.imprentaonline.net/vasos-plastico-color"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-108",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Abanicos de cartón",
+      "opciones_a_definir": "Forma, impresión y mango",
+      "categoria_grafo_actual": "Packaging, troquelado y POP",
+      "subcategoria_grafo_actual": "Troquelados digitales",
+      "codigo_subcategoria_actual": "troquelados_digitales",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/abanicos-de-carton"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-109",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Abanicos de tela",
+      "opciones_a_definir": "Modelo y zona de marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/abanicos-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-110",
+      "familia_revision": "Eventos y gastronomía",
+      "producto_base_propuesto": "Guirnaldas y globos",
+      "opciones_a_definir": "Soporte, tamaño, impresión y armado",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué campos requiere el cliente? ¿Se fabrica o se compra la base? ¿Qué controles y terminaciones lleva?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/guirnaldas-banderas-personalizadas",
+        "https://www.imprentaonline.net/globos-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-111",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Remeras y polos personalizados",
+      "opciones_a_definir": "Prenda, talles, colores y ubicaciones",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Remeras e indumentaria",
+      "codigo_subcategoria_actual": "remeras_indumentaria",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/ropa-personalizada"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-112",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Buzos y camperas personalizados",
+      "opciones_a_definir": "Prenda, talles y marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Remeras e indumentaria",
+      "codigo_subcategoria_actual": "remeras_indumentaria",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/ropa-personalizada"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-113",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Indumentaria de trabajo",
+      "opciones_a_definir": "Chalecos, pantalones, delantales y alta visibilidad",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Remeras e indumentaria",
+      "codigo_subcategoria_actual": "remeras_indumentaria",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/ropa-personalizada",
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-114",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Gorras y gorros",
+      "opciones_a_definir": "Modelo, material y marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Remeras e indumentaria",
+      "codigo_subcategoria_actual": "remeras_indumentaria",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/ropa-personalizada"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-115",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Accesorios textiles",
+      "opciones_a_definir": "Cuellos, pañuelos, bufandas y guantes",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Remeras e indumentaria",
+      "codigo_subcategoria_actual": "remeras_indumentaria",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/ropa-personalizada",
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-116",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Bolsas de tela",
+      "opciones_a_definir": "Modelo, tejido, asas y ubicaciones",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/bolsas-tela"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-117",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Mochilas y bolsos",
+      "opciones_a_definir": "Base, capacidad y zona de marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-118",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Toallas y mantas",
+      "opciones_a_definir": "Tejido, medidas y marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-119",
+      "familia_revision": "Textil y bolsos",
+      "producto_base_propuesto": "Parches bordados",
+      "opciones_a_definir": "Forma, tamaño, colores y fijación",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "DTF y transfer",
+      "codigo_subcategoria_actual": "dtf_transfer",
+      "subcategoria_sugerida": "Parches textiles",
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Cuál es la prenda/base y qué técnica se ofrece? ¿Cómo se presupuestan talles, ubicaciones y colores?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/escudos-y-parches-bordados-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-120",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Tazas y jarras",
+      "opciones_a_definir": "Base, capacidad y área de impresión",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-121",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Botellas y termos",
+      "opciones_a_definir": "Base, capacidad, material y técnica",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-122",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Lapiceras y lápices",
+      "opciones_a_definir": "Modelo, color y zona de marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-123",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Llaveros y chapas",
+      "opciones_a_definir": "Base, forma, medidas y personalización",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-124",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Alfombrillas y felpudos",
+      "opciones_a_definir": "Material, formato y área imprimible",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-125",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Tecnología promocional",
+      "opciones_a_definir": "USB, cargadores, audio y accesorios; modelo de proveedor",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-126",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Hogar y gastronomía promocional",
+      "opciones_a_definir": "Artículo base y técnica de marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-127",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Ocio, deporte y juguetes promocionales",
+      "opciones_a_definir": "Artículo base y personalización disponible",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-128",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Herramientas y accesorios de viaje",
+      "opciones_a_definir": "Modelo, soporte y área de personalización",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Merchandising",
+      "codigo_subcategoria_actual": "merchandising",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Especializado",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-129",
+      "familia_revision": "Objetos y regalos",
+      "producto_base_propuesto": "Trofeos y placas",
+      "opciones_a_definir": "Base, formato y técnica de marcaje",
+      "categoria_grafo_actual": "Textil y personalización",
+      "subcategoria_grafo_actual": "Objetos personalizados",
+      "codigo_subcategoria_actual": "objetos_personalizados",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Se compra el artículo base? ¿Qué técnica, área y cantidad de ubicaciones define su personalización?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/regalos-empresa"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-130",
+      "familia_revision": "Sellos",
+      "producto_base_propuesto": "Sellos automáticos",
+      "opciones_a_definir": "Modelo, medida, texto y tinta",
+      "categoria_grafo_actual": "Sellos",
+      "subcategoria_grafo_actual": "Sellos automáticos",
+      "codigo_subcategoria_actual": "sellos_automaticos",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Primero",
+      "pregunta_para_lucas": "¿Qué parte se compra y qué parte se fabrica? ¿Cómo relacionamos modelo, goma, grabado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/sellos-caucho-personalizados"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    },
+    {
+      "id": "BP-131",
+      "familia_revision": "Sellos",
+      "producto_base_propuesto": "Sellos manuales grandes",
+      "opciones_a_definir": "Medida, mango, goma y aplicación",
+      "categoria_grafo_actual": "Sellos",
+      "subcategoria_grafo_actual": "Sellos manuales",
+      "codigo_subcategoria_actual": "sellos_manuales",
+      "subcategoria_sugerida": null,
+      "prioridad_propuesta": "Después",
+      "pregunta_para_lucas": "¿Qué parte se compra y qué parte se fabrica? ¿Cómo relacionamos modelo, goma, grabado y montaje?",
+      "ruta_acordada": null,
+      "notas_de_lucas": null,
+      "estado": "Pendiente de revisión",
+      "fuentes": [
+        "https://www.imprentaonline.net/sello-grande-bolsas-cajas"
+      ],
+      "tipo_registro": "Propuesta Grafo basada en catálogo público; no plantilla instalada"
+    }
+  ]
+}

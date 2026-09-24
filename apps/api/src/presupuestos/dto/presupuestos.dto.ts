@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsEmail,
   IsIn,
   IsInt,
   IsISO8601,
@@ -14,6 +15,8 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
+  Matches,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -50,6 +53,9 @@ export const MOTIVOS_PERDIDA = [
  * usará la conversión a OT (mismo shape que CrearOrdenTrabajoDto.items).
  */
 export class EmitirPresupuestoDto {
+  @IsOptional()
+  @IsBoolean()
+  notificarWhatsapp?: boolean;
   @IsUUID()
   cotizacionId: string;
 
@@ -129,6 +135,12 @@ export class ResolverPresupuestoDto {
 }
 
 export class ConvertirPresupuestoDto {
+  /** Fecha comercial para planes sin previsión automática del taller. */
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  fechaEntrega?: string;
+
   /** cotizacionItemIds a convertir; omitido = todos (conversión total). */
   @IsOptional()
   @IsArray()
@@ -192,6 +204,23 @@ export class ResolverAprobacionDto {
 
 export class ActualizarConfigPresupuestosDto {
   @IsOptional()
+  @IsEmail()
+  @MaxLength(254)
+  correoResponderA?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  @Matches(/^[^\r\n]+$/)
+  correoAsunto?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(8000)
+  correoMensaje?: string | null;
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(365)
@@ -233,4 +262,24 @@ export class ActualizarConfigPresupuestosDto {
   @IsOptional()
   @IsBoolean()
   requiereAprobacionSinCosteo?: boolean;
+}
+
+export class EnviarCorreoPresupuestoDto {
+  @IsUUID()
+  idempotencia: string;
+
+  @IsEmail()
+  @MaxLength(254)
+  para: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  @Matches(/^[^\r\n]+$/)
+  asunto: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(8000)
+  mensaje: string;
 }

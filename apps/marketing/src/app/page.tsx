@@ -24,6 +24,9 @@ import { Suspense } from "react";
 import { PublicPlans } from "../components/public-plans";
 import { PublicIntegrations } from "../components/public-integrations";
 import { NestingSection } from "../components/nesting-section";
+import { Grafo3DSection } from "../components/grafo3d-section";
+import { CompanyLogos } from "../components/company-logos";
+import { AboutSection } from "../components/about-section";
 
 const modules = [
   {
@@ -177,21 +180,7 @@ export default function Page() {
             </a>
           </nav>
         </section>
-        <div className="trust-strip section-shell">
-          <span>
-            CREADO PARA QUIENES
-            <br />
-            HACEN QUE LAS IDEAS SE VEAN.
-          </span>
-          <strong>
-            Gráfica Corporearte<span>Ya trabaja con Grafoprint</span>
-          </strong>
-          <span className="trust-location">
-            Diseñado en Argentina.
-            <br />
-            Pensado desde el taller.
-          </span>
-        </div>
+        <CompanyLogos />
         <section id="experiencia" className="intro-section section-shell">
           <div className="intro-label">
             <span className="eyebrow">UN SISTEMA. TODO TU MUNDO.</span>
@@ -259,6 +248,7 @@ export default function Page() {
           <NestingSection />
         </Suspense>
         <SignExperience />
+        <Grafo3DSection />
         <section id="industrial" className="industrial-section">
           <div className="section-shell">
             <div className="section-heading industrial-heading">
@@ -351,6 +341,7 @@ export default function Page() {
         <Suspense fallback={null}>
           <PublicIntegrations />
         </Suspense>
+        <AboutSection contact={links.demo} />
         <section className="plans-section" id="precios">
           <div className="section-shell">
             <div className="plans-heading">

@@ -25,6 +25,8 @@ import type { ResultadoCommonLineTrabajo } from '../workers/colas';
 // ============================================================================
 
 export interface CotizarInput {
+  ordenTrabajoId?: string;
+  contextoMateriales?: Array<{ varianteId: string; cantidad: number | null; unidad: string | null }>;
   tipoCambioId?: string;
   usuarioId?: string;
   /** ID del tenant (multi-tenant). */
@@ -119,6 +121,8 @@ export interface JobContext {
   /** Cotización manual de cartelería cuando todavía no existe un SVG. */
   placasVectorialesManuales?: number;
   metrosCortePorPlacaVectorial?: number;
+  /** Inicios de recorrido declarados para estimar tiempos de entrada sin archivo. */
+  entradasCortePorPlacaVectorial?: number;
   /** Geometría normalizada por el servidor para la ejecución actual. */
   geometriaVectorial?: import('./geometria-vectorial/tipos').GeometriaVectorialCanonica;
   /** Disposición física publicada por un paso anterior. En trabajos
@@ -1157,6 +1161,11 @@ export interface NestingCostingPreview {
 }
 
 export interface MaterialEjecutado {
+  seleccionStock?: {
+    politica: string;
+    estado: 'disponible' | 'requiere_reposicion';
+    alternativas: Array<{ id: string; libre: number; necesario: number | null; unidad: string | null; alcanza: boolean }>;
+  };
   /** Unidades y conversiones vigentes al cotizar; abastecimiento no relee el catálogo. */
   contextoUnidadesSnapshot?: MaterialUnitContext;
   slotCodigo: string;
@@ -1581,6 +1590,7 @@ export interface SlotCargado {
   /** Referencia hidratada en runtime; nunca se persiste ni se expone. */
   materialHeredado?: { slot: SlotCargado; paso: PasoCargado };
   criterioMotorAuto?: string | null;
+  politicaStock?: string;
   criterioInputCampo?: string | null;
   criterioMaterialCampo?: string | null;
   criterioFiltroCampo?: string | null;

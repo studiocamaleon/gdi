@@ -2238,6 +2238,28 @@ export const ESQUEMA_PASO: OpcionPaso[] = [
     },
   },
   {
+    clave: "materiales.disponibilidad",
+    seccion: "materiales",
+    grupo: "criterio",
+    etiqueta: "Disponibilidad de materiales",
+    pregunta: "¿Qué alternativas puede elegir el sistema?",
+    ayuda: "Compara el consumo completo, incluida la merma, con el stock libre después de reservas. Cotizar no reserva materiales. Requiere existencias registradas.",
+    visible: (ctx) => ctx.slot?.payload.modoSeleccion === "MOTOR_ELIGE_AUTO",
+    resumen: (ctx) => (({ TODAS: "Considerar todas", PREFERIR_DISPONIBLES: "Priorizar stock disponible", SOLO_DISPONIBLES: "Sólo stock disponible" } as Record<string, string>)[ctx.slot?.payload.politicaStock ?? "TODAS"] ?? "Considerar todas"),
+    origenValor: (ctx) => ctx.slot?.payload.politicaStock ? "config" : "default-paso",
+    control: {
+      tipo: "pills",
+      presentacion: "tarjetas",
+      opciones: () => [
+        { value: "TODAS", label: "Considerar todas", descripcion: "Elige por el criterio configurado. Los faltantes se abastecen después." },
+        { value: "PREFERIR_DISPONIBLES", label: "Priorizar stock disponible", descripcion: "Usa alternativas que alcanzan. Si ninguna alcanza, cotiza con reposición y avisa." },
+        { value: "SOLO_DISPONIBLES", label: "Sólo stock disponible", descripcion: "Si ninguna alcanza, pide elegir un material o revisar la configuración." },
+      ],
+      valor: (ctx) => ctx.slot?.payload.politicaStock ?? "TODAS",
+      aplicar: (_ctx, v) => ({ tipo: "slot", patch: { politicaStock: v } }),
+    },
+  },
+  {
     // Fuente de medida POR SLOT (docs/fuente-de-medida-de-consumo-diseno.md §6/§8):
     // de dónde sale la medida que ESTE material consume. Override del default a
     // nivel paso. Se muestra sólo en slots SUSTRATO y sólo cuando hay una fuente

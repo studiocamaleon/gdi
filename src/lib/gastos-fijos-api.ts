@@ -6,11 +6,7 @@ import { apiRequest } from "@/lib/api";
  */
 
 export type FrecuenciaGastoFijo =
-  | "MENSUAL"
-  | "BIMESTRAL"
-  | "TRIMESTRAL"
-  | "SEMESTRAL"
-  | "ANUAL";
+  "MENSUAL" | "BIMESTRAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
 
 export const FRECUENCIAS_GASTO_FIJO: Array<{
   value: FrecuenciaGastoFijo;
@@ -50,6 +46,14 @@ export type GastoFijo = {
   vigenteHasta: string | null;
   activo: boolean;
   notas: string | null;
+  programacion?: {
+    activa: boolean;
+    desde: string;
+    diaVencimiento: number;
+    ultimoPeriodoGenerado: string | null;
+    egresosEmitidos: number;
+    cantidad: number;
+  } | null;
 };
 
 /**
@@ -57,6 +61,7 @@ export type GastoFijo = {
  * deriva el servidor cruzándolo con la frecuencia.
  */
 export type GastoFijoPayload = {
+  programacion?: { activa: boolean; desde: string; diaVencimiento: number };
   nombre: string;
   categoriaEgresoId: string;
   valor: number;
@@ -95,7 +100,9 @@ export function updateGastoFijo(id: string, payload: GastoFijoPayload) {
 }
 
 export function toggleGastoFijo(id: string) {
-  return apiRequest<GastoFijo>(`/gastos-fijos/${id}/toggle`, { method: "PATCH" });
+  return apiRequest<GastoFijo>(`/gastos-fijos/${id}/toggle`, {
+    method: "PATCH",
+  });
 }
 
 export function eliminarGastoFijo(id: string) {

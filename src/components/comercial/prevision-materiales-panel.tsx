@@ -15,12 +15,14 @@ export function PrevisionMaterialesPanel({
   loading,
   onRefresh,
   entregasDistribuidas = false,
+  expandido = false,
 }: {
   data: PrevisionMateriales | null;
   error: string | null;
   loading: boolean;
   onRefresh: () => void;
   entregasDistribuidas?: boolean;
+  expandido?: boolean;
 }) {
   if (data?.estado === "no_incluido" && !error) return null;
   const titulo = loading
@@ -69,7 +71,7 @@ export function PrevisionMaterialesPanel({
         </ActionButton>
       </div>
       {data && data.estado !== "sin_control" && (
-        <details className={styles.calculation}>
+        <details className={styles.calculation} open={expandido}>
           <summary>
             {data.materiales.length} materiales · Ver disponibilidad y
             reposición

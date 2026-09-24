@@ -129,7 +129,77 @@ function medirPieza(
   }
   return resultado;
 }
+function esEstimacionPorPlacas(ctx: JobContext): boolean {
+  return (
+    ctx.modoCotizacionVectorial === 'placas' ||
+    (!ctx.modoCotizacionVectorial &&
+      !ctx.geometriaVectorial &&
+      Number(ctx.placasVectorialesManuales) > 0)
+  );
+}
+
+function medirRectangulo(
+  id: string,
+  ancho: number,
+  alto: number,
+  cantidad: number,
+): Medicion {
+  if (
+    ![ancho, alto, cantidad].every((n) => Number.isFinite(n) && n > 0) ||
+    !Number.isSafeInteger(cantidad)
+  )
+    throw new Error(
+      'Completá medidas y cantidades válidas para calcular el corte rectangular.',
+    );
+  return {
+    operacion: 'CORTE_COMPLETO',
+    piezaId: id,
+    entidadId: 'perimetro-rectangular',
+    capa: 'CORTE',
+    metros: (2 * (ancho + alto) * cantidad) / 1000,
+    entradas: cantidad,
+  };
+}
+
 function medirContexto(ctx: JobContext): Medicion[] {
+  if (esEstimacionPorPlacas(ctx)) {
+    const placas = Number(ctx.placasVectorialesManuales),
+      metros = Number(ctx.metrosCortePorPlacaVectorial);
+    const entradas = Number(ctx.entradasCortePorPlacaVectorial ?? 0);
+    if (
+      !Number.isSafeInteger(placas) ||
+      placas <= 0 ||
+      !Number.isFinite(metros) ||
+      metros <= 0 ||
+      !Number.isSafeInteger(entradas) ||
+      entradas < 0
+    )
+      throw new Error(
+        'Indicá placas, metros de corte y entradas válidos para la estimación.',
+      );
+    return Array.from({ length: placas }, (_, i) => ({
+      operacion: 'CORTE_COMPLETO' as const,
+      piezaId: `estimacion-placa-${i + 1}`,
+      entidadId: 'recorrido-estimado',
+      capa: 'ESTIMACION',
+      metros,
+      entradas,
+    }));
+  }
+  if (
+    ctx.modoCotizacionVectorial === 'medidas' ||
+    (!ctx.modoCotizacionVectorial && !ctx.geometriaVectorial)
+  ) {
+    const piezas = ctx.piezas?.length
+      ? ctx.piezas
+      : ctx.medidaCustomMm
+        ? [{ ...ctx.medidaCustomMm, cantidad: ctx.cantidad }]
+        : [];
+    if (piezas.length)
+      return piezas.map((p, i) =>
+        medirRectangulo(`rectangulo-${i}`, p.anchoMm, p.altoMm, p.cantidad),
+      );
+  }
   if (!ctx.geometriaVectorial?.piezas.length)
     throw new Error(
       'Cargá e interpretá las piezas vectoriales para cotizar sus operaciones.',
@@ -202,6 +272,14 @@ export function prepararProcesamientoCorte(
     const errores = erroresPerfilCorte(perfil, configuracion);
     if (errores.length)
       throw new Error(`${perfil.nombre}: ${errores.join(' ')}`);
+    if (
+      esEstimacionPorPlacas(ctx) &&
+      Number(registroCorte(perfil.detalleJson).entradaSeg) > 0 &&
+      ctx.entradasCortePorPlacaVectorial == null
+    )
+      throw new Error(
+        'Este perfil cobra cada entrada de la herramienta. Indicá las entradas de corte por placa para estimar su tiempo.',
+      );
     perfiles[operacion] = structuredClone(perfil);
   }
   const firmaConfiguracion = createHash('sha256')
@@ -242,7 +320,32 @@ export function prepararProcesamientoCorte(
 export type PlanOperacionesCorte = Pick<
   NestingDispatchResult,
   'placements' | 'substrates' | 'commonLine'
->;
+> &
+  Partial<Pick<NestingDispatchResult, 'algorithm'>>;
+
+function medirPlacement(
+  p: PlanOperacionesCorte['placements'][number],
+  rectangular: boolean,
+): Medicion[] {
+  const meta = registroCorte(p.meta);
+  if (rectangular)
+    return [medirRectangulo(p.pieceId, p.widthMm, p.heightMm, 1)];
+  if (!Array.isArray(meta.contornos))
+    throw new Error(
+      'El plan no conserva los recorridos de todas las piezas. Volvé a calcularlo con la fuente vectorial.',
+    );
+  return medirPieza(
+    {
+      id: p.pieceId,
+      contornos: meta.contornos as PiezaVectorial['contornos'],
+      operaciones: meta.operaciones as PiezaVectorial['operaciones'],
+      fabricacion: meta.fabricacion as PiezaVectorial['fabricacion'],
+      cortesInternos: meta.cortesInternos as PiezaVectorial['cortesInternos'],
+      segmentacion: meta.segmentacion as PiezaVectorial['segmentacion'],
+    },
+    1,
+  );
+}
 export function calcularProcesamientoCorte(
   paso: Pick<PasoCargado, 'maquina'>,
   ctx: JobContext,
@@ -250,8 +353,12 @@ export function calcularProcesamientoCorte(
   nesting: PlanOperacionesCorte | null,
 ): ProcesamientoCorteCosteado {
   const { configuracion, perfiles } = preparacion;
+  const manual = esEstimacionPorPlacas(ctx);
+  const rectangular =
+    ctx.modoCotizacionVectorial === 'medidas' || !ctx.geometriaVectorial;
   if (
-    !nesting?.placements.length ||
+    !nesting ||
+    (!manual && !nesting.placements.length) ||
     nesting.substrates.some((s) => s.kind !== 'sheet')
   )
     throw new Error(
@@ -262,23 +369,19 @@ export function calcularProcesamientoCorte(
     0,
   );
   const porPlaca = new Map<number, Medicion[]>();
-  for (const p of nesting.placements) {
-    const meta = registroCorte(p.meta);
-    if (!Array.isArray(meta.contornos))
+  if (manual) {
+    if (
+      nesting.algorithm !== 'manual-vector-estimate-v1' ||
+      nesting.placements.length ||
+      placas !== ctx.placasVectorialesManuales
+    )
       throw new Error(
-        'El plan no conserva los recorridos de todas las piezas. Volvé a calcularlo con la fuente vectorial.',
+        'La estimación de corte debe conservar las placas declaradas, sin simular un acomodo.',
       );
-    const mediciones = medirPieza(
-      {
-        id: p.pieceId,
-        contornos: meta.contornos as PiezaVectorial['contornos'],
-        operaciones: meta.operaciones as PiezaVectorial['operaciones'],
-        fabricacion: meta.fabricacion as PiezaVectorial['fabricacion'],
-        cortesInternos: meta.cortesInternos as PiezaVectorial['cortesInternos'],
-        segmentacion: meta.segmentacion as PiezaVectorial['segmentacion'],
-      },
-      1,
-    );
+    medirContexto(ctx).forEach((m, i) => porPlaca.set(i, [m]));
+  }
+  for (const p of nesting.placements) {
+    const mediciones = medirPlacement(p, rectangular);
     const index = p.substrateIndex ?? 0;
     porPlaca.set(index, [...(porPlaca.get(index) ?? []), ...mediciones]);
   }
@@ -523,9 +626,21 @@ export function recalcularOperacionesCongeladas(
     id: p.pieceId,
     cantidadPorUnidad: 1,
   })) as PiezaVectorial[];
+  const rectangular =
+    plan.algorithm === 'grid-2d-single' || plan.algorithm === 'grid-2d-multi';
   const recalculado = calcularProcesamientoCorte(
     { maquina: { id: base.maquinaId } as PasoCargado['maquina'] },
-    { cantidad: 1, geometriaVectorial: { piezas } } as JobContext,
+    (rectangular
+      ? {
+          cantidad: 1,
+          modoCotizacionVectorial: 'medidas',
+          piezas: plan.placements.map((p) => ({
+            anchoMm: p.widthMm,
+            altoMm: p.heightMm,
+            cantidad: 1,
+          })),
+        }
+      : { cantidad: 1, geometriaVectorial: { piezas } }) as JobContext,
     { ...base, perfiles },
     plan,
   );
