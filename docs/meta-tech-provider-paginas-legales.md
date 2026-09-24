@@ -14,7 +14,11 @@ de acceso enviada. La revisión de permisos de WhatsApp sigue sin enviar.
   `soporte@grafoprint.com.ar` y las tres URL legales de la tabla siguiente.
 - Eliminación de datos configurada como **URL de las instrucciones para la
   eliminación de datos**, no como callback.
-- Se conservan el icono existente y la categoría **Utilidad y productividad**.
+- Se conserva el icono existente. Al revisar el formulario específico «Revisa
+  la configuración de la aplicación», su categoría aparecía vacía, aunque en
+  Información básica figuraba «Utilidad y productividad». Se seleccionó
+  **Business and Pages**, disponible en ese formulario; Meta confirmó el guardado
+  y la selección persistió al volver a abrirlo.
   Desapareció el aviso de falta de política de privacidad. En el asistente de
   App Review, Verificación y Configuración de la aplicación muestran 100 %.
 - **Access Verification enviada**: la pantalla confirma que Meta está revisando
