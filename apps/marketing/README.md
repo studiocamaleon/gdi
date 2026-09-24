@@ -10,6 +10,7 @@ modo `live`, su sección de planes consulta el mismo catálogo público que el r
 npm ci --include=dev
 npm run dev
 npm run lint
+npm run typecheck
 npm test
 npm run build
 ```
