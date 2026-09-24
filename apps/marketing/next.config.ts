@@ -1,10 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   poweredByHeader: false,
   images: { qualities: [75, 85] },
   turbopack: {
     root: process.cwd(),
+  },
+  async rewrites() {
+    return [
+      { source: "/3d", destination: "/grafo3d/index.html" },
+      { source: "/3d/:path*", destination: "/grafo3d/:path*" },
+    ];
   },
   async headers() {
     return [

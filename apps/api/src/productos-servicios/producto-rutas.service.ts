@@ -388,6 +388,7 @@ export class ProductoRutasService {
               heredaDeRutaPasoId: slot.heredaDeRutaPasoId,
               heredaDeSlotCodigo: slot.heredaDeSlotCodigo,
               criterioMotorAuto: slot.criterioMotorAuto,
+              politicaStock: slot.politicaStock ?? 'TODAS',
               criterioInputCampo: slot.criterioInputCampo,
               criterioMaterialCampo: slot.criterioMaterialCampo,
               materialVarianteId: slot.materialVarianteId,

@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     "apps/api/**",
+    "apps/forma-studio/**",
+    "apps/marketing/public/grafo3d/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

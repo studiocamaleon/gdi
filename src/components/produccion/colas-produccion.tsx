@@ -301,7 +301,7 @@ export function ColasProduccion({ initialResumen, initialError, initialMaquinaId
           {!maquinas.length && <p className={s.noMachines}>{buscarMaquina ? 'No hay máquinas con trabajo que coincidan.' : 'No hay máquinas con trabajo pendiente.'}</p>}
         </nav>
         </div>
-        {resumen.sinMaquina > 0 && <div className={s.unassigned}><span>{resumen.sinMaquina} operaciones sin máquina</span><ActionLink variant="ghost" href="/produccion/tablero">Ver en tablero<ArrowUpRight size={15} aria-hidden /></ActionLink></div>}
+        {resumen.sinMaquina > 0 && <div className={s.unassigned}><span>{resumen.sinMaquina} operaciones sin máquina</span><ActionLink variant="ghost" href="/produccion/tablero">Ver en Operación diaria<ArrowUpRight size={15} aria-hidden /></ActionLink></div>}
       </aside>
       <section className={s.queue} aria-label="Trabajo de la máquina">
         <div className={s.mobileMachine}><SelectField aria-label="Seleccionar máquina" value={maquinaId} onChange={id => { if (id) seleccionar(id); }} options={resumen.maquinas.length ? resumen.maquinas.map(m => ({ value: m.id, label: m.nombre })) : [{ value: '', label: 'Sin máquinas con trabajo' }]} /></div>

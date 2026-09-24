@@ -20,6 +20,8 @@ export type CampoTecnicoTemplate = {
   options?: string[];
   required?: boolean;
   optional?: boolean;
+  descripcion?: string;
+  placeholder?: string;
 };
 
 export type MateriaPrimaTemplateDef = {
@@ -2359,11 +2361,23 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
         required: true,
       },
       {
+        key: "tituloHilado",
+        label: "Título del hilado",
+        type: "text",
+        optional: true,
+        placeholder: "Ej. 20/1",
+        descripcion:
+          "Identificación del hilado informada por el proveedor, por ejemplo 16/1, 20/1 o 24/1. Es un dato distinto del gramaje de la tela; no se convierte a g/m².",
+      },
+      {
         key: "gramaje",
-        label: "Gramaje",
+        label: "Gramaje de la tela",
         type: "number",
         unit: "g_m2",
         optional: true,
+        placeholder: "Ej. 150",
+        descripcion:
+          "Peso de un metro cuadrado de tela. Completalo sólo si lo informa el proveedor; 20/1 o 24/1 se cargan en Título del hilado.",
       },
       { key: "marca", label: "Marca", type: "text", optional: true },
     ],
@@ -2372,6 +2386,7 @@ export const materiaPrimaTemplatesV1: MateriaPrimaTemplateDef[] = [
       "material",
       "color",
       "talle",
+      "tituloHilado",
       "gramaje",
       "marca",
     ],

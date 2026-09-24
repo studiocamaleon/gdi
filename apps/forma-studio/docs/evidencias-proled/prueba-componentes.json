@@ -1,0 +1,96 @@
+[
+  {
+    "export": "Proled3D_muestra-160_L3_20260905-171507_v2.430.zip",
+    "files": [
+      {
+        "name": "Tapas/muestra-160_Tapa_L3.stl",
+        "min": [
+          -80.0,
+          -80.0,
+          1.5
+        ],
+        "max": [
+          80.0,
+          80.0,
+          41.5
+        ],
+        "sha256": "af9f3192f5528068e189b7d94b06ac90feee91f546b13d3a6b25c48870a2dcf8"
+      },
+      {
+        "name": "Bases/muestra-160_Base_L3.stl",
+        "min": [
+          -80.0,
+          -80.0,
+          0.0
+        ],
+        "max": [
+          80.0,
+          80.0,
+          31.5
+        ],
+        "sha256": "aeb2f530066eee3ae1009e72246252a097f141fe5a3090d92f0b8aebdd1562b5"
+      },
+      {
+        "name": "Acrilicos/Acrilicos_stl/muestra-160_Acrilico_L3.stl",
+        "min": [
+          -78.30000305175781,
+          -78.30000305175781,
+          37.5
+        ],
+        "max": [
+          78.30000305175781,
+          78.30000305175781,
+          39.5
+        ],
+        "sha256": "b28dfd262143a6b513d114723be4beb8328802ed341169de6f53325ed861e9ae"
+      }
+    ]
+  },
+  {
+    "export": "Proled3D_muestra-160_L3_20260905-171607_v2.430.zip",
+    "files": [
+      {
+        "name": "Tapas/muestra-160_Tapa_L3.stl",
+        "min": [
+          -80.0,
+          -80.0,
+          1.5
+        ],
+        "max": [
+          80.0,
+          80.0,
+          41.5
+        ],
+        "sha256": "af9f3192f5528068e189b7d94b06ac90feee91f546b13d3a6b25c48870a2dcf8"
+      },
+      {
+        "name": "Bases/muestra-160_Base_L3.stl",
+        "min": [
+          -80.0,
+          -80.0,
+          0.0
+        ],
+        "max": [
+          80.0,
+          80.0,
+          21.5
+        ],
+        "sha256": "1fb1cebb9671ad915763c3ab55281959ff0f7d553f50d8724daa9624aca7090c"
+      },
+      {
+        "name": "Acrilicos/Acrilicos_stl/muestra-160_Acrilico_L3.stl",
+        "min": [
+          -78.30000305175781,
+          -78.30000305175781,
+          37.5
+        ],
+        "max": [
+          78.30000305175781,
+          78.30000305175781,
+          39.5
+        ],
+        "sha256": "b28dfd262143a6b513d114723be4beb8328802ed341169de6f53325ed861e9ae"
+      }
+    ]
+  }
+]

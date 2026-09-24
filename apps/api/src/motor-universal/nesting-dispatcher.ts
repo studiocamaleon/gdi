@@ -1,3 +1,4 @@
+import { MotorCotizacionError } from './motor-error';
 import { transformarFabricacion } from './geometria-vectorial/fabricacion-vectorial';
 /**
  * G-M1 — Dispatcher de nesting para el motor universal.
@@ -67,6 +68,7 @@ import type {
   SubstrateUsage,
 } from '../productos-servicios/nesting/types';
 import {
+  anchoMaximoRolloMaquina,
   debeEjecutarNestingVectorial,
   debeEjecutarNestingRectangularCorte,
   resolveNestingConfig,
@@ -586,6 +588,18 @@ async function despacharNesting(
 ): Promise<NestingDispatchResult | null> {
   const config = resolveNestingConfig(paso, jobContext, materialResuelto);
 
+  // Con disponibilidad por material, los pliegos con MP propia respetan el
+  // mismo conjunto de variantes que evaluó el paso. No reintroducir un papel
+  // agotado por medio de la selección geométrica del pliego.
+  const slotStock = paso.slots.find((s) => s.slotCodigo === 'sustrato_principal' && s.modoSeleccion === 'MOTOR_ELIGE_AUTO' && s.politicaStock && s.politicaStock !== 'TODAS');
+  if (slotStock && config.printSheetMode === 'automatic' && config.printSheetCostSource === 'por_candidato') {
+    const ids = new Set(slotStock.candidatos.flatMap((c) => [c.defaultVarianteId, ...c.variantes.map((v) => v.varianteId)].filter(Boolean)));
+    const ctx = jobContext as Record<string, unknown>;
+    const selecciones = ctx.slotMateriales as Record<string, string> | undefined;
+    const elegido = selecciones?.[`${paso.configPasoId}_${slotStock.slotCodigo}`] ?? ctx[`slotMaterial_${paso.configPasoId}_${slotStock.slotCodigo}`] ?? selecciones?.[slotStock.slotCodigo];
+    config.printSheetCandidates = config.printSheetCandidates.filter((c) => !c.materiaPrimaVarianteId || (ids.has(c.materiaPrimaVarianteId) && (!elegido || c.materiaPrimaVarianteId === elegido)));
+  }
+
   // Modo 'por_candidato': enriquecer los candidatos de pliego con su MP
   // propia (precio real) antes de despachar. Sin loader, el score cae al
   // derivado (candidatos sin materiaPrima).
@@ -630,6 +644,9 @@ async function despacharNesting(
       ? resolverSuperficieDinamica(config, materialResuelto)
       : declaracion.superficie;
   if (superficie === 'rollo') {
+    if (jobContext.modoCotizacionVectorial === 'placas') {
+      throw new NestingIrregularError('La estimación por placas necesita un material plano y una máquina de impresión sobre placas.');
+    }
     return runShelfRollo(
       paso,
       conLonaBrutaSiExiste(jobContext),
@@ -640,6 +657,11 @@ async function despacharNesting(
   // Hoja/placa finita: la medida sale del material del slot (o de la mesa de
   // la máquina) vía resolveNestingConfig. Piezas uniformes caen solas a
   // grid-2d-single (poses + imposición completa) dentro del multi.
+  if (jobContext.modoCotizacionVectorial === 'placas' && paso.familiaCodigo === 'impresion_por_area') {
+    // Imprimir las placas declaradas también consume material y tiempo. No
+    // inventamos medidas de pieza ni placements para una estimación sin arte.
+    return runIrregularPlaca(jobContext, materialResuelto, config);
+  }
   if (jobContext.disenosVectoriales?.length && paso.familiaCodigo === 'impresion_por_area') {
     await opts?.exigirNestingIrregular?.();
     if (config.pieceBleedMm !== 0) throw new NestingIrregularError('La colección de piezas requiere impresión sin sangrado para conservar el registro del corte.');
@@ -692,6 +714,16 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
     if (!materialResuelto && hayPliegosImpresosHeredados(jobContext)) {
       return null;
     }
+    const layout = jobContext.layout_produccion;
+    const slot = paso.slots.find(s => s.slotCodigo === 'sustrato_corte');
+    const heredaImpresion = !slot || (slot.modoSeleccion === 'HEREDA_DE_PASO' &&
+      (slot.heredaDeRutaPasoId === layout?.sourceRutaPasoId ||
+        // Un laminado intermedio conserva el material y las posiciones.
+        (materialResuelto && materialResuelto.id === layout?.materialVarianteId)));
+    if (heredaImpresion && layout?.sourceFamiliaCodigo === 'impresion_por_area' &&
+      layout.substrates.some(s => s.kind === 'roll')) {
+      return conservarRolloImpreso(paso, layout, materialResuelto, config);
+    }
     return runShelfRollo(
       paso,
       jobContext,
@@ -728,6 +760,88 @@ const ESTRATEGIAS_NESTING: Record<string, EstrategiaNestingFn> = {
 // ────────────────────────────────────────────────────────────────────
 // Implementaciones
 // ────────────────────────────────────────────────────────────────────
+
+/** El plotter corta el rollo tal como salió de impresión: no puede reordenar
+ * las piezas según su propio ancho, márgenes o separación. */
+function conservarRolloImpreso(
+  paso: PasoCargado,
+  layout: LayoutProduccionCompartido,
+  material: MaterialResueltoParaNesting | null,
+  config: NestingConfigResolved,
+): NestingDispatchResult {
+  const rollo = layout.substrates[0];
+  if (
+    layout.schemaVersion !== 1 ||
+    layout.substrates.length !== 1 ||
+    rollo?.kind !== 'roll' ||
+    !layout.placements.length ||
+    !['shelf-rollo', 'maxrects-rollo', 'secuencial-rollo'].includes(
+      layout.algorithm,
+    )
+  )
+    throw new MotorCotizacionError(
+      'layout_impresion_plotter_incompatible',
+      'La impresión no dejó un layout de rollo válido para conservar en el plotter.',
+    );
+  if (
+    material &&
+    layout.materialVarianteId &&
+    material.id !== layout.materialVarianteId
+  )
+    throw new MotorCotizacionError(
+      'layout_impresion_plotter_incompatible',
+      'El plotter debe cortar el mismo material que salió de impresión.',
+    );
+  const anchoMaquina = anchoMaximoRolloMaquina(paso.maquina);
+  if (anchoMaquina != null && rollo.widthMm > anchoMaquina)
+    throw new MotorCotizacionError(
+      'layout_impresion_plotter_incompatible',
+      'El rollo impreso supera el ancho admitido por el plotter. Elegí otra máquina o un rollo compatible en impresión.',
+    );
+  // El sangrado/separación para un nuevo acomodo no puede agrandar los
+  // márgenes físicos exigidos a un layout que ya está impreso.
+  const margen = (value: number) => Math.max(0, value - config.pieceBleedMm);
+  const fuera = layout.placements.some(
+    (p) =>
+      (p.substrateIndex ?? 0) !== 0 ||
+      p.xMm < margen(config.margins.leftMm) - 0.01 ||
+      p.xMm + p.widthMm >
+        rollo.widthMm - margen(config.margins.rightMm) + 0.01 ||
+      p.yMm < margen(config.margins.startMm) - 0.01 ||
+      p.yMm + p.heightMm > rollo.lengthMm - margen(config.margins.endMm) + 0.01,
+  );
+  if (fuera)
+    throw new MotorCotizacionError(
+      'layout_impresion_plotter_incompatible',
+      'El layout impreso invade los márgenes del plotter. Ajustá los márgenes de impresión para conservar el registro del corte.',
+    );
+  const areaTotalMm2 = rollo.widthMm * rollo.lengthMm;
+  const areaUtilMm2 = layout.placements.reduce(
+    (n, p) => n + p.widthMm * p.heightMm,
+    0,
+  );
+  const aprovechamientoPct =
+    areaTotalMm2 > 0 ? (areaUtilMm2 / areaTotalMm2) * 100 : 0;
+  return {
+    algorithm: layout.algorithm,
+    unidad: 'm_lineales',
+    cantidadCalculada: rollo.lengthMm / 1000,
+    consumedLengthMm: rollo.lengthMm,
+    piezasAcomodadas: layout.placements.length,
+    substrates: structuredClone(layout.substrates),
+    placements: structuredClone(layout.placements),
+    visualConfig: layout.visualConfig
+      ? structuredClone(layout.visualConfig)
+      : undefined,
+    aprovechamientoPct,
+    metricasRaw: {
+      areaTotalMm2,
+      areaUtilMm2,
+      aprovechamientoPct,
+      consumedLengthMm: rollo.lengthMm,
+    },
+  };
+}
 
 function leerLayoutProduccionCompartido(
   jobContext: JobContext,
@@ -1360,6 +1474,12 @@ async function runIrregularPlaca(
   );
   if (placasManuales > 0 && metrosCortePorPlaca > 0) {
     const placas = Math.ceil(placasManuales);
+    const impreso = jobContext.layout_produccion;
+    if (impreso && (impreso.algorithm !== 'manual-vector-estimate-v1' ||
+      (impreso.materialVarianteId && impreso.materialVarianteId !== materialResuelto.id) ||
+      impreso.substrates.some(s => s.kind !== 'sheet' || !casiIgual(s.widthMm, superficie.stockWidthMm) || !casiIgual(s.heightMm, superficie.stockHeightMm)) ||
+      impreso.substrates.reduce((n, s) => n + (s.kind === 'sheet' ? s.count : 0), 0) !== placas))
+      throw new NestingIrregularError('La estimación de corte debe usar las mismas placas y material que la impresión.');
     const areaPorPlacaMm2 = superficie.stockWidthMm * superficie.stockHeightMm;
     const perimetroCorteMm = placas * metrosCortePorPlaca * 1_000;
     jobContext.piezaAreaTotalM2 = (areaPorPlacaMm2 * placas) / 1_000_000;

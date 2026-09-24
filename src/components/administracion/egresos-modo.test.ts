@@ -26,11 +26,10 @@ describe("las dos caras del módulo", () => {
     expect(tabs).not.toContain("analisis");
   });
 
-  it("Egresos muestra el registro completo, el análisis y las plantillas", () => {
+  it("Egresos muestra el registro completo y el análisis; las programaciones viven en Gastos fijos", () => {
     expect(TABS_POR_MODO.egresos).toEqual([
       "todos",
       "analisis",
-      "recurrentes",
     ]);
   });
 
@@ -48,7 +47,7 @@ describe("las dos caras del módulo", () => {
     ];
     expect(new Set(todos).size).toBe(todos.length);
     expect([...todos].sort()).toEqual(
-      ["analisis", "por-pagar", "proveedores", "recurrentes", "todos"].sort(),
+      ["analisis", "por-pagar", "proveedores", "todos"].sort(),
     );
   });
 });

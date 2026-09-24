@@ -30,5 +30,5 @@ it.each(["egresos", "cuentas-por-pagar"] as const)("%s conserva registros y no a
   expect(html).not.toContain("Endosar cheque desde cartera");
   const botones = (html.match(/<button\b[^>]*>[\s\S]*?<\/button>/g) ?? []).join("\n");
   expect(botones).not.toMatch(/Registrar egreso|Registrar factura|Pagar selección|Anular/);
-  if (modo === "egresos") expect(botones).toContain("Historial de recurrentes");
+  if (modo === "egresos") expect(html).toContain('href="/administracion/programaciones"');
 });

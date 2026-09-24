@@ -37,6 +37,7 @@ export function crearCorreoBase(args: {
   contenido: string;
   pie: string;
   prueba?: boolean;
+  empresa?: string;
 }) {
   return `<!doctype html>
 <html lang="es">
@@ -68,7 +69,7 @@ export function crearCorreoBase(args: {
         <tr><td class="cabecera" bgcolor="#101214" style="padding:30px 40px;background-color:#101214;border-radius:10px 10px 0 0;border-bottom:3px solid #ff7546;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
             <td width="46" style="width:46px;vertical-align:middle;"><img src="cid:${MARCA_CORREO_CID}" width="34" height="34" alt="" style="display:block;width:34px;height:34px;"></td>
-            <td style="vertical-align:middle;font-size:25px;line-height:30px;font-weight:700;letter-spacing:-1px;color:#fbfaf7;">grafoprint<span style="color:#ff7546;">.</span></td>
+            <td style="vertical-align:middle;font-size:25px;line-height:30px;font-weight:700;letter-spacing:-1px;color:#fbfaf7;">${args.empresa ? escaparHtml(args.empresa) : 'grafoprint'}<span style="color:#ff7546;">.</span></td>
           </tr></table>
         </td></tr>
         <tr><td class="interior" bgcolor="#fbfaf7" style="padding:40px;background-color:#fbfaf7;border:1px solid #deded7;border-top:0;border-radius:0 0 10px 10px;">

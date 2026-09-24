@@ -22,6 +22,21 @@ export async function resolverFuentesProducto(
   contexto: JobContext,
 ): Promise<JobContext> {
   const config = leerGeometriasComerciales(atributos);
+  // Las fuentes predeterminadas son sólo para la modalidad con archivo. Al
+  // volver a medidas o estimar placas no deben reemplazar la elección actual.
+  const sinArchivo = contexto.modoCotizacionVectorial === 'medidas' ||
+    contexto.modoCotizacionVectorial === 'placas';
+  contexto = { ...contexto };
+  if (sinArchivo) {
+    for (const key of ['disenoVectorialFuente', 'disenoVectorialCacheKey', 'geometriaVectorial',
+      'geometriasVectoriales', 'disenosVectoriales', 'coleccionesVectoriales']) delete contexto[key];
+  }
+  if (contexto.modoCotizacionVectorial && contexto.modoCotizacionVectorial !== 'placas') {
+    delete contexto.placasVectorialesManuales;
+    delete contexto.metrosCortePorPlacaVectorial;
+    delete contexto.entradasCortePorPlacaVectorial;
+  }
+  const configuradas = sinArchivo ? [] : config.fuentes;
   const fuentes = { ...registro(contexto.geometriasVectoriales) };
   const verificarFija = (fuente: unknown, nombre: string) => {
     // Una cotización histórica puede referenciar una interpretación anterior.
@@ -32,12 +47,12 @@ export async function resolverFuentesProducto(
         `El diseño de ${nombre} tiene medidas fijas. Habilitá su personalización en el producto para reemplazarlo.`,
       );
   };
-  for (const f of config.fuentes) {
+  for (const f of configuradas) {
     if (!fuentes[f.id] && f.predeterminada) fuentes[f.id] = f.predeterminada;
     if (fuentes[f.id] && f.predeterminada && !f.permitirReemplazo)
       verificarFija(fuentes[f.id], f.nombre);
   }
-  const unica = config.fuentes.length === 1 ? config.fuentes[0] : undefined;
+  const unica = configuradas.length === 1 ? configuradas[0] : undefined;
   const principal =
     contexto.disenoVectorialFuente ?? (unica ? fuentes[unica.id] : undefined);
   if (unica?.predeterminada && !unica.permitirReemplazo && principal)

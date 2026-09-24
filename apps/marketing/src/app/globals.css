@@ -221,9 +221,26 @@ div[id] {
 }
 .desktop-nav {
   display: flex;
+  align-items: center;
   gap: 30px;
   color: #d1d2d2;
   font-size: 14px;
+}
+.nav-link-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.nav-link-badge {
+  border: 1px solid color-mix(in srgb, var(--orange) 35%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--orange) 12%, transparent);
+  color: var(--orange);
+  padding: 3px 5px;
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 .desktop-nav a:hover,
 .login-link:hover {
@@ -265,6 +282,7 @@ div[id] {
 }
 .mobile-nav a {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: 14px 0;
   border-bottom: 1px solid #ffffff13;
@@ -476,40 +494,6 @@ div[id] {
 }
 .hero-chapters > a:hover svg {
   transform: translate(3px, 3px);
-}
-.trust-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
-  padding-block: 34px;
-  border-bottom: 1px solid var(--line);
-}
-.trust-strip > span {
-  font: 400 10px/1.7 var(--font-mono);
-  letter-spacing: 0.09em;
-  color: #777a7b;
-}
-.trust-strip strong {
-  font-size: 23px;
-  font-weight: 550;
-  letter-spacing: -1px;
-}
-.trust-strip strong > span {
-  display: block;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--muted);
-  text-align: center;
-  margin-top: 3px;
-}
-.trust-strip .trust-location {
-  text-align: right;
-  letter-spacing: 0;
-  font-family: var(--font-sans);
-  font-size: 12px;
 }
 .intro-section {
   padding-block: 115px 100px;
@@ -1983,24 +1967,6 @@ summary::-webkit-details-marker {
     font-size: 10px;
     padding: 7px 9px;
   }
-  .trust-strip {
-    gap: 20px;
-    flex-wrap: wrap;
-    padding-block: 28px;
-  }
-  .trust-strip > span:first-child {
-    font-size: 9px;
-    max-width: 155px;
-  }
-  .trust-strip strong {
-    font-size: 18px;
-  }
-  .trust-strip strong > span {
-    font-size: 10px;
-  }
-  .trust-location {
-    display: none;
-  }
   .intro-section {
     grid-template-columns: 1fr;
     padding-block: 66px;
@@ -2423,9 +2389,6 @@ summary::-webkit-details-marker {
   }
   .hero-trial {
     font-size: 9px;
-  }
-  .trust-strip strong {
-    font-size: 15px;
   }
   .hero-chapters {
     padding-inline: 20px;

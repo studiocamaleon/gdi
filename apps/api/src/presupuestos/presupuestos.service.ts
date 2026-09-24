@@ -46,6 +46,8 @@ import {
 } from '../enlaces-publicos/enlaces-publicos.service';
 import { CuponesService } from '../cupones/cupones.service';
 import { FidelizacionService } from '../fidelizacion/fidelizacion.service';
+import { EventosSistemaService } from '../eventos-sistema/eventos-sistema.service';
+import { ASUNTO_PRESUPUESTO, MENSAJE_PRESUPUESTO } from './correo-presupuesto.plantilla';
 
 /**
  * Presupuestos — el ciclo comercial de la cotización
@@ -115,6 +117,8 @@ export class PresupuestosService {
     private readonly documentos: DocumentosPdfService,
     private readonly capacidades: CapacidadesEmpresaService =
       new CapacidadesEmpresaService(prisma),
+    private readonly eventos: EventosSistemaService =
+      new EventosSistemaService(prisma),
   ) {}
 
   /**
@@ -138,6 +142,9 @@ export class PresupuestosService {
       validezDiasDefault: row?.validezDiasDefault ?? 15,
       senaSugeridaPctDefault: Number(row?.senaSugeridaPctDefault ?? 50),
       condicionesTexto: row?.condicionesTexto ?? null,
+      correoResponderA: row?.correoResponderA ?? null,
+      correoAsunto: row?.correoAsunto ?? ASUNTO_PRESUPUESTO,
+      correoMensaje: row?.correoMensaje ?? MENSAJE_PRESUPUESTO,
       // Reglas de aprobación (F2): null = desactivada.
       aprobacionMontoMax:
         row?.aprobacionMontoMax != null ? Number(row.aprobacionMontoMax) : null,
@@ -301,6 +308,7 @@ export class PresupuestosService {
           canalVenta: dto.canalVenta,
           estado: 'borrador',
           fechaEmision: ahora,
+          notificarWhatsapp: dto.notificarWhatsapp ?? true,
           fechaValidez: null,
           observaciones: dto.observaciones,
           senaSugeridaPct: dto.senaSugeridaPct ?? cfg.senaSugeridaPctDefault,
@@ -366,7 +374,9 @@ export class PresupuestosService {
     // borrador para reintentar desde el listado — mejor eso que perder la
     // numeración por un error de envío.
     try {
-      return await this.enviar(auth, dto.cotizacionId);
+      return await this.enviar(auth, dto.cotizacionId, {
+        notificarWhatsapp: dto.notificarWhatsapp,
+      });
     } catch (error) {
       this.logger.warn(
         `${numero} quedó en borrador: no pude enviarlo — ${error instanceof Error ? error.message : String(error)}`,
@@ -827,7 +837,7 @@ export class PresupuestosService {
   // y el actor es OPERADOR, el presupuesto queda BLOQUEADO en
   // pendiente_aprobacion (sin token público). SUPERVISOR/ADMIN están
   // exentos: envían igual y el evento registra que asumieron el envío.
-  async enviar(auth: CurrentAuth, id: string) {
+  async enviar(auth: CurrentAuth, id: string, opciones: { notificarWhatsapp?: boolean } = {}) {
     const c = await this.exigir(id, ['borrador', 'enviado']);
     if (!c.clienteId) {
       throw new BadRequestException('Asigná un cliente antes de enviar.');
@@ -847,6 +857,7 @@ export class PresupuestosService {
             where: { id },
             data: {
               estado: 'pendiente_aprobacion',
+              notificarWhatsapp: opciones.notificarWhatsapp ?? true,
               aprobacionMotivosJson:
                 motivos as unknown as Prisma.InputJsonValue,
               aprobacionSolicitadaEl: new Date(),
@@ -879,8 +890,9 @@ export class PresupuestosService {
 
     const enviado = await this.ejecutarEnvio(auth, c, {
       reenvio: c.estado === 'enviado',
+      notificarWhatsapp: opciones.notificarWhatsapp ?? true,
     });
-    this.avisarAlCliente(c.id);
+    if (opciones.notificarWhatsapp !== false) this.avisarAlCliente(c.id);
     return enviado;
   }
 
@@ -896,7 +908,7 @@ export class PresupuestosService {
       fidelizacionCanjePuntos?: number;
       fidelizacionPuntosEstimados?: number | null;
     },
-    opts: { reenvio: boolean; descripcion?: string },
+    opts: { reenvio: boolean; descripcion?: string; notificarWhatsapp?: boolean },
   ) {
     if (!opts.reenvio)
       await this.capacidades.exigir(auth.tenantId, 'presupuestos');
@@ -967,6 +979,7 @@ export class PresupuestosService {
           fechaEnvio: new Date(),
           fechaValidez,
           publicToken: token,
+          ...(opts.notificarWhatsapp !== undefined ? { notificarWhatsapp: opts.notificarWhatsapp } : {}),
         },
       });
       if (actualizada.count !== 1) {
@@ -1269,14 +1282,8 @@ export class PresupuestosService {
         : reservaFidelizacion.puntos
       : 0;
 
-    // La fecha de entrega cotizada puede haber quedado en el pasado: la OT
-    // nace en borrador para revisarla y emitirla desde su propia ficha.
-    const hoyIso = new Date().toISOString().slice(0, 10);
-    const fechaEntrega =
-      emision.fechaEntrega && emision.fechaEntrega >= hoyIso
-        ? emision.fechaEntrega
-        : undefined;
-
+    // El create canónico emite y recalcula las fechas con la cola actual.
+    // Los planes sin ETA conservan la fecha comercial (validada al emitir).
     const orden = await this.ordenes.create(auth, {
       idempotencyKey: idempotenciaConversionPresupuesto(
         id,
@@ -1286,38 +1293,25 @@ export class PresupuestosService {
       vendedorEmpleadoId: c.vendedorEmpleadoId ?? undefined,
       cotizacionId: id,
       proyectoCampanaId: c.proyectoCampanaId ?? undefined,
-      estado: 'borrador',
-      fechaEntrega,
+      estado: 'pendiente',
+      fechaEntrega: dto.fechaEntrega ?? emision.fechaEntrega ?? undefined,
       canalVenta: emision.canalVenta,
       cargosDirectos: parcial ? undefined : emision.cargosDirectos,
       observaciones: c.observaciones ?? undefined,
       fidelizacionCanjePuntos: puntosCanjeConversion,
-      items,
-    });
+      items: dto.fechaEntrega ? items.map((item) => ({ ...item, fechaEntrega: dto.fechaEntrega })) : items,
+    }, { conversionPresupuesto: { itemIds: todosLosIds } });
 
     // El arte que el cliente mandó con el presupuesto tiene que seguir a la
     // orden: producción lo necesita ahí, no en un documento ya cerrado.
     await this.archivos.revincularCotizacionAOrden(id, orden.id);
 
-    const convertidosTrasEstaOrden = new Set([
-      ...convertidos,
-      ...items
-        .map((item) => item.cotizacionItemId)
-        .filter((itemId): itemId is string => Boolean(itemId)),
-    ]);
+    const conversionesActuales = await this.prisma.ordenTrabajoItem.findMany({
+      where: { tenantId: auth.tenantId, cotizacionItemId: { in: todosLosIds }, orden: { cotizacionId: id } },
+      select: { cotizacionItemId: true },
+    });
+    const convertidosTrasEstaOrden = new Set(conversionesActuales.map((i) => i.cotizacionItemId));
     const completa = convertidosTrasEstaOrden.size === todosLosIds.length;
-    await this.prisma.cotizacion.update({
-      where: { id },
-      data: {
-        estado: completa ? 'convertido' : 'aprobado',
-        convertidaOrdenId: orden.id,
-      },
-    });
-    await this.evento(auth, id, {
-      tipo: 'convertido',
-      descripcion: `Convertido en la orden ${orden.numero}${parcial ? ` (${items.length} de ${emision.items.length} items; ${todosLosIds.length - convertidosTrasEstaOrden.size} pendientes)` : ''}. La orden queda en borrador para revisar fecha y emitir.`,
-      datosJson: { ordenId: orden.id, parcial, completa },
-    });
 
     return {
       ordenId: orden.id,
@@ -1463,9 +1457,10 @@ export class PresupuestosService {
         numero: true,
         estado: true,
         fechaValidez: true,
+        cliente: { select: { nombre: true } },
       },
     });
-    if (!c || !c.numero)
+    if (!c || !c.numero || c.tenantId !== enlace.tenantId)
       throw new NotFoundException('Presupuesto no encontrado.');
     if (c.estado !== 'enviado') {
       throw new BadRequestException(
@@ -1501,6 +1496,7 @@ export class PresupuestosService {
       const cambio = await tx.cotizacion.updateMany({
         where: {
           id: c.id,
+          tenantId: c.tenantId,
           estado: 'enviado',
           ...(c.fechaValidez ? { fechaValidez: { gte: new Date() } } : {}),
         },
@@ -1510,7 +1506,10 @@ export class PresupuestosService {
           motivoPerdida: dto.decision === 'rechazado' ? 'otro' : null,
           motivoPerdidaDetalle:
             dto.decision === 'rechazado'
-              ? (dto.comentario ?? 'Rechazado por el cliente desde el link.')
+              ? (dto.comentario ?? 'Rechazado por el cliente desde el link.').slice(
+                  0,
+                  300,
+                )
               : null,
         },
       });
@@ -1528,6 +1527,25 @@ export class PresupuestosService {
           'Presupuesto rechazado por el cliente.',
         );
       }
+      if (cambio.count === 1) {
+        // La decisión, su firma en el historial y el buzón se guardan juntos.
+        // El update condicional evita avisos duplicados ante doble clic o carreras.
+        await this.eventoSistema(
+          c.tenantId,
+          c.id,
+          {
+            tipo: dto.decision,
+            descripcion:
+              dto.decision === 'aprobado'
+                ? `El cliente APROBÓ el presupuesto desde el link público.${dto.comentario ? ` Comentario: ${dto.comentario}` : ''}`
+                : `El cliente rechazó el presupuesto desde el link público.${dto.comentario ? ` Comentario: ${dto.comentario}` : ''}`,
+            origen: 'cliente',
+            datosJson: { comentario: dto.comentario ?? null },
+          },
+          tx,
+        );
+        await this.notificarDecisionCliente(tx, c, dto);
+      }
       return cambio;
     });
     if (resuelta.count !== 1) {
@@ -1535,18 +1553,41 @@ export class PresupuestosService {
         'El presupuesto ya fue resuelto o venció mientras se registraba la decisión.',
       );
     }
-    // El timestamp de esta decisión ES la firma virtual del acuerdo.
-    await this.eventoSistema(c.tenantId, c.id, {
-      tipo: dto.decision,
-      descripcion:
-        dto.decision === 'aprobado'
-          ? `El cliente APROBÓ el presupuesto desde el link público.${dto.comentario ? ` Comentario: ${dto.comentario}` : ''}`
-          : `El cliente rechazó el presupuesto desde el link público.${dto.comentario ? ` Comentario: ${dto.comentario}` : ''}`,
-      origen: 'cliente',
-      datosJson: { comentario: dto.comentario ?? null },
-    });
     this.avisarAlCliente(c.id);
     return { estado: dto.decision };
+  }
+
+  private async notificarDecisionCliente(
+    tx: Prisma.TransactionClient,
+    presupuesto: {
+      id: string;
+      tenantId: string;
+      numero: string | null;
+      cliente: { nombre: string } | null;
+    },
+    dto: DecisionPublicaDto,
+  ) {
+    const aprobado = dto.decision === 'aprobado';
+    const cliente = presupuesto.cliente?.nombre ?? 'El cliente';
+    const comentario = dto.comentario?.trim();
+    await this.eventos.publicar(
+      {
+        tenantId: presupuesto.tenantId,
+        tipo: `presupuesto.${dto.decision}_por_cliente`,
+        entidadTipo: 'presupuesto',
+        entidadId: presupuesto.id,
+        actorNombre: cliente.slice(0, 200),
+        titulo: `Presupuesto ${presupuesto.numero} ${dto.decision}`.slice(0, 180),
+        mensaje: `${cliente} ${aprobado ? 'aprobó' : 'rechazó'} el presupuesto.${comentario ? ` Comentario: ${comentario}` : ''}`.slice(0, 600),
+        href: `/comercial/presupuestos/${presupuesto.id}`,
+        severidad: aprobado ? 'EXITO' : 'ADVERTENCIA',
+        topicos: ['presupuestos', `presupuesto:${presupuesto.id}`],
+        // Política inicial. La selección futura por responsable/rol vive aquí,
+        // independiente del canal por el que el cliente recibió el enlace.
+        todosLosUsuariosDelTenant: true,
+      },
+      tx,
+    );
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
@@ -1671,8 +1712,9 @@ export class PresupuestosService {
       origen?: string;
       datosJson?: unknown;
     },
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
   ) {
-    await this.prisma.cotizacionEvento.create({
+    await db.cotizacionEvento.create({
       data: {
         tenantId,
         cotizacionId,

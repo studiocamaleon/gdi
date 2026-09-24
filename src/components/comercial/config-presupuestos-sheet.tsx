@@ -151,6 +151,19 @@ export function ConfigPresupuestosSheet({
                   )}
                   <section
                     className={s.approval}
+                    aria-labelledby="presupuesto-correo"
+                  >
+                    <h3 id="presupuesto-correo">Correo electrónico</h3>
+                    <p className={s.explanation}>Plantilla compartida por tu empresa. Cada envío permite editar asunto y mensaje; siempre incluye el PDF y el enlace de aprobación.</p>
+                    {campo("Recibir respuestas en", "Si queda vacío, usamos el correo de los datos de tu empresa.",
+                      <Input type="email" maxLength={254} className={control} placeholder="ventas@tuempresa.com" value={cfg.correoResponderA ?? ""} onChange={(e) => setCfg({ ...cfg, correoResponderA: e.target.value.trim() || null })} />)}
+                    {campo("Asunto predeterminado", "Usá {empresa}, {presupuesto} y {cliente} para completar los datos automáticamente.",
+                      <Input maxLength={200} className={control} value={cfg.correoAsunto ?? ""} placeholder="Tu presupuesto de {empresa} · {presupuesto}" onChange={(e) => setCfg({ ...cfg, correoAsunto: e.target.value || null })} />)}
+                    {campo("Mensaje predeterminado", "El botón de aprobación y el PDF se agregan automáticamente. Podés incluir la firma de tu empresa al final del mensaje.",
+                      <TextArea rows={7} maxLength={8000} className={`${control} ${s.textarea}`} value={cfg.correoMensaje ?? ""} placeholder="Vacío = mensaje predeterminado de Grafo" onChange={(e) => setCfg({ ...cfg, correoMensaje: e.target.value || null })} />)}
+                  </section>
+                  <section
+                    className={s.approval}
                     aria-labelledby="presupuesto-umbrales"
                   >
                     <h3 id="presupuesto-umbrales">

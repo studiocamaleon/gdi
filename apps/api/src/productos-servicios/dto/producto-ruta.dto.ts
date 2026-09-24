@@ -318,6 +318,10 @@ export class UpsertSlotMaterialDto {
   criterioMotorAuto?: string | null;
 
   @IsOptional()
+  @IsIn(['TODAS', 'PREFERIR_DISPONIBLES', 'SOLO_DISPONIBLES'])
+  politicaStock?: string;
+
+  @IsOptional()
   @IsString()
   criterioInputCampo?: string | null;
 

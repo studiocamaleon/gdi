@@ -64,7 +64,7 @@ export function AvisoOtEnBorrador({
           <AlertDialogDescription>
             El presupuesto ya se convirtió y la orden existe, pero{" "}
             <strong>todavía no está emitida</strong>: el taller no la ve y no
-            aparece en el tablero de producción hasta que la emitas. Es a
+            aparece en Operación diaria hasta que la emitas. Es a
             propósito, para que puedas revisar la fecha de entrega y los
             productos antes de mandarla.
           </AlertDialogDescription>

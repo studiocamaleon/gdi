@@ -824,6 +824,7 @@ model Tenant {
   productoRecetaComponentes                        ProductoRecetaComponente[]
   productoRecetaDocumentos                         ProductoRecetaDocumento[]
   cotizacionesV2                                   Cotizacion[]
+  correosPresupuesto                               CorreoPresupuesto[]
   cotizacionesV2Items                              CotizacionItem[]
   cotizacionContadores                             CotizacionContador[]
   cotizacionEventos                                CotizacionEvento[]
@@ -3307,6 +3308,7 @@ model ProductoConfigPasoSlotMaterial {
   heredaDeRutaPasoId    String?                                   @db.Uuid
   heredaDeSlotCodigo    String?
   /// 'MENOR_COSTO' | 'MAYOR_APROVECHAMIENTO' | 'MENOR_CAPACIDAD_QUE_CUMPLA'.
+  politicaStock        String                                    @default("TODAS")
   criterioMotorAuto     String?
   criterioInputCampo    String?
   criterioMaterialCampo String?
@@ -3652,6 +3654,8 @@ model ProyectoCampanaContador {
 // === COTIZACIONES V2 ===
 
 model Cotizacion {
+  correos CorreoPresupuesto[]
+  notificarWhatsapp Boolean @default(true)
   tipoCambioId String? @db.Uuid
   tipoCambio TipoCambioCotizacion? @relation(fields: [tipoCambioId], references: [id], onDelete: Restrict)
   id                           String                @id @default(uuid()) @db.Uuid
@@ -3800,6 +3804,9 @@ model ConfiguracionPresupuestos {
   senaSugeridaPctDefault      Decimal  @default(50) @db.Decimal(5, 2)
   /// Términos y condiciones que imprime el PDF.
   condicionesTexto            String?
+  correoResponderA            String?  @db.VarChar(254)
+  correoAsunto                String?  @db.VarChar(200)
+  correoMensaje               String?
   aprobacionMontoMax          Decimal? @db.Decimal(14, 2)
   aprobacionMargenMinPct      Decimal? @db.Decimal(5, 2)
   aprobacionDescuentoMaxPct   Decimal? @db.Decimal(5, 2)
@@ -3807,6 +3814,42 @@ model ConfiguracionPresupuestos {
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
   tenant                      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+/// Envío durable: contenido congelado, PDF emitido y clave estable en Resend.
+model CorreoPresupuesto {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @db.Uuid
+  cotizacionId         String   @db.Uuid
+  idempotencia         String   @db.Uuid
+  estado               String   @default("PENDIENTE") @db.VarChar(20)
+  para                 String   @db.VarChar(254)
+  responderA           String   @db.VarChar(254)
+  remitente            String
+  empresa              String
+  numero               String
+  asunto               String   @db.VarChar(200)
+  mensaje              String
+  url                  String
+  archivoId            String?  @db.Uuid
+  documentoPdfId       String?  @db.Uuid
+  usuarioId            String   @db.Uuid
+  usuarioNombre        String
+  intentos             Int      @default(0)
+  primerIntentoEl      DateTime?
+  leaseHasta           DateTime?
+  proximoIntentoEl     DateTime @default(now())
+  proveedorId          String?
+  error                String?
+  enviadoEl            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  tenant               Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cotizacion           Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencia])
+  @@index([estado, proximoIntentoEl])
+  @@index([tenantId, cotizacionId, createdAt])
 }
 
 model CotizacionItem {

@@ -1,0 +1,180 @@
+.section {
+  padding-block: 28px 34px;
+  border-bottom: 1px solid var(--line);
+}
+
+.heading,
+.aside {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.heading {
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.heading h2 {
+  color: var(--muted);
+  font: 400 10px/1.7 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.aside p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.control {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  transition: color 160ms, border-color 160ms;
+}
+
+.control:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+.viewport {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 4%, #000 96%, transparent);
+}
+
+.track {
+  display: flex;
+  width: max(200%, 1720px);
+  animation: travel 42s linear infinite;
+}
+
+.group {
+  display: flex;
+  flex: 0 0 50%;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.company {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 100px;
+  padding-inline: 24px;
+}
+
+.logo {
+  display: block;
+  flex-shrink: 0;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.corporearte {
+  width: 205px;
+  height: auto;
+}
+
+.senaliza {
+  width: 192px;
+  height: auto;
+}
+
+.visualIlusion {
+  width: 124px;
+  height: auto;
+  filter: grayscale(1) brightness(0);
+  opacity: 0.76;
+}
+
+.ceroStress {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  filter: grayscale(1);
+  mix-blend-mode: multiply;
+}
+
+.track[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+@media (hover: hover) {
+  .viewport:hover .track {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes travel {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 700px) {
+  .section {
+    padding-block: 22px 26px;
+  }
+
+  .heading {
+    margin-bottom: 16px;
+  }
+
+  .aside p {
+    display: none;
+  }
+
+  .heading h2 {
+    max-width: 230px;
+    font-size: 9px;
+  }
+
+  .company {
+    height: 90px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control,
+  .group[aria-hidden="true"] {
+    display: none;
+  }
+
+  .viewport {
+    mask-image: none;
+  }
+
+  .track {
+    width: 100%;
+    animation: none;
+  }
+
+  .group {
+    display: grid;
+    flex-basis: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (max-width: 700px) {
+  .group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 12px;
+  }
+
+  .company {
+    padding-inline: 14px;
+  }
+}

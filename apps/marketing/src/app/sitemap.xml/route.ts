@@ -12,6 +12,11 @@ export function GET() {
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>${siteUrl}/3d</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>`;
   return new Response(xml, {
     headers: { "Content-Type": "application/xml; charset=utf-8" },

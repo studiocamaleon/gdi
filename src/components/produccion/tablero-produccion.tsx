@@ -1525,7 +1525,7 @@ export function TableroProduccion({
           data-ui="heroui"
           className={toolbar.tabs}
           role="tablist"
-          aria-label="Vistas del tablero de producción"
+          aria-label="Vistas de Operación diaria"
         >
           {tabEntries.map((entry) => (
             <button

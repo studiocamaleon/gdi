@@ -1,5 +1,29 @@
 # Gastos fijos de estructura — diseño
 
+## Actualización implementada · 2026-09-24
+
+Gastos fijos centraliza el presupuesto y la configuración de nuevas obligaciones
+periódicas. Cada gasto tiene una opción **Generar cuentas por pagar**, apagada por
+defecto. Activarla exige permiso `administracion.gestionar` y capacidades
+`cuentas_pagar` y `gastos_recurrentes`, además del acceso a Gastos fijos.
+
+- Se reutiliza `GastoRecurrente` vinculado al gasto, con inicio y día de vencimiento
+  propios. Importe por período, frecuencia, categoría, proveedor y fin de vigencia
+  salen del gasto fijo. El cron diario emite obligaciones pendientes; no pagos.
+- Un inicio anterior recupera los períodos pendientes. El formulario lo informa.
+  La unicidad por plantilla/período y el bloqueo transaccional impiden duplicados
+  ante ejecuciones concurrentes.
+- Los cambios se aplican a futuras emisiones. Inicio y frecuencia quedan fijos
+  tras la primera emisión. Desactivar un gasto pausa la generación; reactivar el
+  presupuesto requiere volver a activar la generación explícitamente.
+- Se conservan egresos e historial. Un gasto con relaciones no se elimina; se
+  desactiva. Los vínculos antiguos múltiples requieren revisión explícita en
+  `/administracion/programaciones`; siempre se permite pausar su emisión.
+- No hay migración ni activación masiva de gastos existentes. Las programaciones
+  anteriores sin vincular conservan su gestión en esa pantalla.
+
+Las secciones siguientes conservan el contexto del diseño original.
+
 > Fuente única y explícita de los **costos fijos** que el **punto de equilibrio**
 > debe cubrir. Desacopla la *planificación de la empresa* (break-even, nivel
 > compañía) del *costeo de producto* (centros de costo → tarifas, por trabajo).

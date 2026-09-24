@@ -2,6 +2,7 @@ import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.m
 import { AsignacionPersonalController } from './asignacion-personal.controller';
 import { AsignacionPersonalService } from './asignacion-personal.service';
 import { ReservasMaterialModule } from '../inventario/reservas-material.module';
+import { InventarioModule } from '../inventario/inventario.module';
 import { Module } from '@nestjs/common';
 import { ArchivosModule } from '../archivos/archivos.module';
 import { AdministracionModule } from '../administracion/administracion.module';
@@ -18,6 +19,7 @@ import { DesarrolloDocumentalModule } from '../desarrollo-documental/desarrollo-
 
 @Module({
   imports: [CapacidadesEmpresaModule,
+    InventarioModule,
     ReservasMaterialModule,
     // "Acreditar y cancelar" en un paso necesita emitir la NC. Dependencia de
     // ida: Administración no importa este módulo.

@@ -20,6 +20,7 @@ import { Public } from '../auth/public.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresupuestosService } from './presupuestos.service';
+import { CorreoPresupuestoService } from './correo-presupuesto.service';
 import { PresupuestoPdfService } from './presupuesto-pdf.service';
 import {
   ActualizarConfigPresupuestosDto,
@@ -29,6 +30,7 @@ import {
   ListarPresupuestosDto,
   ResolverAprobacionDto,
   ResolverPresupuestoDto,
+  EnviarCorreoPresupuestoDto,
 } from './dto/presupuestos.dto';
 import { Permiso } from '../auth/permiso.decorator';
 import { OcultaMargenes } from '../auth/margenes.decorator';
@@ -45,6 +47,7 @@ export class PresupuestosController {
     private readonly prisma: PrismaService,
     private readonly archivos: ArchivosService,
     private readonly piloto: PresupuestoPilotoService,
+    private readonly correos: CorreoPresupuestoService,
   ) {}
 
   // ── Link público (sin sesión; el token es la credencial) ───────────
@@ -127,6 +130,35 @@ export class PresupuestosController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.enviar(auth, id);
+  }
+
+  @Permiso('comercial.gestionar')
+  @Get(':id/correo/preparar')
+  prepararCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
+    return this.correos.preparar(auth, id);
+  }
+
+  @Permiso('comercial.gestionar')
+  @Post(':id/correo/vista-previa')
+  vistaPreviaCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string, @Body() dto: EnviarCorreoPresupuestoDto) {
+    return this.correos.vistaPrevia(auth, id, dto);
+  }
+
+  @Permiso('comercial.gestionar')
+  @Post(':id/correo')
+  enviarCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string, @Body() dto: EnviarCorreoPresupuestoDto) {
+    return this.correos.encolar(auth, id, dto);
+  }
+
+  @Get(':id/correos')
+  historialCorreos(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string) {
+    return this.correos.historial(auth, id);
+  }
+
+  @Permiso('comercial.gestionar')
+  @Post(':id/correos/:correoId/reintentar')
+  reintentarCorreo(@CurrentSession() auth: CurrentAuth, @Param('id', ParseUUIDPipe) id: string, @Param('correoId', ParseUUIDPipe) correoId: string) {
+    return this.correos.reintentar(auth, id, correoId);
   }
 
   @Permiso('comercial.gestionar')

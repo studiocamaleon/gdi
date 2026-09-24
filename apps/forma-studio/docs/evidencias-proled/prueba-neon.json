@@ -1,0 +1,13 @@
+{
+  "source": "recorrido-abierto-200.dxf",
+  "pathLengthMm": 200,
+  "export": "Proled3D_NeonFlex_Project.zip",
+  "mesh": "NeonFlex_Model.stl",
+  "format": "STL ASCII",
+  "triangles": 148,
+  "extentMm": [
+    104.1,
+    104.1,
+    9.2
+  ]
+}

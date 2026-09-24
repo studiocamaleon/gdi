@@ -1,5 +1,20 @@
 # Egresos y Cuentas por pagar — diseño
 
+## Separación de funciones · 2026-09-24
+
+| Pantalla | Función |
+|---|---|
+| Egresos | Registro, clasificación, historial y análisis por competencia de egresos pagados, pendientes y anulados. No representa únicamente salidas de caja. |
+| Cuentas por pagar | Obligaciones pendientes, vencimientos, saldos por proveedor y registro de pagos. |
+| Gastos fijos | Presupuesto de estructura y generación opcional de obligaciones periódicas, desactivada por defecto. |
+
+Egresos deja de repetir indicadores de deuda y la pestaña Recurrentes. Las
+programaciones previas siguen en `/administracion/programaciones`; las nuevas se
+configuran desde Gastos fijos. Los dos registros financieros conservan centavos y
+los egresos anulados no muestran saldo exigible en el listado.
+
+El resto del documento conserva el contexto histórico del diseño original.
+
 Estado: **F1, F2 y F3 completas**. Pendiente: F4 (Libro IVA Compras).
 Diseñado 2026-07-26.
 

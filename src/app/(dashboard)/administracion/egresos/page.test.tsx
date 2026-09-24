@@ -36,7 +36,7 @@ it("carga Egresos sin consultar Gastos fijos cuando el plan no los incluye", asy
   mocks.incluida.mockImplementation(async (clave) => clave === "cuentas_pagar");
   const pagina = await Page({ searchParams: Promise.resolve({}) });
   expect(pagina.type).not.toBe(FuncionNoIncluida);
-  expect(pagina.props.gastosFijos).toEqual([]);
+  expect(pagina.props.initialResumen).toBeNull();
   expect(mocks.egresos).toHaveBeenCalledOnce();
   expect(mocks.gastos).not.toHaveBeenCalled();
 });

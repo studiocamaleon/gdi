@@ -417,6 +417,7 @@ export class ConfigPasosService {
                   ? (s.heredaDeSlotCodigo?.trim() ?? null)
                   : null,
               criterioMotorAuto: s.criterioMotorAuto ?? null,
+              politicaStock: s.politicaStock ?? 'TODAS',
               criterioInputCampo: s.criterioInputCampo ?? null,
               criterioMaterialCampo: s.criterioMaterialCampo ?? null,
               materialVarianteId: s.materialVarianteId ?? null,

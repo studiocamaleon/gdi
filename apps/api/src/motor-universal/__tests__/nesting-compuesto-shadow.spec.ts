@@ -1,3 +1,4 @@
+import { DisponibilidadCotizacion, contextoStockCotizacion } from '../disponibilidad-materiales';
 import type {
   ComponenteFabricadoCosteado,
   NestingEjecutado,
@@ -893,6 +894,88 @@ describe('F4.4.1 nesting compuesto en modo sombra', () => {
           (placement.meta as { componenteCodigo: string }).componenteCodigo,
       ),
     ).toEqual(expect.arrayContaining(['VINILO-A', 'VINILO-B']));
+  });
+
+  it('el lote no vuelve a elegir un ancho agotado y cuenta su consumo una sola vez', async () => {
+    const componentes = [
+      componente('VINILO-A', nestingRollo('frente', 600, 300)),
+      componente('VINILO-B', nestingRollo('lateral', 400, 300)),
+    ];
+    componentes[0].pasos![0].nestingResult!.algorithmPolicy = 'auto';
+    componentes[1].pasos![0].nestingResult!.algorithm = 'maxrects-rollo';
+    componentes[1].pasos![0].nestingResult!.algorithmPolicy = 'auto';
+    for (const item of componentes) {
+      const material = item.pasos?.[0].materiales?.[0];
+      if (!material) throw new Error('fixture inválido');
+      material.materialVarianteId = 'rollo-800';
+      material.materialNombre = 'VINILO-800';
+      material.materialSku = 'VINILO-800';
+      material.materialDisplayName = 'Vinilo 80 cm';
+      material.materiaPrimaId = 'vinilo-base';
+      material.unidad = 'm_lineales';
+      material.precioUnitario = 8;
+      material.cantidad = 0.3;
+      material.costoTotal = 2.4;
+      material.estrategiaCosto = 'consumed-length';
+      material.detalleCosteoNesting = undefined;
+      material.modoSeleccion = 'MOTOR_ELIGE_AUTO';
+      material.opcionesNestingRollo = [
+        {
+          materialVarianteId: 'rollo-800',
+          materialSku: 'VINILO-800',
+          contextoUnidadesSnapshot: {
+            unidadStock: 'M2',
+            unidadCompra: 'ROLLO',
+          },
+          materialDisplayName: 'Vinilo 80 cm',
+          materiaPrimaId: 'vinilo-base',
+          materiaPrimaNombre: 'Vinilo',
+          materiaPrimaTemplateId: 'vinilo-template',
+          materiaPrimaTipoTecnico: 'VINILO',
+          atributosVarianteJson: { anchoMm: 800 },
+          anchoMm: 800,
+          unidad: 'm_lineales',
+          precioUnitario: 8,
+        },
+        {
+          materialVarianteId: 'rollo-1000',
+          materialSku: 'VINILO-1000',
+          contextoUnidadesSnapshot: {
+            unidadStock: 'METRO_LINEAL',
+            unidadCompra: 'ROLLO',
+          },
+          materialDisplayName: 'Vinilo 100 cm',
+          materiaPrimaId: 'vinilo-base',
+          materiaPrimaNombre: 'Vinilo',
+          materiaPrimaTemplateId: 'vinilo-template',
+          materiaPrimaTipoTecnico: 'VINILO',
+          atributosVarianteJson: { anchoMm: 1000 },
+          anchoMm: 1000,
+          unidad: 'm_lineales',
+          precioUnitario: 12,
+        },
+      ];
+      item.costoTotal = 22.4;
+      item.costoUnitario = 22.4;
+      item.pasos![0].costoTotal = 22.4;
+    }
+
+    for (const c of componentes) {
+      const m = c.pasos![0].materiales![0];
+      m.seleccionStock = { politica: 'SOLO_DISPONIBLES', estado: 'disponible', alternativas: [] };
+      m.contextoUnidadesSnapshot = { unidadStock: 'METRO_LINEAL', unidadCompra: 'ROLLO' };
+      for (const opcion of m.opcionesNestingRollo!) opcion.contextoUnidadesSnapshot = { unidadStock: 'METRO_LINEAL', unidadCompra: 'ROLLO' };
+    }
+    const stock = new DisponibilidadCotizacion({} as never, 'tenant-1');
+    jest.spyOn(stock, 'saldo').mockImplementation(async (id) => ({ cantidad: id === 'rollo-800' ? 0.6 : 0, unidad: 'metro_lineal' }));
+    stock.registrar(componentes.flatMap((c) => c.pasos ?? []));
+    const resultado = await contextoStockCotizacion.run(stock, () => aplicarNestingCompuestoRectangular({
+      politica: 'CONSOLIDAR_COMPATIBLES', tenantId: 'tenant-1', productoPadreId: 'padre-1', recetaRevisionId: 'revision-padre-1', componentes,
+    }));
+    expect(resultado?.grupos[0].lote?.materialVarianteId).toBe('rollo-800');
+    expect(stock.usados.get('rollo-800')).toBeCloseTo(0.6);
+    expect(stock.usados.get('rollo-1000') ?? 0).toBe(0);
+    expect(await stock.validar({ pasos: [], componentesFabricados: componentes, analisisNestingCompuesto: resultado } as never)).toEqual([]);
   });
 
   it('reevalúa los anchos automáticos y elige el menor costo del lote completo', async () => {

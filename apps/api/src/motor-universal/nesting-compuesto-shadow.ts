@@ -1,3 +1,6 @@
+import { materialesDeCotizaciones } from '../ordenes-trabajo/materiales-cotizacion.proyeccion';
+import { contextoStockCotizacion, necesidadesDePasos } from './disponibilidad-materiales';
+import { materialUnitConversion } from '../inventario/material-units';
 import { demandaDesdeTiempo } from '../eta/motor/demanda-humana';
 import { recalcularOperacionesCongeladas } from './procesamiento-corte';
 import { aplicarRepartoCorte, planificarRepartoCorte } from './repartir-operaciones-corte';
@@ -1021,8 +1024,27 @@ async function consolidarParticipantes(
       },
     ];
   });
+  const stock = contextoStockCotizacion.getStore();
+  const politicas = participantesRollo.map((p) => p.material.seleccionStock?.politica).filter(Boolean);
+  let elegibles = alternativas;
+  if (stock && politicas.some((p) => p !== 'TODAS')) {
+    const anteriores = necesidadesDePasos(participantesRollo.map((p) => ({ ...p.paso, materiales: [p.material] })));
+    const suficientes = [];
+    for (const alternativa of alternativas) {
+      const opcion = alternativa.resultado.opcionRollo;
+      const saldo = await stock.saldo(opcion.materialVarianteId);
+      const contexto = opcion.contextoUnidadesSnapshot;
+      const conversion = contexto && saldo.unidad ? materialUnitConversion(contexto, opcion.unidad, saldo.unidad) : null;
+      const cantidad = (opcion.unidad === 'm2' ? alternativa.resultado.metrics.areaTotalMm2 / 1_000_000 : alternativa.resultado.consumedLengthMm / 1000) * (1 + Number(base.material.mermaAdicional?.porcentaje ?? 0) / 100);
+      const credito = anteriores.find((m) => m.varianteId === opcion.materialVarianteId)?.cantidad ?? 0;
+      const estado = await stock.evaluarCantidad(opcion.materialVarianteId, conversion?.ok ? cantidad * conversion.factor : null, saldo.unidad, credito);
+      if (estado.alcanza) suficientes.push(alternativa);
+    }
+    if (suficientes.length) elegibles = suficientes;
+    else if (politicas.includes('SOLO_DISPONIBLES')) return null;
+  }
   return (
-    alternativas.sort(
+    elegibles.sort(
       (a, b) =>
         a.costoBase - b.costoBase ||
         a.resultado.metrics.areaTotalMm2 - b.resultado.metrics.areaTotalMm2 ||
@@ -1675,25 +1697,6 @@ export async function analizarNestingCompuestoShadow(args: ProduccionPadreNestin
   const gruposOrdenados = [...porFirma.entries()].sort(([a], [b]) =>
     a.localeCompare(b),
   );
-  // Las firmas son disjuntas: ningún candidato aparece en dos grupos. Se
-  // pueden resolver simultáneamente y la cola decidirá cuánto paralelismo hay
-  // según la capacidad real disponible.
-  const consolidadosPorFirma = new Map(
-    await Promise.all(
-      gruposOrdenados
-        .filter(([, participantes]) => participantes.length >= 2)
-        .map(
-          async ([firma, participantes]) =>
-            [
-              firma,
-              await consolidarParticipantes(
-                participantes,
-                args.resolverNestingIrregular,
-              ),
-            ] as const,
-        ),
-    ),
-  );
   for (const [firma, participantes] of gruposOrdenados) {
     if (participantes.length < 2) {
       const unico = participantes[0];
@@ -1708,7 +1711,7 @@ export async function analizarNestingCompuestoShadow(args: ProduccionPadreNestin
     }
 
     const base = participantes[0];
-    const consolidado = consolidadosPorFirma.get(firma);
+    const consolidado = await consolidarParticipantes(participantes, args.resolverNestingIrregular);
     if (!consolidado) {
       for (const participante of participantes) {
         exclusiones.push({
@@ -1767,6 +1770,9 @@ export async function analizarNestingCompuestoShadow(args: ProduccionPadreNestin
 
     const id = `nesting-compuesto-${firma.slice(0, 16)}`;
     const operaciones = participantes.map((p) => claveOperacionNesting(p.componente.codigo, p.paso.rutaPasoId));
+    const stockActual = contextoStockCotizacion.getStore();
+    const consumoComponentes = (gruposActuales: unknown[]) => materialesDeCotizaciones([{ id: 'compuestos', nombre: 'Componentes', cotizacion: { pasos: [], componentesFabricados: args.componentes, analisisNestingCompuesto: { grupos: gruposActuales } } }]).necesidades;
+    const consumoAntes = stockActual ? consumoComponentes(grupos) : [];
     const aplicacion: Partial<AplicacionGrupo> = args.aplicarCostos
       ? aplicarGrupoConsolidado({
           id,
@@ -1777,6 +1783,12 @@ export async function analizarNestingCompuestoShadow(args: ProduccionPadreNestin
         })
       : {};
     if (aplicacion.lote) {
+      if (stockActual) {
+        for (const m of consumoAntes) stockActual.usados.set(m.varianteId, Math.max(0, (stockActual.usados.get(m.varianteId) ?? 0) - (m.cantidad ?? 0)));
+        // El lote se cuenta una sola vez, con sus unidades físicas completas.
+        for (const m of consumoComponentes([...grupos, aplicacion]))
+          stockActual.usados.set(m.varianteId, (stockActual.usados.get(m.varianteId) ?? 0) + (m.cantidad ?? Infinity));
+      }
       precedencias.confirmar(operaciones);
       registrarCortesDelLote(aplicacion.lote, args.componentes);
     }

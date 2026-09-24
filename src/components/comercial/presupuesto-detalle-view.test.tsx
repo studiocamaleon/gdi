@@ -152,7 +152,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
     expect(button(html, "Registrar rechazo")).toBeDefined();
     expect(button(html, "Registrar aprobación")).toBeDefined();
     expect(button(html, "Convertir en orden")).toBeUndefined();
-    expect(button(html, "Enviar al cliente")).toBeUndefined();
+    expect(button(html, "Enviar al cliente")).toBeDefined();
   });
 
   it.each([
@@ -216,7 +216,7 @@ describe("acciones y datos de la ficha de presupuesto", () => {
     expect(button(html, "Convertir en orden")).toBeUndefined();
   });
 
-  it("sólo el borrador ofrece enviar al cliente", () => {
+  it("ofrece enviar un borrador y no reenviar presupuestos rechazados o vencidos", () => {
     expect(
       button(
         render({ estado: "borrador", publicToken: null }),

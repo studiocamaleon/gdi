@@ -1,0 +1,463 @@
+.workspace {
+  /* El shell es flex: el contenedor necesita ancho antes de evaluar sus queries. */
+  flex: 1;
+  min-width: 0;
+  min-height: 100%;
+  background: var(--canvas-background);
+  color: var(--foreground);
+  container-type: inline-size;
+}
+
+.page.page {
+  width: 100%;
+  max-width: 1480px;
+  padding: 32px 32px 64px;
+}
+
+.page :global(.page-head) {
+  align-items: center;
+  margin-bottom: 28px;
+  padding-bottom: 26px;
+  border-bottom: 1px solid var(--border);
+}
+
+.eyebrow {
+  color: var(--muted-text);
+  font-family: var(--brand-mono);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.page :global(.page-head) h1 {
+  margin: 8px 0;
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1.15;
+}
+
+.titleDot {
+  color: var(--accent);
+}
+
+.page :global(.sub-subhead) {
+  line-height: 1.6;
+}
+
+.page :global(.sub-grid) {
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 24px;
+}
+
+.page :global(.sub-main) {
+  gap: 28px;
+}
+.page :global(.sub-aside) {
+  gap: 16px;
+}
+
+.page :global(.sub-block),
+.page :global(.sub-card) {
+  padding: 22px;
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+.plansSection {
+  min-width: 0;
+}
+
+.page :global(.sub-block-head) {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.page :global(.sub-block-head) h2 {
+  margin-top: 7px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+}
+
+.page :global(.sub-block-head) p {
+  max-width: 55ch;
+  line-height: 1.6;
+}
+
+.billingChoice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+
+.savings {
+  color: var(--success);
+  font-size: 11px;
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.plan {
+  min-width: 0;
+}
+.planHeader {
+  gap: 12px;
+}
+.planHeader h3 {
+  margin: 0;
+}
+
+.planLabels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: 20px;
+}
+
+.planContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.planPricing {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.price strong {
+  font-size: clamp(26px, 2.3cqi, 36px);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.price > span {
+  color: var(--muted-text);
+  font-size: 12px;
+}
+
+.priceNote,
+.implementation {
+  margin: 7px 0 0;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.priceNote b {
+  color: var(--success);
+  font-weight: 500;
+}
+.implementation {
+  margin-top: 12px;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-text);
+}
+
+.features svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--accent-soft-foreground);
+}
+
+.currentLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 500;
+}
+.currentLabel svg {
+  width: 15px;
+  height: 15px;
+}
+
+.founder {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+}
+
+.founder .planContent {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.6fr) minmax(0, 1fr);
+  gap: 18px;
+}
+.founder .planPricing {
+  border: 0;
+  padding: 0;
+}
+.founder .features {
+  gap: 6px;
+}
+.founder > :global([data-slot="card-footer"]) {
+  grid-column: 1 / -1;
+}
+
+.plansNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 0;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.plansNote svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+.page .currentSummary {
+  --ink: var(--brand-on-graphite);
+  --muted-text: var(--brand-muted-on-graphite);
+  --muted-text-2: var(--brand-muted-on-graphite);
+  --hairline: var(--brand-graphite-line);
+  background: var(--brand-graphite);
+  color: var(--brand-on-graphite);
+  border-color: var(--brand-graphite-line);
+  padding-top: 25px;
+}
+
+.currentPlanName {
+  margin: 0 0 26px;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.currentPlanName > span {
+  color: var(--accent);
+}
+.page :global(.sub-summary) {
+  gap: 14px;
+  margin-bottom: 0;
+}
+.page :global(.sub-sum-row.big) {
+  flex-direction: column;
+  gap: 8px;
+}
+.page :global(.sub-sum-row.big) > span {
+  font-size: 12px;
+}
+.page :global(.sub-sum-row.big) strong {
+  font-size: 26px;
+  font-weight: 500;
+}
+.page :global(.sub-card-foot) {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+  line-height: 1.7;
+}
+.taxNote {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.page :global(.sub-card-h) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  font-family: var(--brand-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+.page :global(.sub-card-h) svg {
+  width: 15px;
+  height: 15px;
+}
+.page :global(.sub-pay-empty) {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  margin-bottom: 18px;
+}
+.page :global(.sub-pay-card) {
+  background: var(--canvas-background);
+  padding: 14px 10px;
+  margin-bottom: 16px;
+}
+.page :global(.sub-pay-card-txt .ptos) {
+  letter-spacing: 0;
+}
+.page :global(.sub-card.ghost) {
+  padding: 6px;
+  border-style: solid;
+  background: transparent;
+}
+.page :global(.sub-manage) {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.page :global(.sub-manage.danger) {
+  color: var(--danger);
+}
+.page :global(.sub-manage.danger:hover) {
+  background: var(--danger-soft);
+}
+.page :global(.sub-chip.warn) {
+  color: var(--warning);
+  background: var(--warn-bg);
+}
+.page :global(.sub-state-pill.ok) {
+  color: var(--success);
+  background: var(--ok-bg);
+  border-color: color-mix(in srgb, var(--success) 20%, var(--border));
+}
+.page :global(.sub-state-pill.ok .dot) {
+  background: var(--success);
+}
+.page :global(.sub-state-pill.warn) {
+  color: var(--warning);
+  background: var(--warn-bg);
+  border-color: color-mix(in srgb, var(--warning) 25%, var(--border));
+}
+.page :global(.sub-state-pill.warn .dot) {
+  background: var(--warning);
+}
+
+.page :global(.sub-inv-table) {
+  overflow-x: auto;
+}
+.page :global(.sub-inv-row) {
+  min-width: 600px;
+}
+.page :global(.sub-inv-row.head) {
+  font-family: var(--brand-mono);
+  font-weight: 400;
+}
+.page :global(.sub-alert) {
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+.page :global(.sub-alert.warn) {
+  color: var(--warning);
+  background: var(--warn-bg);
+  border-color: color-mix(in srgb, var(--warning) 25%, var(--border));
+}
+.page :global(.sub-alert.danger) {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 25%, var(--border));
+}
+.page :global(.sub-alert.info) {
+  color: var(--foreground);
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+.page :global(.sub-trial) {
+  border-radius: var(--radius);
+}
+.page :global(.sub-trial-info) {
+  min-width: min(260px, 100%);
+}
+
+@container (max-width: 1120px) {
+  .page :global(.sub-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page :global(.sub-aside) {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .page :global(.sub-card.ghost) {
+    grid-column: 2;
+  }
+}
+
+@container (max-width: 720px) {
+  .page.page {
+    padding: 24px 18px 40px;
+  }
+  .page :global(.page-head) {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .page :global(.page-head) h1 {
+    font-size: 29px;
+  }
+  .page :global(.sub-state-pill) {
+    margin-top: 5px;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+  .page :global(.sub-block-head) {
+    align-items: flex-start;
+  }
+  .billingChoice {
+    align-items: flex-start;
+  }
+  .plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .founder,
+  .founder .planContent {
+    display: flex;
+    flex-direction: column;
+  }
+  .founder .planPricing {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+  }
+  .page :global(.sub-aside) {
+    display: flex;
+  }
+  .page :global(.sub-block),
+  .page :global(.sub-card) {
+    padding: 20px;
+  }
+}

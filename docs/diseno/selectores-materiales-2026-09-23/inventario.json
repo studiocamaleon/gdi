@@ -1,0 +1,4503 @@
+{
+  "fecha": "2026-09-23",
+  "alcance": "Registro en código, sin consulta a variantes de tenants ni cambios de datos.",
+  "fuentes": [
+    "src/lib/materia-prima-templates.ts",
+    "apps/api/src/productos-servicios/pasos/familias.ts"
+  ],
+  "resumen": {
+    "plantillas": 45,
+    "familiasMaterialConPlantilla": 12,
+    "subfamiliasMaterialConPlantilla": 37,
+    "camposDeclarados": 199,
+    "clavesCampoDistintas": 86,
+    "clavesDimensionDistintas": 76,
+    "familiasDePaso": 34,
+    "parametrosPaso": 45
+  },
+  "dimensionesSinCampoDeclarado": [
+    {
+      "plantilla": "componente_editorial_v1",
+      "key": "hojasDesde"
+    },
+    {
+      "plantilla": "componente_editorial_v1",
+      "key": "hojasHasta"
+    },
+    {
+      "plantilla": "componente_editorial_v1",
+      "key": "color"
+    },
+    {
+      "plantilla": "componente_editorial_hoja_v1",
+      "key": "formatoComercial"
+    },
+    {
+      "plantilla": "componente_editorial_hoja_v1",
+      "key": "color"
+    }
+  ],
+  "defaultsSinCampoDeclarado": [
+    {
+      "plantilla": "tinta_impresion_v1",
+      "key": "baseQuimica",
+      "valor": "uv"
+    },
+    {
+      "plantilla": "tinta_impresion_v1",
+      "key": "rendimientoReferencia",
+      "valor": 1
+    },
+    {
+      "plantilla": "toner_v1",
+      "key": "oemOAlternativo",
+      "valor": "oem"
+    },
+    {
+      "plantilla": "film_transferencia_v1",
+      "key": "tipoRelease",
+      "valor": "cold_peel"
+    },
+    {
+      "plantilla": "film_transferencia_v1",
+      "key": "espesorMicrones",
+      "valor": 75
+    },
+    {
+      "plantilla": "papel_transferencia_v1",
+      "key": "ladoImprimible",
+      "valor": "una_cara"
+    },
+    {
+      "plantilla": "fijacion_auxiliar_v1",
+      "key": "encastre",
+      "valor": "Phillips #2"
+    },
+    {
+      "plantilla": "quimico_acabado_v1",
+      "key": "superficiesCompatibles",
+      "valor": "acrilico,pvc,vidrio"
+    },
+    {
+      "plantilla": "polvo_dtf_v1",
+      "key": "granulometria",
+      "valor": "80-200um"
+    },
+    {
+      "plantilla": "anillado_encuadernacion_v1",
+      "key": "pasoPerforacion",
+      "valor": "4:1"
+    },
+    {
+      "plantilla": "tapa_encuadernacion_v1",
+      "key": "espesor",
+      "valor": 0.5
+    },
+    {
+      "plantilla": "tapa_encuadernacion_v1",
+      "key": "colorBase",
+      "valor": "transparente"
+    },
+    {
+      "plantilla": "argolla_llavero_accesorio_v1",
+      "key": "terminacion",
+      "valor": "niquelado"
+    },
+    {
+      "plantilla": "ojal_ojalillo_remache_v1",
+      "key": "terminado",
+      "valor": "niquelado"
+    },
+    {
+      "plantilla": "portabanner_estructura_v1",
+      "key": "materialEstructura",
+      "valor": "aluminio"
+    },
+    {
+      "plantilla": "repuesto_impresion_v1",
+      "key": "categoriaRepuesto",
+      "valor": "desgaste"
+    },
+    {
+      "plantilla": "repuesto_impresion_v1",
+      "key": "clasificacion",
+      "valor": "tecnico_maquinaria"
+    },
+    {
+      "plantilla": "repuesto_corte_mecanizado_v1",
+      "key": "categoriaRepuesto",
+      "valor": "desgaste"
+    },
+    {
+      "plantilla": "repuesto_corte_mecanizado_v1",
+      "key": "clasificacion",
+      "valor": "tecnico_maquinaria"
+    },
+    {
+      "plantilla": "fuente_alimentacion_led_v1",
+      "key": "capacidad",
+      "valor": 150
+    }
+  ],
+  "plantillas": [
+    {
+      "id": "sustrato_hoja_v1",
+      "nombre": "Sustrato hoja",
+      "descripcion": "Papel/cartulina en hoja o pliego para impresión",
+      "familia": "sustrato",
+      "subfamilia": "sustrato_hoja",
+      "tipoTecnico": "sustrato_hoja",
+      "unidadStock": "hoja",
+      "unidadCompra": "resma",
+      "camposTecnicos": [
+        {
+          "key": "formatoComercial",
+          "label": "Nombre/Descripción",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "cm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "cm",
+          "required": true
+        },
+        {
+          "key": "gramaje",
+          "label": "Gramaje",
+          "type": "number",
+          "unit": "g_m2",
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "options": [
+            "Blanco",
+            "Color"
+          ],
+          "required": false
+        },
+        {
+          "key": "acabado",
+          "label": "Acabado",
+          "type": "text",
+          "options": [
+            "Brillo",
+            "Mate"
+          ],
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "formatoComercial",
+        "ancho",
+        "alto",
+        "gramaje",
+        "material",
+        "color",
+        "acabado"
+      ],
+      "requiredAtributos": [
+        "formatoComercial",
+        "ancho",
+        "alto",
+        "gramaje",
+        "material",
+        "acabado"
+      ],
+      "atributosIniciales": {
+        "formatoComercial": "A4",
+        "ancho": 21,
+        "alto": 29.7,
+        "gramaje": 115,
+        "material": "ilustracion",
+        "color": "Blanco",
+        "acabado": "mate"
+      }
+    },
+    {
+      "id": "sustrato_rollo_flexible_v1",
+      "nombre": "Sustrato rollo flexible",
+      "descripcion": "Vinilo/lona/film en rollo",
+      "familia": "sustrato",
+      "subfamilia": "sustrato_rollo_flexible",
+      "tipoTecnico": "sustrato_rollo_flexible",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho de rollo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo de rollo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "acabado",
+          "label": "Acabado",
+          "type": "text",
+          "options": [
+            "Brillante",
+            "Mate"
+          ],
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo",
+        "acabado"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "acabado"
+      ],
+      "atributosIniciales": {
+        "ancho": 1.27,
+        "largo": 50,
+        "acabado": "Brillante"
+      }
+    },
+    {
+      "id": "vinilo_esmerilado_rollo_v1",
+      "nombre": "Vinilo esmerilado en rollo",
+      "descripcion": "Vinilo esmerilado blanco o gris en rollo",
+      "familia": "sustrato",
+      "subfamilia": "sustrato_rollo_flexible",
+      "tipoTecnico": "vinilo_esmerilado",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho de rollo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo de rollo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "acabado",
+          "label": "Acabado",
+          "type": "text",
+          "options": [
+            "Blanco",
+            "Gris"
+          ],
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo",
+        "acabado"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "acabado"
+      ],
+      "atributosIniciales": {
+        "ancho": 0.61,
+        "largo": 50,
+        "acabado": "Blanco"
+      }
+    },
+    {
+      "id": "vinilo_de_corte_rollo_v1",
+      "nombre": "Vinilo de corte en rollo",
+      "descripcion": "Vinilo de corte de color en rollo para plotter de corte",
+      "familia": "sustrato",
+      "subfamilia": "vinilo_corte",
+      "tipoTecnico": "vinilo_de_corte_rollo",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho de rollo",
+          "type": "number",
+          "unit": "m",
+          "preferredDisplayUnit": "cm",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo de rollo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "options": [
+            "Color",
+            "Negro",
+            "Blanco"
+          ],
+          "required": true
+        },
+        {
+          "key": "acabado",
+          "label": "Acabado",
+          "type": "text",
+          "options": [
+            "Brillo",
+            "Mate"
+          ],
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo",
+        "color",
+        "acabado"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "color",
+        "acabado"
+      ],
+      "atributosIniciales": {
+        "ancho": 0.61,
+        "largo": 50,
+        "color": "Blanco",
+        "acabado": "Brillo"
+      }
+    },
+    {
+      "id": "sustrato_rigido_v1",
+      "nombre": "Sustrato rígido",
+      "descripcion": "PVC, acrílico, MDF, dibond y similares",
+      "familia": "sustrato",
+      "subfamilia": "sustrato_rigido",
+      "tipoTecnico": "sustrato_rigido",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "colorBase",
+          "label": "Color base",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "alto",
+        "espesor",
+        "colorBase"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "alto",
+        "espesor",
+        "colorBase"
+      ],
+      "atributosIniciales": {
+        "ancho": 1.22,
+        "alto": 2.44,
+        "espesor": 3,
+        "colorBase": "blanco"
+      }
+    },
+    {
+      "id": "tinta_impresion_v1",
+      "nombre": "Tinta impresión",
+      "descripcion": "Tintas para solvente, UV, latex, DTF, sublimación",
+      "familia": "tinta_colorante",
+      "subfamilia": "tinta_impresion",
+      "tipoTecnico": "tinta_impresion",
+      "unidadStock": "ml",
+      "unidadCompra": "litro",
+      "camposTecnicos": [
+        {
+          "key": "tecnologiaCompatible",
+          "label": "Tecnología compatible",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "volumenPresentacion",
+          "label": "Volumen de presentación",
+          "type": "number",
+          "unit": "ml",
+          "required": true
+        },
+        {
+          "key": "equipoCompatible",
+          "label": "Equipo compatible",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "color",
+        "volumenPresentacion",
+        "equipoCompatible"
+      ],
+      "requiredAtributos": [
+        "tecnologiaCompatible",
+        "color",
+        "volumenPresentacion"
+      ],
+      "atributosIniciales": {
+        "tecnologiaCompatible": "impresora_gran_formato_por_area",
+        "color": "c",
+        "volumenPresentacion": 500,
+        "baseQuimica": "uv",
+        "rendimientoReferencia": 1
+      }
+    },
+    {
+      "id": "master_duplicadora_v1",
+      "nombre": "Máster para duplicadora",
+      "descripcion": "Rollo de máster térmico consumido una vez por original y cara.",
+      "familia": "tinta_colorante",
+      "subfamilia": "auxiliar_proceso",
+      "tipoTecnico": "master_duplicadora",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "rendimientoMasters",
+          "label": "Másteres por rollo",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "equipoCompatible",
+          "label": "Equipo compatible",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo",
+        "equipoCompatible"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "rendimientoMasters",
+        "equipoCompatible"
+      ],
+      "atributosIniciales": {
+        "ancho": 280,
+        "largo": 50,
+        "rendimientoMasters": 100,
+        "equipoCompatible": "Ricoh DX 2430"
+      },
+      "defaults": {
+        "esConsumible": true,
+        "lockEsConsumible": true
+      }
+    },
+    {
+      "id": "toner_v1",
+      "nombre": "Tóner",
+      "descripcion": "Consumibles de impresión láser",
+      "familia": "tinta_colorante",
+      "subfamilia": "toner",
+      "tipoTecnico": "toner",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "rendimientoPaginasIso",
+          "label": "Rendimiento",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "equipoCompatible",
+          "label": "Equipo compatible",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "presentacion",
+          "label": "Presentación",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "color",
+        "rendimientoPaginasIso",
+        "equipoCompatible"
+      ],
+      "requiredAtributos": [
+        "color",
+        "rendimientoPaginasIso",
+        "equipoCompatible"
+      ],
+      "atributosIniciales": {
+        "color": "negro",
+        "rendimientoPaginasIso": 5000,
+        "oemOAlternativo": "oem",
+        "equipoCompatible": "generico"
+      }
+    },
+    {
+      "id": "film_transferencia_v1",
+      "nombre": "Film transferencia",
+      "descripcion": "Film DTF PET o A/B UV",
+      "familia": "transferencia_laminacion",
+      "subfamilia": "film_transferencia",
+      "tipoTecnico": "film_transferencia",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "tecnologiaCompatible",
+          "label": "Tecnología compatible",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "tecnologiaCompatible"
+      ],
+      "atributosIniciales": {
+        "ancho": 600,
+        "largo": 100,
+        "tipoRelease": "cold_peel",
+        "espesorMicrones": 75,
+        "tecnologiaCompatible": "impresora_gran_formato_por_area"
+      }
+    },
+    {
+      "id": "papel_transferencia_v1",
+      "nombre": "Papel transferencia",
+      "descripcion": "Papel de sublimación o transferencia",
+      "familia": "transferencia_laminacion",
+      "subfamilia": "papel_transferencia",
+      "tipoTecnico": "papel_transferencia",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo",
+          "type": "number",
+          "unit": "m",
+          "optional": true
+        },
+        {
+          "key": "gramaje",
+          "label": "Gramaje",
+          "type": "number",
+          "unit": "g_m2",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "gramaje"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "gramaje"
+      ],
+      "atributosIniciales": {
+        "ancho": 610,
+        "largo": 120,
+        "gramaje": 90,
+        "ladoImprimible": "una_cara"
+      }
+    },
+    {
+      "id": "laminado_film_v1",
+      "nombre": "Laminado film",
+      "descripcion": "Laminado brillo/mate para protección",
+      "familia": "transferencia_laminacion",
+      "subfamilia": "laminado_film",
+      "tipoTecnico": "laminado_film",
+      "unidadStock": "rollo",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "acabado",
+          "label": "Acabado",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor",
+          "type": "number",
+          "unit": "mm",
+          "optional": true
+        },
+        {
+          "key": "adhesivoTipo",
+          "label": "Tipo de adhesivo",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo",
+        "acabado"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "acabado"
+      ],
+      "atributosIniciales": {
+        "ancho": 1270,
+        "largo": 50,
+        "espesor": 75,
+        "acabado": "mate",
+        "adhesivoTipo": "acrilico"
+      }
+    },
+    {
+      "id": "laminado_pouch_v1",
+      "nombre": "Laminado pouch",
+      "descripcion": "Pouch térmico para plastificado en caliente",
+      "familia": "transferencia_laminacion",
+      "subfamilia": "laminado_pouch",
+      "tipoTecnico": "laminado_pouch",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "formatoComercial",
+          "label": "Formato comercial",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "margenNoUsable",
+          "label": "Margen no usable",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor (micrones)",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "formatoComercial",
+        "ancho",
+        "alto",
+        "espesor"
+      ],
+      "requiredAtributos": [
+        "formatoComercial",
+        "ancho",
+        "alto",
+        "margenNoUsable",
+        "espesor"
+      ],
+      "atributosIniciales": {
+        "formatoComercial": "A4",
+        "ancho": 216,
+        "alto": 303,
+        "margenNoUsable": 3,
+        "espesor": 125
+      }
+    },
+    {
+      "id": "iman_flexible_rollo_v1",
+      "nombre": "Imán flexible en rollo",
+      "descripcion": "Imán flexible para heladera, souvenirs y piezas promocionales",
+      "familia": "magnetico_fijacion",
+      "subfamilia": "iman_ceramico_flexible",
+      "tipoTecnico": "iman_flexible_rollo",
+      "unidadStock": "metro_lineal",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo",
+          "type": "number",
+          "unit": "m",
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "largo",
+        "espesor"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "largo",
+        "espesor"
+      ],
+      "atributosIniciales": {
+        "ancho": 610,
+        "largo": 20,
+        "espesor": 0.35
+      }
+    },
+    {
+      "id": "iman_redondo_v1",
+      "nombre": "Imán redondo",
+      "descripcion": "Imán redondo de ferrita, cerámico o neodimio",
+      "familia": "magnetico_fijacion",
+      "subfamilia": "iman_ceramico_flexible",
+      "tipoTecnico": "iman_redondo",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "diametro",
+          "label": "Diámetro",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "unidadesPorPack",
+          "label": "Unidades por pack",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "grado",
+          "label": "Grado",
+          "type": "text",
+          "optional": true
+        },
+        {
+          "key": "adhesivo",
+          "label": "Adhesivo",
+          "type": "boolean",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "diametro",
+        "espesor",
+        "unidadesPorPack",
+        "grado",
+        "adhesivo"
+      ],
+      "requiredAtributos": [
+        "diametro",
+        "espesor",
+        "unidadesPorPack"
+      ],
+      "atributosIniciales": {
+        "diametro": 20,
+        "espesor": 3,
+        "unidadesPorPack": 100,
+        "adhesivo": false
+      }
+    },
+    {
+      "id": "fijacion_auxiliar_v1",
+      "nombre": "Tornillo / fijación",
+      "descripcion": "Tornillería y fijaciones auxiliares para cartelería, estructuras y montaje",
+      "familia": "magnetico_fijacion",
+      "subfamilia": "fijacion_auxiliar",
+      "tipoTecnico": "tornillo_autoperforante",
+      "unidadStock": "unidad",
+      "unidadCompra": "caja",
+      "camposTecnicos": [
+        {
+          "key": "tipoFijacion",
+          "label": "Tipo de fijación",
+          "type": "text",
+          "options": [
+            "Tornillo autoperforante",
+            "Tornillo",
+            "Remache",
+            "Otra"
+          ],
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "options": [
+            "Acero zincado",
+            "Acero fosfatado",
+            "Acero inoxidable",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "calibre",
+          "label": "Calibre",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "largo",
+          "label": "Largo",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "tipoCabeza",
+          "label": "Tipo de cabeza",
+          "type": "text",
+          "options": [
+            "Tanque / flangeada",
+            "Hexagonal",
+            "Otra"
+          ],
+          "required": true
+        },
+        {
+          "key": "tipoPunta",
+          "label": "Tipo de punta",
+          "type": "text",
+          "options": [
+            "Mecha",
+            "Aguja",
+            "Otra"
+          ],
+          "required": true
+        },
+        {
+          "key": "unidadesPorCaja",
+          "label": "Unidades por caja",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "calibre",
+        "largo",
+        "tipoCabeza",
+        "tipoPunta"
+      ],
+      "requiredAtributos": [
+        "tipoFijacion",
+        "material",
+        "calibre",
+        "largo",
+        "tipoCabeza",
+        "tipoPunta",
+        "unidadesPorCaja"
+      ],
+      "atributosIniciales": {
+        "tipoFijacion": "Tornillo autoperforante",
+        "material": "Acero zincado",
+        "calibre": 8,
+        "largo": 12.7,
+        "tipoCabeza": "Tanque / flangeada",
+        "tipoPunta": "Mecha",
+        "encastre": "Phillips #2",
+        "unidadesPorCaja": 10000
+      },
+      "defaults": {
+        "esConsumible": true,
+        "esRepuesto": false,
+        "esProductoBase": false,
+        "lockEsRepuesto": true,
+        "lockEsProductoBase": true
+      }
+    },
+    {
+      "id": "quimico_acabado_v1",
+      "nombre": "Químico acabado",
+      "descripcion": "Barniz, primer, promotor de adherencia",
+      "familia": "quimico_auxiliar",
+      "subfamilia": "quimico_acabado",
+      "tipoTecnico": "quimico_acabado",
+      "unidadStock": "ml",
+      "unidadCompra": "litro",
+      "camposTecnicos": [
+        {
+          "key": "volumenPresentacion",
+          "label": "Volumen de presentación",
+          "type": "number",
+          "unit": "ml",
+          "required": true
+        },
+        {
+          "key": "tecnologiaCompatible",
+          "label": "Tecnología compatible",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "volumenPresentacion"
+      ],
+      "requiredAtributos": [
+        "volumenPresentacion",
+        "tecnologiaCompatible"
+      ],
+      "atributosIniciales": {
+        "volumenPresentacion": 1000,
+        "tecnologiaCompatible": "impresora_gran_formato_por_area",
+        "superficiesCompatibles": "acrilico,pvc,vidrio"
+      }
+    },
+    {
+      "id": "polvo_dtf_v1",
+      "nombre": "Polvo DTF",
+      "descripcion": "Polvo adhesivo para proceso DTF",
+      "familia": "quimico_auxiliar",
+      "subfamilia": "polvo_dtf",
+      "tipoTecnico": "polvo_dtf",
+      "unidadStock": "kg",
+      "unidadCompra": "kg",
+      "camposTecnicos": [
+        {
+          "key": "tipoPolvo",
+          "label": "Tipo de polvo",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "rangoTemperaturaAplicacion",
+          "label": "Rango de temperatura",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoPolvo"
+      ],
+      "requiredAtributos": [
+        "tipoPolvo",
+        "rangoTemperaturaAplicacion"
+      ],
+      "atributosIniciales": {
+        "tipoPolvo": "hot_melt",
+        "granulometria": "80-200um",
+        "rangoTemperaturaAplicacion": "130-160C"
+      }
+    },
+    {
+      "id": "controlador_led_v1",
+      "nombre": "Controlador LED",
+      "descripcion": "Controladores para mono, CCT, RGB y RGBW",
+      "familia": "electronica_carteleria",
+      "subfamilia": "controlador_led",
+      "tipoTecnico": "controlador_led",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "tipoControlador",
+          "label": "Tipo de controlador",
+          "type": "text",
+          "options": [
+            "Mono",
+            "CCT",
+            "RGB",
+            "RGBW"
+          ],
+          "required": true
+        },
+        {
+          "key": "tensionEntrada",
+          "label": "Tension de entrada",
+          "type": "number",
+          "unit": "v",
+          "required": true
+        },
+        {
+          "key": "canales",
+          "label": "Canales",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "corrienteMaxCanal",
+          "label": "Corriente maxima por canal",
+          "type": "number",
+          "unit": "a",
+          "required": true
+        },
+        {
+          "key": "corrienteTotalMax",
+          "label": "Corriente total maxima",
+          "type": "number",
+          "unit": "a",
+          "optional": true
+        },
+        {
+          "key": "protocolo",
+          "label": "Protocolo",
+          "type": "text",
+          "options": [
+            "RF",
+            "Wifi",
+            "DMX",
+            "0-10V",
+            "Bluetooth"
+          ],
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoControlador",
+        "tensionEntrada",
+        "canales",
+        "corrienteMaxCanal"
+      ],
+      "requiredAtributos": [
+        "tipoControlador",
+        "tensionEntrada",
+        "canales",
+        "corrienteMaxCanal"
+      ],
+      "atributosIniciales": {
+        "tipoControlador": "RGBW",
+        "tensionEntrada": 24,
+        "canales": 4,
+        "corrienteMaxCanal": 5,
+        "corrienteTotalMax": 20,
+        "protocolo": "RF"
+      }
+    },
+    {
+      "id": "neon_flex_led_v1",
+      "nombre": "Neon flex LED",
+      "descripcion": "Neon flexible LED para carteleria lineal e iluminacion decorativa",
+      "familia": "neon_luminaria",
+      "subfamilia": "neon_flex_led",
+      "tipoTecnico": "neon_flex_led",
+      "unidadStock": "metro_lineal",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "tension",
+          "label": "Tension",
+          "type": "number",
+          "unit": "v",
+          "required": true
+        },
+        {
+          "key": "potenciaLineal",
+          "label": "Potencia lineal",
+          "type": "number",
+          "unit": "w_m",
+          "required": true
+        },
+        {
+          "key": "corrienteNominal",
+          "label": "Corriente nominal",
+          "type": "number",
+          "unit": "a",
+          "optional": true
+        },
+        {
+          "key": "colorLuz",
+          "label": "Color de luz",
+          "type": "text",
+          "options": [
+            "3000K",
+            "4000K",
+            "6500K",
+            "Rojo",
+            "Verde",
+            "Azul",
+            "RGB"
+          ],
+          "required": true
+        },
+        {
+          "key": "ip",
+          "label": "Grado IP",
+          "type": "text",
+          "options": [
+            "IP20",
+            "IP65",
+            "IP67",
+            "IP68"
+          ],
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "alto",
+        "tension",
+        "potenciaLineal",
+        "colorLuz",
+        "ip"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "alto",
+        "tension",
+        "potenciaLineal",
+        "colorLuz",
+        "ip"
+      ],
+      "atributosIniciales": {
+        "ancho": 6,
+        "alto": 12,
+        "tension": 24,
+        "potenciaLineal": 10,
+        "corrienteNominal": 0.42,
+        "colorLuz": "4000K",
+        "ip": "IP67"
+      }
+    },
+    {
+      "id": "accesorio_neon_led_v1",
+      "nombre": "Accesorio neon LED",
+      "descripcion": "Clips, tapas, conectores y accesorios de montaje para neon flex",
+      "familia": "neon_luminaria",
+      "subfamilia": "accesorio_neon_led",
+      "tipoTecnico": "accesorio_neon_led",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "tipoAccesorio",
+          "label": "Tipo de accesorio",
+          "type": "text",
+          "options": [
+            "Clip",
+            "Tapa final",
+            "Conector recto",
+            "Conector L",
+            "Conector T",
+            "Grapa"
+          ],
+          "required": true
+        },
+        {
+          "key": "anchoCompatible",
+          "label": "Ancho compatible",
+          "type": "number",
+          "unit": "mm",
+          "optional": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "options": [
+            "Plastico",
+            "Metal",
+            "Silicona"
+          ],
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoAccesorio",
+        "anchoCompatible"
+      ],
+      "requiredAtributos": [
+        "tipoAccesorio"
+      ],
+      "atributosIniciales": {
+        "tipoAccesorio": "Clip",
+        "anchoCompatible": 8,
+        "material": "Plastico"
+      }
+    },
+    {
+      "id": "anillado_encuadernacion_v1",
+      "nombre": "Anillado encuadernación",
+      "descripcion": "Espirales y anillos para terminación editorial",
+      "familia": "terminacion_editorial",
+      "subfamilia": "anillado_encuadernacion",
+      "tipoTecnico": "anillado_encuadernacion",
+      "unidadStock": "unidad",
+      "unidadCompra": "caja",
+      "camposTecnicos": [
+        {
+          "key": "tipoAnillo",
+          "label": "Tipo de anillo",
+          "type": "text",
+          "options": [
+            "ESPIRAL_PLASTICO",
+            "WIRE_O"
+          ],
+          "required": true
+        },
+        {
+          "key": "diametro",
+          "label": "Diámetro",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "capacidadMaxHojas",
+          "label": "Capacidad (hojas, 80g)",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "required": false
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": false
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoAnillo",
+        "diametro",
+        "capacidadMaxHojas",
+        "color"
+      ],
+      "requiredAtributos": [
+        "tipoAnillo",
+        "diametro",
+        "capacidadMaxHojas"
+      ],
+      "atributosIniciales": {
+        "tipoAnillo": "ESPIRAL_PLASTICO",
+        "diametro": 10,
+        "capacidadMaxHojas": 80,
+        "material": "PVC",
+        "color": "negro",
+        "pasoPerforacion": "4:1"
+      }
+    },
+    {
+      "id": "tapa_encuadernacion_v1",
+      "nombre": "Tapa encuadernación",
+      "descripcion": "Tapas para cuadernos y documentos",
+      "familia": "terminacion_editorial",
+      "subfamilia": "tapa_encuadernacion",
+      "tipoTecnico": "tapa_encuadernacion",
+      "unidadStock": "unidad",
+      "unidadCompra": "caja",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "alto",
+        "material"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "alto",
+        "material"
+      ],
+      "atributosIniciales": {
+        "ancho": 210,
+        "alto": 297,
+        "material": "polipropileno",
+        "espesor": 0.5,
+        "colorBase": "transparente"
+      }
+    },
+    {
+      "id": "componente_carpeta_v1",
+      "nombre": "Componente para carpeta",
+      "descripcion": "Solapas, bolsillos y piezas compradas para armado de carpetas.",
+      "familia": "terminacion_editorial",
+      "subfamilia": "componente_editorial",
+      "tipoTecnico": "componente_carpeta",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "tipoComponente",
+          "label": "Tipo",
+          "type": "text",
+          "options": [
+            "Solapa",
+            "Bolsillo",
+            "Portatarjeta",
+            "Refuerzo",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoComponente",
+        "ancho",
+        "alto",
+        "material",
+        "color"
+      ],
+      "requiredAtributos": [
+        "tipoComponente",
+        "ancho",
+        "alto",
+        "material"
+      ],
+      "atributosIniciales": {
+        "tipoComponente": "Solapa",
+        "ancho": 210,
+        "alto": 90,
+        "material": "cartulina",
+        "color": "blanco"
+      }
+    },
+    {
+      "id": "componente_editorial_v1",
+      "nombre": "Componente editorial",
+      "descripcion": "Insumos de terminación editorial y emblocado por unidad: ganchos, broches y piezas compradas.",
+      "familia": "terminacion_editorial",
+      "subfamilia": "componente_editorial",
+      "tipoTecnico": "componente_editorial",
+      "unidadStock": "unidad",
+      "unidadCompra": "caja",
+      "camposTecnicos": [
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "medida",
+          "label": "Medida",
+          "type": "text",
+          "optional": true
+        },
+        {
+          "key": "unidadesPorCaja",
+          "label": "Unidades por caja",
+          "type": "number",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "medida",
+        "hojasDesde",
+        "hojasHasta",
+        "unidadesPorCaja",
+        "material",
+        "color"
+      ],
+      "requiredAtributos": [
+        "material"
+      ],
+      "atributosIniciales": {
+        "material": "alambre metálico"
+      }
+    },
+    {
+      "id": "componente_editorial_hoja_v1",
+      "nombre": "Componente editorial en hoja",
+      "descripcion": "Componentes de emblocado que se compran en hojas/pliegos: cartón de contratapa, láminas de terminación.",
+      "familia": "terminacion_editorial",
+      "subfamilia": "componente_editorial",
+      "tipoTecnico": "componente_editorial_hoja",
+      "unidadStock": "hoja",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "cm",
+          "optional": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "cm",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "formatoComercial",
+        "ancho",
+        "alto",
+        "color"
+      ],
+      "requiredAtributos": [
+        "material"
+      ],
+      "atributosIniciales": {
+        "material": "cartón gris"
+      }
+    },
+    {
+      "id": "pegatina_raspadita_v1",
+      "nombre": "Pegatina raspadita",
+      "descripcion": "Pegatina autoadhesiva con recubrimiento raspable, aplicada por unidad sobre piezas impresas.",
+      "familia": "terminacion_editorial",
+      "subfamilia": "pegatina_raspadita",
+      "tipoTecnico": "pegatina_raspadita",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "forma",
+          "label": "Forma",
+          "type": "text",
+          "options": [
+            "Rectangular",
+            "Circular",
+            "Ovalada",
+            "Otra"
+          ],
+          "optional": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "optional": true
+        },
+        {
+          "key": "unidadesPorPack",
+          "label": "Unidades por pack",
+          "type": "number",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "ancho",
+        "alto",
+        "forma",
+        "color"
+      ],
+      "requiredAtributos": [
+        "ancho",
+        "alto"
+      ],
+      "atributosIniciales": {
+        "ancho": 40,
+        "alto": 10,
+        "forma": "Rectangular",
+        "color": "plateado",
+        "unidadesPorPack": 100
+      },
+      "defaults": {
+        "esConsumible": true,
+        "esRepuesto": false,
+        "esProductoBase": false,
+        "lockEsRepuesto": true,
+        "lockEsProductoBase": true
+      }
+    },
+    {
+      "id": "argolla_llavero_accesorio_v1",
+      "nombre": "Argolla llavero",
+      "descripcion": "Herrajes para llaveros promocionales",
+      "familia": "herraje_accesorio",
+      "subfamilia": "argolla_llavero_accesorio",
+      "tipoTecnico": "argolla_llavero",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "diametro",
+          "label": "Diámetro",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "diametro",
+        "material"
+      ],
+      "requiredAtributos": [
+        "diametro",
+        "material"
+      ],
+      "atributosIniciales": {
+        "diametro": 25,
+        "material": "acero",
+        "terminacion": "niquelado"
+      }
+    },
+    {
+      "id": "ojal_ojalillo_remache_v1",
+      "nombre": "Ojal / ojalillo",
+      "descripcion": "Ojales para lona, banners y cartelería",
+      "familia": "herraje_accesorio",
+      "subfamilia": "ojal_ojalillo_remache",
+      "tipoTecnico": "ojal",
+      "unidadStock": "unidad",
+      "unidadCompra": "caja",
+      "camposTecnicos": [
+        {
+          "key": "diametroInterno",
+          "label": "Diámetro interno",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "diametroInterno",
+        "material"
+      ],
+      "requiredAtributos": [
+        "diametroInterno",
+        "material"
+      ],
+      "atributosIniciales": {
+        "diametroInterno": 10,
+        "material": "laton",
+        "terminado": "niquelado"
+      }
+    },
+    {
+      "id": "embalaje_proteccion_v1",
+      "nombre": "Embalaje / protección",
+      "descripcion": "Bolsas, cajas, sobres y protecciones para entrega.",
+      "familia": "terminacion_editorial",
+      "subfamilia": "embalaje_proteccion",
+      "tipoTecnico": "embalaje_proteccion",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "tipoEmbalaje",
+          "label": "Tipo",
+          "type": "text",
+          "options": [
+            "Bolsa",
+            "Caja",
+            "Sobre",
+            "Faja",
+            "Protección"
+          ],
+          "required": true
+        },
+        {
+          "key": "capacidadUnidades",
+          "label": "Capacidad",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "cm",
+          "optional": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "cm",
+          "optional": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoEmbalaje",
+        "capacidadUnidades",
+        "ancho",
+        "alto",
+        "material"
+      ],
+      "requiredAtributos": [
+        "tipoEmbalaje",
+        "capacidadUnidades"
+      ],
+      "atributosIniciales": {
+        "tipoEmbalaje": "Bolsa",
+        "capacidadUnidades": 100,
+        "material": "Celofán"
+      }
+    },
+    {
+      "id": "portabanner_estructura_v1",
+      "nombre": "Portabanner estructura",
+      "descripcion": "Estructuras roll-up, X, L o pop-up",
+      "familia": "pop_exhibidor",
+      "subfamilia": "portabanner_estructura",
+      "tipoTecnico": "portabanner",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "tipoPortabanner",
+          "label": "Tipo de portabanner",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "cm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "cm",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoPortabanner",
+        "ancho",
+        "alto"
+      ],
+      "requiredAtributos": [
+        "tipoPortabanner",
+        "ancho",
+        "alto"
+      ],
+      "atributosIniciales": {
+        "tipoPortabanner": "rollup",
+        "ancho": 85,
+        "alto": 200,
+        "materialEstructura": "aluminio"
+      }
+    },
+    {
+      "id": "repuesto_impresion_v1",
+      "nombre": "Repuesto técnico impresión",
+      "descripcion": "Repuestos para equipos de impresión (láser, UV, DTF, solvente, latex, sublimación).",
+      "familia": "quimico_auxiliar",
+      "subfamilia": "auxiliar_proceso",
+      "tipoTecnico": "repuesto_impresion",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "tipoComponenteDesgaste",
+          "label": "Tipo de componente",
+          "type": "text",
+          "options": [
+            "fusor",
+            "drum",
+            "drum_opc",
+            "developer",
+            "developer_unit",
+            "charge_unit",
+            "drum_cleaning_blade",
+            "correa_transferencia",
+            "transfer_belt_itb",
+            "transfer_roller",
+            "fuser_belt",
+            "pressure_roller",
+            "fuser_cleaning_web",
+            "wax_lubricant_bar",
+            "fuser_stripper_finger",
+            "waste_toner_subsystem",
+            "cabezal",
+            "lampara_uv",
+            "fresa",
+            "cuchilla",
+            "filtro",
+            "kit_mantenimiento",
+            "otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "plantillasCompatibles",
+          "label": "Plantillas compatibles",
+          "type": "text",
+          "options": [
+            "impresora_laser",
+            "duplicadora_digital",
+            "impresora_gran_formato_por_area",
+            "guillotina",
+            "plotter_de_corte",
+            "plotter_cad",
+            "laminadora_bopp_rollo",
+            "corte_laser",
+            "router_cnc",
+            "anilladora",
+            "mesa_de_corte",
+            "plancha_termica"
+          ],
+          "required": true
+        },
+        {
+          "key": "unidadVidaUtil",
+          "label": "Unidad de vida útil",
+          "type": "text",
+          "options": [
+            "copias_a4_equiv",
+            "m2",
+            "metros_lineales",
+            "horas",
+            "ciclos",
+            "piezas"
+          ],
+          "required": true
+        },
+        {
+          "key": "vidaUtilReferencia",
+          "label": "Vida útil de referencia",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "cantidadPorRecambio",
+          "label": "Cantidad por recambio",
+          "type": "number",
+          "optional": true
+        },
+        {
+          "key": "maquinasCompatibles",
+          "label": "Maquinas compatibles",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoComponenteDesgaste",
+        "plantillasCompatibles",
+        "vidaUtilReferencia",
+        "unidadVidaUtil",
+        "cantidadPorRecambio",
+        "maquinasCompatibles"
+      ],
+      "requiredAtributos": [
+        "tipoComponenteDesgaste",
+        "plantillasCompatibles",
+        "unidadVidaUtil",
+        "vidaUtilReferencia"
+      ],
+      "atributosIniciales": {
+        "categoriaRepuesto": "desgaste",
+        "clasificacion": "tecnico_maquinaria"
+      },
+      "defaults": {
+        "esConsumible": false,
+        "esRepuesto": true,
+        "lockEsConsumible": false,
+        "lockEsRepuesto": true
+      }
+    },
+    {
+      "id": "repuesto_corte_mecanizado_v1",
+      "nombre": "Repuesto técnico corte/mecanizado",
+      "descripcion": "Repuestos para CNC, láser de corte, mesa de corte y plotter de corte.",
+      "familia": "quimico_auxiliar",
+      "subfamilia": "auxiliar_proceso",
+      "tipoTecnico": "repuesto_corte_mecanizado",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "tipoComponenteDesgaste",
+          "label": "Tipo de componente",
+          "type": "text",
+          "options": [
+            "fusor",
+            "drum",
+            "drum_opc",
+            "developer",
+            "developer_unit",
+            "charge_unit",
+            "drum_cleaning_blade",
+            "correa_transferencia",
+            "transfer_belt_itb",
+            "transfer_roller",
+            "fuser_belt",
+            "pressure_roller",
+            "fuser_cleaning_web",
+            "wax_lubricant_bar",
+            "fuser_stripper_finger",
+            "waste_toner_subsystem",
+            "cabezal",
+            "lampara_uv",
+            "fresa",
+            "cuchilla",
+            "filtro",
+            "kit_mantenimiento",
+            "otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "plantillasCompatibles",
+          "label": "Plantillas compatibles",
+          "type": "text",
+          "options": [
+            "impresora_laser",
+            "duplicadora_digital",
+            "impresora_gran_formato_por_area",
+            "guillotina",
+            "plotter_de_corte",
+            "plotter_cad",
+            "laminadora_bopp_rollo",
+            "corte_laser",
+            "router_cnc",
+            "anilladora",
+            "mesa_de_corte",
+            "plancha_termica"
+          ],
+          "required": true
+        },
+        {
+          "key": "unidadVidaUtil",
+          "label": "Unidad de vida útil",
+          "type": "text",
+          "options": [
+            "copias_a4_equiv",
+            "m2",
+            "metros_lineales",
+            "horas",
+            "ciclos",
+            "piezas"
+          ],
+          "required": true
+        },
+        {
+          "key": "vidaUtilReferencia",
+          "label": "Vida útil de referencia",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "cantidadPorRecambio",
+          "label": "Cantidad por recambio",
+          "type": "number",
+          "optional": true
+        },
+        {
+          "key": "materialTrabajo",
+          "label": "Material de trabajo dominante",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoComponenteDesgaste",
+        "plantillasCompatibles",
+        "vidaUtilReferencia",
+        "unidadVidaUtil",
+        "cantidadPorRecambio",
+        "materialTrabajo"
+      ],
+      "requiredAtributos": [
+        "tipoComponenteDesgaste",
+        "plantillasCompatibles",
+        "unidadVidaUtil",
+        "vidaUtilReferencia"
+      ],
+      "atributosIniciales": {
+        "categoriaRepuesto": "desgaste",
+        "clasificacion": "tecnico_maquinaria"
+      },
+      "defaults": {
+        "esConsumible": false,
+        "esRepuesto": true,
+        "lockEsConsumible": false,
+        "lockEsRepuesto": true
+      }
+    },
+    {
+      "id": "sello_automatico_v1",
+      "nombre": "Sello automático",
+      "descripcion": "Sello autoentintable con carcasa y almohadilla integrada (Colop Printer, Trodat Printy, Nykon).",
+      "familia": "sellos",
+      "subfamilia": "sellos_automaticos",
+      "tipoTecnico": "sello_automatico",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "options": [
+            "Colop",
+            "Trodat",
+            "Nykon",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "modelo",
+          "label": "Modelo",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "anchoPolimero",
+          "label": "Ancho de polímero",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "altoPolimero",
+          "label": "Alto de polímero",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "lineasTexto",
+          "label": "Líneas de texto (máx.)",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "forma",
+          "label": "Forma",
+          "type": "text",
+          "options": [
+            "Rectangular",
+            "Redondo",
+            "Ovalado"
+          ],
+          "optional": true
+        },
+        {
+          "key": "colorCarcasa",
+          "label": "Color de carcasa",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "marca",
+        "modelo",
+        "anchoPolimero",
+        "altoPolimero",
+        "lineasTexto",
+        "forma",
+        "colorCarcasa"
+      ],
+      "requiredAtributos": [
+        "marca",
+        "modelo",
+        "anchoPolimero",
+        "altoPolimero",
+        "lineasTexto"
+      ],
+      "atributosIniciales": {
+        "marca": "Colop",
+        "modelo": "Printer 30",
+        "anchoPolimero": 47,
+        "altoPolimero": 18,
+        "lineasTexto": 5,
+        "forma": "Rectangular"
+      }
+    },
+    {
+      "id": "sello_manual_v1",
+      "nombre": "Sello manual",
+      "descripcion": "Sello tradicional con mango (madera o plástico); usa almohadilla aparte.",
+      "familia": "sellos",
+      "subfamilia": "sellos_manuales",
+      "tipoTecnico": "sello_manual",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "options": [
+            "Colop",
+            "Trodat",
+            "Nykon",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "modelo",
+          "label": "Modelo",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "anchoPolimero",
+          "label": "Ancho de polímero",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "altoPolimero",
+          "label": "Alto de polímero",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "lineasTexto",
+          "label": "Líneas de texto (máx.)",
+          "type": "number",
+          "required": true
+        },
+        {
+          "key": "forma",
+          "label": "Forma",
+          "type": "text",
+          "options": [
+            "Rectangular",
+            "Redondo",
+            "Ovalado"
+          ],
+          "optional": true
+        },
+        {
+          "key": "material",
+          "label": "Material del mango",
+          "type": "text",
+          "options": [
+            "Madera",
+            "Plástico"
+          ],
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "marca",
+        "modelo",
+        "anchoPolimero",
+        "altoPolimero",
+        "lineasTexto",
+        "forma",
+        "material"
+      ],
+      "requiredAtributos": [
+        "marca",
+        "modelo",
+        "anchoPolimero",
+        "altoPolimero",
+        "lineasTexto"
+      ],
+      "atributosIniciales": {
+        "marca": "Trodat",
+        "modelo": "Mango madera 40 mm",
+        "anchoPolimero": 40,
+        "altoPolimero": 40,
+        "lineasTexto": 4,
+        "forma": "Rectangular",
+        "material": "Madera"
+      }
+    },
+    {
+      "id": "almohadilla_sello_v1",
+      "nombre": "Repuesto de almohadilla de sello",
+      "descripcion": "Almohadilla de recambio para sellos automáticos, específica por modelo (ej. 6/4911 para Printy 4911).",
+      "familia": "sellos",
+      "subfamilia": "almohadilla_tinta",
+      "tipoTecnico": "almohadilla_sello",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "options": [
+            "Trodat",
+            "Colop",
+            "Nykon",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "codigoRepuesto",
+          "label": "Código de repuesto",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "modeloCompatible",
+          "label": "Modelo de sello compatible",
+          "type": "text",
+          "optional": true
+        },
+        {
+          "key": "colorTinta",
+          "label": "Color de tinta",
+          "type": "text",
+          "options": [
+            "Negro",
+            "Azul",
+            "Rojo",
+            "Verde",
+            "Violeta",
+            "Neutro",
+            "MCI",
+            "Bicolor"
+          ],
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "codigoRepuesto",
+        "colorTinta",
+        "modeloCompatible"
+      ],
+      "requiredAtributos": [
+        "marca",
+        "codigoRepuesto",
+        "colorTinta"
+      ],
+      "atributosIniciales": {
+        "marca": "Trodat",
+        "codigoRepuesto": "6/4911",
+        "modeloCompatible": "Printy 4911",
+        "colorTinta": "Negro"
+      },
+      "defaults": {
+        "esConsumible": true,
+        "esRepuesto": false,
+        "lockEsConsumible": false,
+        "lockEsRepuesto": false
+      }
+    },
+    {
+      "id": "tinta_sello_v1",
+      "nombre": "Tinta para sellos",
+      "descripcion": "Tinta de recarga para almohadillas de sellos (frascos), por color y volumen.",
+      "familia": "sellos",
+      "subfamilia": "almohadilla_tinta",
+      "tipoTecnico": "tinta_sello",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "options": [
+            "Trodat",
+            "Colop",
+            "Nykon",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "referencia",
+          "label": "Referencia",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "colorTinta",
+          "label": "Color de tinta",
+          "type": "text",
+          "options": [
+            "Negro",
+            "Azul",
+            "Rojo",
+            "Verde",
+            "Violeta"
+          ],
+          "required": true
+        },
+        {
+          "key": "volumen",
+          "label": "Volumen",
+          "type": "number",
+          "unit": "ml",
+          "required": true
+        },
+        {
+          "key": "uso",
+          "label": "Uso",
+          "type": "text",
+          "options": [
+            "General",
+            "Telas"
+          ],
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "referencia",
+        "colorTinta",
+        "volumen",
+        "uso"
+      ],
+      "requiredAtributos": [
+        "marca",
+        "referencia",
+        "colorTinta",
+        "volumen"
+      ],
+      "atributosIniciales": {
+        "marca": "Trodat",
+        "referencia": "7011",
+        "colorTinta": "Negro",
+        "volumen": 28,
+        "uso": "General"
+      },
+      "defaults": {
+        "esConsumible": true,
+        "esRepuesto": false,
+        "lockEsConsumible": false,
+        "lockEsRepuesto": false
+      }
+    },
+    {
+      "id": "almohadilla_escritorio_v1",
+      "nombre": "Almohadilla de escritorio",
+      "descripcion": "Tampón de escritorio para sellos manuales (entintado externo), por tamaño y color de tinta.",
+      "familia": "sellos",
+      "subfamilia": "almohadilla_tinta",
+      "tipoTecnico": "almohadilla_escritorio",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "options": [
+            "Trodat",
+            "Colop",
+            "Nykon",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "referencia",
+          "label": "Referencia",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "cm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "cm",
+          "required": true
+        },
+        {
+          "key": "colorTinta",
+          "label": "Color de tinta",
+          "type": "text",
+          "options": [
+            "Negro",
+            "Azul",
+            "Rojo",
+            "Verde",
+            "Neutro"
+          ],
+          "required": true
+        },
+        {
+          "key": "uso",
+          "label": "Uso",
+          "type": "text",
+          "options": [
+            "Escritorio",
+            "Dactilar"
+          ],
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "referencia",
+        "ancho",
+        "alto",
+        "colorTinta",
+        "uso"
+      ],
+      "requiredAtributos": [
+        "marca",
+        "referencia",
+        "ancho",
+        "alto",
+        "colorTinta"
+      ],
+      "atributosIniciales": {
+        "marca": "Trodat",
+        "referencia": "N9052",
+        "ancho": 11,
+        "alto": 7,
+        "colorTinta": "Negro",
+        "uso": "Escritorio"
+      },
+      "defaults": {
+        "esConsumible": true,
+        "esRepuesto": false,
+        "lockEsConsumible": false,
+        "lockEsRepuesto": false
+      }
+    },
+    {
+      "id": "goma_laserable_v1",
+      "nombre": "Goma laserable",
+      "descripcion": "Plancha de goma/fotopolímero para grabar con láser y cortar al tamaño del sello. Se consume por área.",
+      "familia": "sellos",
+      "subfamilia": "goma_laserable",
+      "tipoTecnico": "goma_laserable",
+      "unidadStock": "hoja",
+      "unidadCompra": "hoja",
+      "camposTecnicos": [
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "optional": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "options": [
+            "Rojo",
+            "Verde",
+            "Gris",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "ancho",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "alto",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        }
+      ],
+      "dimensionesVariante": [
+        "color",
+        "espesor",
+        "ancho",
+        "alto",
+        "marca"
+      ],
+      "requiredAtributos": [
+        "color",
+        "espesor",
+        "ancho",
+        "alto"
+      ],
+      "atributosIniciales": {
+        "color": "Rojo",
+        "espesor": 2.3,
+        "ancho": 210,
+        "alto": 297
+      }
+    },
+    {
+      "id": "objeto_promocional_base_v1",
+      "nombre": "Objeto promocional (blank)",
+      "descripcion": "Artículo comprado por unidad para decorar (taza, botella, mousepad, cuaderno). No es un insumo de producción: su costo entra por unidad. La medida de la estampa la maneja la personalización, no este material. Ver docs/productos-comprados-merchandising-diseno.md",
+      "familia": "sustrato",
+      "subfamilia": "objeto_promocional_base",
+      "tipoTecnico": "objeto_promocional_base",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "categoria",
+          "label": "Categoría",
+          "type": "text",
+          "options": [
+            "Drinkware",
+            "Escritura",
+            "Oficina",
+            "Tecnología",
+            "Llavería",
+            "Hogar y bazar",
+            "Bolsos y estuches",
+            "Escolar",
+            "Salud",
+            "Automotor",
+            "Regalería"
+          ],
+          "required": true
+        },
+        {
+          "key": "tipoObjeto",
+          "label": "Tipo de objeto",
+          "type": "text",
+          "options": [
+            "Taza",
+            "Botella",
+            "Termo",
+            "Vaso",
+            "Mate",
+            "Mousepad",
+            "Llavero",
+            "Lapicera",
+            "Cuaderno",
+            "Agenda",
+            "Posavasos",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "options": [
+            "Cerámica",
+            "Vidrio",
+            "Plástico",
+            "Metal",
+            "Acero inoxidable",
+            "Aluminio",
+            "Madera",
+            "Silicona",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "capacidad",
+          "label": "Capacidad",
+          "type": "number",
+          "unit": "ml",
+          "optional": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "optional": true
+        },
+        {
+          "key": "modelo",
+          "label": "Modelo/Descripción",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoObjeto",
+        "material",
+        "color",
+        "modelo",
+        "capacidad"
+      ],
+      "requiredAtributos": [
+        "categoria",
+        "tipoObjeto",
+        "material"
+      ],
+      "atributosIniciales": {
+        "categoria": "Drinkware",
+        "tipoObjeto": "Taza",
+        "material": "Cerámica",
+        "capacidad": 350,
+        "color": "Blanco"
+      },
+      "defaults": {
+        "esConsumible": false,
+        "esRepuesto": false,
+        "esProductoBase": true,
+        "lockEsProductoBase": true
+      }
+    },
+    {
+      "id": "textil_indumentaria_v1",
+      "nombre": "Textil / indumentaria (blank)",
+      "descripcion": "Prenda comprada por unidad para estampar/bordar (remera, buzo, gorra, tote bag). Se compra por unidad; talle y color son variantes, normalmente al mismo precio. La estampa la maneja la personalización. Ver docs/productos-comprados-merchandising-diseno.md",
+      "familia": "sustrato",
+      "subfamilia": "textil_indumentaria",
+      "tipoTecnico": "textil_indumentaria",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "categoria",
+          "label": "Categoría",
+          "type": "text",
+          "options": [
+            "Remeras",
+            "Camisas y chombas",
+            "Buzos y abrigo",
+            "Camperas",
+            "Gorras y sombreros",
+            "Bolsos de tela",
+            "Indumentaria de trabajo",
+            "Bebé y niños",
+            "Deportivo",
+            "Hogar textil",
+            "Accesorios"
+          ],
+          "required": true
+        },
+        {
+          "key": "tipoPrenda",
+          "label": "Tipo de prenda",
+          "type": "text",
+          "options": [
+            "Remera",
+            "Remera manga larga",
+            "Musculosa",
+            "Chomba",
+            "Camisa",
+            "Buzo canguro",
+            "Buzo cerrado",
+            "Campera",
+            "Gorra",
+            "Tote bag",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "options": [
+            "Algodón",
+            "Poliéster",
+            "Mixta (poly/algodón)",
+            "Frisa",
+            "Piqué",
+            "Otro"
+          ],
+          "required": true
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "talle",
+          "label": "Talle",
+          "type": "text",
+          "options": [
+            "Único",
+            "XS",
+            "S",
+            "M",
+            "L",
+            "XL",
+            "XXL",
+            "XXXL"
+          ],
+          "required": true
+        },
+        {
+          "key": "gramaje",
+          "label": "Gramaje",
+          "type": "number",
+          "unit": "g_m2",
+          "optional": true
+        },
+        {
+          "key": "marca",
+          "label": "Marca",
+          "type": "text",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipoPrenda",
+        "material",
+        "color",
+        "talle",
+        "gramaje",
+        "marca"
+      ],
+      "requiredAtributos": [
+        "categoria",
+        "tipoPrenda",
+        "material",
+        "color",
+        "talle"
+      ],
+      "atributosIniciales": {
+        "categoria": "Remeras",
+        "tipoPrenda": "Remera",
+        "material": "Algodón",
+        "color": "Blanco",
+        "talle": "M"
+      },
+      "defaults": {
+        "esConsumible": false,
+        "esRepuesto": false,
+        "esProductoBase": true,
+        "lockEsProductoBase": true
+      }
+    },
+    {
+      "id": "modulo_led_carteleria_v1",
+      "nombre": "Módulo LED de cartelería",
+      "descripcion": "Módulo LED para backlight, corpóreas y light box",
+      "familia": "electronica_carteleria",
+      "subfamilia": "modulo_led_carteleria",
+      "tipoTecnico": "modulo_led_carteleria",
+      "unidadStock": "unidad",
+      "unidadCompra": "pack",
+      "camposTecnicos": [
+        {
+          "key": "modelo",
+          "label": "Modelo",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "potencia",
+          "label": "Potencia por módulo",
+          "type": "number",
+          "unit": "w",
+          "required": true
+        },
+        {
+          "key": "tension",
+          "label": "Tensión",
+          "type": "text",
+          "options": [
+            "12V",
+            "24V",
+            "220V"
+          ],
+          "required": true
+        },
+        {
+          "key": "paso",
+          "label": "Paso entre módulos",
+          "type": "number",
+          "unit": "mm",
+          "preferredDisplayUnit": "cm",
+          "required": true
+        },
+        {
+          "key": "temperaturaColor",
+          "label": "Temperatura de color",
+          "type": "text",
+          "options": [
+            "Cálido",
+            "Neutro",
+            "Frío"
+          ],
+          "required": false
+        }
+      ],
+      "dimensionesVariante": [
+        "modelo",
+        "potencia",
+        "tension",
+        "paso",
+        "temperaturaColor"
+      ],
+      "requiredAtributos": [
+        "modelo",
+        "potencia",
+        "tension",
+        "paso"
+      ],
+      "atributosIniciales": {
+        "modelo": "SMD 2835 x3",
+        "potencia": 0.72,
+        "tension": "12V",
+        "paso": 250,
+        "temperaturaColor": "Frío"
+      }
+    },
+    {
+      "id": "fuente_alimentacion_led_v1",
+      "nombre": "Fuente de alimentación LED",
+      "descripcion": "Fuente switching para cartelería luminosa (el motor elige por capacidad)",
+      "familia": "electronica_carteleria",
+      "subfamilia": "fuente_alimentacion_led",
+      "tipoTecnico": "fuente_alimentacion_led",
+      "unidadStock": "unidad",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "corriente",
+          "label": "Corriente",
+          "type": "number",
+          "unit": "a",
+          "required": true
+        },
+        {
+          "key": "tension",
+          "label": "Tensión de salida",
+          "type": "text",
+          "options": [
+            "12V",
+            "24V"
+          ],
+          "required": true
+        },
+        {
+          "key": "proteccion",
+          "label": "Protección",
+          "type": "text",
+          "options": [
+            "IP20",
+            "IP65",
+            "IP67"
+          ],
+          "required": false
+        }
+      ],
+      "dimensionesVariante": [
+        "corriente",
+        "tension",
+        "proteccion"
+      ],
+      "requiredAtributos": [
+        "corriente",
+        "tension"
+      ],
+      "atributosIniciales": {
+        "corriente": 12.5,
+        "tension": "12V",
+        "proteccion": "IP67",
+        "capacidad": 150
+      }
+    },
+    {
+      "id": "cableado_conectica_v1",
+      "nombre": "Cable y conectores",
+      "descripcion": "Cable de baja tensión y conectores para cartelería",
+      "familia": "electronica_carteleria",
+      "subfamilia": "cableado_conectica",
+      "tipoTecnico": "cableado_conectica",
+      "unidadStock": "metro_lineal",
+      "unidadCompra": "rollo",
+      "camposTecnicos": [
+        {
+          "key": "seccion",
+          "label": "Sección",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "tipo",
+          "label": "Tipo",
+          "type": "text",
+          "options": [
+            "Cable taller",
+            "Unipolar",
+            "Conector fast"
+          ],
+          "required": false
+        }
+      ],
+      "dimensionesVariante": [
+        "seccion",
+        "tipo"
+      ],
+      "requiredAtributos": [
+        "seccion"
+      ],
+      "atributosIniciales": {
+        "seccion": "2×1 mm²",
+        "tipo": "Cable taller"
+      }
+    },
+    {
+      "id": "perfil_estructural_v1",
+      "nombre": "Perfil / caño estructural",
+      "descripcion": "Caño, perfil o listón para bastidores de cartelería (metal o madera)",
+      "familia": "metal_estructura",
+      "subfamilia": "perfil_estructural",
+      "tipoTecnico": "perfil_estructural",
+      "unidadStock": "metro_lineal",
+      "unidadCompra": "unidad",
+      "camposTecnicos": [
+        {
+          "key": "seccion",
+          "label": "Sección",
+          "type": "text",
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor de pared",
+          "type": "number",
+          "unit": "mm",
+          "required": false
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "type": "text",
+          "options": [
+            "Acero",
+            "Aluminio",
+            "Galvanizado",
+            "Madera"
+          ],
+          "required": true
+        },
+        {
+          "key": "desarrolloSeccion",
+          "label": "Desarrollo de la sección (m²/ml, para pintura)",
+          "type": "number",
+          "unit": "m2",
+          "required": false
+        },
+        {
+          "key": "largoBarra",
+          "label": "Largo de la barra comercial (se cobran barras enteras)",
+          "type": "number",
+          "unit": "m",
+          "required": false
+        }
+      ],
+      "dimensionesVariante": [
+        "seccion",
+        "material",
+        "espesor"
+      ],
+      "requiredAtributos": [
+        "seccion",
+        "material"
+      ],
+      "atributosIniciales": {
+        "seccion": "40×40 mm",
+        "espesor": 1.6,
+        "material": "Acero",
+        "desarrolloSeccion": 0.16
+      }
+    },
+    {
+      "id": "chapa_metalica_v1",
+      "nombre": "Chapa metálica",
+      "descripcion": "Chapa para cenefas, fondos y plegados de cartelería",
+      "familia": "metal_estructura",
+      "subfamilia": "chapa_metalica",
+      "tipoTecnico": "chapa_metalica",
+      "unidadStock": "m2",
+      "unidadCompra": "hoja",
+      "camposTecnicos": [
+        {
+          "key": "tipo",
+          "label": "Tipo",
+          "type": "text",
+          "options": [
+            "Galvanizada",
+            "Prepintada",
+            "Aluminio",
+            "Inoxidable"
+          ],
+          "required": true
+        },
+        {
+          "key": "espesor",
+          "label": "Espesor",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "key": "presentacion",
+          "label": "Presentación",
+          "type": "text",
+          "options": [
+            "hoja"
+          ],
+          "optional": true
+        },
+        {
+          "key": "anchoMm",
+          "label": "Ancho",
+          "type": "number",
+          "unit": "mm",
+          "optional": true
+        },
+        {
+          "key": "altoMm",
+          "label": "Alto",
+          "type": "number",
+          "unit": "mm",
+          "optional": true
+        }
+      ],
+      "dimensionesVariante": [
+        "tipo",
+        "espesor",
+        "presentacion",
+        "anchoMm",
+        "altoMm"
+      ],
+      "requiredAtributos": [
+        "tipo",
+        "espesor"
+      ],
+      "atributosIniciales": {
+        "tipo": "Galvanizada",
+        "espesor": 0.7
+      },
+      "allowUnitSuffixKeys": [
+        "anchoMm",
+        "altoMm"
+      ]
+    }
+  ],
+  "familiasPaso": [
+    {
+      "codigo": "pre_prensa",
+      "nombre": "Pre-prensa / revisión y armado",
+      "categoria": "pre_prensa",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "impresion_por_hoja",
+      "nombre": "Impresión por hoja",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [
+        {
+          "campo": "modoTalonarioIncompleto",
+          "etiqueta": "Agrupado por talonario en el pliego",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "off",
+            "aprovechar_pliego",
+            "pose_completa"
+          ],
+          "default": "off",
+          "requerido": false,
+          "descripcion": "Cómo se apilan los talonarios sueltos: estándar (off), compartiendo pliego (mínimo papel) o con poses vacías (listo para abrochar)."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_principal",
+          "nombre": "Sustrato principal",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_HOJA"
+            ]
+          },
+          "ignoraMultiplicadorCaras": true
+        },
+        {
+          "codigo": "tinta_o_toner",
+          "nombre": "Tinta / tóner",
+          "tipo": "CONSUMIBLE_MAQUINA",
+          "requerido": true
+        }
+      ]
+    },
+    {
+      "codigo": "impresion_por_area",
+      "nombre": "Impresión por área",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_principal",
+          "nombre": "Sustrato principal",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO",
+              "TRANSFERENCIA_LAMINACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_ROLLO_FLEXIBLE",
+              "SUSTRATO_RIGIDO",
+              "OBJETO_PROMOCIONAL_BASE",
+              "FILM_TRANSFERENCIA",
+              "PAPEL_TRANSFERENCIA"
+            ]
+          }
+        },
+        {
+          "codigo": "tinta",
+          "nombre": "Tinta",
+          "tipo": "CONSUMIBLE_MAQUINA",
+          "requerido": true
+        }
+      ]
+    },
+    {
+      "codigo": "impresion_por_pieza",
+      "nombre": "Impresión por pieza",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_principal",
+          "nombre": "Sustrato principal",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO",
+              "OBJETO_PROMOCIONAL_BASE",
+              "TEXTIL_INDUMENTARIA"
+            ]
+          }
+        },
+        {
+          "codigo": "tinta",
+          "nombre": "Tinta",
+          "tipo": "CONSUMIBLE_MAQUINA",
+          "requerido": true
+        }
+      ]
+    },
+    {
+      "codigo": "impresion_3d",
+      "nombre": "Impresión 3D",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [
+        {
+          "campo": "gramosPorPieza",
+          "etiqueta": "Gramos por pieza",
+          "tipo": "number",
+          "requerido": false,
+          "descripcion": "Material que consume UNA pieza, según el slicer. Es la magnitud del tiempo (gramos ÷ caudal del perfil). Conviene dejarlo abierto al comercial: cambia con cada modelo."
+        },
+        {
+          "campo": "rellenoPct",
+          "etiqueta": "Relleno (%)",
+          "tipo": "number",
+          "requerido": false,
+          "descripcion": "Densidad de relleno del slicer. Informativo para producción: el consumo real ya viaja en los gramos por pieza."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "material_3d",
+          "nombre": "Filamento / resina",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ADITIVA_3D"
+            ],
+            "subfamiliasMateriaPrima": [
+              "FILAMENTO_3D",
+              "RESINA_3D"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "aplicacion_transfer",
+      "nombre": "Aplicación de transfer manual",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "textil",
+          "nombre": "Objeto base",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO",
+              "OBJETO_PROMOCIONAL_BASE",
+              "TEXTIL_INDUMENTARIA"
+            ]
+          }
+        },
+        {
+          "codigo": "film_transfer",
+          "nombre": "Film transfer impreso (comprado listo)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TRANSFERENCIA_LAMINACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "FILM_TRANSFERENCIA",
+              "PAPEL_TRANSFERENCIA"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "aplicacion_transfer_textil",
+      "nombre": "Aplicación de transfer textil",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "prenda",
+          "nombre": "Prenda / sustrato textil",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO",
+              "OBJETO_PROMOCIONAL_BASE",
+              "TEXTIL_INDUMENTARIA"
+            ]
+          }
+        },
+        {
+          "codigo": "film_transfer",
+          "nombre": "Film transfer impreso (comprado listo)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TRANSFERENCIA_LAMINACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "FILM_TRANSFERENCIA",
+              "PAPEL_TRANSFERENCIA"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "grabado_laser",
+      "nombre": "Grabado láser",
+      "categoria": "produccion_impresion",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato",
+          "nombre": "Sustrato a grabar",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO",
+              "METAL_ESTRUCTURA",
+              "POP_EXHIBIDOR",
+              "HERRAJE_ACCESORIO",
+              "SELLOS"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO",
+              "OBJETO_PROMOCIONAL_BASE",
+              "CHAPA_METALICA",
+              "SEMIELABORADO_POP",
+              "ARGOLLA_LLAVERO_ACCESORIO",
+              "GOMA_LASERABLE"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "corte_guillotina",
+      "nombre": "Corte con guillotina",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "plotter_corte",
+      "nombre": "Plotter de corte",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [
+        {
+          "campo": "tipoCorte",
+          "etiqueta": "Tipo de corte",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "MEDIO",
+            "PROFUNDO",
+            "COMPLETO"
+          ],
+          "default": "MEDIO",
+          "requerido": false,
+          "descripcion": "Profundidad del corte. MEDIO para stickers (no atraviesa el papel base), COMPLETO para cortar el vinilo entero."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_corte",
+          "nombre": "Material flexible a cortar (opcional)",
+          "tipo": "SUSTRATO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "templateIds": [
+              "vinilo_de_corte_rollo_v1",
+              "sustrato_rollo_flexible_v1",
+              "vinilo_esmerilado_rollo_v1",
+              "iman_flexible_rollo_v1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "corte_laser",
+      "nombre": "Corte láser",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [
+        {
+          "campo": "cotizarOperacionesVectoriales",
+          "etiqueta": "Cotizar operaciones del archivo por herramienta",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas."
+        },
+        {
+          "campo": "usarDisenoVectorial",
+          "etiqueta": "Archivo vectorial para cotizar y preparar",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción."
+        },
+        {
+          "campo": "permitirIngresoPorMedidas",
+          "etiqueta": "Permitir también cotizar por medidas",
+          "tipo": "boolean",
+          "default": true,
+          "descripcion": "El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto."
+        },
+        {
+          "campo": "usarCommonLine",
+          "etiqueta": "Optimizar líneas de corte compartidas",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_corte",
+          "nombre": "Placa a cortar (opcional)",
+          "tipo": "SUSTRATO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "troquelado_digital",
+      "nombre": "Mesa de corte digital",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [
+        {
+          "campo": "cotizarOperacionesVectoriales",
+          "etiqueta": "Cotizar operaciones del archivo por herramienta",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas."
+        },
+        {
+          "campo": "usarDisenoVectorial",
+          "etiqueta": "Archivo vectorial para cotizar y preparar",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción."
+        },
+        {
+          "campo": "permitirIngresoPorMedidas",
+          "etiqueta": "Permitir también cotizar por medidas",
+          "tipo": "boolean",
+          "default": true,
+          "descripcion": "El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto."
+        },
+        {
+          "campo": "usarCommonLine",
+          "etiqueta": "Optimizar líneas de corte compartidas",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_corte",
+          "nombre": "Placa a cortar (opcional)",
+          "tipo": "SUSTRATO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "cnc",
+      "nombre": "CNC",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [
+        {
+          "campo": "cotizarOperacionesVectoriales",
+          "etiqueta": "Cotizar operaciones del archivo por herramienta",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Calcula corte completo, corte parcial e hendido con sus perfiles de máquina. Requiere un archivo interpretado y herramientas configuradas."
+        },
+        {
+          "campo": "usarDisenoVectorial",
+          "etiqueta": "Archivo vectorial para cotizar y preparar",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Permite cargar un SVG o DXF, hacer nesting irregular y generar archivos por placa para producción. El CAM/G-code continúa en el software de la CNC."
+        },
+        {
+          "campo": "permitirIngresoPorMedidas",
+          "etiqueta": "Permitir también cotizar por medidas",
+          "tipo": "boolean",
+          "default": true,
+          "descripcion": "El vendedor podrá elegir entre medidas rectangulares y un archivo vectorial, según la política comercial del producto."
+        },
+        {
+          "campo": "usarCommonLine",
+          "etiqueta": "Optimizar líneas de corte compartidas",
+          "tipo": "boolean",
+          "default": false,
+          "descripcion": "Cuando la máquina lo admite, GrafoNest comparte bordes rectos compatibles y descuenta el recorrido duplicado."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_corte",
+          "nombre": "Placa a cortar (opcional)",
+          "tipo": "SUSTRATO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "plegado",
+      "nombre": "Plegado manual",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [
+        {
+          "campo": "tipoPliegue",
+          "etiqueta": "Tipo de pliegue",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "simple",
+            "ventana",
+            "acordeon",
+            "cruzado"
+          ],
+          "requerido": false
+        }
+      ],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "corte_manual",
+      "nombre": "Corte manual",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_corte",
+          "nombre": "Material flexible a cortar (opcional)",
+          "tipo": "SUSTRATO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "templateIds": [
+              "vinilo_de_corte_rollo_v1",
+              "sustrato_rollo_flexible_v1",
+              "vinilo_esmerilado_rollo_v1",
+              "iman_flexible_rollo_v1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "corte_hilo_caliente",
+      "nombre": "Corte con hilo caliente",
+      "categoria": "corte_y_formado",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_corte",
+          "nombre": "Placa para hilo caliente",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "laminado",
+      "nombre": "Laminado Polipropileno",
+      "categoria": "terminaciones",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "film",
+          "nombre": "Film de laminado",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TRANSFERENCIA_LAMINACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "LAMINADO_FILM"
+            ]
+          },
+          "formulaForzada": "por_metro_lineal"
+        }
+      ]
+    },
+    {
+      "codigo": "plastificado_pouch",
+      "nombre": "Plastificado pouch",
+      "categoria": "terminaciones",
+      "paramsPasoSchema": [
+        {
+          "campo": "separacionEntrePiezasMm",
+          "etiqueta": "Separación entre piezas",
+          "tipo": "number",
+          "requerido": false,
+          "default": 0
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "pouch",
+          "nombre": "Pouch térmico",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TRANSFERENCIA_LAMINACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "LAMINADO_POUCH"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "pintura_superficial",
+      "nombre": "Pintura superficial",
+      "categoria": "terminaciones",
+      "paramsPasoSchema": [
+        {
+          "campo": "variante",
+          "etiqueta": "Tipo de acabado",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "mate",
+            "brillo",
+            "satinado"
+          ],
+          "requerido": false
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "pintura",
+          "nombre": "Pintura / laca",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "PINTURA_RECUBRIMIENTO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "PINTURA_CARTELERIA",
+              "PRIMER_SELLADOR"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "lijado_canteado",
+      "nombre": "Lijado y canteado",
+      "categoria": "terminaciones",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "abrochado_caballete",
+      "nombre": "Abrochado a caballete",
+      "categoria": "encuadernacion_armado",
+      "paramsPasoSchema": [
+        {
+          "campo": "brochesPorLibro",
+          "etiqueta": "Broches por libro",
+          "tipo": "number",
+          "default": 2,
+          "requerido": false,
+          "descripcion": "Cantidad de broches al lomo por ejemplar (típico: 2)."
+        }
+      ],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "encuadernado_anillado",
+      "nombre": "Encuadernación con anillo (espiral / wire-o)",
+      "categoria": "encuadernacion_armado",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "anillo",
+          "nombre": "Anillo (variante por capacidad)",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TERMINACION_EDITORIAL"
+            ],
+            "subfamiliasMateriaPrima": [
+              "ANILLADO_ENCUADERNACION"
+            ]
+          }
+        },
+        {
+          "codigo": "tapa_frontal",
+          "nombre": "Tapa frontal (transparente)",
+          "tipo": "TAPA",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TERMINACION_EDITORIAL",
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "TAPA_ENCUADERNACION",
+              "SUSTRATO_HOJA"
+            ]
+          }
+        },
+        {
+          "codigo": "tapa_posterior",
+          "nombre": "Contratapa (cartón)",
+          "tipo": "TAPA",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TERMINACION_EDITORIAL",
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "TAPA_ENCUADERNACION",
+              "SUSTRATO_HOJA"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "engomado_emblocado",
+      "nombre": "Engomado / emblocado",
+      "categoria": "encuadernacion_armado",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "cola",
+          "nombre": "Cola / goma",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ADHESIVO_TECNICO",
+              "QUIMICO_AUXILIAR"
+            ],
+            "subfamiliasMateriaPrima": [
+              "ADHESIVO_LIQUIDO_ESTRUCTURAL",
+              "CINTA_DOBLE_FAZ_TECNICA",
+              "AUXILIAR_PROCESO"
+            ]
+          }
+        },
+        {
+          "codigo": "carton_base",
+          "nombre": "Cartón base (opcional)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO",
+              "POP_EXHIBIDOR"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_HOJA",
+              "SEMIELABORADO_POP"
+            ]
+          }
+        },
+        {
+          "codigo": "hoja_blanca_superior",
+          "nombre": "Hoja blanca superior (opcional)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_HOJA"
+            ]
+          }
+        },
+        {
+          "codigo": "tapa_cartulina",
+          "nombre": "Tapa cartulina (opcional)",
+          "tipo": "TAPA",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TERMINACION_EDITORIAL",
+              "SUSTRATO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "TAPA_ENCUADERNACION",
+              "SUSTRATO_HOJA"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "montaje_sobre_sustrato",
+      "nombre": "Montado sobre material",
+      "categoria": "estructural_montaje",
+      "paramsPasoSchema": [
+        {
+          "campo": "fuentePiezasMontaje",
+          "etiqueta": "Piezas a montar",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "piezas_jobcontext",
+            "piezas_visibles",
+            "pliegos_impresos"
+          ],
+          "default": "piezas_jobcontext",
+          "descripcion": "Define si el montaje usa las piezas del producto (con las demasías que hayan agregado pasos previos), la medida VISIBLE terminada (chapa trasera cortada al marco), o los pliegos ya impresos por un paso anterior."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "sustrato_montaje",
+          "nombre": "Material de montaje",
+          "tipo": "SUSTRATO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "SUSTRATO",
+              "MAGNETICO_FIJACION",
+              "POP_EXHIBIDOR",
+              "METAL_ESTRUCTURA"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SUSTRATO_RIGIDO",
+              "SUSTRATO_ROLLO_FLEXIBLE",
+              "SUSTRATO_HOJA",
+              "IMAN_CERAMICO_FLEXIBLE",
+              "SEMIELABORADO_POP",
+              "ACCESORIO_MONTAJE_POP",
+              "CHAPA_METALICA"
+            ]
+          }
+        },
+        {
+          "codigo": "adhesivo_montaje",
+          "nombre": "Adhesivo de montaje",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ADHESIVO_TECNICO",
+              "QUIMICO_AUXILIAR"
+            ],
+            "subfamiliasMateriaPrima": [
+              "ADHESIVO_LIQUIDO_ESTRUCTURAL",
+              "CINTA_DOBLE_FAZ_TECNICA",
+              "AUXILIAR_PROCESO"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "ensamble_estructural",
+      "nombre": "Ensamble estructural",
+      "categoria": "estructural_montaje",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "estructura_bastidor",
+      "nombre": "Estructura de bastidor",
+      "categoria": "estructural_montaje",
+      "paramsPasoSchema": [
+        {
+          "campo": "tipoBastidor",
+          "etiqueta": "Tipo de bastidor",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "simple",
+            "doble"
+          ],
+          "default": "doble",
+          "requerido": true,
+          "descripcion": "Simple: un marco plano (frontlight). Doble: cajón con frente y contra unidos por la profundidad (backlight)."
+        },
+        {
+          "campo": "sepRefuerzoVcm",
+          "etiqueta": "Separación máx. refuerzos verticales (cm)",
+          "tipo": "number",
+          "default": 100,
+          "requerido": false,
+          "descripcion": "Cada cuántos cm va una barra vertical. 0 = sin refuerzos.",
+          "expuestoAlComercial": true
+        },
+        {
+          "campo": "sepRefuerzoHcm",
+          "etiqueta": "Separación máx. refuerzos horizontales (cm)",
+          "tipo": "number",
+          "default": 0,
+          "requerido": false,
+          "expuestoAlComercial": true
+        },
+        {
+          "campo": "solapaCenefaCm",
+          "etiqueta": "Solapa del plegado (cm por lado)",
+          "tipo": "number",
+          "default": 2,
+          "requerido": false,
+          "expuestoAlComercial": true
+        },
+        {
+          "campo": "profundidadMm",
+          "etiqueta": "Profundidad fija del cajón (mm)",
+          "tipo": "number",
+          "requerido": false,
+          "descripcion": "Si el producto tiene profundidad fija. Si el comercial la carga al cotizar, manda la del trabajo."
+        },
+        {
+          "campo": "sepAnclajeCm",
+          "etiqueta": "Anclajes: un par cada (cm de ancho)",
+          "tipo": "number",
+          "default": 80,
+          "requerido": false,
+          "descripcion": "Criterio de instalación: cada cuántos cm de ancho va un par de anclajes (mínimo 2 pares). El slot Anclajes puede pisarlo con su propia regla."
+        },
+        {
+          "campo": "margenPinturaPct",
+          "etiqueta": "Pérdida de pintura (%)",
+          "tipo": "number",
+          "default": 10,
+          "requerido": false,
+          "descripcion": "Se suma a los m² de desarrollo del perfil que hereda el paso de pintura."
+        },
+        {
+          "campo": "desperdicioCenefaPct",
+          "etiqueta": "Desperdicio de cenefa (%)",
+          "tipo": "number",
+          "default": 8,
+          "requerido": false,
+          "descripcion": "Se suma a los m² del desarrollo de la cenefa (plegado y recortes)."
+        },
+        {
+          "campo": "montajeLona",
+          "etiqueta": "Montaje de la lona",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "perimetral",
+            "contramarco"
+          ],
+          "default": "perimetral",
+          "requerido": false,
+          "descripcion": "Perimetral: tensada al ras con tornillos (backlight). Contramarco: envuelve la profundidad y se engrampa atrás (tela canvas)."
+        },
+        {
+          "campo": "demasiaAgarreCm",
+          "etiqueta": "Demasía de agarre de la lona (cm por lado)",
+          "tipo": "number",
+          "default": 10,
+          "requerido": false,
+          "descripcion": "Lona extra por lado para pinzar y tensar. El corte final al ras del hierro es merma, no material."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "perfil_estructural",
+          "nombre": "Perfil / caño estructural",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "METAL_ESTRUCTURA",
+              "HERRAJE_ACCESORIO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "CHAPA_METALICA",
+              "PERFIL_ESTRUCTURAL",
+              "FIJACION_AUXILIAR"
+            ]
+          },
+          "formulaForzada": "por_unidad_productiva",
+          "magnitudDerivada": "mlTotal"
+        },
+        {
+          "codigo": "anclaje",
+          "nombre": "Anclajes (opcional)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "HERRAJE_ACCESORIO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "SISTEMA_COLGADO_MONTAJE",
+              "FIJACION_AUXILIAR"
+            ]
+          },
+          "magnitudDerivada": "anclajes"
+        }
+      ]
+    },
+    {
+      "codigo": "iluminacion_led",
+      "nombre": "Iluminación LED",
+      "categoria": "estructural_montaje",
+      "paramsPasoSchema": [
+        {
+          "campo": "modoSembrado",
+          "etiqueta": "Modo de sembrado",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "area",
+            "recorrido"
+          ],
+          "default": "area",
+          "requerido": true,
+          "descripcion": "Por área: grilla sobre la cara (backlight, light box). Por recorrido: siguiendo el trazo (corpóreas)."
+        },
+        {
+          "campo": "densidad",
+          "etiqueta": "Densidad (multiplicador)",
+          "tipo": "number",
+          "default": 1,
+          "requerido": false,
+          "descripcion": "1 = densidad recomendada del módulo. 1,5 = 50% más módulos (más brillo).",
+          "expuestoAlComercial": true
+        },
+        {
+          "campo": "margenFuentePct",
+          "etiqueta": "Margen de la fuente (%)",
+          "tipo": "number",
+          "default": 30,
+          "requerido": false,
+          "descripcion": "Colchón sobre los watts sembrados para elegir la fuente: 16 módulos de 0,72 W = 11,5 W → con 30% la fuente debe cumplir 15 W."
+        },
+        {
+          "campo": "factorCablePerimetro",
+          "etiqueta": "Cable: factor sobre el perímetro",
+          "tipo": "number",
+          "default": 1.4,
+          "requerido": false,
+          "descripcion": "Metros de cable = perímetro × este factor + los cm por módulo."
+        },
+        {
+          "campo": "cablePorModuloCm",
+          "etiqueta": "Cable por módulo (cm)",
+          "tipo": "number",
+          "default": 12,
+          "requerido": false,
+          "descripcion": "Chicote de conexión de cada módulo."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "modulos_led",
+          "nombre": "Módulo LED",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ELECTRONICA_CARTELERIA",
+              "NEON_LUMINARIA"
+            ],
+            "subfamiliasMateriaPrima": [
+              "MODULO_LED_CARTELERIA",
+              "NEON_FLEX_LED"
+            ]
+          },
+          "formulaForzada": "por_unidad_productiva"
+        },
+        {
+          "codigo": "fuente",
+          "nombre": "Fuente de alimentación (auto por capacidad)",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ELECTRONICA_CARTELERIA"
+            ],
+            "subfamiliasMateriaPrima": [
+              "FUENTE_ALIMENTACION_LED"
+            ]
+          },
+          "cantidadFija": 1,
+          "criterioCapacidadDefault": {
+            "inputMagnitud": "wattsRequeridos",
+            "materialCampo": "capacidad"
+          }
+        },
+        {
+          "codigo": "cableado",
+          "nombre": "Cable y conectores (opcional)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ELECTRONICA_CARTELERIA"
+            ],
+            "subfamiliasMateriaPrima": [
+              "CABLEADO_CONECTICA"
+            ]
+          },
+          "magnitudDerivada": "cableMl"
+        }
+      ]
+    },
+    {
+      "codigo": "embalaje",
+      "nombre": "Embalaje",
+      "categoria": "operaciones_manuales",
+      "paramsPasoSchema": [
+        {
+          "campo": "piezasPorCaja",
+          "etiqueta": "Piezas por caja",
+          "tipo": "number",
+          "default": 100,
+          "requerido": false,
+          "descripcion": "Cuántas piezas entran por caja. Para cálculo de cantidad de cajas via CONVERSION."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "caja",
+          "nombre": "Caja / bolsa",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TERMINACION_EDITORIAL",
+              "PACKING_INSTALACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "EMBALAJE_PROTECCION",
+              "CONSUMIBLE_INSTALACION"
+            ]
+          }
+        },
+        {
+          "codigo": "cinta",
+          "nombre": "Cinta",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "ADHESIVO_TECNICO",
+              "PACKING_INSTALACION"
+            ],
+            "subfamiliasMateriaPrima": [
+              "CINTA_DOBLE_FAZ_TECNICA",
+              "CONSUMIBLE_INSTALACION",
+              "SISTEMA_COLGADO_MONTAJE"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "trabajo_manual",
+      "nombre": "Trabajo manual",
+      "categoria": "operaciones_manuales",
+      "paramsPasoSchema": [
+        {
+          "campo": "tipoTrabajo",
+          "etiqueta": "Tipo de trabajo",
+          "tipo": "string",
+          "requerido": false,
+          "descripcion": "Texto opcional para documentar la operación. El nombre visible del paso es el label principal."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "insumo_manual",
+          "nombre": "Insumo manual (opcional)",
+          "tipo": "INSUMO_PASO",
+          "requerido": false,
+          "compatibilidadMaterial": {
+            "sinRestricciones": true
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "modificacion_post",
+      "nombre": "Modificación post-producción",
+      "categoria": "operaciones_manuales",
+      "paramsPasoSchema": [
+        {
+          "campo": "subTipo",
+          "etiqueta": "Sub-tipo de modificación",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "perforacion",
+            "redondeo_puntas",
+            "numeracion",
+            "aplicacion_pegamento",
+            "aplicacion_velcro"
+          ],
+          "requerido": true
+        }
+      ],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "colocacion_ojales",
+      "nombre": "Colocación de ojales",
+      "categoria": "operaciones_manuales",
+      "paramsPasoSchema": [
+        {
+          "campo": "modoDistribucion",
+          "etiqueta": "Distribución de los ojales",
+          "tipo": "enum",
+          "valoresPermitidos": [
+            "por_separacion",
+            "solo_esquinas"
+          ],
+          "default": "por_separacion",
+          "requerido": true,
+          "descripcion": "Distribuidos por los lados con una separación máxima, o únicamente uno en cada una de las cuatro esquinas."
+        },
+        {
+          "campo": "separacionMaxMm",
+          "etiqueta": "Separación máxima entre ojales (mm)",
+          "tipo": "number",
+          "requerido": true,
+          "visibleCuando": {
+            "campo": "modoDistribucion",
+            "valor": "por_separacion"
+          },
+          "descripcion": "Es un MÁXIMO, no un valor exacto: los ojales se reparten parejos por cada lado sin superar esta distancia."
+        },
+        {
+          "campo": "lados",
+          "etiqueta": "Lados con ojales",
+          "tipo": "multi-enum",
+          "valoresPermitidos": [
+            "superior",
+            "inferior",
+            "izquierdo",
+            "derecho"
+          ],
+          "requerido": true,
+          "visibleCuando": {
+            "campo": "modoDistribucion",
+            "valor": "por_separacion"
+          }
+        },
+        {
+          "campo": "distanciaBordeMm",
+          "etiqueta": "Distancia al borde sin refuerzo (mm)",
+          "tipo": "number",
+          "default": 10,
+          "requerido": false,
+          "descripcion": "Sólo para lados SIN refuerzo. Donde hay refuerzo no hace falta configurar nada: el refuerzo doblado deja una banda de su mismo ancho y el ojal se centra en ella (refuerzo de 20 mm → ojal a 10 mm del borde)."
+        },
+        {
+          "campo": "esquinasSiempre",
+          "etiqueta": "Ojal en cada esquina",
+          "tipo": "boolean",
+          "default": true,
+          "requerido": false,
+          "visibleCuando": {
+            "campo": "modoDistribucion",
+            "valor": "por_separacion"
+          },
+          "descripcion": "Práctica de taller: la esquina lleva ojal sí o sí. Cuando dos lados adyacentes llevan ojales, la esquina se cuenta UNA sola vez."
+        }
+      ],
+      "slotsRequeridos": [
+        {
+          "codigo": "ojal",
+          "nombre": "Ojal / ojalillo",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "HERRAJE_ACCESORIO"
+            ],
+            "subfamiliasMateriaPrima": [
+              "OJAL_OJALILLO_REMACHE"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "codigo": "colocacion_raspadita",
+      "nombre": "Colocación de raspadita",
+      "categoria": "operaciones_manuales",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": [
+        {
+          "codigo": "raspadita",
+          "nombre": "Pegatina raspadita",
+          "tipo": "INSUMO_PASO",
+          "requerido": true,
+          "compatibilidadMaterial": {
+            "familiasMateriaPrima": [
+              "TERMINACION_EDITORIAL"
+            ],
+            "subfamiliasMateriaPrima": [
+              "PEGATINA_RASPADITA"
+            ],
+            "templateIds": [
+              "pegatina_raspadita_v1"
+            ]
+          },
+          "formulaForzada": "por_pieza"
+        }
+      ]
+    },
+    {
+      "codigo": "instalacion_in_situ",
+      "nombre": "Instalación en sitio",
+      "categoria": "logistica_instalacion",
+      "paramsPasoSchema": [],
+      "slotsRequeridos": []
+    },
+    {
+      "codigo": "diseno_grafico",
+      "nombre": "Diseño gráfico",
+      "categoria": "servicios_profesionales",
+      "paramsPasoSchema": [
+        {
+          "campo": "horasEstimadas",
+          "etiqueta": "Horas estimadas (solo si T-2)",
+          "tipo": "number",
+          "requerido": false,
+          "descripcion": "Horas que el comercial estima al cotizar. Solo aplica si modoTiempo = T-2."
+        }
+      ],
+      "slotsRequeridos": []
+    }
+  ]
+}

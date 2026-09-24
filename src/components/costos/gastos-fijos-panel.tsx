@@ -54,6 +54,9 @@ import {
   useDesignTheme,
 } from "@/components/design-system/appearance";
 import { ActionButton } from "@/components/design-system/action-button";
+import { ActionLink } from "@/components/design-system/action-link";
+import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 import { FormSheet } from "@/components/design-system/form-sheet";
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { ListMetric } from "@/components/design-system/list-metric";
@@ -126,6 +129,10 @@ export function GastosFijosPanel({
   const { moneda } = useConfigRegional();
   const scope = useDesignScope();
   const theme = useDesignTheme();
+  const conCuentasPagar = useCapacidad("cuentas_pagar");
+  const conRecurrentes = useCapacidad("gastos_recurrentes");
+  const permisoGestionar = usePuede("administracion.gestionar");
+  const puedeProgramar = conCuentasPagar && conRecurrentes && permisoGestionar;
   const fmt = (v: number) =>
     formatearMoneda(v, moneda, { decimales: moneda.decimales });
   const [gastos, setGastos] = React.useState(initialGastos);
@@ -326,8 +333,8 @@ export function GastosFijosPanel({
             Gastos fijos<span className={s.dot}>.</span>
           </h1>
           <p className={listPage.subtitle}>
-            Lo que cuesta sostener tu operación. La base para calcular el punto
-            de equilibrio.
+            Presupuestá los gastos de estructura y elegí cuáles generan cuentas
+            por pagar automáticamente.
           </p>
         </div>
         <ActionButton onPress={() => abrir(null)}>
@@ -447,6 +454,11 @@ export function GastosFijosPanel({
                       <ArrowUpRightIcon aria-hidden />
                     </button>
                     <span className={s.category}>{g.categoriaNombre}</span>
+                    <small className={s.category}>
+                      {g.programacion?.activa
+                        ? "Genera cuentas por pagar"
+                        : "Generación desactivada"}
+                    </small>
                   </TableCell>
                   <TableCell className={s.provider}>
                     {g.proveedorNombre ?? (
@@ -543,8 +555,17 @@ export function GastosFijosPanel({
       <p className={s.caption}>
         <CalendarDaysIcon aria-hidden />
         La vigencia indica cuándo un gasto cuenta para el punto de equilibrio.
-        Las facturas y los pagos se registran en Egresos.
+        Las obligaciones generadas se consultan y pagan en Cuentas por pagar; su
+        historial y clasificación quedan en Egresos.
       </p>
+      <div className={s.actions}>
+        <ActionLink href="/administracion/cuentas-por-pagar" variant="outline">
+          Cuentas por pagar
+        </ActionLink>
+        <ActionLink href="/administracion/programaciones" variant="ghost">
+          Programaciones anteriores
+        </ActionLink>
+      </div>
 
       {fichaAbierta && (
         <FormSheet
@@ -673,9 +694,18 @@ export function GastosFijosPanel({
                           onChange={(v) =>
                             editar("frecuencia", v as FrecuenciaGastoFijo)
                           }
-                          disabled={guardando}
+                          disabled={
+                            guardando ||
+                            !!editando?.programacion?.egresosEmitidos
+                          }
                           options={FRECUENCIAS_GASTO_FIJO}
                         />
+                        {!!editando?.programacion?.egresosEmitidos && (
+                          <FieldDescription>
+                            El período se conserva porque ya hay obligaciones
+                            emitidas.
+                          </FieldDescription>
+                        )}
                       </Field>
                     </div>
                     <div className={s.monthlyPreview}>
@@ -823,6 +853,120 @@ export function GastosFijosPanel({
                           ? ` hasta ${mesLabel(hasta)}, inclusive.`
                           : ". Completá cuándo finaliza."}
                     </p>
+                  </FieldGroup>
+                </fieldset>
+                <fieldset disabled={guardando} className={s.formSection}>
+                  <legend>Generación de cuentas por pagar</legend>
+                  <p className={s.sectionDescription}>
+                    Es opcional y empieza desactivada. Cada período genera una
+                    obligación pendiente con el importe del gasto. El pago se
+                    registra después en Cuentas por pagar.
+                  </p>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel>Generar automáticamente</FieldLabel>
+                      <SegmentedControl
+                        aria-label="Generar cuentas por pagar"
+                        value={form.generarObligaciones ? "si" : "no"}
+                        options={[
+                          {
+                            value: "no",
+                            label: "Desactivado",
+                            icon: <PauseIcon />,
+                          },
+                          {
+                            value: "si",
+                            label: "Activado",
+                            icon: <Repeat2Icon />,
+                          },
+                        ]}
+                        onChange={(v) =>
+                          editar("generarObligaciones", v === "si")
+                        }
+                        isDisabled={
+                          guardando ||
+                          (!puedeProgramar && !form.generarObligaciones) ||
+                          editando?.activo === false
+                        }
+                      />
+                      {!puedeProgramar && (
+                        <FieldDescription>
+                          Activar o modificar la generación requiere el plan con
+                          gastos recurrentes y permiso para gestionar pagos.
+                        </FieldDescription>
+                      )}
+                      {editando?.activo === false && (
+                        <FieldDescription>
+                          Activá el gasto antes de configurar su generación.
+                        </FieldDescription>
+                      )}
+                    </Field>
+                    {form.generarObligaciones && (
+                      <>
+                        <div className={s.formGrid}>
+                          <Field>
+                            <FieldLabel htmlFor="gf-generar-desde">
+                              Generar desde
+                            </FieldLabel>
+                            <Input
+                              id="gf-generar-desde"
+                              type="month"
+                              value={form.generarDesde}
+                              min={form.vigenteDesde}
+                              max={hasta ?? undefined}
+                              disabled={
+                                !puedeProgramar ||
+                                !!editando?.programacion?.egresosEmitidos
+                              }
+                              onChange={(e) =>
+                                editar("generarDesde", e.target.value)
+                              }
+                              className={focus.singleBorder}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="gf-vencimiento">
+                              Día de vencimiento
+                            </FieldLabel>
+                            <Input
+                              id="gf-vencimiento"
+                              type="number"
+                              min={1}
+                              max={31}
+                              step={1}
+                              value={form.diaVencimiento}
+                              disabled={!puedeProgramar}
+                              onChange={(e) =>
+                                editar("diaVencimiento", e.target.value)
+                              }
+                              className={focus.singleBorder}
+                            />
+                          </Field>
+                        </div>
+                        <FieldDescription>
+                          Se emite en la próxima ejecución diaria. Si el mes no
+                          tiene ese día, vence el último día del mes. Los
+                          cambios de importe se aplican a próximas emisiones;
+                          las ya registradas se conservan.
+                        </FieldDescription>
+                        {form.generarDesde < mes && (
+                          <Alert>
+                            <AlertTitle>Incluye períodos anteriores</AlertTitle>
+                            <AlertDescription>
+                              Se generarán también los períodos pendientes desde{" "}
+                              {mesLabel(form.generarDesde)}.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        {!!editando?.programacion?.egresosEmitidos && (
+                          <FieldDescription>
+                            Ya hay {editando.programacion.egresosEmitidos}{" "}
+                            egresos emitidos. Para cambiar el inicio o la
+                            frecuencia, desactivá este gasto y creá uno nuevo.
+                          </FieldDescription>
+                        )}
+                      </>
+                    )}
                   </FieldGroup>
                 </fieldset>
               </Tabs.Panel>

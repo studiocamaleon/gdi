@@ -1,0 +1,82 @@
+[
+  {
+    "id": "Anton",
+    "source": "https://github.com/google/fonts/tree/main/ofl/anton",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "BebasNeue",
+    "source": "https://github.com/google/fonts/tree/main/ofl/bebasneue",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Righteous",
+    "source": "https://github.com/google/fonts/tree/main/ofl/righteous",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Bungee",
+    "source": "https://github.com/google/fonts/tree/main/ofl/bungee",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Syne",
+    "source": "https://github.com/google/fonts/tree/main/ofl/syne",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "ArchivoBlack",
+    "source": "https://github.com/google/fonts/tree/main/ofl/archivoblack",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Poppins",
+    "source": "https://github.com/google/fonts/tree/main/ofl/poppins",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Orbitron",
+    "source": "https://github.com/google/fonts/tree/main/ofl/orbitron",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Lobster",
+    "source": "https://github.com/google/fonts/tree/main/ofl/lobster",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Oswald",
+    "source": "https://github.com/google/fonts/tree/main/ofl/oswald",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Pacifico",
+    "source": "https://github.com/google/fonts/tree/main/ofl/pacifico",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "Montserrat",
+    "source": "https://github.com/google/fonts/tree/main/ofl/montserrat",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "PermanentMarker",
+    "source": "https://github.com/google/fonts/tree/main/apache/permanentmarker",
+    "license": "Apache-2.0"
+  },
+  {
+    "id": "Raleway",
+    "source": "https://github.com/google/fonts/tree/main/ofl/raleway",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "PlayfairDisplay",
+    "source": "https://github.com/google/fonts/tree/main/ofl/playfairdisplay",
+    "license": "OFL-1.1"
+  },
+  {
+    "id": "RussoOne",
+    "source": "https://github.com/google/fonts/tree/main/ofl/russoone",
+    "license": "OFL-1.1"
+  }
+]

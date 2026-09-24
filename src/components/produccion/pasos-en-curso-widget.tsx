@@ -519,7 +519,7 @@ export function PasosEnCursoWidget() {
                   <Link
                     className="pw-link"
                     href={`/produccion/tablero?item=${tramo.itemId}`}
-                    title="Abrir el detalle de este paso en el tablero"
+                    title="Abrir el detalle de este paso en Operación diaria"
                   >
                     Ver paso
                   </Link>

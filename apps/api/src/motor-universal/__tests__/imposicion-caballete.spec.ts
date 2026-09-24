@@ -15,6 +15,7 @@ function pasoImpresion(
     configPasoId: 'cp-1',
     rutaPasoOrden: 1,
     familiaCodigo: 'impresion_por_hoja',
+    slots: [],
     mecanismoCantidad: 'CALCULADO_POR_PASO',
     paramsPasoJson: {
       nestingConfig: {

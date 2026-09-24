@@ -1,11 +1,12 @@
 "use client";
 
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
+import { usePuede } from "@/components/navigation/permisos-provider";
 
 import * as React from "react";
 
 import Link from "next/link";
-import { Card, Tabs, TextArea, Checkbox, Label } from "@heroui/react";
+import { Card, Tabs, TextArea, Checkbox, Label, Input } from "@heroui/react";
 import { ActionButton } from "@/components/design-system/action-button";
 import { ActionLink } from "@/components/design-system/action-link";
 import {
@@ -17,6 +18,7 @@ import { NavigationTabList } from "@/components/design-system/navigation-tab-lis
 import { FormDialog } from "@/components/design-system/form-dialog";
 import { SelectField } from "@/components/design-system/select-field";
 import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
+import { PresupuestoCorreoDialog, HistorialCorreosPresupuesto, type CanalPresupuesto } from "./presupuesto-correo-dialog";
 import focus from "@/components/design-system/field-focus.module.css";
 import s from "./presupuesto-detalle-view.module.css";
 import { useRouter } from "next/navigation";
@@ -45,7 +47,6 @@ import {
 
 import {
   convertirPresupuesto,
-  enviarPresupuesto,
   getPresupuesto,
   presupuestoPdfUrl,
   presupuestoPublicPath,
@@ -63,6 +64,7 @@ import {
 import type { MembershipRole } from "@/lib/auth";
 import { nombreCanalVenta } from "@/lib/canales-venta";
 import { fechaConDia } from "@/lib/fecha";
+import { claveFechaEnZona } from "@/lib/zona";
 
 /** Ficha comercial: presentación y acciones según el estado del presupuesto. */
 const ESTADO_META: Record<PresupuestoEstado, { label: string }> = {
@@ -115,7 +117,13 @@ function PresupuestoDetalleContent({
   inicial,
   rol,
 }: PresupuestoDetalleViewProps) {
+  const puedeEnviar = usePuede("comercial.gestionar");
+  const conPresupuestos = useCapacidad("presupuestos");
   const conPdf = useCapacidad("documentos_pdf");
+  const conEta = useCapacidad("eta_capacidad");
+  const { zonaHoraria } = useConfigRegional();
+  const [fechaConversionAbierta, setFechaConversionAbierta] = React.useState(false);
+  const [fechaConversion, setFechaConversion] = React.useState("");
   const scope = useDesignScope();
   const themeClass = useDesignTheme();
   const router = useRouter();
@@ -130,6 +138,18 @@ function PresupuestoDetalleContent({
   const [d, setD] = React.useState<PresupuestoDetalle>(inicial);
   const [tab, setTab] = React.useState<Tab>("productos");
   const [trabajando, setTrabajando] = React.useState(false);
+  const [correoAbierto, setCorreoAbierto] = React.useState(false);
+  const [canalCorreo, setCanalCorreo] = React.useState<CanalPresupuesto>("correo");
+  const [revisionCorreos, setRevisionCorreos] = React.useState(0);
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    const canal = url.searchParams.get("correo");
+    if ((d.estado === "enviado" || d.estado === "borrador") && (canal === "correo" || canal === "ambos")) {
+      setCanalCorreo(canal); setCorreoAbierto(true);
+      url.searchParams.delete("correo");
+      window.history.replaceState(window.history.state, "", url);
+    }
+  }, [d.estado]);
   const accionEnCurso = React.useRef(false);
   const [aprobacionAbierta, setAprobacionAbierta] = React.useState(false);
   const [rechazoAbierto, setRechazoAbierto] = React.useState(false);
@@ -167,6 +187,7 @@ function PresupuestoDetalleContent({
       if (
         document.visibilityState === "visible" &&
         !trabajando &&
+        !correoAbierto &&
         !aprobacionAbierta &&
         !rechazoAbierto &&
         !devolucionAbierta
@@ -178,6 +199,7 @@ function PresupuestoDetalleContent({
   }, [
     cargar,
     trabajando,
+    correoAbierto,
     aprobacionAbierta,
     rechazoAbierto,
     devolucionAbierta,
@@ -215,28 +237,35 @@ function PresupuestoDetalleContent({
   );
   const parcial = seleccion.size < itemsConvertibles.length;
 
-  // Convertir lleva DERECHO a la orden, con ?convertida=1: allá se abre el
-  // aviso de que quedó en borrador. Antes esto era sólo un toast acá y era
-  // fácil creer que la orden ya estaba emitida y dejarla parada sin querer.
+  // Convertir emite la OT y abre su ficha con la entrega actualizada.
   //
   // No usa accion() porque ése recarga el presupuesto y hace router.refresh()
   // al terminar: dos requests sobre una vista que estamos abandonando. En el
   // camino feliz `trabajando` queda en true a propósito, para que no se pueda
   // apretar dos veces mientras navega.
-  const convertir = async () => {
+  const convertir = async (fechaManual?: string) => {
+    const fecha = fechaManual || d.fechaEntrega;
+    if (!conEta && (!fecha || fecha < claveFechaEnZona(new Date(), zonaHoraria))) {
+      setFechaConversionAbierta(true);
+      return;
+    }
+    if (accionEnCurso.current) return;
+    accionEnCurso.current = true;
     setTrabajando(true);
     try {
       const res = await convertirPresupuesto(
         id,
-        parcial ? { itemIds: [...seleccion] } : {},
+        { ...(parcial ? { itemIds: [...seleccion] } : {}), ...(!conEta && fecha ? { fechaEntrega: fecha } : {}) },
       );
-      toast.success(`Presupuesto convertido en ${res.ordenNumero}.`);
-      router.push(`/produccion/ordenes/${res.ordenId}?convertida=1`);
+      toast.success(`${res.ordenNumero} emitida al taller.`);
+      router.push(`/produccion/ordenes/${res.ordenId}?emitida=1`);
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "No se pudo convertir el presupuesto.",
       );
       setTrabajando(false);
+    } finally {
+      accionEnCurso.current = false;
     }
   };
 
@@ -281,6 +310,7 @@ function PresupuestoDetalleContent({
           )}
         </div>
         <div className={s.headerActions}>
+          {d.estado === "enviado" && <ActionButton variant="outline" isDisabled={trabajando || !puedeEnviar || !conPresupuestos} onPress={() => setCorreoAbierto(true)}><SendIcon aria-hidden /> Enviar al cliente</ActionButton>}
           {(d.pdfDisponible ?? conPdf) && <ActionLink
             variant="outline"
             href={presupuestoPdfUrl(id)}
@@ -379,12 +409,7 @@ function PresupuestoDetalleContent({
         d={d}
         puedeAprobar={puedeAprobar}
         trabajando={trabajando}
-        onEnviar={() =>
-          void accion(
-            () => enviarPresupuesto(id),
-            "Presupuesto enviado — copiá el link y compartilo.",
-          )
-        }
+        onEnviar={() => setCorreoAbierto(true)}
         onAprobar={() =>
           void accion(
             () => resolverAprobacionPresupuesto(id, { decision: "aprobar" }),
@@ -400,6 +425,8 @@ function PresupuestoDetalleContent({
         disponibles={itemsConvertibles.length}
       />
 
+      <HistorialCorreosPresupuesto id={id} revision={revisionCorreos} />
+      {correoAbierto && <PresupuestoCorreoDialog id={id} canalInicial={canalCorreo} onCerrar={() => setCorreoAbierto(false)} onEnviado={() => { setRevisionCorreos((v) => v + 1); void cargar(); }} />}
       <div className={s.workspace}>
         <Tabs
           className={s.tabs}
@@ -450,6 +477,26 @@ function PresupuestoDetalleContent({
         <ResumenFinanciero d={d} />
       </div>
 
+      <FormDialog
+        isOpen={fechaConversionAbierta}
+        onOpenChange={setFechaConversionAbierta}
+        isDismissable={!trabajando}
+        title="Fecha de entrega de la OT"
+        description="La fecha del presupuesto ya pasó o no estaba definida. Tu plan utiliza una fecha comercial: confirmala para emitir la orden."
+      >
+        <form onSubmit={(event) => { event.preventDefault(); void convertir(fechaConversion); }}>
+          <div className={s.formBody}>
+            <label className={s.formField}>
+              <span>Fecha de entrega</span>
+              <Input type="date" required min={claveFechaEnZona(new Date(), zonaHoraria)} value={fechaConversion} onChange={(e) => setFechaConversion(e.target.value)} className={focus.singleBorder} />
+            </label>
+          </div>
+          <div className={s.formActions}>
+            <ActionButton variant="outline" isDisabled={trabajando} onPress={() => setFechaConversionAbierta(false)}>Cancelar</ActionButton>
+            <ActionButton type="submit" isDisabled={trabajando || !fechaConversion} isPending={trabajando}>Convertir y emitir OT</ActionButton>
+          </div>
+        </form>
+      </FormDialog>
       <FormDialog
         isOpen={aprobacionAbierta}
         onOpenChange={setAprobacionAbierta}
@@ -682,8 +729,10 @@ function AccionesEstado({
   seleccionadas: number;
   disponibles: number;
 }) {
+  const puedeEnviar = usePuede("comercial.gestionar");
   const conPresupuestos = useCapacidad("presupuestos");
   const conOrdenes = useCapacidad("ordenes");
+  const conEta = useCapacidad("eta_capacidad");
   const conEnlace = useCapacidad("aprobacion_presupuestos");
   if (d.estado === "convertido") {
     return (
@@ -721,7 +770,7 @@ function AccionesEstado({
                 : "Podés registrar la decisión del cliente desde esta ficha."}
           </div>
         </div>
-        <ActionButton type="button" isDisabled={trabajando || !conPresupuestos} onPress={onEnviar}>
+        <ActionButton type="button" isDisabled={trabajando || !conPresupuestos || !puedeEnviar} onPress={onEnviar}>
           <SendIcon /> Enviar al cliente
         </ActionButton>
       </div>
@@ -808,16 +857,18 @@ function AccionesEstado({
           <div className={s.actionDescription}>
             {parcial
               ? `Se convertirán ${seleccionadas} de ${disponibles} productos pendientes (elegilos en la pestaña Conversión).`
-              : "Se convertirán todos los productos pendientes en una orden de trabajo."}
+              : "Se emitirá una orden de trabajo con todos los productos pendientes."}
+            {conEta && " La entrega de cada producto se recalculará con la disponibilidad actual del taller."}
           </div>
         </div>
         <ActionButton
           type="button"
           isDisabled={trabajando || seleccionadas === 0 || !conOrdenes}
+          isPending={trabajando}
           title={!conOrdenes ? "La creación de órdenes no está incluida en el plan actual." : undefined}
           onPress={onConvertir}
         >
-          Convertir en orden
+          {trabajando ? "Emitiendo OT…" : "Convertir en orden"}
         </ActionButton>
       </div>
     );

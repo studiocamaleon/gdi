@@ -4,7 +4,14 @@ import { GdiSpinner } from "@/components/brand/gdi-spinner";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CheckIcon, LockKeyholeIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  CheckIcon,
+  CreditCardIcon,
+  LockKeyholeIcon,
+  ReceiptTextIcon,
+  XIcon,
+} from "lucide-react";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import { ConfirmacionDestructiva } from "@/components/ui/confirmacion-destructiva";
 import { Button } from "@/components/ui/button";
@@ -19,6 +26,27 @@ import type { Paddle } from "@paddle/paddle-js";
 import checkoutStyles from "./suscripcion-checkout.module.css";
 import { ContratacionDialog } from "./contratacion-dialog";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
+import { ActionButton } from "@/components/design-system/action-button";
+import { SegmentedControl } from "@/components/design-system/choice-controls";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { cn } from "@/lib/utils";
+import theme from "@/components/design-system/brand-workspace-theme.module.css";
+import styles from "./suscripcion-view.module.css";
 
 import {
   abrirPortalSuscripcion,
@@ -37,17 +65,7 @@ import {
 } from "@/lib/suscripcion-api";
 
 /**
- * Administrar suscripción — port del diseño `suscripcion.jsx` de Grafoprint
- * (claude.ai/design), cableado a datos reales.
- *
- * Qué se portó y qué NO, y por qué. El diseño se dibujó antes de decidir la
- * pasarela, así que mostraba cosas que hoy no existen; se dejaron afuera en vez
- * de rellenarlas con datos inventados:
- *  - Toggle Argentina/Internacional (Mercado Pago vs Paddle): MP todavía no
- *    está implementado — es F5. Hoy la pasarela es una sola.
- *  - Tarjeta "•••• 4509" y datos fiscales editables: esos datos los tiene
- *    Paddle, no nosotros. Se delega en su portal de cliente.
- *
+ * Suscripción del tenant, con identidad Grafo y datos reales de facturación.
  * El banner de prueba y el toggle Mensual/Anual SÍ están: los días salen
  * calculados de `trialHasta` (nunca guardados) y el ahorro anual lo calcula el
  * backend contra doce meses sueltos.
@@ -166,7 +184,7 @@ const ETIQUETA_FEATURE: Record<string, string> = {
 
 function precio(monto: number, moneda: string): string {
   const simbolo = moneda === "USD" ? "US$" : "$";
-  return `${simbolo}${monto.toLocaleString("es-AR")}`;
+  return `${simbolo}${monto.toLocaleString("es-AR", { maximumFractionDigits: 2 })}`;
 }
 
 function detallesDe(features: Record<string, unknown>): string[] {
@@ -198,24 +216,6 @@ function detallesDe(features: Record<string, unknown>): string[] {
   if (typeof storage === "number") out.push(`${storage} GB de archivos`);
   return out;
 }
-
-const Tick = () => (
-  <svg
-    viewBox="0 0 24 24"
-    width="12"
-    height="12"
-    fill="none"
-    aria-hidden="true"
-  >
-    <path
-      d="M5 12l4 4 10-10"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
 
 const IcoDescarga = () => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -733,7 +733,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
   if (!token) {
     return (
-      <div className="sub-page">
+      <SuscripcionWorkspace>
         <Cabecera actual={actual} />
         <div className="sub-empty">
           <div className="sub-empty-tt">Cobro no configurado</div>
@@ -741,12 +741,12 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
             La suscripción todavía no está habilitada en este entorno.
           </div>
         </div>
-      </div>
+      </SuscripcionWorkspace>
     );
   }
 
   return (
-    <div className="sub-page">
+    <SuscripcionWorkspace>
       <Cabecera actual={actual} />
 
       {errorPaddle ? (
@@ -1192,125 +1192,133 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
       <div className="sub-grid">
         {/* ── Columna principal ── */}
         <div className="sub-main">
-          <section className="sub-block">
+          <section
+            className={styles.plansSection}
+            aria-labelledby="planes-heading"
+          >
             <div className="sub-block-head">
               <div>
-                <h2>Elegí tu plan</h2>
+                <div className={styles.eyebrow}>Un plan para cada etapa</div>
+                <h2 id="planes-heading">Elegí cómo seguir creciendo.</h2>
                 <p>
-                  Cambiá de plan cuando quieras. Paddle ajusta el cobro de forma
-                  proporcional al período.
+                  Compará lo que incluye cada plan y elegí el que necesita tu
+                  equipo.
                 </p>
               </div>
               {hayAnual ? (
-                <div className="sub-seg" role="tablist">
-                  <button
-                    type="button"
-                    className={`sub-seg-btn ${ciclo === "mensual" ? "active" : ""}`}
-                    onClick={() => setCiclo("mensual")}
-                  >
-                    Mensual
-                  </button>
-                  <button
-                    type="button"
-                    className={`sub-seg-btn ${ciclo === "anual" ? "active" : ""}`}
-                    onClick={() => setCiclo("anual")}
-                  >
-                    Anual
-                    {ahorroMaxPct > 0 ? (
-                      <span className="sub-seg-note">−{ahorroMaxPct}%</span>
-                    ) : null}
-                  </button>
+                <div className={styles.billingChoice}>
+                  <SegmentedControl
+                    aria-label="Ciclo de facturación de los planes"
+                    tone="graphite"
+                    value={ciclo}
+                    onChange={(value) => {
+                      if (value === "mensual" || value === "anual")
+                        setCiclo(value);
+                    }}
+                    options={[
+                      { value: "mensual", label: "Mensual", icon: null },
+                      { value: "anual", label: "Anual", icon: null },
+                    ]}
+                  />
+                  {ahorroMaxPct > 0 ? (
+                    <span className={styles.savings}>
+                      Hasta {ahorroMaxPct}% de ahorro anual
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </div>
 
-            <div className="sub-plans">
-              {datos.planes.map((p, i) => {
-                const activo = elegido === p.codigo;
-                const destacado =
-                  p.recomendado ?? i === datos.planes.length - 1;
+            <div className={styles.plans}>
+              {datos.planes.map((p) => {
+                const founder = p.codigo === "founder";
+                const destacado = p.recomendado === true && !founder;
+                const soloPlanActual =
+                  p.esActual &&
+                  !p.ofertaId &&
+                  !(datos.prueba.enPrueba && actual?.proveedor === "manual");
                 return (
-                  <div
+                  <Card
                     key={p.codigo}
-                    className={`sub-plan ${activo ? "active" : ""} ${destacado ? "hot" : ""}`}
-                    onClick={() => setElegido(p.codigo)}
-                    role="radio"
-                    aria-checked={activo}
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        setElegido(p.codigo);
-                      }
-                    }}
+                    className={cn(styles.plan, founder && styles.founder)}
                   >
-                    <div className="sub-plan-top">
-                      <div className="sub-plan-nm">
-                        {p.nombre}
-                        {destacado ? (
-                          <span className="sub-plan-tag">Recomendado</span>
+                    <CardHeader className={styles.planHeader}>
+                      <div className={styles.planLabels}>
+                        <span className={styles.eyebrow}>
+                          {founder ? "Plan interno" : "Grafoprint"}
+                        </span>
+                        {p.esActual ? (
+                          <Badge variant="outline">Plan actual</Badge>
+                        ) : destacado ? (
+                          <Badge>Recomendado</Badge>
                         ) : null}
                       </div>
-                      <div className={`sub-radio ${activo ? "on" : ""}`}>
-                        {activo ? <Tick /> : null}
-                      </div>
-                    </div>
-                    <div className="sub-plan-price">
-                      <span className="amt">
-                        {precio(
-                          anualActivo && p.anual
-                            ? p.anual.equivalenteMensual
-                            : p.precioMensual,
-                          p.moneda,
+                      <CardTitle>
+                        <h3>{p.nombre}</h3>
+                      </CardTitle>
+                      {p.descripcion ? (
+                        <CardDescription>{p.descripcion}</CardDescription>
+                      ) : null}
+                    </CardHeader>
+                    <CardContent className={styles.planContent}>
+                      <div className={styles.planPricing}>
+                        <div className={styles.price}>
+                          <strong>
+                            {precio(
+                              anualActivo && p.anual
+                                ? p.anual.equivalenteMensual
+                                : p.precioMensual,
+                              p.moneda,
+                            )}
+                          </strong>
+                          <span>/mes</span>
+                        </div>
+                        {anualActivo && p.anual ? (
+                          <p className={styles.priceNote}>
+                            {precio(p.anual.precio, p.moneda)} al año.
+                            <br />
+                            <b>
+                              Ahorrás {precio(p.anual.ahorro, p.moneda)}
+                            </b>{" "}
+                            frente a {precio(p.anual.doceMeses, p.moneda)}{" "}
+                            pagando mes a mes.
+                          </p>
+                        ) : (
+                          <p className={styles.priceNote}>
+                            Facturación mensual
+                          </p>
                         )}
-                      </span>
-                      <span className="per">/mes</span>
-                    </div>
-                    {anualActivo && p.anual ? (
-                      <div className="sub-plan-billed">
-                        {precio(p.anual.precio, p.moneda)} al año ·{" "}
-                        <b>ahorrás {precio(p.anual.ahorro, p.moneda)}</b> frente
-                        a {precio(p.anual.doceMeses, p.moneda)} pagando mes a
-                        mes
+                        {p.implementacion != null && (
+                          <p className={styles.implementation}>
+                            {p.implementacion > 0
+                              ? `Implementación: ${precio(p.implementacion, p.moneda)} · una sola vez`
+                              : "Sin cargo de implementación"}
+                          </p>
+                        )}
                       </div>
-                    ) : null}
-                    {p.implementacion != null && (
-                      <div className="sub-plan-billed">
-                        {p.implementacion > 0
-                          ? `Implementación: ${precio(p.implementacion, p.moneda)} · una sola vez`
-                          : "Sin cargo de implementación"}
-                      </div>
-                    )}
-                    {p.descripcion ? (
-                      <p className="sub-plan-tagline">{p.descripcion}</p>
-                    ) : null}
-                    <ul className="sub-plan-feats">
-                      {detallesDe(p.features).map((f) => (
-                        <li key={f}>
-                          <span className="tick">
-                            <Tick />
-                          </span>
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="sub-plan-cta">
-                      {p.esActual &&
-                      !p.ofertaId &&
-                      !(
-                        datos.prueba.enPrueba &&
-                        datos.actual?.proveedor === "manual"
-                      ) ? (
-                        <span className="sub-current-lbl">Plan actual</span>
+                      <ul className={styles.features}>
+                        {detallesDe(p.features).map((f) => (
+                          <li key={f}>
+                            <CheckIcon aria-hidden="true" />
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                    <CardFooter>
+                      {soloPlanActual ? (
+                        <span className={styles.currentLabel}>
+                          <CheckIcon aria-hidden="true" /> Tu plan actual
+                        </span>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn sm w"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        <ActionButton
+                          variant={destacado ? "primary" : "secondary"}
+                          className="w-full"
+                          onPress={() => {
+                            setElegido(p.codigo);
                             elegirPlan(p);
                           }}
-                          disabled={confirmando || abriendo === p.codigo}
+                          isDisabled={confirmando || abriendo === p.codigo}
                         >
                           {abriendo === p.codigo
                             ? "Abriendo…"
@@ -1319,36 +1327,45 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                               : p.esActual
                                 ? `Contratar ${p.nombre}`
                                 : `Elegir ${p.nombre}`}
-                        </button>
+                          <ArrowUpRightIcon aria-hidden="true" />
+                        </ActionButton>
                       )}
-                    </div>
-                  </div>
+                    </CardFooter>
+                  </Card>
                 );
               })}
             </div>
+            <p className={styles.plansNote}>
+              <LockKeyholeIcon aria-hidden="true" />
+              Los precios no incluyen impuestos. Al cambiar de plan, revisás el
+              ajuste proporcional antes de confirmar.
+            </p>
           </section>
 
           {/* ── Facturas ── */}
           <section className="sub-block">
             <div className="sub-block-head">
               <div>
+                <div className={styles.eyebrow}>Historial de facturación</div>
                 <h2>Facturas</h2>
-                <p>
-                  Los comprobantes los emite Paddle en cada cobro. Podés
-                  descargarlos desde su portal.
-                </p>
+                <p>Consultá y descargá los comprobantes de tus pagos.</p>
               </div>
             </div>
 
             {datos.facturas.length === 0 ? (
-              <div className="sub-empty">
-                <div className="sub-empty-tt">Todavía no hay facturas</div>
-                <div className="sub-empty-sub">
-                  {actual?.proximoCobro
-                    ? `Tu próximo cobro es el ${fechaLarga(actual.proximoCobro)}.`
-                    : "Aparecerán acá en cuanto se registre el primer cobro."}
-                </div>
-              </div>
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <ReceiptTextIcon aria-hidden="true" />
+                  </EmptyMedia>
+                  <EmptyTitle>Todavía no hay facturas</EmptyTitle>
+                  <EmptyDescription>
+                    {actual?.proximoCobro
+                      ? `Tu próximo cobro es el ${fechaLarga(actual.proximoCobro)}.`
+                      : "Aparecerán acá en cuanto se registre el primer cobro."}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
               <div className="sub-inv-table">
                 <div className="sub-inv-row head">
@@ -1401,15 +1418,15 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
         {/* ── Aside ── */}
         <aside className="sub-aside">
-          <div className="sub-card">
-            <div className="sub-card-h">Resumen</div>
+          <div className={cn("sub-card", styles.currentSummary)}>
+            <div className="sub-card-h">
+              {actual ? "Tu suscripción" : "Resumen del plan"}
+            </div>
+            <h2 className={styles.currentPlanName}>
+              {actual?.planNombre ?? planElegido?.nombre ?? "Elegí tu plan"}
+              <span>.</span>
+            </h2>
             <div className="sub-summary">
-              <div className="sub-sum-row">
-                <span>Plan</span>
-                <strong>
-                  {actual?.planNombre ?? planElegido?.nombre ?? "—"}
-                </strong>
-              </div>
               <div className="sub-sum-row">
                 <span>Ciclo</span>
                 <strong>
@@ -1480,7 +1497,7 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                 </div>
               )}
               {!cancelaEl && actual?.estado !== "baja" && (
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <p className={styles.taxNote}>
                   Paddle aplica los impuestos, descuentos y saldos a favor al
                   calcular el cobro final.
                 </p>
@@ -1507,13 +1524,15 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
 
           {/* Método de pago */}
           <div className="sub-card">
-            <div className="sub-card-h">Método de pago</div>
+            <div className="sub-card-h">
+              <CreditCardIcon aria-hidden="true" /> Método de pago
+            </div>
             <div className="sub-pay">
               <div className="sub-pay-head">
                 <LogoPaddle />
                 <div className="sub-pay-tt">
                   <div className="nm">Paddle</div>
-                  <div className="sub">Merchant of record · USD</div>
+                  <div className="sub">Pagos y facturación</div>
                 </div>
                 <span className={`sub-chip ${datos.puedePortal ? "ok" : ""}`}>
                   {datos.puedePortal ? "Conectado" : "Sin activar"}
@@ -1541,14 +1560,15 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
                 empresa y emite la factura.
               </div>
               {datos.puedePortal ? (
-                <button
-                  type="button"
-                  className="btn sm w"
-                  onClick={irAlPortal}
-                  disabled={yendoAlPortal}
+                <ActionButton
+                  variant="secondary"
+                  className="w-full"
+                  onPress={irAlPortal}
+                  isDisabled={yendoAlPortal}
                 >
                   {yendoAlPortal ? "Abriendo…" : "Cambiar medio de pago"}
-                </button>
+                  <ArrowUpRightIcon aria-hidden="true" />
+                </ActionButton>
               ) : null}
             </div>
           </div>
@@ -1578,7 +1598,21 @@ export function SuscripcionView({ inicial }: { inicial: EstadoSuscripcion }) {
           ) : null}
         </aside>
       </div>
-    </div>
+    </SuscripcionWorkspace>
+  );
+}
+
+function SuscripcionWorkspace({ children }: { children: React.ReactNode }) {
+  return (
+    <DesignSystemProvider theme="brand" appearance="light">
+      <div
+        data-ui="heroui"
+        data-appearance="light"
+        className={cn(theme.theme, theme.legacy, styles.workspace)}
+      >
+        <div className={cn("sub-page", styles.page)}>{children}</div>
+      </div>
+    </DesignSystemProvider>
   );
 }
 
@@ -1605,9 +1639,13 @@ function Cabecera({ actual }: { actual: EstadoSuscripcion["actual"] }) {
   return (
     <div className="page-head">
       <div className="title-block">
-        <h1>Administrar suscripción</h1>
+        <div className={styles.eyebrow}>Administración · Tu empresa</div>
+        <h1>
+          Tu suscripción<span className={styles.titleDot}>.</span>
+        </h1>
         <p className="sub-subhead">
-          Plan, facturación y método de pago de tu empresa.
+          El plan de tu equipo, los próximos cobros y toda tu facturación, en un
+          solo lugar.
         </p>
       </div>
       <div className={`sub-state-pill ${tono}`}>

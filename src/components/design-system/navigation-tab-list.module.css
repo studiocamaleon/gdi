@@ -120,12 +120,12 @@
 }
 @container navigation-tabs (max-width: 560px) {
   .container[data-variant="detailed"] .list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(min(3, var(--tab-count)), minmax(0, 1fr));
   }
 }
 @container navigation-tabs (max-width: 320px) {
   .container[data-variant="detailed"] .list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(min(2, var(--tab-count)), minmax(0, 1fr));
   }
 }
 
@@ -321,6 +321,7 @@
   .container[data-variant="detailed"][data-many] .description { display: none; }
   .container[data-variant="detailed"][data-many] .iconWell { width: 20px; height: 20px; border: 0; background: transparent; }
   .container[data-variant="detailed"][data-many] .count { position: absolute; right: 7px; top: 6px; min-width: 15px; height: 16px; font-size: 9px; }
+  .container[data-variant="detailed"][data-many] .warning { position: absolute; right: 7px; top: 6px; }
 }
 @container navigation-tabs (max-width: 950px) {
   .container[data-variant="detailed"][data-many] .list { grid-template-columns: repeat(3, minmax(0, 1fr)); }

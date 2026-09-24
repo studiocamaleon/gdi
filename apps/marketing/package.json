@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "npm --prefix ../forma-studio ci --include=dev --no-audit --no-fund",
+    "grafo3d:build": "node scripts/build-grafo3d.mjs",
+    "predev": "npm run grafo3d:build -- --development",
     "dev": "next dev -p 3002",
+    "prebuild": "npm run grafo3d:build",
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint"

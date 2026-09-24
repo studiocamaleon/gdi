@@ -61,6 +61,22 @@ describe('referencias compactas de geometría', () => {
     },
   });
 
+  it.each(['medidas', 'placas'] as const)('con %s no inyecta el archivo predeterminado ni reutiliza geometrías residuales', async modo => {
+    const prisma = db();
+    const original = {cantidad: 50, modoCotizacionVectorial: modo, disenoVectorialFuente: ref,
+      geometriasVectoriales: {principal: ref}, placasVectorialesManuales: 2,
+      metrosCortePorPlacaVectorial: 15, entradasCortePorPlacaVectorial: 4};
+    const resultado = await resolverFuentesProducto(prisma as never, 'tenant-1', {
+      geometriasComerciales: {version: 1, modo: 'AMBAS', permitirCotizacionManual: true,
+        fuentes: [{id: 'principal', nombre: 'Pieza', predeterminada: fuente, permitirReemplazo: false}]},
+    }, original as never);
+    expect(resultado.disenoVectorialFuente).toBeUndefined();
+    expect(resultado.geometriasVectoriales).toBeUndefined();
+    expect(resultado.placasVectorialesManuales).toBe(modo === 'placas' ? 2 : undefined);
+    expect(prisma.geometriaProducto.findMany).not.toHaveBeenCalled();
+    expect(original.disenoVectorialFuente).toBe(ref);
+  });
+
   it('resuelve el archivo una vez y completa medidas de overrides antes del binding hijo', async () => {
     const prisma = db();
     const contexto = await resolverFuentesProducto(

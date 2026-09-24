@@ -24,6 +24,7 @@ import { updateMateriaPrima } from "@/lib/materias-primas-api";
 import { MaterialInventarioPanel } from "./material-inventario-panel";
 import {
   familiaMateriaPrimaItems,
+  subfamiliaMateriaPrimaItems,
   unidadMateriaPrimaItems,
   type FamiliaMateriaPrima,
   type MateriaPrima,
@@ -71,64 +72,6 @@ import { numeroMoneda, type Moneda } from "@/lib/moneda";
 import { monedaDe } from "@/lib/monedas";
 import { MoneyInput } from "@/components/ui/money-input";
 import { useConfigRegional } from "@/components/navigation/config-regional-provider";
-
-const subfamiliaMateriaPrimaItems: Array<{
-  value: SubfamiliaMateriaPrima;
-  label: string;
-}> = [
-  { value: "sustrato_hoja", label: "Sustrato hoja" },
-  { value: "sustrato_rollo_flexible", label: "Sustrato rollo flexible" },
-  { value: "sustrato_rigido", label: "Sustrato rígido" },
-  { value: "objeto_promocional_base", label: "Objeto promocional base" },
-  { value: "tinta_impresion", label: "Tinta impresión" },
-  { value: "toner", label: "Tóner" },
-  { value: "film_transferencia", label: "Film transferencia" },
-  { value: "papel_transferencia", label: "Papel transferencia" },
-  { value: "laminado_film", label: "Laminado film" },
-  { value: "laminado_pouch", label: "Laminado pouch" },
-  { value: "quimico_acabado", label: "Químico acabado" },
-  { value: "auxiliar_proceso", label: "Auxiliar proceso" },
-  { value: "polvo_dtf", label: "Polvo DTF" },
-  { value: "filamento_3d", label: "Filamento 3D" },
-  { value: "resina_3d", label: "Resina 3D" },
-  { value: "modulo_led_carteleria", label: "Módulo LED cartelería" },
-  { value: "fuente_alimentacion_led", label: "Fuente alimentación LED" },
-  { value: "cableado_conectica", label: "Cableado y conectica" },
-  { value: "controlador_led", label: "Controlador LED" },
-  { value: "neon_flex_led", label: "Neón flex LED" },
-  { value: "accesorio_neon_led", label: "Accesorio neón LED" },
-  { value: "chapa_metalica", label: "Chapa metálica" },
-  { value: "perfil_estructural", label: "Perfil estructural" },
-  { value: "pintura_carteleria", label: "Pintura cartelería" },
-  { value: "primer_sellador", label: "Primer sellador" },
-  { value: "anillado_encuadernacion", label: "Anillado encuadernación" },
-  { value: "tapa_encuadernacion", label: "Tapa encuadernación" },
-  { value: "componente_editorial", label: "Componente editorial / carpeta" },
-  { value: "pegatina_raspadita", label: "Pegatina raspadita" },
-  { value: "iman_ceramico_flexible", label: "Imán cerámico/flexible" },
-  { value: "fijacion_auxiliar", label: "Fijación auxiliar" },
-  { value: "accesorio_exhibidor_carton", label: "Accesorio exhibidor cartón" },
-  { value: "accesorio_montaje_pop", label: "Accesorio montaje POP" },
-  { value: "semielaborado_pop", label: "Semielaborado POP" },
-  { value: "argolla_llavero_accesorio", label: "Argolla llavero accesorio" },
-  { value: "ojal_ojalillo_remache", label: "Ojal/ojalillo/remache" },
-  { value: "portabanner_estructura", label: "Portabanner estructura" },
-  { value: "sistema_colgado_montaje", label: "Sistema colgado/montaje" },
-  { value: "perfil_bastidor_textil", label: "Perfil bastidor textil" },
-  { value: "cinta_doble_faz_tecnica", label: "Cinta doble faz técnica" },
-  {
-    value: "adhesivo_liquido_estructural",
-    label: "Adhesivo líquido estructural",
-  },
-  { value: "velcro_cierre_tecnico", label: "Velcro/cierre técnico" },
-  { value: "embalaje_proteccion", label: "Embalaje/protección" },
-  { value: "etiquetado_identificacion", label: "Etiquetado/identificación" },
-  { value: "consumible_instalacion", label: "Consumible instalación" },
-  { value: "sellos_automaticos", label: "Sellos automáticos" },
-  { value: "sellos_manuales", label: "Sellos manuales" },
-  { value: "goma_laserable", label: "Goma laserable" },
-  { value: "almohadilla_tinta", label: "Almohadillas y tintas" },
-];
 
 function resolveVarianteUnits(
   variante: LocalVariante,
@@ -1383,11 +1326,12 @@ export function MateriaPrimaFicha({
                               );
                           const label = field?.label ?? formatFieldLabel(key);
                           const tooltipText =
-                            key === "vidaUtilReferencia"
+                            field?.descripcion ??
+                            (key === "vidaUtilReferencia"
                               ? "Vida útil esperada del repuesto en la unidad seleccionada."
                               : key === "cantidadPorRecambio"
                                 ? "Cantidad de unidades que se reemplazan en cada cambio."
-                                : "";
+                                : "");
                           return (
                             <div className="inline-flex items-center gap-1">
                               <span>
@@ -1647,6 +1591,12 @@ export function MateriaPrimaFicha({
                                   : raw;
                               return (
                                 <Input
+                                  placeholder={
+                                    templateFieldByKey.get(key)?.placeholder
+                                  }
+                                  aria-description={
+                                    templateFieldByKey.get(key)?.descripcion
+                                  }
                                   aria-label={
                                     templateFieldByKey.get(key)?.label ??
                                     formatFieldLabel(key)

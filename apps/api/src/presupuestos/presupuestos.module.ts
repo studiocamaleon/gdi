@@ -11,6 +11,8 @@ import { PresupuestoPdfService } from './presupuesto-pdf.service';
 import { PresupuestoRenderService } from './pdf-piloto/presupuesto-render.service';
 import { PresupuestoPilotoService } from './pdf-piloto/presupuesto-piloto.service';
 import { DocumentosPdfModule } from '../documentos-pdf/documentos-pdf.module';
+import { CorreoPresupuestoService } from './correo-presupuesto.service';
+import { CorreoPresupuestoTransporte } from './correo-presupuesto.transporte';
 
 @Module({
   imports: [CapacidadesEmpresaModule,
@@ -27,6 +29,8 @@ import { DocumentosPdfModule } from '../documentos-pdf/documentos-pdf.module';
     PresupuestoPdfService,
     PresupuestoRenderService,
     PresupuestoPilotoService,
+    CorreoPresupuestoService,
+    CorreoPresupuestoTransporte,
   ],
 })
 export class PresupuestosModule {}

@@ -1,0 +1,235 @@
+.subtitle {
+  max-width: 72ch;
+  line-height: 1.6;
+}
+.panel {
+  min-width: 0;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.stateFilter {
+  width: 185px;
+}
+.toolbar {
+  flex-wrap: wrap;
+}
+.table {
+  min-width: 1200px;
+}
+.date {
+  white-space: nowrap;
+}
+.beneficiary {
+  display: block;
+  min-width: 130px;
+  max-width: 180px;
+  white-space: normal;
+}
+.secondary {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-text);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: normal;
+  max-width: 190px;
+}
+.muted {
+  color: var(--muted-text);
+}
+.table tr[data-anulado] {
+  color: var(--muted-text);
+}
+.status {
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--muted-text);
+  font-size: 10px;
+  white-space: nowrap;
+  gap: 6px;
+}
+.status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.status[data-estado="pendiente"],
+.status[data-estado="parcial"] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-foreground);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+.status[data-estado="pagado"] {
+  background: color-mix(in srgb, var(--success) 9%, var(--surface));
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 24%, var(--border));
+}
+.related {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 18px 0 0;
+}
+.related > span {
+  color: var(--muted-text);
+  font: 10px/1.5 var(--brand-mono);
+}
+.analysis {
+  display: grid;
+  gap: 20px;
+}
+.dateFilters {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+.dateFilterHeading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px 20px;
+}
+.dateFilterHeading h2 {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.dateFilterHeading p,
+.periodHint {
+  margin: 4px 0 0;
+  color: var(--muted-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.dateFields {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 180px) auto;
+  align-items: end;
+  justify-content: start;
+  gap: 12px;
+}
+.dateFields label {
+  color: var(--muted-text);
+  font-size: 11px;
+}
+.dateInput {
+  background: var(--surface);
+  color: var(--foreground);
+  border-color: var(--border);
+  border-radius: 6px;
+}
+.period {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.period > span {
+  margin: 0;
+}
+.period strong {
+  color: var(--muted-text);
+  font: 11px/1.6 var(--brand-mono);
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.breakdowns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.distribution {
+  display: grid;
+  gap: 22px;
+  padding: 0 22px 24px;
+}
+.distributionRow {
+  display: grid;
+  gap: 7px;
+}
+.distributionLabel,
+.distributionDetail {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.distributionLabel {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.distributionLabel strong {
+  font: 11px/1.8 var(--brand-mono);
+  white-space: nowrap;
+}
+.distributionDetail {
+  font-size: 10px;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
+.bar {
+  height: 5px;
+  background: var(--surface-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.bar > span[data-neutral] {
+  background: var(--muted-text);
+}
+.budgetTable {
+  min-width: 660px;
+}
+.overBudget {
+  color: var(--danger);
+}
+@container list-page (max-width: 900px) {
+  .breakdowns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container list-page (max-width: 650px) {
+  .dateFilters {
+    padding: 16px;
+  }
+  .dateFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dateFields > button {
+    grid-column: 1 / -1;
+  }
+  .metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .filters {
+    width: 100%;
+  }
+  .filters > * {
+    width: 100%;
+  }
+  .distribution {
+    padding: 0 16px 20px;
+  }
+  .distributionLabel {
+    flex-wrap: wrap;
+    gap: 3px 12px;
+  }
+}

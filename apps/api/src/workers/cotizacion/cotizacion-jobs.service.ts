@@ -390,7 +390,7 @@ export function idTrabajoCotizacion(
   const digest = createHash('sha256')
     // No reutilizar cotizaciones previas al consumo dimensional y al nesting
     // rectangular de los pasos de corte configurados con cantidad directa.
-    .update('cotizacion-corte-rectangular-v3\0')
+    .update('cotizacion-seleccion-stock-v4\0')
     .update(tenantId)
     .update('\0')
     .update(scope)

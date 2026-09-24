@@ -84,6 +84,7 @@ const CENSO: Record<string, string[]> = {
     "materiales.material",
     "materiales.candidatos",
     "materiales.criterio",
+    "materiales.disponibilidad",
     "materiales.consumo",
     "materiales.base",
     "materiales.herencia",
@@ -1075,5 +1076,20 @@ describe("sección Ajustes del trabajo (oficio)", () => {
       },
     });
     expect(acomodado.resumen(rollo)).toBe("Panelizado");
+  });
+});
+
+
+describe("disponibilidad en selección automática", () => {
+  it("ofrece tres políticas sólo al elegir automáticamente y conserva TODAS por defecto", () => {
+    const opcion = ESQUEMA_PASO.find((o) => o.clave === "materiales.disponibilidad")!;
+    const auto = ctxBase({ slot: slotCtx({ modoSeleccion: "MOTOR_ELIGE_AUTO" }) });
+    expect(opcion.visible(auto)).toBe(true);
+    expect(opcion.visible(ctxBase({ slot: slotCtx({ modoSeleccion: "COMERCIAL_ELIGE" }) }))).toBe(false);
+    expect(opcion.resumen(auto)).toBe("Considerar todas");
+    if (opcion.control.tipo !== "pills") throw new Error("Control incorrecto");
+    expect(opcion.control.valor(auto)).toBe("TODAS");
+    expect(opcion.control.opciones(auto).map((o) => o.value)).toEqual(["TODAS", "PREFERIR_DISPONIBLES", "SOLO_DISPONIBLES"]);
+    expect(opcion.control.aplicar(auto, "SOLO_DISPONIBLES")).toEqual({ tipo: "slot", patch: { politicaStock: "SOLO_DISPONIBLES" } });
   });
 });

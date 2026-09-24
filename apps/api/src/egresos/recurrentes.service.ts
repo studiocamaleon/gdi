@@ -158,6 +158,18 @@ export class RecurrentesService {
       }
       await exigirProveedorActivoDelTenant(tx, auth.tenantId, dto.proveedorId);
       await this.validarGastoFijoDelTenant(auth, dto.gastoFijoEstructuraId, tx);
+      if (
+        dto.gastoFijoEstructuraId &&
+        (await tx.gastoRecurrente.count({
+          where: {
+            tenantId: auth.tenantId,
+            gastoFijoEstructuraId: dto.gastoFijoEstructuraId,
+          },
+        }))
+      )
+        throw new BadRequestException(
+          'Ese gasto fijo ya tiene una programación. Administrala desde Gastos fijos.',
+        );
       return tx.gastoRecurrente.create({
         data: {
           tenantId: auth.tenantId,
@@ -196,6 +208,20 @@ export class RecurrentesService {
       if (!actual) throw new NotFoundException('No encontramos esa plantilla.');
 
       await this.validarGastoFijoDelTenant(auth, dto.gastoFijoEstructuraId, tx);
+      if (
+        dto.gastoFijoEstructuraId &&
+        dto.gastoFijoEstructuraId !== actual.gastoFijoEstructuraId &&
+        (await tx.gastoRecurrente.count({
+          where: {
+            tenantId: auth.tenantId,
+            gastoFijoEstructuraId: dto.gastoFijoEstructuraId,
+            id: { not: id },
+          },
+        }))
+      )
+        throw new BadRequestException(
+          'Ese gasto fijo ya tiene una programación vinculada.',
+        );
 
       // Vincular la plantilla al presupuestado alcanza a los egresos YA
       // emitidos: si no, quien descubre el reporte después de meses de uso lo
@@ -356,11 +382,19 @@ export class RecurrentesService {
           return false;
         const actual = await tx.gastoRecurrente.findFirst({
           where: { id: plantilla.id, tenantId },
-          include: { proveedor: { select: { nombre: true } } },
+          include: { proveedor: { select: { nombre: true } }, gastoFijo: true },
         });
         if (
           !actual?.activo ||
           !periodosPendientes(actual, periodo).includes(periodo)
+        )
+          return false;
+        if (
+          actual.gastoFijo &&
+          (!actual.gastoFijo.activo ||
+            periodo < actual.gastoFijo.vigenteDesde ||
+            (actual.gastoFijo.vigenteHasta &&
+              periodo > actual.gastoFijo.vigenteHasta))
         )
           return false;
         await exigirContinuidadCompromiso(tx, tenantId, [

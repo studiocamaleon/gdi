@@ -28,8 +28,9 @@ export function SiteHeader({
   const links = [
     ["La experiencia", "#experiencia"],
     ["El sistema", "#modulos"],
-    ["GrafoNest", "#nesting"],
-    ["Planes", "#precios"],
+    ["Nosotros", "#nosotros"],
+    ["Grafo3D", "/3d", "Gratis"],
+    ["Precios", "#precios"],
   ];
   return (
     <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
@@ -37,9 +38,12 @@ export function SiteHeader({
         <Brand />
       </a>
       <nav className="desktop-nav" aria-label="Navegación principal">
-        {links.map(([label, href]) => (
+        {links.map(([label, href, badge]) => (
           <a key={href} href={href}>
-            {label}
+            <span className="nav-link-label">
+              {label}
+              {badge && <span className="nav-link-badge">{badge}</span>}
+            </span>
           </a>
         ))}
       </nav>
@@ -67,9 +71,12 @@ export function SiteHeader({
           className="mobile-nav"
           aria-label="Navegación móvil"
         >
-          {links.map(([label, href]) => (
+          {links.map(([label, href, badge]) => (
             <a key={href} href={href} onClick={() => setOpen(false)}>
-              {label}
+              <span className="nav-link-label">
+                {label}
+                {badge && <span className="nav-link-badge">{badge}</span>}
+              </span>
               <ArrowUpRight size={18} />
             </a>
           ))}

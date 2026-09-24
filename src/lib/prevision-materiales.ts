@@ -1,3 +1,4 @@
+import { solicitudDesdeMateriales } from "../../apps/api/src/inventario/prevision-materiales.proyeccion";
 import { apiRequest } from "./api";
 import { materialesDeCotizaciones } from "../../apps/api/src/ordenes-trabajo/materiales-cotizacion.proyeccion";
 import type { PropuestaItem } from "./propuestas";
@@ -53,38 +54,7 @@ export function solicitudPrevisionMateriales(
       jobContext: i.jobContext,
     })),
   );
-  const materiales = proyeccion.necesidades.flatMap((n) =>
-    [false, true].flatMap((consumible) => {
-      const origenes = n.origenes.filter(
-        (o) => (o.tipo === "consumible") === consumible,
-      );
-      if (!origenes.length) return [];
-      const unidad = origenes[0].unidadStock;
-      const validos =
-        unidad &&
-        origenes.every(
-          (o) =>
-            !o.observacion &&
-            o.cantidadStock !== null &&
-            o.unidadStock === unidad,
-        );
-      return [
-        {
-          varianteId: n.varianteId,
-          unidad: validos ? unidad : null,
-          cantidad: validos
-            ? Number(
-                origenes
-                  .reduce((sum, o) => sum + o.cantidadStock!, 0)
-                  .toFixed(8),
-              )
-            : null,
-          consumible,
-        },
-      ];
-    }),
-  );
-  return { materiales, pendientes: proyeccion.pendientes.length };
+  return solicitudDesdeMateriales(proyeccion);
 }
 export function consultarPrevisionMateriales(
   data: ReturnType<typeof solicitudPrevisionMateriales>,

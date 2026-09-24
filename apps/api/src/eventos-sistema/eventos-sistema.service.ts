@@ -20,6 +20,8 @@ export type PublicarEventoSistema = {
   severidad?: SeveridadNotificacionInterna;
   topicos: string[];
   destinatariosUserId?: string[];
+  /** Audiencia resuelta en servidor: sólo usuarios y membresías activos. */
+  todosLosUsuariosDelTenant?: boolean;
   proyectoCampanaId?: string;
   incluirActor?: boolean;
 };
@@ -56,18 +58,23 @@ export class EventosSistemaService {
       destinatarios.delete(input.actorUserId);
     }
 
-    const usuariosValidos = destinatarios.size
-      ? await db.user.findMany({
-          where: {
-            id: { in: [...destinatarios] },
-            activo: true,
-            memberships: {
-              some: { tenantId: input.tenantId, activa: true },
+    const usuariosValidos =
+      input.todosLosUsuariosDelTenant || destinatarios.size
+        ? await db.user.findMany({
+            where: {
+              ...(input.todosLosUsuariosDelTenant
+                ? !input.incluirActor && input.actorUserId
+                  ? { id: { not: input.actorUserId } }
+                  : {}
+                : { id: { in: [...destinatarios] } }),
+              activo: true,
+              memberships: {
+                some: { tenantId: input.tenantId, activa: true },
+              },
             },
-          },
-          select: { id: true },
-        })
-      : [];
+            select: { id: true },
+          })
+        : [];
 
     return db.eventoSistema.create({
       data: {

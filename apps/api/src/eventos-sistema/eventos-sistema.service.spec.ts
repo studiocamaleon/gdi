@@ -13,6 +13,53 @@ const auth: CurrentAuth = {
 };
 
 describe('EventosSistemaService', () => {
+  it.each([false, true])(
+    'la audiencia general respeta incluirActor=%s y el tenant activo',
+    async (incluirActor) => {
+      const findMany = jest.fn().mockResolvedValue([{ id: 'destinatario' }]);
+      const create = jest.fn().mockResolvedValue({ id: 1n });
+      const service = new EventosSistemaService({
+        user: { findMany },
+        eventoSistema: { create },
+      } as never);
+      await service.publicarDesdeAuth(auth, {
+        tipo: 'prueba',
+        entidadTipo: 'presupuesto',
+        titulo: 'Aviso',
+        mensaje: 'Mensaje',
+        topicos: [],
+        todosLosUsuariosDelTenant: true,
+        incluirActor,
+      });
+      expect(findMany).toHaveBeenCalledWith({
+        where: {
+          ...(incluirActor ? {} : { id: { not: auth.userId } }),
+          activo: true,
+          memberships: { some: { tenantId: auth.tenantId, activa: true } },
+        },
+        select: { id: true },
+      });
+    },
+  );
+
+  it('sin audiencia explícita no convierte eventos anteriores en avisos para toda la empresa', async () => {
+    const findMany = jest.fn();
+    const create = jest.fn().mockResolvedValue({ id: 1n });
+    const service = new EventosSistemaService({
+      user: { findMany },
+      eventoSistema: { create },
+    } as never);
+    await service.publicarDesdeAuth(auth, {
+      tipo: 'prueba',
+      entidadTipo: 'presupuesto',
+      titulo: 'Aviso',
+      mensaje: 'Mensaje',
+      topicos: [],
+    });
+    expect(findMany).not.toHaveBeenCalled();
+    expect(create.mock.calls[0][0].data.notificaciones).toBeUndefined();
+  });
+
   describe('canal en vivo', () => {
     beforeEach(() => jest.useFakeTimers());
     afterEach(() => jest.useRealTimers());

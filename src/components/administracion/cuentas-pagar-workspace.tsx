@@ -120,7 +120,7 @@ export function CuentasPagarWorkspace(p: Props) {
       ) : (
         p.puedeGestionar && (
           <ActionButton variant="outline" onPress={p.onAlta}>
-            <PlusIcon aria-hidden /> Registrar egreso
+            <PlusIcon aria-hidden /> Registrar obligación
           </ActionButton>
         )
       )}
@@ -142,11 +142,11 @@ export function CuentasPagarWorkspace(p: Props) {
         </div>
         <div className={styles.actions}>
           <ActionLink href="/administracion/egresos" variant="outline">
-            Ver egresos <ArrowUpRightIcon aria-hidden />
+            Ver registro de egresos <ArrowUpRightIcon aria-hidden />
           </ActionLink>
           {p.puedeGestionar && (
             <ActionButton onPress={p.onAlta}>
-              <PlusIcon aria-hidden /> Registrar egreso
+              <PlusIcon aria-hidden /> Registrar obligación
             </ActionButton>
           )}
         </div>

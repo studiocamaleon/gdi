@@ -1,0 +1,11 @@
+.root { grid-column: 1 / -1; min-width: 0; border: 1px solid var(--border); border-radius: var(--cotizador-radius, 11px); background: var(--surface); overflow: hidden; }
+.notice { display: flex; align-items: flex-start; gap: 10px; padding: 14px; background: var(--accent-soft); border-bottom: 1px solid var(--border); }
+.notice > svg { flex-shrink: 0; color: var(--accent-soft-foreground); margin-top: 1px; }
+.notice strong { font-size: 13px; font-weight: 600; }
+.notice p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted-text); }
+.selector { padding: 14px 14px 0; }
+.omitted { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; color: var(--muted-text); font-size: 12px; line-height: 1.5; }
+.omitted > svg { flex-shrink: 0; margin-top: 2px; color: var(--accent-soft-foreground); }
+.omitted strong { font-weight: 500; color: var(--foreground); }
+.hint { margin: 0; padding: 0 14px 14px; font-size: 11px; color: var(--muted-text); line-height: 1.5; }
+.actions { padding: 0 14px 14px; }

@@ -1170,7 +1170,7 @@ export function ConfigurarComponenteWorkspace({
                 </div>
                 <div className={styles.executionControl}>
                   <select
-                    aria-label="Flujo en el tablero de producción"
+                    aria-label="Flujo en Operación diaria"
                     value={politicaEjecucion}
                     onChange={(event) =>
                       setPoliticaEjecucion(

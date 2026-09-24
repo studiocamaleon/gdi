@@ -3165,6 +3165,7 @@ export function ConfigPasosEditorView({
             heredaDeRutaPasoId: s.heredaDeRutaPasoId ?? null,
             heredaDeSlotCodigo: s.heredaDeSlotCodigo ?? null,
             criterioMotorAuto: s.criterioMotorAuto ?? null,
+            politicaStock: s.politicaStock ?? 'TODAS',
             materialVarianteId: s.materialVariante?.id ?? null,
             candidatos: s.candidatos.map((candidate) => ({
               materiaPrimaId: candidate.materiaPrimaId,
@@ -7401,6 +7402,16 @@ export function ConfigPasosEditorView({
                                                             }
                                                             placeholder="Elegí criterio"
                                                             triggerClassName="min-h-9 text-xs"
+                                                          />
+                                                          <LabelConTooltip label="Disponibilidad de materiales" tooltip="Usa el consumo completo y el stock libre después de reservas. Cotizar no reserva materiales." />
+                                                          <HumanSelect
+                                                            value={slot.politicaStock ?? "TODAS"}
+                                                            onValueChange={(politicaStock) => updateSlot(paso.id, slotIdx, { politicaStock })}
+                                                            options={[
+                                                              { value: "TODAS", label: "Considerar todas" },
+                                                              { value: "PREFERIR_DISPONIBLES", label: "Priorizar stock disponible" },
+                                                              { value: "SOLO_DISPONIBLES", label: "Sólo stock disponible" },
+                                                            ]}
                                                           />
                                                         </div>
                                                       )}

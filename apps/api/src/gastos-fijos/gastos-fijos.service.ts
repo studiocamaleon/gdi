@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +10,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentAuth } from '../auth/auth.types';
 import { UpsertGastoFijoDto } from './dto/upsert-gasto-fijo.dto';
 import { exigirProveedorActivoDelTenant } from '../proveedores/proveedor-validacion';
+import { CapacidadesEmpresaService } from '../suscripciones/capacidades-empresa.service';
+import { bloquearCupoUsuarios } from '../suscripciones/cupos-usuarios';
+import { regionalDelTenant } from '../common/regional';
 
 /**
  * Gastos fijos de estructura — fuente ÚNICA del pool de costos fijos del
@@ -33,12 +38,19 @@ const INCLUDE_GASTO = {
   categoria: { select: { nombre: true, codigo: true } },
   proveedor: { select: { nombre: true } },
   metodoPago: { select: { nombre: true } },
+  recurrentes: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { _count: { select: { egresos: true } } },
+  },
 } as const;
 
 @Injectable()
 export class GastosFijosService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly capacidades: CapacidadesEmpresaService = new CapacidadesEmpresaService(
+      prisma,
+    ),
   ) {}
 
   async listar(auth: CurrentAuth) {
@@ -58,14 +70,20 @@ export class GastosFijosService {
       auth.tenantId,
       dto.proveedorId,
     );
-    const row = await this.prisma.gastoFijoEstructura.create({
-      data: {
-        tenantId: auth.tenantId,
-        ...this.datosDesdeDto(dto),
-      },
-      include: INCLUDE_GASTO,
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      const row = await tx.gastoFijoEstructura.create({
+        data: { tenantId: auth.tenantId, ...this.datosDesdeDto(dto) },
+        include: INCLUDE_GASTO,
+      });
+      await this.sincronizarProgramacion(tx, auth, row, dto.programacion);
+      return this.toResponse(
+        await tx.gastoFijoEstructura.findUniqueOrThrow({
+          where: { id: row.id },
+          include: INCLUDE_GASTO,
+        }),
+      );
     });
-    return this.toResponse(row);
   }
 
   async actualizar(auth: CurrentAuth, id: string, dto: UpsertGastoFijoDto) {
@@ -76,35 +94,149 @@ export class GastosFijosService {
       auth.tenantId,
       dto.proveedorId,
     );
-    await this.obtenerOFallar(auth, id);
-    const row = await this.prisma.gastoFijoEstructura.update({
-      where: { id },
-      data: this.datosDesdeDto(dto),
-      include: INCLUDE_GASTO,
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      await this.obtenerOFallar(auth, id, tx);
+      const row = await tx.gastoFijoEstructura.update({
+        where: { id },
+        data: this.datosDesdeDto(dto),
+        include: INCLUDE_GASTO,
+      });
+      await this.sincronizarProgramacion(tx, auth, row, dto.programacion);
+      return this.toResponse(
+        await tx.gastoFijoEstructura.findUniqueOrThrow({
+          where: { id },
+          include: INCLUDE_GASTO,
+        }),
+      );
     });
-    return this.toResponse(row);
   }
 
   async alternarActivo(auth: CurrentAuth, id: string) {
-    const actual = await this.obtenerOFallar(auth, id);
-    const row = await this.prisma.gastoFijoEstructura.update({
-      where: { id },
-      data: { activo: !actual.activo },
-      include: INCLUDE_GASTO,
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      const actual = await this.obtenerOFallar(auth, id, tx);
+      // Reactivar el presupuesto no reactiva compromisos de pago.
+      if (actual.activo)
+        await tx.gastoRecurrente.updateMany({
+          where: { tenantId: auth.tenantId, gastoFijoEstructuraId: id },
+          data: { activo: false },
+        });
+      const row = await tx.gastoFijoEstructura.update({
+        where: { id },
+        data: { activo: !actual.activo },
+        include: INCLUDE_GASTO,
+      });
+      return this.toResponse(row);
     });
-    return this.toResponse(row);
   }
 
   async eliminar(auth: CurrentAuth, id: string) {
-    await this.obtenerOFallar(auth, id);
-    await this.prisma.gastoFijoEstructura.delete({ where: { id } });
-    return { id, eliminado: true };
+    return this.prisma.$transaction(async (tx) => {
+      await bloquearCupoUsuarios(tx, auth.tenantId);
+      const actual = await this.obtenerOFallar(auth, id, tx);
+      if (
+        actual.recurrentes.length ||
+        (await tx.egreso.count({
+          where: { tenantId: auth.tenantId, gastoFijoEstructuraId: id },
+        }))
+      )
+        throw new ConflictException(
+          'Este gasto tiene programación o egresos asociados. Desactivalo para conservar el historial.',
+        );
+      await tx.gastoFijoEstructura.delete({ where: { id } });
+      return { id, eliminado: true };
+    });
   }
 
-
-
-
-
+  private async sincronizarProgramacion(
+    tx: Prisma.TransactionClient,
+    auth: CurrentAuth,
+    gasto: GastoFijoRow,
+    solicitud?: UpsertGastoFijoDto['programacion'],
+  ) {
+    const anteriores = gasto.recurrentes;
+    if (!anteriores.length && !solicitud?.activa) return;
+    // Incluso si hay vínculos antiguos duplicados, siempre se puede detener la emisión.
+    if (!gasto.activo || solicitud?.activa === false) {
+      await tx.gastoRecurrente.updateMany({
+        where: { tenantId: auth.tenantId, gastoFijoEstructuraId: gasto.id },
+        data: { activo: false },
+      });
+      return;
+    }
+    if (anteriores.length > 1)
+      throw new ConflictException(
+        'Hay varias programaciones vinculadas a este gasto. Revisalas en Programaciones anteriores antes de editarlo.',
+      );
+    const anterior = anteriores[0];
+    const activa =
+      (solicitud?.activa ?? anterior?.activo ?? false) && gasto.activo;
+    // Un presupuesto sin programación activa sigue siendo independiente del plan de pagos.
+    if (!activa) {
+      if (anterior)
+        await tx.gastoRecurrente.update({
+          where: { id: anterior.id },
+          data: { activo: false },
+        });
+      return;
+    }
+    if (!auth.permisos?.has('administracion.gestionar'))
+      throw new ForbiddenException(
+        'Necesitás permiso para gestionar pagos antes de activar o modificar su generación.',
+      );
+    await this.capacidades.exigirOperacionTx(
+      tx,
+      auth.tenantId,
+      ['cuentas_pagar', 'gastos_recurrentes'],
+      ['cuentas_pagar', 'gastos_recurrentes'],
+    );
+    const desde = solicitud?.desde ?? anterior.vigenteDesde;
+    const dia = solicitud?.diaVencimiento ?? anterior.diaVencimiento;
+    if (
+      desde < gasto.vigenteDesde ||
+      (gasto.vigenteHasta && desde > gasto.vigenteHasta)
+    )
+      throw new BadRequestException(
+        'El inicio de la generación debe estar dentro de la vigencia del gasto.',
+      );
+    if (Number(gasto.valor) <= 0)
+      throw new BadRequestException(
+        'La generación necesita un importe por período mayor que cero.',
+      );
+    if (
+      anterior?._count.egresos &&
+      (desde !== anterior.vigenteDesde ||
+        gasto.frecuencia.toLowerCase() !== anterior.frecuencia)
+    )
+      throw new ConflictException(
+        'Esta programación ya emitió egresos: conservá su inicio y frecuencia. Para otro calendario, desactivá este gasto y creá uno nuevo.',
+      );
+    const { moneda } = await regionalDelTenant(tx, auth.tenantId);
+    const data = {
+      descripcion: gasto.nombre,
+      categoriaEgresoId: gasto.categoriaEgresoId,
+      proveedorId: gasto.proveedorId,
+      metodoPagoId: gasto.metodoPagoId,
+      monto: gasto.valor,
+      moneda: moneda.codigo,
+      frecuencia: gasto.frecuencia.toLowerCase(),
+      vigenteDesde: desde,
+      vigenteHasta: gasto.vigenteHasta,
+      diaVencimiento: dia,
+      activo: true,
+    };
+    if (anterior)
+      await tx.gastoRecurrente.update({ where: { id: anterior.id }, data });
+    else
+      await tx.gastoRecurrente.create({
+        data: {
+          ...data,
+          tenantId: auth.tenantId,
+          gastoFijoEstructuraId: gasto.id,
+        },
+      });
+  }
   /**
    * El usuario carga el valor de UNA cuota y cada cuánto se paga; el importe
    * mensual se deriva. Sin esto, un seguro anual de $1.200.000 haría saltar el
@@ -129,8 +261,12 @@ export class GastosFijosService {
     };
   }
 
-  private async obtenerOFallar(auth: CurrentAuth, id: string): Promise<GastoFijoRow> {
-    const row = await this.prisma.gastoFijoEstructura.findFirst({
+  private async obtenerOFallar(
+    auth: CurrentAuth,
+    id: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<GastoFijoRow> {
+    const row = await db.gastoFijoEstructura.findFirst({
       where: { id, tenantId: auth.tenantId },
       include: INCLUDE_GASTO,
     });
@@ -188,6 +324,19 @@ export class GastosFijosService {
       vigenteHasta: g.vigenteHasta,
       activo: g.activo,
       notas: g.notas,
+      programacion: g.recurrentes?.length
+        ? {
+            activa: g.recurrentes.some((r) => r.activo),
+            desde: g.recurrentes[0].vigenteDesde,
+            diaVencimiento: g.recurrentes[0].diaVencimiento,
+            ultimoPeriodoGenerado: g.recurrentes[0].ultimoPeriodoGenerado,
+            egresosEmitidos: g.recurrentes.reduce(
+              (s, r) => s + r._count.egresos,
+              0,
+            ),
+            cantidad: g.recurrentes.length,
+          }
+        : null,
     };
   }
 }

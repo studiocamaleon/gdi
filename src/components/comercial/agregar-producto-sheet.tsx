@@ -6,6 +6,22 @@ import brandStyles from "./orden-configurador.module.css";
 import catalogStyles from "./producto-catalogo.module.css";
 import { ProductoCatalogoGlyph } from "./producto-catalogo-glyph";
 import { ActionButton } from "@/components/design-system/action-button";
+import { MaterialAutomaticoStock } from "./material-automatico-stock";
+import { MaterialSelectorRollo } from "./material-selector-rollo";
+import { crearGruposRollos } from "@/lib/selector-rollos";
+import { decisionesMaterialStock, hayDecisionMaterialStockPendiente } from "@/lib/seleccion-material-stock";
+import { MaterialSelectorRigido } from "./material-selector-rigido";
+import { crearGruposRigidos } from "@/lib/selector-rigidos";
+import { MaterialSelectorLaminado } from "./material-selector-laminado";
+import { crearGruposLaminados } from "@/lib/selector-laminados";
+import { MaterialSelectorPapel } from "./material-selector-papel";
+import { MaterialSelectorColor } from "./material-selector-color";
+import { crearGruposColores, esSelectorColor } from "@/lib/selector-colores";
+import {
+  crearGruposPapeles,
+  esSelectorPapel,
+} from "@/lib/selector-papeles";
+import { seleccionVarianteVisualResuelta } from "@/lib/selectores-materiales";
 
 import * as React from "react";
 import { obtenerRelacionAspectoSvg } from "@/lib/producto-geometrias";
@@ -36,8 +52,6 @@ import {
   SlidersHorizontalIcon,
   CheckIcon,
   CircleAlertIcon,
-  CalculatorIcon,
-  FileUpIcon,
   Grid2X2Icon,
   ListIcon,
   MinusIcon,
@@ -74,13 +88,12 @@ import {
   valorEfectivoCampo,
 } from "@/lib/params-comercial";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 
-import {
-  getHerramientaMedidasArchivo,
-  getHerramientaEditorSello,
-} from "@/lib/producto-herramientas";
-import { leerMedidasPdf } from "@/lib/pdf-medidas";
+import { permiteImportarMedidasPdf, resolverEditorSello, modeloSelloDeAtributos, type MaterialEditorSello } from "@/lib/capacidades-cotizacion-producto";
+import { ImportarMedidasPdf, type PaginaPdfImportada } from "./importar-medidas-pdf";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import {
   CotizadorTercerizadoCostoManual,
   CotizadorTercerizadoSelectors,
@@ -101,7 +114,6 @@ import seC from "./cotizador-seccion.module.css";
 import {
   SelloEditorSheet,
   type DisenoSello,
-  type SelloEditorModel,
 } from "@/components/comercial/sello-editor-sheet";
 
 import {
@@ -134,6 +146,7 @@ import {
   DisenoVectorialCotizador,
   type CotizacionVectorialManual,
 } from "@/components/comercial/diseno-vectorial-cotizador";
+import { GeometriaProductoSelector } from "./geometria-producto-selector";
 import { ModoIngresoSelector } from "@/components/comercial/modo-ingreso-selector";
 import { BriefDisenoForm } from "@/components/comercial/brief-diseno-form";
 import { ComponentesFabricadosCotizacion } from "@/components/comercial/componentes-fabricados-cotizacion";
@@ -292,10 +305,12 @@ type SlotComercialElige = {
 
 type SlotMaterialCandidato = {
   materiaPrimaId: string;
+  templateId: string;
   label: string;
   defaultVarianteId?: string | null;
   variantes: Array<{
     variantId: string;
+    nombreVariante?: string | null;
     label: string;
     description: string;
     details: Array<{ label: string; value: string }>;
@@ -419,6 +434,8 @@ type MotorConfigState = {
 type CotizacionExitosa = CotizacionPropuestaSnapshot;
 
 type AgregarProductoSheetProps = {
+  ordenTrabajoId?: string;
+  contextoMateriales?: Array<{ varianteId: string; cantidad: number | null; unidad: string | null }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productos: ProductoListItem[];
@@ -1434,6 +1451,7 @@ function mapSlotMaterial(
     nombrePaso: config.nombreVisible?.trim() || null,
     candidatos: slot.candidatos.map((candidate) => ({
       materiaPrimaId: candidate.materiaPrimaId,
+      templateId: candidate.materiaPrima.templateId,
       label: candidate.materiaPrima.nombre,
       defaultVarianteId: candidate.defaultVarianteId,
       // Modo "todas las variantes": la lista fija del candidato viene
@@ -1466,6 +1484,7 @@ function mapSlotMaterial(
           );
           return {
             variantId: item.variante.id,
+            nombreVariante: item.variante.nombreVariante,
             label: display.label,
             description: display.description,
             details: display.details,
@@ -1511,32 +1530,42 @@ function getSlotsComercialElige(
   );
 }
 
-// Resuelve el modelo de sello (tamaño de polímero + líneas) para el editor.
-// Prioriza el cuerpo elegido por el comercial; si el producto tiene el cuerpo
-// fijo (HARDCODED / MOTOR_ELIGE_AUTO) lo lee del material resuelto del slot.
-function getSelloModelDeRuta(
+function getSlotsAutomaticosStock(
   ruta: RutaAlternativaDetalle | null,
-  slotsComercialElige: SlotComercialElige[],
-  config: MotorConfigState,
   includeConfig: (config: ConfigPasoDetalle) => boolean = () => true,
-): SelloEditorModel | null {
-  for (const slot of slotsComercialElige) {
-    const { variant } = findSelectedCandidateVariant(slot, config);
-    if (variant?.sello) return variant.sello;
-  }
-  const configPasos =
-    ruta?.configPasos.filter(isExecutableConfigPaso).filter(includeConfig) ??
-    [];
-  for (const configPaso of configPasos) {
-    for (const slot of configPaso.slotsMateriales) {
-      const sello = getSelloModelDeVariante(
-        slot.materialVariante?.atributosVarianteJson,
-        slot.materialVariante?.nombreVariante ?? slot.slotNombre ?? "Sello",
-      );
-      if (sello) return sello;
-    }
-  }
-  return null;
+) {
+  return (ruta?.configPasos.filter(isExecutableConfigPaso).filter(includeConfig)
+    .flatMap((config) => config.slotsMateriales
+      .filter((slot) => slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && slot.politicaStock && slot.politicaStock !== "TODAS")
+      .map((slot) => mapSlotMaterial(config, slot))) ?? []);
+}
+
+// Sólo los materiales de pasos activos y la variante elegida aportan el modelo.
+function getMaterialesEditorSelloDeRuta(
+  ruta: RutaAlternativaDetalle | null,
+  config: MotorConfigState,
+  includeConfig: (config: ConfigPasoDetalle) => boolean,
+): MaterialEditorSello[] {
+  return (ruta?.configPasos ?? []).filter(isExecutableConfigPaso).filter(includeConfig).flatMap(paso =>
+    paso.slotsMateriales.flatMap(slot => {
+      if (slot.modoSeleccion === "HEREDA_DE_PASO") return [];
+      if (slot.modoSeleccion === "HARDCODED" && slot.materialVariante) {
+        const v = slot.materialVariante;
+        return [{ ...v.materiaPrima, nombre: v.nombreVariante ?? v.materiaPrima.nombre, atributos: v.atributosVarianteJson }];
+      }
+      const mapped = mapSlotMaterial(paso, slot);
+      // No adivinamos el área si el motor aún compara cuerpos distintos.
+      if (slot.modoSeleccion === "MOTOR_ELIGE_AUTO" && !config.seleccionMaterial[materialSelectionKey(paso.id, slot.slotCodigo)]) {
+        return mapped.candidatos.flatMap(c => c.variantes.map(v => ({
+          templateId: c.templateId, subfamilia: slot.candidatos.find(raw => raw.materiaPrimaId === c.materiaPrimaId)?.materiaPrima.subfamilia,
+          nombre: v.nombreVariante ?? c.label, atributos: v.atributosVarianteJson,
+        })));
+      }
+      const { candidate, variant } = findSelectedCandidateVariant(mapped, config);
+      return candidate && variant ? [{ templateId: candidate.templateId,
+        subfamilia: slot.candidatos.find(c => c.materiaPrimaId === candidate.materiaPrimaId)?.materiaPrima.subfamilia,
+        nombre: variant.nombreVariante ?? candidate.label, atributos: variant.atributosVarianteJson }] : [];
+    }));
 }
 
 function getSlotsMaterialesLinealDirecto(
@@ -1585,6 +1614,27 @@ function getSlotsParaCotizacion(
     ]);
   }
   return slotsComerciales;
+}
+
+/** Sólo elecciones comerciales activas: los materiales fijos/automáticos no preguntan. */
+export function hayMaterialVisualPendiente(
+  producto: ProductoDetalle | null,
+  config: MotorConfigState,
+  qty: number,
+): boolean {
+  if (!producto) return false;
+  const ruta = getRutaSeleccionada(producto, config.rutaAlternativaId);
+  const slots = getSlotsParaCotizacion(ruta, producto, config);
+  const contexto = buildJobContext(producto, config, qty, slots);
+  return getSlotsComercialElige(ruta, (paso) =>
+    isConfigPasoVisibleForContext(paso, config, contexto),
+  ).some((slot) =>
+    (esSelectorPapel(slot.candidatos) || esSelectorColor(slot.candidatos)) &&
+    !seleccionVarianteVisualResuelta(
+      slot.candidatos,
+      config.seleccionMaterial[materialSelectionKey(slot.configPasoId, slot.slotCodigo)],
+    ),
+  );
 }
 
 function getModoColorConfig(params: unknown): {
@@ -2410,39 +2460,7 @@ function getVariantWidthLabel(
   return value ? `${formatNumberForSpec(value / 10)} cm` : null;
 }
 
-/**
- * Modelo del cuerpo del sello a partir de los atributos de su variante
- * (anchoPolimero × altoPolimero + lineasTexto). Devuelve null si no es un sello.
- */
-function getSelloModelDeVariante(
-  attrs: Record<string, unknown> | null | undefined,
-  fallbackNombre: string,
-): {
-  nombre: string;
-  widthMm: number;
-  heightMm: number;
-  lineasMax: number;
-} | null {
-  if (!attrs) return null;
-  const num = (v: unknown) => {
-    const n = typeof v === "string" ? Number(v.replace(",", ".")) : Number(v);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  };
-  const w = num(attrs.anchoPolimero);
-  const h = num(attrs.altoPolimero);
-  const lineas = num(attrs.lineasTexto);
-  if (w === null || h === null || lineas === null) return null;
-  const modelo =
-    typeof attrs.modelo === "string" && attrs.modelo.trim()
-      ? attrs.modelo.trim()
-      : fallbackNombre;
-  return {
-    nombre: modelo,
-    widthMm: w,
-    heightMm: h,
-    lineasMax: Math.round(lineas),
-  };
-}
+const getSelloModelDeVariante = modeloSelloDeAtributos;
 
 function getVariantWidthMm(attrs: Record<string, unknown> | null | undefined) {
   const mmEntries = [
@@ -3647,6 +3665,15 @@ export function buildJobContext(
       ctx[`slotMaterial_${slot.slotCodigo}`] = variantId;
     }
   }
+  // En selección automática sólo enviamos una variante si el comercial la eligió.
+  for (const slot of getSlotsAutomaticosStock(getRutaSeleccionada(productoDetalle, config.rutaAlternativaId), includeConfig)) {
+    const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+    const variantId = config.seleccionMaterial[key];
+    if (variantId) {
+      slotMateriales[key] = variantId;
+      ctx[`slotMaterial_${key}`] = variantId;
+    }
+  }
   if (Object.keys(slotMateriales).length > 0)
     ctx.slotMateriales = slotMateriales;
 
@@ -3812,6 +3839,7 @@ export function buildJobContext(
     );
     ctx.placasVectorialesManuales = placasVectorialesManuales;
     ctx.metrosCortePorPlacaVectorial = metrosCortePorPlacaVectorial;
+    ctx.entradasCortePorPlacaVectorial = config.cotizacionVectorialManual.entradasPorPlaca;
     ctx.piezaPerimetroTotalM =
       placasVectorialesManuales * metrosCortePorPlacaVectorial;
   } else if (
@@ -4911,6 +4939,7 @@ function motorConfigFromItem(item: PropuestaItem): MotorConfigState {
             ? "svg"
             : "medidas",
     cotizacionVectorialManual: {
+      entradasPorPlaca: typeof ctx.entradasCortePorPlacaVectorial === "number" ? ctx.entradasCortePorPlacaVectorial : undefined,
       placas:
         Number(ctx.placasVectorialesManuales) > 0
           ? Math.ceil(Number(ctx.placasVectorialesManuales))
@@ -5492,6 +5521,10 @@ function ApConfigStep({
     () => getSlotsComercialElige(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
   );
+  const slotsAutomaticosStock = React.useMemo(
+    () => getSlotsAutomaticosStock(rutaSel, includeVisibleConfig),
+    [includeVisibleConfig, rutaSel],
+  );
   const slotsLinealesDirectos = React.useMemo(
     () => getSlotsMaterialesLinealDirecto(rutaSel, includeVisibleConfig),
     [includeVisibleConfig, rutaSel],
@@ -5503,33 +5536,28 @@ function ApConfigStep({
   // ambiguo y hay que anteponer el nombre del paso.
   const slotCodigosDuplicados = React.useMemo(() => {
     const cuenta = new Map<string, number>();
-    for (const slot of slotsComercialElige) {
+    for (const slot of [...slotsComercialElige, ...slotsAutomaticosStock]) {
       cuenta.set(slot.slotCodigo, (cuenta.get(slot.slotCodigo) ?? 0) + 1);
     }
     return new Set(
       [...cuenta.entries()].filter(([, n]) => n > 1).map(([codigo]) => codigo),
     );
-  }, [slotsComercialElige]);
-  // Configurador de sello: activo si el producto tiene la herramienta y hay un
-  // cuerpo de sello elegido (variante con tamaño de polímero + líneas de texto).
-  const editorSelloHabilitado = getHerramientaEditorSello(
-    productoDetalle?.atributosComercialesJson,
-  ).enabled;
-  const selloModel: SelloEditorModel | null = React.useMemo(() => {
-    if (!editorSelloHabilitado) return null;
-    return getSelloModelDeRuta(
-      rutaSel,
-      slotsComercialElige,
-      motorConfig,
-      includeVisibleConfig,
-    );
-  }, [
-    editorSelloHabilitado,
-    rutaSel,
-    slotsComercialElige,
-    motorConfig,
-    includeVisibleConfig,
-  ]);
+  }, [slotsComercialElige, slotsAutomaticosStock]);
+  const [lineasGoma, setLineasGoma] = React.useState(motorConfig.disenoSello?.modelo?.lineasMax ?? 4);
+  const contextoEditorSello = React.useMemo(() => {
+    const personalizadas = modoMedidasPermitePersonalizada(productoDetalle?.modoMedidas) &&
+      (productoDetalle?.modoMedidas !== "MIXTA" || motorConfig.piezas.length > 0);
+    const medidas = productoDetalle ? resolverMedidasPredefinidas(productoDetalle, motorConfig, includeVisibleConfig) : [];
+    const medida = personalizadas
+      ? (motorConfig.piezas.length === 1 ? motorConfig.piezas[0] : null)
+      : getSelectedPredefinedMeasure(productoDetalle, motorConfig.medidaPredefinidaId, medidas);
+    return resolverEditorSello({
+      pasos: (rutaSel?.configPasos ?? []).filter(includeVisibleConfig),
+      materiales: getMaterialesEditorSelloDeRuta(rutaSel, motorConfig, includeVisibleConfig),
+      medida, lineasGoma,
+    });
+  }, [rutaSel, motorConfig, productoDetalle, includeVisibleConfig, lineasGoma]);
+  const selloModel = contextoEditorSello.modelo;
   const [selloEditorAbierto, setSelloEditorAbierto] = React.useState(false);
   const slotsMaterialesOpcionalesPorPaso = React.useMemo(
     () => getSlotsOpcionalesPorPaso(slotsComercialElige),
@@ -5744,7 +5772,6 @@ function ApConfigStep({
     {},
   );
   const focusPiezaCantidadKey = React.useRef<string | null>(null);
-  const planosInputRef = React.useRef<HTMLInputElement | null>(null);
   const [piezaMeasureDrafts, setPiezaMeasureDrafts] = React.useState<
     Record<string, { anchoCm?: string; altoCm?: string }>
   >({});
@@ -5823,11 +5850,6 @@ function ApConfigStep({
     [setMotorConfig],
   );
 
-  const herramientaMedidasArchivo = React.useMemo(
-    () =>
-      getHerramientaMedidasArchivo(productoDetalle?.atributosComercialesJson),
-    [productoDetalle],
-  );
   const geometriasComerciales = React.useMemo(
     () =>
       getGeometriasComerciales(
@@ -6007,75 +6029,26 @@ function ApConfigStep({
       maquina?.parametrosTecnicosJson ?? null,
     );
   }, [pasoVectorialActivo, motorConfig.seleccionMaquina]);
-  const [leyendoPlanos, setLeyendoPlanos] = React.useState(false);
-  const [arrastrandoPlanos, setArrastrandoPlanos] = React.useState(false);
-
-  const handleAdjuntarPlanos = React.useCallback(
-    async (files: FileList | File[]) => {
-      const lista = Array.from(files);
-      if (lista.length === 0) return;
-      setLeyendoPlanos(true);
-      try {
-        const resultados = await leerMedidasPdf(lista);
-        const nuevas: PiezaInput[] = [];
-        const errores: string[] = [];
-        for (const resultado of resultados) {
-          if (!resultado.ok) {
-            errores.push(`${resultado.archivoNombre}: ${resultado.error}`);
-            continue;
-          }
-          for (const pagina of resultado.paginas) {
-            nuevas.push({
-              uiKey: `pz-${Date.now()}-${Math.random()}`,
-              cantidad: 1,
-              anchoMm: pagina.anchoMm,
-              altoMm: pagina.altoMm,
-              origen: {
-                archivoNombre: pagina.archivoNombre,
-                pagina: pagina.pagina,
-                totalPaginas: pagina.totalPaginas,
-                anchoDetectadoMm: pagina.anchoMm,
-                altoDetectadoMm: pagina.altoMm,
-              },
-            });
-          }
-        }
-        // Retener los PDF que leyeron bien, para subirlos al guardar la orden.
-        const claveFile = (f: File) => `${f.name}::${f.size}`;
-        const okFiles = lista.filter((_, j) => resultados[j]?.ok);
-        if (okFiles.length > 0) {
-          setPlanosAdjuntos((prev) => {
-            const vistos = new Set(prev.map(claveFile));
-            const agregar = okFiles.filter((f) => !vistos.has(claveFile(f)));
-            return agregar.length > 0 ? [...prev, ...agregar] : prev;
-          });
-        }
-        if (nuevas.length > 0) {
-          setMotorConfig((current) => {
-            const previas = current.piezas.filter(
-              (pieza) => pieza.origen || pieza.anchoMm > 0 || pieza.altoMm > 0,
-            );
-            return {
-              ...current,
-              medidaPredefinidaId: "",
-              piezas: [...previas, ...nuevas],
-            };
-          });
-          const archivosOk = resultados.filter(
-            (resultado) => resultado.ok,
-          ).length;
-          toast.success(
-            `${nuevas.length} ${nuevas.length === 1 ? "medida leída" : "medidas leídas"} de ${archivosOk} ${archivosOk === 1 ? "archivo" : "archivos"}`,
-          );
-        }
-        if (errores.length > 0) {
-          toast.error(errores.join(" · "));
-        }
-      } finally {
-        setLeyendoPlanos(false);
-      }
-    },
-    [setMotorConfig, setPlanosAdjuntos],
+  const importarMedidasPdf = (paginas: PaginaPdfImportada[], archivos: File[]) => {
+    const nuevas: PiezaInput[] = paginas.map(pagina => ({
+      uiKey: `pz-${crypto.randomUUID()}`, cantidad: 1,
+      anchoMm: pagina.anchoFinalMm, altoMm: pagina.altoFinalMm,
+      origen: { archivoNombre: pagina.archivoNombre, pagina: pagina.pagina,
+        totalPaginas: pagina.totalPaginas, anchoDetectadoMm: pagina.anchoMm, altoDetectadoMm: pagina.altoMm },
+    }));
+    setMotorConfig(current => ({ ...current, medidaPredefinidaId: "", piezas: [
+      ...current.piezas.filter(pieza => pieza.origen || pieza.anchoMm > 0 || pieza.altoMm > 0), ...nuevas,
+    ] }));
+    setPlanosAdjuntos(prev => {
+      const clave = (f: File) => `${f.name}::${f.size}::${f.lastModified}`;
+      const vistos = new Set(prev.map(clave));
+      return [...prev, ...archivos.filter(f => { const key = clave(f); if (vistos.has(key)) return false; vistos.add(key); return true; })];
+    });
+    toast.success(`${nuevas.length} ${nuevas.length === 1 ? "pieza agregada" : "piezas agregadas"} desde PDF`);
+  };
+  const permiteMedidasPdf = permiteImportarMedidasPdf(
+    productoDetalle, (rutaSel?.configPasos ?? []).filter(includeVisibleConfig),
+    editorVectorialHabilitado ? modoCotizacionVectorialVisible : "medidas",
   );
 
   const getPiezaMeasureValue = React.useCallback(
@@ -6178,7 +6151,9 @@ function ApConfigStep({
       opcionalesRuta.map((opcional) => opcional.code),
     );
     const materialKeys = new Set(
-      slotsComercialElige.map((slot) =>
+      // La reposición permite una elección manual también en un slot automático.
+      // No descartarla al normalizar el formulario después de cada clic.
+      [...slotsComercialElige, ...slotsAutomaticosStock].map((slot) =>
         materialSelectionKey(slot.configPasoId, slot.slotCodigo),
       ),
     );
@@ -6291,6 +6266,7 @@ function ApConfigStep({
     product.real,
     setMotorConfig,
     slotsComercialElige,
+    slotsAutomaticosStock,
   ]);
 
   const setMaterial = React.useCallback(
@@ -6542,7 +6518,68 @@ function ApConfigStep({
         ? `${slot.nombrePaso} · ${humanizeCodigo(slot.slotCodigo)}`
         : humanizeCodigo(slot.slotCodigo);
     const selected =
-      motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
+      motorConfig.seleccionMaterial[key] ?? defaultSlotCandidateId(slot) ?? "";
+    const gruposPapeles = crearGruposPapeles(slot.candidatos);
+    if (gruposPapeles !== null) {
+      return (
+        <MaterialSelectorPapel
+          key={key}
+          etiquetaSlot={etiquetaSlot}
+          grupos={gruposPapeles}
+          selected={
+            motorConfig.seleccionMaterial[key] ?? defaultSlotCandidateId(slot) ?? ""
+          }
+          onSelect={(variantId) => setMaterial(key, variantId)}
+          sinTarjeta={options?.sinTarjeta}
+        />
+      );
+    }
+    const gruposRigidos = crearGruposRigidos(slot.candidatos);
+    const gruposColores = crearGruposColores(slot.candidatos);
+    if (gruposRigidos !== null && (gruposColores?.length ?? 0) <= 1) {
+      return (
+        <MaterialSelectorRigido
+          key={key}
+          etiquetaSlot={etiquetaSlot}
+          grupos={gruposRigidos}
+          selected={selected}
+          onSelect={(variantId) => setMaterial(key, variantId)}
+          sinTarjeta={options?.sinTarjeta}
+        />
+      );
+    }
+    if (gruposColores !== null) {
+      return (
+        <MaterialSelectorColor
+          key={key}
+          etiquetaSlot={etiquetaSlot}
+          grupos={gruposColores}
+          selected={selected}
+          onSelect={(variantId) => setMaterial(key, variantId)}
+          sinTarjeta={options?.sinTarjeta}
+        />
+      );
+    }
+    const gruposLaminados = crearGruposLaminados(slot.candidatos);
+    if (gruposLaminados !== null) {
+      return (
+        <MaterialSelectorLaminado
+          key={key}
+          etiquetaSlot={etiquetaSlot}
+          grupos={gruposLaminados}
+          selected={selected}
+          onSelect={(variantId) => setMaterial(key, variantId)}
+          sinTarjeta={options?.sinTarjeta}
+        />
+      );
+    }
+    const gruposRollos = crearGruposRollos(slot.candidatos);
+    if (gruposRollos !== null) {
+      return <MaterialSelectorRollo key={key} etiquetaSlot={etiquetaSlot}
+        grupos={gruposRollos} selected={selected}
+        onSelect={(variantId) => setMaterial(key, variantId)}
+        sinTarjeta={options?.sinTarjeta} />;
+    }
     const selectedCandidate =
       slot.candidatos.find((candidate) =>
         candidate.variantes.some((variant) => variant.variantId === selected),
@@ -6635,6 +6672,9 @@ function ApConfigStep({
 
   const renderLinearMaterialWidthSelect = (slot: SlotComercialElige) => {
     const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+    if (slot.modoSeleccion === "COMERCIAL_ELIGE" && esSelectorColor(slot.candidatos)) {
+      return <div className="ap-spec ap-spec-wide" key={`lineal-${key}`}>{renderMaterialSelect(slot)}</div>;
+    }
     const selected =
       motorConfig.seleccionMaterial[key] || defaultSlotCandidateId(slot) || "";
     const selectedCandidate =
@@ -7369,7 +7409,7 @@ function ApConfigStep({
   // cuando entran varias por pliego; con la medida "Plancha completa" elegida
   // el dato es trivial (entra 1) y no se muestra. Si el producto tiene una
   // plancha con nombre propio, la frase usa ese nombre.
-  const entranPorPliego = React.useMemo(() => {
+  const entranPorPliego = (() => {
     if (!cotizacionExitosa) return null;
     const medidaSel =
       usaMedidaMixta && motorConfig.piezas.length > 0
@@ -7396,20 +7436,13 @@ function ApConfigStep({
     // SRA3"): bajarlo a minúsculas rompería siglas como SRA3.
     const nombrePlancha = plancha ? medidaLabel(plancha) : "pliego";
     return `Entran ${porPliego} por ${nombrePlancha} · este pedido usa ${pliegos}`;
-  }, [
-    cotizacionExitosa,
-    medidasPredefinidas,
-    motorConfig.medidaPredefinidaId,
-    motorConfig.piezas.length,
-    productoDetalle,
-    usaMedidaMixta,
-  ]);
+  })();
   // Transparencia del rollo (DTF/vinilo por metro): el comercial cotiza sobre
   // un ancho útil fijo (anchoUtil de la máquina − márgenes) que hoy no ve.
   // Gemelo del "Entran N por plancha", pero para rollo: ancho útil, consumo en
   // ml y cuántas piezas entran a lo ancho. Cero cálculo nuevo — todo sale de
   // getSelectedLinearMaterialMetrics y de la cotización viva.
-  const infoRolloLineal = React.useMemo(() => {
+  const infoRolloLineal = (() => {
     if (!metroLinealConMedidasVariables) return null;
     const metrics = getSelectedLinearMaterialMetrics(
       productoDetalle,
@@ -7440,14 +7473,7 @@ function ApConfigStep({
       entranAncho = Math.max(...porFila.values());
     }
     return { anchoUtilCm, consumoMl, entranAncho };
-  }, [
-    cotizacionExitosa,
-    includeVisibleConfig,
-    metroLinealConMedidasVariables,
-    motorConfig,
-    productoDetalle,
-    slotsComercialElige,
-  ]);
+  })();
 
   const cuentaProductosVectoriales =
     coleccionVectorialHabilitada && modoCotizacionVectorialVisible === "svg";
@@ -7587,7 +7613,13 @@ function ApConfigStep({
       </>
     ) : null;
     return (
-      <div className={seC.card}>
+      <ImportarMedidasPdf
+        key={rutaSel?.id}
+        className={seC.card}
+        habilitada={permiteMedidasPdf}
+        onConfirmar={importarMedidasPdf}
+      >
+        {(importar) => <>
         <div className={seC.gh}>{options?.titulo ?? "Medida"}</div>
         <div className={seC.body}>
           <div className="ap-piezas">
@@ -7714,84 +7746,15 @@ function ApConfigStep({
                 </React.Fragment>
               );
             })}
-            {herramientaMedidasArchivo.enabled ? (
-              <div
-                className={`ap-planos-tool${arrastrandoPlanos ? " is-dragging" : ""}${leyendoPlanos ? " is-loading" : ""}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  if (!leyendoPlanos) planosInputRef.current?.click();
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    (event.key === "Enter" || event.key === " ") &&
-                    !leyendoPlanos
-                  ) {
-                    event.preventDefault();
-                    planosInputRef.current?.click();
-                  }
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  if (!arrastrandoPlanos) setArrastrandoPlanos(true);
-                }}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setArrastrandoPlanos(true);
-                }}
-                onDragLeave={(event) => {
-                  if (
-                    event.relatedTarget instanceof Node &&
-                    event.currentTarget.contains(event.relatedTarget)
-                  ) {
-                    return;
-                  }
-                  setArrastrandoPlanos(false);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setArrastrandoPlanos(false);
-                  if (event.dataTransfer.files?.length) {
-                    handleAdjuntarPlanos(event.dataTransfer.files);
-                  }
-                }}
-              >
-                <input
-                  ref={planosInputRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  multiple
-                  className="ap-planos-input"
-                  style={{ display: "none" }}
-                  onChange={(event) => {
-                    if (event.target.files)
-                      handleAdjuntarPlanos(event.target.files);
-                    event.target.value = "";
-                  }}
-                />
-                <div className="ap-planos-cta">
-                  <FileUpIcon />
-                  <span className="ap-planos-title">
-                    {leyendoPlanos
-                      ? "Leyendo archivos…"
-                      : arrastrandoPlanos
-                        ? "Soltá los archivos para leer sus medidas"
-                        : "Adjuntar archivos para medir"}
-                  </span>
-                  <span className="ap-planos-hint">
-                    Arrastrá los PDF acá o hacé clic. Cada página se agrega como
-                    una fila con su medida.
-                  </span>
-                </div>
-              </div>
-            ) : null}
+            {importar}
             <button type="button" className="adi-add" onClick={addPieza}>
               <PlusIcon />
               Agregar pieza
             </button>
           </div>
         </div>
-      </div>
+        </>}
+      </ImportarMedidasPdf>
     );
   };
 
@@ -8042,59 +8005,13 @@ function ApConfigStep({
 
             {editorVectorialHabilitado ? (
               <>
-                <ModoIngresoSelector
-                  value={
-                    modoCotizacionVectorialVisible === "placas"
-                      ? permiteArchivoVectorial
-                        ? "svg"
-                        : "medidas"
-                      : modoCotizacionVectorialVisible
-                  }
-                  options={[
-                    ...(permiteMedidasVectoriales
-                      ? [{ value: "medidas" as const, label: "Rectangular" }]
-                      : []),
-                    ...(permiteArchivoVectorial
-                      ? [
-                          {
-                            value: "svg" as const,
-                            label: "Archivo vectorial",
-                          },
-                        ]
-                      : []),
-                  ]}
+                <GeometriaProductoSelector
+                  value={modoCotizacionVectorialVisible}
+                  permiteMedidas={permiteMedidasVectoriales}
+                  permiteArchivo={permiteArchivoVectorial}
+                  permitePlacas={geometriasComerciales.permitirCotizacionManual}
                   onValueChange={(modoCotizacionVectorial) =>
-                    setMotorConfig((current) => ({
-                      ...current,
-                      modoCotizacionVectorial,
-                    }))
-                  }
-                  title="Geometría del producto"
-                  description="Elegí cómo está definida la pieza. Los archivos SVG y DXF utilizan GrafoNest."
-                  icon={ShapesIcon}
-                  action={
-                    geometriasComerciales.permitirCotizacionManual &&
-                    permiteArchivoVectorial ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setMotorConfig((current) => ({
-                            ...current,
-                            modoCotizacionVectorial:
-                              modoCotizacionVectorialVisible === "placas"
-                                ? "svg"
-                                : "placas",
-                          }))
-                        }
-                      >
-                        <CalculatorIcon data-icon="inline-start" />
-                        {modoCotizacionVectorialVisible === "placas"
-                          ? "Volver al archivo vectorial"
-                          : "Cotización manual"}
-                      </Button>
-                    ) : null
+                    setMotorConfig((current) => ({ ...current, modoCotizacionVectorial }))
                   }
                 />
                 {modoCotizacionVectorialVisible === "medidas" &&
@@ -8894,6 +8811,29 @@ function ApConfigStep({
               ? renderParamPlanilla()
               : null}
 
+            {slotsAutomaticosStock.map((slot) => {
+              const key = materialSelectionKey(slot.configPasoId, slot.slotCodigo);
+              const decision = !cotizando && !cotizacionDesactualizada
+                ? decisionesMaterialStock(cotizacion).find((d) => d.configPasoId === slot.configPasoId && d.slotCodigo === slot.slotCodigo)
+                : undefined;
+              return <MaterialAutomaticoStock
+                key={`stock-${key}`}
+                etiqueta={slotCodigosDuplicados.has(slot.slotCodigo) && slot.nombrePaso
+                  ? `${slot.nombrePaso} · ${humanizeCodigo(slot.slotCodigo)}`
+                  : humanizeCodigo(slot.slotCodigo)}
+                candidatos={slot.candidatos}
+                decision={decision}
+                contextoDecision={JSON.stringify([qty, claveCalculoPiezas({
+                  ...motorConfig,
+                  seleccionMaterial: Object.fromEntries(
+                    Object.entries(motorConfig.seleccionMaterial).filter(([id]) => id !== key),
+                  ),
+                })])}
+                selected={motorConfig.seleccionMaterial[key] || ""}
+                onSelect={(value) => setMaterial(key, value)}
+              />;
+            })}
+
             {slotsMaterialesGenerales.length > 0 ? (
               <div className={matS.list}>
                 {slotsMaterialesGenerales.map((slot) =>
@@ -8902,9 +8842,17 @@ function ApConfigStep({
               </div>
             ) : null}
 
-            {editorSelloHabilitado && selloModel ? (
+            {contextoEditorSello.visible && !selloModel ? (
+              <Alert><StampIcon /><AlertTitle>Diseño del sello</AlertTitle><AlertDescription>{contextoEditorSello.motivo}</AlertDescription></Alert>
+            ) : null}
+            {contextoEditorSello.visible && selloModel ? (
               <div className="ap-spec ap-spec-wide">
                 <label>Diseño del sello</label>
+                {contextoEditorSello.esGoma && <Field>
+                  <FieldLabel htmlFor="lineas-goma-sello">Líneas de texto</FieldLabel>
+                  <Input id="lineas-goma-sello" type="number" min={1} max={30} className="max-w-28"
+                    value={lineasGoma} onChange={e => setLineasGoma(Math.min(30, Math.max(1, Number(e.target.value) || 1)))} />
+                </Field>}
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -9609,6 +9557,8 @@ export function AgregarProductoSheet({
   editingItem = null,
   onSaveItem,
   clienteId = null,
+  contextoMateriales,
+  ordenTrabajoId,
 }: AgregarProductoSheetProps) {
   const { cotizar, cotizarEnSegundoPlano } = useMotorConTipoCambio();
   const designScope = useDesignScope();
@@ -9763,6 +9713,11 @@ export function AgregarProductoSheet({
     );
   }, [motorConfig, product, productoDetalle, qty]);
   const isBlockedByTiempoManual = Boolean(tiempoManualBloqueo);
+  const isBlockedByMaterialVisual = React.useMemo(
+    () =>
+      Boolean(product?.real) && hayMaterialVisualPendiente(productoDetalle, motorConfig, qty),
+    [product, productoDetalle, motorConfig, qty],
+  );
 
   React.useEffect(() => {
     if (!product) return;
@@ -9950,6 +9905,7 @@ export function AgregarProductoSheet({
 
   const cotizarActual = React.useCallback(async () => {
     if (!product?.real || !product.id || !productoDetalle) return;
+    if (isBlockedByMaterialVisual) return;
     if (motorConfig.importandoPiezasVectoriales) return;
     const configParaCotizar = completarNombresPiezas(motorConfig);
     const rutaSel = getRutaSeleccionada(
@@ -10176,6 +10132,8 @@ export function AgregarProductoSheet({
       : window.setTimeout(() => controller.abort(), 20_000);
     try {
       const solicitud = {
+        contextoMateriales,
+        ordenTrabajoId,
         productoId: product.id,
         rutaAlternativaId: motorConfig.rutaAlternativaId || null,
         jobContext: jobContext as never,
@@ -10198,10 +10156,11 @@ export function AgregarProductoSheet({
         : await cotizar(solicitud, controller.signal);
       if (seq !== cotizacionSeqRef.current) return; // llegó una cotización más nueva
       setCotizacion(res);
+      // Un faltante es una respuesta actual del motor: sus alternativas deben
+      // poder elegirse. El guardado sigue exigiendo una cotización exitosa.
+      setCotizacionDesactualizada(false);
       if (!res.exitoso) {
         setCotizacionError(null);
-      } else {
-        setCotizacionDesactualizada(false);
       }
     } catch (error) {
       if (seq !== cotizacionSeqRef.current) return;
@@ -10236,12 +10195,17 @@ export function AgregarProductoSheet({
     clienteId,
     cotizar,
     cotizarEnSegundoPlano,
+    contextoMateriales,
+  ordenTrabajoId,
     geometriasComerciales,
+    isBlockedByMaterialVisual,
     motorConfig,
     product,
     productoDetalle,
     qty,
   ]);
+
+  const claveContextoMateriales = JSON.stringify(contextoMateriales ?? []);
 
   // Lee la edición más reciente cuando vence el debounce sin convertir un
   // cambio de etiqueta en una cancelación o en otro trabajo de nesting.
@@ -10253,6 +10217,20 @@ export function AgregarProductoSheet({
   // fluido, y `cotizacionSeqRef` descarta respuestas que quedaron viejas.
   React.useEffect(() => {
     if (step !== "config") return;
+    // Cambiar de papel o color puede dejar una selección parcial. No volver al default
+    // anterior ni conservar una respuesta en vuelo mientras se elige una variante.
+    if (isBlockedByMaterialVisual) {
+      suppressNextCotizacionClear.current = false;
+      cotizacionSeqRef.current += 1;
+      cotizacionAbortRef.current?.abort();
+      cotizacionAbortRef.current = null;
+      setCotizando(false);
+      setCotizacionDesactualizada(true);
+      setCotizacion(null);
+      setCotizacionTrabajo(null);
+      setCotizacionError(null);
+      return;
+    }
     if (isBlockedByMinimum) return;
     // Al hidratar un item existente conservamos la cotización guardada y no
     // recotizamos hasta el primer cambio real del usuario.
@@ -10280,6 +10258,7 @@ export function AgregarProductoSheet({
     return () => clearTimeout(handle);
   }, [
     claveCalculoMotor,
+    claveContextoMateriales,
     clienteId,
     geometriasComerciales,
     product,
@@ -10288,11 +10267,22 @@ export function AgregarProductoSheet({
     adi,
     step,
     isBlockedByMinimum,
+    isBlockedByMaterialVisual,
   ]);
+
+  const isBlockedByStockSelection = hayDecisionMaterialStockPendiente(cotizacion, motorConfig.seleccionMaterial);
 
   const addCurrent = React.useCallback(
     (keepOpen: boolean) => {
       if (!product) return;
+      if (isBlockedByMaterialVisual) {
+        toast.error("Completá la selección del material y su variante antes de guardar.");
+        return;
+      }
+      if (isBlockedByStockSelection) {
+        toast.error("Elegí el material que requiere reposición antes de guardar.");
+        return;
+      }
       if (nombresPiezasIncompletos) {
         toast.error("Completá el nombre de cada pieza antes de guardar.");
         return;
@@ -10428,6 +10418,8 @@ export function AgregarProductoSheet({
       planosAdjuntos,
       specs,
       tiempoManualBloqueo,
+      isBlockedByMaterialVisual,
+      isBlockedByStockSelection,
     ],
   );
 
@@ -10473,7 +10465,7 @@ export function AgregarProductoSheet({
         event.key !== "Tab" ||
         planOpenRef.current ||
         (event.target instanceof Element &&
-          event.target.closest('[data-slot="dialog-content"]'))
+          event.target.closest('[role="dialog"]') !== dialogRef.current)
       )
         return;
       const disponibles = focusables();
@@ -10504,9 +10496,7 @@ export function AgregarProductoSheet({
         planOpenRef.current ||
         event.defaultPrevented ||
         (event.target instanceof Element &&
-          event.target.closest(
-            '[data-plan-fabricacion-dialog], [data-slot="dialog-content"]',
-          ))
+          event.target.closest('[role="dialog"]') !== dialogRef.current)
       )
         return;
       if (briefEditorOpen) {
@@ -10599,9 +10589,9 @@ export function AgregarProductoSheet({
               briefArchivosPendientesDraft={briefArchivosPendientesDraft}
               setBriefArchivosPendientesDraft={setBriefArchivosPendientesDraft}
               onSaveBrief={guardarBrief}
-              cotizacion={cotizacion}
+              cotizacion={isBlockedByMaterialVisual ? null : cotizacion}
               cotizando={cotizando}
-              cotizacionDesactualizada={cotizacionDesactualizada}
+              cotizacionDesactualizada={cotizacionDesactualizada || isBlockedByMaterialVisual}
               onPlanOpenChange={cambiarPlanOpen}
               cotizacionTrabajo={cotizacionTrabajo}
               cotizacionError={cotizacionError}
@@ -10629,14 +10619,18 @@ export function AgregarProductoSheet({
                 <span className="lbl">Total c/ imp.</span>
                 <span className="val mono">
                   {product.real
-                    ? cotizando
-                      ? "Cotizando…"
-                      : cotizacionExitosa && !cotizacionDesactualizada
-                        ? formatCurrency(
-                            getCotizacionTotal(cotizacionExitosa),
-                            moneda,
-                          )
-                        : "Pendiente de cotizar"
+                    ? isBlockedByMaterialVisual
+                      ? "Elegí la variante del material"
+                      : isBlockedByStockSelection && !cotizacionDesactualizada && !cotizando
+                        ? "Elegí el material a reponer"
+                        : cotizando
+                        ? "Cotizando…"
+                        : cotizacionExitosa && !cotizacionDesactualizada
+                          ? formatCurrency(
+                              getCotizacionTotal(cotizacionExitosa),
+                              moneda,
+                            )
+                          : "Pendiente de cotizar"
                     : formatCurrency(totals.total, moneda)}
                 </span>
               </div>
@@ -10652,6 +10646,8 @@ export function AgregarProductoSheet({
                       (!cotizacionExitosa ||
                         cotizacionDesactualizada ||
                         cotizando ||
+                        isBlockedByMaterialVisual ||
+                        isBlockedByStockSelection ||
                         isBlockedByMinimum ||
                         isBlockedByTiempoManual))
                   }
@@ -10670,6 +10666,8 @@ export function AgregarProductoSheet({
                     (!cotizacionExitosa ||
                       cotizacionDesactualizada ||
                       cotizando ||
+                      isBlockedByMaterialVisual ||
+                      isBlockedByStockSelection ||
                       isBlockedByMinimum ||
                       isBlockedByTiempoManual))
                 }

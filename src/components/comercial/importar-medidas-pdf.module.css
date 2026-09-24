@@ -1,0 +1,34 @@
+.zona[data-arrastrando] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--background));
+}
+.importar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.ayuda {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.zona[data-arrastrando] .ayuda {
+  color: var(--foreground);
+}
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  gap: 20px;
+  padding: 22px 24px;
+}
+.footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+}

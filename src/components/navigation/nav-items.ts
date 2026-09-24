@@ -159,7 +159,7 @@ export const NAV: NavItem[] = [
     children: [
       {
         key: "tablero-produccion",
-        label: "Tablero de producción",
+        label: "Operación diaria",
         href: "/produccion/tablero",
       },
       {
@@ -210,10 +210,10 @@ export const NAV: NavItem[] = [
         href: "/administracion/cuentas-por-pagar",
       },
       {
-        // Todo lo que sale de la caja, deuda o no: el registro completo, el
-        // análisis de en qué se va la plata y las plantillas recurrentes.
+        // Registro, clasificación y análisis de egresos pagados o pendientes.
+        // Las programaciones periódicas se configuran en Gastos fijos.
         key: "egresos",
-        label: "Egresos",
+        label: "Registro de egresos",
         href: "/administracion/egresos",
       },
       {
@@ -331,7 +331,6 @@ export function navPara(
       cupones: { capacidad: "cupones", label: "Historial de cupones" },
       fidelizacion: { capacidad: "fidelizacion", label: "Historial de puntos" },
       tesoreria: { capacidad: "tesoreria", label: "Historial de tesorería" },
-      egresos: { capacidad: "cuentas_pagar", label: "Historial de egresos" },
       "cuentas-por-pagar": { capacidad: "cuentas_pagar", label: "Historial por proveedor" },
     };
     const historial = historiales[c.key];

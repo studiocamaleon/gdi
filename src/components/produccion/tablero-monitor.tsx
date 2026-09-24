@@ -32,7 +32,7 @@ export function TableroMonitor({ zona, actualizadoEl, conexion, error, refreshin
               <span className={s.signal} aria-hidden="true" />{estado.etiqueta}
             </span>
           </div>
-          <h1>Tablero de producción<span className={s.titleDot} aria-hidden="true">.</span></h1>
+          <h1>Operación diaria<span className={s.titleDot} aria-hidden="true">.</span></h1>
           <p>Trabajos, personal y tiempos del taller.</p>
         </div>
       </div>

@@ -55,7 +55,7 @@ export async function cargarDatosTableroProduccion({ soloPendientes = false }: {
       vendedorSinVinculo: tablero.value.vendedorSinVinculo,
     };
   } else {
-    errorInicial = "No se pudo cargar el tablero de producción.";
+    errorInicial = "No se pudieron cargar los trabajos de producción.";
   }
   if (ests.status === "fulfilled") estaciones = ests.value;
   if (durs.status === "fulfilled") duraciones = durs.value;

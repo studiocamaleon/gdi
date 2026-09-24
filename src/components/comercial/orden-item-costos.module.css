@@ -380,3 +380,10 @@
 @media (prefers-reduced-motion: reduce) {
   .cost-row-chevron { transition: none; }
 }
+
+.cost-stock-note {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+}
