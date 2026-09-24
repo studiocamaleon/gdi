@@ -10,6 +10,7 @@ modo `live`, su sección de planes consulta el mismo catálogo público que el r
 npm ci --include=dev
 npm run dev
 npm run lint
+npm test
 npm run build
 ```
 
@@ -23,8 +24,9 @@ fijado en `package.json`, y las dependencias de desarrollo durante el build.
 
 Si el renderizador de PDF ocupa el puerto 3002, usar `npx next dev -p 3003`.
 Al arrancar directamente con `npx`, ejecutar primero `npm run grafo3d:build`.
-Pruebas del catálogo, desde la raíz del monorepo:
-`npx vitest run --config apps/marketing/vitest.config.ts`.
+Pruebas del catálogo y del modo de lanzamiento: `npm test` desde esta carpeta.
+Vitest forma parte de sus dependencias de desarrollo para que la instalación
+independiente y la comprobación de tipos en Vercel no dependan de la raíz del monorepo.
 
 ## Estructura
 

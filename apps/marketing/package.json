@@ -13,7 +13,8 @@
     "prebuild": "npm run grafo3d:build",
     "build": "next build",
     "start": "next start -p 3002",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -34,6 +35,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
