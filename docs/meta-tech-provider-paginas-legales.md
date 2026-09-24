@@ -1,6 +1,66 @@
 # Páginas legales para la integración de WhatsApp
 
-Preparación local del 24 de septiembre de 2026. No se publicó la web ni se cambió la aplicación de Meta.
+Actualizado el 24 de septiembre de 2026: web publicada en
+`https://grafoprint.com.ar`, configuración básica guardada en Meta y verificación
+de acceso enviada. La revisión de permisos de WhatsApp sigue sin enviar.
+
+## Estado comprobado en Meta — 24/09/2026
+
+- Aplicación **Grafoprint**, ID `1377285724378010`.
+- Empresa vinculada: **Verificado**. El onboarding independiente de Tech Provider
+  muestra la verificación empresarial como **Aprobado**.
+- Configuración básica guardada y comprobada tras recargar:
+  dominio `grafoprint.com.ar`, sitio `https://grafoprint.com.ar/`, correo
+  `soporte@grafoprint.com.ar` y las tres URL legales de la tabla siguiente.
+- Eliminación de datos configurada como **URL de las instrucciones para la
+  eliminación de datos**, no como callback.
+- Se conservan el icono existente y la categoría **Utilidad y productividad**.
+  Desapareció el aviso de falta de política de privacidad. En el asistente de
+  App Review, Verificación y Configuración de la aplicación muestran 100 %.
+- **Access Verification enviada**: la pantalla confirma que Meta está revisando
+  la solicitud y que, si necesita más información, se pondrá en contacto en un
+  plazo de 5 días. Esto no es una aprobación de Tech Provider ni de permisos.
+- Lucas confirmó que Grafoprint administra sólo su propio porfolio. En el
+  formulario se seleccionó **Plataforma SaaS**, **No** a administrar diversos
+  porfolios y la web pública. Antes del envío figuraba el plazo del 23/11/2026.
+- **App Review sin enviar**: el borrador contiene `whatsapp_business_messaging`,
+  `whatsapp_business_management` y `public_profile`. El botón de envío sigue
+  deshabilitado por apartados incompletos. No se añadieron permisos ni se publicó
+  la aplicación de Meta.
+- El panel de incorporación muestra una etiqueta general «En revisión»; para
+  distinguir los trámites, se comprobó el formulario específico: Access
+  Verification está enviada, pero App Review continúa como borrador incompleto.
+
+Descripción enviada en la verificación de acceso:
+
+> Grafoprint, de GRUPO IDEA SAS, es una plataforma SaaS de gestión para empresas de la industria gráfica, actualmente en prelanzamiento. Con la autorización de cada empresa cliente, la integración prevista utilizará los identificadores de su cuenta y número de WhatsApp, contactos, mensajes, plantillas y estados de entrega para conectar su propio número a Grafoprint, centralizar la atención en una bandeja de entrada y enviar notificaciones a sus clientes sobre presupuestos, trabajos y pedidos. Cada empresa utilizará estas funciones desde Grafoprint; cuando sea elegible, podrá conservar el uso de la aplicación WhatsApp Business con su número. El sitio comercial y las políticas están publicados; la integración directa con Meta está en preparación.
+
+## Próximo paso: evidencias y borrador de App Review
+
+1. Preparar una prueba de envío y recepción de WhatsApp con un destinatario de
+   ensayo autorizado. Grabar ambas interfaces en un video para
+   `whatsapp_business_messaging`.
+2. Crear una plantilla del caso de uso y grabar un video separado para
+   `whatsapp_business_management`. La guía oficial permite usar WhatsApp Manager
+   para esta demostración y una solicitud de la configuración de API para la
+   prueba de envío. No es necesario terminar todo Embedded Signup antes de
+   iniciar la revisión; sí hace falta evidencia funcional real.
+3. Redactar la explicación de cada permiso y completar instrucciones reproducibles
+   para el revisor. No se enviaron mensajes ni se generaron credenciales en esta
+   etapa de configuración administrativa.
+4. Completar el apartado de tratamiento de datos con hechos confirmados: entidades
+   que tendrán acceso a datos de Meta, responsable y país, respuestas a solicitudes
+   de seguridad nacional durante los últimos 12 meses y procedimientos realmente
+   implementados para solicitudes de autoridades. No se marcaron declaraciones
+   sobre estos procesos sin verificarlos con Lucas.
+5. Revisar el envío completo, adjuntar los videos y solicitar los permisos cuando
+   todas las respuestas y pruebas estén listas. El inbox, los webhooks y la
+   coexistencia de la integración propia conservan su implementación pendiente.
+
+Fuentes oficiales consultadas el 24/09/2026: la guía de Tech Providers muestra
+actualización del 20/08/2026 y la guía de App Review del 16/06/2026. La verificación
+de acceso y App Review son procesos distintos; la solicitud de acceso no exige
+esperar a tener toda la aplicación desplegada.
 
 ## Versión y ubicación
 
@@ -25,7 +85,7 @@ La vista previa de esta revisión está en `http://localhost:3012`: el puerto 30
 
 ## Datos confirmados por el titular
 
-- Dominio: `grafoprint.com.ar`, administrado en Donweb; publicación pendiente.
+- Dominio: `grafoprint.com.ar`, administrado en Donweb y publicado en Vercel.
 - Razón social responsable: **GRUPO IDEA SAS**; marca y servicio: **Grafoprint**.
 - CUIT: **33-71888258-9**.
 - Domicilio legal público: **Julio Argentino Roca 1260, El Calafate, Santa Cruz,
@@ -58,7 +118,10 @@ sistema antes de recibir clientes reales, incluido el piloto.
 
 Las comprobaciones operativas anteriores están pendientes: las páginas son una versión preparada para revisión, no evidencia de que esos procesos ya estén implementados. La retención técnica no sustituye los plazos legales.
 
-## Publicación coordinada, pendiente de autorización
+## Publicación coordinada por etapas
+
+Marketing y sus URL en Meta ya están publicados/configurados. Los pasos relativos
+al sistema, la API y su versión de consentimiento se conservan como pendientes.
 
 1. Configurar `MARKETING_SITE_URL` con el origen HTTPS real tanto en marketing como en el sistema. Debe apuntar a marketing, no al dominio de la aplicación, para evitar un bucle de redirección. Configurar `MARKETING_APP_URL` en marketing para login y registro.
 2. Publicar primero las páginas de marketing. Después publicar el sistema con las redirecciones para que los enlaces de registro no queden sin destino.
@@ -82,6 +145,7 @@ Completar estas páginas cubre una parte de la preparación. Access Verification
 ## Fuentes consultadas
 
 - [Meta: proceso para Tech Providers](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/get-started-for-tech-providers).
+- [Meta: verificación de acceso](https://developers.facebook.com/documentation/development/release/access-verification).
 - [Meta: App Review](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/app-review).
 - [Meta: onboarding de usuarios de WhatsApp Business](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users/).
 - [WhatsApp: política de mensajes](https://whatsappbusiness.com/policy/).

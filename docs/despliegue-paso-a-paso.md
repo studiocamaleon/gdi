@@ -39,8 +39,9 @@ pendiente.
   No se enviaron mensajes para probar la casilla; esa comprobación sigue a cargo
   de Lucas.
 
-Siguiente paso: retomar la configuración de Meta con las URL legales públicas
-y preparar el código del SaaS para su entorno de pruebas. Fly, Neon, R2 y Redis
+Meta ya tiene las URL legales públicas y la verificación de acceso fue enviada
+el 24/09/2026. Siguiente paso: preparar las evidencias de App Review y el código
+del SaaS para su entorno de pruebas. Fly, Neon, R2 y Redis
 permanecen pendientes. El registro, acceso y contratación siguen en prelanzamiento.
 
 ## 1. Arquitectura y alcance acordados
@@ -252,11 +253,13 @@ Una vez comprobadas, quedan disponibles:
 - `https://grafoprint.com.ar/terminos`
 - `https://grafoprint.com.ar/eliminacion-de-datos`
 
-Usarlas en la configuración correspondiente de Grafoprint en Meta cuando se
-ejecute ese paso. La última es una URL de **instrucciones**, no un callback de
+Ya se guardaron en la configuración básica de Grafoprint en Meta el 24/09/2026.
+La última es una URL de **instrucciones**, no un callback de
 borrado. El proceso de Tech Provider, Access Verification/App Review y la
 integración técnica requieren su propio seguimiento. La web pública no sustituye
 una demostración funcional que Meta solicite ni concede permisos avanzados.
+La verificación de acceso está enviada y en revisión; App Review continúa como
+borrador incompleto. Ver [estado y próximos pasos](meta-tech-provider-paginas-legales.md).
 Referencia: [guía de Tech Providers](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/get-started-for-tech-providers).
 
 Podemos continuar esa preparación mientras construimos el entorno de pruebas,
