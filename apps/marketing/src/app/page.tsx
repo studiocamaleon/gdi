@@ -66,28 +66,36 @@ const modules = [
     tag: "GESTIÓN + MÉTRICAS",
   },
 ];
-const faqs = [
-  [
-    "¿Para qué tipo de empresa es Grafo?",
-    "Para empresas de la industria gráfica: impresión digital y gran formato, fabricación de cartelería y operaciones con procesos de producción más complejos. Podés elegir el plan según tu equipo y las funciones que necesitás.",
-  ],
-  [
-    "¿Cómo elijo mi plan?",
-    "Compará los usuarios incluidos, el almacenamiento y las funciones de cada plan. Podés consultar el detalle de las capacidades disponibles antes de registrarte y revisar un cambio de plan desde tu cuenta.",
-  ],
-  [
-    "¿Necesito instalar algo?",
-    "Grafoprint funciona desde el navegador. Podés acceder desde una computadora o tablet, y usar una pantalla en el taller para consultar la producción.",
-  ],
-  [
-    "¿Puedo migrar mis datos actuales?",
-    "Durante la configuración inicial podemos acompañarte en la importación de clientes, materiales y productos desde tus planillas o tu sistema anterior.",
-  ],
-  [
-    "¿Puedo probarlo antes de elegir?",
-    "Los planes con registro disponible indican su período de prueba, sin tarjeta. También podés solicitar una demo para recorrer el sistema con el foco en tu operación.",
-  ],
-];
+function getFaqs(isLive: boolean) {
+  return [
+    [
+      "¿Para qué tipo de empresa es Grafo?",
+      "Para empresas de la industria gráfica: impresión digital y gran formato, fabricación de cartelería y operaciones con procesos de producción más complejos. Podés elegir el plan según tu equipo y las funciones que necesitás.",
+    ],
+    [
+      "¿Cómo elijo mi plan?",
+      isLive
+        ? "Compará los usuarios incluidos, el almacenamiento y las funciones de cada plan. Podés consultar el detalle de las capacidades disponibles antes de registrarte y revisar un cambio de plan desde tu cuenta."
+        : "Publicaremos los planes y sus condiciones junto con el lanzamiento. Mientras tanto, podés contarnos cómo trabaja tu gráfica para que te orientemos.",
+    ],
+    [
+      "¿Necesito instalar algo?",
+      "Grafoprint funciona desde el navegador. Podés acceder desde una computadora o tablet, y usar una pantalla en el taller para consultar la producción.",
+    ],
+    [
+      "¿Puedo migrar mis datos actuales?",
+      "Durante la configuración inicial podemos acompañarte en la importación de clientes, materiales y productos desde tus planillas o tu sistema anterior.",
+    ],
+    [
+      isLive
+        ? "¿Puedo probarlo antes de elegir?"
+        : "¿Ya puedo crear una cuenta?",
+      isLive
+        ? "Los planes con registro disponible indican su período de prueba, sin tarjeta. También podés solicitar una demo para recorrer el sistema con el foco en tu operación."
+        : "Estamos preparando el lanzamiento: todavía no están habilitados el registro ni el inicio de sesión. Podés escribirnos para conocer más. Grafo3D ya se puede usar gratis desde esta web, sin crear una cuenta.",
+    ],
+  ];
+}
 
 export default function Page() {
   const links = getSiteConfig();
@@ -106,7 +114,11 @@ export default function Page() {
       <a className="skip-link" href="#contenido">
         Saltar al contenido
       </a>
-      <SiteHeader login={links.login} signup={links.signup} />
+      <SiteHeader
+        login={links.login}
+        signup={links.signup}
+        isLive={links.isLive}
+      />
       <main id="contenido">
         <section className="hero" id="top">
           <div className="hero-film">
@@ -136,11 +148,14 @@ export default function Page() {
                 Ver Grafo en acción <ArrowDown size={17} />
               </a>
               <a className="text-link" href="#precios">
-                Explorar planes <ArrowUpRight size={16} />
+                {links.isLive ? "Explorar planes" : "Próximo lanzamiento"}{" "}
+                <ArrowUpRight size={16} />
               </a>
             </div>
             <span className="hero-trial">
-              Prueba sin tarjeta · Configuración guiada
+              {links.isLive
+                ? "Prueba sin tarjeta · Configuración guiada"
+                : "Próximamente · Estamos preparando el lanzamiento"}
             </span>
           </div>
           <div className="hero-corner">
@@ -334,7 +349,10 @@ export default function Page() {
               También en la pantalla de tu taller.
             </span>
             <a href={links.signup}>
-              Empezar prueba gratis <ArrowUpRight size={16} />
+              {links.isLive
+                ? "Empezar prueba gratis"
+                : "Conocé el próximo lanzamiento"}{" "}
+              <ArrowUpRight size={16} />
             </a>
           </div>
         </section>
@@ -351,7 +369,11 @@ export default function Page() {
                 <br />
                 <span>con tu operación.</span>
               </h2>
-              <p>Empezá donde estás. Sumá capacidades cuando las necesites.</p>
+              <p>
+                {links.isLive
+                  ? "Empezá donde estás. Sumá capacidades cuando las necesites."
+                  : "Conocé Grafo hoy. Los planes estarán disponibles con el lanzamiento."}
+              </p>
             </div>
             <Suspense
               fallback={
@@ -369,7 +391,10 @@ export default function Page() {
                 procesos.
               </span>
               <a href={links.signup}>
-                O empezá con una prueba gratis <ArrowUpRight size={15} />
+                {links.isLive
+                  ? "O empezá con una prueba gratis"
+                  : "Información del lanzamiento"}{" "}
+                <ArrowUpRight size={15} />
               </a>
             </div>
           </div>
@@ -387,7 +412,7 @@ export default function Page() {
             </a>
           </div>
           <div className="faq-list">
-            {faqs.map(([question, answer]) => (
+            {getFaqs(links.isLive).map(([question, answer]) => (
               <details key={question}>
                 <summary>
                   {question}
@@ -418,10 +443,14 @@ export default function Page() {
             </p>
             <div>
               <a className="button button-orange" href={links.signup}>
-                Empezar prueba gratis <ArrowUpRight size={17} />
+                {links.isLive ? "Empezar prueba gratis" : "Próximamente"}{" "}
+                <ArrowUpRight size={17} />
               </a>
               <a className="text-link" href={links.demo}>
-                Solicitar una demo <ArrowUpRight size={16} />
+                {links.isLive
+                  ? "Solicitar una demo"
+                  : "Consultar con el equipo"}{" "}
+                <ArrowUpRight size={16} />
               </a>
             </div>
           </div>
@@ -433,7 +462,7 @@ export default function Page() {
             <Brand />
           </a>
           <p>El sistema operativo de la industria gráfica.</p>
-          <a href="mailto:soporte@grafoprint.com.ar">
+          <a href={links.contact}>
             <Mail size={16} />
             Hablemos
           </a>
@@ -445,6 +474,7 @@ export default function Page() {
           <nav aria-label="Información legal">
             <a href={links.terms}>Términos</a>
             <a href={links.privacy}>Privacidad</a>
+            <a href={links.dataDeletion}>Eliminación de datos</a>
             <a href="#faq">Ayuda</a>
           </nav>
           <a href="#top" className="back-top">

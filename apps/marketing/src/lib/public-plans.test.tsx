@@ -5,6 +5,8 @@ vi.mock("next/server", () => ({
 }));
 import { getPublicPlans, planSignup, type PublicPlan } from "./public-plans";
 import { PublicPlans } from "../components/public-plans";
+import { PublicIntegrations } from "../components/public-integrations";
+import { NestingSection } from "../components/nesting-section";
 import { comparisonRows, hasDifferences } from "./plan-comparison";
 import { publicIntegrations } from "./public-integrations";
 
@@ -32,6 +34,7 @@ const plan: PublicPlan = {
   ],
 };
 function response(data: unknown = [plan], status = 200) {
+  vi.stubEnv("MARKETING_LAUNCH_MODE", "live");
   vi.stubEnv("MARKETING_API_URL", "http://catalogo.test/api/");
   return vi.stubGlobal(
     "fetch",
@@ -44,6 +47,30 @@ afterEach(() => {
 });
 
 describe("Oferta compartida entre web y registro", () => {
+  it("no consulta el SaaS ni anuncia precios o integraciones durante el prelanzamiento", async () => {
+    response();
+    vi.stubEnv("MARKETING_LAUNCH_MODE", "prelaunch");
+    expect(await getPublicPlans()).toBeNull();
+    expect(await PublicIntegrations()).toBeNull();
+    const nesting = await NestingSection();
+    expect(nesting.props.isLive).toBe(false);
+    expect(nesting.props.rectangularPlans).toEqual([]);
+    expect(nesting.props.irregularPlans).toEqual([]);
+    const html = renderToStaticMarkup(
+      await PublicPlans({
+        signup: "https://app.test/registro",
+        demo: "https://app.test/demo",
+      }),
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(html).toContain("Estamos preparando el lanzamiento");
+    expect(html).toContain('id="comparar-planes"');
+    expect(html).toContain("mailto:soporte@grafoprint.com.ar");
+    expect(html).not.toContain("https://app.test");
+    expect(html).not.toContain("Grafo Esencial");
+    expect(html).not.toContain("Empezar prueba");
+    expect(html).not.toContain("No pudimos cargar");
+  });
   it("consulta el catálogo sin caché ni credenciales y conserva los datos publicados", async () => {
     response();
     expect(await getPublicPlans()).toEqual([plan]);

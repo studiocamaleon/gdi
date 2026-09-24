@@ -2,6 +2,7 @@ import { Bot, FileCheck2, MessageCircle, Printer } from "lucide-react";
 import { connection } from "next/server";
 import { getPublicPlans } from "../lib/public-plans";
 import { publicIntegrations } from "../lib/public-integrations";
+import { isMarketingLive } from "../lib/site-config";
 
 const icons = {
   invoice: FileCheck2,
@@ -11,6 +12,7 @@ const icons = {
 };
 
 export async function PublicIntegrations() {
+  if (!isMarketingLive()) return null;
   await connection();
   const plans = await getPublicPlans();
   if (!plans) return null;

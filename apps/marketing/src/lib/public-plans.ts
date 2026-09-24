@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { isMarketingLive } from "./site-config";
 
 export type PublicPlan = {
   implementacion?: { importe: number } | null;
@@ -24,6 +25,7 @@ export type PublicPlan = {
 // Comparativa e integraciones comparten una lectura durante este render.
 // React cache no conserva esta respuesta entre solicitudes de usuarios.
 export const getPublicPlans = cache(async (): Promise<PublicPlan[] | null> => {
+  if (!isMarketingLive()) return null;
   const base =
     process.env.MARKETING_API_URL ||
     (process.env.NODE_ENV === "development"

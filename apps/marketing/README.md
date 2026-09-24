@@ -1,12 +1,13 @@
 # Web comercial de Grafoprint
 
 Landing pública de Grafo, **el sistema operativo de la industria gráfica**.
-Su sección de planes consulta el mismo catálogo público que el registro del SaaS.
+Puede publicarse en prelanzamiento sin desplegar el SaaS. Cuando se activa el
+modo `live`, su sección de planes consulta el mismo catálogo público que el registro.
 
 ## Desarrollo y validación
 
 ```bash
-npm install
+npm ci --include=dev
 npm run dev
 npm run lint
 npm run build
@@ -17,8 +18,8 @@ producción en ese mismo puerto.
 
 Grafo3D se abre en **`/3d`**, gratis y sin registro. `npm install` / `npm ci`
 instalan también las dependencias bloqueadas de `../forma-studio`; `npm run dev`
-y `npm run build` compilan el editor antes de arrancar Next. Requiere Node 22.13+
-o Node 24+ y las dependencias de desarrollo durante el build.
+y `npm run build` compilan el editor antes de arrancar Next. Usar Node 24.x,
+fijado en `package.json`, y las dependencias de desarrollo durante el build.
 
 Si el renderizador de PDF ocupa el puerto 3002, usar `npx next dev -p 3003`.
 Al arrancar directamente con `npx`, ejecutar primero `npm run grafo3d:build`.
@@ -42,6 +43,19 @@ El HTML original (`src/landing.html`, `public/marketing.css` y
 `public/marketing.js`) se conserva como referencia; la portada ya no lo carga.
 
 ## Contenido comercial
+
+`MARKETING_LAUNCH_MODE=prelaunch` es el modo predeterminado. La portada conserva
+las demostraciones y las páginas legales; los accesos y el registro conducen a
+`/proximamente`. Los planes muestran un aviso deliberado, sin precios ni errores
+de conexión. Ni planes, ni integraciones, ni nesting consultan la API. Grafo3D
+funciona de manera independiente y permanece accesible.
+
+Sólo el valor exacto `live` activa los enlaces al SaaS y el catálogo. Cualquier
+otro valor mantiene el prelanzamiento. El modo se evalúa durante la compilación:
+**cambiarlo requiere reconstruir y desplegar la web**. No es un control de
+seguridad para la aplicación ni reemplaza `REGISTRO_PUBLICO_HABILITADO` en la API.
+
+En modo `live`:
 
 Los nombres, descripciones, precios, recomendación, trial, usuarios y espacio
 proceden de `GET /registro/planes`. Las ofertas versionadas incluyen las funciones
@@ -72,12 +86,23 @@ una explicación alternativa si WebGL no está disponible.
 
 Usar `apps/marketing` como directorio raíz y las variables de `.env.example`.
 `MARKETING_API_URL` es la base de la API, incluido `/api`, consultada sólo por el
-servidor, sin credenciales. Es obligatoria en producción; en desarrollo usa
+servidor, sin credenciales. Es necesaria para el catálogo en modo `live`; en desarrollo usa
 `http://localhost:3001/api`. La sección espera una petición real y consulta sin
 caché, con un timeout de 5 segundos, para no publicar precios retenidos del build.
 `MARKETING_SIGNUP_URL` apunta al onboarding público; `MARKETING_DEMO_URL` puede
 ser un correo o una URL comercial. Los enlaces de planes agregan su nombre al
 asunto solo cuando el destino es `mailto:`.
+
+En prelanzamiento sólo configurar `MARKETING_SITE_URL` y, opcionalmente,
+`MARKETING_CONTACT_URL` (por defecto, el correo de soporte). `MARKETING_DEMO_URL`
+no se usa en ese modo: el contacto no depende de un sistema de reservas ni de
+una aplicación publicada. No se recopilan suscripciones a una lista de espera.
+
+Para Vercel, `vercel.json` fija Next.js, instalación con npm y build completo.
+Configurar **Root Directory: `apps/marketing`**, Node 24.x, salida automática de
+Next y **Include source files outside of the Root Directory in the Build Step**
+para acceder a `apps/forma-studio`. No instalar ni compilar todo el monorepo.
+Guía de publicación y activación: [despliegue-web-prelanzamiento.md](../../docs/despliegue-web-prelanzamiento.md).
 
 Se conservan las rutas de sitemap/robots y las cabeceras existentes.
 
@@ -95,9 +120,11 @@ El despliegue debe incluir el repositorio completo, con ambas carpetas hermanas:
 - Instalación: `npm ci --include=dev` (su `postinstall` instala Grafo3D).
 - Compilación: `npm run build` (su `prebuild` prepara Grafo3D).
 - Servidor: `npm start`, o `npx next start -p "$PORT"` si el proveedor asigna puerto.
-- Sitio público: `MARKETING_SITE_URL=https://grafoprint.com.ar` para generar las
-  URLs canónicas y el sitemap. Configurar además los destinos reales del SaaS
-  y la API indicados arriba.
+- Sitio público: `MARKETING_SITE_URL` con el dominio confirmado para generar las
+  URLs canónicas y el sitemap. El dominio principal confirmado es
+  `grafoprint.com.ar`, administrado en Donweb; los subdominios de la app y API
+  en `.env.example` siguen siendo propuestas.
+  En `live`, configurar además los destinos reales del SaaS y la API.
 
 En proveedores que limitan el acceso al directorio de la aplicación, habilitar
 la inclusión de archivos externos a `apps/marketing`: la carpeta

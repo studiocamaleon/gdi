@@ -43,9 +43,11 @@ const contours: Piece[] = Array.from({ length: 12 }, (_, i) => ({
 }));
 
 export function NestingShowcase({
+  isLive,
   rectangularPlans,
   irregularPlans,
 }: {
+  isLive: boolean;
   rectangularPlans: string[];
   irregularPlans: string[];
 }) {
@@ -103,13 +105,16 @@ export function NestingShowcase({
           </h3>
           <p>{descriptions[mode]}</p>
           <span className={styles.availability}>
-            {plans.length
-              ? `Incluido en ${plans.join(" · ")}`
-              : "Consultá la disponibilidad por plan"}
+            {!isLive
+              ? "Planes y disponibilidad: próximamente"
+              : plans.length
+                ? `Incluido en ${plans.join(" · ")}`
+                : "Consultá la disponibilidad por plan"}
           </span>
         </div>
         <a className="text-link dark-link" href="#comparar-planes">
-          Compará las funciones <ArrowUpRight size={16} />
+          {isLive ? "Compará las funciones" : "Conocé el próximo lanzamiento"}{" "}
+          <ArrowUpRight size={16} />
         </a>
       </div>
       <div className={styles.demo}>

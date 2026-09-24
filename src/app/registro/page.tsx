@@ -15,6 +15,7 @@ import { RegistroForm } from "@/components/registro/registro-form";
 import { RegistroAmbient } from "@/components/registro/registro-ambient";
 import s from "@/components/registro/registro-premium.module.css";
 import { listarPlanesRegistro } from "@/lib/registro-api";
+import { getMarketingSiteUrl } from "@/lib/marketing-site";
 
 export const metadata: Metadata = {
   title: "Creá tu cuenta · Grafoprint",
@@ -25,11 +26,7 @@ export const metadata: Metadata = {
 
 export default async function RegistroPage() {
   const planes = await listarPlanesRegistro().catch(() => []);
-  const site =
-    process.env.MARKETING_SITE_URL ??
-    (process.env.NODE_ENV === "development"
-      ? "http://localhost:3002"
-      : "https://grafoprint.com");
+  const site = getMarketingSiteUrl();
   return (
     <main className={s.page}>
       <a className={s.skipLink} href="#registro-formulario">
@@ -143,6 +140,7 @@ export default async function RegistroPage() {
               <nav aria-label="Información legal">
                 <Link href="/terminos">Términos</Link>
                 <Link href="/privacidad">Privacidad</Link>
+                <Link href="/eliminacion-de-datos">Eliminación de datos</Link>
                 <a href="mailto:soporte@grafoprint.com.ar">
                   Ayuda <ArrowUpRight size={12} />
                 </a>
