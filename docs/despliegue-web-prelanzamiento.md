@@ -1,7 +1,9 @@
 # Publicar la web de Grafoprint antes que el sistema
 
-Preparación local al 24 de septiembre de 2026. No se creó infraestructura,
-no se contrató hosting y no se publicó ningún entorno.
+Estado al 24 de septiembre de 2026: web comercial publicada en
+<https://grafoprint-web.vercel.app>, proyecto `grafoprint-web` de Vercel Pro.
+Commit `604bf17`, rama `meta-tech-provider`, todavía sin integrar en `main`.
+El dominio de Donweb y la infraestructura del SaaS siguen pendientes.
 
 Orden completo, responsables y paso posterior al sistema:
 [despliegue-paso-a-paso.md](despliegue-paso-a-paso.md). Arquitectura confirmada:
@@ -31,18 +33,19 @@ revisión operativa de los textos en
 Al publicar, configurar la variante `www` para redirigir al dominio principal.
 Antes de editar DNS, revisar sus registros actuales y conservar los del correo.
 Se consultó DNS público: hay A y AAAA de la web, y MX/hosts de correo de Donweb.
-El inventario observado está en la guía general. No se modificó Donweb ni se
-revisó/exportó la zona completa del panel; hacer ese respaldo antes del cambio.
+Se revisó la zona del panel y se conservó un inventario local de sus 27 registros,
+contrastado por consultas DNS. No se modificó Donweb. Antes del cambio, comparar
+el inventario con el estado vigente y conservar los registros de correo.
 La publicación de estas páginas ayuda a preparar Meta, pero no equivale a una
 aprobación de Tech Provider ni sustituye la integración y su revisión.
 
 ## Paso 2: crear el proyecto de la web en Vercel
 
-Este paso es futuro; requiere autorización para publicar/contratar.
-Antes de importar, guardar y subir la versión revisada al repositorio y confirmar
-la rama de publicación. Los cambios locales actuales no se publican automáticamente
-por conectar GitHub. No importar un `main` que todavía no contenga esta preparación.
-Importar el repositorio conservando ambas aplicaciones hermanas:
+El proyecto ya se creó con la cuenta y el plan Pro preparados por Lucas.
+La versión publicada fue promovida manualmente desde `meta-tech-provider`.
+La rama `main` todavía no contiene esta preparación. Para futuras instalaciones,
+guardar y subir la versión revisada antes de importar el repositorio, conservando
+ambas aplicaciones hermanas:
 
 | Ajuste | Valor |
 | --- | --- |
@@ -58,7 +61,7 @@ Importar el repositorio conservando ambas aplicaciones hermanas:
 `next build` omite esa preparación. No usar `output: export`: la configuración
 actual utiliza rewrites y el catálogo de la futura versión live usa servidor.
 
-Configurar para ese entorno:
+Para conectar el dominio definitivo, configurar y volver a desplegar:
 
 ```dotenv
 MARKETING_SITE_URL=https://grafoprint.com.ar
@@ -129,5 +132,21 @@ base de datos y backend es independiente.
 
 El build de Grafo3D conserva avisos de tamaño de bundle y externalización de
 `node:module` de Manifold; el motor generó el ejemplo sin errores de consola.
-Esta verificación es local. Instalación limpia y ejecución en Vercel, exportación
-de archivos y revisión final de contenido siguen en la validación del preview.
+
+## Verificación en Vercel realizada
+
+- Instalación independiente y build completos; se agregó Vitest como dependencia
+  propia de marketing y el comando `typecheck` para los controles de Vercel.
+- Lint y TypeCheck aprobados, sin omitir requisitos de promoción.
+- Despliegue `dpl_2PazpEPg3Axeckis4egVkmxkJe8F` listo en el alias público temporal.
+- Portada, `/proximamente`, las tres páginas legales, `/3d`, robots y sitemap:
+  HTTP 200 sin autenticación. Recurso inexistente de Grafo3D: HTTP 404.
+- URLs canónicas y enlaces apuntan al alias temporal; no hay enlaces a
+  localhost, login o registro del SaaS en las páginas revisadas.
+- Grafo3D generó tres componentes y descargó `Isologo Grafoprint-fabricacion.zip`.
+  Integridad ZIP correcta, dos STL binarios con tamaños y triángulos coherentes,
+  contornos DXF/SVG y documentos JSON legibles.
+
+Las variables actuales usan `MARKETING_SITE_URL=https://grafoprint-web.vercel.app`.
+Quedan la revisión de contenido por Lucas, la conexión y validación de
+`grafoprint.com.ar` y `www`, y la dirección de facturación solicitada por Vercel.

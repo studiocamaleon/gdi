@@ -1,8 +1,37 @@
 # Grafoprint: publicación de la web y despliegue del sistema
 
 Plan revisado el **24/09/2026** con el repositorio y documentación oficial.
-Decisiones del titular incorporadas. Es una guía de ejecución futura: no se
-crearon cuentas ni recursos, no se contrató infraestructura y no se modificó DNS.
+Decisiones del titular incorporadas. La primera publicación de marketing ya
+está disponible en Vercel; las etapas del dominio y del SaaS siguen pendientes.
+No se modificó DNS.
+
+## Avance de la primera publicación — 24/09/2026
+
+- Lucas creó la cuenta de Vercel, conectó GitHub y activó Pro.
+- Proyecto `grafoprint-web`, equipo `camaleon`, raíz `apps/marketing`, Node 24.x.
+- Web temporal: <https://grafoprint-web.vercel.app>.
+- Commit publicado: `604bf177c615ca9b5fa10b78b50f99d838ceffd9`, de
+  `meta-tech-provider`, promovido después de aprobar Lint y TypeCheck.
+- Despliegue: `dpl_2PazpEPg3Axeckis4egVkmxkJe8F`. En Vercel es Production;
+  su finalidad en esta etapa es revisar la web antes de conectar el dominio.
+- Variables de Production y Preview: `MARKETING_LAUNCH_MODE=prelaunch`,
+  `MARKETING_SITE_URL=https://grafoprint-web.vercel.app` y
+  `MARKETING_CONTACT_URL=mailto:soporte@grafoprint.com.ar`.
+- [PR borrador #1](https://github.com/studiocamaleon/gdi/pull/1), sin integrar
+  en `main`. Los envíos a la rama generan previews; la promoción de esta
+  versión fue manual. No publicar otro estado de `main` antes de integrarla.
+- Se comprobaron las páginas públicas por HTTPS sin sesión, sus enlaces y
+  URLs canónicas. Grafo3D generó el ejemplo y descargó un paquete íntegro con
+  STL, DXF, SVG y JSON. La portada se revisó también en Chrome.
+- Se leyó la zona de Donweb y se guardó un inventario local de sus 27 registros,
+  contrastado por consultas DNS. No se alteraron dominio ni correo.
+- Vercel muestra un aviso de dirección de facturación pendiente. Lucas debe
+  completar los datos correspondientes a su medio de pago en la cuenta.
+
+Siguiente paso: revisar la web temporal y conectar `grafoprint.com.ar` y `www`
+con los valores que indique Vercel, conservando el correo. Luego cambiar
+`MARKETING_SITE_URL` al dominio definitivo y reconstruir la web. La infraestructura
+Fly, Neon, R2 y Redis permanece pendiente.
 
 ## 1. Arquitectura y alcance acordados
 
@@ -31,7 +60,7 @@ No presupone que Vercel, R2 y todos los proveedores almacenen datos en Brasil.
 Neon documenta sus [regiones](https://neon.com/docs/introduction/regions);
 R2 distingue [ubicación y sugerencias de ubicación](https://developers.cloudflare.com/r2/reference/data-location/).
 
-## 2. Estado real antes de comenzar
+## 2. Estado inicial del relevamiento
 
 - El modo de prelanzamiento y las páginas legales están preparados localmente.
   Login/registro llevan a un aviso, el contacto funciona mediante un enlace de
@@ -69,10 +98,10 @@ R2 distingue [ubicación y sugerencias de ubicación](https://developers.cloudfl
 5. Conservar el identificador del commit y los resultados de validación. Vercel
    obtiene código de GitHub: no puede publicar cambios que sólo existen en esta Mac.
 
-Comprobaciones locales ya realizadas: build completo con Node 24, 18 pruebas
-de marketing, revisión de rutas, páginas legales, móvil y motor Grafo3D. Quedan
-la instalación limpia en Vercel, la descarga real de una exportación y la
-validación del dominio público. Ver [detalle de validación](despliegue-web-prelanzamiento.md).
+Comprobaciones realizadas: build completo con Node 24, 18 pruebas de marketing,
+revisión de rutas, páginas legales, móvil y motor Grafo3D. La instalación en
+Vercel y la descarga real de una exportación también están verificadas. Queda
+conectar y validar el dominio propio. Ver [detalle de validación](despliegue-web-prelanzamiento.md).
 
 **Resultado necesario:** una versión identificada y revisada, disponible para el
 proveedor de despliegue. Todavía no se cambia el dominio.
