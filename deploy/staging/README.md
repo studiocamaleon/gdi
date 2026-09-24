@@ -2,6 +2,8 @@
 
 Este directorio prepara el despliegue; sus archivos no crean recursos ni publican la aplicación. La web comercial sigue en Vercel desde `main`. La aplicación de trabajo y sus servicios se desplegarán por separado. No usar datos de clientes en el ensayo.
 
+La [comparación de Redis y presupuesto](./PRESUPUESTO.md) propone Redis Cloud Essentials 1 GB con réplica en São Paulo y una previsión de USD 130/mes adicionales a Vercel. Es una propuesta pendiente de aprobación; incluye los supuestos, precios consultados y comprobaciones que faltan antes de contratar.
+
 ## Servicios y orden
 
 | Servicio | Propuesta | Acceso | Tamaño inicial a presupuestar |
@@ -11,13 +13,13 @@ Este directorio prepara el despliegue; sus archivos no crean recursos ni publica
 | Worker de cálculos/entregas | Fly `grafoprint-staging-worker`, São Paulo | Redis y red privada | 2 CPU compartidas / 4 GB |
 | Worker de documentos | Fly `grafoprint-staging-worker-pdf`, São Paulo | Redis y red privada | 1 CPU compartida / 1 GB |
 | Gotenberg | Fly `grafoprint-staging-pdf`, São Paulo | Sólo red privada | 1 CPU compartida / 1 GB |
-| PostgreSQL 16 | Neon, São Paulo | TLS, credencial por función | Plan pendiente |
-| Redis | Proveedor pendiente | Conexión Redis compatible con BullMQ | Plan/ubicación pendientes |
+| PostgreSQL 16 | Neon Launch, São Paulo (propuesta) | TLS, credencial por función | 0,25 CU iniciales; pendiente de aprobación y medición |
+| Redis | Redis Cloud Essentials, AWS São Paulo (propuesta) | TCP/TLS compatible con BullMQ | 1 GB RAM y réplica en la misma zona; pendiente de aprobación |
 | Archivos | R2, bucket exclusivo con jurisdicción US | Bucket privado y URLs firmadas | Consumo |
 
 Los nombres de Fly aún no están reservados. Una sola máquina por servicio alcanza para el ensayo inicial; no es alta disponibilidad. Los tamaños son propuestas que se deben contrastar con mediciones y presupuesto antes de crear recursos. Los workers no se apagan automáticamente: esperan trabajos incluso cuando no hay tráfico web. No configurar escalado automático del worker de geometría sin recalcular el presupuesto compartido del pool.
 
-La comprobación de salud de la API consulta PostgreSQL cada 30 segundos. Esto mantiene actividad en Neon aunque no haya usuarios; calcular el presupuesto con ese comportamiento y revisar también las tareas programadas antes de estimar ahorro por suspensión. Si se evalúa Upstash, [Fly recomienda un plan de precio fijo para BullMQ](https://fly.io/docs/upstash/redis/) por el sondeo de las colas; además hay que comprobar límites de tamaño de mensajes, memoria y comandos Lua con los trabajos de geometría.
+La comprobación de salud de la API consulta PostgreSQL cada 30 segundos y el worker PDF consulta la base cada dos segundos. Presupuestar Neon activo mientras estos servicios estén encendidos. Upstash de precio fijo se evaluó, pero su plan de 1 GB limita cada solicitud a 10 MB, por debajo de algunos resultados que permite el formato actual de geometría. Ver la medición sintética y las alternativas en [PRESUPUESTO.md](./PRESUPUESTO.md).
 
 ## 1. Ensayo local reproducible
 

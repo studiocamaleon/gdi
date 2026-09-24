@@ -29,4 +29,4 @@ La imagen backend se construyó con `SKIP_TYPECHECK=true` después de los cheque
 
 También quedan pendientes el documento generado desde un flujo funcional de la aplicación, los demás motores de geometría y el recorrido completo en navegador. El ensayo de PDF anterior valida el servicio de renderizado, no toda la cola de documentos.
 
-Las pruebas de DNS, TLS, IP real, SSE, CORS y firmas contra R2, recuperación de trabajos y restauración de Neon se ejecutarán en el entorno cloud. El proveedor/plan de Redis y los tamaños/costos de Fly siguen pendientes de cierre.
+Las pruebas de DNS, TLS, IP real, SSE, CORS y firmas contra R2, recuperación de trabajos y restauración de Neon se ejecutarán en el entorno cloud. La [propuesta de Redis y presupuesto](./PRESUPUESTO.md) está documentada y pendiente de aprobación. No equivale a validar Redis Cloud ni Neon reales.
