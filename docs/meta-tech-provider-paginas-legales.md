@@ -1,8 +1,9 @@
 # Páginas legales para la integración de WhatsApp
 
 Actualizado el 24 de septiembre de 2026: web publicada en
-`https://grafoprint.com.ar`, configuración básica guardada en Meta y verificación
-de acceso enviada. La revisión de permisos de WhatsApp sigue sin enviar.
+`https://grafoprint.com.ar`, configuración básica guardada en Meta y solicitudes
+de verificación de acceso y App Review enviadas. App Review muestra «Revisión
+en curso»; el envío no implica aprobación ni publicación de la aplicación.
 
 ## Estado comprobado en Meta — 24/09/2026
 
@@ -27,39 +28,35 @@ de acceso enviada. La revisión de permisos de WhatsApp sigue sin enviar.
 - Lucas confirmó que Grafoprint administra sólo su propio porfolio. En el
   formulario se seleccionó **Plataforma SaaS**, **No** a administrar diversos
   porfolios y la web pública. Antes del envío figuraba el plazo del 23/11/2026.
-- **App Review sin enviar**: el borrador contiene `whatsapp_business_messaging`,
-  `whatsapp_business_management` y `public_profile`. El botón de envío sigue
-  deshabilitado por apartados incompletos. No se añadieron permisos ni se publicó
-  la aplicación de Meta.
-- El panel de incorporación muestra una etiqueta general «En revisión»; para
-  distinguir los trámites, se comprobó el formulario específico: Access
-  Verification está enviada, pero App Review continúa como borrador incompleto.
+- **App Review enviada por Lucas**: Meta muestra «Revisión en curso» para
+  `whatsapp_business_messaging`, `whatsapp_business_management` y `public_profile`.
+  Antes del envío se comprobaron las cinco secciones al 100 %, las dos pruebas
+  de API completadas y los dos videos adjuntos. La aplicación sigue sin publicar.
+- Meta informa que la mayoría de los envíos se revisan en un plazo de 20 días,
+  que puede extenderse si solicita información o correcciones. No es una fecha
+  garantizada. Access Verification y App Review conservan resultados separados.
 
 Descripción enviada en la verificación de acceso:
 
 > Grafoprint, de GRUPO IDEA SAS, es una plataforma SaaS de gestión para empresas de la industria gráfica, actualmente en prelanzamiento. Con la autorización de cada empresa cliente, la integración prevista utilizará los identificadores de su cuenta y número de WhatsApp, contactos, mensajes, plantillas y estados de entrega para conectar su propio número a Grafoprint, centralizar la atención en una bandeja de entrada y enviar notificaciones a sus clientes sobre presupuestos, trabajos y pedidos. Cada empresa utilizará estas funciones desde Grafoprint; cuando sea elegible, podrá conservar el uso de la aplicación WhatsApp Business con su número. El sitio comercial y las políticas están publicados; la integración directa con Meta está en preparación.
 
-## Próximo paso: evidencias y borrador de App Review
+## Evidencias presentadas y continuación
 
-1. Preparar una prueba de envío y recepción de WhatsApp con un destinatario de
-   ensayo autorizado. Grabar ambas interfaces en un video para
-   `whatsapp_business_messaging`.
-2. Crear una plantilla del caso de uso y grabar un video separado para
-   `whatsapp_business_management`. La guía oficial permite usar WhatsApp Manager
-   para esta demostración y una solicitud de la configuración de API para la
-   prueba de envío. No es necesario terminar todo Embedded Signup antes de
-   iniciar la revisión; sí hace falta evidencia funcional real.
-3. Redactar la explicación de cada permiso y completar instrucciones reproducibles
-   para el revisor. No se enviaron mensajes ni se generaron credenciales en esta
-   etapa de configuración administrativa.
-4. Completar el apartado de tratamiento de datos con hechos confirmados: entidades
-   que tendrán acceso a datos de Meta, responsable y país, respuestas a solicitudes
-   de seguridad nacional durante los últimos 12 meses y procedimientos realmente
-   implementados para solicitudes de autoridades. No se marcaron declaraciones
-   sobre estos procesos sin verificarlos con Lucas.
-5. Revisar el envío completo, adjuntar los videos y solicitar los permisos cuando
-   todas las respuestas y pruebas estén listas. El inbox, los webhooks y la
-   coexistencia de la integración propia conservan su implementación pendiente.
+1. Se grabó el envío y la recepción de un mensaje con un destinatario de ensayo
+   autorizado para `whatsapp_business_messaging`, usando las herramientas de Meta.
+2. Se grabó por separado la creación de una plantilla en WhatsApp Manager para
+   `whatsapp_business_management`. La evidencia de creación no acredita su aprobación.
+3. Se adjuntaron ambos videos y se guardaron las justificaciones y las instrucciones
+   para el revisor. Estas describen el estado de prelanzamiento y no presentan
+   la integración directa como disponible para clientes.
+4. Se completó el tratamiento de datos con respuestas confirmadas por el titular
+   y documentación pública de los proveedores previstos. Se aclaró el carácter
+   prospectivo de la infraestructura, todavía sin aprovisionar. Las respuestas
+   operativas detalladas y los videos se conservan fuera del repositorio público.
+5. Corresponde atender las eventuales observaciones de Meta y seguir los resultados
+   de ambos trámites por separado. Mientras tanto, preparar staging y construir
+   la integración directa: inbox, webhooks, Embedded Signup y coexistencia siguen
+   pendientes de implementación y validación.
 
 Fuentes oficiales consultadas el 24/09/2026: la guía de Tech Providers muestra
 actualización del 20/08/2026 y la guía de App Review del 16/06/2026. La verificación

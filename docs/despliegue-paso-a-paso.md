@@ -20,9 +20,11 @@ pendiente.
   la publicación actual. Para un preview aislado, usar su propio origen estable.
 - Ambos entornos conservan `MARKETING_LAUNCH_MODE=prelaunch` y
   `MARKETING_CONTACT_URL=mailto:soporte@grafoprint.com.ar`.
-- [PR borrador #1](https://github.com/studiocamaleon/gdi/pull/1), sin integrar
-  en `main`. Los envíos a la rama generan previews; la promoción de esta
-  versión fue manual. No publicar otro estado de `main` antes de integrarla.
+- La publicación inicial se promovió manualmente desde `meta-tech-provider`.
+  Vercel conserva **Production → Branch Tracking: `main`**, comprobado en su
+  configuración. El [PR #1](https://github.com/studiocamaleon/gdi/pull/1) reúne
+  esa versión y su documentación para integrarlas a `main`. Su merge dispara
+  la publicación habitual de marketing; no despliega el SaaS ni cambia `prelaunch`.
 - Portada, aviso, tres páginas legales, Grafo3D, robots y sitemap: HTTP 200 sin
   sesión en el dominio final. Canónicas y enlaces correctos; recurso inexistente
   de Grafo3D: 404. La portada se revisó también en Chrome.
@@ -39,10 +41,11 @@ pendiente.
   No se enviaron mensajes para probar la casilla; esa comprobación sigue a cargo
   de Lucas.
 
-Meta ya tiene las URL legales públicas y la verificación de acceso fue enviada
-el 24/09/2026. Siguiente paso: preparar las evidencias de App Review y el código
-del SaaS para su entorno de pruebas. Fly, Neon, R2 y Redis
-permanecen pendientes. El registro, acceso y contratación siguen en prelanzamiento.
+Meta ya tiene las URL legales públicas. La verificación de acceso y App Review
+fueron enviadas el 24/09/2026; App Review muestra «Revisión en curso».
+Siguiente paso: preparar el código del SaaS para staging, desde `main` una vez
+integrado y comprobado el PR de marketing. Fly, Neon, R2 y Redis permanecen
+pendientes. El registro, acceso y contratación siguen en prelanzamiento.
 
 ## 1. Arquitectura y alcance acordados
 
@@ -81,8 +84,8 @@ R2 distingue [ubicación y sugerencias de ubicación](https://developers.cloudfl
   CUIT 33-71888258-9, Julio Argentino Roca 1260, El Calafate, Santa Cruz,
   CP 9405, y soporte@grafoprint.com.ar. Lucas German Gomez atenderá internamente
   las solicitudes. No faltan esos datos de identificación.
-- Hay cambios sin commit en la rama `meta-tech-provider`. El remoto configurado
-  es `studiocamaleon/gdi`; la referencia local de rama principal es `origin/main`.
+- El remoto configurado es `studiocamaleon/gdi`. Los cambios de prelanzamiento
+  están versionados en `meta-tech-provider` y en el PR #1 hacia `main`.
   No se verificó en este paso que el remoto contenga los cambios locales.
 - No hay Dockerfiles, manifiestos Fly ni workflows de despliegue preparados en
   el repositorio. La preparación de Vercel no cubre esos componentes.
@@ -258,8 +261,8 @@ La última es una URL de **instrucciones**, no un callback de
 borrado. El proceso de Tech Provider, Access Verification/App Review y la
 integración técnica requieren su propio seguimiento. La web pública no sustituye
 una demostración funcional que Meta solicite ni concede permisos avanzados.
-La verificación de acceso está enviada y en revisión; App Review continúa como
-borrador incompleto. Ver [estado y próximos pasos](meta-tech-provider-paginas-legales.md).
+La verificación de acceso está enviada y App Review también: su pantalla muestra
+«Revisión en curso». Ver [estado y próximos pasos](meta-tech-provider-paginas-legales.md).
 Referencia: [guía de Tech Providers](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/get-started-for-tech-providers).
 
 Podemos continuar esa preparación mientras construimos el entorno de pruebas,

@@ -158,3 +158,21 @@ El build de Grafo3D conserva avisos de tamaño de bundle y externalización de
 La web permanece en `prelaunch`. Las URL legales ya están disponibles para
 retomar la preparación de Meta. El siguiente despliegue del SaaS requiere su
 propia preparación y validación; no se crearon recursos Fly, Neon, R2 ni Redis.
+
+## Validación previa a integrar en main — 24/09/2026
+
+- Vercel conserva `main` como rama de Production. La primera publicación fue
+  una promoción manual de `meta-tech-provider`; el PR #1 incorpora esa versión
+  y su documentación a la rama habitual de publicación.
+- Reejecutados con Node 24.19.0: 18 tests de marketing, 10 de rutas públicas,
+  lint de marketing y de los archivos modificados del sistema, comprobaciones
+  TypeScript del sistema y de la API. Todos aprobaron.
+- Build completo de Grafo3D y marketing aprobado en `prelaunch`, con origen
+  `https://grafoprint.com.ar` y API deliberadamente inaccesible. Se generaron
+  las nueve páginas estáticas. Persisten los avisos conocidos de tamaño de
+  bundle de Grafo3D y de externalización de `node:module` de Manifold.
+- App Review fue enviada por el titular y muestra «Revisión en curso».
+  Verificación de acceso y aprobación de permisos siguen siendo trámites separados.
+
+El merge publica únicamente el proyecto de marketing configurado en Vercel.
+El entorno de staging y la integración directa de WhatsApp siguen pendientes.
