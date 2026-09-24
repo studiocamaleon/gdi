@@ -35,3 +35,37 @@ describe("enlaces de invitación", () => {
     );
   });
 });
+
+describe("documentos legales públicos", () => {
+  it.each([undefined, "empresa", "plataforma", "vencida"] as const)(
+    "permite acceder a los documentos con sesión %s",
+    (tipo) => {
+      for (const path of [
+        "/terminos",
+        "/privacidad",
+        "/eliminacion-de-datos",
+      ]) {
+        const response = proxy(request(path, tipo));
+        expect(response.headers.get("location")).toBeNull();
+        expect(response.headers.get("x-middleware-next")).toBe("1");
+      }
+    },
+  );
+
+  it("mantiene privadas las rutas con prefijos parecidos", () => {
+    for (const path of [
+      "/terminos-admin",
+      "/privacidad-interna",
+      "/eliminacion-de-datos-admin",
+    ]) {
+      expect(proxy(request(path)).headers.get("location")).toBe(
+        "http://localhost:3000/login",
+      );
+    }
+    expect(
+      proxy(request("/registro/verificar?token=prueba")).headers.get(
+        "x-middleware-next",
+      ),
+    ).toBe("1");
+  });
+});

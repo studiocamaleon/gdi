@@ -743,6 +743,7 @@
 }
 .footer nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 19px;
 }
 .footer a {

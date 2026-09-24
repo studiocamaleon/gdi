@@ -1391,6 +1391,25 @@ div[id] {
 }
 .plans-unavailable { text-align: center; color: #c4ccd0; padding: 32px; }
 .plans-unavailable .button { margin-top: 20px; }
+.plans-prelaunch {
+  max-width: 760px;
+  margin-inline: auto;
+  padding: clamp(28px, 5vw, 56px);
+  border: 1px solid #354047;
+  border-radius: 20px;
+  text-align: center;
+}
+.plans-prelaunch h3 {
+  margin: 20px 0 16px;
+  font-size: clamp(26px, 4vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+.plans-prelaunch p {
+  color: #c4ccd0;
+  line-height: 1.7;
+  margin-bottom: 28px;
+}
 .plans-note {
   display: flex;
   align-items: center;
@@ -1548,6 +1567,7 @@ summary::-webkit-details-marker {
 }
 .footer-bottom nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 25px;
 }
 .footer-bottom a:hover {

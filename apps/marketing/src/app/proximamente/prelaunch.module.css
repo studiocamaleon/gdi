@@ -1,0 +1,78 @@
+.page {
+  min-height: 100svh;
+  background: var(--dark);
+  color: var(--paper);
+  padding-inline: clamp(24px, 6vw, 88px);
+}
+.header,
+.footer {
+  max-width: 1280px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-block: 28px;
+}
+.header > a:last-child,
+.footer nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 13px;
+}
+.main {
+  max-width: 1000px;
+  margin-inline: auto;
+  padding-block: clamp(64px, 10vw, 140px) 72px;
+}
+.main h1 {
+  font-size: clamp(42px, 6vw, 80px);
+  font-weight: 550;
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+  margin-block: 28px;
+}
+.main h1 span {
+  color: var(--orange);
+}
+.intro {
+  max-width: 660px;
+  color: #b8c0c5;
+  font-size: 18px;
+  line-height: 1.7;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin-block: 36px 72px;
+}
+.grafo3d {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  border-top: 1px solid #354047;
+  padding-top: 32px;
+}
+.grafo3d h2 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.grafo3d p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #b8c0c5;
+}
+.footer {
+  border-top: 1px solid #354047;
+  color: #b8c0c5;
+  font-size: 12px;
+}
+.footer nav {
+  flex-wrap: wrap;
+}

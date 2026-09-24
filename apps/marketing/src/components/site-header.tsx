@@ -6,9 +6,11 @@ import { Brand } from "./brand";
 export function SiteHeader({
   login,
   signup,
+  isLive,
 }: {
   login: string;
   signup: string;
+  isLive: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [scrolled, setScrolled] = useState(false);
@@ -30,7 +32,7 @@ export function SiteHeader({
     ["El sistema", "#modulos"],
     ["Nosotros", "#nosotros"],
     ["Grafo3D", "/3d", "Gratis"],
-    ["Precios", "#precios"],
+    [isLive ? "Precios" : "Lanzamiento", "#precios"],
   ];
   return (
     <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
@@ -49,10 +51,10 @@ export function SiteHeader({
       </nav>
       <div className="header-actions">
         <a className="login-link" href={login}>
-          Iniciar sesión
+          {isLive ? "Iniciar sesión" : "Acceso próximamente"}
         </a>
         <a href={signup} className="button button-light header-cta">
-          Probar Grafo <ArrowUpRight size={16} />
+          {isLive ? "Probar Grafo" : "Próximamente"} <ArrowUpRight size={16} />
         </a>
         <button
           type="button"
@@ -81,11 +83,11 @@ export function SiteHeader({
             </a>
           ))}
           <a href={login}>
-            Iniciar sesión
+            {isLive ? "Iniciar sesión" : "Acceso próximamente"}
             <ArrowUpRight size={18} />
           </a>
           <a href={signup}>
-            Empezar prueba gratis
+            {isLive ? "Empezar prueba gratis" : "Próximo lanzamiento"}
             <ArrowUpRight size={18} />
           </a>
         </nav>

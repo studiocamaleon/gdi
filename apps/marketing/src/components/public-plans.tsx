@@ -5,7 +5,7 @@ import {
   planSignup,
   type PublicPlan,
 } from "../lib/public-plans";
-import { planInquiry } from "../lib/site-config";
+import { getSiteConfig, planInquiry } from "../lib/site-config";
 import { PlanComparison } from "./plan-comparison";
 
 const number = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
@@ -32,6 +32,22 @@ export async function PublicPlans({
   signup: string;
   demo: string;
 }) {
+  const site = getSiteConfig();
+  if (!site.isLive)
+    return (
+      <div className="plans-prelaunch" id="comparar-planes">
+        <span className="eyebrow">PRÓXIMAMENTE</span>
+        <h3>Estamos preparando el lanzamiento.</h3>
+        <p>
+          Los planes, el registro y el acceso a Grafoprint se habilitarán cuando
+          lancemos el sistema. Mientras tanto, podés conocer sus funciones y
+          conversar con nuestro equipo.
+        </p>
+        <a className="button button-orange" href={site.contact}>
+          Hablemos de tu gráfica <ArrowUpRight size={16} />
+        </a>
+      </div>
+    );
   // Nunca fijar en el build una oferta ni una falla de configuración de la API.
   await connection();
   const plans = await getPublicPlans();
