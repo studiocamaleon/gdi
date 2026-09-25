@@ -47,10 +47,20 @@ Para apagar el piloto: desactivar `META_WHATSAPP_PILOT_ENABLED`; para cerrar nue
 - Tipos de frontend comprobados localmente. La compilación completa de API se trasladó al runner de GitHub por la memoria disponible de la Mac; no se reinició Docker ni se detuvieron los servicios existentes.
 - Compilación y arranque de contenedores aprobados: [ejecución de GitHub](https://github.com/studiocamaleon/gdi/actions/runs/36189193191), sobre `ee67367cc8f0`. Pasaron API/web con tipos, tipografía de etiquetas, 283 migraciones con rol no superusuario, permisos, ensayo Meta con PostgreSQL, salud y login directo/BFF. Los commits posteriores sólo actualizan documentación y AGENTS.md.
 - Interfaz revisada en Chrome con una vista local aislada y API simulada: estado entregado, conexión pendiente, bloqueo por plan y reintento del mismo pedido. Queda verificarla integrada en la sesión real de staging.
-- La base de desarrollo y Neon staging no recibieron esta migración. El piloto no está activo. Faltan la comprobación de la pantalla integrada en staging, el despliegue, los secretos de Meta, la suscripción del webhook y el ensayo real de entrega.
+- La base de desarrollo conserva su versión anterior. Neon staging recibió luego la migración del piloto; ver el estado de activación siguiente.
 
 ## Fuentes consultadas
 
 - [API de mensajes](https://developers.facebook.com/documentation/business-messaging/whatsapp/reference/whatsapp-business-phone-number/message-api).
 - [Envíos y estados](https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages).
 - [Embedded Signup](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/overview): próxima fase en v4; v2/v3 se retiran el 15/10/2026.
+
+## Activación en staging — 25 de septiembre de 2026
+
+- API, ambos workers y web compilados remotamente con tipos desde `7efabd87213e`, sin cambiar las cinco máquinas, regiones ni tamaños. El builder temporal se retiró. No se modificaron local, Vercel, producción ni los PR anteriores.
+- Neon tiene 283 migraciones. Se aplicó únicamente la migración aditiva del piloto, sin seeds; el rol de ejecución conserva acceso de datos sin DDL ni lectura del historial de migraciones.
+- Token temporal renovado en Meta con los permisos existentes. Secreto de la app obtenido tras la reautenticación realizada por Lucas. Guardados fuera de Git, con permisos privados, e importados sólo en la API de Fly. El token temporal debe renovarse cuando expire.
+- Webhook verificado por Meta y suscripción activa únicamente para `messages`. La cuenta de prueba quedó suscripta a Grafoprint. La plantilla `hello_world`, idioma `en_US`, está aprobada.
+- Ocho comprobaciones HTTP reales aprobadas: salud, cierre de API/web, rechazo de ruta similar, rechazo del verify token incorrecto, rechazo de POST sin firma, challenge correcto y POST firmado sin eventos. Estas comprobaciones no representan entrega de un mensaje real.
+- La empresa ficticia pasó de Trial a Founder mediante Plataforma, con motivo auditado; conserva suscripción manual y activa, sin vinculación a una pasarela. Founder habilita las funciones para los ensayos, no sólo WhatsApp.
+- La entrega real desde la interfaz sigue pendiente de completar el ingreso a la empresa de prueba. Meta advierte que, mientras la app no se publique, no entrega datos de producción por webhook. El ensayo usará exclusivamente su número de prueba; no debe confundirse un evento simulado con un estado real de entrega.
