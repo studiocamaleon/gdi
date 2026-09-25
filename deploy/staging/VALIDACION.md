@@ -197,3 +197,15 @@ Se corrigió la tarjeta «Tu acceso a Grafo» mediante los tokens de superficie/
 La nueva web se desplegó en la misma máquina `683d195da310e8`, sin cambiar capacidad, con la imagen `registry.fly.io/grafoprint-staging-web@sha256:12d6bee6768edf85732854c76b993f2696b2587548ca9c1a0b43ecad256f6dd7`. Backend/workers conservan la imagen del arreglo de primer acceso. El builder temporal `fly-builder-withered-valley-3413` se eliminó al finalizar.
 
 Después del despliegue aprobaron salud web y las peticiones GET/HEAD al ícono: `200`, SVG válido y sin redirección. POST al ícono, rutas con sufijos, backoffice y BFF sin Basic respondieron `401`. En Chrome se conservó la sesión MFA y se verificó la etiqueta Staging y la tarjeta corregida: fondo `rgb(16,18,20)`, título/botón `rgb(243,242,238)` y texto secundario `rgb(185,189,190)`, con captura visual. El control del navegador superpone temporalmente su propio indicador al favicon; no se modificó ese indicador. La ficha de Gráfica Demo se mantuvo disponible tras la actualización.
+
+## Enlace manual de invitación
+
+El commit `75493454a` corrige la ficha de empresa: al reenviar la invitación, conserva la URL devuelta por la API y la entrega al panel existente para mostrarla/copiarla. Antes sólo recargaba el detalle, que deliberadamente no contiene tokens, y perdía la URL. No cambia el servidor ni los permisos. El enlace sólo vive en memoria, se limita a la empresa actual y deja de mostrarse si el detalle identifica una renovación distinta, si el servidor no devuelve una URL vigente o si el usuario no puede gestionar la invitación.
+
+Pasaron ocho pruebas de empresas/invitaciones, TypeScript web y ESLint. La regresión comprueba copia del enlace con correo fallido, conservación al actualizar la ficha, reemplazo al renovar, descarte al detectar otra renovación y aislamiento entre empresas/roles. La API de staging sigue sin `RESEND_API_KEY`; no se contrataron ni configuraron servicios de correo.
+
+[GitHub Actions 36135335379](https://github.com/studiocamaleon/gdi/actions/runs/36135335379) aprobó sobre el mismo commit las dos compilaciones con tipos, migraciones, permisos y el ensayo HTTP completo.
+
+La web se compiló remotamente con tipos y se desplegó en la misma máquina `683d195da310e8`, con la imagen `registry.fly.io/grafoprint-staging-web@sha256:31ffa14299e1d369b2f973be9f97c56aaa382dd2c6980a03df4c3709fd8de373`. Los controles de Fly aprobaron y `/api/health` respondió `200` con `status: ok`. No se modificaron API, workers, base de datos ni tamaños. Se eliminó el builder temporal `fly-builder-lilac-sound-6923` después del despliegue.
+
+En Chrome se renovó una vez la invitación de Gráfica Demo y apareció «Compartir el enlace manualmente». El botón notificó «Enlace copiado» y, al pulsar «Actualizar» en la ficha, la opción se conservó. Abrir la URL mostrada llevó a «Activá tu acceso», con empresa, rol administrador y correo ficticio correctos, comprobados también visualmente. Se dejó esa pestaña abierta para que Lucas elija y envíe personalmente la contraseña; la activación del usuario todavía está pendiente. No se registró el token en estos documentos ni se envió correo.
