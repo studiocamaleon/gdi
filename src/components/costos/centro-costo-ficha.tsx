@@ -72,9 +72,8 @@ import styles from "./centros-costo.module.css";
  * texto libre y un número de horas. Ver
  * docs/centros-de-costo-carga-manual-diseno.md
  *
- * Un mismo componente sirve para el alta (los cinco bloques en una sola vista)
- * y para la edición (cuatro solapas), porque las tres secciones son las mismas
- * en los dos casos.
+ * Alta y edición comparten las cuatro solapas. Las horas productivas deben
+ * poder cargarse antes del primer guardado para publicar la tarifa del centro.
  */
 
 type LineaLocal = {
@@ -893,14 +892,6 @@ export function CentroCostoFicha({
         <div className={styles.loading}>
           <GdiSpinner className="size-5" />
         </div>
-      ) : esAlta ? (
-        <>
-          {bloqueIdentidad}
-          {SECCIONES.map((item) =>
-            renderSeccion(item.seccion, item.titulo, item.ayuda),
-          )}
-          {bloqueResumen}
-        </>
       ) : (
         <>
           {tab === "datos" ? (
@@ -1115,55 +1106,49 @@ export function CentroCostoFicha({
                 <XIcon />
               </Button>
             </Drawer.Header>
-            {esAlta ? (
+            <Tabs
+              selectedKey={tab}
+              onSelectionChange={(value) => setTab(value as Tab)}
+              className={styles.tabs}
+            >
+              <NavigationTabList
+                label="Configuración del centro"
+                className={styles.tabList}
+                variant="detailed"
+                tone="graphite"
+                items={[
+                  {
+                    id: "datos",
+                    label: "Datos generales",
+                    description: "Identidad y resumen",
+                    icon: <FactoryIcon />,
+                  },
+                  {
+                    id: "gastos",
+                    label: "Gastos",
+                    description: "Planilla del centro",
+                    icon: <ReceiptTextIcon />,
+                  },
+                  {
+                    id: "ajustes",
+                    label: "Ajustes",
+                    description: "Período y capacidad",
+                    icon: <Settings2Icon />,
+                  },
+                  {
+                    id: "historial",
+                    label: "Historial",
+                    description: "Tarifas publicadas",
+                    icon: <HistoryIcon />,
+                  },
+                ]}
+              />
               <Drawer.Body className={`${sheet.body} ${styles.body}`}>
-                {contenido}
+                <Tabs.Panel key={tab} id={tab} className={styles.panel}>
+                  {contenido}
+                </Tabs.Panel>
               </Drawer.Body>
-            ) : (
-              <Tabs
-                selectedKey={tab}
-                onSelectionChange={(value) => setTab(value as Tab)}
-                className={styles.tabs}
-              >
-                <NavigationTabList
-                  label="Configuración del centro"
-                  className={styles.tabList}
-                  variant="detailed"
-                  tone="graphite"
-                  items={[
-                    {
-                      id: "datos",
-                      label: "Datos generales",
-                      description: "Identidad y resumen",
-                      icon: <FactoryIcon />,
-                    },
-                    {
-                      id: "gastos",
-                      label: "Gastos",
-                      description: "Planilla del centro",
-                      icon: <ReceiptTextIcon />,
-                    },
-                    {
-                      id: "ajustes",
-                      label: "Ajustes",
-                      description: "Período y capacidad",
-                      icon: <Settings2Icon />,
-                    },
-                    {
-                      id: "historial",
-                      label: "Historial",
-                      description: "Tarifas publicadas",
-                      icon: <HistoryIcon />,
-                    },
-                  ]}
-                />
-                <Drawer.Body className={`${sheet.body} ${styles.body}`}>
-                  <Tabs.Panel key={tab} id={tab} className={styles.panel}>
-                    {contenido}
-                  </Tabs.Panel>
-                </Drawer.Body>
-              </Tabs>
-            )}
+            </Tabs>
             <Drawer.Footer className={`${sheet.footer} ${styles.footer}`}>
               <span className={styles.saveStatus} data-dirty={sucio}>
                 {isLoading

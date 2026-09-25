@@ -1,6 +1,8 @@
 // Ensayo destructible exclusivamente sobre una base sintética terminada en _test.
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 const { client, databaseUrl, fail } = require('./target.cjs');
 const { bootstrapAdmin } = require('./bootstrap-admin.cjs');
 
@@ -26,6 +28,41 @@ async function main() {
     }
     assert.equal(await runtime.materiaPrima.count(), 0, 'El catálogo no debe instalar materiales en empresas.');
     console.log('OK: biblioteca global completa, referencias existentes conservadas y sin materiales de tenant.');
+    assert.equal(await runtime.productoCategoriaComercial.count(), 11, 'Faltan categorías comerciales.');
+    assert.equal(await runtime.productoSubcategoriaComercial.count(), 48, 'Faltan subcategorías comerciales.');
+    for (const codigo of ['tarjetas', 'vinilos_impresos', 'producto_a_medida', 'sellos_automaticos']) {
+      const sub = await runtime.productoSubcategoriaComercial.findUniqueOrThrow({
+        where: { codigo }, include: { categoria: true },
+      });
+      assert.ok(sub.activo && sub.categoria.activo);
+      assert.ok(Array.isArray(sub.atributosSchemaJson) && sub.atributosSchemaJson.length > 0);
+    }
+    // Reaplicar el snapshot en una transacción que se revierte comprueba que
+    // conserva IDs, configuraciones e inactivos; sólo se permite en esta base _test.
+    const sql = readFileSync(resolve(__dirname, '../../prisma/migrations/20260925190000_completar_catalogo_comercial/migration.sql'), 'utf8');
+    const rollback = new Error('FIN_ENSAYO_CATALOGO');
+    try {
+      await migrator.$transaction(async (tx) => {
+        const categoria = await tx.productoCategoriaComercial.update({
+          where: { codigo: 'impresion_hoja' }, data: { nombre: 'Nombre conservado', activo: false, orden: 91 },
+        });
+        const subcategoria = await tx.productoSubcategoriaComercial.update({
+          where: { codigo: 'tarjetas' }, data: { nombre: 'Personalizado', activo: false, atributosSchemaJson: [{ key: 'propio' }] },
+        });
+        for (const statement of sql.split(/;\s*\n\s*\n/).filter((part) => part.trim())) {
+          await tx.$executeRawUnsafe(statement);
+        }
+        assert.deepEqual(await tx.productoCategoriaComercial.findUnique({ where: { id: categoria.id } }), categoria);
+        assert.deepEqual(await tx.productoSubcategoriaComercial.findUnique({ where: { id: subcategoria.id } }), subcategoria);
+        assert.equal(await tx.productoCategoriaComercial.count(), 11);
+        assert.equal(await tx.productoSubcategoriaComercial.count(), 48);
+        throw rollback;
+      });
+    } catch (error) {
+      if (error !== rollback) throw error;
+    }
+    assert.equal(await runtime.producto.count(), 0, 'El catálogo no debe crear productos de empresas.');
+    console.log('OK: catálogo comercial completo y reaplicación sin alterar registros existentes.');
     const [admin] = await runtime.user.findMany({ where: { rolPlataforma: 'ADMIN', activo: true } });
     assert.ok(admin?.passwordHash, 'Debe haberse ejecutado bootstrap antes del ensayo.');
     assert.equal(await bootstrapAdmin(runtime, {

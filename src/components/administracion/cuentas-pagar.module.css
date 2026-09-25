@@ -507,7 +507,17 @@ tr[data-vencimiento="urgente"] .due {
   padding: 20px 24px;
 }
 .selectPopover {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   max-width: min(460px, calc(100vw - 40px));
+}
+.selectOptions {
+  /* La lista debe poder encogerse al abrirse dentro de un modal bajo. */
+  min-height: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .optionDetail {
   display: block;
@@ -586,6 +596,7 @@ tr[data-vencimiento="urgente"] .due {
   grid-column: 1 / -1;
 }
 .selectSearch {
+  flex-shrink: 0;
   padding: 8px;
 }
 .optionEmpty {
