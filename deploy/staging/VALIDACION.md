@@ -159,7 +159,7 @@ Pruebas HTTP en los dominios auxiliares y repetidas en los originales después d
 
 El código `2f1d05b79a8e` se compiló remotamente con chequeo de tipos y se desplegó después de aprobar el ensayo de GitHub. Se mantuvieron las cinco máquinas, sus identificadores, región y tamaños. API y ambos workers usan el mismo backend; Gotenberg no se modificó. El builder temporal `fly-builder-noble-tree-8917` fue eliminado al terminar.
 
-Imágenes actuales:
+Imágenes del arreglo de primer acceso (la web fue actualizada posteriormente; ver última sección):
 
 - Backend: `registry.fly.io/grafoprint-staging-api@sha256:5513e09cd1be961b5ae7497d245015f70a9a690f0faf19450b0137d9e5bd71d4`.
 - Web: `registry.fly.io/grafoprint-staging-web@sha256:db1eb97acfefc52624c0ac597a41e77bd336beda989ca24d85cc3ba7a0257ee7`.
@@ -168,17 +168,32 @@ El verificador HTTP por los dominios originales aprobó salud, acceso privado, l
 
 En Chrome, Lucas abrió manualmente la página y confirmó que aparecía el diálogo de usuario/contraseña. Tras completar HTTP Basic se vio el login de Grafoprint. Con la versión nueva se ingresó con la cuenta inicial y la pantalla «Elegí tu clave» apareció en `/backoffice/cambiar-clave`. Se dejó la clave provisoria cargada y se entregó el control a Lucas antes de introducir la nueva. No fue necesario desactivar extensiones ni protecciones del navegador. El fallo de automatización se superó; no se atribuye a una extensión específica.
 
-Lucas confirmó que guardó su contraseña personal y la pantalla cambió a «Protegé tu acceso»; se verificó esa pantalla en Chrome. La activación MFA se entregó al usuario y sigue pendiente. Su nueva contraseña no fue solicitada ni almacenada por el agente.
+Lucas confirmó que guardó su contraseña personal y la pantalla cambió a «Protegé tu acceso»; se verificó esa pantalla en Chrome. Luego Lucas completó MFA y accedió a la consola; se comprobó la fila del administrador con «MFA activada» y una sesión activa. Su nueva contraseña, QR y códigos de recuperación no fueron solicitados ni almacenados por el agente.
 
 No se desactivó la validación TLS, no se enviaron credenciales por HTTP y no se cambiaron registros de la web comercial o correo.
 
-Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valores predeterminados; historial de restauración de un día y notificación de gasto de USD 20. El administrador inicial existe; login HTTP y llegada al formulario de cambio de clave en Chrome comprobados. Lucas ya eligió su contraseña y debe completar MFA. El acceso privado y sus credenciales iniciales están en un archivo local fuera de Git.
+Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valores predeterminados; historial de restauración de un día y notificación de gasto de USD 20. El administrador inicial existe; login HTTP y llegada al formulario de cambio de clave en Chrome comprobados. Lucas ya eligió su contraseña y completó MFA. El acceso privado y sus credenciales iniciales están en un archivo local fuera de Git.
 
 Orden de continuación:
 
-1. Lucas debe completar MFA en la pantalla abierta `/backoffice/seguridad`, guardar sus códigos de recuperación y continuar a Plataforma; la clave personal ya fue elegida.
-2. Preparar catálogo/plan de pruebas y una empresa ficticia; verificar archivos, PDF desde la aplicación, cálculos y eventos SSE.
-3. Medir carga, memoria, conexiones y resultados grandes; probar interrupción y recuperación de trabajos y restauración de Neon antes de usar datos reales.
-4. Al implementar WhatsApp, revisar la declaración de Redis como proveedor si recibe datos de Meta. Staging todavía no incorpora la integración directa de WhatsApp.
+1. Con la empresa ficticia creada, verificar archivos, PDF desde la aplicación, cálculos y eventos SSE; el administrador ficticio todavía no está activado.
+2. Medir carga, memoria, conexiones y resultados grandes; probar interrupción y recuperación de trabajos y restauración de Neon antes de usar datos reales.
+3. Al implementar WhatsApp, revisar la declaración de Redis como proveedor si recibe datos de Meta. Staging todavía no incorpora la integración directa de WhatsApp.
 
 Las pruebas actuales validan el despliegue y componentes básicos; no acreditan disponibilidad de producción, capacidad por tenant ni recuperación ante desastres.
+
+## Empresa ficticia de staging
+
+Se creó desde la interfaz autenticada «Gráfica Demo — Staging», slug `grafica-demo-staging`, ID `222fd65a-7234-4d86-9c20-be1cd646853d`. El directorio confirmó acceso operativo, plan Trial, suscripción activa/manual y cero usuarios habilitados. La ficha confirmó 3 usuarios, 50 órdenes al mes y 2 GB; facturación electrónica, WhatsApp, centro de copiado e impresión directa no incluidos. El correo elegido es sintético (`admin@grafoprint-demo.example.invalid`); la invitación está pendiente y no hay `RESEND_API_KEY` configurada en la API de staging, por lo que no se enviaron correos. No se conectó ningún medio de pago. El alta utilizó el aprovisionamiento normal y dejó la auditoría correspondiente.
+
+La empresa ya existe; no repetir el alta ante el aviso de correo sin confirmar. El staff puede iniciar un acceso de soporte desde Plataforma. El ingreso con usuario propio del tenant requiere activar su invitación; todavía no se verificaron los flujos funcionales de esa empresa.
+
+## Contraste, ícono e identificación del entorno
+
+El commit `66dd4fb3e714e37673a78ca37a520fc5973f4ea8` aprobó [GitHub Actions 36091947240](https://github.com/studiocamaleon/gdi/actions/runs/36091947240), con ambas compilaciones, tipos, migraciones, permisos y ensayo HTTP. Localmente aprobaron 33 pruebas del proxy/acceso de staging, TypeScript web y ESLint de los archivos cambiados.
+
+Se corrigió la tarjeta «Tu acceso a Grafo» mediante los tokens de superficie/borde del panel: el fondo compartido ya no puede sobreescribir el grafito por orden de carga del CSS. El rótulo de ambiente toma `STAGING_PRIVATE` y muestra Staging, aunque Next se ejecute en modo de producción. El SVG de marca existente se sirve en su ruta exacta `/icon.svg` con GET/HEAD sin redirección de sesión ni desafío Basic; las rutas parecidas, POST y el resto del entorno siguen protegidos.
+
+La nueva web se desplegó en la misma máquina `683d195da310e8`, sin cambiar capacidad, con la imagen `registry.fly.io/grafoprint-staging-web@sha256:12d6bee6768edf85732854c76b993f2696b2587548ca9c1a0b43ecad256f6dd7`. Backend/workers conservan la imagen del arreglo de primer acceso. El builder temporal `fly-builder-withered-valley-3413` se eliminó al finalizar.
+
+Después del despliegue aprobaron salud web y las peticiones GET/HEAD al ícono: `200`, SVG válido y sin redirección. POST al ícono, rutas con sufijos, backoffice y BFF sin Basic respondieron `401`. En Chrome se conservó la sesión MFA y se verificó la etiqueta Staging y la tarjeta corregida: fondo `rgb(16,18,20)`, título/botón `rgb(243,242,238)` y texto secundario `rgb(185,189,190)`, con captura visual. El control del navegador superpone temporalmente su propio indicador al favicon; no se modificó ese indicador. La ficha de Gráfica Demo se mantuvo disponible tras la actualización.
