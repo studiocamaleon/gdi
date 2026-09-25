@@ -18,6 +18,7 @@ on:
       - 'next.config.ts'
       - 'tsconfig.json'
       - 'postcss.config.mjs'
+      - 'scripts/postcss-heroui-scope.cjs'
   workflow_dispatch:
 
 permissions:

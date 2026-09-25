@@ -5,6 +5,8 @@
 !next.config.ts
 !tsconfig.json
 !postcss.config.mjs
+!scripts
+!scripts/postcss-heroui-scope.cjs
 !src
 !src/**
 !public

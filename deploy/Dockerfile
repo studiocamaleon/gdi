@@ -80,6 +80,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund
 COPY next.config.ts tsconfig.json postcss.config.mjs ./
+COPY scripts/postcss-heroui-scope.cjs ./scripts/postcss-heroui-scope.cjs
 COPY src ./src
 COPY public ./public
 # Módulos puros compartidos y tipos Prisma importados por el frontend.
