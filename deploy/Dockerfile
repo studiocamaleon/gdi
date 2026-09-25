@@ -51,7 +51,7 @@ FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e6
 COPY --from=base /usr/local/bin/node /usr/local/bin/node
 # Sharp rasteriza los textos de las etiquetas mediante las fuentes del sistema.
 # Las imágenes slim no incluyen ninguna: sin ésta se imprimen cuadros vacíos.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl libgomp1 fonts-dejavu-core \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl libgomp1 fontconfig fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 node && useradd --uid 1000 --gid node --create-home node \
     && python3 -m venv /opt/grafoprint-python
