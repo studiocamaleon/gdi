@@ -1,6 +1,6 @@
 # Segundo bloque de WhatsApp: recepción visible
 
-25/09/2026. Rama `codex/meta-recepcion-piloto`, basada en `codex/meta-cloud-base` (PR #4). Trabajo local; no activa cuentas de clientes ni modifica staging.
+25/09/2026. Rama `codex/meta-recepcion-piloto`, basada en `codex/meta-cloud-base` (PR #4). [PR #5 en borrador](https://github.com/studiocamaleon/gdi/pull/5). Trabajo local; no activa cuentas de clientes ni modifica staging.
 
 ## Para qué sirve
 
@@ -37,7 +37,7 @@ La recepción exige `META_WHATSAPP_RECEPCION_PILOT_ENABLED=true`, además de la 
 - Base PostgreSQL local nueva y desechable con las 284 migraciones, sin seed y sin modificar la base de desarrollo. El ensayo de recepción comprueba concurrencia, duplicados con metadata distinta, aislamiento, orden, límite, asociación ambigua, interruptor apagado y rollback de toda la transacción si falla la proyección.
 - Script reproducible: `apps/api/scripts/deploy/verify-meta-recepcion.cjs`. Sólo admite una base terminada en `_test` cuyo nombre coincida con `DEPLOY_DATABASE_NAME`; elimina exclusivamente sus filas sintéticas.
 - Revisión visual local de la tarjeta real con datos ficticios: nombres, fechas, Unicode, texto multilínea, lista desplazable, adjuntos identificados y botón Actualizar. El servidor temporal no usa credenciales ni llama a Meta; no reemplaza la prueba integrada.
-- CI de contenedores incorpora ese ensayo junto al del envío. Compilación remota pendiente de completar en GitHub.
+- [CI remoto aprobado](https://github.com/studiocamaleon/gdi/actions/runs/36195604016) para `715c7084346cad30addc149fe0856bdb815a1b7d`: imágenes Linux amd64 de API y Next con chequeo de tipos, tipografías de etiquetas, migraciones y permisos sin superusuario, ensayos PostgreSQL de envío/recepción Meta y login directo y por BFF. Los commits posteriores de este bloque sólo actualizan documentación.
 
 No confundir los eventos sintéticos de estos ensayos con un mensaje real de WhatsApp. La prueba real de recepción integrada sigue pendiente de despliegue del lote.
 
