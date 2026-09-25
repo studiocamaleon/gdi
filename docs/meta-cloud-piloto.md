@@ -1,6 +1,6 @@
 # Primer bloque de Cloud API — piloto interno
 
-25/09/2026. Rama `codex/meta-cloud-base`, basada en `codex/entorno-local`.
+25/09/2026. Rama `codex/meta-cloud-base`, basada en `codex/entorno-local`. [PR #4 en borrador](https://github.com/studiocamaleon/gdi/pull/4), con base en la rama del PR #3; no fusiona los PR previos.
 
 ## Qué permite
 
@@ -38,6 +38,15 @@ Para apagar el piloto: desactivar `META_WHATSAPP_PILOT_ENABLED`; para cerrar nue
 - Tests unitarios y HTTP de `integraciones/meta`, `webhooks-whatsapp` y `common/staging-ingress`.
 - `scripts/deploy/verify-meta.cjs`: exige una base cuyo nombre termine en `_test` y coincida con `DEPLOY_DATABASE_NAME`. Usa PostgreSQL real y Meta simulado. Prueba concurrencia, idempotencia, estados fuera de orden, aislamiento y webhook anterior a la respuesta del POST. Sólo elimina sus propias filas sintéticas.
 - CI de staging compila API/web, aplica el historial y ejecuta el ensayo PostgreSQL. No usa credenciales ni envía mensajes a Meta.
+
+## Resultados del primer bloque
+
+- 32 pruebas específicas del cliente, servicio, receptor HTTP y entrada privada aprobadas.
+- PostgreSQL 16 local: 283 migraciones aplicadas a una base nueva y desechable. El ensayo real comprobó un único envío con pedidos simultáneos, estados fuera de orden, duplicados, aislamiento, webhook temprano y recuperación de respuesta incierta. Meta fue simulado; no hubo mensajes reales.
+- Regresión de integraciones: 210 de 211 pruebas pasaron en la primera ejecución. El ensayo existente de seis emisores simultáneos agotó la espera con el pool de prueba limitado a dos conexiones. Repetida únicamente esa suite con ocho conexiones: 10/10 aprobadas. No se cambiaron los límites de local ni staging.
+- Tipos de frontend comprobados localmente. La compilación completa de API se trasladó al runner de GitHub por la memoria disponible de la Mac; no se reinició Docker ni se detuvieron los servicios existentes.
+- Compilación y arranque de contenedores: [ejecución de GitHub](https://github.com/studiocamaleon/gdi/actions/runs/36189193191), sobre `ee67367cc8f0`; consultar su resultado antes de desplegar.
+- La base de desarrollo y Neon staging no recibieron esta migración. El piloto no está activo. Faltan la revisión visual en la aplicación, el despliegue, los secretos de Meta, la suscripción del webhook y el ensayo real de entrega.
 
 ## Fuentes consultadas
 
