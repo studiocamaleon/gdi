@@ -41,6 +41,33 @@ async function main() {
     const body = await response.json();
     assert.equal(typeof body.accessToken, 'string');
     assert.equal(body.staff.rolPlataforma, 'ADMIN');
+    if (base !== api) {
+      const session = await request(`${web}/api/session`, {
+        method: 'POST', headers: { ...browser, 'content-type': 'application/json' },
+        body: JSON.stringify({ token: body.accessToken }),
+      });
+      assert.equal(session.status, 200);
+      const setCookie = session.headers.get('set-cookie');
+      assert.ok(setCookie?.startsWith('gdi_access_token='), 'El ingreso debe guardar la sesión.');
+      for (const attribute of [/; HttpOnly/i, /; Secure/i, /; SameSite=Lax/i]) {
+        assert.match(setCookie, attribute);
+      }
+      const cookie = setCookie.split(';')[0];
+      // La pantalla consulta el API desde el servidor de Next. Comprueba que
+      // el canal autenticado y la IP también funcionan fuera del BFF.
+      const security = await request(`${web}/backoffice/seguridad`, {
+        headers: { ...browser, cookie }, redirect: 'manual',
+      });
+      assert.equal(security.status, 200);
+      const html = await security.text();
+      assert.ok(html.includes('Protegé tu acceso'), 'Debe renderizar la pantalla de seguridad, sin error SSR.');
+      assert.ok(html.includes(process.env.BOOTSTRAP_ADMIN_EMAIL));
+      const clearSession = await request(`${web}/api/session`, {
+        method: 'DELETE', headers: { ...browser, cookie },
+      });
+      assert.equal(clearSession.status, 200);
+      assert.match(clearSession.headers.get('set-cookie') ?? '', /^gdi_access_token=;/);
+    }
     const logout = await request(`${api}/auth/logout`, {
       method: 'POST', headers: { ...internal, authorization: `Bearer ${body.accessToken}` },
     });
@@ -54,7 +81,7 @@ async function main() {
   });
   assert.equal(signup.status, 404);
   console.log(apiOnly ? 'OK: salud API, autenticación directa, logout y registro público cerrado.' :
-    'OK: staging restringido, noindex, salud, autenticación por canal interno/BFF, logout y registro público cerrado.');
+    'OK: staging restringido, noindex, salud, autenticación interna/BFF, cookie segura, pantalla SSR, logout y registro público cerrado.');
 }
 
 main().catch(fail);
