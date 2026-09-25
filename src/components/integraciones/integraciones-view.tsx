@@ -1,4 +1,6 @@
 "use client";
+import { MetaPilotoCard } from './meta-piloto-card';
+import type { EstadoMetaPiloto } from '@/lib/meta-piloto-api';
 import { useCapacidad } from "@/components/navigation/capacidades-provider";
 import { ActionButton } from "@/components/design-system/action-button";
 import {
@@ -224,10 +226,12 @@ function Logo({
 
 export function IntegracionesView({
   inicial,
+  metaPiloto,
   mcp,
   puedeResolverAvisos = false,
 }: {
   inicial: EstadoIntegraciones;
+  metaPiloto?: EstadoMetaPiloto | null;
   puedeResolverAvisos?: boolean;
   /**
    * Credenciales MCP ("Conectá tu IA"). undefined = el usuario no puede
@@ -374,6 +378,8 @@ export function IntegracionesView({
           </div>
         </div>
       )}
+
+      {metaPiloto && puedeResolverAvisos && <MetaPilotoCard inicial={metaPiloto} puedeEnviar={conWati} />}
 
       {conectadas.length > 0 && (
         <Seccion titulo="Conectadas" cuenta={conectadas.length}>
@@ -1741,9 +1747,10 @@ export function MensajesTab({
                     ?.label ?? l.estado}
                 </span>
                 <small>
-                  {l.canal === "WHATSAPP_WEB" ? "WhatsApp Web" : "Wati"}
+                  {l.canal === "META_WHATSAPP" ? "Meta" : l.canal === "WHATSAPP_WEB" ? "WhatsApp Web" : "Wati"}
                 </small>
                 {puedeResolver &&
+                  l.canal !== "META_WHATSAPP" &&
                   operativa &&
                   [
                     "pendiente",

@@ -18,6 +18,9 @@ import { NotificacionesResenasService } from './notificaciones/notificaciones-re
 import { NotificacionesScheduler } from './notificaciones/notificaciones.scheduler';
 import { NotificacionesService } from './notificaciones/notificaciones.service';
 import { WatiScheduler } from './wati/wati.scheduler';
+import { MetaCloudClient } from './meta/meta-cloud.client';
+import { MetaPilotoService } from './meta/meta-piloto.service';
+import { MetaPilotoController } from './meta/meta-piloto.controller';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -39,11 +42,14 @@ import { WatiScheduler } from './wati/wati.scheduler';
   // Nest resuelve por orden de registro, así que las rutas concretas van antes
   // que las que tienen comodín.
   controllers: [
+    MetaPilotoController,
     AutomaticosWebController,
     NotificacionesController,
     IntegracionesController,
   ],
   providers: [
+    MetaCloudClient,
+    MetaPilotoService,
     AutomaticosWebService,
     SecretosService,
     IntegracionesService,

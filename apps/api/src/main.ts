@@ -75,6 +75,15 @@ async function bootstrap() {
   // Se acota por path para no retener un Buffer extra en cada request.
   const bodyLimit = process.env.BODY_LIMIT ?? '1mb';
   app.use(
+    '/api/webhooks/whatsapp',
+    json({
+      limit: '3mb',
+      verify: (req, _res, buf: Buffer) => {
+        (req as typeof req & { rawBody?: Buffer }).rawBody = buf;
+      },
+    }),
+  );
+  app.use(
     json({
       limit: bodyLimit,
       verify: (req: { url?: string; rawBody?: Buffer }, _res, buf: Buffer) => {

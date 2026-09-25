@@ -287,3 +287,24 @@ API, worker de cálculos y worker PDF desplegados con esa misma imagen por diges
 Chrome confirmó en `OT-2026-0001` el vendedor «Lucas German», avatar LG y los cinco eventos originales. La vista previa de etiqueta pasó de cuadrados vacíos a texto legible. Se descargó el PDF desde la aplicación y se renderizó con Poppler: una página de 100 × 150 mm, con nombre de empresa y acento en «Gráfica», identificación interna, número de orden, cliente, fecha, producto, cantidad `4,04 m²` y pie legibles, sin superposiciones ni recortes. La impresión física no se ensayó. La orden siguió pendiente, con su mismo importe y fecha; no se guardó ni reemitió.
 
 Por indicación de Lucas, materiales, reservas y fechas mantienen su comportamiento. No se fusionaron PR ni se cambió producción.
+
+
+## Piloto interno de WhatsApp Cloud API — 25 de septiembre
+
+Despliegue del código `7efabd87213e` del [PR #4](https://github.com/studiocamaleon/gdi/pull/4). Las compilaciones remotas conservaron el chequeo de tipos. Backend compartido por API y ambos workers: `registry.fly.io/grafoprint-staging-api@sha256:ccf65db71c98a649b36793aed49a4a264b39d81bf1902a0ac678f0dc0ccae4e0`. Web: `registry.fly.io/grafoprint-staging-web@sha256:f455af59fea4fa0ae76de41fa4e77b0ce898c4fc42e8cec323e997140c2cf97d`. Se mantuvieron las máquinas y tamaños; Gotenberg no cambió. El builder temporal `fly-builder-humming-bush-589` se eliminó al terminar.
+
+Se aplicó en Neon `20260925210000_meta_cloud_piloto`: total 283 migraciones. Se verificaron las siete columnas nuevas y los permisos del rol de ejecución, sin DDL ni acceso a `_prisma_migrations`. No hubo seed, reset ni cambios en la base local.
+
+El reemplazo de la única máquina API produjo una interrupción temporal del acceso mientras concluía su cierre. Fly terminó correctamente, y salud y las pruebas HTTP posteriores aprobaron. La arquitectura de una sola máquina no garantiza despliegues sin interrupción; no se contrataron réplicas adicionales.
+
+Token, secreto y configuración del piloto se cargaron sólo en los secretos de la API. Meta confirmó el webhook de `api-staging` y la suscripción `messages`; la cuenta de prueba incluye Grafoprint entre sus apps suscriptas. El token temporal y los identificadores privados no se guardan en este documento.
+
+Controles HTTP reales aprobados: salud 200; API general 403 sin credencial interna; backoffice web 401 sin Basic; ruta de webhook con sufijo 403; verificación incorrecta 403; POST sin firma 401; challenge correcto 200 con el texto exacto; POST con firma válida y lote vacío 200. No se crearon mensajes mediante ese lote sintético.
+
+Gráfica Demo quedó en Founder mediante la acción normal de Plataforma, con motivo de auditoría; suscripción manual/activa sin cobros. La plantilla de prueba `hello_world` figura aprobada en Meta.
+
+Lucas completó el ingreso normal a la empresa demo. Desde Configuración → Integraciones se envió una sola prueba a su destinatario previamente autorizado: registro creado a las 21:33:55 UTC, webhook real `delivered` a las 21:33:59 UTC, un intento y ningún error. La interfaz mostró primero «Aceptado por Meta» y, al actualizar, «Entregado · Confirmado por Meta». Se verificaron los datos persistidos y la presentación visual. No hubo reenvío ni se sustituyó la entrega por un webhook simulado.
+
+Chrome repitió el desafío Basic durante el acceso manual. El ensayo HTTP con las credenciales privadas vigentes respondió 200; se recordó que la puerta usa `grafoprint`, distinto de los usuarios de empresa/Plataforma, y se dejó un archivo privado local para copiar la clave. Lucas confirmó después su ingreso. No se rotaron contraseñas ni se desactivó la protección.
+
+La inspección del token informó vencimiento a las 23:00 UTC del 25/09 (20:00 de Argentina). Renovarlo antes de continuar pruebas posteriores. La app sigue sin publicar y no se cambiaron sus solicitudes de revisión. El ensayo verifica el número oficial de prueba, no onboarding de clientes, coexistencia ni inbox.

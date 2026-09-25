@@ -1,145 +1,244 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { Injectable } from '@nestjs/common';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { configuracionMetaPiloto } from '../integraciones/meta/meta-piloto.config';
 
-/**
- * Receptor de webhooks de WhatsApp (Meta Cloud API) — F1a.
- *
- * Regla de oro: PERSISTIR PRIMERO, PROCESAR DESPUÉS. Meta no reenvía
- * history/echoes/state_sync perdidos: lo que no se guarda al llegar se pierde
- * para siempre. Este servicio firma-verifica, desarma el envelope y guarda
- * cada change CRUDO en WebhookWhatsappCrudo; los procesadores (statuses,
- * plantillas, account_update) vienen en F1d y leen de esa tabla.
- *
- * Ver docs/whatsapp-tech-provider-diseno.md §5.
- */
-
-/** Un change del envelope de Meta, ya aplanado para persistir. */
 export interface CambioWebhook {
   tipo: string;
   wamid: string | null;
   phoneNumberId: string | null;
+  wabaId: string | null;
   payload: Record<string, unknown>;
+}
+const objeto = (v: unknown): Record<string, unknown> =>
+  v !== null && typeof v === 'object' && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : {};
+const texto = (v: unknown): string | null =>
+  typeof v === 'string' && v.length > 0 ? v : null;
+const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+function canonico(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonico).join(',')}]`;
+  if (v && typeof v === 'object')
+    return `{${Object.keys(v)
+      .sort()
+      .map(
+        (k) =>
+          `${JSON.stringify(k)}:${canonico((v as Record<string, unknown>)[k])}`,
+      )
+      .join(',')}}`;
+  return JSON.stringify(v) ?? 'null';
 }
 
 @Injectable()
 export class WebhooksWhatsappService {
-  private readonly logger = new Logger(WebhooksWhatsappService.name);
-
   constructor(private readonly prisma: PrismaService) {}
-
-  get puedeVerificarFirma(): boolean {
+  get puedeVerificarFirma() {
     return Boolean(process.env.META_APP_SECRET);
   }
-
-  get verifyToken(): string | undefined {
+  get verifyToken() {
     return process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || undefined;
   }
 
-  /**
-   * Firma de Meta: `X-Hub-Signature-256: sha256=<hex>` = HMAC-SHA256 del body
-   * CRUDO con NUESTRO app secret. A diferencia de la época Dualhook, acá la
-   * firma es verificable de verdad — es LA defensa del endpoint (que es
-   * @Public): sin firma válida no se persiste ni se loguea contenido.
-   */
-  verificarFirma(rawBody: Buffer, header: string | undefined): boolean {
+  verificarFirma(rawBody: Buffer, header?: string): boolean {
     const secret = process.env.META_APP_SECRET;
-    if (!secret || !header?.startsWith('sha256=')) return false;
-    const esperada = createHmac('sha256', secret).update(rawBody).digest('hex');
-    const recibida = header.slice('sha256='.length);
-    if (recibida.length !== esperada.length) return false;
-    return timingSafeEqual(Buffer.from(esperada), Buffer.from(recibida));
+    if (!secret || !header || !/^sha256=[0-9a-f]{64}$/i.test(header))
+      return false;
+    const esperada = createHmac('sha256', secret).update(rawBody).digest();
+    return timingSafeEqual(esperada, Buffer.from(header.slice(7), 'hex'));
   }
 
-  /**
-   * Desarma el envelope estándar de Meta (`entry[].changes[]`) en cambios
-   * planos. El `field` del change es el tipo base; para `messages` se afina
-   * por contenido (statuses vs mensajes entrantes vs errores) porque Meta
-   * los manda por el mismo campo.
-   */
   extraerCambios(body: unknown): CambioWebhook[] {
     const cambios: CambioWebhook[] = [];
-    const entries = (body as { entry?: unknown[] })?.entry;
-    if (!Array.isArray(entries)) return cambios;
-
-    for (const entry of entries) {
-      const changes = (entry as { changes?: unknown[] })?.changes;
-      if (!Array.isArray(changes)) continue;
-      for (const change of changes) {
-        const c = change as { field?: string; value?: Record<string, unknown> };
-        const value = c.value ?? {};
-        const metadata = (value.metadata ?? {}) as { phone_number_id?: string };
-
-        let tipo = c.field ?? 'desconocido';
-        let wamid: string | null = null;
-        if (tipo === 'messages') {
-          const statuses = value.statuses as Array<{ id?: string }> | undefined;
-          const messages = value.messages as Array<{ id?: string }> | undefined;
-          if (Array.isArray(statuses) && statuses.length) {
-            tipo = 'statuses';
-            wamid = statuses[0]?.id ?? null;
-          } else if (Array.isArray(messages) && messages.length) {
-            tipo = 'messages';
-            wamid = messages[0]?.id ?? null;
-          } else if (Array.isArray(value.errors) && value.errors.length) {
-            tipo = 'errors';
+    for (const rawEntry of lista(objeto(body).entry)) {
+      const entry = objeto(rawEntry);
+      for (const rawChange of lista(entry.changes)) {
+        const change = objeto(rawChange);
+        if (
+          typeof change.field !== 'string' ||
+          !change.value ||
+          typeof change.value !== 'object' ||
+          Array.isArray(change.value)
+        )
+          continue;
+        const value = objeto(change.value);
+        const base = {
+          wabaId: texto(entry.id),
+          phoneNumberId: texto(objeto(value.metadata).phone_number_id),
+        };
+        // Separar todos los elementos. Un lote puede contener varios mensajes y
+        // estados; deduplicar por el primero perdía el resto del lote.
+        let separado = false;
+        if (change.field === 'messages') {
+          for (const key of ['statuses', 'messages', 'errors']) {
+            for (const item of lista(value[key])) {
+              if (!item || typeof item !== 'object' || Array.isArray(item))
+                continue;
+              const {
+                statuses: _s,
+                messages: _m,
+                errors: _e,
+                ...common
+              } = value;
+              cambios.push({
+                ...base,
+                tipo: key,
+                wamid: texto(objeto(item).id),
+                payload: { ...common, [key]: [item] },
+              });
+              separado = true;
+            }
           }
         }
-
-        cambios.push({
-          tipo,
-          wamid,
-          phoneNumberId: metadata.phone_number_id ?? null,
-          payload: value,
-        });
+        if (!separado)
+          cambios.push({
+            ...base,
+            tipo: change.field,
+            wamid: null,
+            payload: value,
+          });
       }
     }
     return cambios;
   }
 
-  /**
-   * Persiste los cambios crudos, ruteando cada uno a su tenant por
-   * phone_number_id (best-effort: si no hay integración conectada para ese
-   * número, queda tenantId null y se revisa a mano — nunca se descarta).
-   */
   async persistir(cambios: CambioWebhook[]): Promise<void> {
-    if (cambios.length === 0) return;
-
-    // Un webhook trae 1..n changes del MISMO número casi siempre: cachear el
-    // ruteo por request evita n queries iguales.
-    const ruteo = new Map<string, string | null>();
-    for (const cambio of cambios) {
-      const pni = cambio.phoneNumberId;
-      if (!pni || ruteo.has(pni)) continue;
-      const integracion = await this.prisma.integracionTenant.findFirst({
-        where: {
-          proveedor: 'META_WHATSAPP',
-          metadataJson: { path: ['phoneNumberId'], equals: pni },
-        },
-        select: { tenantId: true },
+    if (!cambios.length) return;
+    const rutas = new Map<string, string | null>();
+    const filas: (CambioWebhook & {
+      tenantId: string | null;
+      dedupClave: string;
+      payload: Prisma.InputJsonObject;
+    })[] = [];
+    for (const c of cambios) {
+      const key = `${c.wabaId}:${c.phoneNumberId}`;
+      if (!rutas.has(key)) rutas.set(key, await this.tenantDe(c));
+      filas.push({
+        ...c,
+        tenantId: rutas.get(key) ?? null,
+        dedupClave: createHash('sha256').update(canonico(c)).digest('hex'),
+        payload: c.payload as Prisma.InputJsonObject,
       });
-      ruteo.set(pni, integracion?.tenantId ?? null);
     }
-
-    await this.prisma.webhookWhatsappCrudo.createMany({
-      data: cambios.map((c) => ({
-        tenantId: c.phoneNumberId ? (ruteo.get(c.phoneNumberId) ?? null) : null,
-        tipo: c.tipo,
-        wamid: c.wamid,
-        phoneNumberId: c.phoneNumberId,
-        payload: c.payload as object,
-      })),
+    // Si falla el guardado O el procesamiento se devuelve error a Meta para
+    // que reintente. Las huellas y las actualizaciones condicionales permiten
+    // repetir el lote sin duplicar eventos ni retroceder estados.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.webhookWhatsappCrudo.createMany({
+        data: filas,
+        skipDuplicates: true,
+      });
+      for (const fila of filas) {
+        if (fila.tipo !== 'statuses' || !fila.tenantId || !fila.phoneNumberId)
+          continue;
+        const aplicado = await this.procesarEstado(
+          tx,
+          fila.tenantId,
+          fila.phoneNumberId,
+          objeto(lista(fila.payload.statuses)[0]),
+        );
+        if (aplicado)
+          await tx.webhookWhatsappCrudo.updateMany({
+            where: { dedupClave: fila.dedupClave },
+            data: { procesado: true },
+          });
+      }
     });
+  }
 
-    const sinTenant = cambios.filter(
-      (c) => !c.phoneNumberId || !ruteo.get(c.phoneNumberId),
-    ).length;
-    if (sinTenant > 0) {
-      // Esperable durante el modo prueba (número de test sin integración);
-      // en producción sostenido es señal de conexión rota.
-      this.logger.warn(
-        `${sinTenant} webhook(s) de WhatsApp sin tenant ruteable.`,
-      );
-    }
+  private async tenantDe(c: CambioWebhook): Promise<string | null> {
+    if (!c.wabaId) return null;
+    const filters: Prisma.IntegracionTenantWhereInput[] = [
+      { metadataJson: { path: ['wabaId'], equals: c.wabaId } },
+    ];
+    if (c.phoneNumberId)
+      filters.push({
+        metadataJson: { path: ['phoneNumberId'], equals: c.phoneNumberId },
+      });
+    const encontrados = await this.prisma.integracionTenant.findMany({
+      where: { proveedor: 'META_WHATSAPP', estado: 'CONECTADA', AND: filters },
+      select: { tenantId: true },
+      take: 2,
+    });
+    const tenants = new Set(encontrados.map((x) => x.tenantId));
+    const piloto = configuracionMetaPiloto();
+    if (
+      piloto?.listo &&
+      c.wabaId === piloto.wabaId &&
+      (!c.phoneNumberId || c.phoneNumberId === piloto.phoneNumberId)
+    )
+      tenants.add(piloto.tenantId);
+    // Una asociación ambigua nunca se resuelve eligiendo la primera empresa.
+    return tenants.size === 1 ? [...tenants][0] : null;
+  }
+
+  private async procesarEstado(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    phoneNumberId: string,
+    status: Record<string, unknown>,
+  ) {
+    const wamid = texto(status.id);
+    const estado = texto(status.status);
+    const timestamp = Number(status.timestamp);
+    if (
+      !wamid ||
+      !estado ||
+      !['sent', 'delivered', 'read', 'failed'].includes(estado) ||
+      !Number.isFinite(timestamp) ||
+      timestamp <= 0 ||
+      timestamp > 8.64e12
+    )
+      return false;
+    const correlacion = texto(status.biz_opaque_callback_data);
+    const id =
+      correlacion &&
+      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(correlacion)
+        ? correlacion
+        : null;
+    const scope: Prisma.NotificacionWhatsappWhereInput = {
+      tenantId,
+      canal: 'META_WHATSAPP',
+      metaPhoneNumberId: phoneNumberId,
+      OR: [{ metaWamid: wamid }, ...(id ? [{ id, metaWamid: null }] : [])],
+    };
+    // Monótono: read > delivered > sent. Un failed tardío tampoco deshace
+    // una entrega comprobada. Las fechas originales quedan en el evento crudo.
+    const anteriores: Record<string, string[]> = {
+      sent: [],
+      delivered: ['sent', 'failed'],
+      read: ['sent', 'delivered', 'failed'],
+      failed: ['sent'],
+    };
+    const codigo = objeto(lista(status.errors)[0]).code;
+    await tx.notificacionWhatsapp.updateMany({
+      where: {
+        AND: [
+          scope,
+          {
+            OR: [
+              { estadoEntrega: null },
+              { estadoEntrega: { in: anteriores[estado] } },
+            ],
+          },
+        ],
+      },
+      data: {
+        metaWamid: wamid,
+        estadoEntrega: estado,
+        estadoEntregaEl: new Date(timestamp * 1000),
+        estado: estado === 'failed' ? 'fallida' : 'enviada',
+        metaErrorCodigo:
+          estado === 'failed' && Number.isInteger(codigo)
+            ? String(codigo)
+            : null,
+        motivo:
+          estado === 'failed'
+            ? `Meta informó que no pudo entregar el mensaje${Number.isInteger(codigo) ? ` (código ${codigo})` : ''}.`
+            : null,
+      },
+    });
+    return (await tx.notificacionWhatsapp.count({ where: scope })) > 0;
   }
 }
