@@ -104,6 +104,7 @@ export class AuthGuard implements CanActivate {
             select: {
               activo: true,
               rolPlataforma: true,
+              debeCambiarPassword: true,
               mfa: {
                 select: { activatedAt: true, recuperacionConfirmadaEl: true },
               },
@@ -126,15 +127,18 @@ export class AuthGuard implements CanActivate {
         session.user.mfa,
         session.mfaVerificadoEl,
       );
+      const plataformaPasswordPendiente = session.user.debeCambiarPassword;
       if (
-        plataformaMfaPendiente &&
+        (plataformaMfaPendiente || plataformaPasswordPendiente) &&
         !this.reflector.getAllAndOverride<boolean>(ENROLAMIENTO_PLATAFORMA, [
           context.getHandler(),
           context.getClass(),
         ])
       ) {
         throw new ForbiddenException(
-          'Completá MFA y guardá tus códigos de recuperación en Seguridad del backoffice para continuar.',
+          plataformaPasswordPendiente
+            ? 'Elegí tu clave personal en el backoffice para continuar.'
+            : 'Completá MFA y guardá tus códigos de recuperación en Seguridad del backoffice para continuar.',
         );
       }
       request.auth = {
@@ -146,6 +150,7 @@ export class AuthGuard implements CanActivate {
         email: payload.email,
         esPlataforma: true,
         plataformaMfaPendiente,
+        plataformaPasswordPendiente,
       };
       return true;
     }

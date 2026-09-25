@@ -102,6 +102,7 @@ export type UsuariosEmpresa = {
 };
 export type StaffPlataforma = NonNullable<ConsolaPlataforma["staff"]> & {
   requiereSeguridad: boolean;
+  debeCambiarPassword: boolean;
 };
 export const getContextoPlataforma = () =>
   apiRequest<StaffPlataforma>("/plataforma/contexto", { cache: "no-store" });

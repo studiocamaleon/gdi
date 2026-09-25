@@ -9,7 +9,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
-import { cabecerasPrivadas, controlAccesoStaging, stagingPrivado } from "@/lib/staging-access";
+import {
+  cabecerasPrivadas,
+  controlAccesoStaging,
+  stagingPrivado,
+} from "@/lib/staging-access";
 
 // Páginas de autenticación: accesibles sin sesión y, si ya hay sesión, se
 // rebota al home (no tiene sentido re-loguearse).
@@ -87,9 +91,11 @@ export function proxy(request: NextRequest) {
     const path = request.nextUrl.pathname;
     // Las sondas no llevan credenciales; estas rutas sólo exponen salud y robots.
     if (["GET", "HEAD"].includes(request.method) && path === "/robots.txt") {
-      return cabecerasPrivadas(new NextResponse("User-agent: *\nDisallow: /\n", {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      }));
+      return cabecerasPrivadas(
+        new NextResponse("User-agent: *\nDisallow: /\n", {
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }),
+      );
     }
     if (!(["GET", "HEAD"].includes(request.method) && path === "/api/health")) {
       const denied = controlAccesoStaging(request.headers);
@@ -102,7 +108,11 @@ export function proxy(request: NextRequest) {
 
 function rutearSesion(request: NextRequest) {
   // El control de staging cubre también API y archivos. El ruteo de sesión no.
-  if (/^\/(?:api(?:\/|$)|_next(?:\/|$)|favicon\.ico$|brand(?:\/|$)|catalogo(?:\/|$))/.test(request.nextUrl.pathname)) {
+  if (
+    /^\/(?:api(?:\/|$)|_next(?:\/|$)|favicon\.ico$|brand(?:\/|$)|catalogo(?:\/|$))/.test(
+      request.nextUrl.pathname,
+    )
+  ) {
     return NextResponse.next();
   }
   const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
@@ -134,6 +144,11 @@ function rutearSesion(request: NextRequest) {
   // las mandamos a /plataforma. Sin esto, /login la rebotaba a "/"
   // y el dashboard reventaba con 401 → 500 (pantalla en blanco).
   if (token && esSesionPlataforma(token)) {
+    if (pathname === "/cambiar-clave") {
+      return NextResponse.redirect(
+        new URL("/backoffice/cambiar-clave", request.url),
+      );
+    }
     const enSuTerritorio =
       pathname === PLATAFORMA_HOME ||
       pathname.startsWith(`${PLATAFORMA_HOME}/`) ||

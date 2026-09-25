@@ -173,6 +173,7 @@ export class PlataformaController {
       )),
       requiereSeguridad:
         !auth.esPlataforma || auth.plataformaMfaPendiente !== false,
+      debeCambiarPassword: auth.plataformaPasswordPendiente === true,
     };
   }
 

@@ -55,6 +55,32 @@ async function main() {
       const cookie = setCookie.split(';')[0];
       // La pantalla consulta el API desde el servidor de Next. Comprueba que
       // el canal autenticado y la IP también funcionan fuera del BFF.
+      const paginaClave = await request(`${web}/backoffice/cambiar-clave`, {
+        headers: { ...browser, cookie }, redirect: 'manual',
+      });
+      assert.equal(paginaClave.status, 200);
+      assert.ok((await paginaClave.text()).includes('Elegí tu clave'));
+      for (const path of ['/cambiar-clave', '/plataforma', '/backoffice/seguridad']) {
+        const redirected = await request(`${web}${path}`, { headers: { ...browser, cookie }, redirect: 'manual' });
+        assert.equal(redirected.status, 307);
+        assert.equal(new URL(redirected.headers.get('location'), web).pathname, '/backoffice/cambiar-clave');
+      }
+      const authHeaders = { ...browser, cookie, 'content-type': 'application/json' };
+      const contexto = () => request(`${base}/plataforma/contexto`, { headers: authHeaders }).then(r => r.json());
+      assert.equal((await contexto()).debeCambiarPassword, true);
+      assert.equal((await request(`${base}/plataforma/empresas`, { headers: authHeaders })).status, 403);
+      const nueva = `ensayo-${require('node:crypto').randomUUID()}`;
+      const cambiar = (actual, claveNueva) => request(`${base}/auth/password`, {
+        method: 'POST', headers: authHeaders, body: JSON.stringify({ actual, nueva: claveNueva }),
+      });
+      assert.equal((await cambiar('clave-incorrecta', nueva)).status, 400);
+      assert.equal((await contexto()).debeCambiarPassword, true);
+      assert.equal((await cambiar(process.env.BOOTSTRAP_ADMIN_PASSWORD, process.env.BOOTSTRAP_ADMIN_PASSWORD)).status, 400);
+      assert.equal((await cambiar(process.env.BOOTSTRAP_ADMIN_PASSWORD, nueva)).status, 201);
+      const actualizado = await contexto();
+      assert.equal(actualizado.debeCambiarPassword, false);
+      assert.equal(actualizado.requiereSeguridad, true);
+      assert.equal((await request(`${base}/plataforma/empresas`, { headers: authHeaders })).status, 403);
       const security = await request(`${web}/backoffice/seguridad`, {
         headers: { ...browser, cookie }, redirect: 'manual',
       });
@@ -62,6 +88,15 @@ async function main() {
       const html = await security.text();
       assert.ok(html.includes('Protegé tu acceso'), 'Debe renderizar la pantalla de seguridad, sin error SSR.');
       assert.ok(html.includes(process.env.BOOTSTRAP_ADMIN_EMAIL));
+      const reingresar = (password) => request(`${base}/auth/login-plataforma`, {
+        method: 'POST', headers: { ...browser, 'content-type': 'application/json' },
+        body: JSON.stringify({ email: process.env.BOOTSTRAP_ADMIN_EMAIL, password }),
+      });
+      assert.equal((await reingresar(process.env.BOOTSTRAP_ADMIN_PASSWORD)).status, 401);
+      const reingreso = await reingresar(nueva);
+      assert.equal(reingreso.status, 201);
+      const otra = await reingreso.json();
+      assert.ok((await request(`${api}/auth/logout`, { method: 'POST', headers: { ...internal, authorization: `Bearer ${otra.accessToken}` } })).ok);
       const clearSession = await request(`${web}/api/session`, {
         method: 'DELETE', headers: { ...browser, cookie },
       });
@@ -81,7 +116,7 @@ async function main() {
   });
   assert.equal(signup.status, 404);
   console.log(apiOnly ? 'OK: salud API, autenticación directa, logout y registro público cerrado.' :
-    'OK: staging restringido, noindex, salud, autenticación interna/BFF, cookie segura, pantalla SSR, logout y registro público cerrado.');
+    'OK: staging restringido, salud, autenticación interna/BFF, cookie segura, cambio de clave de staff sin empresa, MFA obligatorio, SSR, logout y registro público cerrado.');
 }
 
 main().catch(fail);

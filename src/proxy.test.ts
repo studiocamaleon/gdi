@@ -69,3 +69,31 @@ describe("documentos legales públicos", () => {
     ).toBe("1");
   });
 });
+
+describe("cambio de clave según la sesión", () => {
+  it("lleva al staff al formulario de backoffice, sin abrir rutas de tenant", () => {
+    expect(
+      proxy(request("/cambiar-clave", "plataforma")).headers.get("location"),
+    ).toBe("http://localhost:3000/backoffice/cambiar-clave");
+    expect(
+      proxy(request("/backoffice/cambiar-clave", "plataforma")).headers.get(
+        "x-middleware-next",
+      ),
+    ).toBe("1");
+    expect(
+      proxy(request("/cambiar-clave-otra", "plataforma")).headers.get(
+        "location",
+      ),
+    ).toBe("http://localhost:3000/plataforma");
+  });
+  it("conserva el formulario de empresa y exige sesión", () => {
+    expect(
+      proxy(request("/cambiar-clave", "empresa")).headers.get(
+        "x-middleware-next",
+      ),
+    ).toBe("1");
+    expect(proxy(request("/cambiar-clave")).headers.get("location")).toBe(
+      "http://localhost:3000/login",
+    );
+  });
+});

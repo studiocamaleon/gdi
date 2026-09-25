@@ -12,6 +12,7 @@ export default async function SeguridadPage() {
       throw error;
   }
   if (!contexto?.esSesionPlataforma) redirect("/backoffice");
+  if (contexto.debeCambiarPassword) redirect("/backoffice/cambiar-clave");
   if (!contexto.requiereSeguridad) redirect("/plataforma");
   return <SeguridadBackoffice email={contexto.email} />;
 }

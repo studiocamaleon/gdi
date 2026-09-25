@@ -61,6 +61,7 @@ export type CurrentAuth = {
    */
   esPlataforma?: boolean;
   plataformaMfaPendiente?: boolean;
+  plataformaPasswordPendiente?: boolean;
   /**
    * Credencial MCP: la IA del tenant operando vía token opaco `grafo_mcp_...`.
    * No hay AuthSession detrás (`sessionId` es `mcp:<credencialId>`, sólo para
