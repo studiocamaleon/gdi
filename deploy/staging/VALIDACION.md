@@ -52,6 +52,14 @@ La validación final de contenedores aprobó sobre el commit desplegado `9e2a67c
 
 También quedan pendientes el documento generado desde un flujo funcional de la aplicación, los demás motores de geometría y el recorrido completo en navegador. El ensayo de PDF anterior valida el servicio de renderizado, no toda la cola de documentos.
 
+### Corrección del primer acceso del administrador
+
+El commit `2f1d05b79a8efe20717db121e1bbe00fec8958eb` aprobó [GitHub Actions 36090326663](https://github.com/studiocamaleon/gdi/actions/runs/36090326663): ambas imágenes compiladas con tipos, 280 migraciones, rol limitado, bootstrap y ensayo HTTP en una base temporal con usuario ficticio.
+
+El ensayo adicional comprobó la pantalla SSR `/backoffice/cambiar-clave`, las redirecciones desde `/cambiar-clave`, `/plataforma` y `/backoffice/seguridad`, el rechazo de una clave actual incorrecta y de reutilizar la provisoria, el cambio válido, el rechazo de login con la contraseña anterior y el reingreso con la nueva. Después del cambio, MFA siguió siendo obligatorio y la consola respondió `403`. La clave del administrador cloud no se cambió en estos ensayos.
+
+También aprobaron 28 pruebas de proxy/acceso de staging y 13 del guard de plataforma/autenticación, TypeScript web y ESLint de los archivos modificados. El caso con MFA ya completa verifica que una clave provisoria siga bloqueando la consola; al cambiarla se vuelve a consultar el estado vigente del usuario. Las sesiones de plataforma siguen sin acceder a rutas de tenant.
+
 ## Conexiones a proveedores reales desde la Mac
 
 Comprobaciones iniciales realizadas el 24 de septiembre de 2026, antes del despliegue Fly:
@@ -144,19 +152,33 @@ Pruebas HTTP en los dominios auxiliares y repetidas en los originales después d
 - Login de plataforma `201`, cookie `Secure`/`HttpOnly`/`SameSite=Lax`, pantalla de seguridad SSR `200`, contexto de plataforma `200`, logout y eliminación de cookie correctos.
 - Origen ajeno rechazado `403`.
 - Preflight de R2 con el origen exacto devuelto y origen ajeno rechazado; el origen auxiliar se eliminó al restaurar la configuración. Este chequeo no repitió multipart ni el flujo de archivos completo desde el navegador.
-- **Incidencia de primer acceso:** `/cambiar-clave` con sesión de plataforma responde `307` a `/plataforma`. `src/proxy.ts` limita esas sesiones al backoffice/plataforma; la pantalla de seguridad ofrece MFA pero no cambio de contraseña. El verificador inicial falló esa aserción; el diagnóstico posterior conservó la limitación y completó los demás chequeos. No se cambió la contraseña ni se da por aprobado ese recorrido.
-- **Recorrido Chrome pendiente:** la apertura del login devolvió `ERR_BLOCKED_BY_CLIENT`, incluso tras recargar. Ocurrió también al abrir `/api/health` en el dominio original, que responde `200` sin Basic en el ensayo HTTP; no se identificó la causa del bloqueo del navegador. No se desactivaron extensiones ni protecciones. Los ensayos HTTP anteriores sí usaron autenticación válida por HTTPS.
+- **Incidencia de primer acceso observada antes de la corrección descrita debajo:** `/cambiar-clave` con sesión de plataforma responde `307` a `/plataforma`. `src/proxy.ts` limita esas sesiones al backoffice/plataforma; la pantalla de seguridad ofrece MFA pero no cambio de contraseña. El verificador inicial falló esa aserción; el diagnóstico posterior conservó la limitación y completó los demás chequeos. No se cambió la contraseña ni se da por aprobado ese recorrido.
+- **Bloqueo de Chrome observado antes del acceso descrito debajo:** la apertura del login devolvió `ERR_BLOCKED_BY_CLIENT`, incluso tras recargar. Ocurrió también al abrir `/api/health` en el dominio original, que responde `200` sin Basic en el ensayo HTTP; no se identificó la causa del bloqueo del navegador. No se desactivaron extensiones ni protecciones. Los ensayos HTTP anteriores sí usaron autenticación válida por HTTPS.
+
+### Primer acceso corregido y comprobado en staging
+
+El código `2f1d05b79a8e` se compiló remotamente con chequeo de tipos y se desplegó después de aprobar el ensayo de GitHub. Se mantuvieron las cinco máquinas, sus identificadores, región y tamaños. API y ambos workers usan el mismo backend; Gotenberg no se modificó. El builder temporal `fly-builder-noble-tree-8917` fue eliminado al terminar.
+
+Imágenes actuales:
+
+- Backend: `registry.fly.io/grafoprint-staging-api@sha256:5513e09cd1be961b5ae7497d245015f70a9a690f0faf19450b0137d9e5bd71d4`.
+- Web: `registry.fly.io/grafoprint-staging-web@sha256:db1eb97acfefc52624c0ac597a41e77bd336beda989ca24d85cc3ba7a0257ee7`.
+
+El verificador HTTP por los dominios originales aprobó salud, acceso privado, login de plataforma, cookie segura, pantalla de cambio de clave `200`, redirección de las tres entradas al cambio de clave, contexto con clave/MFA pendientes, consola `403`, rechazo de origen ajeno y logout con eliminación de cookie. Usó TLS normal y la clave inicial existente; no eligió una nueva contraseña para el usuario.
+
+En Chrome, Lucas abrió manualmente la página y confirmó que aparecía el diálogo de usuario/contraseña. Tras completar HTTP Basic se vio el login de Grafoprint. Con la versión nueva se ingresó con la cuenta inicial y la pantalla «Elegí tu clave» apareció en `/backoffice/cambiar-clave`. Se dejó la clave provisoria cargada y se entregó el control a Lucas antes de introducir la nueva. No fue necesario desactivar extensiones ni protecciones del navegador. El fallo de automatización se superó; no se atribuye a una extensión específica.
+
+Lucas confirmó que guardó su contraseña personal y la pantalla cambió a «Protegé tu acceso»; se verificó esa pantalla en Chrome. La activación MFA se entregó al usuario y sigue pendiente. Su nueva contraseña no fue solicitada ni almacenada por el agente.
 
 No se desactivó la validación TLS, no se enviaron credenciales por HTTP y no se cambiaron registros de la web comercial o correo.
 
-Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valores predeterminados; historial de restauración de un día y notificación de gasto de USD 20. El administrador inicial existe y el login HTTP fue probado, pero Lucas todavía debe elegir su contraseña y completar MFA. El acceso privado y sus credenciales iniciales están en un archivo local fuera de Git.
+Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valores predeterminados; historial de restauración de un día y notificación de gasto de USD 20. El administrador inicial existe; login HTTP y llegada al formulario de cambio de clave en Chrome comprobados. Lucas ya eligió su contraseña y debe completar MFA. El acceso privado y sus credenciales iniciales están en un archivo local fuera de Git.
 
 Orden de continuación:
 
-1. Corregir y verificar el recorrido de cambio de contraseña de una sesión de plataforma; HTTPS ya funciona en los dominios originales.
-2. Recorrer el acceso en Chrome por `https://staging.grafoprint.com.ar/backoffice`. Lucas debe elegir personalmente su contraseña y completar MFA; no indicar `/cambiar-clave` hasta resolver su redirección.
-3. Preparar catálogo/plan de pruebas y una empresa ficticia; verificar archivos, PDF desde la aplicación, cálculos y eventos SSE.
-4. Medir carga, memoria, conexiones y resultados grandes; probar interrupción y recuperación de trabajos y restauración de Neon antes de usar datos reales.
-5. Al implementar WhatsApp, revisar la declaración de Redis como proveedor si recibe datos de Meta. Staging todavía no incorpora la integración directa de WhatsApp.
+1. Lucas debe completar MFA en la pantalla abierta `/backoffice/seguridad`, guardar sus códigos de recuperación y continuar a Plataforma; la clave personal ya fue elegida.
+2. Preparar catálogo/plan de pruebas y una empresa ficticia; verificar archivos, PDF desde la aplicación, cálculos y eventos SSE.
+3. Medir carga, memoria, conexiones y resultados grandes; probar interrupción y recuperación de trabajos y restauración de Neon antes de usar datos reales.
+4. Al implementar WhatsApp, revisar la declaración de Redis como proveedor si recibe datos de Meta. Staging todavía no incorpora la integración directa de WhatsApp.
 
 Las pruebas actuales validan el despliegue y componentes básicos; no acreditan disponibilidad de producción, capacidad por tenant ni recuperación ante desastres.
