@@ -11,7 +11,7 @@ La [comparación de Redis y presupuesto](./PRESUPUESTO.md) contempla Redis Cloud
 - **R2:** bucket `grafoprint-staging-files` creado, **Standard**, jurisdicción **US**, vacío y con acceso público deshabilitado. Faltan token limitado al bucket, CORS y pruebas de integración.
 - **Redis:** base `grafoprint-staging` creada en AWS São Paulo, RAM, **1 GB total = 512 MB de datos + 512 MB de réplica**, réplica en una zona y AOF cada segundo, por **USD 36/mes**. TLS activado, autenticación mutua desactivada y política `no eviction` verificada. Las alertas existentes de memoria y conexiones están activas al 80 %. Redis 8.6; su compatibilidad con nuestros flujos y la recuperación todavía deben probarse. No hay conexiones ni claves de la aplicación. El respaldo remoto aparece desactivado; no confundir AOF/réplica con una restauración de respaldo verificada.
 
-Este estado no significa que staging esté desplegado. Sigue pendiente la compilación/arranque de Next y el recorrido completo de login en un entorno con memoria suficiente, sin reiniciar Docker en esta Mac. No se guardan credenciales en estos documentos.
+Este estado no significa que staging esté desplegado. La compilación y el arranque de API/Next, las migraciones y la autenticación HTTP directa/BFF ya aprobaron en GitHub; ver [VALIDACION.md](./VALIDACION.md). Falta recorrer la interfaz con cookies/MFA y probar las conexiones cloud, la recuperación y la carga. No se reinició Docker en esta Mac ni se guardan credenciales en estos documentos.
 
 ## Servicios y orden
 
