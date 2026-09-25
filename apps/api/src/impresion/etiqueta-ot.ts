@@ -152,7 +152,7 @@ export async function renderizarEtiquetas(
     cuerpo += texto(42, 1140, 'Escaneá en Grafo para abrir la entrega', 23);
     cuerpo += `<text x="758" y="1180" text-anchor="end" font-size="18">${pagina + 1} / ${paginas}</text>`;
     cuerpo += texto(42, 1180, 'grafo.', 20, 700);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200"><rect width="800" height="1200" fill="white"/><g fill="black" font-family="Arial, sans-serif">${cuerpo}</g></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200"><rect width="800" height="1200" fill="white"/><g fill="black" font-family="DejaVu Sans, Arial, sans-serif">${cuerpo}</g></svg>`;
     salida.push(
       await sharp(Buffer.from(svg))
         .flatten({ background: '#fff' })

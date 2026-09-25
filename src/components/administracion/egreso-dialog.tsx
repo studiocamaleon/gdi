@@ -186,6 +186,7 @@ function EgresoBrandSelect({
             </SearchField>
           )}
           <ListBox
+            className={styles.selectOptions}
             renderEmptyState={() => (
               <p className={styles.optionEmpty}>{vacio}</p>
             )}

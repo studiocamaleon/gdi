@@ -1259,9 +1259,25 @@ export class OrdenesTrabajoService {
         tenantId: auth.tenantId,
         tipo: { in: ['borrador', 'emision', 'estado'] },
       },
-      select: { tipo: true, fecha: true, datosJson: true },
+      select: {
+        tipo: true,
+        fecha: true,
+        datosJson: true,
+        usuarioNombre: true,
+        usuario: { select: { nombreCompleto: true, email: true } },
+      },
       orderBy: { fecha: 'asc' as const },
     });
+    // Sin vendedor asignado, la ficha muestra a quien emitió la orden.
+    // Si la firma guardada era su correo, completarla con el perfil actual:
+    // el nombre puede haberse cargado después del alta o de la emisión.
+    // No reemplazar firmas de soporte ni modificar el historial. Esta consulta
+    // incluye la primera emisión aunque ya no esté entre los últimos 200 eventos.
+    const emisor = transiciones.find((evento) => evento.tipo === 'emision');
+    const nombreEmisor =
+      emisor?.usuario && emisor.usuarioNombre === emisor.usuario.email
+        ? emisor.usuario.nombreCompleto?.trim() || emisor.usuarioNombre
+        : emisor?.usuarioNombre;
     const distribuciones = await distribucionesDeItems(
       this.prisma,
       auth.tenantId,
@@ -1295,6 +1311,7 @@ export class OrdenesTrabajoService {
     });
     return {
       ...detalle,
+      vendedorNombre: orden.vendedor?.nombreCompleto || nombreEmisor || '—',
       tieneHistorialImpresion: Boolean(impresionRegistrada),
       progreso: progresoDeOrden(orden),
       progresoPct: progresoDeOrden(orden).porcentaje,
