@@ -2,7 +2,16 @@
 
 Este directorio prepara el despliegue; sus archivos no crean recursos ni publican la aplicación. La web comercial sigue en Vercel desde `main`. La aplicación de trabajo y sus servicios se desplegarán por separado. No usar datos de clientes en el ensayo.
 
-La [comparación de Redis y presupuesto](./PRESUPUESTO.md) propone Redis Cloud Essentials 1 GB con réplica en São Paulo y una previsión de USD 130/mes adicionales a Vercel. Es una propuesta pendiente de aprobación; incluye los supuestos, precios consultados y comprobaciones que faltan antes de contratar.
+La [comparación de Redis y presupuesto](./PRESUPUESTO.md) contempla Redis Cloud Essentials con 1 GB total (512 MB para datos y 512 MB para réplica) en São Paulo y una previsión de USD 130/mes adicionales a Vercel. La suscripción Redis de USD 36/mes fue autorizada y la base está creada. El resto del presupuesto incluye supuestos y comprobaciones que faltan antes de contratar recursos pagos.
+
+## Estado de las cuentas y recursos — 24 de septiembre de 2026
+
+- **Fly:** organización `Grafoprint` preparada con facturación. Todavía no hay aplicaciones ni máquinas desplegadas.
+- **Neon:** proyecto `grafoprint-staging` y base `grafoprint_staging` creados en **Free**, AWS São Paulo, PostgreSQL 16. Cómputo fijo de **0,25 CU**, suspensión tras cinco minutos de inactividad. La rama se llama `production` por defecto de Neon; pertenece al proyecto exclusivo de staging. No se aplicaron migraciones ni se creó el rol de ejecución. El paso a Launch sigue pendiente; Free no cubre el escenario de funcionamiento continuo presupuestado.
+- **R2:** bucket `grafoprint-staging-files` creado, **Standard**, jurisdicción **US**, vacío y con acceso público deshabilitado. Faltan token limitado al bucket, CORS y pruebas de integración.
+- **Redis:** base `grafoprint-staging` creada en AWS São Paulo, RAM, **1 GB total = 512 MB de datos + 512 MB de réplica**, réplica en una zona y AOF cada segundo, por **USD 36/mes**. TLS activado, autenticación mutua desactivada y política `no eviction` verificada. Las alertas existentes de memoria y conexiones están activas al 80 %. Redis 8.6; su compatibilidad con nuestros flujos y la recuperación todavía deben probarse. No hay conexiones ni claves de la aplicación. El respaldo remoto aparece desactivado; no confundir AOF/réplica con una restauración de respaldo verificada.
+
+Este estado no significa que staging esté desplegado. Sigue pendiente la compilación/arranque de Next y el recorrido completo de login en un entorno con memoria suficiente, sin reiniciar Docker en esta Mac. No se guardan credenciales en estos documentos.
 
 ## Servicios y orden
 
@@ -13,8 +22,8 @@ La [comparación de Redis y presupuesto](./PRESUPUESTO.md) propone Redis Cloud E
 | Worker de cálculos/entregas | Fly `grafoprint-staging-worker`, São Paulo | Redis y red privada | 2 CPU compartidas / 4 GB |
 | Worker de documentos | Fly `grafoprint-staging-worker-pdf`, São Paulo | Redis y red privada | 1 CPU compartida / 1 GB |
 | Gotenberg | Fly `grafoprint-staging-pdf`, São Paulo | Sólo red privada | 1 CPU compartida / 1 GB |
-| PostgreSQL 16 | Neon Launch, São Paulo (propuesta) | TLS, credencial por función | 0,25 CU iniciales; pendiente de aprobación y medición |
-| Redis | Redis Cloud Essentials, AWS São Paulo (propuesta) | TCP/TLS compatible con BullMQ | 1 GB RAM y réplica en la misma zona; pendiente de aprobación |
+| PostgreSQL 16 | Neon Free creado en São Paulo; Launch propuesto para uso continuo | TLS, credencial por función | 0,25 CU fijos; migraciones y medición pendientes |
+| Redis | Redis Cloud Essentials creado, AWS São Paulo | TCP/TLS habilitado; prueba BullMQ pendiente | 1 GB RAM total: 512 MB de datos y 512 MB de réplica en la misma zona |
 | Archivos | R2, bucket exclusivo con jurisdicción US | Bucket privado y URLs firmadas | Consumo |
 
 Los nombres de Fly aún no están reservados. Una sola máquina por servicio alcanza para el ensayo inicial; no es alta disponibilidad. Los tamaños son propuestas que se deben contrastar con mediciones y presupuesto antes de crear recursos. Los workers no se apagan automáticamente: esperan trabajos incluso cuando no hay tráfico web. No configurar escalado automático del worker de geometría sin recalcular el presupuesto compartido del pool.
@@ -26,6 +35,8 @@ La comprobación de salud de la API consulta PostgreSQL cada 30 segundos y el wo
 Requisitos: Docker con Compose, Node 24. Compilar Linux **amd64**: `compas_nest` ofrece su wheel Linux para esa arquitectura y Python >= 3.12. El contenedor incluye Python 3.12, OpenNest y el lector DXF. PackingSolver queda deshabilitado.
 
 En una Mac ARM hay emulación. Compilar secuencialmente, con los servicios de ensayo detenidos; no lanzar ambos builds juntos en Docker Desktop con sólo 4 GB de RAM. Para el conjunto completo, usar una máquina o runner con memoria suficiente para Docker y el sistema operativo, o ejecutar las pruebas por etapas. No asignar a Docker toda la memoria física de la computadora ni detener contenedores de otros proyectos. En esta Mac de 8 GB, el usuario pidió dejar pendiente la validación completa de la web, sin reiniciar Docker. Ver los resultados y límites en [VALIDACION.md](./VALIDACION.md).
+
+El workflow [staging-validation.yml](../../.github/workflows/staging-validation.yml) ejecuta las dos compilaciones y el ensayo de migraciones/permisos/login en un ejecutor estándar Ubuntu de GitHub. Usa el Compose aislado con PostgreSQL/Redis/S3Mock temporales y claves aleatorias; no recibe credenciales cloud ni despliega. Se activa por cambios relevantes en la rama `codex/staging-infraestructura`. No guarda imágenes ni artefactos externos. Si el repositorio deja de ser público, el trabajo se omite hasta revisar el presupuesto. Consultar [facturación de GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 
 El build comprueba tipos por defecto. En una máquina con poca memoria se puede ejecutar primero `npm --prefix apps/api run build` y `npx tsc --noEmit --incremental false` en el host (con las dependencias instaladas), y **sólo si ambos pasan** agregar `--build-arg SKIP_TYPECHECK=true` a los dos comandos Docker. Esto omite el chequeo duplicado dentro del contenedor; no cambia la lógica de la aplicación. Los manifiestos Fly no habilitan esa opción.
 
