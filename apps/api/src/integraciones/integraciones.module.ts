@@ -21,6 +21,8 @@ import { WatiScheduler } from './wati/wati.scheduler';
 import { MetaCloudClient } from './meta/meta-cloud.client';
 import { MetaPilotoService } from './meta/meta-piloto.service';
 import { MetaPilotoController } from './meta/meta-piloto.controller';
+import { MetaRecepcionController } from './meta/meta-recepcion.controller';
+import { MetaRecepcionService } from './meta/meta-recepcion.service';
 
 /**
  * Cimientos compartidos por todas las integraciones con terceros.
@@ -42,12 +44,14 @@ import { MetaPilotoController } from './meta/meta-piloto.controller';
   // Nest resuelve por orden de registro, así que las rutas concretas van antes
   // que las que tienen comodín.
   controllers: [
+    MetaRecepcionController,
     MetaPilotoController,
     AutomaticosWebController,
     NotificacionesController,
     IntegracionesController,
   ],
   providers: [
+    MetaRecepcionService,
     MetaCloudClient,
     MetaPilotoService,
     AutomaticosWebService,
