@@ -209,3 +209,23 @@ Pasaron ocho pruebas de empresas/invitaciones, TypeScript web y ESLint. La regre
 La web se compiló remotamente con tipos y se desplegó en la misma máquina `683d195da310e8`, con la imagen `registry.fly.io/grafoprint-staging-web@sha256:31ffa14299e1d369b2f973be9f97c56aaa382dd2c6980a03df4c3709fd8de373`. Los controles de Fly aprobaron y `/api/health` respondió `200` con `status: ok`. No se modificaron API, workers, base de datos ni tamaños. Se eliminó el builder temporal `fly-builder-lilac-sound-6923` después del despliegue.
 
 En Chrome se renovó una vez la invitación de Gráfica Demo y apareció «Compartir el enlace manualmente». El botón notificó «Enlace copiado» y, al pulsar «Actualizar» en la ficha, la opción se conservó. Abrir la URL mostrada llevó a «Activá tu acceso», con empresa, rol administrador y correo ficticio correctos, comprobados también visualmente. Lucas eligió y envió personalmente la contraseña, y confirmó su ingreso. Se verificó en la aplicación `admin@grafoprint-demo.example.invalid`, «Gráfica Demo — Staging · Administrador» y Trial; la pantalla de suscripción mostró activa y cobro no configurado. No se solicitó ni guardó su contraseña, no se registró el token en estos documentos y no se envió correo.
+
+## Correcciones de la primera prueba funcional de empresa — 25 de septiembre
+
+El commit `5c388e01234f` agrega el alta de plantas desde Nueva máquina y desde la ficha de maquinaria, completa la biblioteca global y corrige la disposición de Cuentas de cobro. El alta de planta conserva los campos de máquina, selecciona la planta creada y acepta planes con maquinaria o centros de costo; sigue exigiendo permiso de gestión.
+
+La migración `20260925143000_completar_biblioteca_materiales` contiene un snapshot de los 112 materiales y 720 variantes del catálogo existente. Agrega sólo claves/SKU faltantes, preserva los IDs y ajustes existentes y no instala materiales ni stock en empresas. No usa el seed destructivo de desarrollo. El ensayo remoto comprueba también que se conserve el tornillo creado por una migración anterior.
+
+Validación local aprobada: cinco pruebas de interacción del alta de planta (selección, conservación de datos, Enter sin envío del formulario padre, doble envío, conflicto y permisos), 32 pruebas de capacidades de API, TypeScript web y ESLint de los componentes modificados. Snapshot comparado con el catálogo fuente sin diferencias ni claves duplicadas. Antes del despliegue, Neon tenía 2 materiales globales, 7 variantes y la empresa demo no tenía plantas, máquinas ni materiales propios.
+
+[GitHub Actions 36152318800](https://github.com/studiocamaleon/gdi/actions/runs/36152318800) aprobó sobre `5c388e01234f`: compilaciones de backend y web con tipos, 281 migraciones, catálogo global completo con referencias existentes intactas, permisos de ejecución y ensayo de acceso HTTP. La migración se aplicó luego en Neon; lectura con el rol de aplicación confirmó 112 materiales y 720 variantes, sin crear plantas, máquinas ni materiales de la empresa demo.
+
+La API y los workers usan la imagen backend `registry.fly.io/grafoprint-staging-api@sha256:8b401da85ba89bbea1caaed14ec70f5258f553aa70a331756cb35e429b75ce19`. En Chrome se comprobó el contador de 112 materiales y el configurador del PVC espumado con sus 8 variantes; se canceló sin instalar material en la empresa.
+
+La web se compiló con chequeo de tipos en el mismo builder remoto. La primera subida falló por un error de transporte de Fly; el reintento reutilizó íntegramente la caché y publicó la imagen `registry.fly.io/grafoprint-staging-web@sha256:ecc9349b08cf9545b462a83fd61ec0b6e03db189c54c3bdb68c6ea68e348153a`. No se reinició Docker ni se aumentó memoria o tamaños.
+
+Web desplegada y saludable. Chrome confirmó el alta de `Taller de prueba — Staging` (`PLT-001`) desde Nueva máquina, selección automática y conservación del nombre y tipo ya completados. Se guardó `Router de prueba — Staging` como borrador inactivo y su ficha mostró la planta persistida; faltan los datos normales de configuración para activarla. Ambos registros sintéticos se conservaron para continuar las pruebas.
+
+Se verificó visualmente Cuentas de cobro en escritorio: texto legible a la izquierda y botón Agregar cuenta a la derecha, sin la columna vacía previa. El botón abrió Nueva cuenta y se canceló sin guardar cuentas ni saldos. No se ensayó el guardado financiero ni un viewport móvil.
+
+API, ambos workers y web conservaron una máquina cada uno, región gru y tamaños acordados. Gotenberg no se modificó. El builder temporal `fly-builder-thrumming-field-7164` se eliminó tras publicar las imágenes. No se fusionó el PR a main ni se cambiaron servicios de producción.
