@@ -65,7 +65,14 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
   imports: [
     CapacidadesEmpresaModule,
     ConfigModule.forRoot({ isGlobal: true }),
-    ScheduleModule.forRoot(),
+    ScheduleModule.forRoot({
+      // El local puede contener integraciones anteriores y notificaciones
+      // pendientes. Este opt-out no puede desactivar crons en producción.
+      cronJobs: !(
+        process.env.NODE_ENV === 'development' &&
+        process.env.GRAFO_LOCAL_DISABLE_CRON === 'true'
+      ),
+    }),
     LoggerModule.forRoot({
       pinoHttp: {
         level:
