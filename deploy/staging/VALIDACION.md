@@ -145,7 +145,7 @@ Pruebas HTTP en los dominios auxiliares y repetidas en los originales después d
 - Origen ajeno rechazado `403`.
 - Preflight de R2 con el origen exacto devuelto y origen ajeno rechazado; el origen auxiliar se eliminó al restaurar la configuración. Este chequeo no repitió multipart ni el flujo de archivos completo desde el navegador.
 - **Incidencia de primer acceso:** `/cambiar-clave` con sesión de plataforma responde `307` a `/plataforma`. `src/proxy.ts` limita esas sesiones al backoffice/plataforma; la pantalla de seguridad ofrece MFA pero no cambio de contraseña. El verificador inicial falló esa aserción; el diagnóstico posterior conservó la limitación y completó los demás chequeos. No se cambió la contraseña ni se da por aprobado ese recorrido.
-- **Recorrido Chrome pendiente:** la apertura automatizada del login protegido con Basic devolvió `ERR_BLOCKED_BY_CLIENT`, incluso tras recargar. No se desactivaron extensiones ni protecciones del navegador. Los ensayos HTTP anteriores sí usaron autenticación válida por HTTPS.
+- **Recorrido Chrome pendiente:** la apertura del login devolvió `ERR_BLOCKED_BY_CLIENT`, incluso tras recargar. Ocurrió también al abrir `/api/health` en el dominio original, que responde `200` sin Basic en el ensayo HTTP; no se identificó la causa del bloqueo del navegador. No se desactivaron extensiones ni protecciones. Los ensayos HTTP anteriores sí usaron autenticación válida por HTTPS.
 
 No se desactivó la validación TLS, no se enviaron credenciales por HTTP y no se cambiaron registros de la web comercial o correo.
 
