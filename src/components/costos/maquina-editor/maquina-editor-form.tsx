@@ -225,13 +225,15 @@ export function MaquinaEditorIdentidad({
           <div className={styles.tariffField}>
             <LabelConTooltip
               label="Tarifa / hora"
+              htmlFor="maquina-tarifa-hora"
               tooltip="Lo que cuesta una hora de esta máquina según la última planilla publicada de su centro de costo. Se edita en Centros de costo, no acá."
             />
             <Input
+              id="maquina-tarifa-hora"
               className={focus.singleBorder}
               value={
-                typeof centroSeleccionado?.ultimaTarifaTotal === "number"
-                  ? fmtTarifa.format(centroSeleccionado.ultimaTarifaTotal)
+                typeof centroSeleccionado?.ultimaTarifaPublicada === "number"
+                  ? fmtTarifa.format(centroSeleccionado.ultimaTarifaPublicada)
                   : "Sin tarifa publicada"
               }
               disabled
