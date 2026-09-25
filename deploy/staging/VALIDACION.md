@@ -229,3 +229,30 @@ Web desplegada y saludable. Chrome confirmó el alta de `Taller de prueba — St
 Se verificó visualmente Cuentas de cobro en escritorio: texto legible a la izquierda y botón Agregar cuenta a la derecha, sin la columna vacía previa. El botón abrió Nueva cuenta y se canceló sin guardar cuentas ni saldos. No se ensayó el guardado financiero ni un viewport móvil.
 
 API, ambos workers y web conservaron una máquina cada uno, región gru y tamaños acordados. Gotenberg no se modificó. El builder temporal `fly-builder-thrumming-field-7164` se eliminó tras publicar las imágenes. No se fusionó el PR a main ni se cambiaron servicios de producción.
+
+
+## Categorías comerciales, alta de centros y selector de egresos — 25 de septiembre
+
+Corrección `311cbcd274bac7fff819c584eb9a66197ba33f63`, rama `codex/fix-configuracion-staging`, propuesta en [PR #3](https://github.com/studiocamaleon/gdi/pull/3) sobre `codex/staging-infraestructura`. El PR #2 sigue sin integrar a `main`.
+
+- **Catálogo comercial:** la base tenía cero categorías y subcategorías. La migración `20260925190000_completar_catalogo_comercial` agrega las 11 categorías y 48 subcategorías de la fuente existente con sus atributos. Sólo inserta códigos faltantes; conserva IDs, configuraciones e inactivos existentes. No ejecuta seed ni crea productos de empresas.
+- **Centro de costo:** alta y edición comparten Datos generales, Gastos, Ajustes e Historial. Las horas productivas se pueden cargar antes del primer guardado. Se conserva el comportamiento existente de guardar y publicar cuando hay datos válidos; no cambian reglas ni permisos de API.
+- **Egresos:** las 35 categorías ya existían, pero la lista excedía su contenedor y se recortaba. Ahora tiene altura limitada y desplazamiento propio, con el buscador visible.
+
+Validación local: ocho pruebas aprobadas (tres del formulario de centro y cinco de categorías de egresos), TypeScript web, ESLint y sintaxis del verificador. Las pruebas del alta cubren conservación entre pestañas, envío conjunto de gastos/horas, centro no productivo y error de API sin perder el formulario. El snapshot JSON coincide con su fuente.
+
+[GitHub Actions 36166757028](https://github.com/studiocamaleon/gdi/actions/runs/36166757028) aprobó sobre ese commit: backend y web compilados con tipos, 282 migraciones sobre PostgreSQL temporal, permisos y acceso HTTP. El ensayo del catálogo modifica registros dentro de una transacción descartable y reaplica el snapshot, comprobando que conserva sus IDs y configuraciones. Este verificador no se ejecutó contra Neon persistente.
+
+Después se ejecutó `migrate.cjs` con la credencial separada de migración y destino explícito `grafoprint_staging`. Salida cero; consulta posterior confirmó 282 migraciones terminadas, 11 categorías y 48 subcategorías accesibles con el rol de aplicación.
+
+La web se compiló remotamente con tipos y se desplegó en la misma máquina `683d195da310e8`, región `gru`, 1 CPU compartida y 1 GB. Imagen: `registry.fly.io/grafoprint-staging-web@sha256:2aca392f9fcacf23d979c15ece3d43cc5855d3613ca76c1c9dc4166721d4d8b6`. Fly sufrió un timeout transitorio al cerrar el registro de la compilación; la imagen ya estaba subida y el despliegue posterior por digest terminó correctamente. Los controles de Fly y `/api/health` aprobaron. Se retiró el builder temporal `fly-builder-willow-tide-2612`.
+
+API y workers mantienen la imagen `registry.fly.io/grafoprint-staging-api@sha256:8b401da85ba89bbea1caaed14ec70f5258f553aa70a331756cb35e429b75ce19`: no hubo cambios de lógica de backend. Gotenberg, tamaños y secretos no cambiaron. No se reinició Docker ni se compiló la web localmente.
+
+Comprobación en Chrome con Gráfica Demo — Staging:
+
+1. **Nuevo producto:** las 48 opciones comerciales aparecen; se seleccionó Impresión comercial en hoja · Tarjetas. No se guardó ningún producto.
+2. **Nuevo centro:** las cuatro pestañas aparecen desde el alta. Se creó `QA — Alta completa — Staging` (`QA-ALTA-0925`) para `2026-10`, con un gasto sintético de $20.000 y 100 horas. El resumen mostró $200/hora antes de guardar. Un único guardado creó la tarifa; al consultar después el historial figuró `v1`, `publicada`, $20.000, 100 horas y $200/hora. No se necesitó completar datos ni publicar de nuevo. El registro se conserva identificado para pruebas; la planilla de septiembre del centro preexistente mantuvo $1.800.000, 120 horas y $15.000/hora.
+3. **Registrar egreso:** scroll real hasta el final de las 35 categorías, selección de Ajustes de caja y búsqueda de Alquiler comprobados. El buscador permaneció visible. Se descartó el formulario sin crear egresos (registro sigue en cero).
+
+La verificación visual se hizo en escritorio; no se ensayó un viewport móvil. No se fusionaron PR ni se cambió producción.
