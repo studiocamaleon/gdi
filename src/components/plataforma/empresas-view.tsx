@@ -25,6 +25,7 @@ import {
   type HistorialEmpresa,
   type PaginaEmpresas,
   type PlanCatalogo,
+  type ResultadoInvitacionEmpresa,
   type UsuariosEmpresa,
 } from "@/lib/plataforma-api";
 import { ActionButton } from "@/components/design-system/action-button";
@@ -442,6 +443,9 @@ function FichaEmpresa({
 }) {
   const [restaurarContrato, setRestaurarContrato] = useState(false);
   const [version, setVersion] = useState(0);
+  // El enlace sólo vive en esta ficha; el detalle de la API no devuelve tokens.
+  const [invitacionRenovada, setInvitacionRenovada] =
+    useState<ResultadoInvitacionEmpresa | null>(null);
   const [accion, setAccion] = useState<
     "bloquear" | "reactivar" | "plan" | null
   >(null);
@@ -491,10 +495,28 @@ function FichaEmpresa({
             </AlertTitle>
             <AlertDescription>{e.acceso.descripcion}</AlertDescription>
           </Alert>
-          {e.invitacionAdministrador && <InvitacionEmpresaPanel
-            tenantId={e.id} invitacion={e.invitacionAdministrador}
-            puedeEnviar={esAdmin && e.activo} onCambio={() => setVersion((v) => v + 1)}
-          />}
+          {e.invitacionAdministrador && (
+            <InvitacionEmpresaPanel
+              tenantId={e.id}
+              invitacion={e.invitacionAdministrador}
+              enlace={
+                invitacionRenovada?.tenantId === e.id &&
+                invitacionRenovada.invitacion.id ===
+                  e.invitacionAdministrador.id &&
+                invitacionRenovada.invitacion.venceEl ===
+                  e.invitacionAdministrador.venceEl &&
+                invitacionRenovada.invitacion.ultimoIntentoEl ===
+                  e.invitacionAdministrador.ultimoIntentoEl
+                  ? invitacionRenovada.invitacionUrl
+                  : undefined
+              }
+              puedeEnviar={esAdmin && e.activo}
+              onCambio={(resultado) => {
+                setInvitacionRenovada(resultado);
+                setVersion((v) => v + 1);
+              }}
+            />
+          )}
           <Tabs defaultValue="resumen">
             <div className={styles.tabScroll}>
               <TabsList variant="graphite">
