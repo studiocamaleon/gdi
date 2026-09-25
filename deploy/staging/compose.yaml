@@ -110,10 +110,17 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Inicializar .env}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:?Inicializar .env}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Inicializar .env}
+      STAGING_ACCESS_USER: ${STAGING_ACCESS_USER:?Inicializar .env}
+      STAGING_ACCESS_PASSWORD: ${STAGING_ACCESS_PASSWORD:?Inicializar .env}
+      STAGING_WEB_API_TOKEN: ${STAGING_WEB_API_TOKEN:?Inicializar .env}
     command: ['node', 'scripts/deploy/bootstrap-admin.cjs']
 
   api:
     <<: *backend
+    environment:
+      <<: *api-environment
+      STAGING_PRIVATE: 'true'
+      STAGING_WEB_API_TOKEN: ${STAGING_WEB_API_TOKEN:?Inicializar .env}
     ports: ['127.0.0.1:3101:3001']
     mem_limit: 2g
     depends_on:
@@ -156,6 +163,11 @@ services:
     environment:
       API_URL: http://api:3001/api
       MARKETING_SITE_URL: https://grafoprint.com.ar
+      STAGING_PRIVATE: 'true'
+      STAGING_WEB_ORIGIN: http://localhost:3100
+      STAGING_ACCESS_USER: ${STAGING_ACCESS_USER:?Inicializar .env}
+      STAGING_ACCESS_PASSWORD: ${STAGING_ACCESS_PASSWORD:?Inicializar .env}
+      STAGING_WEB_API_TOKEN: ${STAGING_WEB_API_TOKEN:?Inicializar .env}
     ports: ['127.0.0.1:3100:3000']
     mem_limit: 1g
     depends_on:

@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+import { configurarEntradaStaging } from './common/staging-ingress';
+import type { Express } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
@@ -34,7 +36,16 @@ async function bootstrap() {
    * variable no se confía en nadie, que es lo correcto en local.
    */
   const trustProxy = process.env.TRUST_PROXY;
-  if (trustProxy) {
+  const staging = configurarEntradaStaging(
+    app.getHttpAdapter().getInstance() as Express,
+  );
+  if (staging) {
+    app
+      .get(Logger)
+      .log(
+        'Staging restringido: IP recibida por el canal autenticado de la web.',
+      );
+  } else if (trustProxy) {
     const valor = /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy;
     const express = app.getHttpAdapter().getInstance() as unknown as {
       set: (k: string, v: unknown) => void;

@@ -8,6 +8,7 @@ kill_timeout = 120
   build-target = "backend"
 
 [env]
+  STAGING_PRIVATE = "true"
   PORT = "3001"
   HOST = "::"
   FRONTEND_URL = "https://staging.grafoprint.com.ar"

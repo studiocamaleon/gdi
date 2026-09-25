@@ -9,6 +9,8 @@ kill_timeout = 30
   build-target = "web"
 
 [env]
+  STAGING_PRIVATE = "true"
+  STAGING_WEB_ORIGIN = "https://staging.grafoprint.com.ar"
   PORT = "3000"
   HOSTNAME = "0.0.0.0"
   API_URL = "http://grafoprint-staging-api.internal:3001/api"

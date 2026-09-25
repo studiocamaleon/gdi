@@ -11,6 +11,9 @@ const content = [
   'BOOTSTRAP_ADMIN_EMAIL=admin@staging.example.invalid',
   'BOOTSTRAP_ADMIN_NAME=Administrador de ensayo',
   `BOOTSTRAP_ADMIN_PASSWORD=${secret()}`,
+  'STAGING_ACCESS_USER=ensayo',
+  `STAGING_ACCESS_PASSWORD=${secret()}`,
+  `STAGING_WEB_API_TOKEN=${secret()}`,
   '',
 ].join('\n');
 // wx: nunca reemplazar claves de una instalación ya inicializada.

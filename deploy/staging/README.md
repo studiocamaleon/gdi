@@ -6,7 +6,7 @@ La [comparación de Redis y presupuesto](./PRESUPUESTO.md) contempla Redis Cloud
 
 ## Estado de las cuentas y recursos — 24 de septiembre de 2026
 
-- **Fly:** organización `Grafoprint` preparada con facturación y herramienta local autenticada. Las cinco apps de la tabla están creadas, todavía sin máquinas, imágenes desplegadas ni IP asignada. Los secretos de ejecución están cargados con `--stage` en API y ambos workers; Next y Gotenberg no reciben esas claves. No se cargó la conexión del migrador.
+- **Fly:** organización `Grafoprint` preparada con facturación y herramienta local autenticada. Las cinco apps de la tabla están creadas, todavía sin máquinas, imágenes desplegadas ni IP asignada. Los secretos de ejecución están cargados con `--stage` en API y ambos workers; Next recibe sólo las tres variables de acceso de staging. API y Next comparten una credencial interna adicional; Gotenberg no recibe claves. No se cargó la conexión del migrador.
 - **Neon:** proyecto `grafoprint-staging` y base `grafoprint_staging` en **Free**, AWS São Paulo, PostgreSQL 16. Cómputo fijo de **0,25 CU**, suspensión tras cinco minutos de inactividad. La rama `production` pertenece al proyecto exclusivo de staging. Se comprobó que la base estaba vacía y se aplicaron las **280 migraciones**. Rol `grafoprint_staging_app` creado por SQL, sin privilegios elevados ni creación de tablas; conexión agrupada y operaciones de datos verificadas. El administrador inicial y la restauración siguen pendientes. No se contrató Launch; Free no cubre el escenario continuo presupuestado.
 - **R2:** bucket `grafoprint-staging-files`, **Standard**, jurisdicción **US** y acceso público deshabilitado. Token de cuenta `grafoprint-staging-app` activo, lectura/escritura de objetos limitada a este bucket. [CORS](./r2-cors.json) configurado sólo para `https://staging.grafoprint.com.ar`. Subida y descarga firmadas, multipart de dos partes, cabeceras y rechazo de acceso anónimo comprobados contra R2 real; archivos sintéticos eliminados.
 - **Redis:** base `grafoprint-staging` en AWS São Paulo, RAM, **1 GB total = 512 MB de datos + 512 MB de réplica**, réplica en una zona y AOF cada segundo, por **USD 36/mes**. TLS activado, autenticación mutua desactivada y política `no eviction` verificada. Alertas de memoria y conexiones al 80 %. Redis **8.6.2** respondió con validación TLS normal; BullMQ procesó un trabajo sintético con reintento y eventos usando la configuración del código. Cola temporal eliminada. Carga, latencia desde Fly y recuperación siguen pendientes. El respaldo remoto aparece desactivado; AOF/réplica no sustituyen una restauración verificada.
@@ -102,8 +102,8 @@ El bootstrap no inventa planes, precios, empresas ni suscripciones. Después del
 5. Crear las cinco apps Fly en la misma organización/red. Revisar nombres, recursos y archivos `fly.*.toml`. Cargar los secretos de `runtime.env.example` en API/workers mediante el almacén de secretos de Fly. El web no necesita claves de PostgreSQL, R2 ni Meta. **No cargar credenciales de migración en procesos permanentes.**
 6. Desplegar Gotenberg; luego API y workers; finalmente Next. Las migraciones se ejecutan una sola vez, desde un entorno controlado, antes del cambio de versión. No hay `release_command` que distribuya la clave del migrador a todos los procesos.
 7. Solicitar certificados para ambos subdominios y copiar en Donweb exactamente los registros que entregue Fly. Conservar los registros de Vercel y del correo. Verificar HTTPS, cookies y redirecciones.
-8. Comprobar IP real y cadena de proxies: navegador → Fly → Next/BFF → API, y acceso directo a API/webhooks. El BFF actual no reenvía IP de cliente. Resolver ese recorrido y probar cabeceras falsificadas antes de definir `TRUST_PROXY` y abrir staging a usuarios. No usar ciegamente un número de saltos.
-9. Añadir bloqueo de indexación y acceso restringido a las pruebas; el registro público ya está apagado, pero eso por sí solo no vuelve privada una URL. Mantener accesibles los callbacks de Meta que se habiliten más adelante.
+8. Comprobar IP real desde Fly usando el canal autenticado descrito abajo. Los ensayos locales simulan la cabecera de Fly; queda comprobar que el proxy real la sobrescriba ante intentos de suplantación. No configurar `TRUST_PROXY` adicional en staging.
+9. Verificar el acceso restringido y bloqueo de indexación. Los callbacks externos están cerrados en esta etapa: cuando se implemente Meta, abrir sólo sus rutas necesarias con validación de firma/verificación y pruebas propias, sin quitar el cierre general.
 10. Completar pruebas cloud: login/MFA, empresa de ensayo, carga/descarga, PDF desde la aplicación, cola de cálculos, eventos SSE, reinicio con trabajo en curso, salud con base caída y restauración de respaldo. Medir memoria/CPU y ajustar máquinas y concurrencia.
 
 Ejemplos de despliegue para la etapa 6, **sólo con las apps, secretos y presupuesto ya preparados**, desde la raíz:
@@ -117,6 +117,26 @@ fly deploy --config deploy/staging/fly.web.toml --ha=false
 ```
 
 Si cambia un nombre, actualizar también las URLs `.internal`. Los contenedores terminan con SIGTERM para cerrar conexiones y drenar trabajos; Fly limita la espera a 300 segundos. Configurar los límites de duración y reintentos de los trabajos teniendo en cuenta ese plazo. Probar compatibilidad de la versión anterior antes de revertir una imagen; un rollback de código no deshace migraciones.
+
+## Acceso e IP en staging
+
+`STAGING_PRIVATE=true` está en los manifiestos de API y Next. La web exige una clave HTTP Basic de entrada antes del login normal, incluyendo rutas API, archivos y links públicos. Sólo `GET`/`HEAD /api/health` y `robots.txt` quedan abiertos en Next. Las respuestas llevan `X-Robots-Tag: noindex, nofollow, noarchive`; robots impide rastreo. La clave de entrada es exclusiva del ensayo y no crea ni reemplaza un usuario de Grafoprint. Se guarda fuera de Git; compartirla únicamente con quienes deban probar el entorno y rotarla al cambiar ese grupo.
+
+El navegador entra directamente por Fly, sin CDN ni otro proxy delante. Next lee `Fly-Client-IP`, exige una única IP válida y construye dos cabeceras internas para Nest: la IP y una credencial compartida. Aplica tanto al BFF como a las consultas de componentes del servidor. No copia cabeceras internas ni `X-Forwarded-For` enviadas por el navegador; tampoco entrega las claves de entrada a la API o las credenciales internas al navegador. Las solicitudes con `Origin` ajeno al origen configurado se rechazan.
+
+Nest descarta las cabeceras de proxies recibidas, autentica a Next y sólo entonces construye un `X-Forwarded-For` de un salto. Esto permite que `req.ip`, los límites de uso y las restricciones por IP reciban el cliente correcto sin confiar en una cadena arbitraria. Sólo `GET`/`HEAD /api` queda abierto para salud. Las rutas restantes, incluidos webhooks, rechazan solicitudes sin la credencial interna; los guards normales de usuario siguen vigentes después de este control. Una clave interna ausente o demasiado corta impide iniciar API. Una clave web incompleta bloquea la entrada.
+
+Archivos privados preparados en `~/.config/grafoprint/staging`:
+
+- `runtime.env`: datos/colas/archivos y secretos de la aplicación, para API/workers.
+- `api-ingress.env`: credencial adicional del canal Next → API, sólo para API.
+- `web.env`: usuario/clave de entrada y credencial del canal interno, sólo para Next.
+
+Las plantillas equivalentes de este directorio no contienen valores reales. Los tres archivos ya se importaron con `fly secrets import --stage` en las apps correspondientes; no se encendieron máquinas. La clave interna se redacta en logs, y Nest la elimina de la petición antes de entrar al resto del sistema.
+
+Compose reproduce estos controles con claves sintéticas generadas por `init-local-env.mjs`. Un `.env` de ensayo creado antes de incorporar el cierre necesita las tres variables `STAGING_ACCESS_USER`, `STAGING_ACCESS_PASSWORD` y `STAGING_WEB_API_TOKEN`: agregarlas con claves ficticias aleatorias, sin reutilizar las cloud. El verificador HTTP proporciona un `Fly-Client-IP` simulado sólo en ese Compose y comprueba rechazo de accesos, cabeceras falsas, login y cierre de sesión.
+
+La validación desde Fly debe comprobar login/MFA, cookies Secure, IP pública observada, intentos de falsificar cabeceras, SSE y descargas. Si se incorpora otro proxy público en el futuro, revisar este contrato antes de cambiar DNS. Referencias: [cabeceras de Fly](https://docs.fly.io/networking/request-headers/), [proxies de Express](https://expressjs.com/en/guide/behind-proxies/) y [Proxy de Next](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
 
 ## 4. Git, Vercel y WhatsApp
 

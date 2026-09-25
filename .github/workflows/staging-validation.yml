@@ -53,7 +53,7 @@ jobs:
           const fs = require('node:fs');
           for (const line of fs.readFileSync('deploy/staging/.env', 'utf8').split('\n')) {
             const separator = line.indexOf('=');
-            if (separator > 0 && /PASSWORD|SECRET|KEY/.test(line.slice(0, separator))) {
+            if (separator > 0 && /PASSWORD|SECRET|KEY|TOKEN/.test(line.slice(0, separator))) {
               console.log(`::add-mask::${line.slice(separator + 1)}`);
             }
           }
