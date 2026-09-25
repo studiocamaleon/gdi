@@ -1,4 +1,4 @@
-# App creada sin máquinas. Confirmar presupuesto antes de desplegar.
+# Staging activado con el presupuesto autorizado; una máquina.
 app = "grafoprint-staging-web"
 primary_region = "gru"
 kill_signal = "SIGTERM"

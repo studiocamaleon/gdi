@@ -1,4 +1,4 @@
-# Validación de staging — 24 de septiembre de 2026
+# Validación de staging — 24 y 25 de septiembre de 2026
 
 Ensayos con el Compose aislado `grafoprint-staging-local`, en la Mac y en un ejecutor temporal de GitHub, y comprobaciones posteriores contra los proveedores de staging. Todos usaron datos sintéticos. Las credenciales cloud se usaron desde la Mac y desde las máquinas Fly a través de su almacén de secretos; no se incorporaron al repositorio ni al workflow.
 
@@ -105,6 +105,9 @@ Configuración actual en Donweb, TTL 900:
 
 | Tipo | Nombre | Valor |
 | --- | --- | --- |
+| A | pruebas.grafoprint.com.ar | 66.241.125.194 |
+| AAAA | pruebas.grafoprint.com.ar | 2a09:8280:1::19a:e4e7:0 |
+| CNAME | api-pruebas.grafoprint.com.ar | rknkl93.grafoprint-staging-api.fly.dev. |
 | A | staging.grafoprint.com.ar | 66.241.125.194 |
 | AAAA | staging.grafoprint.com.ar | 2a09:8280:1::19a:e4e7:0 |
 | CNAME | api-staging.grafoprint.com.ar | rknkl93.grafoprint-staging-api.fly.dev. |
@@ -123,14 +126,35 @@ Comprobaciones adicionales del 24 de septiembre, aproximadamente 23:25–23:40 d
 - El validador Fly reconoció la web como `configured=true`/`Awaiting certificates` y luego volvió a informar ausencia de registros. También se observó `http_configured=true` después de pasar a A/AAAA. No hay aún certificado emitido. La consulta `check` puede variar entre validadores o cachés; el resultado positivo aislado no demuestra que HTTPS esté listo.
 - El diagnóstico externo recomendado por Fly, Let's Debug, informó `NoRecords` tanto antes como después del ajuste. [Resultado de la última consulta](https://letsdebug.net/staging.grafoprint.com.ar/3173274). Esta diferencia con los DNS consultados impide atribuir el problema exclusivamente a Fly o afirmar una causa definitiva.
 
-**HTTPS por los dominios propios sigue pendiente.** No se desactivó la validación TLS ni se enviaron credenciales por HTTP. La discrepancia de resolución está documentada; aún no se demostró si corresponde sólo a propagación/caché o a otro problema de DNS. Evitar eliminar/recrear solicitudes repetidamente.
+### HTTPS resuelto en los dominios originales
+
+**`staging.grafoprint.com.ar` y `api-staging.grafoprint.com.ar` quedaron Ready/active**, con certificados RSA/ECDSA de Let's Encrypt emitidos el 25 de septiembre a las 02:55 UTC y vencimiento el 24 de diciembre de 2026. Fly administra su renovación automática mientras se mantengan los DNS y la validación.
+
+Como diagnóstico se publicaron primero los DNS de `pruebas.grafoprint.com.ar` y `api-pruebas.grafoprint.com.ar`, se comprobó su resolución y sólo después se agregaron a Fly. También obtuvieron certificados. Se ensayó temporalmente el acceso con esos nombres; al confirmar la emisión para los originales, se restauraron las URLs originales en web, API, workers y CORS de R2. Los registros/certificados auxiliares permanecen como evidencia de diagnóstico; no son las direcciones de acceso.
+
+El dominio raíz pasó [Let's Debug](https://letsdebug.net/grafoprint.com.ar/3173295); el [nombre nuevo](https://letsdebug.net/pruebas.grafoprint.com.ar/3173301) resolvió sus direcciones en ese mismo servicio antes de emitirse el certificado, a diferencia del `NoRecords` de `staging`. El diagnóstico HTTP de ese instante todavía fallaba porque no había certificado; después se verificó HTTPS directamente con la validación TLS normal. La resolución de `staging` también se observó correcta desde múltiples países en What's My DNS.
+
+Estos resultados son compatibles con caché negativa de los nombres originales; no prueban cuál de los componentes la conservaba ni que crear los nombres auxiliares haya causado su desbloqueo. No fue necesario migrar el DNS global ni comprar/importar un certificado. Según [Fly](https://docs.fly.io/networking/custom-domain/#use-your-own-certificate), la importación también exige validar propiedad.
+
+Los ajustes temporales y la restauración reutilizaron las imágenes existentes y las mismas cuatro máquinas, sin compilar ni aumentar capacidad. Gotenberg conserva su configuración. R2 mantiene el bucket privado y sólo permite el origen original de staging.
+
+Pruebas HTTP en los dominios auxiliares y repetidas en los originales después de restaurar la configuración, con TLS validado:
+
+- Salud web/API `200`; acceso web/BFF sin Basic `401`; API sin credencial interna `403`.
+- Login de plataforma `201`, cookie `Secure`/`HttpOnly`/`SameSite=Lax`, pantalla de seguridad SSR `200`, contexto de plataforma `200`, logout y eliminación de cookie correctos.
+- Origen ajeno rechazado `403`.
+- Preflight de R2 con el origen exacto devuelto y origen ajeno rechazado; el origen auxiliar se eliminó al restaurar la configuración. Este chequeo no repitió multipart ni el flujo de archivos completo desde el navegador.
+- **Incidencia de primer acceso:** `/cambiar-clave` con sesión de plataforma responde `307` a `/plataforma`. `src/proxy.ts` limita esas sesiones al backoffice/plataforma; la pantalla de seguridad ofrece MFA pero no cambio de contraseña. El verificador inicial falló esa aserción; el diagnóstico posterior conservó la limitación y completó los demás chequeos. No se cambió la contraseña ni se da por aprobado ese recorrido.
+- **Recorrido Chrome pendiente:** la apertura automatizada del login protegido con Basic devolvió `ERR_BLOCKED_BY_CLIENT`, incluso tras recargar. No se desactivaron extensiones ni protecciones del navegador. Los ensayos HTTP anteriores sí usaron autenticación válida por HTTPS.
+
+No se desactivó la validación TLS, no se enviaron credenciales por HTTP y no se cambiaron registros de la web comercial o correo.
 
 Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valores predeterminados; historial de restauración de un día y notificación de gasto de USD 20. El administrador inicial existe y el login HTTP fue probado, pero Lucas todavía debe elegir su contraseña y completar MFA. El acceso privado y sus credenciales iniciales están en un archivo local fuera de Git.
 
 Orden de continuación:
 
-1. Verificar que Fly emita los dos certificados y repetir el ensayo HTTP por el dominio propio.
-2. Recorrer el acceso en Chrome. Cambiar personalmente la clave del administrador en `/cambiar-clave` y completar MFA en `/backoffice/seguridad`.
+1. Corregir y verificar el recorrido de cambio de contraseña de una sesión de plataforma; HTTPS ya funciona en los dominios originales.
+2. Recorrer el acceso en Chrome por `https://staging.grafoprint.com.ar/backoffice`. Lucas debe elegir personalmente su contraseña y completar MFA; no indicar `/cambiar-clave` hasta resolver su redirección.
 3. Preparar catálogo/plan de pruebas y una empresa ficticia; verificar archivos, PDF desde la aplicación, cálculos y eventos SSE.
 4. Medir carga, memoria, conexiones y resultados grandes; probar interrupción y recuperación de trabajos y restauración de Neon antes de usar datos reales.
 5. Al implementar WhatsApp, revisar la declaración de Redis como proveedor si recibe datos de Meta. Staging todavía no incorpora la integración directa de WhatsApp.
