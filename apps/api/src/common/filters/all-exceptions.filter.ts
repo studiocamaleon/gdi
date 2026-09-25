@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
+import { rutaLog } from '../ruta-log';
 
 /**
  * Filtro global de excepciones. Mapea errores conocidos de Prisma a códigos
@@ -40,12 +41,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = mapped.message;
     }
 
-    const where = `${req.method} ${req.url}`;
+    const where = `${req.method} ${rutaLog(req.url)}`;
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       // 5xx: error real, logueamos con stack para diagnóstico.
       this.logger.error(
         `${where} → ${status}`,
-        exception instanceof Error ? exception.stack : String(exception),
+        req.path === '/api/webhooks/whatsapp'
+          ? 'Falló el receptor de Meta; el proveedor puede reintentar.'
+          : exception instanceof Error
+            ? exception.stack
+            : String(exception),
       );
     } else {
       // 4xx: esperado (validación/negocio), log liviano.

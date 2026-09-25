@@ -660,6 +660,13 @@ model NotificacionWhatsapp {
   reservaToken String? @db.Uuid
   mensajeWebId String?
 
+  /// Cloud API: aceptar el POST no significa que el destinatario lo recibió.
+  metaWamid String? @unique
+  metaPhoneNumberId String?
+  estadoEntrega String?
+  estadoEntregaEl DateTime?
+  metaErrorCodigo String?
+
   intentos Int     @default(0)
   /// Por qué se descartó o falló. Es lo que se muestra en el log.
   motivo   String?
@@ -6427,6 +6434,10 @@ model WebhookWhatsappCrudo {
   wamid         String?
   /// phone_number_id del value.metadata: la clave de ruteo a tenant.
   phoneNumberId String?
+  /// Cuenta del envelope: necesaria para eventos de plantillas sin número.
+  wabaId        String?
+  /// Huella del evento completo, no sólo del mensaje: sent/read son distintos.
+  dedupClave    String? @unique
   /// El `value` crudo del webhook, tal como llegó.
   payload       Json
   procesado     Boolean  @default(false)

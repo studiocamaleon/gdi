@@ -11,6 +11,15 @@ export function configurarEntradaStaging(express: Express): boolean {
   }
   const digest = (value: string) => createHash('sha256').update(value).digest();
   const expected = digest(token);
+  const metaHabilitado = process.env.STAGING_META_WEBHOOK_ENABLED === 'true';
+  if (
+    metaHabilitado &&
+    (!process.env.META_APP_SECRET || !process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN)
+  ) {
+    throw new Error(
+      'El webhook de Meta exige META_APP_SECRET y WHATSAPP_WEBHOOK_VERIFY_TOKEN.',
+    );
+  }
   // Sólo se conserva UN salto, creado abajo después de autenticar la web.
   // Nunca se entrega a Express una cadena X-Forwarded-For recibida del público.
   express.set('trust proxy', 1);
@@ -31,6 +40,16 @@ export function configurarEntradaStaging(express: Express): boolean {
     delete req.headers['x-grafoprint-web-token'];
     delete req.headers['x-grafoprint-client-ip'];
     if (['GET', 'HEAD'].includes(req.method) && req.path === '/api') {
+      next();
+      return;
+    }
+    // Excepción exacta y opt-in. El controller verifica challenge/firma sobre
+    // rawBody. No se abren otros webhooks ni se confía en cabeceras del cliente.
+    if (
+      metaHabilitado &&
+      ['GET', 'POST'].includes(req.method) &&
+      req.path === '/api/webhooks/whatsapp'
+    ) {
       next();
       return;
     }

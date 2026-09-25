@@ -37,6 +37,7 @@ import { ProductosServiciosModule } from './productos-servicios/productos-servic
 import { MotorUniversalModule } from './motor-universal/motor.module';
 import { McpModule } from './mcp/mcp.module';
 import { WebhooksWhatsappModule } from './webhooks-whatsapp/webhooks-whatsapp.module';
+import { rutaLog } from './common/ruta-log';
 import { OrdenesTrabajoModule } from './ordenes-trabajo/ordenes-trabajo.module';
 import { PresupuestosModule } from './presupuestos/presupuestos.module';
 import { CuponesModule } from './cupones/cupones.module';
@@ -75,6 +76,9 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
     }),
     LoggerModule.forRoot({
       pinoHttp: {
+        serializers: {
+          req: (req) => ({ ...req, url: rutaLog(String(req.url ?? '')) }),
+        },
         level:
           process.env.LOG_LEVEL ??
           (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
@@ -89,6 +93,8 @@ import { CotizacionesModule } from './cotizaciones/cotizaciones.module';
         redact: [
           'req.headers.authorization',
           'req.headers.cookie',
+          'req.headers["x-hub-signature-256"]',
+          'req.query["hub.verify_token"]',
           'req.headers["x-grafoprint-web-token"]',
           'req.headers["x-grafo-mfa-empresa"]',
           'req.headers["x-grafo-mfa-plataforma"]',
