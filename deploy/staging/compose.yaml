@@ -1,0 +1,184 @@
+name: grafoprint-staging-local
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://grafoprint_staging_app:${APP_DB_PASSWORD:?Inicializar .env}@postgres:5432/grafoprint_staging_test?schema=public
+  JWT_SECRET: ${JWT_SECRET:?Inicializar .env}
+  INTEGRACIONES_ENCRYPTION_KEY: ${INTEGRACIONES_ENCRYPTION_KEY:?Inicializar .env}
+  REDIS_URL: redis://redis:6379
+  FRONTEND_URL: http://localhost:3100
+  REGISTRO_PUBLICO_URL: http://localhost:3100
+  REGISTRO_PUBLICO_HABILITADO: 'false'
+  PADDLE_ENV: sandbox
+  AFIPSDK_ENVIRONMENT: dev
+  R2_ACCOUNT_ID: local
+  R2_ACCESS_KEY_ID: local-test-only
+  R2_SECRET_ACCESS_KEY: local-test-only
+  R2_BUCKET: grafoprint-staging-files
+  R2_ENDPOINT: http://storage:9090
+  R2_FORCE_PATH_STYLE: 'true'
+  PDF_RENDER_URL: http://pdf-renderer:3000
+  PRESUPUESTO_PDF_ASYNC: 'false'
+  PRESUPUESTO_PDF_PILOTO: 'false'
+  GRAFONEST_POOL_ID: staging-local
+  GRAFONEST_POOL_CPU: '2'
+  GRAFONEST_POOL_MEMORY_MB: '3072'
+  GRAFONEST_NORMAL_MAX_ACTIVE: '1'
+  WORKER_GEOMETRY_CONCURRENCY: '1'
+  WORKER_GEOMETRY_HEAVY_CONCURRENCY: '1'
+  WORKER_QUOTE_CONCURRENCY: '2'
+  WORKER_PDF_CONCURRENCY: '1'
+  WORKER_PDF_GLOBAL_CONCURRENCY: '1'
+
+x-backend: &backend
+  image: grafoprint-staging-api:local
+  platform: linux/amd64
+  build:
+    context: ../..
+    dockerfile: deploy/Dockerfile
+    target: backend
+  init: true
+  environment: *api-environment
+  stop_grace_period: 5m
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: staging_local_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Inicializar .env}
+      POSTGRES_DB: grafoprint_staging_test
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U staging_local_admin -d grafoprint_staging_test']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Simulación local, sin datos reales ni conexión con Cloudflare.
+  storage:
+    image: adobe/s3mock:5.1.0
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: grafoprint-staging-files
+    mem_limit: 768m
+
+  pdf-renderer:
+    image: gotenberg/gotenberg@sha256:f29984bd1e226bf1b93ba90af06000afa8b315853e99d27b9aaa41b93f15c769
+    command:
+      - gotenberg
+      - --chromium-auto-start
+      - --chromium-max-concurrency=1
+      - --chromium-max-queue-size=8
+      - --chromium-disable-javascript
+      - --chromium-deny-public-ips
+      - --chromium-deny-private-ips
+      - --api-body-limit=8MB
+      - --api-disable-download-from
+      - --webhook-disable
+      - --libreoffice-disable-routes
+      - --pdfengines-disable-routes
+    mem_limit: 1g
+
+  # Herramientas con credencial de migrador: nunca se hereda en API/workers.
+  database-tools:
+    <<: *backend
+    profiles: ['tools']
+    environment:
+      DEPLOY_DATABASE_NAME: grafoprint_staging_test
+      MIGRATE_DATABASE_URL: postgresql://grafoprint_migrator:${POSTGRES_PASSWORD:?Inicializar .env}@postgres:5432/grafoprint_staging_test?schema=public
+      APP_DATABASE_URL: postgresql://grafoprint_staging_app:${APP_DB_PASSWORD:?Inicializar .env}@postgres:5432/grafoprint_staging_test?schema=public
+    command: ['node', 'scripts/deploy/migrate.cjs']
+
+  bootstrap:
+    <<: *backend
+    profiles: ['tools']
+    environment:
+      DATABASE_URL: postgresql://grafoprint_staging_app:${APP_DB_PASSWORD:?Inicializar .env}@postgres:5432/grafoprint_staging_test?schema=public
+      DEPLOY_DATABASE_NAME: grafoprint_staging_test
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?Inicializar .env}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:?Inicializar .env}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Inicializar .env}
+      STAGING_ACCESS_USER: ${STAGING_ACCESS_USER:?Inicializar .env}
+      STAGING_ACCESS_PASSWORD: ${STAGING_ACCESS_PASSWORD:?Inicializar .env}
+      STAGING_WEB_API_TOKEN: ${STAGING_WEB_API_TOKEN:?Inicializar .env}
+    command: ['node', 'scripts/deploy/bootstrap-admin.cjs']
+
+  api:
+    <<: *backend
+    environment:
+      <<: *api-environment
+      STAGING_PRIVATE: 'true'
+      STAGING_WEB_API_TOKEN: ${STAGING_WEB_API_TOKEN:?Inicializar .env}
+    ports: ['127.0.0.1:3101:3001']
+    mem_limit: 2g
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      storage: { condition: service_started }
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3001/api',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 6s
+      start_period: 30s
+      retries: 10
+
+  worker:
+    <<: *backend
+    command: ['node', 'dist/src/workers/worker-main.js']
+    mem_limit: 4g
+    cpus: 2
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker-pdf:
+    <<: *backend
+    command: ['node', 'dist/src/documentos-pdf/documentos-worker-main.js']
+    mem_limit: 1g
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      pdf-renderer: { condition: service_started }
+
+  web:
+    image: grafoprint-staging-web:local
+    platform: linux/amd64
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      target: web
+    init: true
+    environment:
+      API_URL: http://api:3001/api
+      MARKETING_SITE_URL: https://grafoprint.com.ar
+      STAGING_PRIVATE: 'true'
+      STAGING_WEB_ORIGIN: http://localhost:3100
+      STAGING_ACCESS_USER: ${STAGING_ACCESS_USER:?Inicializar .env}
+      STAGING_ACCESS_PASSWORD: ${STAGING_ACCESS_PASSWORD:?Inicializar .env}
+      STAGING_WEB_API_TOKEN: ${STAGING_WEB_API_TOKEN:?Inicializar .env}
+    ports: ['127.0.0.1:3100:3000']
+    mem_limit: 1g
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/health',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 6s
+      start_period: 20s
+      retries: 10
+
+volumes:
+  postgres:
+  redis:

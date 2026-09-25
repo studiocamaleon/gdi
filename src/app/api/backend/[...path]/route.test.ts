@@ -18,7 +18,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal("fetch", mocks.fetch);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 function llamar(path: string, method = "POST", headers = {}) {
   const request = new Request(`http://localhost/api/backend/${path}`, {
     method,
@@ -95,4 +95,23 @@ it("un MFA fallido no emite confianza y sólo una revocación exitosa borra cook
     [MFA_COOKIES.tenant],
     [MFA_COOKIES.plataforma],
   ]);
+});
+
+it("protege el BFF de staging y sólo envía el secreto interno configurado por el servidor", async () => {
+  vi.stubEnv("STAGING_PRIVATE", "true");
+  vi.stubEnv("STAGING_ACCESS_USER", "ensayo");
+  vi.stubEnv("STAGING_ACCESS_PASSWORD", "clave-ficticia-de-staging-123456");
+  vi.stubEnv("STAGING_WEB_API_TOKEN", "secreto-interno-del-servidor-12345678");
+  expect((await llamar("auth/login")).status).toBe(401);
+  expect(mocks.fetch).not.toHaveBeenCalled();
+  mocks.fetch.mockResolvedValue(new Response("{}"));
+  const authorization = `Basic ${Buffer.from("ensayo:clave-ficticia-de-staging-123456").toString("base64")}`;
+  const response = await llamar("auth/login", "POST", { authorization, "fly-client-ip":"203.0.113.25", "x-forwarded-for":"8.8.8.8", "x-grafoprint-web-token":"falso", "x-grafoprint-client-ip":"1.1.1.1" });
+  expect(response.status).toBe(200);
+  const headers: Headers = mocks.fetch.mock.calls[0][1].headers;
+  expect(headers.get("x-grafoprint-web-token")).toBe("secreto-interno-del-servidor-12345678");
+  expect(headers.get("x-grafoprint-client-ip")).toBe("203.0.113.25");
+  expect(headers.has("x-forwarded-for")).toBe(false);
+  expect(headers.has("authorization")).toBe(false);
+  expect(response.headers.has("x-grafoprint-web-token")).toBe(false);
 });

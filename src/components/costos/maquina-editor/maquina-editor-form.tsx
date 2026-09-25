@@ -4,6 +4,7 @@ import focus from "@/components/design-system/field-focus.module.css";
 import { SelectField } from "@/components/design-system/select-field";
 import { HerramientasCorteEditor } from "./herramientas-corte-editor";
 import { OperacionMaquinaEditor } from "./operacion-maquina-editor";
+import { PlantaSelector } from "../planta-selector";
 
 /**
  * Cuerpo del editor de una máquina, en dos piezas que la ficha reparte en
@@ -173,8 +174,8 @@ export function MaquinaEditorIdentidad({
             />
           </div>
           <div className="flex min-w-0 flex-col gap-2">
-            <Label>Planta</Label>
-            <SelectField
+            <PlantaSelector
+              plantas={plantas}
               value={form.plantaId}
               onChange={(v) => {
                 const plantaId = v ?? "";
@@ -187,12 +188,6 @@ export function MaquinaEditorIdentidad({
                       : undefined,
                 });
               }}
-              aria-label="Planta"
-              className="w-full min-w-0"
-              options={[
-                ...(plantas.map((p) => ({ value: p.id, label: p.nombre })) ??
-                  []),
-              ]}
             />
           </div>
           <div className="flex min-w-0 flex-col gap-2">

@@ -46,6 +46,12 @@ export async function apiRequest<T>(
     }
   }
 
+  if (typeof window === "undefined" && process.env.STAGING_PRIVATE === "true") {
+    const { headers: requestHeaders } = await import("next/headers");
+    const { cabecerasBackendStaging } = await import("./staging-access");
+    cabecerasBackendStaging(await requestHeaders(), headers);
+  }
+
   let response: Response;
 
   try {
@@ -53,6 +59,10 @@ export async function apiRequest<T>(
       cache: "no-store",
       ...init,
       headers,
+      // Un redirect del API nunca debe llevar la credencial interna a otro host.
+      ...(typeof window === "undefined" && process.env.STAGING_PRIVATE === "true"
+        ? { redirect: "manual" as const }
+        : {}),
     });
   } catch {
     throw new ApiError(

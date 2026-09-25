@@ -1,0 +1,32 @@
+app = "grafoprint-staging-worker"
+primary_region = "gru"
+kill_signal = "SIGTERM"
+kill_timeout = 300
+
+[build]
+  dockerfile = "../Dockerfile"
+  build-target = "backend"
+
+[processes]
+  app = "node dist/src/workers/worker-main.js"
+
+[env]
+  FRONTEND_URL = "https://staging.grafoprint.com.ar"
+  REGISTRO_PUBLICO_URL = "https://staging.grafoprint.com.ar"
+  REGISTRO_PUBLICO_HABILITADO = "false"
+  PADDLE_ENV = "sandbox"
+  AFIPSDK_ENVIRONMENT = "dev"
+  PDF_RENDER_URL = "http://grafoprint-staging-pdf.internal:3000"
+  GRAFONEST_POOL_ID = "staging"
+  GRAFONEST_POOL_CPU = "2"
+  GRAFONEST_POOL_MEMORY_MB = "3072"
+  GRAFONEST_NORMAL_MAX_ACTIVE = "1"
+  WORKER_GEOMETRY_CONCURRENCY = "1"
+  WORKER_GEOMETRY_HEAVY_CONCURRENCY = "1"
+  WORKER_QUOTE_CONCURRENCY = "2"
+
+# Sin servicio HTTP público.
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "4gb"

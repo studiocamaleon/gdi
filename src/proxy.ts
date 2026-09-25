@@ -9,6 +9,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/session";
+import {
+  cabecerasPrivadas,
+  controlAccesoStaging,
+  stagingPrivado,
+} from "@/lib/staging-access";
 
 // Páginas de autenticación: accesibles sin sesión y, si ya hay sesión, se
 // rebota al home (no tiene sentido re-loguearse).
@@ -82,6 +87,43 @@ function tokenUsable(token: string | undefined): token is string {
 }
 
 export function proxy(request: NextRequest) {
+  // Chrome debe poder leer el ícono estático sin sesión ni desafío Basic.
+  // La excepción es sólo de lectura y sólo para esta ruta exacta de marca.
+  if (
+    ["GET", "HEAD"].includes(request.method) &&
+    request.nextUrl.pathname === "/icon.svg"
+  ) {
+    const response = NextResponse.next();
+    return stagingPrivado() ? cabecerasPrivadas(response) : response;
+  }
+  if (stagingPrivado()) {
+    const path = request.nextUrl.pathname;
+    // Las sondas no llevan credenciales; estas rutas sólo exponen salud y robots.
+    if (["GET", "HEAD"].includes(request.method) && path === "/robots.txt") {
+      return cabecerasPrivadas(
+        new NextResponse("User-agent: *\nDisallow: /\n", {
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        }),
+      );
+    }
+    if (!(["GET", "HEAD"].includes(request.method) && path === "/api/health")) {
+      const denied = controlAccesoStaging(request.headers);
+      if (denied) return cabecerasPrivadas(denied);
+    }
+    return cabecerasPrivadas(rutearSesion(request));
+  }
+  return rutearSesion(request);
+}
+
+function rutearSesion(request: NextRequest) {
+  // El control de staging cubre también API y archivos. El ruteo de sesión no.
+  if (
+    /^\/(?:api(?:\/|$)|_next(?:\/|$)|favicon\.ico$|brand(?:\/|$)|catalogo(?:\/|$))/.test(
+      request.nextUrl.pathname,
+    )
+  ) {
+    return NextResponse.next();
+  }
   const cookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   // Una cookie que no sirve se trata como si no estuviera Y se borra: dejarla
   // puesta es lo que arma el bucle en el request siguiente.
@@ -111,6 +153,11 @@ export function proxy(request: NextRequest) {
   // las mandamos a /plataforma. Sin esto, /login la rebotaba a "/"
   // y el dashboard reventaba con 401 → 500 (pantalla en blanco).
   if (token && esSesionPlataforma(token)) {
+    if (pathname === "/cambiar-clave") {
+      return NextResponse.redirect(
+        new URL("/backoffice/cambiar-clave", request.url),
+      );
+    }
     const enSuTerritorio =
       pathname === PLATAFORMA_HOME ||
       pathname.startsWith(`${PLATAFORMA_HOME}/`) ||
@@ -148,5 +195,5 @@ function limpiando(response: NextResponse, hayQueBorrar: boolean) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|brand|catalogo|api).*)"],
+  matcher: ["/:path*"],
 };

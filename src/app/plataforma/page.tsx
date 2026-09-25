@@ -36,12 +36,21 @@ export default async function PlataformaPage() {
 
   if (sinSesion) redirect("/backoffice");
   if (!datos) return <PlataformaSinAcceso />;
-  if (datos.requiereSeguridad) redirect(datos.esSesionPlataforma ? '/backoffice/seguridad' : '/backoffice');
+  if (datos.esSesionPlataforma && datos.debeCambiarPassword)
+    redirect("/backoffice/cambiar-clave");
+  if (datos.requiereSeguridad)
+    redirect(
+      datos.esSesionPlataforma ? "/backoffice/seguridad" : "/backoffice",
+    );
   return (
     <ConsolaPlataformaView
       staff={datos}
       ambiente={
-        process.env.NODE_ENV === "production" ? "produccion" : "desarrollo"
+        process.env.STAGING_PRIVATE === "true"
+          ? "staging"
+          : process.env.NODE_ENV === "production"
+            ? "produccion"
+            : "desarrollo"
       }
     />
   );

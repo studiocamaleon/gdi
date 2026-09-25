@@ -1,0 +1,44 @@
+app = "grafoprint-staging-api"
+primary_region = "gru"
+kill_signal = "SIGTERM"
+kill_timeout = 120
+
+[build]
+  dockerfile = "../Dockerfile"
+  build-target = "backend"
+
+[env]
+  STAGING_PRIVATE = "true"
+  PORT = "3001"
+  HOST = "::"
+  FRONTEND_URL = "https://staging.grafoprint.com.ar"
+  REGISTRO_PUBLICO_URL = "https://staging.grafoprint.com.ar"
+  API_PUBLIC_URL = "https://api-staging.grafoprint.com.ar"
+  REGISTRO_PUBLICO_HABILITADO = "false"
+  PADDLE_ENV = "sandbox"
+  AFIPSDK_ENVIRONMENT = "dev"
+  PDF_RENDER_URL = "http://grafoprint-staging-pdf.internal:3000"
+  PRESUPUESTO_PDF_ASYNC = "false"
+  PRESUPUESTO_PDF_PILOTO = "false"
+  GRAFONEST_POOL_ID = "staging"
+  GRAFONEST_POOL_CPU = "2"
+  GRAFONEST_POOL_MEMORY_MB = "3072"
+  GRAFONEST_NORMAL_MAX_ACTIVE = "1"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = false
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/api"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "2gb"

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { cabecerasPrivadas, controlAccesoStaging } from "@/lib/staging-access";
 
 import {
   SESSION_COOKIE_NAME,
@@ -7,6 +8,8 @@ import {
 } from "@/lib/session";
 
 export async function POST(request: Request) {
+  const denied = controlAccesoStaging(request.headers);
+  if (denied) return cabecerasPrivadas(denied);
   const body = (await request.json().catch(() => null)) as {
     token?: unknown;
   } | null;
@@ -28,7 +31,9 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const denied = controlAccesoStaging(request.headers);
+  if (denied) return cabecerasPrivadas(denied);
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE_NAME);
   return NextResponse.json({ ok: true });
