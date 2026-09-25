@@ -165,7 +165,7 @@ La evidencia cloud y sus límites se registran en VALIDACION.md; no interpretar 
 
 ### Empresa demo
 
-La empresa `Gráfica Demo — Staging` (`grafica-demo-staging`) está creada y operativa con suscripción Trial manual: 3 usuarios, 50 órdenes mensuales y 2 GB. Tiene una invitación pendiente para un correo ficticio; no se configuró correo transaccional ni se enviaron mensajes. Antes de probar el login de empresa habrá que activar ese usuario. Los primeros ensayos pueden realizarse mediante el acceso auditado de soporte de Plataforma; verificar también su salida para staff sin pertenencia a una empresa.
+La empresa `Gráfica Demo — Staging` (`grafica-demo-staging`) está creada y operativa con suscripción Trial manual: 3 usuarios, 50 órdenes mensuales y 2 GB. Lucas activó su administrador ficticio `admin@grafoprint-demo.example.invalid`, eligió personalmente la contraseña e ingresó a la aplicación; se comprobó empresa y rol Administrador en Chrome. No se configuró correo transaccional ni se enviaron mensajes. Quedan los ensayos funcionales de la empresa y la entrada/salida de soporte para staff sin pertenencia a ella.
 
 Para activar el administrador ficticio sin correo, abrir la ficha desde Empresas, pulsar «Reenviar invitación» y desplegar «Compartir el enlace manualmente». «Copiar enlace» copia la URL que acaba de generar el servidor aunque no se haya podido enviar correo. El enlace se conserva en memoria al actualizar esa ficha; al salir o recargar el navegador se descarta y hace falta renovarlo. Cada renovación invalida el anterior. No guardarlo en Git ni en documentación compartida.
 

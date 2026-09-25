@@ -176,7 +176,7 @@ Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valor
 
 Orden de continuación:
 
-1. Con la empresa ficticia creada, verificar archivos, PDF desde la aplicación, cálculos y eventos SSE; el administrador ficticio todavía no está activado.
+1. Con la empresa ficticia y su administrador activados, verificar archivos, PDF desde la aplicación, cálculos y eventos SSE.
 2. Medir carga, memoria, conexiones y resultados grandes; probar interrupción y recuperación de trabajos y restauración de Neon antes de usar datos reales.
 3. Al implementar WhatsApp, revisar la declaración de Redis como proveedor si recibe datos de Meta. Staging todavía no incorpora la integración directa de WhatsApp.
 
@@ -186,7 +186,7 @@ Las pruebas actuales validan el despliegue y componentes básicos; no acreditan 
 
 Se creó desde la interfaz autenticada «Gráfica Demo — Staging», slug `grafica-demo-staging`, ID `222fd65a-7234-4d86-9c20-be1cd646853d`. El directorio confirmó acceso operativo, plan Trial, suscripción activa/manual y cero usuarios habilitados. La ficha confirmó 3 usuarios, 50 órdenes al mes y 2 GB; facturación electrónica, WhatsApp, centro de copiado e impresión directa no incluidos. El correo elegido es sintético (`admin@grafoprint-demo.example.invalid`); la invitación está pendiente y no hay `RESEND_API_KEY` configurada en la API de staging, por lo que no se enviaron correos. No se conectó ningún medio de pago. El alta utilizó el aprovisionamiento normal y dejó la auditoría correspondiente.
 
-La empresa ya existe; no repetir el alta ante el aviso de correo sin confirmar. El staff puede iniciar un acceso de soporte desde Plataforma. El ingreso con usuario propio del tenant requiere activar su invitación; todavía no se verificaron los flujos funcionales de esa empresa.
+La empresa ya existe; no repetir el alta ante el aviso de correo sin confirmar. El staff puede iniciar un acceso de soporte desde Plataforma. La activación del administrador ficticio se completó posteriormente mediante enlace manual, como se documenta en la última sección; todavía no se verificaron los flujos funcionales de esa empresa.
 
 ## Contraste, ícono e identificación del entorno
 
@@ -208,4 +208,4 @@ Pasaron ocho pruebas de empresas/invitaciones, TypeScript web y ESLint. La regre
 
 La web se compiló remotamente con tipos y se desplegó en la misma máquina `683d195da310e8`, con la imagen `registry.fly.io/grafoprint-staging-web@sha256:31ffa14299e1d369b2f973be9f97c56aaa382dd2c6980a03df4c3709fd8de373`. Los controles de Fly aprobaron y `/api/health` respondió `200` con `status: ok`. No se modificaron API, workers, base de datos ni tamaños. Se eliminó el builder temporal `fly-builder-lilac-sound-6923` después del despliegue.
 
-En Chrome se renovó una vez la invitación de Gráfica Demo y apareció «Compartir el enlace manualmente». El botón notificó «Enlace copiado» y, al pulsar «Actualizar» en la ficha, la opción se conservó. Abrir la URL mostrada llevó a «Activá tu acceso», con empresa, rol administrador y correo ficticio correctos, comprobados también visualmente. Se dejó esa pestaña abierta para que Lucas elija y envíe personalmente la contraseña; la activación del usuario todavía está pendiente. No se registró el token en estos documentos ni se envió correo.
+En Chrome se renovó una vez la invitación de Gráfica Demo y apareció «Compartir el enlace manualmente». El botón notificó «Enlace copiado» y, al pulsar «Actualizar» en la ficha, la opción se conservó. Abrir la URL mostrada llevó a «Activá tu acceso», con empresa, rol administrador y correo ficticio correctos, comprobados también visualmente. Lucas eligió y envió personalmente la contraseña, y confirmó su ingreso. Se verificó en la aplicación `admin@grafoprint-demo.example.invalid`, «Gráfica Demo — Staging · Administrador» y Trial; la pantalla de suscripción mostró activa y cobro no configurado. No se solicitó ni guardó su contraseña, no se registró el token en estos documentos y no se envió correo.
