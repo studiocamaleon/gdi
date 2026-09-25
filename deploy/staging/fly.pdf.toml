@@ -7,7 +7,8 @@ kill_timeout = 60
   image = "gotenberg/gotenberg@sha256:f29984bd1e226bf1b93ba90af06000afa8b315853e99d27b9aaa41b93f15c769"
 
 [env]
-  API_BIND_IP = "::"
+  API_BIND_IP = "0.0.0.0"
+  TINI_SUBREAPER = "1"
   CHROMIUM_AUTO_START = "true"
   CHROMIUM_MAX_CONCURRENCY = "1"
   CHROMIUM_MAX_QUEUE_SIZE = "8"
@@ -21,6 +22,15 @@ kill_timeout = 60
   PDFENGINES_DISABLE_ROUTES = "true"
 
 # Sólo red privada IPv6. No asignar servicio/puertos públicos.
+[checks.pdf]
+  type = "http"
+  port = 3000
+  method = "GET"
+  path = "/health"
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "60s"
+
 [[vm]]
   cpu_kind = "shared"
   cpus = 1

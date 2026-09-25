@@ -1,32 +1,35 @@
 # Preparación de staging de Grafoprint
 
-Este directorio prepara el despliegue; sus archivos no crean recursos ni publican la aplicación. La web comercial sigue en Vercel desde `main`. La aplicación de trabajo y sus servicios se desplegarán por separado. No usar datos de clientes en el ensayo.
+Este directorio contiene la configuración del staging desplegado de Grafoprint. La web comercial sigue en Vercel desde `main`; la aplicación de trabajo y sus servicios funcionan por separado en Fly. Usar únicamente datos ficticios mientras se completan los ensayos.
 
-La [comparación de Redis y presupuesto](./PRESUPUESTO.md) contempla Redis Cloud Essentials con 1 GB total (512 MB para datos y 512 MB para réplica) en São Paulo y una previsión de USD 130/mes adicionales a Vercel. La suscripción Redis de USD 36/mes fue autorizada y la base está creada. El resto del presupuesto incluye supuestos y comprobaciones que faltan antes de contratar recursos pagos.
+## Estado — 24 de septiembre de 2026 (Argentina)
 
-## Estado de las cuentas y recursos — 24 de septiembre de 2026
+Lucas autorizó activar las cinco máquinas y Neon Launch a 0,25 CU, con una previsión total de **USD 150/mes**, incluido Redis, excluidos Vercel e impuestos, y hasta **USD 5** adicionales de preparación inicial. No es un límite automático de facturación. Consultar antes de aumentar tamaños o contratar extras. Ver [PRESUPUESTO.md](./PRESUPUESTO.md).
 
-- **Fly:** organización `Grafoprint` preparada con facturación y herramienta local autenticada. Las cinco apps de la tabla están creadas, todavía sin máquinas, imágenes desplegadas ni IP asignada. Los secretos de ejecución están cargados con `--stage` en API y ambos workers; Next recibe sólo las tres variables de acceso de staging. API y Next comparten una credencial interna adicional; Gotenberg no recibe claves. No se cargó la conexión del migrador.
-- **Neon:** proyecto `grafoprint-staging` y base `grafoprint_staging` en **Free**, AWS São Paulo, PostgreSQL 16. Cómputo fijo de **0,25 CU**, suspensión tras cinco minutos de inactividad. La rama `production` pertenece al proyecto exclusivo de staging. Se comprobó que la base estaba vacía y se aplicaron las **280 migraciones**. Rol `grafoprint_staging_app` creado por SQL, sin privilegios elevados ni creación de tablas; conexión agrupada y operaciones de datos verificadas. El administrador inicial y la restauración siguen pendientes. No se contrató Launch; Free no cubre el escenario continuo presupuestado.
-- **R2:** bucket `grafoprint-staging-files`, **Standard**, jurisdicción **US** y acceso público deshabilitado. Token de cuenta `grafoprint-staging-app` activo, lectura/escritura de objetos limitada a este bucket. [CORS](./r2-cors.json) configurado sólo para `https://staging.grafoprint.com.ar`. Subida y descarga firmadas, multipart de dos partes, cabeceras y rechazo de acceso anónimo comprobados contra R2 real; archivos sintéticos eliminados.
-- **Redis:** base `grafoprint-staging` en AWS São Paulo, RAM, **1 GB total = 512 MB de datos + 512 MB de réplica**, réplica en una zona y AOF cada segundo, por **USD 36/mes**. TLS activado, autenticación mutua desactivada y política `no eviction` verificada. Alertas de memoria y conexiones al 80 %. Redis **8.6.2** respondió con validación TLS normal; BullMQ procesó un trabajo sintético con reintento y eventos usando la configuración del código. Cola temporal eliminada. Carga, latencia desde Fly y recuperación siguen pendientes. El respaldo remoto aparece desactivado; AOF/réplica no sustituyen una restauración verificada.
+- **Fly:** cinco máquinas iniciadas, una por app, todas en `gru`, con los tamaños de la tabla. Backend y web compilados remotamente y desplegados desde `9e2a67c2881f`. La misma imagen backend se reutiliza en API y ambos workers. Web/API tienen IPv4 compartida e IPv6; workers y Gotenberg sólo red privada. Secretos activos: API diez, cada worker nueve, Next tres y Gotenberg ninguno. La conexión del migrador nunca se cargó en Fly. El builder temporal fue eliminado al terminar.
+- **Neon:** **Launch activo**, PostgreSQL 16 en AWS São Paulo, base `grafoprint_staging`. Cómputo actual y valor predeterminado del proyecto fijados en **0,25 CU**; suspensión tras cinco minutos, aunque los sondeos de API/workers mantienen la base activa. Ventana de restauración de **un día** y notificación de gasto de **USD 20**. La rama llamada `production` pertenece exclusivamente al proyecto de staging. Se aplicaron **280 migraciones**, sin seed. Rol de ejecución sin privilegios elevados, DDL ni acceso al historial Prisma. Administrador inicial creado; cambio de clave, MFA y ensayo de restauración pendientes.
+- **R2:** bucket `grafoprint-staging-files`, Standard, jurisdicción US, privado. Token de lectura/escritura limitado a ese bucket; CORS para el origen exacto de staging. Subida/descarga firmadas, multipart y rechazo anónimo comprobados desde Fly; objetos sintéticos eliminados.
+- **Redis:** Essentials, AWS São Paulo, **USD 36/mes**, 512 MB de datos + 512 MB de réplica en la misma zona, AOF cada segundo, TLS y `no eviction`. Alertas de memoria y conexiones al 80 %. BullMQ con reintento y eventos comprobado desde Fly con certificado TLS validado normalmente; cola sintética eliminada. Carga, failover y recuperación pendientes.
+- **DNS/HTTPS:** Donweb tiene CNAME de ambos subdominios, TXT de propiedad y CNAME para los desafíos ACME. Los resolutores públicos y una máquina Fly resuelven los registros; el emisor de certificados aún informa `Awaiting configuration`. **El acceso por los dominios propios no está habilitado hasta que HTTPS pase la verificación.**
 
-Este estado no significa que staging esté desplegado. La compilación y el arranque de API/Next, las migraciones y la autenticación HTTP directa/BFF aprobaron en GitHub; las conexiones a los tres proveedores se probaron desde la Mac con datos sintéticos. Ver [VALIDACION.md](./VALIDACION.md). Falta probar desde las máquinas Fly, recorrer la interfaz con cookies/MFA y verificar recuperación y carga. Los accesos locales están fuera del repositorio, en `~/.config/grafoprint/staging`, con directorio `0700` y archivos privados `0600`. No se reinició Docker.
+Pasaron las compilaciones con tipos, las pruebas de base/permisos y el login/BFF con cookie y pantalla SSR en GitHub. Contra Fly real pasaron salud, acceso restringido, login/logout, cookie segura, SSR, rechazo de origen ajeno y de cabeceras IP falsificadas; también PostgreSQL, Redis, R2 y un PDF real por red privada. Los ensayos HTTP usaron el hostname `.fly.dev` y no sustituyen el recorrido en navegador ni MFA. Ver [VALIDACION.md](./VALIDACION.md).
+
+Los accesos están fuera de Git, en `~/.config/grafoprint/staging`, con directorio `0700` y archivos privados `0600`. No se reinició Docker ni se compiló la web en esta Mac.
 
 ## Servicios y orden
 
-| Servicio | Propuesta | Acceso | Tamaño inicial a presupuestar |
+| Servicio | Propuesta | Acceso | Tamaño activo |
 | --- | --- | --- | --- |
 | Aplicación Next | Fly `grafoprint-staging-web`, São Paulo | `staging.grafoprint.com.ar` | 1 CPU compartida / 1 GB |
 | API Nest | Fly `grafoprint-staging-api`, São Paulo | `api-staging.grafoprint.com.ar` y red privada | 1 CPU compartida / 2 GB |
 | Worker de cálculos/entregas | Fly `grafoprint-staging-worker`, São Paulo | Redis y red privada | 2 CPU compartidas / 4 GB |
 | Worker de documentos | Fly `grafoprint-staging-worker-pdf`, São Paulo | Redis y red privada | 1 CPU compartida / 1 GB |
 | Gotenberg | Fly `grafoprint-staging-pdf`, São Paulo | Sólo red privada | 1 CPU compartida / 1 GB |
-| PostgreSQL 16 | Neon Free en São Paulo; Launch propuesto para uso continuo | TLS, rol de migración separado del rol de ejecución | 0,25 CU fijos; 280 migraciones aplicadas; medición pendiente |
-| Redis | Redis Cloud Essentials, AWS São Paulo | TCP/TLS y ensayo sintético BullMQ comprobados desde la Mac | 1 GB RAM total: 512 MB de datos y 512 MB de réplica en la misma zona |
+| PostgreSQL 16 | Neon Launch en São Paulo | TLS, rol de migración separado del rol de ejecución | 0,25 CU fijos; 280 migraciones aplicadas; medición pendiente |
+| Redis | Redis Cloud Essentials, AWS São Paulo | TCP/TLS y ensayo sintético BullMQ comprobados desde Fly | 1 GB RAM total: 512 MB de datos y 512 MB de réplica en la misma zona |
 | Archivos | R2, bucket exclusivo con jurisdicción US | Bucket privado y URLs firmadas | Consumo |
 
-Los nombres de Fly ya están reservados y sus apps no tienen máquinas. Una sola máquina por servicio es la propuesta para el ensayo inicial; no es alta disponibilidad. Los tamaños se deben contrastar con mediciones y presupuesto antes de encender servidores. Los workers no se apagan automáticamente: esperan trabajos incluso cuando no hay tráfico web. No configurar escalado automático del worker de geometría sin recalcular el presupuesto compartido del pool.
+Hay una máquina activa por servicio; no es alta disponibilidad. Los tamaños deben contrastarse con mediciones antes de ampliar las pruebas. Los workers no se apagan automáticamente: esperan trabajos incluso cuando no hay tráfico web. No configurar escalado automático del worker de geometría sin recalcular el presupuesto compartido del pool.
 
 La comprobación de salud de la API consulta PostgreSQL cada 30 segundos y el worker PDF consulta la base cada dos segundos. Presupuestar Neon activo mientras estos servicios estén encendidos. Upstash de precio fijo se evaluó, pero su plan de 1 GB limita cada solicitud a 10 MB, por debajo de algunos resultados que permite el formato actual de geometría. Ver la medición sintética y las alternativas en [PRESUPUESTO.md](./PRESUPUESTO.md).
 
@@ -85,7 +88,7 @@ Para comprobar sólo la API cuando la imagen web todavía no está disponible, e
 
 1. `node scripts/deploy/migrate.cjs`: aplica el historial existente, sin editar migraciones ni ejecutar seed. Exige `DEPLOY_DATABASE_NAME` y `MIGRATE_DATABASE_URL`; verifica el nombre y esquema de destino.
 2. `node scripts/deploy/runtime-role.cjs`: después de las migraciones, crea y comprueba un rol exclusivo de ejecución. Exige además `APP_DATABASE_URL`. Otorga acceso de datos, sin crear tablas ni leer el historial Prisma. Configura los permisos de tablas futuras para el migrador que ejecuta el comando. Repetirlo no rota contraseñas. Si encuentra un rol con privilegios elevados, membresías o propiedad de objetos, se detiene.
-3. `node scripts/deploy/bootstrap-admin.cjs`: con `DATABASE_URL` del rol de ejecución y las variables `BOOTSTRAP_ADMIN_*`, crea el primer administrador y el evento de auditoría. Repetir con el mismo administrador activo no cambia sus datos ni su contraseña. No eleva usuarios existentes ni crea un segundo administrador. La contraseña inicial debe cambiarse y el enrolamiento MFA se completa desde Plataforma.
+3. `node scripts/deploy/bootstrap-admin.cjs`: con `DATABASE_URL` del rol de ejecución y las variables `BOOTSTRAP_ADMIN_*`, crea el primer administrador y el evento de auditoría. Repetir con el mismo administrador activo no cambia sus datos ni su contraseña. No eleva usuarios existentes ni crea un segundo administrador. La contraseña inicial debe cambiarse en `/cambiar-clave` y el enrolamiento MFA se completa en `/backoffice/seguridad`. El usuario debe realizar personalmente ambos pasos. El acceso de Plataforma no redirige automáticamente al cambio de clave; abrir esa ruta explícitamente antes de completar MFA.
 
 La base y los roles son exclusivos de staging. **No crear un rol `grafo_app` antes del historial**: una migración antigua contiene concesiones para `postgres` cuando detecta ese nombre. La preparación nueva usa `grafoprint_staging_app` y mantiene intacto el historial. En Neon, crear ese rol mediante SQL (el script), no con el botón de creación de roles de la consola, que le daría membresía `neon_superuser`.
 
@@ -93,7 +96,7 @@ El bootstrap no inventa planes, precios, empresas ni suscripciones. Después del
 
 `verify-database.cjs` verifica repetición del bootstrap, rechazo de elevación, rechazo de DDL/acceso al historial y permisos sobre nuevas tablas. Sólo admite bases cuyo nombre termine en `_test`; no ejecutarlo contra la base cloud con datos de prueba persistentes.
 
-## 3. Crear recursos cloud, después de cerrar planes y costos
+## 3. Procedimiento cloud y ensayos restantes
 
 1. Confirmar organización y facturación de Fly, plan de Neon, proveedor de Redis y presupuesto total. Redis necesita comandos de BullMQ, scripts Lua, conexiones persistentes, política `noeviction` y recuperación definida. Una API REST de caché no basta. Si se agrega otro proveedor que trate datos de la integración, revisar la declaración de proveedores en Meta.
 2. Crear proyecto/base Neon PostgreSQL 16 en São Paulo. Definir retención de restauración. Obtener conexión directa de migrador, aplicar historial, crear rol de ejecución, verificarlo y hacer bootstrap. Usar conexión agrupada para la aplicación y directa para las operaciones de esquema. Presupuestar conexiones por proceso y número de máquinas; la plantilla propone cinco por cliente Prisma como punto de partida.
@@ -102,19 +105,24 @@ El bootstrap no inventa planes, precios, empresas ni suscripciones. Después del
 5. Crear las cinco apps Fly en la misma organización/red. Revisar nombres, recursos y archivos `fly.*.toml`. Cargar los secretos de `runtime.env.example` en API/workers mediante el almacén de secretos de Fly. El web no necesita claves de PostgreSQL, R2 ni Meta. **No cargar credenciales de migración en procesos permanentes.**
 6. Desplegar Gotenberg; luego API y workers; finalmente Next. Las migraciones se ejecutan una sola vez, desde un entorno controlado, antes del cambio de versión. No hay `release_command` que distribuya la clave del migrador a todos los procesos.
 7. Solicitar certificados para ambos subdominios y copiar en Donweb exactamente los registros que entregue Fly. Conservar los registros de Vercel y del correo. Verificar HTTPS, cookies y redirecciones.
-8. Comprobar IP real desde Fly usando el canal autenticado descrito abajo. Los ensayos locales simulan la cabecera de Fly; queda comprobar que el proxy real la sobrescriba ante intentos de suplantación. No configurar `TRUST_PROXY` adicional en staging.
+8. Comprobar IP real desde Fly usando el canal autenticado descrito abajo. La prueba desde Fly ya verificó que las cabeceras falsas del cliente no sustituyen la IP observada. No configurar `TRUST_PROXY` adicional en staging.
 9. Verificar el acceso restringido y bloqueo de indexación. Los callbacks externos están cerrados en esta etapa: cuando se implemente Meta, abrir sólo sus rutas necesarias con validación de firma/verificación y pruebas propias, sin quitar el cierre general.
 10. Completar pruebas cloud: login/MFA, empresa de ensayo, carga/descarga, PDF desde la aplicación, cola de cálculos, eventos SSE, reinicio con trabajo en curso, salud con base caída y restauración de respaldo. Medir memoria/CPU y ajustar máquinas y concurrencia.
 
 Ejemplos de despliegue para la etapa 6, **sólo con las apps, secretos y presupuesto ya preparados**, desde la raíz:
 
 ```sh
-fly deploy --config deploy/staging/fly.pdf.toml --ha=false
-fly deploy --config deploy/staging/fly.api.toml --ha=false
-fly deploy --config deploy/staging/fly.worker.toml --ha=false
-fly deploy --config deploy/staging/fly.worker-pdf.toml --ha=false
-fly deploy --config deploy/staging/fly.web.toml --ha=false
+GRAFO_STAGING_REV=$(git rev-parse --short=12 HEAD)
+GRAFO_STAGING_BACKEND_IMAGE="registry.fly.io/grafoprint-staging-api:staging-$GRAFO_STAGING_REV"
+fly deploy --config deploy/staging/fly.api.toml --remote-only --depot=false --build-only --push --image-label "staging-$GRAFO_STAGING_REV"
+fly deploy --config deploy/staging/fly.pdf.toml --ha=false --no-public-ips
+fly deploy --config deploy/staging/fly.api.toml --image "$GRAFO_STAGING_BACKEND_IMAGE" --ha=false
+fly deploy --config deploy/staging/fly.worker.toml --image "$GRAFO_STAGING_BACKEND_IMAGE" --ha=false --no-public-ips
+fly deploy --config deploy/staging/fly.worker-pdf.toml --image "$GRAFO_STAGING_BACKEND_IMAGE" --ha=false --no-public-ips
+fly deploy --config deploy/staging/fly.web.toml --remote-only --depot=false --ha=false
 ```
+
+Antes de reutilizar la imagen, verificar en la salida del build el tag y digest realmente publicados. Estos ejemplos usan un builder remoto de Fly y una sola compilación backend; contemplar su costo inicial y retirar sólo sus recursos temporales identificados al terminar. Comprobar una máquina por app e IPv4 compartida en las apps públicas, sin comprar direcciones dedicadas. Ver [opciones oficiales de deploy](https://fly.io/docs/flyctl/deploy/).
 
 Si cambia un nombre, actualizar también las URLs `.internal`. Los contenedores terminan con SIGTERM para cerrar conexiones y drenar trabajos; Fly limita la espera a 300 segundos. Configurar los límites de duración y reintentos de los trabajos teniendo en cuenta ese plazo. Probar compatibilidad de la versión anterior antes de revertir una imagen; un rollback de código no deshace migraciones.
 
@@ -132,11 +140,11 @@ Archivos privados preparados en `~/.config/grafoprint/staging`:
 - `api-ingress.env`: credencial adicional del canal Next → API, sólo para API.
 - `web.env`: usuario/clave de entrada y credencial del canal interno, sólo para Next.
 
-Las plantillas equivalentes de este directorio no contienen valores reales. Los tres archivos ya se importaron con `fly secrets import --stage` en las apps correspondientes; no se encendieron máquinas. La clave interna se redacta en logs, y Nest la elimina de la petición antes de entrar al resto del sistema.
+Las plantillas equivalentes de este directorio no contienen valores reales. Los tres archivos se importaron en las apps correspondientes y sus secretos están activos tras el despliegue. La clave interna se redacta en logs, y Nest la elimina de la petición antes de entrar al resto del sistema.
 
 Compose reproduce estos controles con claves sintéticas generadas por `init-local-env.mjs`. Un `.env` de ensayo creado antes de incorporar el cierre necesita las tres variables `STAGING_ACCESS_USER`, `STAGING_ACCESS_PASSWORD` y `STAGING_WEB_API_TOKEN`: agregarlas con claves ficticias aleatorias, sin reutilizar las cloud. El verificador HTTP proporciona un `Fly-Client-IP` simulado sólo en ese Compose y comprueba rechazo de accesos, cabeceras falsas, login y cierre de sesión.
 
-La validación desde Fly debe comprobar login/MFA, cookies Secure, IP pública observada, intentos de falsificar cabeceras, SSE y descargas. Si se incorpora otro proxy público en el futuro, revisar este contrato antes de cambiar DNS. Referencias: [cabeceras de Fly](https://docs.fly.io/networking/request-headers/), [proxies de Express](https://expressjs.com/en/guide/behind-proxies/) y [Proxy de Next](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
+Desde Fly ya se comprobaron login HTTP, cookies Secure, IP observada, rechazo de cabeceras falsas y descargas firmadas. Quedan el recorrido en navegador, MFA y SSE. Si se incorpora otro proxy público en el futuro, revisar este contrato antes de cambiar DNS. Referencias: [cabeceras de Fly](https://docs.fly.io/networking/request-headers/), [proxies de Express](https://expressjs.com/en/guide/behind-proxies/) y [Proxy de Next](https://nextjs.org/docs/app/api-reference/file-conventions/proxy).
 
 ## 4. Git, Vercel y WhatsApp
 
@@ -153,4 +161,4 @@ La integración directa de WhatsApp se implementa y prueba después de tener est
 - [Gotenberg: configuración](https://gotenberg.dev/docs/configuration).
 - [S3Mock: emulador para pruebas](https://github.com/adobe/S3Mock).
 
-Las comprobaciones locales no validan por sí solas nombres disponibles, costos, IAM de Neon, DNS, proxy de Fly ni permisos reales de R2. Esos puntos se verifican al crear el entorno cloud.
+La evidencia cloud y sus límites se registran en VALIDACION.md; no interpretar un ensayo de componentes como aprobación de todos los flujos funcionales.
