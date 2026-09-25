@@ -8,3 +8,4 @@
 - La Mac tiene 8 GB y Docker 4 GB compartidos con otros proyectos. No reiniciar Docker, aumentar su memoria ni parar otros proyectos. Compilar contenedores y web de producción en remoto.
 - Para operar staging, consultar `deploy/staging/README.md` y registrar versión y verificación en `deploy/staging/VALIDACION.md`. No fusionar los PR pendientes ni modificar producción incidentalmente.
 - Para levantar el desarrollo local, consultar `docs/desarrollo-local.md`. La configuración local anterior contiene integraciones externas; mantener desactivadas las tareas programadas durante este recorrido de desarrollo.
+- En tests, ejemplos y documentación pública usar datos ficticios. Nunca copiar teléfonos personales, credenciales ni identificadores privados de la conversación a archivos versionados. Revisar el diff antes de publicar.

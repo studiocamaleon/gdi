@@ -46,7 +46,8 @@ Para apagar el piloto: desactivar `META_WHATSAPP_PILOT_ENABLED`; para cerrar nue
 - Regresión de integraciones: 210 de 211 pruebas pasaron en la primera ejecución. El ensayo existente de seis emisores simultáneos agotó la espera con el pool de prueba limitado a dos conexiones. Repetida únicamente esa suite con ocho conexiones: 10/10 aprobadas. No se cambiaron los límites de local ni staging.
 - Tipos de frontend comprobados localmente. La compilación completa de API se trasladó al runner de GitHub por la memoria disponible de la Mac; no se reinició Docker ni se detuvieron los servicios existentes.
 - Compilación y arranque de contenedores: [ejecución de GitHub](https://github.com/studiocamaleon/gdi/actions/runs/36189193191), sobre `ee67367cc8f0`; consultar su resultado antes de desplegar.
-- La base de desarrollo y Neon staging no recibieron esta migración. El piloto no está activo. Faltan la revisión visual en la aplicación, el despliegue, los secretos de Meta, la suscripción del webhook y el ensayo real de entrega.
+- Interfaz revisada en Chrome con una vista local aislada y API simulada: estado entregado, conexión pendiente, bloqueo por plan y reintento del mismo pedido. Queda verificarla integrada en la sesión real de staging.
+- La base de desarrollo y Neon staging no recibieron esta migración. El piloto no está activo. Faltan la comprobación de la pantalla integrada en staging, el despliegue, los secretos de Meta, la suscripción del webhook y el ensayo real de entrega.
 
 ## Fuentes consultadas
 
