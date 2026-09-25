@@ -268,3 +268,22 @@ Pasaron cuatro pruebas del componente real: publicación de $15.000 frente a bor
 La web se compiló remotamente con tipos y se desplegó por digest en la misma máquina `683d195da310e8`, con los mismos recursos. Imagen: `registry.fly.io/grafoprint-staging-web@sha256:d12ca9fe457c7b1266a952eab0f0ef1ad5b921960e9c1930861956ef285f769b`. Los controles de Fly aprobaron y `/api/health` respondió `200` con `status: ok`. API, workers, Gotenberg, secretos y migraciones permanecieron sin cambios. El builder temporal `fly-builder-russet-star-6762` se eliminó al terminar.
 
 En Chrome se recargó la ficha guardada de Impresora Hibrida UV, sin cambios pendientes. Se confirmó visualmente el centro Impresion gran formato UV y «Tarifa / hora: $15.000,00», manteniendo «Sin cambios pendientes» y Guardar deshabilitado. No se volvió a guardar ni se modificó la configuración de la máquina. No se fusionaron PR ni se publicó el SaaS en producción.
+
+## Nombre del vendedor y tipografía de etiquetas — 25 de septiembre
+
+Correcciones `958e42012` y `0dc67c499`, incorporadas al [PR #3](https://github.com/studiocamaleon/gdi/pull/3).
+
+- La OT de la empresa demo no tiene un empleado vendedor asignado. La ficha usa entonces a quien la emitió, cuya firma histórica era el correo aunque el perfil actual ya tenía nombre. El detalle ahora completa ese correo con el nombre actual del usuario asociado al evento. Conserva la prioridad del vendedor asignado, las firmas de soporte/sistema y el historial original. La primera emisión se lee fuera del límite de 200 eventos; no se asigna al lector actual como vendedor ni se modifican registros.
+- La vista previa de la etiqueta mostraba cuadrados en todos los textos. El contenedor backend no tenía archivos de fuentes ni configuración Fontconfig. Se incluyen `fontconfig` y `fonts-dejavu-core`, y se elige DejaVu Sans en el SVG rasterizado. La vista previa, el PDF descargado y el raster TSPL comparten este generador. El tamaño sigue siendo 100 × 150 mm y no cambia el contenido del QR.
+
+Validación local: 12 pruebas nuevas del detalle de vendedor, 97 pruebas existentes del ciclo de la OT y 20 de impresión aprobadas; compilación backend con tipos y ESLint del nuevo spec aprobados. El ensayo `verify-label.cjs` usa datos sintéticos, sin base ni red, y comprueba texto visible con anchuras de glifos distintas y QR conservado. Ejecutado contra el servidor anterior reproduce el fallo «Falta una fuente proporcional legible en las etiquetas». Se agrega al workflow para ejecutarlo dentro de la imagen Linux final, donde ocurre el problema; en macOS las fuentes instaladas podían ocultarlo.
+
+Referencias de paquetes: [DejaVu en Debian](https://packages.debian.org/bookworm/fonts-dejavu-core) y [Fontconfig](https://packages.debian.org/bookworm/fontconfig).
+
+[GitHub Actions 36180731864](https://github.com/studiocamaleon/gdi/actions/runs/36180731864) aprobó sobre `0dc67c49983574263d063cb0ef0dab9ec2a18233`: compilaciones backend/web con tipos, prueba del raster dentro de Linux, 282 migraciones en la base temporal, permisos y ensayo HTTP completo. La imagen backend se compiló remotamente con tipos y se publicó con digest `sha256:5604c934b96cf09a53613683fae86d2738573a8dbe97e05bdf29769c23ec9f5d`. El builder `fly-builder-sunlit-woodland-5964` se eliminó al finalizar la compilación.
+
+API, worker de cálculos y worker PDF desplegados con esa misma imagen por digest en sus máquinas existentes, sin cambiar tamaños ni regiones. Fly aprobó los controles de los tres procesos. Salud API y web respondió `200`, con base disponible; el ensayo de tipografía también aprobó en la API real de Fly. La web conserva su imagen anterior, ya que ambas correcciones se resuelven en el servidor. No se cambiaron secretos, Gotenberg ni migraciones cloud.
+
+Chrome confirmó en `OT-2026-0001` el vendedor «Lucas German», avatar LG y los cinco eventos originales. La vista previa de etiqueta pasó de cuadrados vacíos a texto legible. Se descargó el PDF desde la aplicación y se renderizó con Poppler: una página de 100 × 150 mm, con nombre de empresa y acento en «Gráfica», identificación interna, número de orden, cliente, fecha, producto, cantidad `4,04 m²` y pie legibles, sin superposiciones ni recortes. La impresión física no se ensayó. La orden siguió pendiente, con su mismo importe y fecha; no se guardó ni reemitió.
+
+Por indicación de Lucas, materiales, reservas y fechas mantienen su comportamiento. No se fusionaron PR ni se cambió producción.
