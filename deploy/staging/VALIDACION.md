@@ -256,3 +256,15 @@ Comprobación en Chrome con Gráfica Demo — Staging:
 3. **Registrar egreso:** scroll real hasta el final de las 35 categorías, selección de Ajustes de caja y búsqueda de Alquiler comprobados. El buscador permaneció visible. Se descartó el formulario sin crear egresos (registro sigue en cero).
 
 La verificación visual se hizo en escritorio; no se ensayó un viewport móvil. No se fusionaron PR ni se cambió producción.
+
+## Tarifa publicada del centro en maquinaria — 25 de septiembre
+
+Corrección `e209c74d46ff2c38f42856ac962655b1d3785ca3`, incorporada al mismo [PR #3](https://github.com/studiocamaleon/gdi/pull/3). La ficha leía `ultimaTarifaTotal`, que puede pertenecer a un borrador, aunque el campo se describe como la última planilla publicada. Ahora utiliza `ultimaTarifaPublicada` y conserva «Sin tarifa publicada» cuando no existe publicación.
+
+La lectura de staging confirmó que el centro de Impresión gran formato UV tenía una tarifa publicada de septiembre de $15.000/hora y un borrador de octubre de $0/hora. El recálculo del período al crear el centro QA de la prueba anterior había generado ese borrador. La máquina Impresora Hibrida UV conservaba el vínculo correcto con su centro: no guarda una copia de la tarifa y no había sobrescrito la publicación. El problema estaba en el importe mostrado. No se cambiaron datos, reglas de cálculo, API ni migraciones para corregirlo.
+
+Pasaron cuatro pruebas del componente real: publicación de $15.000 frente a borrador posterior en cero, borrador sin publicación, máquina sin centro asignado y publicación válida de cero. También aprobaron TypeScript web y ESLint. [GitHub Actions 36170770793](https://github.com/studiocamaleon/gdi/actions/runs/36170770793) aprobó sobre ese commit las compilaciones con tipos, 282 migraciones, permisos y acceso HTTP en el entorno temporal.
+
+La web se compiló remotamente con tipos y se desplegó por digest en la misma máquina `683d195da310e8`, con los mismos recursos. Imagen: `registry.fly.io/grafoprint-staging-web@sha256:d12ca9fe457c7b1266a952eab0f0ef1ad5b921960e9c1930861956ef285f769b`. Los controles de Fly aprobaron y `/api/health` respondió `200` con `status: ok`. API, workers, Gotenberg, secretos y migraciones permanecieron sin cambios. El builder temporal `fly-builder-russet-star-6762` se eliminó al terminar.
+
+En Chrome se recargó la ficha guardada de Impresora Hibrida UV, sin cambios pendientes. Se confirmó visualmente el centro Impresion gran formato UV y «Tarifa / hora: $15.000,00», manteniendo «Sin cambios pendientes» y Guardar deshabilitado. No se volvió a guardar ni se modificó la configuración de la máquina. No se fusionaron PR ni se publicó el SaaS en producción.
