@@ -24,6 +24,34 @@ import { PrecioAplicacionesService } from '../../productos-servicios/precio/apli
 import { TipoCambioService } from '../../cotizaciones/tipo-cambio.service';
 
 const auth = { tenantId: 'empresa', userId: 'usuario' } as CurrentAuth;
+
+it.each(['maquinaria', 'centros_costo'])(
+  'permite crear una planta cuando el plan incluye sólo %s de las dos capacidades',
+  async (habilitada) => {
+    const create = jest.fn().mockResolvedValue({ id: 'nueva-planta' });
+    const toPlantaResponse = jest.fn((p: unknown) => p);
+    const servicio = new CostosCatalogoService(
+      { planta: { create } } as never,
+      { toPlantaResponse } as never,
+      {} as never,
+      capacidades(
+        ['maquinaria', 'centros_costo'].filter((c) => c !== habilitada),
+      ),
+    );
+    await expect(
+      servicio.createPlanta(auth, { codigo: ' plt-001 ', nombre: ' Taller ' }),
+    ).resolves.toEqual({ id: 'nueva-planta' });
+    expect(create).toHaveBeenCalledWith({
+      data: {
+        tenantId: 'empresa',
+        codigo: 'PLT-001',
+        nombre: 'Taller',
+        descripcion: null,
+      },
+    });
+  },
+);
+
 function capacidades(excluidas: string[]) {
   const caps = new CapacidadesEmpresaService({} as never);
   const contrato = contratoCompatible(null);
@@ -37,6 +65,25 @@ function capacidades(excluidas: string[]) {
   });
   return caps;
 }
+
+it.each(['createPlanta', 'updatePlanta', 'togglePlanta'])(
+  '%s deniega la escritura si el plan no incluye maquinaria ni centros de costo',
+  async (metodo) => {
+    const servicio = new CostosCatalogoService(
+      {} as never,
+      {} as never,
+      {} as never,
+      capacidades(['maquinaria', 'centros_costo']),
+    );
+    await expect(
+      (
+        servicio[metodo as keyof CostosCatalogoService] as (
+          ...args: unknown[]
+        ) => Promise<unknown>
+      )(auth, {}, {}),
+    ).rejects.toMatchObject({ status: 403 });
+  },
+);
 // No se proveen delegates de escritura: estas operaciones deben denegarse
 // antes de abrir transacciones, importar filas, publicar tarifas o modificar referencias.
 const entradas = [
@@ -105,15 +152,7 @@ const entradas = [
     nombre: 'CostosCatalogoService',
     crear: (caps: CapacidadesEmpresaService) =>
       new CostosCatalogoService({} as never, {} as never, {} as never, caps),
-    metodos: [
-      'createPlanta',
-      'updatePlanta',
-      'togglePlanta',
-      'createCentro',
-      'updateCentro',
-      'toggleCentro',
-      'eliminarCentro',
-    ],
+    metodos: ['createCentro', 'updateCentro', 'toggleCentro', 'eliminarCentro'],
     primerArgumento: auth,
   },
   {
@@ -364,12 +403,10 @@ describe('Configuración de catálogos por plan', () => {
             .mockResolvedValue({ estructuraProducto: 'COMPUESTO' }),
         },
         productoRecetaRevision: {
-          findFirst: jest
-            .fn()
-            .mockResolvedValue({
-              receta: { productoId: 'producto' },
-              _count: { componentes: 1 },
-            }),
+          findFirst: jest.fn().mockResolvedValue({
+            receta: { productoId: 'producto' },
+            _count: { componentes: 1 },
+          }),
         },
       } as never,
       {} as never,

@@ -14,6 +14,18 @@ async function main() {
   const table = `deploy_test_${suffix}`;
   const email = `deploy-${suffix}@example.invalid`;
   try {
+    // Una instalación nueva necesita el catálogo global, sin datos de empresas demo.
+    assert.ok(await runtime.materialPreset.count() >= 112, 'Falta la biblioteca base.');
+    assert.ok(await runtime.materialPresetVariante.count() >= 720, 'Faltan variantes del catálogo.');
+    const tornillo = await runtime.materialPreset.findUniqueOrThrow({ where: { key: 'TORNILLO_AUTOPERFORANTE_T1' } });
+    assert.equal(tornillo.id, 'cc71748e-4804-4147-b6ea-a59dd85ec091');
+    assert.equal(tornillo.orden, 901, 'La migración de catálogo no debe sobreescribir el registro existente.');
+    for (const key of ['PVC_ESPUMADO', 'PAPEL_OBRA', 'TINTA_UV_CMYK']) {
+      const material = await runtime.materialPreset.findUniqueOrThrow({ where: { key }, include: { variantes: true } });
+      assert.ok(material.variantes.length > 0, `Sin variantes: ${key}`);
+    }
+    assert.equal(await runtime.materiaPrima.count(), 0, 'El catálogo no debe instalar materiales en empresas.');
+    console.log('OK: biblioteca global completa, referencias existentes conservadas y sin materiales de tenant.');
     const [admin] = await runtime.user.findMany({ where: { rolPlataforma: 'ADMIN', activo: true } });
     assert.ok(admin?.passwordHash, 'Debe haberse ejecutado bootstrap antes del ensayo.');
     assert.equal(await bootstrapAdmin(runtime, {
