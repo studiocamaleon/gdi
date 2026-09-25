@@ -1,4 +1,4 @@
-# Propuesta: confirmar nombres y presupuesto antes de crear las apps.
+# App creada sin máquinas. Confirmar presupuesto antes de desplegar.
 app = "grafoprint-staging-web"
 primary_region = "gru"
 kill_signal = "SIGTERM"

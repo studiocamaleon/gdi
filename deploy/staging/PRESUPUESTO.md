@@ -20,7 +20,7 @@ Mantener Fly para los cinco servicios, Neon Launch PostgreSQL 16 a 0,25 CU inici
 
 | Opción | Precio base consultado | Ventaja | Condición para Grafoprint |
 | --- | --- | --- | --- |
-| Redis Cloud Essentials 1 GB RAM total, AWS São Paulo, réplica en la misma zona y AOF cada segundo | **USD 36/mes**, consola | 512 MB de datos y 512 MB de réplica; TLS y no eviction configurados | Base creada. Probar BullMQ, Lua, tamaño de resultados, conexiones y recuperación con la instancia real. |
+| Redis Cloud Essentials 1 GB RAM total, AWS São Paulo, réplica en la misma zona y AOF cada segundo | **USD 36/mes**, consola | 512 MB de datos y 512 MB de réplica; TLS y no eviction configurados | TLS y trabajo sintético BullMQ con reintento/eventos comprobados. Falta carga, tamaño de resultados, conexiones desde Fly y recuperación. |
 | Redis Cloud Essentials 1 GB, sin réplica | Requiere cotización de esa configuración | Más memoria útil con el mismo tamaño total | Quita la réplica; no es la configuración elegida. |
 | Redis Cloud Essentials 250 MB totales, con réplica y AOF cada segundo | USD 13/mes, consola | Ensayo pequeño más económico | Sólo 125 MB para datos; poco margen para geometrías y retención. |
 | Upstash Fixed 1 GB, una región primaria São Paulo, sin regiones de lectura | USD 20/mes | Persistencia y comandos sin cobro por cantidad | Límite de solicitud 10 MB; 100 GB/mes de tráfico incluido. Requiere resolver/validar los resultados grandes antes de elegirlo. |

@@ -1,6 +1,6 @@
 # Validación de staging — 24 de septiembre de 2026
 
-Ensayos con el Compose aislado `grafoprint-staging-local`, en la Mac y en un ejecutor temporal de GitHub. Sin datos reales ni credenciales de los servicios cloud de Grafoprint.
+Ensayos con el Compose aislado `grafoprint-staging-local`, en la Mac y en un ejecutor temporal de GitHub, y comprobaciones posteriores contra los proveedores de staging. Todos usaron datos sintéticos. Las credenciales cloud sólo se utilizaron desde la Mac y se cargaron en el almacén de secretos de Fly; no se incorporaron al repositorio ni al workflow.
 
 ## Comprobaciones locales
 
@@ -44,4 +44,17 @@ La prueba HTTP no recorre la interfaz en un navegador ni valida cookies, MFA, SS
 
 También quedan pendientes el documento generado desde un flujo funcional de la aplicación, los demás motores de geometría y el recorrido completo en navegador. El ensayo de PDF anterior valida el servicio de renderizado, no toda la cola de documentos.
 
-Las pruebas de DNS, TLS, IP real, SSE, CORS y firmas contra R2, recuperación de trabajos y restauración de Neon se ejecutarán en el entorno cloud. Redis ya está creado con TLS, AOF y `no eviction`, pero no se probó todavía desde la aplicación. El [presupuesto](./PRESUPUESTO.md) distingue la suscripción Redis contratada de los recursos pagos todavía propuestos. Los ensayos con servicios temporales no equivalen a validar Redis Cloud, Neon o R2 reales.
+## Conexiones a proveedores reales desde la Mac
+
+Comprobaciones realizadas el 24 de septiembre de 2026, sin desplegar máquinas Fly:
+
+- **Neon:** base vacía confirmada antes de aplicar las 280 migraciones. Rol SQL `grafoprint_staging_app` sin superusuario, creación de base/roles, `BYPASSRLS` ni permiso `CREATE` en `public`. Conexión agrupada del rol de ejecución validada. Inserción, consulta, actualización y eliminación de un usuario ficticio dentro de una transacción revertida. Lectura del historial Prisma denegada realmente, sin datos de ensayo persistentes. No se ejecutó seed ni bootstrap de administrador.
+- **Redis Cloud 8.6.2:** conexión `rediss://` con certificado validado por Node 24, sin desactivar comprobaciones TLS ni agregar una CA privada. Queue, Worker y QueueEvents de BullMQ usaron las funciones de conexión compiladas de Grafoprint. Un trabajo sintético falló deliberadamente una vez, se reintentó y produjo el resultado esperado en el segundo intento. Cola exclusiva temporal eliminada; no se borraron otras claves. Esto no prueba caída de máquina, failover ni restauración.
+- **R2:** driver compilado de Grafoprint contra bucket US privado, con token limitado a ese bucket. Subida PUT y descarga mediante firmas, HEAD de tamaño, multipart de dos partes (8 MiB + 1 KiB), exposición de `ETag`, preflight del origen de staging permitido, otro origen sin permiso CORS y descarga sin firma rechazada. Objetos temporales eliminados y su ausencia comprobada. La prueba envía las cabeceras HTTP de CORS; no sustituye el recorrido de la interfaz en navegador.
+- **Fly:** cinco apps creadas, todas con lista de máquinas vacía. API y ambos workers tienen nueve variables en estado `Staged`, sin conexión de migrador. Next y Gotenberg tienen lista de secretos vacía. Todavía no se cargaron imágenes ni se asignaron IP/DNS.
+
+Los accesos y el registro local de estas comprobaciones están en un directorio privado fuera de Git. Se cerraron los formularios temporales de captura y sus servidores locales.
+
+Siguen pendientes DNS/HTTPS de la aplicación, IP real y proxies, acceso restringido a staging, cookies/MFA/SSE desde navegador, conectividad desde Fly, carga, recuperación de trabajos y restauración de Neon. El [presupuesto](./PRESUPUESTO.md) distingue Redis contratado de las máquinas Fly y Neon Launch aún propuestos.
+
+La documentación de [TLS de Redis Cloud](https://redis.io/docs/latest/operate/rc/security/database-security/tls-ssl/) incluye autoridades privadas antiguas y una raíz pública GlobalSign. La conexión probada aceptó la cadena con el almacén normal de Node; volver a verificar dentro de la imagen desplegada sin desactivar la validación.
