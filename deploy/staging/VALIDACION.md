@@ -301,4 +301,10 @@ Token, secreto y configuración del piloto se cargaron sólo en los secretos de 
 
 Controles HTTP reales aprobados: salud 200; API general 403 sin credencial interna; backoffice web 401 sin Basic; ruta de webhook con sufijo 403; verificación incorrecta 403; POST sin firma 401; challenge correcto 200 con el texto exacto; POST con firma válida y lote vacío 200. No se crearon mensajes mediante ese lote sintético.
 
-Gráfica Demo quedó en Founder mediante la acción normal de Plataforma, con motivo de auditoría; suscripción manual/activa sin cobros. La plantilla de prueba `hello_world` figura aprobada en Meta. Pendiente: recorrido final en la sesión de empresa y confirmación real de entrega.
+Gráfica Demo quedó en Founder mediante la acción normal de Plataforma, con motivo de auditoría; suscripción manual/activa sin cobros. La plantilla de prueba `hello_world` figura aprobada en Meta.
+
+Lucas completó el ingreso normal a la empresa demo. Desde Configuración → Integraciones se envió una sola prueba a su destinatario previamente autorizado: registro creado a las 21:33:55 UTC, webhook real `delivered` a las 21:33:59 UTC, un intento y ningún error. La interfaz mostró primero «Aceptado por Meta» y, al actualizar, «Entregado · Confirmado por Meta». Se verificaron los datos persistidos y la presentación visual. No hubo reenvío ni se sustituyó la entrega por un webhook simulado.
+
+Chrome repitió el desafío Basic durante el acceso manual. El ensayo HTTP con las credenciales privadas vigentes respondió 200; se recordó que la puerta usa `grafoprint`, distinto de los usuarios de empresa/Plataforma, y se dejó un archivo privado local para copiar la clave. Lucas confirmó después su ingreso. No se rotaron contraseñas ni se desactivó la protección.
+
+La inspección del token informó vencimiento a las 23:00 UTC del 25/09 (20:00 de Argentina). Renovarlo antes de continuar pruebas posteriores. La app sigue sin publicar y no se cambiaron sus solicitudes de revisión. El ensayo verifica el número oficial de prueba, no onboarding de clientes, coexistencia ni inbox.

@@ -150,7 +150,7 @@ Desde Fly ya se comprobaron login HTTP, cookies Secure, IP observada, rechazo de
 
 `main` es la base estable y la rama de producción de la web comercial. El trabajo nuevo se propone en una rama `codex/…` y PR. Las previews de Vercel no equivalen al staging de toda la aplicación. No cambiar el proyecto Vercel para ejecutar API o workers. Definir posteriormente el flujo de promoción de imágenes entre staging y producción y ejecutar migraciones como paso explícito, con una sola ejecución a la vez.
 
-El [piloto interno de WhatsApp](../../docs/meta-cloud-piloto.md) ya tiene código y configuración en staging: envío de una plantilla de prueba, webhooks firmados y estados por empresa. El ensayo real de entrega sigue pendiente. Embedded Signup, inbox, coexistencia, administración de plantillas y notificaciones automáticas quedan para los bloques siguientes. Las credenciales de WATI u otros servicios reales no se copian automáticamente. El resultado de la revisión de Meta es una condición externa independiente del despliegue.
+El [piloto interno de WhatsApp](../../docs/meta-cloud-piloto.md) ya tiene código y configuración en staging: envío de una plantilla de prueba, webhooks firmados y estados por empresa. El ensayo real desde Grafo llegó a «Entregado», confirmado por webhook de Meta. Embedded Signup, inbox, coexistencia, administración de plantillas y notificaciones automáticas quedan para los bloques siguientes. Las credenciales de WATI u otros servicios reales no se copian automáticamente. El resultado de la revisión de Meta es una condición externa independiente del despliegue.
 
 ## Referencias consultadas
 
