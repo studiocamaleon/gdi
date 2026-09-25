@@ -101,7 +101,29 @@ Resultados HTTP contra las apps `.fly.dev` con certificados válidos:
 
 ## DNS, acceso inicial y límites pendientes
 
-Donweb contiene CNAME para `staging` y `api-staging`, TXT `_fly-ownership` y CNAME `_acme-challenge` con los valores entregados por Fly. Los DNS públicos y una máquina Fly ya resuelven los destinos y los TXT. El emisor de certificados sigue indicando `Awaiting configuration`; aún no se aprobó HTTPS por los dominios propios. La caché DNS es una hipótesis, no una causa demostrada. No se desactivó validación TLS ni se enviaron credenciales por HTTP.
+Configuración actual en Donweb, TTL 900:
+
+| Tipo | Nombre | Valor |
+| --- | --- | --- |
+| A | staging.grafoprint.com.ar | 66.241.125.194 |
+| AAAA | staging.grafoprint.com.ar | 2a09:8280:1::19a:e4e7:0 |
+| CNAME | api-staging.grafoprint.com.ar | rknkl93.grafoprint-staging-api.fly.dev. |
+| TXT | _fly-ownership.staging.grafoprint.com.ar | app-kjwj93o |
+| TXT | _fly-ownership.api-staging.grafoprint.com.ar | app-rknkl93 |
+| CNAME | _acme-challenge.staging.grafoprint.com.ar | staging.grafoprint.com.ar.kjwj93o.flydns.net. |
+| CNAME | _acme-challenge.api-staging.grafoprint.com.ar | api-staging.grafoprint.com.ar.rknkl93.flydns.net. |
+
+El CNAME inicial de la web se sustituyó por A/AAAA directos, modalidad recomendada por [Fly para conexión directa](https://docs.fly.io/networking/custom-domain/). No se cambiaron los registros de la web comercial, correo ni delegación del dominio.
+
+Comprobaciones adicionales del 24 de septiembre, aproximadamente 23:25–23:40 de Argentina:
+
+- Consultas directas a los DNS de Donweb/Hostmar respondieron con los registros actuales; también consultas con mayúsculas y minúsculas. Hubo algunos tiempos de espera TCP entre las consultas, sin respuestas con datos incorrectos.
+- La delegación consultada en `e.dns.ar` apunta a `ns1.donweb.com` y `ns2.donweb.com`. Esos nombres resuelven a las mismas direcciones que `ns3.hostmar.com` y `ns4.hostmar.com`, que figuran en la zona. No se cambió la delegación por esa diferencia de nombres.
+- Desde la máquina API, consultas explícitas a los dos DNS autoritativos y a Google devolvieron CNAME/TXT/ACME correctos. Una consulta CNAME a `1.1.1.1` dio `ENOTFOUND`, mientras otras consultas respondían correctamente. Se solicitó refresco en la herramienta pública de caché de Cloudflare para A, AAAA, CNAME, TXT de propiedad y ACME de ambos subdominios. Después, consultas DNS sobre HTTPS desde Fly devolvieron A/AAAA/CNAME correctos.
+- El validador Fly reconoció la web como `configured=true`/`Awaiting certificates` y luego volvió a informar ausencia de registros. También se observó `http_configured=true` después de pasar a A/AAAA. No hay aún certificado emitido. La consulta `check` puede variar entre validadores o cachés; el resultado positivo aislado no demuestra que HTTPS esté listo.
+- El diagnóstico externo recomendado por Fly, Let's Debug, informó `NoRecords` tanto antes como después del ajuste. [Resultado de la última consulta](https://letsdebug.net/staging.grafoprint.com.ar/3173274). Esta diferencia con los DNS consultados impide atribuir el problema exclusivamente a Fly o afirmar una causa definitiva.
+
+**HTTPS por los dominios propios sigue pendiente.** No se desactivó la validación TLS ni se enviaron credenciales por HTTP. La discrepancia de resolución está documentada; aún no se demostró si corresponde sólo a propagación/caché o a otro problema de DNS. Evitar eliminar/recrear solicitudes repetidamente.
 
 Neon Launch quedó a 0,25 CU fijos tanto en el cómputo actual como en los valores predeterminados; historial de restauración de un día y notificación de gasto de USD 20. El administrador inicial existe y el login HTTP fue probado, pero Lucas todavía debe elegir su contraseña y completar MFA. El acceso privado y sus credenciales iniciales están en un archivo local fuera de Git.
 
