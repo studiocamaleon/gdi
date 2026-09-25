@@ -49,7 +49,9 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm run prisma:generate
 FROM python:3.12-slim-bookworm@sha256:392307d22300de8b5986851a12d9176dfc0fc073e65bf6523ebd7dcbeb23564e AS backend
 # compas_nest publica su wheel Linux para Python >= 3.12 (x86_64).
 COPY --from=base /usr/local/bin/node /usr/local/bin/node
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl libgomp1 \
+# Sharp rasteriza los textos de las etiquetas mediante las fuentes del sistema.
+# Las imágenes slim no incluyen ninguna: sin ésta se imprimen cuadros vacíos.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl libgomp1 fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 node && useradd --uid 1000 --gid node --create-home node \
     && python3 -m venv /opt/grafoprint-python

@@ -63,6 +63,9 @@ jobs:
       - name: Compilar backend Linux amd64 con chequeo de tipos
         run: docker build --platform linux/amd64 --target backend -f deploy/Dockerfile -t grafoprint-staging-api:local .
 
+      - name: Comprobar tipografía de etiquetas en el contenedor final
+        run: docker run --rm grafoprint-staging-api:local node scripts/deploy/verify-label.cjs
+
       - name: Compilar aplicación Next Linux amd64 con chequeo de tipos
         run: docker build --platform linux/amd64 --target web -f deploy/Dockerfile -t grafoprint-staging-web:local .
 
