@@ -87,6 +87,15 @@ function tokenUsable(token: string | undefined): token is string {
 }
 
 export function proxy(request: NextRequest) {
+  // Chrome debe poder leer el ícono estático sin sesión ni desafío Basic.
+  // La excepción es sólo de lectura y sólo para esta ruta exacta de marca.
+  if (
+    ["GET", "HEAD"].includes(request.method) &&
+    request.nextUrl.pathname === "/icon.svg"
+  ) {
+    const response = NextResponse.next();
+    return stagingPrivado() ? cabecerasPrivadas(response) : response;
+  }
   if (stagingPrivado()) {
     const path = request.nextUrl.pathname;
     // Las sondas no llevan credenciales; estas rutas sólo exponen salud y robots.

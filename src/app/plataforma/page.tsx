@@ -46,7 +46,11 @@ export default async function PlataformaPage() {
     <ConsolaPlataformaView
       staff={datos}
       ambiente={
-        process.env.NODE_ENV === "production" ? "produccion" : "desarrollo"
+        process.env.STAGING_PRIVATE === "true"
+          ? "staging"
+          : process.env.NODE_ENV === "production"
+            ? "produccion"
+            : "desarrollo"
       }
     />
   );

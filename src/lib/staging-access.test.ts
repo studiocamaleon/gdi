@@ -16,6 +16,18 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("entrada de staging", () => {
+  it("permite leer sólo el ícono exacto sin Basic, sin abrir rutas privadas", () => {
+    for (const method of ["GET", "HEAD"]) {
+      const response = proxy(new NextRequest("https://staging.example.invalid/icon.svg?v=prueba", {method}));
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    }
+    for (const path of ["/icon.svg/privado", "/icon.svg-admin", "/backoffice"]) {
+      expect(proxy(new NextRequest(`https://staging.example.invalid${path}`)).status).toBe(401);
+    }
+    expect(proxy(new NextRequest("https://staging.example.invalid/icon.svg", {method:"POST"})).status).toBe(401);
+  });
   it.each(["/login", "/backoffice", "/api/backend/auth/login", "/api/session", "/p/token", "/_next/static/app.js", "/brand/logo.png", "/api/health/extra"])(
     "protege %s incluso sin sesión de usuario", (path) => {
       const response = proxy(new NextRequest(`https://staging.example.invalid${path}`));

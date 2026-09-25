@@ -70,6 +70,17 @@ describe("documentos legales públicos", () => {
   });
 });
 
+describe("ícono de la aplicación", () => {
+  it.each([undefined, "empresa", "plataforma", "vencida"] as const)(
+    "entrega el SVG sin redirigir con sesión %s",
+    (tipo) => {
+      const response = proxy(request("/icon.svg?version=prueba", tipo));
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    },
+  );
+});
+
 describe("cambio de clave según la sesión", () => {
   it("lleva al staff al formulario de backoffice, sin abrir rutas de tenant", () => {
     expect(

@@ -133,7 +133,7 @@ export function ConsolaPlataformaView({
   ambiente,
 }: {
   staff: StaffPlataforma;
-  ambiente: "produccion" | "desarrollo";
+  ambiente: "produccion" | "desarrollo" | "staging";
 }) {
   const [datos, setDatos] = React.useState<ConsolaPlataforma | null>(null);
   const [errorConsola, setErrorConsola] = React.useState<string | null>(null);
@@ -223,7 +223,11 @@ export function ConsolaPlataformaView({
             </div>
             <div className="cpl-env">
               <span className={`d ${ambiente === "produccion" ? "" : "dev"}`} />
-              {ambiente === "produccion" ? "Producción" : "Desarrollo"}
+              {ambiente === "produccion"
+                ? "Producción"
+                : ambiente === "staging"
+                  ? "Staging"
+                  : "Desarrollo"}
               <span className="who">Equipo Grafo</span>
             </div>
           </div>
