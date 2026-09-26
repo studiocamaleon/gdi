@@ -17,7 +17,10 @@ import {
 } from '../cripto/secretos.service';
 import { exigirAccesoConexionMeta } from './meta-conexion-acceso';
 import { ErrorConexionMeta, MetaConexionClient } from './meta-conexion.client';
-import { configuracionMetaConexion } from './meta-conexion.config';
+import {
+  configuracionMetaConexion,
+  modoAltaPermitido,
+} from './meta-conexion.config';
 import { configuracionMetaPiloto } from './meta-piloto.config';
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -29,9 +32,8 @@ const pendientes: EstadoAutorizacionMeta[] = [
 ];
 export type IntentoMeta = { id: string; estadoSecreto: string };
 
-/** Base del alta por empresa. Aún SIN controller ni registro en el módulo:
- * activar el popup antes de tener el importador listo gastaría la ventana de
- * sincronización de Meta. Ver docs/meta-conexion-empresas.md. */
+/** Autoriza el alta. Su controller mantiene el recorrido desactivado por
+ * defecto y limitado a empresas de ensayo. Sandbox nunca crea un vínculo. */
 @Injectable()
 export class MetaConexionService {
   constructor(
@@ -67,7 +69,7 @@ export class MetaConexionService {
   }
 
   private async limpiarVencidos(tenantId: string) {
-    // Limpieza al acceder; sumar barrido periódico antes de habilitar altas.
+    // Limpieza al acceder, además del barrido del worker.
     await this.prisma.metaAutorizacion.updateMany({
       where: {
         tenantId,
@@ -103,6 +105,17 @@ export class MetaConexionService {
     const estadoSecreto = randomBytes(32).toString('base64url');
     const venceEl = new Date(Date.now() + 15 * 60_000);
     const fila = await this.escribir(auth, ip, async (tx) => {
+      const canal = await tx.metaVinculo.findFirst({
+        where: {
+          tenantId: auth.tenantId,
+          estado: 'VERIFICADO',
+          altas: { some: {} },
+        },
+      });
+      if (canal)
+        throw new ConflictException(
+          'La conexión existente debe revisarse antes de iniciar otra alta.',
+        );
       // Una sola autorización pendiente por empresa, incluso en dos pestañas.
       // Crear otra cancela la anterior; cualquier respuesta en vuelo falla su CAS.
       await tx.metaAutorizacion.updateMany({
@@ -119,6 +132,7 @@ export class MetaConexionService {
           venceEl,
           appId: config.appId,
           configId: config.configId,
+          modo: config.modo ?? 'COEXISTENCIA',
           graphVersion: config.graphVersion,
         },
         select: { id: true },
@@ -131,6 +145,7 @@ export class MetaConexionService {
       appId: config.appId,
       configId: config.configId,
       graphVersion: config.graphVersion,
+      modo: config.modo ?? 'COEXISTENCIA',
     };
   }
 
@@ -145,11 +160,116 @@ export class MetaConexionService {
         venceEl: true,
         verificadaEl: true,
         falloCodigo: true,
+        modo: true,
       },
     });
     if (!fila) throw new NotFoundException();
     // Lista cerrada: ni token, ni hash, ni otros datos del intento salen al cliente.
     return fila;
+  }
+
+  /** Lectura sin efectos: nunca crea intentos ni inicia solicitudes a Meta. */
+  async estado(auth: CurrentAuth, ip: string) {
+    await exigirAccesoConexionMeta(this.prisma, auth, ip);
+    const modo = modoAltaPermitido(auth.tenantId);
+    const capacidad = modo
+      ? await this.capacidades.puedeOperar(auth.tenantId, 'whatsapp_automatico')
+      : false;
+    const vinculo = await this.prisma.metaVinculo.findFirst({
+      where: { tenantId: auth.tenantId },
+      select: {
+        id: true,
+        numero: true,
+        estado: true,
+        autorizacionId: true,
+        tokenVenceEl: true,
+        accesoDatosVenceEl: true,
+        recepcionDesdeEl: true,
+      },
+    });
+    const alta = vinculo
+      ? await this.prisma.metaAlta.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            vinculoId: vinculo.id,
+            autorizacionId: vinculo.autorizacionId,
+          },
+          select: { estado: true, falloCodigo: true, updatedAt: true },
+        })
+      : null;
+    const importacion = vinculo
+      ? await this.prisma.inboxImportacion.findFirst({
+          where: {
+            tenantId: auth.tenantId,
+            vinculoId: vinculo.id,
+            autorizacionId: vinculo.autorizacionId,
+          },
+          select: {
+            progresoInformado: true,
+            finInformadoEl: true,
+            historialRechazado: true,
+            necesitaRevision: true,
+          },
+        })
+      : null;
+    const pendientes = vinculo
+      ? await this.prisma.inboxTrabajoEvento.count({
+          where: {
+            tenantId: auth.tenantId,
+            vinculoId: vinculo.id,
+            autorizacionId: vinculo.autorizacionId,
+            estado: 'PENDIENTE',
+          },
+        })
+      : 0;
+    const revisiones = vinculo
+      ? await this.prisma.inboxTrabajoEvento.count({
+          where: {
+            tenantId: auth.tenantId,
+            vinculoId: vinculo.id,
+            autorizacionId: vinculo.autorizacionId,
+            estado: { in: ['REVISION', 'PAUSADO'] },
+          },
+        })
+      : 0;
+    const sandbox = await this.prisma.metaAutorizacion.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        userId: auth.userId,
+        modo: 'SANDBOX',
+        estado: 'VERIFICADA',
+      },
+      orderBy: { verificadaEl: 'desc' },
+      select: { verificadaEl: true },
+    });
+    return {
+      empresaId: auth.tenantId,
+      usuarioId: auth.userId,
+      modo,
+      disponible: Boolean(
+        modo &&
+        capacidad &&
+        configuracionMetaConexion() &&
+        this.secretos.disponible &&
+        (!vinculo || vinculo.estado !== 'VERIFICADO' || !alta),
+      ),
+      sandboxVerificadoEl: sandbox?.verificadaEl ?? null,
+      canal: vinculo
+        ? {
+            numero: vinculo.numero,
+            estado: vinculo.estado,
+            credencialVencida: [
+              vinculo.tokenVenceEl,
+              vinculo.accesoDatosVenceEl,
+            ].some((d) => d && d <= new Date()),
+            recepcionPreparada: Boolean(vinculo.recepcionDesdeEl),
+            alta,
+            importacion,
+            pendientes,
+            revisiones,
+          }
+        : null,
+    };
   }
 
   private async reiniciar(
@@ -190,6 +310,7 @@ export class MetaConexionService {
           appId: config.appId,
           configId: config.configId,
           graphVersion: config.graphVersion,
+          modo: config.modo ?? 'COEXISTENCIA',
         },
         data: { estado: 'CANJEANDO', canjeIniciadoEl: new Date() },
       }),
@@ -235,6 +356,7 @@ export class MetaConexionService {
           appId: config.appId,
           configId: config.configId,
           graphVersion: config.graphVersion,
+          modo: config.modo ?? 'COEXISTENCIA',
         },
         data: { estado: 'VERIFICANDO' },
       });
@@ -248,6 +370,25 @@ export class MetaConexionService {
       const token = this.secretos.descifrar(
         fila.tokenCifrado as SecretoCifrado,
       );
+      if (fila.modo === 'SANDBOX') {
+        await this.client.verificarSandbox(config, token, seleccion.wabaId);
+        await this.escribir(auth, ip, async (tx) => {
+          const cambio = await tx.metaAutorizacion.updateMany({
+            where: {
+              ...filtro,
+              estado: 'VERIFICANDO',
+              venceEl: { gt: new Date() },
+            },
+            data: {
+              estado: 'VERIFICADA',
+              tokenCifrado: Prisma.DbNull,
+              verificadaEl: new Date(),
+            },
+          });
+          if (!cambio.count) throw new ConflictException();
+        });
+        return this.consultar(auth, ip, intento);
+      }
       const activos = await this.client.verificar(config, token, seleccion);
       await this.escribir(auth, ip, async (tx) => {
         if (
@@ -309,14 +450,27 @@ export class MetaConexionService {
         };
         // Índices globales de cuenta y número evitan adjudicarlos a dos tenants,
         // aun cuando las consultas de cada uno sólo ven sus propios registros.
-        if (anterior)
-          await tx.metaVinculo.update({
-            where: { id: anterior.id, tenantId: auth.tenantId },
-            data,
-          });
-        else
-          await tx.metaVinculo.create({
-            data: { ...data, tenantId: auth.tenantId },
+        const vinculo = anterior
+          ? await tx.metaVinculo.update({
+              where: { id: anterior.id, tenantId: auth.tenantId },
+              data,
+            })
+          : await tx.metaVinculo.create({
+              data: { ...data, tenantId: auth.tenantId },
+            });
+        // Sólo las altas activadas expresamente generan trabajo. En la misma
+        // transacción: cerrar la pestaña no pierde la solicitud inicial.
+        if (modoAltaPermitido(auth.tenantId) === 'COEXISTENCIA')
+          await tx.metaAlta.create({
+            data: {
+              tenantId: auth.tenantId,
+              vinculoId: vinculo.id,
+              autorizacionId: fila.id,
+              appId: fila.appId,
+              graphVersion: fila.graphVersion,
+              // Cota conservadora: el alta de Meta ocurrió después de preparar.
+              venceEl: new Date(fila.createdAt.getTime() + 24 * 3600_000),
+            },
           });
       });
     } catch (error) {

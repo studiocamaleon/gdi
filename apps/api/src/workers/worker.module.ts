@@ -1,3 +1,5 @@
+import { MetaAltaModule } from '../integraciones/meta/meta-alta.module';
+import { MetaAltaWorker } from '../integraciones/meta/meta-alta.worker';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { PlanificacionEntregasCoreModule } from '../planificacion-entregas/planificacion-core.module';
 import { PlanificacionEntregasWorker } from '../planificacion-entregas/planificacion.worker';
@@ -21,6 +23,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
  */
 @Module({
   imports: [
+    MetaAltaModule,
     MetaInboxProcesamientoModule,
     CapacidadesEmpresaModule,
     PlanificacionEntregasCoreModule,
@@ -31,6 +34,7 @@ import { MetaInboxWorker } from '../integraciones/meta/inbox/meta-inbox.worker';
     CapacidadGeometriaModule,
   ],
   providers: [
+    MetaAltaWorker,
     MetaInboxWorker,
     GeometriaWorker,
     OpenNestService,

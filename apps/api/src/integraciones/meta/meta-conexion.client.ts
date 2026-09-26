@@ -115,17 +115,12 @@ export class MetaConexionClient {
     return this.leer(url, token);
   }
 
-  async verificar(
+  private async comprobarToken(
     config: MetaConexionConfig,
     token: string,
-    seleccion: { wabaId: string; phoneNumberId?: string },
-  ): Promise<ActivosMetaVerificados> {
-    if (
-      !token ||
-      !idValido(seleccion.wabaId) ||
-      (seleccion.phoneNumberId !== undefined &&
-        !idValido(seleccion.phoneNumberId))
-    )
+    wabaId: string,
+  ) {
+    if (!token || !idValido(wabaId))
       throw new ErrorConexionMeta('DATOS_INVALIDOS');
     const debugUrl = this.url(config, 'debug_token');
     debugUrl.searchParams.set('input_token', token);
@@ -157,12 +152,48 @@ export class MetaConexionClient {
                 (id) =>
                   (typeof id === 'string' ||
                     (typeof id === 'number' && Number.isSafeInteger(id))) &&
-                  String(id) === seleccion.wabaId,
+                  String(id) === wabaId,
               )),
         )
       )
         throw new ErrorConexionMeta('ACTIVO_NO_AUTORIZADO');
     }
+    return { tokenVenceEl, accesoDatosVenceEl };
+  }
+
+  /** Sandbox sólo acredita acceso a la cuenta. No crea un canal operativo. */
+  async verificarSandbox(
+    config: MetaConexionConfig,
+    token: string,
+    wabaId: string,
+  ) {
+    if (!config.sandboxWabaId || config.sandboxWabaId !== wabaId)
+      throw new ErrorConexionMeta('ACTIVO_NO_AUTORIZADO');
+    await this.comprobarToken(config, token, wabaId);
+    const cuenta = await this.consultar(config, token, wabaId, {
+      fields: 'id',
+    });
+    if (cuenta.id !== wabaId)
+      throw new ErrorConexionMeta('ACTIVO_NO_AUTORIZADO');
+  }
+
+  async verificar(
+    config: MetaConexionConfig,
+    token: string,
+    seleccion: { wabaId: string; phoneNumberId?: string },
+  ): Promise<ActivosMetaVerificados> {
+    if (
+      !token ||
+      !idValido(seleccion.wabaId) ||
+      (seleccion.phoneNumberId !== undefined &&
+        !idValido(seleccion.phoneNumberId))
+    )
+      throw new ErrorConexionMeta('DATOS_INVALIDOS');
+    const { tokenVenceEl, accesoDatosVenceEl } = await this.comprobarToken(
+      config,
+      token,
+      seleccion.wabaId,
+    );
     // No basta un ID recibido del navegador: comprobar su pertenencia por
     // el edge de la cuenta con ESTE token. Nunca seguir paging.next (URL libre).
     let after: string | undefined;
@@ -233,5 +264,66 @@ export class MetaConexionClient {
       tokenVenceEl,
       accesoDatosVenceEl,
     };
+  }
+  private async post(
+    config: MetaConexionConfig,
+    token: string,
+    id: string,
+    edge: 'subscribed_apps' | 'smb_app_data',
+    body: Json,
+  ) {
+    if (!idValido(id) || !token) throw new ErrorConexionMeta('DATOS_INVALIDOS');
+    try {
+      const res = await fetch(this.url(config, `${id}/${edge}`), {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(12_000),
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...body,
+          appsecret_proof: createHmac('sha256', config.appSecret)
+            .update(token)
+            .digest('hex'),
+        }),
+      });
+      const data = objeto(await res.json());
+      if (res.status >= 400 && res.status < 500 && res.status !== 429)
+        throw new ErrorConexionMeta('AUTORIZACION_RECHAZADA');
+      if (!res.ok || data.error)
+        throw new ErrorConexionMeta('RESPUESTA_INCIERTA');
+      return data;
+    } catch (e) {
+      if (e instanceof ErrorConexionMeta) throw e;
+      throw new ErrorConexionMeta('RESPUESTA_INCIERTA');
+    }
+  }
+  async suscribir(config: MetaConexionConfig, token: string, wabaId: string) {
+    if (
+      (await this.post(config, token, wabaId, 'subscribed_apps', {}))
+        .success !== true
+    )
+      throw new ErrorConexionMeta('RESPUESTA_INCIERTA');
+  }
+  async sincronizar(
+    config: MetaConexionConfig,
+    token: string,
+    phoneNumberId: string,
+    tipo: 'smb_app_state_sync' | 'history',
+  ) {
+    const data = await this.post(config, token, phoneNumberId, 'smb_app_data', {
+      messaging_product: 'whatsapp',
+      sync_type: tipo,
+    });
+    if (
+      typeof data.request_id !== 'string' ||
+      !data.request_id ||
+      data.request_id.length > 512
+    )
+      throw new ErrorConexionMeta('RESPUESTA_INCIERTA');
+    return data.request_id;
   }
 }

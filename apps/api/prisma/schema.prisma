@@ -6490,6 +6490,7 @@ model MetaAutorizacion {
   falloCodigo         String?
   appId               String
   configId            String
+  modo                String @default("COEXISTENCIA")
   graphVersion        String
   tokenCifrado        Json?
   venceEl             DateTime
@@ -6535,10 +6536,45 @@ model MetaVinculo {
   importaciones         InboxImportacion[]
   bloquesHistorial      InboxBloqueHistorial[]
   trabajos              InboxTrabajoEvento[]
+  altas                 MetaAlta[]
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   tenant                Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   @@unique([id, tenantId])
+}
+
+enum EstadoAltaMeta {
+  PENDIENTE
+  SUSCRIBIENDO
+  CONTACTOS_PENDIENTES
+  SOLICITANDO_CONTACTOS
+  HISTORIAL_PENDIENTE
+  SOLICITANDO_HISTORIAL
+  SOLICITUDES_COMPLETADAS
+  REVISION
+  PAUSADA
+}
+
+/// Cada llamada de uso único se reclama ANTES de salir a la red. No repetir
+/// un paso en vuelo tras una caída: su resultado puede haberse aplicado en Meta.
+model MetaAlta {
+  id                   String @id @default(uuid()) @db.Uuid
+  tenantId             String @db.Uuid
+  vinculoId            String @db.Uuid
+  autorizacionId       String @unique @db.Uuid
+  appId                String
+  graphVersion         String
+  estado               EstadoAltaMeta @default(PENDIENTE)
+  venceEl              DateTime
+  pasoIniciadoEl       DateTime?
+  contactosRequestId   String?
+  historialRequestId   String?
+  falloCodigo          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  vinculo              MetaVinculo @relation(fields: [vinculoId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  @@index([estado, createdAt])
+  @@index([tenantId, vinculoId])
 }
 
 enum EstadoTrabajoInbox {

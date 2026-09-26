@@ -1,3 +1,4 @@
+import { MetaAltaService } from './meta-alta.service';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { RolSistema } from '@prisma/client';
@@ -31,6 +32,10 @@ const clavesEnv = [
   'META_GRAPH_API_VERSION',
   'INTEGRACIONES_ENCRYPTION_KEY',
   'META_WHATSAPP_PILOT_ENABLED',
+  'META_CONEXION_MODO',
+  'META_SANDBOX_WABA_ID',
+  'META_CONEXION_TENANT_IDS',
+  'META_INBOX_RECEPCION_ENABLED',
 ] as const;
 const envAntes = Object.fromEntries(clavesEnv.map((k) => [k, process.env[k]]));
 const fetchOriginal = global.fetch;
@@ -39,7 +44,14 @@ let auth: CurrentAuth,
   otra: CurrentAuth,
   secretos: SecretosService,
   service: MetaConexionService;
-let client: { canjear: jest.Mock; verificar: jest.Mock };
+let altas: MetaAltaService;
+let client: {
+  canjear: jest.Mock;
+  verificar: jest.Mock;
+  verificarSandbox: jest.Mock;
+  suscribir: jest.Mock;
+  sincronizar: jest.Mock;
+};
 let capacidadPermitida: boolean;
 const tenants: string[] = [],
   usuarios: string[] = [];
@@ -122,24 +134,38 @@ beforeAll(async () => {
   secretos.onModuleInit();
 });
 beforeEach(async () => {
+  process.env.META_CONEXION_MODO = '';
+  process.env.META_SANDBOX_WABA_ID = '200001';
+  process.env.META_CONEXION_TENANT_IDS = '';
+  process.env.META_INBOX_RECEPCION_ENABLED = 'false';
   auth = await crearUsuario();
   otra = await crearUsuario();
   capacidadPermitida = true;
   client = {
+    verificarSandbox: jest.fn().mockResolvedValue(undefined),
+    suscribir: jest.fn().mockResolvedValue(undefined),
+    sincronizar: jest
+      .fn()
+      .mockImplementation((_c, _t, _p, tipo) =>
+        Promise.resolve(`solicitud-${tipo}`),
+      ),
     canjear: jest.fn().mockResolvedValue('token-sintetico-de-cliente'),
     verificar: jest.fn().mockImplementation(() => Promise.resolve(activos())),
   };
   // Capacidad controlada por el ensayo; lock real compartido con el servicio
   // de suscripciones. El resto (sesión, membresía, cifrado, unicidad) es real.
   const capacidades = {
+    puedeOperar: async () => capacidadPermitida,
     exigirOperacionTx: async (tx, tenantId) => {
       await bloquearCupoUsuarios(tx, tenantId);
       if (!capacidadPermitida) throw new ForbiddenException();
     },
   } as CapacidadesEmpresaService;
   service = new MetaConexionService(db, secretos, client as never, capacidades);
+  altas = new MetaAltaService(db, secretos, client as never, capacidades);
 });
 afterEach(async () => {
+  await db.metaAlta.deleteMany({ where: { tenantId: { in: tenants } } });
   await db.metaVinculo.deleteMany({ where: { tenantId: { in: tenants } } });
   await db.tenant.deleteMany({ where: { id: { in: tenants } } });
   await db.user.deleteMany({ where: { id: { in: usuarios } } });
@@ -174,6 +200,7 @@ it('guarda hash y token cifrado; la respuesta no contiene credenciales', async (
     'estado',
     'falloCodigo',
     'id',
+    'modo',
     'venceEl',
     'verificadaEl',
   ]);
@@ -533,4 +560,186 @@ it('un token vencido durante la comprobación nunca queda como vínculo verifica
   expect(
     await db.metaVinculo.count({ where: { tenantId: auth.tenantId } }),
   ).toBe(0);
+});
+
+async function altaRealPreparada() {
+  process.env.META_CONEXION_MODO = 'coexistencia';
+  process.env.META_CONEXION_TENANT_IDS = auth.tenantId;
+  process.env.META_INBOX_RECEPCION_ENABLED = 'true';
+  const intento = await canjear();
+  await enEmpresa(auth, () =>
+    service.verificar(auth, ip, intento, { wabaId: '200001' }),
+  );
+  return db.metaAlta.findUniqueOrThrow({
+    where: { autorizacionId: intento.id },
+  });
+}
+it('sandbox verifica autorización sin vínculo, credencial retenida ni trabajo posterior', async () => {
+  process.env.META_CONEXION_MODO = 'sandbox';
+  process.env.META_CONEXION_TENANT_IDS = auth.tenantId;
+  const intento = await canjear();
+  expect(intento.modo).toBe('SANDBOX');
+  await service.verificar(auth, ip, intento, { wabaId: '200001' });
+  expect(client.verificarSandbox).toHaveBeenCalledTimes(1);
+  expect(client.verificarSandbox).toHaveBeenCalledWith(
+    expect.objectContaining({ sandboxWabaId: '200001' }),
+    expect.any(String),
+    '200001',
+  );
+  expect(client.verificar).not.toHaveBeenCalled();
+  expect(
+    await db.metaVinculo.count({ where: { tenantId: auth.tenantId } }),
+  ).toBe(0);
+  expect(await db.metaAlta.count({ where: { tenantId: auth.tenantId } })).toBe(
+    0,
+  );
+  expect(
+    (await db.metaAutorizacion.findUniqueOrThrow({ where: { id: intento.id } }))
+      .tokenCifrado,
+  ).toBeNull();
+  const estado = await service.estado(auth, ip);
+  expect(estado.sandboxVerificadoEl).toBeInstanceOf(Date);
+  expect(estado.canal).toBeNull();
+  expect(await altas.procesarSiguiente()).toBe(false);
+  expect(client.suscribir).not.toHaveBeenCalled();
+});
+it('agenda atómicamente; tres workers no repiten suscripción, contactos ni historial', async () => {
+  const alta = await altaRealPreparada();
+  const detenida = diferida<void>();
+  client.suscribir.mockImplementationOnce(async () => {
+    const v = await db.metaVinculo.findUniqueOrThrow({
+      where: { id: alta.vinculoId },
+    });
+    expect(v.recepcionDesdeEl).toBeInstanceOf(Date);
+    await detenida.promise;
+  });
+  const primero = altas.procesarSiguiente();
+  while (!client.suscribir.mock.calls.length)
+    await new Promise((r) => setTimeout(r, 10));
+  expect(await altas.procesarSiguiente()).toBe(false);
+  detenida.resolver();
+  await primero;
+  await Promise.all([
+    altas.procesarSiguiente(),
+    altas.procesarSiguiente(),
+    altas.procesarSiguiente(),
+  ]);
+  while (await altas.procesarSiguiente()) {
+    /* agotar pasos pendientes */
+  }
+  expect(client.suscribir).toHaveBeenCalledTimes(1);
+  expect(client.sincronizar.mock.calls.map((c) => c[3])).toEqual([
+    'smb_app_state_sync',
+    'history',
+  ]);
+  expect(
+    await db.metaAlta.findUniqueOrThrow({ where: { id: alta.id } }),
+  ).toMatchObject({
+    estado: 'SOLICITUDES_COMPLETADAS',
+    contactosRequestId: 'solicitud-smb_app_state_sync',
+    historialRequestId: 'solicitud-history',
+  });
+  // Solicitudes aceptadas no inventan una importación finalizada.
+  const estado = await service.estado(auth, ip);
+  expect(estado.canal?.importacion).toBeNull();
+  expect(estado.disponible).toBe(false);
+  expect(JSON.stringify(estado)).not.toContain('token-sintetico');
+  expect((await service.estado(otra, ip)).canal).toBeNull();
+  await expect(preparar()).rejects.toThrow('conexión existente');
+});
+it.each([
+  'SUSCRIBIENDO',
+  'SOLICITANDO_CONTACTOS',
+  'SOLICITANDO_HISTORIAL',
+] as const)(
+  'un reinicio durante %s exige revisión; no vuelve a hacer POST',
+  async (estado) => {
+    const alta = await altaRealPreparada();
+    await db.metaAlta.update({
+      where: { id: alta.id },
+      data: { estado, pasoIniciadoEl: new Date(Date.now() - 180000) },
+    });
+    expect(await altas.procesarSiguiente()).toBe(true);
+    expect(await altas.procesarSiguiente()).toBe(false);
+    expect(client.suscribir).not.toHaveBeenCalled();
+    expect(client.sincronizar).not.toHaveBeenCalled();
+    expect(
+      await db.metaAlta.findUniqueOrThrow({ where: { id: alta.id } }),
+    ).toMatchObject({ estado: 'REVISION', falloCodigo: 'RESPUESTA_INCIERTA' });
+  },
+);
+it('un timeout al solicitar historial no lo solicita de nuevo', async () => {
+  const alta = await altaRealPreparada();
+  await altas.procesarSiguiente();
+  await altas.procesarSiguiente();
+  client.sincronizar.mockRejectedValueOnce(
+    new ErrorConexionMeta('RESPUESTA_INCIERTA'),
+  );
+  await altas.procesarSiguiente();
+  await altas.procesarSiguiente();
+  expect(client.sincronizar).toHaveBeenCalledTimes(2);
+  expect(
+    await db.metaAlta.findUniqueOrThrow({ where: { id: alta.id } }),
+  ).toMatchObject({ estado: 'REVISION', falloCodigo: 'RESPUESTA_INCIERTA' });
+});
+it.each([
+  'vencido',
+  'plan',
+  'desconectado',
+  'generacion',
+  'credencial',
+  'configuracion',
+  'fuera-lista',
+  'apagado',
+])('detiene el alta: %s', async (caso) => {
+  const alta = await altaRealPreparada();
+  if (caso === 'vencido')
+    await db.metaAlta.update({
+      where: { id: alta.id },
+      data: { venceEl: new Date(0) },
+    });
+  if (caso === 'plan') capacidadPermitida = false;
+  if (caso === 'desconectado')
+    await service.descartarVinculoPreparado(auth, ip);
+  if (caso === 'generacion')
+    await db.metaVinculo.update({
+      where: { id: alta.vinculoId },
+      data: { autorizacionId: randomUUID() },
+    });
+  if (caso === 'credencial')
+    await db.metaVinculo.update({
+      where: { id: alta.vinculoId },
+      data: { tokenCifrado: { invalido: true } },
+    });
+  if (caso === 'configuracion') process.env.META_APP_ID = '999001';
+  if (caso === 'fuera-lista')
+    process.env.META_CONEXION_TENANT_IDS = otra.tenantId;
+  if (caso === 'apagado') process.env.META_INBOX_RECEPCION_ENABLED = 'false';
+  try {
+    await altas.procesarSiguiente();
+  } finally {
+    process.env.META_APP_ID = '100001';
+  }
+  expect(client.suscribir).not.toHaveBeenCalled();
+  expect(client.sincronizar).not.toHaveBeenCalled();
+});
+it('desconectar durante la red no reactiva el canal ni solicita contactos', async () => {
+  const alta = await altaRealPreparada();
+  const red = diferida<void>();
+  client.suscribir.mockReturnValueOnce(red.promise);
+  const paso = altas.procesarSiguiente();
+  while (!client.suscribir.mock.calls.length)
+    await new Promise((r) => setTimeout(r, 10));
+  await service.descartarVinculoPreparado(auth, ip);
+  red.resolver();
+  await paso;
+  await altas.procesarSiguiente();
+  expect(client.sincronizar).not.toHaveBeenCalled();
+  expect(
+    await db.metaAlta.findUniqueOrThrow({ where: { id: alta.id } }),
+  ).toMatchObject({ estado: 'PAUSADA' });
+  expect(
+    (await db.metaVinculo.findUniqueOrThrow({ where: { id: alta.vinculoId } }))
+      .recepcionDesdeEl,
+  ).toBeNull();
 });

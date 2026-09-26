@@ -1,3 +1,5 @@
+import { MetaAltaModule } from './meta/meta-alta.module';
+import { MetaConexionController } from './meta/meta-conexion.controller';
 import { CapacidadesEmpresaModule } from '../suscripciones/capacidades-empresa.module';
 import { AutomaticosWebController } from './whatsapp-web/automaticos.controller';
 import { AutomaticosWebService } from './whatsapp-web/automaticos.service';
@@ -42,6 +44,7 @@ import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.mo
 @Global()
 @Module({
   imports: [
+    MetaAltaModule,
     CapacidadesEmpresaModule,
     DatosEmpresaModule,
     ClientesModule,
@@ -54,6 +57,7 @@ import { InboxTiempoRealModule } from '../inbox-tiempo-real/inbox-tiempo-real.mo
   // Nest resuelve por orden de registro, así que las rutas concretas van antes
   // que las que tienen comodín.
   controllers: [
+    MetaConexionController,
     MetaInboxController,
     MetaRecepcionController,
     MetaPilotoController,

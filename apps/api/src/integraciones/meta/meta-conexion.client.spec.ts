@@ -4,6 +4,7 @@ const config = {
   appId: '100001',
   appSecret: 'secreto-sintetico',
   configId: '100002',
+  sandboxWabaId: '200001',
   graphVersion: 'v26.0',
 };
 const token = 'token-opaco-sintetico';
@@ -233,5 +234,82 @@ it.each([
   await expect(
     new MetaConexionClient().verificar(config, token, ids),
   ).rejects.toThrow('DATOS_INVALIDOS');
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it('sandbox consulta la WABA sin comprobar ni registrar números', async () => {
+  responder(debug(), { id: seleccion.wabaId });
+  await new MetaConexionClient().verificarSandbox(
+    config,
+    token,
+    seleccion.wabaId,
+  );
+  expect(fetchMock.mock.calls.map((c) => c[0].pathname)).toEqual([
+    '/v26.0/debug_token',
+    '/v26.0/200001',
+  ]);
+});
+it('contrato de suscripción y sincronización: Bearer, POST y request_id', async () => {
+  responder(
+    { success: true },
+    { request_id: 'contactos-1' },
+    { request_id: 'historial-1' },
+  );
+  const client = new MetaConexionClient();
+  await client.suscribir(config, token, seleccion.wabaId);
+  expect(
+    await client.sincronizar(
+      config,
+      token,
+      seleccion.phoneNumberId,
+      'smb_app_state_sync',
+    ),
+  ).toBe('contactos-1');
+  expect(
+    await client.sincronizar(config, token, seleccion.phoneNumberId, 'history'),
+  ).toBe('historial-1');
+  expect(fetchMock.mock.calls.map((c) => c[0].pathname)).toEqual([
+    '/v26.0/200001/subscribed_apps',
+    '/v26.0/300001/smb_app_data',
+    '/v26.0/300001/smb_app_data',
+  ]);
+  for (const [, options] of fetchMock.mock.calls)
+    expect(options).toMatchObject({
+      method: 'POST',
+      redirect: 'error',
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({
+    messaging_product: 'whatsapp',
+    sync_type: 'history',
+    appsecret_proof: expect.stringMatching(/^[a-f0-9]{64}$/),
+  });
+});
+it.each([400, 429, 500, 200])(
+  'POST fallido %s queda incierto/rechazado sin repetirse ni filtrar errores',
+  async (status) => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'secreto-privado' } }), {
+        status,
+      }),
+    );
+    await expect(
+      new MetaConexionClient().sincronizar(
+        config,
+        token,
+        seleccion.phoneNumberId,
+        'history',
+      ),
+    ).rejects.toThrow(
+      status === 400 ? 'AUTORIZACION_RECHAZADA' : 'RESPUESTA_INCIERTA',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  },
+);
+
+it('sandbox rechaza una WABA distinta de la cuenta de ensayo configurada sin llamar a Meta', async () => {
+  await expect(
+    new MetaConexionClient().verificarSandbox(config, token, '999001'),
+  ).rejects.toThrow('ACTIVO_NO_AUTORIZADO');
   expect(fetchMock).not.toHaveBeenCalled();
 });
