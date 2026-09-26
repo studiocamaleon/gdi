@@ -739,6 +739,8 @@ model Tenant {
   integraciones                                    IntegracionTenant[]
   mensajesWhatsappRecibidos                         MensajeWhatsappRecibido[]
   revisionesInbox                                  InboxCanalRevision[]
+  autorizacionesMeta                               MetaAutorizacion[]
+  vinculoMeta                                      MetaVinculo?
   memberships                                      Membership[]
   roles                                            Rol[]
   eventosAcceso                                    EventoAcceso[]
@@ -6460,6 +6462,70 @@ model InboxCanalRevision {
   tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, wabaId, phoneNumberId])
+}
+
+enum EstadoAutorizacionMeta {
+  PREPARADA
+  CANJEANDO
+  CANJEADA
+  VERIFICANDO
+  VERIFICADA
+  CANCELADA
+  REINICIAR
+}
+
+/// Intento de Embedded Signup ligado a una sesión humana. El código de Meta
+/// nunca se persiste; el secreto del intento sólo se conserva como hash.
+model MetaAutorizacion {
+  id                  String @id @default(uuid()) @db.Uuid
+  tenantId            String @db.Uuid
+  userId              String @db.Uuid
+  sessionId           String @db.Uuid
+  membershipId        String @db.Uuid
+  estadoHash          String @unique
+  estado              EstadoAutorizacionMeta @default(PREPARADA)
+  falloCodigo         String?
+  appId               String
+  configId            String
+  graphVersion        String
+  tokenCifrado        Json?
+  venceEl             DateTime
+  canjeIniciadoEl     DateTime?
+  canjeadoEl          DateTime?
+  verificadaEl        DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  tenant              Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, sessionId, estado])
+  @@index([venceEl, estado])
+}
+
+enum EstadoVinculoMeta {
+  VERIFICADO
+  DESCONECTADO
+}
+
+/// Reserva comprobada en Graph, todavía NO es un canal operativo. Conserva
+/// la propiedad al desconectar: nunca reasignar eventos tardíos a otro tenant.
+/// La primera versión admite un número y una cuenta de mensajes por empresa.
+model MetaVinculo {
+  id                    String @id @default(uuid()) @db.Uuid
+  tenantId              String @unique @db.Uuid
+  wabaId                String @unique
+  phoneNumberId         String @unique
+  estado                EstadoVinculoMeta @default(VERIFICADO)
+  numero                String
+  nombreVerificado      String?
+  tokenCifrado          Json?
+  tokenVenceEl          DateTime?
+  accesoDatosVenceEl    DateTime?
+  autorizacionId        String @unique @db.Uuid
+  verificadoEl          DateTime
+  desconectadoEl        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  tenant                Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 }
 
 /// Proyección de mensajes ENTRANTES del piloto, sin descargar adjuntos ni
