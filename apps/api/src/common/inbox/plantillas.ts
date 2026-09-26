@@ -11,6 +11,7 @@ export type PlantillaInbox = {
   estado: string;
   formato: 'NAMED' | 'POSITIONAL';
   encabezado: string;
+  archivo?: 'image' | 'document' | null;
   cuerpo: string;
   pie: string;
   botones: { texto: string; destino: string }[];
@@ -19,9 +20,24 @@ export type PlantillaInbox = {
   version: string;
   pagina: string | null;
 };
-export type ComponenteEnvioPlantilla = {
-  type: 'header' | 'body';
-  parameters: { type: 'text'; text: string; parameter_name?: string }[];
+export type ComponenteEnvioPlantilla =
+  | {
+      type: 'header' | 'body';
+      parameters: { type: 'text'; text: string; parameter_name?: string }[];
+    }
+  | {
+      type: 'header';
+      parameters: (
+        | { type: 'image'; image: { id: string } }
+        | { type: 'document'; document: { id: string; filename: string } }
+      )[];
+    };
+export type ArchivoPlantillaInbox = {
+  id: string;
+  version: string;
+  nombre: string;
+  mimeType: string;
+  bytes: number;
 };
 export function vistaPlantilla(p: PlantillaInbox, valores: string[]) {
   const reemplazar = (

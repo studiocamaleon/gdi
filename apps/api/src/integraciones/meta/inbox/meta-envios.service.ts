@@ -1,4 +1,6 @@
 import { normalizarPlantilla } from './meta-plantillas';
+import { MetaArchivosPlantillaService } from './meta-archivos-plantilla.service';
+import type { Archivo } from '@prisma/client';
 import {
   componentesPlantilla,
   textoPlantilla,
@@ -47,7 +49,17 @@ export class MetaEnviosService {
     private readonly secretos: SecretosService,
     private readonly capacidades: CapacidadesEmpresaService,
     private readonly bus: InboxTiempoRealBus,
+    private readonly archivos: MetaArchivosPlantillaService,
   ) {}
+
+  archivosPlantilla(
+    auth: CurrentAuth,
+    ip: string,
+    conversacionId: string,
+    dto: CatalogoPlantillasInboxDto,
+  ) {
+    return this.archivos.listar(auth, ip, conversacionId, dto.canalId);
+  }
 
   async catalogo(
     auth: CurrentAuth,
@@ -152,11 +164,15 @@ export class MetaEnviosService {
               dto.version,
               dto.valores,
               dto.consentimientoConfirmado,
+              ...(dto.archivoId || dto.archivoVersion
+                ? [dto.archivoId, dto.archivoVersion]
+                : []),
             ])
           : dto.texto,
       )
       .digest('hex');
     let plantilla: PlantillaInbox | null = null;
+    let archivo: Archivo | null = null;
     // Un intento existente se consulta aunque luego se retire la plantilla; nunca vuelve a enviarse.
     if (
       esPlantilla &&
@@ -177,6 +193,22 @@ export class MetaEnviosService {
         );
       const error = validarValoresPlantilla(plantilla, dto.valores);
       if (error) throw new BadRequestException(error);
+      if (plantilla.archivo) {
+        if (!dto.archivoId || !dto.archivoVersion)
+          throw new BadRequestException(
+            'Elegí el archivo que llevará la plantilla.',
+          );
+        archivo = await this.archivos.validar(
+          auth,
+          ip,
+          conversacionId,
+          dto.canalId,
+          dto.archivoId,
+          dto.archivoVersion,
+          plantilla.archivo,
+        );
+      } else if (dto.archivoId || dto.archivoVersion)
+        throw new BadRequestException('Esta plantilla no admite archivos.');
     }
     const texto = esPlantilla
       ? plantilla
@@ -278,6 +310,76 @@ export class MetaEnviosService {
     this.bus.avisar(aviso);
     if (reservado.token && reservado.telefono) {
       let resultado: ResultadoMeta;
+      const componentes =
+        esPlantilla && plantilla
+          ? componentesPlantilla(plantilla, dto.valores)
+          : [];
+      let preparacionFallida = false;
+      if (esPlantilla && plantilla?.archivo && archivo) {
+        try {
+          const archivoTipo = plantilla.archivo;
+          const adjunto = await this.archivos.conContenido(
+            archivo,
+            async (bytes, nombreArchivo) => {
+              // La sesión, permisos, ficha y archivo se revisan también después de leer el storage.
+              await this.archivos.validar(
+                auth,
+                ip,
+                conversacionId,
+                dto.canalId,
+                dto.archivoId!,
+                dto.archivoVersion!,
+                archivoTipo,
+              );
+              const mediaId = await this.client.subirArchivo({
+                accessToken: reservado.token,
+                phoneNumberId: canal.phoneNumberId,
+                bytes,
+                mime: archivo.mimeType,
+                nombre: nombreArchivo,
+              });
+              return {
+                mediaId,
+                nombreArchivo,
+                mime: archivo.mimeType,
+                tipo: archivoTipo,
+                plantilla: true,
+              };
+            },
+          );
+          await this.archivos.validar(
+            auth,
+            ip,
+            conversacionId,
+            dto.canalId,
+            dto.archivoId!,
+            dto.archivoVersion!,
+            archivoTipo,
+          );
+          // Persistir antes del POST permite reconstruir incluso si el webhook llega primero.
+          await this.db.inboxEnvio.update({
+            where: { id: reservado.envio.id, tenantId: auth.tenantId },
+            data: { adjunto },
+          });
+          componentes.unshift({
+            type: 'header',
+            parameters:
+              archivoTipo === 'image'
+                ? [{ type: 'image', image: { id: adjunto.mediaId } }]
+                : [
+                    {
+                      type: 'document',
+                      document: {
+                        id: adjunto.mediaId,
+                        filename: adjunto.nombreArchivo,
+                      },
+                    },
+                  ],
+          });
+        } catch {
+          preparacionFallida = true;
+        }
+      }
       try {
         const base = {
           accessToken: reservado.token,
@@ -285,14 +387,15 @@ export class MetaEnviosService {
           telefono: reservado.telefono,
           correlacion: `grafo-inbox:${reservado.envio.id}`,
         };
-        resultado =
-          esPlantilla && plantilla
+        resultado = preparacionFallida
+          ? { estado: 'fallida', codigo: 'ARCHIVO_NO_PREPARADO' }
+          : esPlantilla && plantilla
             ? await this.client.enviarPlantilla({
                 ...base,
                 plantilla: plantilla.nombre,
                 idioma: plantilla.idioma,
                 parametros: [],
-                componentes: componentesPlantilla(plantilla, dto.valores),
+                componentes,
               })
             : await this.client.enviarTexto({ ...base, texto });
       } catch {

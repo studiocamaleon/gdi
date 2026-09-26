@@ -9,6 +9,62 @@ export type ResultadoMeta =
 
 @Injectable()
 export class MetaCloudClient {
+  /** La subida no envía un mensaje. Sólo devuelve un ID de media de este número. */
+  async subirArchivo(args: {
+    accessToken: string;
+    phoneNumberId: string;
+    bytes: Buffer;
+    mime: string;
+    nombre: string;
+  }): Promise<string> {
+    const version = process.env.META_GRAPH_API_VERSION ?? 'v26.0',
+      secret = process.env.META_APP_SECRET;
+    const limite =
+      args.mime === 'application/pdf'
+        ? 20_000_000
+        : ['image/png', 'image/jpeg'].includes(args.mime)
+          ? 5_000_000
+          : 0;
+    if (
+      !/^v\d+\.0$/.test(version) ||
+      !/^\d+$/.test(args.phoneNumberId) ||
+      !secret ||
+      !args.accessToken ||
+      !args.bytes.length ||
+      args.bytes.length > limite
+    )
+      throw new Error('Archivo no compatible.');
+    const url = new URL(
+      `https://graph.facebook.com/${version}/${args.phoneNumberId}/media`,
+    );
+    url.searchParams.set(
+      'appsecret_proof',
+      createHmac('sha256', secret).update(args.accessToken).digest('hex'),
+    );
+    const form = new FormData();
+    form.set('messaging_product', 'whatsapp');
+    form.set('type', args.mime);
+    form.set(
+      'file',
+      new Blob([new Uint8Array(args.bytes)], { type: args.mime }),
+      args.nombre,
+    );
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(20000),
+        headers: { Authorization: `Bearer ${args.accessToken}` },
+        body: form,
+      });
+      const body = (await r.json()) as { id?: unknown };
+      if (!r.ok || typeof body.id !== 'string' || !/^\d{1,80}$/.test(body.id))
+        throw new Error();
+      return body.id;
+    } catch {
+      throw new Error('No se pudo preparar el archivo en Meta.');
+    }
+  }
   /** Un único POST. Un timeout no permite saber si Meta ya envió el mensaje. */
   async enviarPlantilla(args: {
     accessToken: string;

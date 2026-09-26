@@ -58,6 +58,7 @@ function presentar(m: Mensaje, nombre: string | null) {
     id: m.id,
     nombreContacto: nombre,
     tipo: m.revocadoEl ? 'revocado' : (m.tipo ?? 'desconocido'),
+    plantilla: !m.revocadoEl && contenido.plantilla === true,
     texto: m.revocadoEl
       ? null
       : typeof contenido.texto === 'string'

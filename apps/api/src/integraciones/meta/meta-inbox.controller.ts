@@ -91,6 +91,16 @@ export class MetaInboxController {
   ) {
     return this.envios.catalogo(auth, ipDeRequest(req), dto);
   }
+  @Get('conversaciones/:id/archivos-plantilla')
+  @Header('Cache-Control', 'private, no-store')
+  archivosPlantilla(
+    @CurrentSession() auth: CurrentAuth,
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() dto: CatalogoPlantillasInboxDto,
+  ) {
+    return this.envios.archivosPlantilla(auth, ipDeRequest(req), id, dto);
+  }
   @Post('conversaciones/:id/plantilla')
   @HttpCode(200)
   @Header('Cache-Control', 'private, no-store')

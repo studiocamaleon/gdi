@@ -136,19 +136,17 @@ it('texto no repite un POST que agota el tiempo de espera', async () => {
   expect(global.fetch).toHaveBeenCalledTimes(1);
 });
 it('consulta la WABA actual sin seguir paging.next ni exponer el token en URL', async () => {
-  const mock = jest
-    .fn()
-    .mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: [],
-          paging: {
-            next: 'https://externo.example.invalid',
-            cursors: { after: 'cursor-2' },
-          },
-        }),
-      ),
-    );
+  const mock = jest.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        data: [],
+        paging: {
+          next: 'https://externo.example.invalid',
+          cursors: { after: 'cursor-2' },
+        },
+      }),
+    ),
+  );
   global.fetch = mock;
   expect(
     await new MetaCloudClient().listarPlantillas({
@@ -195,4 +193,53 @@ it('sanitiza errores de catálogo y no repite solicitudes', async () => {
     }),
   ).rejects.toThrow('No se pudo consultar el catálogo de Meta.');
   expect(mock).toHaveBeenCalledTimes(1);
+});
+
+it('sube media por multipart al número propio sin publicar URLs de Grafo', async () => {
+  const mock = jest.fn().mockResolvedValue(new Response('{"id":"98765"}'));
+  global.fetch = mock;
+  const bytes = Buffer.from('%PDF-1.7 prueba');
+  expect(
+    await new MetaCloudClient().subirArchivo({
+      ...args,
+      bytes,
+      mime: 'application/pdf',
+      nombre: 'Trabajo.pdf',
+    }),
+  ).toBe('98765');
+  const [url, init] = mock.mock.calls[0];
+  expect(url.origin).toBe('https://graph.facebook.com');
+  expect(url.pathname).toBe('/v26.0/123456/media');
+  expect(init.redirect).toBe('error');
+  expect(init.headers).toEqual({ Authorization: 'Bearer token-sintetico' });
+  expect(init.body.get('messaging_product')).toBe('whatsapp');
+  expect(init.body.get('type')).toBe('application/pdf');
+  expect(init.body.get('file').name).toBe('Trabajo.pdf');
+  expect(Buffer.from(await init.body.get('file').arrayBuffer())).toEqual(bytes);
+});
+it('upload fallido no reintenta ni revela errores de Meta', async () => {
+  const mock = jest.fn().mockRejectedValue(new Error('Token privado'));
+  global.fetch = mock;
+  await expect(
+    new MetaCloudClient().subirArchivo({
+      ...args,
+      bytes: Buffer.from('%PDF-1.7'),
+      mime: 'application/pdf',
+      nombre: 'Ejemplo.pdf',
+    }),
+  ).rejects.toThrow('No se pudo preparar el archivo en Meta.');
+  expect(mock).toHaveBeenCalledTimes(1);
+});
+it('bloquea upload excesivo o tipo no permitido antes de la red', async () => {
+  global.fetch = jest.fn();
+  for (const mime of ['text/html', 'image/jpeg'])
+    await expect(
+      new MetaCloudClient().subirArchivo({
+        ...args,
+        bytes: Buffer.alloc(5_000_001),
+        mime,
+        nombre: 'Ejemplo.jpg',
+      }),
+    ).rejects.toThrow();
+  expect(global.fetch).not.toHaveBeenCalled();
 });

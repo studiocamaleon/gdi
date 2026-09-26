@@ -1,5 +1,7 @@
 import { Prisma, type InboxEnvio, type MetaVinculo } from '@prisma/client';
 import type { OperacionInbox } from './meta-inbox-normalizar';
+import { objeto } from './meta-inbox-normalizar';
+import { encolarAdjunto } from './meta-adjuntos';
 
 type Contexto = Pick<
   MetaVinculo,
@@ -232,6 +234,11 @@ export async function confirmarEnvioInbox(
   wamid: string,
 ) {
   if (envio.mensajeId || !envio.texto) return false;
+  const adjunto = objeto(envio.adjunto);
+  const tieneArchivo =
+    envio.tipo === 'PLANTILLA' &&
+    ['image', 'document'].includes(String(adjunto.tipo)) &&
+    typeof adjunto.mediaId === 'string';
   const c = await tx.inboxConversacion.findFirstOrThrow({
     where: {
       id: envio.conversacionId,
@@ -246,13 +253,18 @@ export async function confirmarEnvioInbox(
     direccion: 'SALIENTE',
     fecha: envio.createdAt,
     origen: 'GRAFO',
-    tipo: envio.tipo === 'PLANTILLA' ? 'template' : 'text',
-    contenido: { texto: envio.texto },
+    tipo: tieneArchivo
+      ? String(adjunto.tipo)
+      : envio.tipo === 'PLANTILLA'
+        ? 'template'
+        : 'text',
+    contenido: { ...(tieneArchivo ? adjunto : {}), texto: envio.texto },
     prioridad: 3,
   });
   const m = await tx.inboxMensaje.findFirstOrThrow({
     where: { tenantId: canal.tenantId, vinculoId: canal.id, wamid },
   });
+  if (tieneArchivo) await encolarAdjunto(tx, canal, wamid);
   await tx.inboxMensaje.updateMany({
     where: { id: m.id, tenantId: canal.tenantId, estadoEntrega: null },
     data: { estadoEntrega: 'ACEPTADO' },
@@ -264,6 +276,7 @@ export async function confirmarEnvioInbox(
       wamid,
       mensajeId: m.id,
       texto: null,
+      adjunto: Prisma.DbNull,
       codigo: null,
     },
   });

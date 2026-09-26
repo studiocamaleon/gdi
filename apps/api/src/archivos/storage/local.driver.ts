@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import { calcularTamanioParte } from './multipart';
@@ -149,8 +149,27 @@ export class LocalDriver implements StorageDriver {
   }
 
   async leerCabecera(key: string, bytes: number): Promise<Buffer | null> {
-    const contenido = await this.leer(key);
-    return contenido ? contenido.subarray(0, bytes) : null;
+    let file: Awaited<ReturnType<typeof open>> | undefined;
+    try {
+      file = await open(this.rutaDe(key), 'r');
+      const buffer = Buffer.alloc(bytes);
+      let leidos = 0;
+      while (leidos < bytes) {
+        const { bytesRead } = await file.read(
+          buffer,
+          leidos,
+          bytes - leidos,
+          leidos,
+        );
+        if (!bytesRead) break;
+        leidos += bytesRead;
+      }
+      return buffer.subarray(0, leidos);
+    } catch {
+      return null;
+    } finally {
+      await file?.close();
+    }
   }
 
   async leer(key: string): Promise<Buffer | null> {

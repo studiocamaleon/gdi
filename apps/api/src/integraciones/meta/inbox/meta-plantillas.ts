@@ -55,14 +55,18 @@ export function normalizarPlantilla(
     vistos.add(tipo);
     if (tipo === 'HEADER' || tipo === 'BODY') {
       if (tipo === 'HEADER' && c.format !== 'TEXT') {
-        no(
-          'El envío de plantillas con archivos o ubicación estará disponible en otra etapa.',
-        );
+        if (c.format === 'IMAGE') p.archivo = 'image';
+        else if (c.format === 'DOCUMENT') p.archivo = 'document';
+        else
+          no(
+            'Este formato de encabezado todavía no se puede enviar desde Grafo.',
+          );
         continue;
       }
       const texto = cadena(c.text, tipo === 'HEADER' ? 60 : 1024);
       if (!texto) no('El texto de la plantilla no es compatible.');
-      const componente = tipo === 'HEADER' ? 'header' : 'body';
+      const componente: 'header' | 'body' =
+        tipo === 'HEADER' ? 'header' : 'body';
       if (tipo === 'HEADER') p.encabezado = texto;
       else p.cuerpo = texto;
       const nombres = [

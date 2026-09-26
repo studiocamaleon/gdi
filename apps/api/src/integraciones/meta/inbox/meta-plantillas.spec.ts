@@ -121,3 +121,43 @@ it('detecta cambios en acciones de botones estáticos', () => {
     )!.version,
   ).not.toBe(p.version);
 });
+
+it.each([
+  ['IMAGE', 'image'],
+  ['DOCUMENT', 'document'],
+])('admite encabezado %s sin exponer URLs de ejemplos', (format, archivo) => {
+  const p = normalizarPlantilla(
+    {
+      ...raw,
+      components: [
+        {
+          type: 'HEADER',
+          format,
+          example: { header_handle: ['secreto-de-ejemplo'] },
+        },
+        { type: 'BODY', text: 'Tu archivo' },
+      ],
+    },
+    null,
+  )!;
+  expect(p.motivo).toBeNull();
+  expect(p.archivo).toBe(archivo);
+  expect(JSON.stringify(p)).not.toContain('secreto-de-ejemplo');
+});
+it.each(['VIDEO', 'LOCATION', 'NEW'])(
+  'mantiene cerrado encabezado no compatible %s',
+  (format) => {
+    expect(
+      normalizarPlantilla(
+        {
+          ...raw,
+          components: [
+            { type: 'HEADER', format },
+            { type: 'BODY', text: 'Hola' },
+          ],
+        },
+        null,
+      )!.motivo,
+    ).toBeTruthy();
+  },
+);

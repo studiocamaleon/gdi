@@ -17,6 +17,7 @@ let app: INestApplication<Server>;
 const abrirAdjunto = jest
   .fn()
   .mockResolvedValue({ url: 'https://files.example.invalid/privado' });
+const archivosPlantilla = jest.fn().mockResolvedValue({ archivos: [] });
 const catalogo = jest.fn().mockResolvedValue({ plantillas: [] });
 const enviarPlantilla = jest.fn().mockResolvedValue({ estado: 'ACEPTADO' });
 const enviar = jest.fn().mockResolvedValue({ estado: 'ACEPTADO' });
@@ -30,7 +31,7 @@ beforeAll(async () => {
     providers: [
       {
         provide: MetaEnviosService,
-        useValue: { enviar, catalogo, enviarPlantilla },
+        useValue: { enviar, catalogo, enviarPlantilla, archivosPlantilla },
       },
       { provide: MetaAdjuntosService, useValue: { abrir: abrirAdjunto } },
       { provide: MetaInboxService, useValue: { consultar, disponibilidad } },
@@ -366,4 +367,30 @@ it.each([
     .set(headers)
     .send(pedidoPlantilla)
     .expect(403);
+});
+
+it('el selector de archivos exige el mismo acceso y rechaza tenant/URL suministrados por cliente', async () => {
+  const ruta = textoUrl.replace('/texto', '/archivos-plantilla');
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query({ canalId: textoDto.canalId })
+    .set('x-actor', 'OPERADOR')
+    .expect(403);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query({ canalId: textoDto.canalId, tenantId: 'ajena' })
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect(400);
+  await request(app.getHttpServer())
+    .get(ruta)
+    .query({ canalId: textoDto.canalId })
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect('Cache-Control', 'private, no-store')
+    .expect(200);
+  expect(archivosPlantilla).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantId: 'propia' }),
+    expect.any(String),
+    '11111111-1111-4111-8111-111111111111',
+    { canalId: textoDto.canalId },
+  );
 });

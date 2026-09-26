@@ -24,6 +24,8 @@ export class CatalogoPlantillasInboxDto {
   @IsOptional() @IsString() @MaxLength(2048) despues?: string;
 }
 export class EnviarPlantillaInboxDto {
+  @IsOptional() @IsUUID('4') archivoId?: string;
+  @IsOptional() @IsString() @Matches(/^[a-f0-9]{64}$/) archivoVersion?: string;
   @IsUUID('4') clave!: string;
   @IsString() @MaxLength(80) canalId!: string;
   @IsString() @Matches(/^\d{1,40}$/) plantillaId!: string;

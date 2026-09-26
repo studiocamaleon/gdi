@@ -1,3 +1,9 @@
+import sharp from 'sharp';
+import {
+  MetaArchivosPlantillaService,
+  versionArchivoPlantilla,
+} from './meta-archivos-plantilla.service';
+import { WhatsappContextoService } from '../../../clientes/whatsapp-contexto.service';
 import { normalizarPlantilla } from './meta-plantillas';
 import { randomUUID } from 'node:crypto';
 import {
@@ -30,6 +36,7 @@ const client = {
   enviarTexto: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
   enviarPlantilla: jest.fn<Promise<ResultadoMeta>, [unknown]>(),
   listarPlantillas: jest.fn(),
+  subirArchivo: jest.fn(),
 };
 const secretos = {
   disponible: true,
@@ -37,6 +44,14 @@ const secretos = {
 };
 const capacidades = { exigirOperacionTx: jest.fn(), exigirIncluida: jest.fn() },
   bus = { avisar: jest.fn() };
+const pdf = Buffer.from('%PDF-1.7 ejemplo sintetico');
+const storage = { cabecera: jest.fn(), leerCabecera: jest.fn() };
+const archivos = new MetaArchivosPlantillaService(
+  db,
+  new WhatsappContextoService(db),
+  capacidades as never,
+  storage as never,
+);
 const servicio = () =>
   new MetaEnviosService(
     db,
@@ -44,8 +59,10 @@ const servicio = () =>
     secretos as never,
     capacidades as never,
     bus as never,
+    archivos,
   );
 const keys = [
+  'META_INBOX_ADJUNTOS_ENABLED',
   'META_INBOX_ENVIOS_ENABLED',
   'META_INBOX_PLANTILLAS_ENABLED',
   'META_CONEXION_MODO',
@@ -151,6 +168,7 @@ beforeEach(async () => {
     .mockRejectedValue(new Error('Red real prohibida'));
   await preparar();
   Object.assign(process.env, {
+    META_INBOX_ADJUNTOS_ENABLED: 'true',
     META_INBOX_ENVIOS_ENABLED: 'true',
     META_INBOX_PLANTILLAS_ENABLED: 'true',
     META_CONEXION_MODO: 'coexistencia',
@@ -165,6 +183,12 @@ beforeEach(async () => {
     estado: 'aceptada',
     wamid: 'wamid.respuesta',
   });
+  storage.cabecera.mockResolvedValue({
+    bytes: pdf.length,
+    contentType: 'application/pdf',
+  });
+  storage.leerCabecera.mockResolvedValue(pdf);
+  client.subirArchivo.mockResolvedValue('56789');
   secretos.disponible = true;
   secretos.descifrar.mockReturnValue('token-ficticio');
   capacidades.exigirIncluida.mockResolvedValue(undefined);
@@ -175,7 +199,10 @@ afterEach(async () => {
   fetchMock.mockRestore();
   const where = { tenantId: auth.tenantId };
   await db.inboxEnvio.deleteMany({ where });
+  await db.inboxAdjunto.deleteMany({ where });
   await db.inboxMensaje.deleteMany({ where });
+  await db.archivo.deleteMany({ where });
+  await db.cliente.deleteMany({ where });
   await db.inboxConversacion.deleteMany({ where });
   await db.inboxCanalRevision.deleteMany({ where });
   await db.metaVinculo.deleteMany({ where });
@@ -640,4 +667,287 @@ it('rechaza conversaciones ajenas y sesiones revocadas', async () => {
   });
   await expect(enviarPlantilla()).rejects.toThrow();
   expect(client.enviarPlantilla).not.toHaveBeenCalled();
+});
+
+async function prepararArchivo() {
+  catalogoValido();
+  const raw = {
+    ...plantillaRaw,
+    components: [
+      { type: 'HEADER', format: 'DOCUMENT' },
+      ...plantillaRaw.components,
+    ],
+  };
+  client.listarPlantillas.mockResolvedValue({ data: [raw], siguiente: null });
+  const cliente = await db.cliente.create({
+    data: {
+      tenantId: auth.tenantId,
+      nombre: 'Cliente de prueba',
+      telefonoCodigo: '+1',
+      telefonoNumero: '6505550123',
+      paisCodigo: 'US',
+    },
+  });
+  const file = await db.archivo.create({
+    data: {
+      tenantId: auth.tenantId,
+      scope: 'CLIENTE',
+      clienteId: cliente.id,
+      key: `prueba/${randomUUID()}.pdf`,
+      nombreOriginal: 'Trabajo.pdf',
+      mimeType: 'application/pdf',
+      bytes: pdf.length,
+      estado: 'LISTO',
+    },
+  });
+  return {
+    file,
+    cliente,
+    dto: {
+      ...plantillaDto(),
+      version: normalizarPlantilla(raw, null)!.version,
+      archivoId: file.id,
+      archivoVersion: versionArchivoPlantilla(file),
+    },
+  };
+}
+it('sube un PDF privado una sola vez y proyecta una copia independiente con sus checks', async () => {
+  const { file, dto: d } = await prepararArchivo();
+  const listado = await runWithTenant(auth.tenantId, () =>
+    archivos.listar(auth, '127.0.0.1', conv.id, d.canalId),
+  );
+  expect(listado.archivos.map((f) => f.id)).toEqual([file.id]);
+  expect(JSON.stringify(listado)).not.toContain(file.key);
+  const [r] = await Promise.all([enviarPlantilla(d), enviarPlantilla(d)]);
+  expect(client.subirArchivo).toHaveBeenCalledTimes(1);
+  expect(client.enviarPlantilla).toHaveBeenCalledTimes(1);
+  expect(client.enviarPlantilla).toHaveBeenCalledWith(
+    expect.objectContaining({
+      componentes: [
+        {
+          type: 'header',
+          parameters: [
+            {
+              type: 'document',
+              document: { id: '56789', filename: 'Trabajo.pdf' },
+            },
+          ],
+        },
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', parameter_name: 'nombre', text: 'Alma' },
+          ],
+        },
+      ],
+    }),
+  );
+  const m = await db.inboxMensaje.findFirstOrThrow({
+    where: { tenantId: auth.tenantId },
+    include: { adjunto: true },
+  });
+  expect(m).toMatchObject({
+    tipo: 'document',
+    estadoEntrega: 'ACEPTADO',
+    contenido: {
+      texto: 'Hola Alma, tu trabajo está listo.',
+      mediaId: '56789',
+      plantilla: true,
+    },
+    adjunto: { estado: 'PENDIENTE', archivoId: null },
+  });
+  expect(
+    (await db.archivo.findUniqueOrThrow({ where: { id: file.id } })).estado,
+  ).toBe('LISTO');
+  await webhook(r.id, 'read', conv.contactoWaId, 'wamid.plantilla');
+  expect(
+    (await db.inboxMensaje.findUniqueOrThrow({ where: { id: m.id } }))
+      .estadoEntrega,
+  ).toBe('READ');
+  await enviarPlantilla(d);
+  expect(client.subirArchivo).toHaveBeenCalledTimes(1);
+  await expect(
+    enviarPlantilla({ ...d, archivoVersion: 'f'.repeat(64) }),
+  ).rejects.toThrow('otro mensaje');
+});
+it('el webhook adelantado recupera también el adjunto de una plantilla', async () => {
+  const { dto: d } = await prepararArchivo();
+  client.enviarPlantilla.mockImplementation(async () => {
+    const intento = await db.inboxEnvio.findFirstOrThrow({
+      where: { tenantId: auth.tenantId },
+    });
+    await webhook(
+      intento.id,
+      'delivered',
+      conv.contactoWaId,
+      'wamid.plantilla',
+    );
+    return { estado: 'incierta' };
+  });
+  expect((await enviarPlantilla(d)).estado).toBe('ACEPTADO');
+  expect(
+    await db.inboxAdjunto.count({ where: { tenantId: auth.tenantId } }),
+  ).toBe(1);
+});
+it.each([
+  'otro-cliente',
+  'version',
+  'publico',
+  'borrado',
+  'sin-permiso',
+  'flag',
+  'ambiguo',
+  'limite',
+  'tipo',
+])(
+  'bloquea archivo no autorizado/compatible antes de reservar o subir: %s',
+  async (caso) => {
+    const { file, cliente, dto: d } = await prepararArchivo();
+    if (caso === 'otro-cliente')
+      await db.cliente.update({
+        where: { id: cliente.id },
+        data: { telefonoNumero: '6505550199' },
+      });
+    if (caso === 'version') d.archivoVersion = 'f'.repeat(64);
+    if (caso === 'publico')
+      await db.archivo.update({
+        where: { id: file.id },
+        data: { publico: true },
+      });
+    if (caso === 'borrado')
+      await db.archivo.update({
+        where: { id: file.id },
+        data: { estado: 'ELIMINADO' },
+      });
+    if (caso === 'flag') process.env.META_INBOX_ADJUNTOS_ENABLED = 'false';
+    if (caso === 'sin-permiso')
+      await db.authSession.update({
+        where: { id: auth.sessionId },
+        data: { revokedAt: new Date() },
+      });
+    if (caso === 'ambiguo')
+      await db.cliente.create({
+        data: {
+          tenantId: auth.tenantId,
+          nombre: 'Otra ficha',
+          telefonoCodigo: '+1',
+          telefonoNumero: '6505550123',
+          paisCodigo: 'US',
+        },
+      });
+    if (caso === 'limite' || caso === 'tipo') {
+      const nuevo = await db.archivo.update({
+        where: { id: file.id },
+        data:
+          caso === 'limite' ? { bytes: 20_000_001 } : { mimeType: 'image/png' },
+      });
+      d.archivoVersion = versionArchivoPlantilla(nuevo);
+    }
+    await expect(enviarPlantilla(d)).rejects.toThrow();
+    expect(client.subirArchivo).not.toHaveBeenCalled();
+    expect(client.enviarPlantilla).not.toHaveBeenCalled();
+    expect(
+      await db.inboxEnvio.count({ where: { tenantId: auth.tenantId } }),
+    ).toBe(0);
+  },
+);
+it.each(['firma', 'bytes', 'storage', 'upload'])(
+  'si falla la preparación %s no hace POST de mensajes ni reintenta',
+  async (caso) => {
+    const { dto: d } = await prepararArchivo();
+    if (caso === 'firma')
+      storage.leerCabecera.mockResolvedValue(Buffer.alloc(pdf.length));
+    if (caso === 'bytes')
+      storage.leerCabecera.mockResolvedValue(Buffer.from('%PDF-no coincide'));
+    if (caso === 'storage') storage.cabecera.mockResolvedValue(null);
+    if (caso === 'upload')
+      client.subirArchivo.mockRejectedValue(new Error('Error sensible de red'));
+    const r = await enviarPlantilla(d);
+    expect(r).toMatchObject({
+      estado: 'RECHAZADO',
+      codigo: 'ARCHIVO_NO_PREPARADO',
+    });
+    const cantidad = client.subirArchivo.mock.calls.length;
+    await enviarPlantilla(d);
+    expect(client.subirArchivo).toHaveBeenCalledTimes(cantidad);
+    expect(client.enviarPlantilla).not.toHaveBeenCalled();
+  },
+);
+it('revocar la sesión durante la subida impide enviar el mensaje', async () => {
+  const { dto: d } = await prepararArchivo();
+  client.subirArchivo.mockImplementation(async () => {
+    await db.authSession.update({
+      where: { id: auth.sessionId },
+      data: { revokedAt: new Date() },
+    });
+    return '56789';
+  });
+  await expect(enviarPlantilla(d)).rejects.toThrow(ForbiddenException);
+  expect(client.enviarPlantilla).not.toHaveBeenCalled();
+  expect(
+    await db.inboxEnvio.findFirst({ where: { tenantId: auth.tenantId } }),
+  ).toMatchObject({ estado: 'RECHAZADO', codigo: 'ARCHIVO_NO_PREPARADO' });
+});
+
+it('una imagen RGB válida se envía mediante ID de Meta', async () => {
+  const { file, dto: d } = await prepararArchivo();
+  const bytes = await sharp({
+    create: { width: 2, height: 2, channels: 3, background: '#ff6535' },
+  })
+    .png()
+    .toBuffer();
+  const nuevo = await db.archivo.update({
+    where: { id: file.id },
+    data: {
+      mimeType: 'image/png',
+      bytes: bytes.length,
+      nombreOriginal: 'Ejemplo.png',
+    },
+  });
+  d.archivoVersion = versionArchivoPlantilla(nuevo);
+  const raw = {
+    ...plantillaRaw,
+    components: [
+      { type: 'HEADER', format: 'IMAGE' },
+      ...plantillaRaw.components,
+    ],
+  };
+  d.version = normalizarPlantilla(raw, null)!.version;
+  client.listarPlantillas.mockResolvedValue({ data: [raw], siguiente: null });
+  storage.cabecera.mockResolvedValue({
+    bytes: bytes.length,
+    contentType: 'image/png',
+  });
+  storage.leerCabecera.mockResolvedValue(bytes);
+  expect((await enviarPlantilla(d)).estado).toBe('ACEPTADO');
+  expect(client.enviarPlantilla).toHaveBeenCalledWith(
+    expect.objectContaining({
+      componentes: expect.arrayContaining([
+        {
+          type: 'header',
+          parameters: [{ type: 'image', image: { id: '56789' } }],
+        },
+      ]),
+    }),
+  );
+});
+it('rechaza el ID de un archivo perteneciente a otra empresa', async () => {
+  const { file, dto: d } = await prepararArchivo();
+  const otra = await db.tenant.create({
+    data: { nombre: 'Otra empresa ficticia', slug: `otra-${randomUUID()}` },
+  });
+  try {
+    // La conversación y cliente siguen siendo propios; el archivo se vuelve ajeno.
+    const nuevo = await db.archivo.update({
+      where: { id: file.id },
+      data: { tenantId: otra.id },
+    });
+    d.archivoVersion = versionArchivoPlantilla(nuevo);
+    await expect(enviarPlantilla(d)).rejects.toThrow('archivo cambió');
+    expect(client.subirArchivo).not.toHaveBeenCalled();
+    expect(client.enviarPlantilla).not.toHaveBeenCalled();
+  } finally {
+    await db.archivo.deleteMany({ where: { tenantId: otra.id } });
+    await db.tenant.delete({ where: { id: otra.id } });
+  }
 });
