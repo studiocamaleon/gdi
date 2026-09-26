@@ -8,7 +8,7 @@ Base del bloque: `562b0d112`. API y autorización: `b5b6c3c48`. Pantalla y vista
 
 La pantalla ya puede consultar varias conversaciones de la empresa, buscar por nombre o teléfono, cambiar de chat y cargar mensajes anteriores. El contexto sigue identificándose por el teléfono completo del contacto: si coincide con una ficha de Grafo, se muestran sus datos y órdenes según los permisos del operador.
 
-Los mensajes entrantes y salientes tienen lados distintos. Se presentan estados de entrega, ediciones, eliminaciones, mensajes del historial y mensajes enviados desde WhatsApp Business. Los adjuntos muestran su tipo y texto descriptivo; todavía no se descargan ni se abren. El editor de respuestas permanece deshabilitado.
+Los mensajes entrantes y salientes tienen lados distintos. Se presentan estados de entrega, ediciones, eliminaciones, mensajes del historial y mensajes enviados desde WhatsApp Business. El primer bloque mostraba sólo referencias de adjuntos; la ampliación de [archivos privados](meta-inbox-adjuntos.md) agrega descarga y apertura controlada, todavía pendiente de prueba real en staging. El editor de respuestas permanece deshabilitado.
 
 La lectura usa las tablas generales de [recepción](meta-inbox-recepcion.md). El [transporte en vivo](inbox-tiempo-real.md) comparte la revisión duradera y los avisos de Redis que ya estaban implementados; ahora resuelve el vínculo propio de cada empresa. No se agregó otro servicio cloud.
 
@@ -49,6 +49,6 @@ Pruebas de este bloque: varias conversaciones, búsqueda y cursores, aislamiento
 
 Resultado: **297 pruebas de API y 57 de web aprobadas**; TypeScript de API y web, ESLint de la implementación modificada y comprobación de diff sin errores. Revisión en Chrome de los tres contactos, cambio de contexto, búsqueda y presentación de mensajes. API y web respondieron 200 al terminar; ambos workers siguen activos. No se compiló un contenedor de producción ni se realizó una prueba de carga.
 
-Siguientes bloques: reconciliar importaciones y eventos tardíos; desconexión/reconexión coordinada; adjuntos privados; envíos, plantillas y ventana de atención; roles del equipo; carga, conservación y métricas. Después corresponde validar el lote en staging y ensayar el alta real con los mecanismos de Meta disponibles. La aprobación de la app no convierte las pruebas sintéticas en validación de coexistencia real.
+El ciclo de importación/reconexión y los adjuntos privados ya tienen ampliaciones locales. Siguen pendientes envíos, plantillas y ventana de atención; roles del equipo; carga, conservación y métricas. Corresponde validar el lote en staging y ensayar el alta real con los mecanismos de Meta disponibles. La aprobación de la app no convierte las pruebas sintéticas en validación de coexistencia real.
 
 Ampliación del 26/09: [estado de importación y reconexión](meta-importacion-reconexion.md) incorpora el panel Conexión, el resumen de lo recibido y el ciclo de pausa/restauración. No habilita todavía archivos ni envíos.

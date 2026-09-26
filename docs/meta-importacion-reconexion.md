@@ -57,7 +57,7 @@ Resultado del lote: **309 pruebas de API y 61 de web**, TypeScript de API/web y 
 1. Validar en staging la autorización real del SDK y las suscripciones `account_update`, `history`, contactos y mensajes; luego ensayar coexistencia con un número propio elegible. La aprobación de Meta no sustituye estas pruebas.
 2. Resolver con diagnóstico operativo las solicitudes inciertas o historiales en revisión. No existe un botón que garantice recuperar mensajes que Meta nunca entregó.
 3. Medir carga, límite HTTP y convivencia con cálculos; agregar métricas y conservación de eventos.
-4. Completar archivos privados, respuestas, plantillas, ventana de atención y permisos de agentes antes de habilitar el Inbox para clientes.
+4. Validar la ampliación local de [archivos privados](meta-inbox-adjuntos.md) con Meta/R2 reales y completar respuestas, plantillas, ventana de atención y permisos de agentes antes de habilitar el Inbox para clientes.
 
 ## Fuentes oficiales
 

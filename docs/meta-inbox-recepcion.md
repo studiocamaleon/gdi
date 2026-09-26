@@ -27,7 +27,7 @@ PostgreSQL conserva la cola y el cursor para retomar después de un reinicio. Lo
 - **Separación por empresa:** se usa el vínculo comprobado de cuenta y número. Los eventos sin asociación válida quedan crudos, fuera de la bandeja. Las claves de base impiden relacionar un mensaje o contacto con el vínculo de otra empresa.
 - **Duplicados y orden:** un `wamid` identifica un mensaje dentro del vínculo. Las reentregas no duplican mensajes; los bloques pueden llegar desordenados. Los estados de entrega no retroceden.
 - **Historial:** conserva la fecha original, entradas y salidas. No genera notificaciones ni abre por sí solo una ventana de atención. Una entrada nueva válida registra su fecha por separado; aún falta aplicar las reglas completas en el envío general.
-- **Adjuntos:** guarda sus referencias y completa el mensaje aunque lleguen antes que su marcador. El complemento no cambia su dirección ni fecha. No descarga archivos ni crea enlaces públicos.
+- **Adjuntos:** guarda sus referencias y completa el mensaje aunque lleguen antes que su marcador. El complemento no cambia su dirección ni fecha. La ampliación de [adjuntos privados](meta-inbox-adjuntos.md) agenda su copia en un bucle independiente; no hace descargas durante la proyección del mensaje ni crea enlaces públicos permanentes.
 - **Ediciones y eliminaciones:** conserva cambios que llegan antes del original. Un historial atrasado no recupera el contenido de un mensaje eliminado. El original crudo permanece según la política de conservación todavía pendiente.
 - **Contactos:** mantiene nombres y eliminaciones con su fecha. No crea ni elimina clientes fiscales en Grafo.
 - **Recuperación:** un fallo revierte todo el lote, incluido el avance. Reintenta con espera creciente; al sexto fallo o ante una identidad contradictoria requiere revisión. Los errores almacenan códigos internos, no contenido ni credenciales.
@@ -56,7 +56,7 @@ Plan de integración:
 1. Orquestar suscripción y solicitudes de contactos/historial, con resultados persistidos y recuperación de respuestas inciertas; preparar la recepción antes de solicitar datos. La guía de Meta establece una ventana inicial de 24 horas y restricciones de repetición por alta.
 2. Conectar el SDK v4 y los controladores protegidos con Configuración e Inbox. Ampliar lectura, paginación y autorización de tiempo real a las conversaciones generales.
 3. Mostrar importación en curso, historial no compartido y situaciones que requieren atención; reconciliar progreso y mensajes faltantes.
-4. Completar descarga privada de archivos, tipos pendientes, envío, plantillas, conservación, barrido de autorizaciones y observabilidad.
+4. Validar la descarga privada de archivos en staging; completar tipos pendientes, envío, plantillas, conservación, barrido de autorizaciones y observabilidad.
 5. Probar el conjunto en staging con un número propio elegible y los permisos disponibles. Las pruebas locales no sustituyen ese recorrido real.
 
 ## Verificación reproducible

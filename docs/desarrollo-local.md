@@ -10,7 +10,7 @@ Al 25 de septiembre, `codex/entorno-local` parte de la versión corregida de sta
 
 - Aplicación: `http://localhost:3000` (Next en modo desarrollo con Webpack).
 - API: `http://127.0.0.1:3001/api`.
-- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 288 migraciones aplicadas al 26/09, sin ejecutar seed.
+- PostgreSQL: contenedor existente `gdi-saas-postgres`, puerto 5436, base `gdi_saas`. Tiene las 290 migraciones aplicadas al 26/09, sin ejecutar seed.
 - Redis: contenedor existente `gdi-saas-redis`, puerto 6379.
 - PDF: contenedor existente `gdi-saas-pdf-renderer`, puerto 3002.
 - Workers: procesos locales de cálculos/entregas y documentos PDF.
@@ -72,3 +72,5 @@ Cuarto bloque del 26/09: mismo worktree en `codex/meta-alta-sincronizacion`, des
 Quinto bloque del 26/09: mismo worktree en `codex/inbox-conversaciones-generales`, desde `562b0d112`. Se inició Docker Desktop, que estaba apagado, y se levantaron API, web y ambos workers; no se reinició Docker ni se modificaron recursos de otros proyectos. Sin nuevas migraciones. La [lectura general y su vista local](meta-inbox-lectura-general.md) están implementadas. La API corre con `META_INBOX_LECTURA_ENABLED=false`, `META_INBOX_RECEPCION_ENABLED=false`, `META_WHATSAPP_PILOT_ENABLED=false`, `META_CONEXION_MODO=` y cron apagado; los workers también conservan Meta y cron apagados. Durante la recarga fue necesario finalizar únicamente el hijo de la API que esperaba una conexión persistente; el supervisor lo recuperó. No se alteraron secretos, staging ni producción.
 
 Sexto bloque del 26/09: mismo worktree en `codex/inbox-importacion-reconexion`, desde `6e6909a4b`. Aplicada `20260926170000_meta_ciclo_cuenta` sólo en desarrollo y tests: **289 migraciones**. Agrega [estado de importación y reconexión](meta-importacion-reconexion.md). Los servicios continúan locales, sin reiniciar Docker, con cron y Meta reales deshabilitados. La demo del Inbox permite abrir el panel Conexión con datos ficticios.
+
+Séptimo bloque del 26/09: mismo worktree en `codex/inbox-adjuntos-bienvenida`, desde `80c1347c8`. Aplicada `20260926190000_inbox_adjuntos` sólo en desarrollo y tests: **290 migraciones**, con permisos del rol local comprobados. Agrega [adjuntos privados y bienvenida de Grafo](meta-inbox-adjuntos.md). No se cambiaron secretos ni flags reales. Durante la recarga se finalizó únicamente el hijo local de la API que esperaba conexiones; su supervisor lo recuperó. No se reinició Docker ni se operó staging.
