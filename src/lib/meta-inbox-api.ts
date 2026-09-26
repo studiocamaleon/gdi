@@ -1,5 +1,16 @@
 import { apiRequest } from "@/lib/api";
 
+export const INBOX_CONEXION_ACTUALIZADA = "grafo:inbox-conexion-actualizada";
+export type DisponibilidadInbox = {
+  empresaId: string;
+  usuarioId: string;
+  disponible: boolean;
+};
+export const getDisponibilidadInbox = (signal?: AbortSignal) =>
+  apiRequest<DisponibilidadInbox>("/integraciones/meta/inbox/disponibilidad", {
+    signal,
+  });
+
 export type InboxIdentidad = {
   empresaId: string;
   usuarioId: string;

@@ -14,6 +14,7 @@ export type NavIconKey =
   | "Grid"
   | "Briefcase"
   | "Users"
+  | "Chat"
   | "Coin"
   | "Factory"
   | "Wallet"
@@ -48,6 +49,7 @@ export type NavItem =
        * menú ocupa una sola línea: escribir "embudo" sigue llevando a Reportes.
        */
       buscar?: string[];
+      nuevaPestana?: boolean;
     }
   | {
       key: string;
@@ -60,6 +62,15 @@ export type NavItem =
     };
 
 export const NAV: NavItem[] = [
+  {
+    key: "inbox",
+    label: "Inbox",
+    icon: "Chat",
+    permiso: "configuracion.gestionar",
+    href: "/inbox",
+    nuevaPestana: true,
+    buscar: ["grafo inbox", "whatsapp", "mensajes", "conversaciones"],
+  },
   // El home. Vacío por ahora: qué muestra —y para quién— se diseña aparte.
   // Lo tienen todos los roles, incluido el Operario.
   { key: "panel", label: "Panel general", icon: "Grid",
@@ -316,7 +327,16 @@ export function navPara(
   permisos: Set<string> | null,
   pais: string = "AR",
   funciones?: Record<string, boolean>,
+  conexiones?: { inboxDisponible?: boolean },
 ): NavItem[] {
+  // A diferencia del menú legacy, Inbox nunca se ofrece por falta de datos.
+  const disponibles = NAV.filter(
+    item => item.key !== "inbox" || (
+      conexiones?.inboxDisponible === true &&
+      permisos?.has("configuracion.gestionar") === true &&
+      funciones?.whatsapp_automatico === true
+    ),
+  );
   // El filtro por país corre SIEMPRE, incluso sin permisos: un tenant chileno
   // sin lista de permisos no tiene por qué ver el circuito fiscal argentino.
   const porPlan = (href: string) => {
@@ -340,13 +360,13 @@ export function navPara(
   };
   const porPais = (c: NavChild) => (!c.soloPais || c.soloPais === pais) && porPlan(c.href);
   if (!permisos) {
-    return NAV.flatMap<NavItem>((item) => {
+    return disponibles.flatMap<NavItem>((item) => {
       if (!hasChildren(item)) return porPlan(item.href) ? [item] : [];
       const children = item.children.filter(porPais).map(presentar);
       return children.length ? [{ ...item, children }] : [];
     });
   }
-  return NAV.flatMap<NavItem>((item) => {
+  return disponibles.flatMap<NavItem>((item) => {
     if (!hasChildren(item)) {
       return permisos.has(item.permiso) && porPlan(item.href) ? [item] : [];
     }

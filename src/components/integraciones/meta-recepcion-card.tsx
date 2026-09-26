@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/empty";
 import { useFecha } from "@/components/navigation/config-regional-provider";
 import { getMetaRecepcion, type RecepcionMeta } from "@/lib/meta-recepcion-api";
+import { INBOX_CONEXION_ACTUALIZADA } from "@/lib/meta-inbox-api";
 
 const tipos: Record<string, string> = {
   text: "Texto",
@@ -61,6 +62,7 @@ export function MetaRecepcionCard({ inicial }: { inicial: RecepcionMeta }) {
     } finally {
       lock.current = false;
       setOcupado(false);
+      window.dispatchEvent(new Event(INBOX_CONEXION_ACTUALIZADA));
     }
   }
 
@@ -105,7 +107,8 @@ export function MetaRecepcionCard({ inicial }: { inicial: RecepcionMeta }) {
                   <EmptyTitle>Todavía no hay mensajes recibidos</EmptyTitle>
                   <EmptyDescription>
                     Acá aparecerán los mensajes nuevos que recibamos después de
-                    habilitar esta prueba.
+                    habilitar esta prueba. Al comprobar la recepción, Inbox
+                    aparecerá en el menú de Grafo.
                   </EmptyDescription>
                 </EmptyHeader>
               </Empty>
@@ -153,13 +156,17 @@ export function MetaRecepcionCard({ inicial }: { inicial: RecepcionMeta }) {
         )}
       </CardContent>
       <CardFooter>
-        <Button
-          nativeButton={false}
-          render={<a href="/inbox" target="_blank" rel="noopener noreferrer" />}
-        >
-          <MessageCircle data-icon="inline-start" />
-          Abrir inbox
-        </Button>
+        {Boolean(datos?.mensajes.length) && !error && (
+          <Button
+            nativeButton={false}
+            render={
+              <a href="/inbox" target="_blank" rel="noopener noreferrer" />
+            }
+          >
+            <MessageCircle data-icon="inline-start" />
+            Abrir inbox
+          </Button>
+        )}
         <Button
           variant="outline"
           disabled={ocupado}

@@ -39,14 +39,12 @@ function setup() {
     exigirIncluida: jest.fn().mockResolvedValue(undefined),
   };
   const clientes = {
-    contexto: jest
-      .fn()
-      .mockResolvedValue({
-        estado: 'sin_coincidencias',
-        cliente: null,
-        coincidencias: [],
-        ordenes: [],
-      }),
+    contexto: jest.fn().mockResolvedValue({
+      estado: 'sin_coincidencias',
+      cliente: null,
+      coincidencias: [],
+      ordenes: [],
+    }),
   };
   return {
     prisma,
@@ -62,6 +60,45 @@ function setup() {
 beforeEach(() =>
   jest.mocked(configuracionMetaRecepcion).mockReturnValue(config),
 );
+it('oculta el acceso hasta comprobar recepción; no devuelve texto, teléfono ni secretos al menú', async () => {
+  const { servicio, prisma, clientes } = setup();
+  expect(await servicio.disponibilidad(auth)).toEqual({
+    empresaId: auth.tenantId,
+    usuarioId: auth.userId,
+    disponible: false,
+  });
+  prisma.mensajeWhatsappRecibido.findFirst.mockResolvedValue({
+    id: 'comprobante',
+  });
+  expect(await servicio.disponibilidad(auth)).toEqual({
+    empresaId: auth.tenantId,
+    usuarioId: auth.userId,
+    disponible: true,
+  });
+  expect(prisma.mensajeWhatsappRecibido.findFirst).toHaveBeenLastCalledWith({
+    where: scope,
+    select: { id: true },
+  });
+  expect(prisma.mensajeWhatsappRecibido.findMany).not.toHaveBeenCalled();
+  expect(clientes.contexto).not.toHaveBeenCalled();
+});
+it('la disponibilidad desaparece al apagar el piloto o cambiar de empresa', async () => {
+  const { servicio, prisma } = setup();
+  expect(
+    (await servicio.disponibilidad({ ...auth, tenantId: 'otra' })).disponible,
+  ).toBe(false);
+  jest.mocked(configuracionMetaRecepcion).mockReturnValue(null);
+  expect((await servicio.disponibilidad(auth)).disponible).toBe(false);
+  expect(prisma.mensajeWhatsappRecibido.findFirst).not.toHaveBeenCalled();
+});
+it('el menú también exige la capacidad del plan antes de consultar recepción', async () => {
+  const { servicio, capacidades, prisma } = setup();
+  capacidades.exigirIncluida.mockRejectedValue(new ForbiddenException());
+  await expect(servicio.disponibilidad(auth)).rejects.toBeInstanceOf(
+    ForbiddenException,
+  );
+  expect(prisma.mensajeWhatsappRecibido.findFirst).not.toHaveBeenCalled();
+});
 it('no consulta datos con el piloto apagado ni para otra empresa', async () => {
   const { servicio, prisma, clientes } = setup();
   expect(

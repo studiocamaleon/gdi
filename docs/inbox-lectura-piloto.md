@@ -4,11 +4,15 @@ Desarrollado en local el 25 de septiembre de 2026, en `codex/inbox-lectura`, sob
 
 ## Qué permite
 
-El botón **Abrir inbox**, en la tarjeta de recepción de Meta de Configuración → Integraciones, abre `/inbox` en otra pestaña, sin el sidebar de Grafo. Lee los mensajes guardados por el piloto de recepción: muestra los últimos 50 y permite cargar anteriores. Actualiza al pulsar **Actualizar** o volver a la pestaña; todavía no tiene actualización continua.
+El acceso **Inbox** del sidebar y el botón **Abrir inbox** de Configuración → Integraciones abren `/inbox` en otra pestaña, sin el sidebar de Grafo. Se muestran cuando la recepción del piloto está habilitada y existe al menos un mensaje validado del contacto autorizado en el canal actual. Lee los mensajes guardados por el piloto: muestra los últimos 50 y permite cargar anteriores. Actualiza al pulsar **Actualizar** o volver a la pestaña; todavía no tiene actualización continua.
 
 El contexto se busca automáticamente por teléfono completo entre los clientes y sus contactos, dentro de la misma empresa. Una coincidencia muestra la ficha y las órdenes recientes permitidas. Varias coincidencias requieren elegir la ficha antes de mostrar sus órdenes; ninguna coincidencia indica que se debe registrar el teléfono en el cliente o contacto correspondiente. La selección es temporal y se vuelve a validar en cada consulta.
 
 Esta entrega conserva el alcance del piloto: **un contacto autorizado, una empresa y acceso de administrador con `configuracion.gestionar`**. No habilita todavía el inbox para operadores ni la conexión de otras empresas.
+
+El menú consulta `GET /integraciones/meta/inbox/disponibilidad`, que sólo devuelve identidad y un booleano: no descarga mensajes ni contactos. Se revalida al navegar, volver a la pestaña y actualizar la recepción desde Configuración. Mientras se comprueba, si falla, si cambia la identidad o si falta el plan/permiso, permanece oculto. La ruta privada y la API conservan sus controles aunque se conozca la URL.
+
+**Alcance de esa señal:** comprueba que la recepción del piloto fue validada; no asegura que el token de envío siga vigente ni realiza una consulta en vivo a Meta. Todavía no existe el alta Cloud por empresa. Cuando se implemente, esta condición deberá depender del estado de la conexión y su suscripción al canal, sin exigir conversaciones previas. No usar el estado de Wati para habilitar este inbox.
 
 ## Qué queda pendiente
 
@@ -49,6 +53,8 @@ Para probar con la aplicación local completa, seguir `docs/desarrollo-local.md`
 - TypeScript de web y API; ESLint del alcance web; guardia de CSS; diff sin errores de espacios.
 - Ensayo en PostgreSQL local con 115 mensajes ficticios: historial completo sin saltos ni duplicados, separación entre empresas/canales/contactos, cursor ajeno rechazado, contacto secundario, coincidencias múltiples y piloto apagado.
 - Chrome en escritorio y 390 × 844: historial por páginas, contexto, fecha de entrega, tema y último mensaje al entrar al chat móvil.
+
+Revisión posterior del acceso condicional: 26 pruebas de API y 31 de web aprobadas, incluyendo recepción sin comprobar, plan/permisos, fallo de consulta, cambio de identidad, respuesta tardía y enlace real del sidebar en nueva pestaña. TypeScript de web/API y ESLint del alcance también comprobados. No agrega migraciones ni llamadas a Meta.
 
 El ensayo de PostgreSQL está en `apps/api/scripts/deploy/verify-meta-inbox.cjs`. Exige una base cuyo nombre termine en `_test` y coincida con `DEPLOY_DATABASE_NAME`; crea identificadores propios y elimina solamente esos datos al terminar. Usar `VERIFY_META_SOURCE=true` con `ts-node/register/transpile-only` para ejecutarlo desde fuentes. No ejecutarlo contra staging ni producción.
 

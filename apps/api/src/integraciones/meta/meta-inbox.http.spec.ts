@@ -9,10 +9,13 @@ import { MetaInboxController } from './meta-inbox.controller';
 import { MetaInboxService } from './meta-inbox.service';
 let app: INestApplication;
 const consultar = jest.fn().mockResolvedValue({ mensajes: [] });
+const disponibilidad = jest.fn().mockResolvedValue({ disponible: false });
 beforeAll(async () => {
   const module = await Test.createTestingModule({
     controllers: [MetaInboxController],
-    providers: [{ provide: MetaInboxService, useValue: { consultar } }],
+    providers: [
+      { provide: MetaInboxService, useValue: { consultar, disponibilidad } },
+    ],
   }).compile();
   app = module.createNestApplication();
   app.setGlobalPrefix('api');
@@ -52,8 +55,34 @@ beforeAll(async () => {
   );
   await app.init();
 });
-beforeEach(() => consultar.mockClear());
+beforeEach(() => {
+  consultar.mockClear();
+  disponibilidad.mockClear();
+});
 afterAll(() => app?.close());
+it('el estado del menú sólo consulta disponibilidad y no se almacena en caché', async () => {
+  await request(app.getHttpServer())
+    .get('/api/integraciones/meta/inbox/disponibilidad')
+    .set('x-actor', 'ADMINISTRADOR')
+    .expect('Cache-Control', 'no-store')
+    .expect(200, { disponible: false });
+  expect(disponibilidad).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantId: 'propia' }),
+  );
+  expect(consultar).not.toHaveBeenCalled();
+});
+it.each([
+  {},
+  { 'x-actor': 'VENDEDOR' },
+  { 'x-actor': 'ADMINISTRADOR', 'x-sin-permiso': '1' },
+  { 'x-actor': 'ADMINISTRADOR', 'x-impersonacion': '1' },
+])('protege también la disponibilidad: %j', async (headers) => {
+  await request(app.getHttpServer())
+    .get('/api/integraciones/meta/inbox/disponibilidad')
+    .set(headers)
+    .expect(403);
+  expect(disponibilidad).not.toHaveBeenCalled();
+});
 it('admin autorizado recibe no-store y sólo identidad de sesión', async () => {
   await request(app.getHttpServer())
     .get('/api/integraciones/meta/inbox')

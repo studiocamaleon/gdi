@@ -26,6 +26,19 @@ const hijos = (permisos: string[], grupo: string) => {
     : [];
 };
 
+describe("Inbox requiere disponibilidad confirmada", () => {
+  it("no aparece por defecto ni con permisos o plan desconocidos", () => {
+    const acceso = new Set(["configuracion.gestionar"]);
+    expect(navPara(acceso).some(i => i.key === "inbox")).toBe(false);
+    expect(navPara(null, "AR", { whatsapp_automatico: true }, { inboxDisponible: true }).some(i => i.key === "inbox")).toBe(false);
+    expect(navPara(acceso, "AR", undefined, { inboxDisponible: true }).some(i => i.key === "inbox")).toBe(false);
+  });
+  it("con permiso, plan y conexión se ofrece en otra pestaña y se puede buscar por WhatsApp", () => {
+    const item = navPara(new Set(["configuracion.gestionar"]), "AR", { whatsapp_automatico: true }, { inboxDisponible: true }).find(i => i.key === "inbox");
+    expect(item).toMatchObject({ href: "/inbox", label: "Inbox", nuevaPestana: true, buscar: expect.arrayContaining(["whatsapp"]) });
+  });
+});
+
 describe("qué muestra el sidebar", () => {
   describe("el hijo con permiso propio se sostiene solo", () => {
     /** El circuito fiscal es del que factura, no del dueño del taller. */

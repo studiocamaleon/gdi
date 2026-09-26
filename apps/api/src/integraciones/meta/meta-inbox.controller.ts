@@ -16,6 +16,12 @@ import { MetaInboxService } from './meta-inbox.service';
 export class MetaInboxController {
   constructor(private readonly service: MetaInboxService) {}
 
+  @Get('disponibilidad')
+  @Header('Cache-Control', 'no-store')
+  disponibilidad(@CurrentSession() auth: CurrentAuth) {
+    return this.service.disponibilidad(auth);
+  }
+
   @Get()
   @Header('Cache-Control', 'no-store')
   consultar(

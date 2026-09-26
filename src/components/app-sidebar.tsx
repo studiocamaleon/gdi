@@ -4,7 +4,8 @@ import { useFuncionesPlan } from "@/components/navigation/capacidades-provider";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Layers3, X } from "lucide-react";
+import { ArrowUpRight, Layers3, MessageCircle, X } from "lucide-react";
+import { useInboxDisponible } from "@/components/inbox/use-inbox-disponible";
 
 import { type CurrentUser, type TenantSummary } from "@/lib/auth";
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
@@ -32,6 +33,7 @@ type IconProps = React.SVGProps<SVGSVGElement>;
 type IconComponent = (props: IconProps) => React.ReactElement;
 
 const Ico = {
+  Chat: (props: IconProps) => <MessageCircle width={16} height={16} {...props} />,
   Chart: (props: IconProps) => (
     <svg
       viewBox="0 0 24 24"
@@ -320,7 +322,7 @@ function getSuscripcionProgress(susc: TenantSummary["suscripcion"]) {
 const SECCIONES: ReadonlyArray<{ label: string; keys: string[] }> = [
   {
     label: "Operación",
-    keys: ["panel", "comercial", "produccion", "inventario"],
+    keys: ["panel", "comercial", "inbox", "produccion", "inventario"],
   },
   {
     label: "Gestión",
@@ -350,6 +352,11 @@ function filtrarNav(nav: NavItem[], q: string): NavItem[] {
 export function AppSidebar({ currentUser }: AppSidebarProps) {
   const funciones = useFuncionesPlan();
   const pathname = usePathname();
+  const inboxDisponible = useInboxDisponible(
+    currentUser,
+    funciones.whatsapp_automatico === true,
+    pathname,
+  );
   // Lo que este usuario puede ver. Se calcula una vez y de acá sale todo el
   // resto: qué grupos hay, cuál está activo y qué encuentra el buscador.
   const nav = React.useMemo(
@@ -358,8 +365,9 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
         permisosDe(currentUser),
         currentUser.tenantActual?.regional?.paisCodigo ?? "AR",
         funciones,
+        { inboxDisponible },
       ),
-    [currentUser, funciones],
+    [currentUser, funciones, inboxDisponible],
   );
   // El ancla del pie. Se muestra si le queda alguna sección: el Administrativo
   // entra por Datos fiscales y Métodos de pago sin tener `configuracion.ver`.
@@ -443,6 +451,28 @@ export function AppSidebar({ currentUser }: AppSidebarProps) {
     const isDirectActive = !itemHasChildren && activeKey === item.key;
 
     if (!itemHasChildren) {
+      if (item.nuevaPestana) {
+        return (
+          <a
+            key={item.key}
+            href={item.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`${item.label} · Abrir en otra pestaña`}
+            aria-label={`${item.label} · Abrir en otra pestaña`}
+            className={s.it}
+            onClick={() => setOpenMobile(false)}
+          >
+            <span className={s.ic}>
+              <IconCmp />
+            </span>
+            <span className={s.tx}>
+              {filtering ? highlightMatch(item.label, q) : item.label}
+            </span>
+            <ArrowUpRight className={s.cv} size={12} aria-hidden="true" />
+          </a>
+        );
+      }
       return (
         <NavLink
           key={item.key}

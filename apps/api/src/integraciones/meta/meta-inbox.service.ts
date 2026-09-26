@@ -18,6 +18,27 @@ export class MetaInboxService {
     private readonly clientes: WhatsappContextoService,
   ) {}
 
+  /** Disponibilidad de lectura del piloto, no un chequeo de salud de Meta.
+   * Exige una recepción validada en el canal actual; no basta con cargar claves.
+   * El menú sólo necesita esta señal, nunca el contenido de los mensajes. */
+  async disponibilidad(auth: CurrentAuth) {
+    const identidad = { empresaId: auth.tenantId, usuarioId: auth.userId };
+    const config = configuracionMetaRecepcion();
+    if (!auth.tenantId || config?.tenantId !== auth.tenantId)
+      return { ...identidad, disponible: false };
+    await this.capacidades.exigirIncluida(auth.tenantId, 'whatsapp_automatico');
+    const comprobante = await this.prisma.mensajeWhatsappRecibido.findFirst({
+      where: {
+        tenantId: auth.tenantId,
+        wabaId: config.wabaId,
+        phoneNumberId: config.phoneNumberId,
+        remitente: config.destinatario,
+      },
+      select: { id: true },
+    });
+    return { ...identidad, disponible: Boolean(comprobante) };
+  }
+
   async consultar(auth: CurrentAuth, query: MetaInboxQueryDto) {
     const config = configuracionMetaRecepcion();
     if (!auth.tenantId || config?.tenantId !== auth.tenantId) return null;
