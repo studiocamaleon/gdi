@@ -1,7 +1,12 @@
 "use client";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxView } from "../inbox-view";
-import type { CargarInbox, MetaInbox } from "@/lib/meta-inbox-api";
+import type {
+  CargarInbox,
+  MetaInbox,
+  EnviarTextoInbox,
+  IntentoInbox,
+} from "@/lib/meta-inbox-api";
 
 /** Fixtures exclusivos de la ruta local /dev; no crean datos ni conectan Meta. */
 const identidad = {
@@ -105,7 +110,7 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
       nombreContacto: "Clara Paz",
       tipo: "text",
       texto: "Hola, ¿hacen etiquetas adhesivas en pequeñas cantidades?",
-      enviadoEl: "2026-09-26T11:30:00Z",
+      enviadoEl: "2026-09-24T11:30:00Z",
       direccion: "ENTRANTE",
     },
     {
@@ -114,7 +119,7 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
       tipo: "revocado",
       texto: null,
       eliminado: true,
-      enviadoEl: "2026-09-26T11:31:00Z",
+      enviadoEl: "2026-09-24T11:31:00Z",
       direccion: "ENTRANTE",
     },
     {
@@ -122,10 +127,36 @@ const conversaciones: Record<string, MetaInbox["mensajes"]> = {
       nombreContacto: "Clara Paz",
       tipo: "text",
       texto: "Serían 200 unidades. Todavía no tengo cuenta con ustedes.",
-      enviadoEl: "2026-09-26T11:33:00Z",
+      enviadoEl: "2026-09-24T11:33:00Z",
       direccion: "ENTRANTE",
     },
   ],
+};
+const intentos = new Map<string, IntentoInbox>();
+const enviar: EnviarTextoInbox = async (id, dto) => {
+  if (intentos.has(dto.clave)) return intentos.get(dto.clave)!;
+  if (!conversaciones[id] || id === "clara")
+    throw new Error("Demo: ventana cerrada");
+  const enviado = {
+    id: crypto.randomUUID(),
+    clave: dto.clave,
+    estado: "ACEPTADO",
+    codigo: null,
+    texto: null,
+    creadoEl: new Date().toISOString(),
+    mensajeId: crypto.randomUUID(),
+  };
+  conversaciones[id].push({
+    id: enviado.mensajeId,
+    nombreContacto: null,
+    tipo: "text",
+    texto: dto.texto,
+    enviadoEl: enviado.creadoEl,
+    direccion: "SALIENTE",
+    estadoEntrega: "DEMO",
+  });
+  intentos.set(dto.clave, enviado);
+  return enviado;
 };
 const cargar: CargarInbox = async (query) => {
   const lista = contactos.filter((c) =>
@@ -157,6 +188,15 @@ const cargar: CargarInbox = async (query) => {
     empresaId: identidad.empresaId,
     usuarioId: identidad.usuarioId,
     origen: "GENERAL",
+    respuesta: {
+      habilitado: true,
+      abierta: contacto?.id !== "clara",
+      servidorEl: new Date().toISOString(),
+      hasta: new Date(
+        Date.now() + (contacto?.id === "clara" ? -3600000 : 7200000),
+      ).toISOString(),
+    },
+    envios: [],
     canalId: "canal-ficticio",
     conversacionId: contacto?.id ?? null,
     contacto: { telefono: contacto?.telefono ?? "", nombre: contacto?.nombre },
@@ -246,6 +286,7 @@ export function InboxGeneralPreview() {
       cargar={cargar}
       tiempoReal={null}
       conexionApi={conexionApi}
+      enviarTexto={enviar}
       abrirAdjunto={async () => ({
         url: "/dev/diseno/inbox/archivo",
         nombre: "Ejemplo-inbox.pdf",

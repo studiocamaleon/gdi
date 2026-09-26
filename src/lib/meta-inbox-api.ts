@@ -27,6 +27,8 @@ export type MetaInbox = {
   }[];
   listaAnterior?: string | null;
   ventanaAcotada?: boolean;
+  respuesta?: RespuestaInbox;
+  envios?: IntentoInbox[];
   contacto: { telefono: string; nombre?: string | null };
   mensajes: {
     id: string;
@@ -110,4 +112,34 @@ export const abrirAdjuntoInbox: AbrirAdjuntoInbox = (id, signal) =>
   apiRequest(
     `/integraciones/meta/inbox/mensajes/${encodeURIComponent(id)}/adjunto`,
     { signal },
+  );
+
+export type RespuestaInbox = {
+  habilitado: boolean;
+  abierta: boolean;
+  hasta: string | null;
+  servidorEl: string;
+};
+export type IntentoInbox = {
+  id: string;
+  clave: string;
+  texto: string | null;
+  estado: string;
+  codigo: string | null;
+  creadoEl: string;
+  mensajeId: string | null;
+};
+export type EnviarTextoInbox = (
+  conversacionId: string,
+  dto: { clave: string; canalId: string; texto: string },
+  signal?: AbortSignal,
+) => Promise<IntentoInbox>;
+export const enviarTextoInbox: EnviarTextoInbox = (id, dto, signal) =>
+  apiRequest(
+    `/integraciones/meta/inbox/conversaciones/${encodeURIComponent(id)}/texto`,
+    {
+      method: "POST",
+      body: JSON.stringify(dto),
+      signal,
+    },
   );

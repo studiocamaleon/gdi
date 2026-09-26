@@ -11,7 +11,6 @@ import {
   RefreshCw,
   UserRound,
   Search,
-  LockKeyhole,
 } from "lucide-react";
 import { GrafoprintBrand } from "@/components/brand/grafoprint-brand";
 import { DesignSystemProvider } from "@/components/design-system/appearance";
@@ -54,12 +53,14 @@ import {
   type InboxConsulta,
   type CargarInbox,
   type AbrirAdjuntoInbox,
+  type EnviarTextoInbox,
 } from "@/lib/meta-inbox-api";
 import { cn } from "@/lib/utils";
 import s from "./inbox-workspace.module.css";
 import live from "./inbox-view.module.css";
 import type { MetaConexionApi } from "@/lib/meta-conexion-api";
 import { InboxConexion } from "./inbox-conexion";
+import { InboxComposer, type BorradoresInbox } from "./inbox-composer";
 import { InboxAdjunto } from "./inbox-adjunto";
 import { InboxBienvenida } from "./inbox-bienvenida";
 import { ApiError } from "@/lib/api";
@@ -91,19 +92,21 @@ const tipos: Record<string, string> = {
   button: "Respuesta a botón",
 };
 
-/** Lectura del canal general o del piloto. No hay acciones de envío simuladas. */
+/** Canal general con respuestas explícitas; el piloto conserva sólo lectura. */
 export function InboxView({
   identidad,
   cargar = getMetaInbox,
   tiempoReal = escucharInbox,
   conexionApi,
   abrirAdjunto,
+  enviarTexto,
 }: {
   identidad: InboxIdentidad;
   cargar?: CargarInbox;
   tiempoReal?: EscucharInbox | null;
   conexionApi?: MetaConexionApi;
   abrirAdjunto?: AbrirAdjuntoInbox;
+  enviarTexto?: EnviarTextoInbox;
 }) {
   const [datos, setDatos] = useState<MetaInbox | null>(null);
   const [estado, setEstado] = useState<
@@ -117,6 +120,7 @@ export function InboxView({
   const [movilChat, setMovilChat] = useState(false);
   const [contextoAbierto, setContextoAbierto] = useState(false);
   const [conexionAbierta, setConexionAbierta] = useState(false);
+  const borradores = useRef<BorradoresInbox>(new Map());
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
   const elegido = useRef<string | undefined>(undefined);
@@ -196,6 +200,8 @@ export function InboxView({
               nombre: contacto?.nombre,
             },
             mensajes: [],
+            respuesta: undefined,
+            envios: [],
             contexto: null,
             anterior: null,
           };
@@ -217,6 +223,7 @@ export function InboxView({
           return false;
         if (!resultado) {
           datosActuales.current = null;
+          borradores.current.clear();
           setDatos(null);
           conversacionElegida.current = undefined;
           setEstado("inactivo");
@@ -229,6 +236,7 @@ export function InboxView({
           resultado.usuarioId !== identidad.usuarioId
         ) {
           datosActuales.current = null;
+          borradores.current.clear();
           setDatos(null);
           conversacionElegida.current = undefined;
           setEstado("sesion");
@@ -293,7 +301,10 @@ export function InboxView({
         const denegado =
           error instanceof ApiError && [401, 403].includes(error.status);
         setEstado(denegado ? "sesion" : "error");
-        if (denegado) setCanalHabilitado(false);
+        if (denegado) {
+          borradores.current.clear();
+          setCanalHabilitado(false);
+        }
         elegido.current = undefined;
         return false;
       } finally {
@@ -311,6 +322,7 @@ export function InboxView({
   );
 
   useEffect(() => {
+    borradores.current.clear();
     elegido.current = undefined;
     conversacionElegida.current = undefined;
     datosActuales.current = null;
@@ -342,6 +354,7 @@ export function InboxView({
       accesoCerrado: () => {
         controller.current?.abort();
         datosActuales.current = null;
+        borradores.current.clear();
         setDatos(null);
         conversacionElegida.current = undefined;
         setEstado("sesion");
@@ -573,7 +586,9 @@ export function InboxView({
               <span className={s.previewDot} />
               {estado === "listo"
                 ? datos?.origen === "GENERAL"
-                  ? "Grafo Inbox · conversaciones sincronizadas · sólo lectura"
+                  ? datos.respuesta?.habilitado
+                    ? "Grafo Inbox · WhatsApp de tu empresa"
+                    : "Grafo Inbox · conversaciones sincronizadas · sólo lectura"
                   : "Prueba interna · contacto autorizado · sólo lectura"
                 : "Grafo Inbox · WhatsApp"}
             </span>
@@ -946,6 +961,8 @@ export function InboxView({
                                     <span>
                                       {(
                                         {
+                                          DEMO: "Simulado · sin envío real",
+                                          ACEPTADO: "Aceptado por Meta",
                                           PENDING: "Pendiente",
                                           ERROR: "No entregado",
                                           SENT: "Enviado",
@@ -964,22 +981,84 @@ export function InboxView({
                           </div>
                         ))
                       )}
+                      {datos.envios
+                        ?.filter((e) => !e.mensajeId)
+                        .map((e) => (
+                          <div
+                            key={e.id}
+                            className={s.messageRow}
+                            data-kind="salida"
+                          >
+                            <div
+                              className={s.bubble}
+                              data-kind="salida"
+                              data-error={e.estado === "RECHAZADO"}
+                            >
+                              <p>{e.texto}</p>
+                              <div className={s.messageMeta}>
+                                <span>
+                                  {
+                                    (
+                                      {
+                                        ENVIANDO: "Esperando confirmación",
+                                        INCIERTO:
+                                          "Sin confirmación · no reenviar todavía",
+                                        RECHAZADO: "No enviado",
+                                        ACEPTADO: "Aceptado por Meta",
+                                      } as Record<string, string>
+                                    )[e.estado]
+                                  }
+                                </span>
+                                <time dateTime={e.creadoEl}>
+                                  {fechaHora(e.creadoEl)}
+                                </time>
+                              </div>
+                              {e.estado === "RECHAZADO" && (
+                                <p>
+                                  {e.codigo === "131047"
+                                    ? "Meta indicó que la ventana está cerrada. Hace falta una plantilla."
+                                    : "Meta rechazó este envío. Revisá la conexión antes de volver a intentarlo."}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                     </div>
                     <div className={s.composer}>
-                      <div className={s.unavailable}>
-                        <LockKeyhole size={18} />
-                        <div>
-                          <strong>
-                            {datos.origen === "GENERAL"
-                              ? "Conversaciones sincronizadas"
-                              : "Recepción de prueba"}
-                          </strong>
+                      {datos.conversacionId && datos.canalId ? (
+                        <InboxComposer
+                          key={`${identidad.empresaId}:${identidad.usuarioId}:${datos.canalId}:${datos.conversacionId}`}
+                          scope={`${datos.canalId}:${datos.conversacionId}`}
+                          borradores={borradores.current}
+                          canalId={datos.canalId}
+                          conversacionId={datos.conversacionId}
+                          destino={nombre}
+                          respuesta={
+                            datos.respuesta ?? {
+                              habilitado: false,
+                              abierta: false,
+                              hasta: null,
+                              servidorEl: new Date().toISOString(),
+                            }
+                          }
+                          enviar={enviarTexto}
+                          actualizar={() =>
+                            consultar(
+                              { clienteId: elegido.current },
+                              false,
+                              true,
+                            )
+                          }
+                        />
+                      ) : (
+                        <div className={s.unavailable}>
+                          <strong>Recepción de prueba</strong>
                           <p>
                             Las respuestas desde el inbox todavía no están
                             habilitadas.
                           </p>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </>
                 )}
